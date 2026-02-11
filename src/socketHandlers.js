@@ -538,6 +538,40 @@ function setupSocketHandlers(io, db) {
       handleVoiceLeave(socket, data.code);
     });
 
+    // ── Screen Sharing Signaling ──────────────────────────
+
+    socket.on('screen-share-started', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8)) return;
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      // Broadcast to all voice users in the channel
+      for (const [uid, user] of voiceRoom) {
+        if (uid !== socket.user.id) {
+          io.to(user.socketId).emit('screen-share-started', {
+            userId: socket.user.id,
+            username: socket.user.username,
+            channelCode: data.code
+          });
+        }
+      }
+    });
+
+    socket.on('screen-share-stopped', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8)) return;
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      for (const [uid, user] of voiceRoom) {
+        if (uid !== socket.user.id) {
+          io.to(user.socketId).emit('screen-share-stopped', {
+            userId: socket.user.id,
+            channelCode: data.code
+          });
+        }
+      }
+    });
+
     // ═══════════════ REACTIONS ═════════════════════════════════
 
     socket.on('add-reaction', (data) => {
@@ -1051,6 +1085,57 @@ function setupSocketHandlers(io, db) {
       const settings = {};
       rows.forEach(r => { settings[r.key] = r.value; });
       socket.emit('server-settings', settings);
+    });
+
+    // ═══════════════ WHITELIST MANAGEMENT ═══════════════════
+
+    socket.on('get-whitelist', () => {
+      if (!socket.user.isAdmin) return;
+      const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
+      socket.emit('whitelist-list', rows);
+    });
+
+    socket.on('whitelist-add', (data) => {
+      if (!socket.user.isAdmin) return;
+      if (!data || typeof data !== 'object') return;
+      const username = typeof data.username === 'string' ? data.username.trim() : '';
+      if (!username || username.length < 3 || username.length > 20) {
+        return socket.emit('error-msg', 'Username must be 3-20 characters');
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        return socket.emit('error-msg', 'Invalid username format');
+      }
+
+      try {
+        db.prepare('INSERT OR IGNORE INTO whitelist (username, added_by) VALUES (?, ?)').run(username, socket.user.id);
+        socket.emit('error-msg', `Added "${username}" to whitelist`);
+        // Send updated list
+        const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
+        socket.emit('whitelist-list', rows);
+      } catch {
+        socket.emit('error-msg', 'Failed to add to whitelist');
+      }
+    });
+
+    socket.on('whitelist-remove', (data) => {
+      if (!socket.user.isAdmin) return;
+      if (!data || typeof data !== 'object') return;
+      const username = typeof data.username === 'string' ? data.username.trim() : '';
+      if (!username) return;
+
+      db.prepare('DELETE FROM whitelist WHERE username = ?').run(username);
+      socket.emit('error-msg', `Removed "${username}" from whitelist`);
+      // Send updated list
+      const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
+      socket.emit('whitelist-list', rows);
+    });
+
+    socket.on('whitelist-toggle', (data) => {
+      if (!socket.user.isAdmin) return;
+      if (!data || typeof data !== 'object') return;
+      const enabled = data.enabled === true ? 'true' : 'false';
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('whitelist_enabled', ?)").run(enabled);
+      socket.emit('error-msg', `Whitelist ${enabled === 'true' ? 'enabled' : 'disabled'}`);
     });
 
     // ═══════════════ USER PREFERENCES ═══════════════════

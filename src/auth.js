@@ -83,6 +83,16 @@ router.post('/register', async (req, res) => {
     }
 
     const db = getDb();
+
+    // Whitelist check — if enabled, only pre-approved usernames can register
+    const wlSetting = db.prepare("SELECT value FROM server_settings WHERE key = 'whitelist_enabled'").get();
+    if (wlSetting && wlSetting.value === 'true') {
+      const onList = db.prepare('SELECT 1 FROM whitelist WHERE username = ?').get(username);
+      if (!onList) {
+        return res.status(403).json({ error: 'Registration is restricted. Your username is not on the whitelist.' });
+      }
+    }
+
     const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
     if (existing) {
       return res.status(409).json({ error: 'Username already taken' });

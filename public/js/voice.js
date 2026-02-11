@@ -6,13 +6,17 @@ class VoiceManager {
   constructor(socket) {
     this.socket = socket;
     this.localStream = null;
-    this.peers = new Map();       // userId → { connection, stream, username }
+    this.screenStream = null;       // Screen share MediaStream
+    this.isScreenSharing = false;
+    this.peers = new Map();         // userId → { connection, stream, username }
     this.currentChannel = null;
     this.isMuted = false;
     this.isDeafened = false;
     this.inVoice = false;
-    this.audioCtx = null;         // Web Audio context for volume boost
-    this.gainNodes = new Map();   // userId → GainNode
+    this.audioCtx = null;           // Web Audio context for volume boost
+    this.gainNodes = new Map();     // userId → GainNode
+    this.onScreenStream = null;     // callback(userId, stream|null) — set by app.js
+    this.screenShareUserId = null;  // who is currently sharing
 
     this.rtcConfig = {
       iceServers: [
@@ -92,6 +96,24 @@ class VoiceManager {
     // Someone left voice
     this.socket.on('voice-user-left', (data) => {
       this._removePeer(data.user.id);
+      // If they were screen sharing, clean up
+      if (this.screenShareUserId === data.user.id) {
+        this.screenShareUserId = null;
+        if (this.onScreenStream) this.onScreenStream(data.user.id, null);
+      }
+    });
+
+    // Someone started screen sharing
+    this.socket.on('screen-share-started', (data) => {
+      this.screenShareUserId = data.userId;
+    });
+
+    // Someone stopped screen sharing
+    this.socket.on('screen-share-stopped', (data) => {
+      if (this.screenShareUserId === data.userId) {
+        this.screenShareUserId = null;
+        if (this.onScreenStream) this.onScreenStream(data.userId, null);
+      }
     });
   }
 
@@ -127,6 +149,11 @@ class VoiceManager {
   }
 
   leave() {
+    // Stop screen share first if active
+    if (this.isScreenSharing) {
+      this.stopScreenShare();
+    }
+
     if (this.currentChannel) {
       this.socket.emit('voice-leave', { code: this.currentChannel });
     }
@@ -147,6 +174,7 @@ class VoiceManager {
     this.inVoice = false;
     this.isMuted = false;
     this.isDeafened = false;
+    this.screenShareUserId = null;
   }
 
   toggleMute() {
@@ -177,6 +205,80 @@ class VoiceManager {
     return this.isDeafened;
   }
 
+  // ── Screen Sharing ──────────────────────────────────────
+
+  async shareScreen() {
+    if (!this.inVoice || this.isScreenSharing) return false;
+    try {
+      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' },
+        audio: true // capture tab/system audio if available
+      });
+
+      this.isScreenSharing = true;
+
+      // When user clicks browser "Stop sharing" button
+      this.screenStream.getVideoTracks()[0].onended = () => {
+        this.stopScreenShare();
+      };
+
+      // Add screen tracks to all existing peer connections
+      for (const [userId, peer] of this.peers) {
+        this.screenStream.getTracks().forEach(track => {
+          peer.connection.addTrack(track, this.screenStream);
+        });
+        // Renegotiate with each peer
+        await this._renegotiate(userId, peer.connection);
+      }
+
+      // Tell the server we're sharing
+      this.socket.emit('screen-share-started', { code: this.currentChannel });
+      return true;
+    } catch (err) {
+      console.error('Screen share failed:', err);
+      this.isScreenSharing = false;
+      this.screenStream = null;
+      return false;
+    }
+  }
+
+  stopScreenShare() {
+    if (!this.isScreenSharing || !this.screenStream) return;
+
+    // Remove screen tracks from all peer connections
+    for (const [userId, peer] of this.peers) {
+      const senders = peer.connection.getSenders();
+      this.screenStream.getTracks().forEach(track => {
+        const sender = senders.find(s => s.track === track);
+        if (sender) peer.connection.removeTrack(sender);
+        track.stop();
+      });
+      // Renegotiate
+      this._renegotiate(userId, peer.connection).catch(() => {});
+    }
+
+    this.screenStream = null;
+    this.isScreenSharing = false;
+
+    this.socket.emit('screen-share-stopped', { code: this.currentChannel });
+    // Notify local UI
+    if (this.onScreenStream) this.onScreenStream(null, null);
+  }
+
+  async _renegotiate(userId, connection) {
+    try {
+      const offer = await connection.createOffer();
+      await connection.setLocalDescription(offer);
+      this.socket.emit('voice-offer', {
+        code: this.currentChannel,
+        targetUserId: userId,
+        offer: offer
+      });
+    } catch (err) {
+      console.error('Renegotiation failed:', err);
+    }
+  }
+
   // ── Private: Peer connection management ─────────────────
 
   async _createPeer(userId, username, createOffer) {
@@ -189,13 +291,28 @@ class VoiceManager {
       });
     }
 
-    // Handle incoming remote audio
-    const remoteStream = new MediaStream();
-    connection.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => {
-        remoteStream.addTrack(track);
+    // If we're screen sharing, add those tracks too
+    if (this.screenStream && this.isScreenSharing) {
+      this.screenStream.getTracks().forEach(track => {
+        connection.addTrack(track, this.screenStream);
       });
-      this._playAudio(userId, remoteStream);
+    }
+
+    // Handle incoming remote tracks — route audio and video separately
+    const remoteAudioStream = new MediaStream();
+    connection.ontrack = (event) => {
+      const track = event.track;
+      if (track.kind === 'video') {
+        // Incoming screen share — build a dedicated video stream
+        const videoStream = new MediaStream([track]);
+        if (this.onScreenStream) this.onScreenStream(userId, videoStream);
+        track.onended = () => {
+          if (this.onScreenStream) this.onScreenStream(userId, null);
+        };
+      } else {
+        remoteAudioStream.addTrack(track);
+        this._playAudio(userId, remoteAudioStream);
+      }
     };
 
     // Send ICE candidates to the remote peer via server

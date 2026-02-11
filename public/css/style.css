@@ -2607,8 +2607,8 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 .mobile-menu-btn,
 .mobile-users-btn {
   display: none;  /* hidden on desktop */
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   background: transparent;
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
@@ -2734,6 +2734,12 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .messages { padding: 12px; }
   .message-input-area { padding: 8px 12px 12px; gap: 6px; }
 
+  /* GIF picker — constrained on tablet */
+  .gif-picker { max-width: 360px; }
+
+  /* Screen share — constrained */
+  .screen-share-container { max-height: 40vh; }
+
   /* Status bar — compact */
   .status-bar { padding: 4px 10px; gap: 10px; font-size: 10px; }
   .status-bar .label { display: none; }
@@ -2746,6 +2752,14 @@ input, textarea { font-family: inherit; outline: none; border: none; }
    ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 480px) {
+  /* Safe area insets for notched phones */
+  #app {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
   /* Sidebar full width on phones */
   .sidebar { width: 85vw; min-width: 85vw; }
 
@@ -2767,13 +2781,13 @@ input, textarea { font-family: inherit; outline: none; border: none; }
     gap: 4px;
   }
 
-  .channel-info h3 { font-size: 13px; max-width: 140px; }
+  .channel-info h3 { font-size: 13px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* Voice buttons — icon-only on phone */
-  .voice-controls { gap: 4px; }
+  /* Voice buttons — compact on phone */
+  .voice-controls { gap: 4px; flex-wrap: wrap; }
   .btn-voice {
     padding: 6px 8px;
-    font-size: 14px;
+    font-size: 12px;
     min-width: 0;
   }
 
@@ -2782,7 +2796,7 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .message-row { gap: 8px; padding: 4px; }
   .message-avatar { width: 30px; height: 30px; font-size: 12px; }
   .message-author { font-size: 13px; }
-  .message-content { font-size: 13px; }
+  .message-content { font-size: 14px; line-height: 1.45; word-break: break-word; }
   .message-time { font-size: 10px; }
   .message-compact { padding-left: 46px; }
 
@@ -2791,24 +2805,41 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 
   /* Input area — touch-friendly */
   .message-input-area {
-    padding: 6px 8px 10px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
     gap: 4px;
   }
 
   .message-input-area textarea {
-    padding: 10px;
+    padding: 10px 14px;
     font-size: 16px; /* prevents iOS zoom on focus */
     border-radius: 20px;
+    min-height: 40px;
   }
 
   .btn-send,
   .btn-upload,
-  .btn-emoji {
+  .btn-emoji,
+  .btn-gif {
     width: 40px;
     height: 40px;
     min-width: 40px;
     min-height: 40px;
+    font-size: 16px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
+
+  /* GIF picker — full width on phone */
+  .gif-picker {
+    left: 4px;
+    right: 4px;
+    bottom: 56px;
+    max-width: none;
+    width: auto;
+    max-height: 50vh;
+  }
+
+  .gif-picker-grid { max-height: 40vh; }
 
   /* Emoji picker — full width on phone */
   .emoji-picker {
@@ -2852,16 +2883,19 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   }
 
   .msg-toolbar button {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     font-size: 16px;
     background: var(--bg-tertiary);
     border-radius: var(--radius);
   }
 
+  /* Screen share — smaller on phone */
+  .screen-share-container { max-height: 35vh; min-height: 120px; }
+
   /* Status bar — minimal */
   .status-bar {
-    padding: 3px 8px;
+    padding: 3px 8px calc(3px + env(safe-area-inset-bottom, 0px));
     min-height: 24px;
     font-size: 9px;
   }
@@ -2874,15 +2908,22 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .welcome-content p { font-size: 13px; }
 
   /* Modal — wider on phone */
-  .modal { padding: 20px; width: 95%; }
+  .modal { padding: 20px; width: 95%; max-height: 85vh; overflow-y: auto; }
   .modal h3 { font-size: 18px; }
 
+  /* Settings modal — scrollable on phone */
+  .modal-settings { max-height: 80vh; overflow-y: auto; }
+
   /* Toasts — full width */
-  #toast-container { left: 50%; right: auto; top: 8px; transform: translateX(-50%); }
+  #toast-container { left: 50%; right: auto; top: calc(8px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }
   .toast { max-width: none; }
 
   /* Typing indicator */
   .typing-indicator { padding: 0 8px; font-size: 11px; }
+
+  /* Search container */
+  .search-container { flex: 1; }
+  .search-input { font-size: 14px; }
 }
 
 
@@ -2891,14 +2932,22 @@ input, textarea { font-family: inherit; outline: none; border: none; }
    ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 360px) {
-  .channel-info h3 { font-size: 12px; max-width: 100px; }
-  .btn-voice { display: none; } /* hide voice buttons — use sidebar */
+  .channel-info h3 { font-size: 12px; max-width: 90px; }
+  .btn-voice { font-size: 11px; padding: 5px 6px; }
   .message-avatar { width: 26px; height: 26px; font-size: 11px; }
   .message-compact { padding-left: 40px; }
   .message-row { gap: 6px; }
+  .message-content { font-size: 13px; }
+
+  /* Voice controls stack to two rows if needed */
+  .voice-controls { gap: 3px; }
 
   /* Hide non-critical status items */
   .status-bar .status-item:nth-child(n+3) { display: none; }
+
+  /* Sidebar slightly narrower */
+  .sidebar { width: 80vw; min-width: 80vw; }
+  .right-sidebar { width: 80vw; min-width: 80vw; }
 }
 
 
@@ -2907,19 +2956,23 @@ input, textarea { font-family: inherit; outline: none; border: none; }
    ═══════════════════════════════════════════════════════════ */
 
 @media (hover: none) and (pointer: coarse) {
+  /* Prevent pull-to-refresh on chat app */
+  html, body { overscroll-behavior-y: contain; }
+
   /* Touch devices — larger tap targets */
   .channel-item { padding: 12px 16px; min-height: 44px; }
   .btn-sm { min-height: 44px; padding: 10px 14px; }
-  .icon-btn { min-width: 36px; min-height: 36px; font-size: 18px; }
-  .theme-btn { width: 34px; height: 34px; }
+  .icon-btn { min-width: 40px; min-height: 40px; font-size: 18px; }
+  .theme-btn { width: 36px; height: 36px; }
   .toggle-row input[type="checkbox"] { width: 20px; height: 20px; }
   .server-icon { width: 44px; height: 44px; }
+  .btn-voice { min-height: 36px; }
 
   /* Disable hover-only interactions */
   .message:hover, .message-compact:hover { background: transparent; }
   .message-compact:hover .compact-time { display: none; }
 
-  /* Make msg toolbar always visible on touch (handled in 480px too) */
+  /* Make msg toolbar always visible on touch */
   .msg-toolbar {
     display: flex;
     position: static;
@@ -2933,6 +2986,13 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .msg-toolbar button {
     background: var(--bg-tertiary);
     border-radius: var(--radius);
+    min-width: 34px;
+    min-height: 34px;
+  }
+
+  /* Smoother scrolling on touch */
+  .messages, .sidebar, .right-sidebar, .modal {
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -3113,3 +3173,109 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   margin-left: 6px;
   opacity: 0.7;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SCREEN SHARE
+   ═══════════════════════════════════════════════════════════ */
+
+.screen-share-container {
+  display: none;
+  flex-direction: column;
+  background: #000;
+  border-bottom: 2px solid var(--accent);
+  max-height: 50vh;
+  min-height: 180px;
+  position: relative;
+}
+
+.screen-share-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.screen-share-header .icon-btn {
+  color: var(--text-muted);
+}
+
+#screen-share-video {
+  width: 100%;
+  max-height: calc(50vh - 32px);
+  object-fit: contain;
+  background: #000;
+}
+
+.btn-voice.sharing {
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WHITELIST PANEL
+   ═══════════════════════════════════════════════════════════ */
+
+.whitelist-add-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.whitelist-add-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-text-input {
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.settings-text-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.whitelist-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.whitelist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.whitelist-username {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.btn-danger-sm {
+  padding: 2px 8px !important;
+  font-size: 11px;
+  background: var(--danger) !important;
+  color: #fff !important;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-height: 0;
+  line-height: 1.4;
+}
+
+.btn-danger-sm:hover { opacity: 0.85; }

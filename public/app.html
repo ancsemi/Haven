@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Haven</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
@@ -125,6 +129,9 @@
             <button id="voice-deafen-btn" class="btn-voice" style="display:none">
               🔇 Deafen
             </button>
+            <button id="screen-share-btn" class="btn-voice" style="display:none" title="Share Screen">
+              🖥️ Share
+            </button>
             <button id="voice-leave-btn" class="btn-voice btn-danger" style="display:none">
               📞 Leave
             </button>
@@ -143,6 +150,14 @@
 
         <!-- Chat Area -->
         <div id="message-area" class="message-area" style="display:none">
+          <!-- Screen Share Viewer -->
+          <div id="screen-share-container" class="screen-share-container" style="display:none">
+            <div class="screen-share-header">
+              <span id="screen-share-label">🖥️ Screen Share</span>
+              <button id="screen-share-close" class="icon-btn small" title="Minimize">&times;</button>
+            </div>
+            <video id="screen-share-video" autoplay playsinline></video>
+          </div>
           <div id="search-results-panel" class="search-results-panel" style="display:none">
             <div class="search-results-header">
               <span id="search-results-count">Results</span>
@@ -384,7 +399,24 @@
           <button class="btn-sm btn-full" id="view-bans-btn">📋 View Bans</button>
         </div>
         <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🗑️ Auto-Cleanup</h5>
+          <h5 class="settings-section-subtitle">� Whitelist</h5>
+          <label class="toggle-row">
+            <span>Enabled</span>
+            <input type="checkbox" id="whitelist-enabled">
+          </label>
+          <small class="settings-hint">When enabled, only pre-approved usernames can register</small>
+          <div id="whitelist-panel" style="margin-top:8px;">
+            <div class="whitelist-add-row">
+              <input type="text" id="whitelist-username-input" placeholder="Username..." maxlength="20" class="settings-text-input">
+              <button class="btn-sm btn-accent" id="whitelist-add-btn">Add</button>
+            </div>
+            <div id="whitelist-list" class="whitelist-list">
+              <p class="muted-text">Loading...</p>
+            </div>
+          </div>
+        </div>
+        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">�🗑️ Auto-Cleanup</h5>
           <label class="toggle-row">
             <span>Enabled</span>
             <input type="checkbox" id="cleanup-enabled">

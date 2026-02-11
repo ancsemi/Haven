@@ -489,6 +489,11 @@ class HavenApp {
     document.getElementById('voice-mute-btn').addEventListener('click', () => this._toggleMute());
     document.getElementById('voice-deafen-btn').addEventListener('click', () => this._toggleDeafen());
     document.getElementById('voice-leave-btn').addEventListener('click', () => this._leaveVoice());
+    document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
+    document.getElementById('screen-share-close').addEventListener('click', () => this._hideScreenShare());
+
+    // Wire up the voice manager's video callback
+    this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
 
     // Search
     let searchTimeout = null;
@@ -761,6 +766,35 @@ class HavenApp {
         this._showToast('Cleanup triggered — check server console for results', 'success');
       });
     }
+
+    // ── Whitelist controls (admin) ───────────────────────
+    const whitelistToggle = document.getElementById('whitelist-enabled');
+    if (whitelistToggle) {
+      whitelistToggle.addEventListener('change', () => {
+        this.socket.emit('whitelist-toggle', { enabled: whitelistToggle.checked });
+        this.socket.emit('update-server-setting', {
+          key: 'whitelist_enabled',
+          value: whitelistToggle.checked ? 'true' : 'false'
+        });
+      });
+    }
+
+    document.getElementById('whitelist-add-btn').addEventListener('click', () => {
+      const input = document.getElementById('whitelist-username-input');
+      const username = input.value.trim();
+      if (!username) return;
+      this.socket.emit('whitelist-add', { username });
+      input.value = '';
+    });
+
+    document.getElementById('whitelist-username-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('whitelist-add-btn').click();
+    });
+
+    // Listen for whitelist list updates
+    this.socket.on('whitelist-list', (list) => {
+      this._renderWhitelist(list);
+    });
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1157,6 +1191,7 @@ class HavenApp {
     document.getElementById('voice-mute-btn').style.display = 'none';
     document.getElementById('voice-deafen-btn').style.display = 'none';
     document.getElementById('voice-leave-btn').style.display = 'none';
+    document.getElementById('screen-share-btn').style.display = 'none';
     document.getElementById('status-channel').textContent = 'None';
     document.getElementById('status-online-count').textContent = '0';
   }
@@ -1561,12 +1596,16 @@ class HavenApp {
     document.getElementById('voice-mute-btn').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('voice-deafen-btn').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('voice-leave-btn').style.display = inVoice ? 'inline-flex' : 'none';
+    document.getElementById('screen-share-btn').style.display = inVoice ? 'inline-flex' : 'none';
 
     if (!inVoice) {
       document.getElementById('voice-mute-btn').textContent = '🔇 Mute';
       document.getElementById('voice-mute-btn').classList.remove('muted');
       document.getElementById('voice-deafen-btn').textContent = '🔇 Deafen';
       document.getElementById('voice-deafen-btn').classList.remove('muted');
+      document.getElementById('screen-share-btn').textContent = '🖥️ Share';
+      document.getElementById('screen-share-btn').classList.remove('sharing');
+      this._hideScreenShare();
     }
   }
 
@@ -1578,6 +1617,60 @@ class HavenApp {
       this._setLed('status-voice-led', 'off');
       document.getElementById('status-voice-text').textContent = 'Off';
     }
+  }
+
+  // ── Screen Share ──────────────────────────────────────
+
+  async _toggleScreenShare() {
+    if (!this.voice.inVoice) return;
+
+    if (this.voice.isScreenSharing) {
+      this.voice.stopScreenShare();
+      document.getElementById('screen-share-btn').textContent = '🖥️ Share';
+      document.getElementById('screen-share-btn').classList.remove('sharing');
+      this._showToast('Stopped screen sharing', 'info');
+    } else {
+      const ok = await this.voice.shareScreen();
+      if (ok) {
+        document.getElementById('screen-share-btn').textContent = '🛑 Stop';
+        document.getElementById('screen-share-btn').classList.add('sharing');
+        this._showToast('Screen sharing started', 'success');
+        // Show our own screen in the viewer so we can see what's being shared
+        const vid = document.getElementById('screen-share-video');
+        vid.srcObject = this.voice.screenStream;
+        vid.muted = true; // don't echo our own audio
+        document.getElementById('screen-share-label').textContent = '🖥️ You are sharing';
+        document.getElementById('screen-share-container').style.display = 'flex';
+      } else {
+        this._showToast('Screen share cancelled or not supported', 'error');
+      }
+    }
+  }
+
+  _handleScreenStream(userId, stream) {
+    const container = document.getElementById('screen-share-container');
+    const vid = document.getElementById('screen-share-video');
+    const label = document.getElementById('screen-share-label');
+
+    if (stream) {
+      vid.srcObject = stream;
+      // Find username from voice peers or online list
+      const peer = this.voice.peers.get(userId);
+      const who = peer ? peer.username : 'Someone';
+      label.textContent = `🖥️ ${who} is sharing`;
+      container.style.display = 'flex';
+    } else {
+      // Stream ended
+      vid.srcObject = null;
+      container.style.display = 'none';
+    }
+  }
+
+  _hideScreenShare() {
+    const container = document.getElementById('screen-share-container');
+    const vid = document.getElementById('screen-share-video');
+    vid.srcObject = null;
+    container.style.display = 'none';
   }
 
   // ── Utilities ─────────────────────────────────────────
@@ -2076,6 +2169,35 @@ class HavenApp {
     if (cleanupSize && this.serverSettings.cleanup_max_size_mb) {
       cleanupSize.value = this.serverSettings.cleanup_max_size_mb;
     }
+    // Whitelist setting
+    const whitelistToggle = document.getElementById('whitelist-enabled');
+    if (whitelistToggle) {
+      whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
+    }
+    // Fetch whitelist entries when admin opens settings
+    if (this.user && this.user.isAdmin) {
+      this.socket.emit('get-whitelist');
+    }
+  }
+
+  _renderWhitelist(list) {
+    const el = document.getElementById('whitelist-list');
+    if (!el) return;
+    if (!list || list.length === 0) {
+      el.innerHTML = '<p class="muted-text">No whitelisted users</p>';
+      return;
+    }
+    el.innerHTML = list.map(w => `
+      <div class="whitelist-item">
+        <span class="whitelist-username">${this._escapeHtml(w.username)}</span>
+        <button class="btn-sm btn-danger-sm whitelist-remove-btn" data-username="${this._escapeHtml(w.username)}">✕</button>
+      </div>
+    `).join('');
+    el.querySelectorAll('.whitelist-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.socket.emit('whitelist-remove', { username: btn.dataset.username });
+      });
+    });
   }
 
   _renderBanList(bans) {

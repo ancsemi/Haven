@@ -135,6 +135,16 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: whitelist table ─────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS whitelist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+      added_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // ── Migration: seed default server settings ───────────
   const insertSetting = db.prepare(
     'INSERT OR IGNORE INTO server_settings (key, value) VALUES (?, ?)'
@@ -143,6 +153,7 @@ function initDatabase() {
   insertSetting.run('cleanup_enabled', 'false');       // auto-cleanup toggle
   insertSetting.run('cleanup_max_age_days', '0');      // delete messages older than N days (0 = disabled)
   insertSetting.run('cleanup_max_size_mb', '0');       // delete oldest messages when DB exceeds N MB (0 = disabled)
+  insertSetting.run('whitelist_enabled', 'false');     // whitelist toggle
 
   return db;
 }
