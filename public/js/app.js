@@ -78,6 +78,7 @@ class HavenApp {
     this._setupServerBar();
     this._setupNotifications();
     this._setupImageUpload();
+    this._setupGifPicker();
     this._startStatusBar();
     this._setupMobile();
 
@@ -1592,6 +1593,8 @@ class HavenApp {
     const trimmed = str.trim();
     if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) return true;
     if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
+    // Tenor GIF URLs (don't have file extensions)
+    if (/^https:\/\/media\.tenor\.com\/.+/i.test(trimmed)) return true;
     return false;
   }
 
@@ -1615,7 +1618,8 @@ class HavenApp {
       (url) => {
         try { new URL(url); } catch { return url; }
         const safeUrl = url.replace(/['"<>]/g, '');
-        if (/\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(safeUrl)) {
+        if (/\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(safeUrl) ||
+            /^https:\/\/media\.tenor\.com\//i.test(safeUrl)) {
           return `<img src="${safeUrl}" class="chat-image" alt="image" loading="lazy">`;
         }
         return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer nofollow">${safeUrl}</a>`;
@@ -1727,6 +1731,126 @@ class HavenApp {
       picker.appendChild(btn);
     });
     picker.style.display = 'flex';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // GIF PICKER (Tenor)
+  // ═══════════════════════════════════════════════════════
+
+  _setupGifPicker() {
+    const btn = document.getElementById('gif-btn');
+    const picker = document.getElementById('gif-picker');
+    const searchInput = document.getElementById('gif-search-input');
+    const grid = document.getElementById('gif-grid');
+    if (!btn || !picker) return;
+
+    this._gifDebounce = null;
+
+    btn.addEventListener('click', () => {
+      if (picker.style.display === 'flex') {
+        picker.style.display = 'none';
+        return;
+      }
+      // Close emoji picker if open
+      document.getElementById('emoji-picker').style.display = 'none';
+      picker.style.display = 'flex';
+      searchInput.value = '';
+      searchInput.focus();
+      this._loadTrendingGifs();
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+      if (picker.style.display !== 'none' &&
+          !picker.contains(e.target) && !btn.contains(e.target)) {
+        picker.style.display = 'none';
+      }
+    });
+
+    // Search on typing with debounce
+    searchInput.addEventListener('input', () => {
+      clearTimeout(this._gifDebounce);
+      const q = searchInput.value.trim();
+      if (!q) {
+        this._loadTrendingGifs();
+        return;
+      }
+      this._gifDebounce = setTimeout(() => this._searchGifs(q), 350);
+    });
+
+    // Click on a GIF to send it
+    grid.addEventListener('click', (e) => {
+      const img = e.target.closest('img');
+      if (!img || !img.dataset.full) return;
+      this._sendGifMessage(img.dataset.full);
+      picker.style.display = 'none';
+    });
+  }
+
+  _loadTrendingGifs() {
+    const grid = document.getElementById('gif-grid');
+    grid.innerHTML = '<div class="gif-picker-empty">Loading...</div>';
+    fetch('/api/gif/trending?limit=20')
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          grid.innerHTML = `<div class="gif-picker-empty">${data.error}</div>`;
+          return;
+        }
+        this._renderGifGrid(data.results || []);
+      })
+      .catch(() => {
+        grid.innerHTML = '<div class="gif-picker-empty">Failed to load GIFs</div>';
+      });
+  }
+
+  _searchGifs(query) {
+    const grid = document.getElementById('gif-grid');
+    grid.innerHTML = '<div class="gif-picker-empty">Searching...</div>';
+    fetch(`/api/gif/search?q=${encodeURIComponent(query)}&limit=20`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          grid.innerHTML = `<div class="gif-picker-empty">${data.error}</div>`;
+          return;
+        }
+        const results = data.results || [];
+        if (results.length === 0) {
+          grid.innerHTML = '<div class="gif-picker-empty">No GIFs found</div>';
+          return;
+        }
+        this._renderGifGrid(results);
+      })
+      .catch(() => {
+        grid.innerHTML = '<div class="gif-picker-empty">Search failed</div>';
+      });
+  }
+
+  _renderGifGrid(results) {
+    const grid = document.getElementById('gif-grid');
+    grid.innerHTML = '';
+    results.forEach(gif => {
+      if (!gif.tiny) return;
+      const img = document.createElement('img');
+      img.src = gif.tiny;
+      img.alt = gif.title || 'GIF';
+      img.loading = 'lazy';
+      img.dataset.full = gif.full || gif.tiny;
+      grid.appendChild(img);
+    });
+  }
+
+  _sendGifMessage(url) {
+    if (!this.currentChannel || !url) return;
+    const payload = {
+      channelCode: this.currentChannel,
+      content: url,
+    };
+    if (this.replyTo) {
+      payload.replyTo = this.replyTo;
+      this._clearReply();
+    }
+    this.socket.emit('send-message', payload);
   }
 
   // ═══════════════════════════════════════════════════════

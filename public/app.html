@@ -166,6 +166,14 @@
             </button>
             <button id="emoji-btn" class="btn-emoji" title="Emoji">😀</button>
             <div id="emoji-picker" class="emoji-picker" style="display:none"></div>
+            <button id="gif-btn" class="btn-gif" title="Search GIFs">GIF</button>
+            <div id="gif-picker" class="gif-picker" style="display:none">
+              <div class="gif-picker-header">
+                <input type="text" id="gif-search-input" placeholder="Search Tenor..." maxlength="100" autocomplete="off">
+              </div>
+              <div class="gif-picker-grid" id="gif-grid"></div>
+              <div class="gif-picker-footer">Powered by Tenor</div>
+            </div>
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
             <div id="slash-dropdown" class="slash-dropdown" style="display:none"></div>
             <textarea id="message-input" placeholder="Type a message... (/ for commands)"

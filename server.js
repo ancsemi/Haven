@@ -49,7 +49,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles needed for themes
-      imgSrc: ["'self'", "data:", "blob:"],
+      imgSrc: ["'self'", "data:", "blob:", "https://media.tenor.com"],
       connectSrc: ["'self'", "wss:", "ws:"],    // Socket.IO websockets
       mediaSrc: ["'self'", "blob:"],            // WebRTC audio
       fontSrc: ["'self'"],
@@ -177,6 +177,41 @@ app.post('/api/upload', uploadLimiter, (req, res) => {
     }
     res.json({ url: `/uploads/${req.file.filename}` });
   });
+});
+
+// ── GIF search proxy (Tenor API — keeps key server-side) ──
+const TENOR_KEY = process.env.TENOR_API_KEY;
+
+app.get('/api/gif/search', (req, res) => {
+  if (!TENOR_KEY) return res.status(501).json({ error: 'GIF search not configured — add TENOR_API_KEY to .env' });
+  const q = (req.query.q || '').trim().slice(0, 100);
+  if (!q) return res.status(400).json({ error: 'Missing search query' });
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&client_key=haven&limit=${limit}&media_filter=tinygif,gif`;
+  fetch(url).then(r => r.json()).then(data => {
+    const results = (data.results || []).map(r => ({
+      id: r.id,
+      title: r.title || '',
+      tiny: r.media_formats?.tinygif?.url || '',
+      full: r.media_formats?.gif?.url || '',
+    }));
+    res.json({ results });
+  }).catch(() => res.status(502).json({ error: 'Tenor API error' }));
+});
+
+app.get('/api/gif/trending', (req, res) => {
+  if (!TENOR_KEY) return res.status(501).json({ error: 'GIF search not configured — add TENOR_API_KEY to .env' });
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const url = `https://tenor.googleapis.com/v2/featured?key=${TENOR_KEY}&client_key=haven&limit=${limit}&media_filter=tinygif,gif`;
+  fetch(url).then(r => r.json()).then(data => {
+    const results = (data.results || []).map(r => ({
+      id: r.id,
+      title: r.title || '',
+      tiny: r.media_formats?.tinygif?.url || '',
+      full: r.media_formats?.gif?.url || '',
+    }));
+    res.json({ results });
+  }).catch(() => res.status(502).json({ error: 'Tenor API error' }));
 });
 
 // ── Catch-all: 404 ──────────────────────────────────────

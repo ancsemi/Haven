@@ -1701,6 +1701,115 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 
 
 /* ═══════════════════════════════════════════════════════════
+   GIF PICKER
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-gif {
+  width: 38px;
+  height: 26px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--text-muted);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  align-self: center;
+}
+
+.btn-gif:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.gif-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 88px;
+  margin-bottom: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  width: 340px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.gif-picker-header {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.gif-picker-header input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.gif-picker-header input:focus {
+  border-color: var(--accent);
+}
+
+.gif-picker-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  min-height: 200px;
+}
+
+.gif-picker-grid img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.2s;
+  display: block;
+}
+
+.gif-picker-grid img:hover {
+  transform: scale(1.03);
+  opacity: 0.85;
+}
+
+.gif-picker-footer {
+  padding: 4px 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.gif-picker-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
    MESSAGE REACTIONS
    ═══════════════════════════════════════════════════════════ */
 
