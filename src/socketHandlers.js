@@ -370,8 +370,9 @@ function setupSocketHandlers(io, db) {
       // Skip slash command parsing for image uploads and file paths
       const trimmed = content.trim();
       const isImage = data.isImage === true;
+      const isUpload = /^\/uploads\b/i.test(trimmed);
       const isPath = trimmed.startsWith('/') && trimmed.indexOf('/', 1) !== -1;
-      const slashMatch = (!isImage && !isPath) ? trimmed.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/) : null;
+      const slashMatch = (!isImage && !isUpload && !isPath) ? trimmed.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/) : null;
       if (slashMatch) {
         const cmd = slashMatch[1].toLowerCase();
         const arg = (slashMatch[2] || '').trim();

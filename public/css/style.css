@@ -1289,10 +1289,12 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 #toast-container {
   position: fixed;
   top: 16px;
-  right: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10000;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
   pointer-events: none;
 }
@@ -1315,8 +1317,8 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 .toast.success { border-color: var(--success); background: rgba(67,181,129,0.15); }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translateX(30px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes toastOut {
@@ -2767,7 +2769,7 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .modal h3 { font-size: 18px; }
 
   /* Toasts — full width */
-  #toast-container { left: 8px; right: 8px; top: 8px; }
+  #toast-container { left: 50%; right: auto; top: 8px; transform: translateX(-50%); }
   .toast { max-width: none; }
 
   /* Typing indicator */
