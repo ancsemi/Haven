@@ -1765,6 +1765,7 @@ function setupSocketHandlers(io, db) {
         disapprove:() => ({ content: `${arg ? arg + ' ' : ''}ಠ_ಠ` }),
         bbs:       () => ({ content: `🕐 ${username} will be back soon` }),
         boobs:     () => ({ content: `( . Y . )` }),
+        butt:      () => ({ content: `( . )( . )` }),
         brb:       () => ({ content: `⏳ ${username} will be right back` }),
         afk:       () => ({ content: `💤 ${username} is away from keyboard` }),
         me:        () => arg ? ({ content: `_${username} ${arg}_` }) : null,

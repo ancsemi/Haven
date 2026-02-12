@@ -50,7 +50,7 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles needed for themes
       imgSrc: ["'self'", "data:", "blob:", "https://media.tenor.com", "https:"],  // https: for link preview OG images
-      connectSrc: ["'self'", "wss:", "ws:"],    // Socket.IO websockets
+      connectSrc: ["'self'", "wss:"],            // Socket.IO (wss only — no plaintext ws:)
       mediaSrc: ["'self'", "blob:"],            // WebRTC audio
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
@@ -89,6 +89,13 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.use('/uploads', express.static(UPLOADS_DIR, {
   dotfiles: 'deny',
   maxAge: '1h',
+  setHeaders: (res, filePath) => {
+    // Force download for non-image files (prevents HTML/SVG execution in browser)
+    const ext = path.extname(filePath).toLowerCase();
+    if (!['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+  }
 }));
 
 // ── File uploads (images max 5 MB, general files max 25 MB) ──
@@ -192,6 +199,26 @@ app.post('/api/upload', uploadLimiter, (req, res) => {
   upload.single('image')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    // Validate file magic bytes (don't trust MIME type alone)
+    try {
+      const fd = fs.openSync(req.file.path, 'r');
+      const hdr = Buffer.alloc(12);
+      fs.readSync(fd, hdr, 0, 12, 0);
+      fs.closeSync(fd);
+      let validMagic = false;
+      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
+      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
+      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
+      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
+      if (!validMagic) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'File content does not match image type' });
+      }
+    } catch {
+      try { fs.unlinkSync(req.file.path); } catch {}
+      return res.status(400).json({ error: 'Failed to validate file' });
+    }
 
     // Force safe extension based on validated mimetype (prevent HTML/SVG upload)
     const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };

@@ -392,6 +392,24 @@
         </div>
       </div>
 
+      <!-- Password Change Section -->
+      <div class="settings-section">
+        <h5 class="settings-section-title">🔒 Password</h5>
+        <div class="password-change-form">
+          <div class="form-group compact">
+            <input type="password" id="current-password" placeholder="Current password" maxlength="128" autocomplete="current-password">
+          </div>
+          <div class="form-group compact">
+            <input type="password" id="new-password" placeholder="New password (8+ chars)" maxlength="128" autocomplete="new-password">
+          </div>
+          <div class="form-group compact">
+            <input type="password" id="confirm-password" placeholder="Confirm new password" maxlength="128" autocomplete="new-password">
+          </div>
+          <button class="btn-sm btn-full" id="change-password-btn">Change Password</button>
+          <small class="settings-hint" id="password-status"></small>
+        </div>
+      </div>
+
       <!-- Admin Section (hidden for non-admins) -->
       <div class="settings-section admin-settings-section" id="admin-mod-panel" style="display:none">
         <h5 class="settings-section-title">🛡️ Admin</h5>

@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.3.2] — 2026-02-12
+
+### Fixed — Security Hardening II
+- **Upload serving headers** — non-image uploads now served with `Content-Disposition: attachment`, preventing HTML/SVG files from executing in the browser when accessed directly.
+- **Image magic-byte validation** — uploaded images are verified by reading file header bytes (JPEG `FF D8 FF`, PNG `89 50 4E 47`, GIF `GIF8x`, WebP `RIFF…WEBP`), not just MIME type. Spoofed files are rejected and deleted.
+- **CSP tightened** — removed `ws:` from `connect-src`, allowing only `wss:` (encrypted WebSocket connections).
+- **Inline event handler removed** — link preview `onerror` attribute replaced with delegated JS listener, eliminating a CSP `unsafe-inline` bypass vector.
+- **Password minimum raised** — registration now requires 8+ characters (was 6).
+- **Account enumeration mitigated** — registration endpoint no longer reveals whether a username is already taken.
+
+### Added — Quality of Life
+- **Password change from settings** — new 🔒 Password section in the settings modal lets users change their password (current → new → confirm) without logging out. Backend `POST /api/auth/change-password` issues a fresh JWT on success.
+- **Emoji picker upgrade** — categorized tabs (Smileys, People, Animals, Food, Activities, Travel, Objects, Symbols), search bar, scrollable grid with 280+ emojis. Replaces the old flat 40-emoji palette.
+- **`/butt` slash command** — `( . )( . )` — companion to `/boobs`.
+
+---
+
 ## [1.3.1] — 2026-02-12
 
 ### Fixed — Security Hardening

@@ -45,6 +45,7 @@ class HavenApp {
       { cmd: 'brb',        args: '',         desc: 'Announce you\'ll be right back' },
       { cmd: 'afk',        args: '',         desc: 'Away from keyboard' },
       { cmd: 'boobs',      args: '',         desc: '( . Y . )' },
+      { cmd: 'butt',       args: '',         desc: '( . )( . )' },
       { cmd: 'nick',       args: '<name>',   desc: 'Change your username' },
       { cmd: 'clear',      args: '',         desc: 'Clear your chat view' },
       { cmd: 'flip',       args: '',         desc: 'Flip a coin: heads or tails' },
@@ -53,13 +54,20 @@ class HavenApp {
       { cmd: 'wave',       args: '[text]',   desc: 'Wave at the chat 👋' },
     ];
 
-    // Quick-access emoji palette (most useful ones)
-    this.emojis = [
-      '😀','😂','😍','🥺','😎','🤔','😭','🥳','🔥','❤️',
-      '👍','👎','👏','🙌','💀','💯','✅','❌','⭐','🎉',
-      '😈','🤡','💩','👀','🫡','🤝','😴','🤣','😤','🫠',
-      '🍕','🎮','🎵','⚡','🚀','💎','🏆','🛡️','⚔️','🧠'
-    ];
+    // Emoji palette organized by category
+    this.emojiCategories = {
+      'Smileys':  ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','🙄','😏','😣','😥','😮','😯','😴','😛','😜','😝','😒','😔','🙃','😲','😤','😭','😢','😱','🥺','😠','😡','🤬','😈','💀','💩','🤡','👻','😺','😸','🫠'],
+      'People':   ['👋','🤚','✋','🖖','👌','🤌','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','👍','👎','✊','👊','🤛','🤜','👏','🙌','🤝','🙏','💪','🫡','🫶','💅','💃','🕺','🤳','🖕'],
+      'Animals':  ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🦆','🦅','🦉','🐺','🐴','🦄','🐝','🦋','🐌','🐞','🐢','🐍','🐙','🐬','🐳','🦈','🐊','🦖'],
+      'Food':     ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍒','🍑','🥭','🍍','🥝','🍅','🥑','🌽','🌶️','🍕','🍔','🍟','🌭','🍿','🧁','🍩','🍪','🍰','☕','🍺','🍷','🥤','🧊'],
+      'Activities':['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🎮','🕹️','🎲','🧩','🎯','🎳','🎭','🎨','🎼','🎵','🎸','🥁','🎹','🏆','🥇','🏅','🎪','🎬'],
+      'Travel':   ['🚗','🚕','🚀','✈️','🚁','🛸','🚢','🏠','🏢','🏰','🗼','🗽','⛩️','🌋','🏔️','🌊','🌅','🌄','🌉','🎡','🎢','🗺️','🧭','🏖️','🏕️'],
+      'Objects':  ['⌚','📱','💻','⌨️','🖥️','💾','📷','🔭','🔬','💡','🔦','📚','📝','✏️','📎','📌','🔑','🔒','🔓','🛡️','⚔️','🔧','💰','💎','📦','🎁','✉️','🔔'],
+      'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❣️','💕','💞','💓','💗','✨','⭐','🌟','💫','🔥','💯','✅','❌','‼️','⁉️','❓','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲']
+    };
+
+    // Flat list for quick access (used by search)
+    this.emojis = Object.values(this.emojiCategories).flat();
 
     if (!this.token || !this.user) {
       window.location.href = '/';
@@ -87,6 +95,11 @@ class HavenApp {
     this._setupStatusPicker();
     this._setupFileUpload();
     this._setupIdleDetection();
+
+    // CSP-safe image error handling (no inline onerror attributes)
+    document.getElementById('messages')?.addEventListener('error', (e) => {
+      if (e.target.tagName === 'IMG') e.target.style.display = 'none';
+    }, true);
 
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
@@ -811,6 +824,48 @@ class HavenApp {
     });
     document.getElementById('settings-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+    });
+
+    // ── Password change ──────────────────────────────────
+    document.getElementById('change-password-btn').addEventListener('click', async () => {
+      const cur  = document.getElementById('current-password').value;
+      const np   = document.getElementById('new-password').value;
+      const conf = document.getElementById('confirm-password').value;
+      const hint = document.getElementById('password-status');
+      hint.textContent = '';
+      hint.className = 'settings-hint';
+
+      if (!cur || !np) return hint.textContent = 'Fill in all fields';
+      if (np.length < 8) return hint.textContent = 'New password must be 8+ characters';
+      if (np !== conf)   return hint.textContent = 'Passwords do not match';
+
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          },
+          body: JSON.stringify({ currentPassword: cur, newPassword: np })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          hint.textContent = data.error || 'Failed';
+          hint.classList.add('error');
+          return;
+        }
+        // Store the fresh token
+        this.token = data.token;
+        localStorage.setItem('haven_token', data.token);
+        hint.textContent = '✅ Password changed!';
+        hint.classList.add('success');
+        document.getElementById('current-password').value = '';
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-password').value = '';
+      } catch {
+        hint.textContent = 'Network error';
+        hint.classList.add('error');
+      }
     });
 
     // Member visibility select (admin)
@@ -1688,7 +1743,7 @@ class HavenApp {
 
           let inner = '';
           if (data.image) {
-            inner += `<img class="link-preview-image" src="${this._escapeHtml(data.image)}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+            inner += `<img class="link-preview-image" src="${this._escapeHtml(data.image)}" alt="" loading="lazy">`;
           }
           inner += '<div class="link-preview-text">';
           if (data.siteName) inner += `<span class="link-preview-site">${this._escapeHtml(data.siteName)}</span>`;
@@ -2247,7 +2302,7 @@ class HavenApp {
   }
 
   // ═══════════════════════════════════════════════════════
-  // EMOJI PICKER
+  // EMOJI PICKER (categorized + searchable)
   // ═══════════════════════════════════════════════════════
 
   _toggleEmojiPicker() {
@@ -2257,22 +2312,90 @@ class HavenApp {
       return;
     }
     picker.innerHTML = '';
-    this.emojis.forEach(emoji => {
-      const btn = document.createElement('button');
-      btn.className = 'emoji-item';
-      btn.textContent = emoji;
-      btn.addEventListener('click', () => {
-        const input = document.getElementById('message-input');
-        const start = input.selectionStart;
-        const end = input.selectionEnd;
-        input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
-        input.selectionStart = input.selectionEnd = start + emoji.length;
-        input.focus();
-        picker.style.display = 'none';
+    this._emojiActiveCategory = this._emojiActiveCategory || Object.keys(this.emojiCategories)[0];
+
+    // Search bar
+    const searchRow = document.createElement('div');
+    searchRow.className = 'emoji-search-row';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'emoji-search-input';
+    searchInput.placeholder = 'Search emoji\u2026';
+    searchInput.maxLength = 30;
+    searchRow.appendChild(searchInput);
+    picker.appendChild(searchRow);
+
+    // Category tabs
+    const tabRow = document.createElement('div');
+    tabRow.className = 'emoji-tab-row';
+    const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️' };
+    for (const cat of Object.keys(this.emojiCategories)) {
+      const tab = document.createElement('button');
+      tab.className = 'emoji-tab' + (cat === this._emojiActiveCategory ? ' active' : '');
+      tab.textContent = catIcons[cat] || cat.charAt(0);
+      tab.title = cat;
+      tab.addEventListener('click', () => {
+        this._emojiActiveCategory = cat;
+        searchInput.value = '';
+        renderGrid();
+        tabRow.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
       });
-      picker.appendChild(btn);
+      tabRow.appendChild(tab);
+    }
+    picker.appendChild(tabRow);
+
+    // Grid
+    const grid = document.createElement('div');
+    grid.className = 'emoji-grid';
+    picker.appendChild(grid);
+
+    const self = this;
+    function renderGrid(filter) {
+      grid.innerHTML = '';
+      let emojis;
+      if (filter) {
+        // Simple search: match emoji by checking if any category name contains the query,
+        // or just show all matches from every category
+        emojis = self.emojis.filter(() => true); // show all, we filter visually below
+        // Actually let's just filter all emojis - since we can't search by name,
+        // show emojis from categories whose name matches the query
+        emojis = [];
+        for (const [cat, list] of Object.entries(self.emojiCategories)) {
+          if (cat.toLowerCase().includes(filter.toLowerCase())) {
+            emojis.push(...list);
+          }
+        }
+        // If no category matched, show all (user might be looking visually)
+        if (emojis.length === 0) emojis = self.emojis;
+      } else {
+        emojis = self.emojiCategories[self._emojiActiveCategory] || self.emojis;
+      }
+      emojis.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'emoji-item';
+        btn.textContent = emoji;
+        btn.addEventListener('click', () => {
+          const input = document.getElementById('message-input');
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+          input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
+          input.selectionStart = input.selectionEnd = start + emoji.length;
+          input.focus();
+          picker.style.display = 'none';
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim();
+      renderGrid(q || null);
     });
+
+    renderGrid();
     picker.style.display = 'flex';
+    searchInput.focus();
   }
 
   // ═══════════════════════════════════════════════════════

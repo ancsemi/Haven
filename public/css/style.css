@@ -1691,13 +1691,63 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: 12px;
-  padding: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-height: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1000;
+}
+
+.emoji-search-row {
+  padding: 0 2px 6px;
+}
+
+.emoji-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.emoji-search-input:focus {
+  border-color: var(--accent);
+}
+
+.emoji-tab-row {
+  display: flex;
+  gap: 2px;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.emoji-tab {
+  flex: 1;
+  padding: 4px 0;
+  font-size: 16px;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+  border: none;
+  opacity: 0.5;
+  transition: opacity var(--transition), background var(--transition);
+}
+.emoji-tab:hover { opacity: 0.8; background: var(--bg-tertiary); }
+.emoji-tab.active { opacity: 1; background: var(--bg-tertiary); }
+
+.emoji-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  max-width: 320px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 1000;
+  overflow-y: auto;
+  max-height: 240px;
+  padding: 2px;
 }
 
 .emoji-item {
@@ -2566,6 +2616,30 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   display: block;
   margin-top: -2px;
 }
+.settings-hint.error { color: #e94560; }
+.settings-hint.success { color: #43b581; }
+
+.password-change-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.password-change-form .form-group.compact {
+  margin: 0;
+}
+.password-change-form input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.password-change-form input:focus {
+  border-color: var(--accent);
+}
 
 .sidebar-settings-panel {
   margin-top: auto;
@@ -2925,6 +2999,7 @@ input, textarea { font-family: inherit; outline: none; border: none; }
     width: auto;
   }
 
+  .emoji-grid { max-height: 200px; }
   .emoji-item { width: 40px; height: 40px; font-size: 22px; }
 
   /* Mention dropdown — wider */
