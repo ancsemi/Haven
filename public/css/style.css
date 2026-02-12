@@ -1310,6 +1310,14 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 .icon-btn.danger:hover { color: var(--danger); }
 
 .sidebar-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.sidebar-section.channel-section {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
 
 .section-label {
   font-size: 11px;
@@ -2118,7 +2126,7 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   margin-top: 4px;
   -webkit-appearance: none;
   appearance: none;
-  background: var(--bg-tertiary);
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--fill, 50%), var(--bg-tertiary) var(--fill, 50%), var(--bg-tertiary) 100%);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
@@ -4434,6 +4442,38 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   margin-top: 12px !important;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.dm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.dm-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.dm-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 10px;
+}
+
+.dm-toggle-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+.dm-unread-count {
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 8px;
+  margin-left: auto;
 }
 
 .dm-item .channel-hash {

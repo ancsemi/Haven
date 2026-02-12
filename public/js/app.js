@@ -339,6 +339,14 @@ class HavenApp {
         this.channels.push(data);
         this._renderChannels();
       }
+      // Auto-expand DM section when a DM opens
+      const dmList = document.getElementById('dm-list');
+      if (dmList && dmList.style.display === 'none') {
+        dmList.style.display = '';
+        const arrow = document.querySelector('.dm-toggle-arrow');
+        if (arrow) arrow.classList.remove('collapsed');
+        localStorage.setItem('haven_dm_collapsed', false);
+      }
       this.switchChannel(data.code);
       // Scroll the DM channel into view in the sidebar
       const dmEl = document.querySelector(`.channel-item[data-code="${data.code}"]`);
@@ -1865,12 +1873,29 @@ class HavenApp {
       list.appendChild(el);
     });
 
-    // DM section
+    // DM section (collapsible)
     if (dmChannels.length > 0) {
-      const dmLabel = document.createElement('h5');
-      dmLabel.className = 'section-label dm-section-label';
-      dmLabel.textContent = 'Direct Messages';
-      list.appendChild(dmLabel);
+      const dmToggle = document.createElement('h5');
+      dmToggle.className = 'section-label dm-section-label dm-toggle';
+      const isCollapsed = localStorage.getItem('haven_dm_collapsed') === 'true';
+      const totalUnread = dmChannels.reduce((sum, ch) => sum + (this.unreadCounts[ch.code] || ch.unreadCount || 0), 0);
+      dmToggle.innerHTML = `<span class="dm-toggle-arrow${isCollapsed ? ' collapsed' : ''}">▾</span> Direct Messages${totalUnread > 0 ? ` <span class="dm-unread-count">${totalUnread > 99 ? '99+' : totalUnread}</span>` : ''}`;
+      dmToggle.style.cursor = 'pointer';
+      dmToggle.addEventListener('click', () => {
+        const dmList = document.getElementById('dm-list');
+        const arrow = dmToggle.querySelector('.dm-toggle-arrow');
+        if (dmList) {
+          const nowCollapsed = dmList.style.display === 'none';
+          dmList.style.display = nowCollapsed ? '' : 'none';
+          arrow.classList.toggle('collapsed', !nowCollapsed);
+          localStorage.setItem('haven_dm_collapsed', !nowCollapsed);
+        }
+      });
+      list.appendChild(dmToggle);
+
+      const dmList = document.createElement('div');
+      dmList.id = 'dm-list';
+      if (isCollapsed) dmList.style.display = 'none';
 
       dmChannels.forEach(ch => {
         const el = document.createElement('div');
@@ -1891,8 +1916,10 @@ class HavenApp {
         }
 
         el.addEventListener('click', () => this.switchChannel(ch.code));
-        list.appendChild(el);
+        dmList.appendChild(el);
       });
+
+      list.appendChild(dmList);
     }
 
     // Render voice indicators for channels with active voice users
@@ -2350,12 +2377,14 @@ class HavenApp {
 
     // Bind volume sliders
     el.querySelectorAll('.volume-slider').forEach(slider => {
+      if (this._sliderFillUpdate) this._sliderFillUpdate(slider);
       slider.addEventListener('input', () => {
         const userId = parseInt(slider.dataset.userId);
         const vol = parseInt(slider.value);
         slider.title = `Volume: ${vol}%`;
         this._setVoiceVolume(userId, vol);
         if (this.voice) this.voice.setVolume(userId, vol / 100);
+        if (this._sliderFillUpdate) this._sliderFillUpdate(slider);
       });
     });
   }
