@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.3.1] — 2026-02-12
+
+### Fixed — Security Hardening
+- **GIF endpoints now require authentication** — `/api/gif/search` and `/api/gif/trending` were previously unauthenticated, allowing anyone to probe the server and burn Tenor API quota. Now require a valid JWT.
+- **GIF endpoint rate limiting** — new per-IP rate limiter (30 req/min) prevents abuse.
+- **Version fingerprint removed** — `/api/health` no longer exposes the Haven version number to the public internet.
+- **HTTP redirect server (port 3001) hardened** — added rate limiting, `x-powered-by` disabled, header/request timeouts, and replaced open redirect (`req.hostname`) with fixed `localhost` redirect target.
+- **DNS rebinding SSRF protection** — link preview endpoint now resolves DNS and checks the resulting IP against private ranges, defeating rebinding attacks where `attacker.com` resolves to `127.0.0.1`.
+- **Link preview rate limiting** — new per-IP rate limiter (30 req/min) prevents abuse of the outbound HTTP fetcher.
+- **HSTS header** — forces browsers to use HTTPS for 1 year after first visit, preventing protocol downgrade attacks.
+- **Permissions-Policy header** — explicitly denies camera, geolocation, and payment APIs to the page.
+- **Referrer-Policy header** — `strict-origin-when-cross-origin` prevents full URL leakage in referrer headers.
+- **X-Content-Type-Options** — `nosniff` header prevents MIME-type sniffing on uploaded files.
+- **Server request timeouts** — headersTimeout (15s), requestTimeout (30s), keepAliveTimeout (65s), and absolute socket timeout (120s) to prevent Slowloris-style attacks.
+
+---
+
 ## [1.3.0] — 2026-02-12
 
 ### Added — Direct Messages

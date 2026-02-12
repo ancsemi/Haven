@@ -2332,7 +2332,9 @@ class HavenApp {
   _loadTrendingGifs() {
     const grid = document.getElementById('gif-grid');
     grid.innerHTML = '<div class="gif-picker-empty">Loading...</div>';
-    fetch('/api/gif/trending?limit=20')
+    fetch('/api/gif/trending?limit=20', {
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    })
       .then(r => r.json())
       .then(data => {
         if (data.error === 'gif_not_configured') {
@@ -2353,7 +2355,9 @@ class HavenApp {
   _searchGifs(query) {
     const grid = document.getElementById('gif-grid');
     grid.innerHTML = '<div class="gif-picker-empty">Searching...</div>';
-    fetch(`/api/gif/search?q=${encodeURIComponent(query)}&limit=20`)
+    fetch(`/api/gif/search?q=${encodeURIComponent(query)}&limit=20`, {
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    })
       .then(r => r.json())
       .then(data => {
         if (data.error === 'gif_not_configured') {

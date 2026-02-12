@@ -61,7 +61,16 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false,  // needed for WebRTC
   crossOriginOpenerPolicy: false,    // needed for WebRTC
+  hsts: { maxAge: 31536000, includeSubDomains: false }, // force HTTPS for 1 year
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
+
+// Additional security headers helmet doesn't cover
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), payment=()');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+});
 
 // Disable Express version disclosure
 app.disable('x-powered-by');
@@ -148,8 +157,8 @@ app.get('/api/health', (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.json({
     status: 'online',
-    name: process.env.SERVER_NAME || 'Haven',
-    version: require('./package.json').version
+    name: process.env.SERVER_NAME || 'Haven'
+    // version intentionally omitted — don't fingerprint the server for attackers
   });
 });
 
@@ -243,7 +252,28 @@ function getTenorKey() {
   return process.env.TENOR_API_KEY || '';
 }
 
-app.get('/api/gif/search', (req, res) => {
+// ── GIF endpoint rate limiting (per IP) ──────────────────
+const gifLimitStore = new Map();
+function gifLimiter(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress;
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute
+  const maxReqs = 30;
+  if (!gifLimitStore.has(ip)) gifLimitStore.set(ip, []);
+  const stamps = gifLimitStore.get(ip).filter(t => now - t < windowMs);
+  gifLimitStore.set(ip, stamps);
+  if (stamps.length >= maxReqs) return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  stamps.push(now);
+  next();
+}
+setInterval(() => { const now = Date.now(); for (const [ip, t] of gifLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) gifLimitStore.delete(ip); else gifLimitStore.set(ip, f); } }, 5 * 60 * 1000);
+
+app.get('/api/gif/search', gifLimiter, (req, res) => {
+  // Require authentication
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
   const key = getTenorKey();
   if (!key) return res.status(501).json({ error: 'gif_not_configured' });
   const q = (req.query.q || '').trim().slice(0, 100);
@@ -261,7 +291,12 @@ app.get('/api/gif/search', (req, res) => {
   }).catch(() => res.status(502).json({ error: 'Tenor API error' }));
 });
 
-app.get('/api/gif/trending', (req, res) => {
+app.get('/api/gif/trending', gifLimiter, (req, res) => {
+  // Require authentication
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
   const key = getTenorKey();
   if (!key) return res.status(501).json({ error: 'gif_not_configured' });
   const limit = Math.min(parseInt(req.query.limit) || 20, 50);
@@ -281,8 +316,37 @@ app.get('/api/gif/trending', (req, res) => {
 const linkPreviewCache = new Map(); // url → { data, ts }
 const PREVIEW_CACHE_TTL = 30 * 60 * 1000; // 30 min
 const PREVIEW_MAX_SIZE = 256 * 1024; // only read first 256 KB of page
+const dns = require('dns');
+const { promisify } = require('util');
+const dnsResolve = promisify(dns.resolve4);
 
-app.get('/api/link-preview', async (req, res) => {
+// Rate limit link preview fetches (per IP, separate from upload limiter)
+const previewLimitStore = new Map();
+function previewLimiter(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress;
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxReqs = 30; // 30 previews per minute per user
+  if (!previewLimitStore.has(ip)) previewLimitStore.set(ip, []);
+  const stamps = previewLimitStore.get(ip).filter(t => now - t < windowMs);
+  previewLimitStore.set(ip, stamps);
+  if (stamps.length >= maxReqs) return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  stamps.push(now);
+  next();
+}
+setInterval(() => { const now = Date.now(); for (const [ip, t] of previewLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) previewLimitStore.delete(ip); else previewLimitStore.set(ip, f); } }, 5 * 60 * 1000);
+
+// Check if an IP is private/internal
+function isPrivateIP(ip) {
+  if (!ip) return true;
+  return ip === '127.0.0.1' || ip === '0.0.0.0' || ip === '::1' || ip === '::' ||
+    ip.startsWith('10.') || ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
+    ip.startsWith('169.254.') || ip.startsWith('fc00:') || ip.startsWith('fd') ||
+    ip.startsWith('fe80:');
+}
+
+app.get('/api/link-preview', previewLimiter, async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -291,12 +355,13 @@ app.get('/api/link-preview', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'Missing url param' });
 
   // Only allow http(s) URLs
+  let parsed;
   try {
-    const parsed = new URL(url);
+    parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       return res.status(400).json({ error: 'Only http/https URLs allowed' });
     }
-    // Block private/internal IPs (SSRF protection)
+    // Block private/internal hostnames (SSRF protection — layer 1: hostname check)
     const host = parsed.hostname.toLowerCase();
     if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
         host === '::1' || host === '[::1]' ||
@@ -307,6 +372,16 @@ app.get('/api/link-preview', async (req, res) => {
       return res.status(400).json({ error: 'Private addresses not allowed' });
     }
   } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+
+  // SSRF protection — layer 2: DNS resolution check (defeats DNS rebinding)
+  try {
+    const addresses = await dnsResolve(parsed.hostname);
+    if (addresses.some(isPrivateIP)) {
+      return res.status(400).json({ error: 'Private addresses not allowed' });
+    }
+  } catch {
+    // DNS resolution failed — could be IPv6-only or non-existent; allow fetch to fail naturally
+  }
 
   // Cache check
   const cached = linkPreviewCache.get(url);
@@ -414,13 +489,35 @@ if (useSSL) {
     server = createHttpsServer(sslOptions, app);
     console.log('🔒 HTTPS enabled');
 
-    // Also start an HTTP server that redirects to HTTPS
+    // Also start an HTTP server that redirects to HTTPS (hardened)
     const httpRedirect = express();
-    httpRedirect.all('*', (req, res) => {
-      res.redirect(`https://${req.hostname}:${process.env.PORT || 3000}${req.url}`);
+    httpRedirect.disable('x-powered-by');
+    // Rate limit redirect server to prevent abuse
+    const redirectHits = new Map();
+    httpRedirect.use((req, res, next) => {
+      const ip = req.ip || req.socket.remoteAddress;
+      const now = Date.now();
+      if (!redirectHits.has(ip)) redirectHits.set(ip, []);
+      const stamps = redirectHits.get(ip).filter(t => now - t < 60000);
+      redirectHits.set(ip, stamps);
+      if (stamps.length > 60) return res.status(429).end('Rate limited');
+      stamps.push(now);
+      next();
     });
-    const HTTP_REDIRECT_PORT = parseInt(process.env.PORT || 3000) + 1; // 3001
-    createServer(httpRedirect).listen(HTTP_REDIRECT_PORT, process.env.HOST || '0.0.0.0', () => {
+    setInterval(() => { const now = Date.now(); for (const [ip, t] of redirectHits) { const f = t.filter(x => now - x < 60000); if (!f.length) redirectHits.delete(ip); else redirectHits.set(ip, f); } }, 5 * 60 * 1000);
+    // Only redirect to our own host — prevent open redirect
+    const safePort = parseInt(process.env.PORT || 3000);
+    httpRedirect.all('*', (req, res) => {
+      // Sanitize: only allow path portion, strip host manipulation
+      const safePath = (req.url || '/').replace(/[\r\n]/g, '');
+      res.redirect(301, `https://localhost:${safePort}${safePath}`);
+    });
+    const HTTP_REDIRECT_PORT = safePort + 1; // 3001
+    const httpRedirectServer = createServer(httpRedirect);
+    // Timeout to prevent Slowloris on redirect server
+    httpRedirectServer.headersTimeout = 5000;
+    httpRedirectServer.requestTimeout = 5000;
+    httpRedirectServer.listen(HTTP_REDIRECT_PORT, process.env.HOST || '0.0.0.0', () => {
       console.log(`↪️  HTTP redirect running on port ${HTTP_REDIRECT_PORT} → HTTPS`);
     });
   } catch (err) {
@@ -540,6 +637,12 @@ global.runAutoCleanup = runAutoCleanup;
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const protocol = useSSL ? 'https' : 'http';
+
+// ── Anti-Slowloris: server-level timeouts ────────────────
+server.headersTimeout = 15000;     // 15s to send all headers
+server.requestTimeout = 30000;     // 30s total request time
+server.keepAliveTimeout = 65000;   // slightly above typical ALB/LB timeout
+server.timeout = 120000;           // 2 min absolute socket timeout
 
 server.listen(PORT, HOST, () => {
   console.log(`
