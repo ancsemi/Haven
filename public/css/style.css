@@ -1399,6 +1399,18 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   padding: 0 5px;
 }
 
+/* ── Channel voice indicator (sidebar) ─── */
+.channel-voice-indicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--success);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.channel-voice-indicator .voice-icon { font-size: 12px; }
+
 /* ── Main Content ──────────────────────────────────────── */
 
 .main {
@@ -3353,6 +3365,7 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 
   /* Voice buttons — smaller on tablet */
   .btn-voice { padding: 5px 10px; font-size: 12px; }
+  .voice-label-text { display: none; }
 
   /* Hide header clutter — search/pin/delete tucked into long-press or sidebar */
   #delete-channel-btn,
@@ -3436,12 +3449,13 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .channel-info h3 { font-size: 13px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Voice buttons — compact on phone */
-  .voice-controls { gap: 4px; flex-wrap: wrap; }
+  .voice-controls { gap: 4px; flex-wrap: nowrap; flex-shrink: 1; overflow: hidden; }
   .btn-voice {
-    padding: 6px 8px;
+    padding: 4px 8px;
     font-size: 12px;
     min-width: 0;
   }
+  .voice-label-text { display: none; }
 
   /* Messages */
   .messages { padding: 8px; }
@@ -3458,25 +3472,25 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   /* Input area — touch-friendly */
   .message-input-area {
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-    gap: 4px;
+    gap: 3px;
   }
 
   .message-input-area textarea {
-    padding: 10px 14px;
+    padding: 8px 12px;
     font-size: 16px; /* prevents iOS zoom on focus */
     border-radius: 20px;
-    min-height: 40px;
+    min-height: 36px;
   }
 
   .btn-send,
   .btn-upload,
   .btn-emoji,
   .btn-gif {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
-    font-size: 16px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    font-size: 14px;
     border-radius: 50%;
     flex-shrink: 0;
   }

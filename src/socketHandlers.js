@@ -560,7 +560,17 @@ function setupSocketHandlers(io, db) {
       ).get(vch.id, socket.user.id);
       if (!vMember) return socket.emit('error-msg', 'Not a member of this channel');
 
+      // Leave any previous voice room first
+      for (const [prevCode, room] of voiceUsers) {
+        if (room.has(socket.user.id) && prevCode !== code) {
+          handleVoiceLeave(socket, prevCode);
+        }
+      }
+
       if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
+
+      // Join dedicated voice socket.io room (independent of text channel room)
+      socket.join(`voice:${code}`);
 
       // Existing users before this one joins
       const existingUsers = Array.from(voiceUsers.get(code).values());
@@ -586,7 +596,7 @@ function setupSocketHandlers(io, db) {
         });
       });
 
-      // Update voice user list for the whole channel
+      // Update voice user list for voice participants + text viewers
       broadcastVoiceUsers(code);
     });
 
@@ -1683,6 +1693,7 @@ function setupSocketHandlers(io, db) {
       if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
 
       voiceRoom.delete(socket.user.id);
+      socket.leave(`voice:${code}`);
 
       // Tell remaining peers to close connection to this user
       for (const [, user] of voiceRoom) {
@@ -1700,10 +1711,13 @@ function setupSocketHandlers(io, db) {
       const users = room
         ? Array.from(room.values()).map(u => ({ id: u.id, username: u.username }))
         : [];
-      io.to(`channel:${code}`).emit('voice-users-update', {
+      // Emit to voice participants (may have switched text channels) AND text viewers
+      io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', {
         channelCode: code,
         users
       });
+      // Lightweight count for sidebar voice indicators (all connected clients)
+      io.emit('voice-count-update', { code, count: users.length });
     }
 
     function emitOnlineUsers(code) {

@@ -310,6 +310,22 @@ That's it. All users can now search and send GIFs.
 
 ---
 
+## Roadmap
+
+Planned features — roughly in priority order:
+
+| Feature | Description |
+|---------|-------------|
+| **Webhook / Bot support** | Incoming webhooks and a lightweight bot API so external services can post messages and respond to events. |
+| **Permission levels** | Role-based access (Admin → Moderator → Member → Guest) with granular per-channel overrides. |
+| **Thread replies** | Threaded conversations that branch off a message without cluttering the main chat. |
+| **File sharing improvements** | Drag-and-drop multi-file uploads, file previews, and a searchable file history per channel. |
+| **End-to-end encryption (E2EE)** | Optional per-channel E2EE using client-managed keys for maximum privacy. |
+
+> Want something else? Open an issue — PRs are always welcome.
+
+---
+
 ## License
 
 MIT-NC — free to use, modify, and share. **Not for resale.** See [LICENSE](LICENSE).

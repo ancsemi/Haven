@@ -30,6 +30,7 @@ class HavenApp {
     this.userStatus = 'online';    // current user's status
     this.userStatusText = '';      // custom status text
     this.idleTimer = null;         // auto-away timer
+    this.voiceCounts = {};         // { channelCode: count } for sidebar voice indicators
 
     // Slash command definitions for autocomplete
     this.slashCommands = [
@@ -218,9 +219,25 @@ class HavenApp {
     });
 
     this.socket.on('voice-users-update', (data) => {
+      // Always render voice panel when viewing the matching text channel
       if (data.channelCode === this.currentChannel) {
         this._renderVoiceUsers(data.users);
       }
+      // Also update if we're in voice for this channel (we may be viewing a different text channel)
+      if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode) {
+        // Keep voice bar up to date
+        this._updateVoiceBar();
+      }
+    });
+
+    // Lightweight sidebar voice count — fires for every voice join/leave
+    this.socket.on('voice-count-update', (data) => {
+      if (data.count > 0) {
+        this.voiceCounts[data.code] = data.count;
+      } else {
+        delete this.voiceCounts[data.code];
+      }
+      this._updateChannelVoiceIndicators();
     });
 
     this.socket.on('user-typing', (data) => {
@@ -497,6 +514,11 @@ class HavenApp {
   _setupUI() {
     const msgInput = document.getElementById('message-input');
 
+    // Shorter placeholder on narrow screens to prevent wrapping
+    if (window.innerWidth <= 480) {
+      msgInput.placeholder = 'Message...';
+    }
+
     msgInput.addEventListener('keydown', (e) => {
       // If slash dropdown is visible, hijack arrow keys and enter
       const slashDd = document.getElementById('slash-dropdown');
@@ -542,8 +564,9 @@ class HavenApp {
     });
 
     msgInput.addEventListener('input', () => {
+      const maxH = window.innerWidth <= 480 ? 90 : 120;
       msgInput.style.height = 'auto';
-      msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+      msgInput.style.height = Math.min(msgInput.scrollHeight, maxH) + 'px';
 
       const now = Date.now();
       if (now - this.lastTypingEmit > 2000 && this.currentChannel) {
@@ -1587,6 +1610,9 @@ class HavenApp {
         list.appendChild(el);
       });
     }
+
+    // Render voice indicators for channels with active voice users
+    this._updateChannelVoiceIndicators();
   }
 
   _updateBadge(code) {
@@ -1602,6 +1628,24 @@ class HavenApp {
     } else if (badge) {
       badge.remove();
     }
+  }
+
+  _updateChannelVoiceIndicators() {
+    document.querySelectorAll('.channel-item').forEach(el => {
+      const code = el.dataset.code;
+      let indicator = el.querySelector('.channel-voice-indicator');
+      const count = this.voiceCounts[code] || 0;
+      if (count > 0) {
+        if (!indicator) {
+          indicator = document.createElement('span');
+          indicator.className = 'channel-voice-indicator';
+          el.appendChild(indicator);
+        }
+        indicator.innerHTML = `<span class="voice-icon">🔊</span>${count}`;
+      } else if (indicator) {
+        indicator.remove();
+      }
+    });
   }
 
   // ── Messages ──────────────────────────────────────────

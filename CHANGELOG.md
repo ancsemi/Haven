@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.4.1] — 2025-02-16
+
+### Added
+- **Independent voice & text channels** — voice and text are now fully decoupled, matching Discord's model. You can be in voice on one channel while reading/typing in another. Voice persists across text channel switches. The server uses dedicated `voice:<code>` socket.io rooms so voice signaling and updates reach participants regardless of which text channel they're viewing.
+- **Sidebar voice indicators** — channels with active voice users show a 🔊 count badge in the left sidebar, so you can see at a glance where people are talking without clicking into each channel.
+- **Roadmap section in README** — planned features (webhooks/bots, permission levels, threads, file sharing, E2EE) are now listed in a roadmap table.
+
+### Fixed
+- **Mobile input field sizing** — shortened placeholder to "Message..." on narrow screens, reduced button sizes from 40 px to 34 px, tightened padding, and lowered the auto-resize cap to 90 px. The input no longer starts too small or jumps to an awkward height on tap.
+- **Mobile header voice overflow** — voice controls no longer wrap to a second line and get cut off. Removed `flex-wrap`, compacted button labels ("🎤▾" instead of "🎤 Voice ▾" on ≤ 768 px), and allowed the controls container to shrink.
+- **Voice updates reaching wrong clients** — `broadcastVoiceUsers` previously emitted only to the text-channel room (`channel:<code>`), so users in voice who had switched text channels missed updates. It now emits to both `voice:<code>` and `channel:<code>`.
+
+---
+
 ## [1.4.0] — 2025-02-16
 
 ### Added
