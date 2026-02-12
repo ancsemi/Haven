@@ -1,6 +1,6 @@
 {
   "name": "haven",
-  "version": "1.3.8",
+  "version": "1.3.9",
   "description": "Self-hosted private chat — your server, your rules",
   "license": "MIT-NC",
   "main": "server.js",

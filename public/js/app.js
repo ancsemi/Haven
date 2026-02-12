@@ -1236,6 +1236,37 @@ class HavenApp {
         this._closeMobilePanels();
       }
     }, { passive: true });
+
+    // ── Tap-to-show message toolbar on mobile ──
+    const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (isTouchDevice) {
+      const messagesEl = document.getElementById('messages');
+
+      messagesEl.addEventListener('click', (e) => {
+        // Don't interfere with toolbar button clicks, links, images, reactions, spoilers
+        if (e.target.closest('.msg-toolbar') || e.target.closest('a') ||
+            e.target.closest('img') || e.target.closest('.reaction-badge') ||
+            e.target.closest('.spoiler') || e.target.closest('.reply-banner')) return;
+
+        const msgEl = e.target.closest('.message, .message-compact');
+        if (!msgEl) {
+          // Tapped empty space — deselect all
+          messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
+          return;
+        }
+
+        const wasSelected = msgEl.classList.contains('msg-selected');
+        // Deselect all
+        messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
+        // Toggle — if it wasn't selected, select it
+        if (!wasSelected) msgEl.classList.add('msg-selected');
+      });
+
+      // Deselect when tapping input area or outside messages
+      document.getElementById('message-input').addEventListener('focus', () => {
+        messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
+      });
+    }
   }
 
   _closeMobilePanels() {

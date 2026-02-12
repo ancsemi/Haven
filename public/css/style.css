@@ -3469,16 +3469,25 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .reaction-picker { gap: 4px; padding: 6px 8px; }
   .reaction-pick-btn { width: 38px; height: 38px; font-size: 20px; }
 
-  /* Message toolbar — always visible on touch devices */
+  /* Message toolbar — hidden until message is tapped */
   .msg-toolbar {
     position: static;
-    display: flex;
+    display: none;
     margin-top: 4px;
     box-shadow: none;
     border: none;
     background: none;
     padding: 0;
     gap: 4px;
+  }
+
+  .msg-selected .msg-toolbar {
+    display: flex;
+  }
+
+  .msg-selected {
+    background: rgba(255,255,255,0.04);
+    border-radius: var(--radius);
   }
 
   .msg-toolbar button {
@@ -3571,15 +3580,24 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .message:hover, .message-compact:hover { background: transparent; }
   .message-compact:hover .compact-time { display: none; }
 
-  /* Make msg toolbar always visible on touch */
+  /* Message toolbar — hidden until message is tapped */
   .msg-toolbar {
-    display: flex;
+    display: none;
     position: static;
     box-shadow: none;
     border: none;
     background: none;
     padding: 0;
     margin-top: 4px;
+  }
+
+  .msg-selected .msg-toolbar {
+    display: flex;
+  }
+
+  .msg-selected {
+    background: rgba(255,255,255,0.04);
+    border-radius: var(--radius);
   }
 
   .msg-toolbar button {

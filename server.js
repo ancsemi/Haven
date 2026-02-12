@@ -82,7 +82,9 @@ app.use(express.urlencoded({ extended: false, limit: '16kb' }));
 // ── Static files with caching ────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
   dotfiles: 'deny',       // block .env, .git, etc.
-  maxAge: '1h',           // browser caching
+  etag: true,             // ETag for conditional requests
+  lastModified: true,     // Last-Modified header
+  maxAge: 0,              // always revalidate — prevents stale JS/CSS after deploys
 }));
 
 // ── Serve uploads from external data directory ──────────

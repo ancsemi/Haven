@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.3.9] — 2025-02-16
+
+### Fixed
+- **Slash commands working after every deploy** — static file caching dropped from 1 h to always-revalidate (ETag). Previously, browsers could serve stale JS for up to an hour after a server restart, causing commands and other new features to appear broken.
+
+### Improved
+- **Mobile message actions — tap to reveal** — react, reply, pin, edit, and delete buttons are now hidden until you tap a message, drastically reducing clutter on phone screens. Tap another message to move the toolbar; tap empty space or the input to dismiss.
+
+---
+
 ## [1.3.8] — 2025-02-16
 
 ### Fixed
