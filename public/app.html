@@ -90,8 +90,9 @@
             <canvas id="custom-hue-bar" width="206" height="18"></canvas>
             <canvas id="custom-triangle" width="206" height="180"></canvas>
           </div>
-          <button class="btn-game-sidebar" id="play-flappy-btn" title="Play Shippy Container">� Shippy Container</button>
-        </div>
+          <button class="btn-game-sidebar" id="play-flappy-btn" title="Play Shippy Container">� Shippy Container</button>          <button class="btn-game-sidebar btn-leaderboard" id="leaderboard-btn" title="View Leaderboard">🏆 Leaderboard</button>
+          <!-- Persistent voice bar (shows when in voice) -->
+          <div id="voice-bar" class="voice-bar" style="display:none"></div>        </div>
       </aside>
 
       <!-- ─── Main Content ────────────────────────────── -->
@@ -138,6 +139,9 @@
             </button>
             <button id="screen-share-btn" class="btn-voice" style="display:none" title="Share Screen">
               🖥️ Share
+            </button>
+            <button id="voice-ns-btn" class="btn-voice ns-active" style="display:none" title="Noise Suppression">
+              🤫 NS
             </button>
             <button id="voice-leave-btn" class="btn-voice btn-danger" style="display:none">
               📞 Leave
@@ -478,6 +482,19 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="close-bans-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaderboard Modal -->
+  <div class="modal-overlay" id="leaderboard-modal" style="display:none">
+    <div class="modal modal-leaderboard">
+      <h3>🏆 Shippy Container — Leaderboard</h3>
+      <div id="leaderboard-list" class="leaderboard-list">
+        <p class="muted-text">No scores yet</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="close-leaderboard-btn">Close</button>
       </div>
     </div>
   </div>

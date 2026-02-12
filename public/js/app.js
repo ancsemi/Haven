@@ -591,6 +591,10 @@ class HavenApp {
     document.getElementById('voice-leave-btn').addEventListener('click', () => this._leaveVoice());
     document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
     document.getElementById('screen-share-close').addEventListener('click', () => this._hideScreenShare());
+    document.getElementById('voice-ns-btn').addEventListener('click', () => this._toggleNoiseSuppression());
+
+    // Leaderboard
+    document.getElementById('leaderboard-btn')?.addEventListener('click', () => this._showLeaderboard());
 
     // Wire up the voice manager's video callback
     this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
@@ -692,6 +696,9 @@ class HavenApp {
     }
     document.getElementById('play-flappy-btn')?.addEventListener('click', () => {
       window.open('/games/flappy', '_blank', 'noopener,width=520,height=760');
+    });
+    document.getElementById('close-leaderboard-btn')?.addEventListener('click', () => {
+      document.getElementById('leaderboard-modal').style.display = 'none';
     });
 
     // Image click + spoiler click delegation (CSP-safe — no inline handlers)
@@ -1320,11 +1327,7 @@ class HavenApp {
   switchChannel(code) {
     if (this.currentChannel === code) return;
 
-    if (this.voice && this.voice.inVoice && this.voice.currentChannel !== code) {
-      this.voice.leave();
-      this._updateVoiceButtons(false);
-      this._updateVoiceStatus(false);
-    }
+    // Voice persists across channel switches — no auto-disconnect
 
     this.currentChannel = code;
     const channel = this.channels.find(c => c.code === code);
@@ -1336,7 +1339,18 @@ class HavenApp {
     document.getElementById('channel-header-name').textContent = displayName;
     document.getElementById('channel-code-display').textContent = isDm ? '' : code;
     document.getElementById('copy-code-btn').style.display = isDm ? 'none' : 'inline-flex';
-    document.getElementById('voice-join-btn').style.display = 'inline-flex';
+    // Update voice button state for this channel
+    if (this.voice && this.voice.inVoice && this.voice.currentChannel === code) {
+      this._updateVoiceButtons(true);
+    } else {
+      // Show just the join button (not mute/deafen/leave)
+      document.getElementById('voice-join-btn').style.display = 'inline-flex';
+      document.getElementById('voice-mute-btn').style.display = 'none';
+      document.getElementById('voice-deafen-btn').style.display = 'none';
+      document.getElementById('voice-leave-btn').style.display = 'none';
+      document.getElementById('screen-share-btn').style.display = 'none';
+      document.getElementById('voice-ns-btn').style.display = 'none';
+    }
     document.getElementById('search-toggle-btn').style.display = 'inline-flex';
     document.getElementById('pinned-toggle-btn').style.display = 'inline-flex';
 
@@ -1944,10 +1958,12 @@ class HavenApp {
 
   async _joinVoice() {
     if (!this.currentChannel) return;
+    // voice.join() auto-leaves old channel if connected
     const success = await this.voice.join(this.currentChannel);
     if (success) {
       this._updateVoiceButtons(true);
       this._updateVoiceStatus(true);
+      this._updateVoiceBar();
       this._showToast('Joined voice chat', 'success');
     } else {
       this._showToast('Could not access microphone. Check permissions or use HTTPS.', 'error');
@@ -1958,6 +1974,7 @@ class HavenApp {
     this.voice.leave();
     this._updateVoiceButtons(false);
     this._updateVoiceStatus(false);
+    this._updateVoiceBar();
   }
 
   _toggleMute() {
@@ -2005,6 +2022,7 @@ class HavenApp {
     document.getElementById('voice-deafen-btn').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('voice-leave-btn').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('screen-share-btn').style.display = inVoice ? 'inline-flex' : 'none';
+    document.getElementById('voice-ns-btn').style.display = inVoice ? 'inline-flex' : 'none';
 
     if (!inVoice) {
       document.getElementById('voice-mute-btn').textContent = '🔇 Mute';
@@ -2013,6 +2031,8 @@ class HavenApp {
       document.getElementById('voice-deafen-btn').classList.remove('muted');
       document.getElementById('screen-share-btn').textContent = '🖥️ Share';
       document.getElementById('screen-share-btn').classList.remove('sharing');
+      document.getElementById('voice-ns-btn').textContent = '🤫 NS';
+      document.getElementById('voice-ns-btn').classList.add('ns-active');
       this._hideScreenShare();
     }
   }
@@ -2025,6 +2045,53 @@ class HavenApp {
       this._setLed('status-voice-led', 'off');
       document.getElementById('status-voice-text').textContent = 'Off';
     }
+  }
+
+  _updateVoiceBar() {
+    const bar = document.getElementById('voice-bar');
+    if (!bar) return;
+    if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
+      const ch = this.channels.find(c => c.code === this.voice.currentChannel);
+      const name = ch ? (ch.is_dm && ch.dm_target ? `@ ${ch.dm_target.username}` : `# ${ch.name}`) : this.voice.currentChannel;
+      bar.innerHTML = `<span class="voice-bar-icon">🔊</span><span class="voice-bar-channel">${name}</span><button class="voice-bar-leave" id="voice-bar-leave-btn" title="Disconnect">✕</button>`;
+      bar.style.display = 'flex';
+      document.getElementById('voice-bar-leave-btn').addEventListener('click', () => this._leaveVoice());
+    } else {
+      bar.innerHTML = '';
+      bar.style.display = 'none';
+    }
+  }
+
+  _toggleNoiseSuppression() {
+    if (!this.voice || !this.voice.inVoice) return;
+    const enabled = this.voice.toggleNoiseSuppression();
+    const btn = document.getElementById('voice-ns-btn');
+    if (enabled) {
+      btn.textContent = '🤫 NS';
+      btn.classList.add('ns-active');
+      this._showToast('Noise suppression ON', 'success');
+    } else {
+      btn.textContent = '🤫 NS';
+      btn.classList.remove('ns-active');
+      this._showToast('Noise suppression OFF', 'info');
+    }
+  }
+
+  _showLeaderboard() {
+    const modal = document.getElementById('leaderboard-modal');
+    if (!modal) return;
+    const list = document.getElementById('leaderboard-list');
+    const scores = this.highScores?.flappy || [];
+    if (!scores.length) {
+      list.innerHTML = '<p class="muted-text">No scores yet — play Shippy Container!</p>';
+    } else {
+      const rows = scores.slice(0, 20).map((s, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+        return `<div class="lb-row"><span class="lb-rank">${medal}</span><span class="lb-name">${this._escapeHtml(s.username)}</span><span class="lb-score">${s.score}</span></div>`;
+      }).join('');
+      list.innerHTML = rows;
+    }
+    modal.style.display = 'flex';
   }
 
   // ── Screen Share ──────────────────────────────────────

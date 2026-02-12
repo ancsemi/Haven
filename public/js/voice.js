@@ -5,7 +5,8 @@
 class VoiceManager {
   constructor(socket) {
     this.socket = socket;
-    this.localStream = null;
+    this.localStream = null;        // Processed stream (sent to peers)
+    this.rawStream = null;          // Raw mic stream (for local talk detection)
     this.screenStream = null;       // Screen share MediaStream
     this.isScreenSharing = false;
     this.peers = new Map();         // userId → { connection, stream, username }
@@ -13,6 +14,7 @@ class VoiceManager {
     this.isMuted = false;
     this.isDeafened = false;
     this.inVoice = false;
+    this.noiseSuppression = true;   // Noise gate enabled by default
     this.audioCtx = null;           // Web Audio context for volume boost
     this.gainNodes = new Map();     // userId → GainNode
     this.onScreenStream = null;     // callback(userId, stream|null) — set by app.js
@@ -23,6 +25,9 @@ class VoiceManager {
     this.talkingState = new Map();  // userId → boolean
     this.analysers = new Map();     // userId → { analyser, dataArray, interval }
     this._localTalkInterval = null;
+    this._noiseGateInterval = null;
+    this._noiseGateGain = null;
+    this._noiseGateAnalyser = null;
 
     this.rtcConfig = {
       iceServers: [
@@ -142,13 +147,16 @@ class VoiceManager {
 
   async join(channelCode) {
     try {
+      // Leave existing voice channel if connected elsewhere
+      if (this.inVoice) this.leave();
+
       // Create/resume AudioContext with user gesture (needed for volume boost)
       if (!this.audioCtx) {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
       if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
 
-      this.localStream = await navigator.mediaDevices.getUserMedia({
+      this.rawStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -157,13 +165,33 @@ class VoiceManager {
         video: false
       });
 
+      // ── Noise Gate via Web Audio ──
+      // Route mic through an analyser + gain node so we can silence
+      // audio below a threshold before sending it to peers.
+      const source = this.audioCtx.createMediaStreamSource(this.rawStream);
+      const gateAnalyser = this.audioCtx.createAnalyser();
+      gateAnalyser.fftSize = 2048;
+      gateAnalyser.smoothingTimeConstant = 0.3;
+      source.connect(gateAnalyser);
+
+      const gateGain = this.audioCtx.createGain();
+      source.connect(gateGain);
+
+      const dest = this.audioCtx.createMediaStreamDestination();
+      gateGain.connect(dest);
+
+      this._noiseGateAnalyser = gateAnalyser;
+      this._noiseGateGain = gateGain;
+      this.localStream = dest.stream;   // processed stream → peers
+      this._startNoiseGate();
+
       this.currentChannel = channelCode;
       this.inVoice = true;
       this.isMuted = false;
 
       this.socket.emit('voice-join', { code: channelCode });
 
-      // Start local talk indicator
+      // Start local talk indicator (use raw stream for accurate detection)
       this._startLocalTalkDetection();
 
       return true;
@@ -179,7 +207,8 @@ class VoiceManager {
       this.stopScreenShare();
     }
 
-    // Stop all talk analysers
+    // Stop noise gate and talk detection
+    this._stopNoiseGate();
     this._stopLocalTalkDetection();
     for (const [id] of this.analysers) this._stopAnalyser(id);
 
@@ -193,7 +222,11 @@ class VoiceManager {
     }
     this.gainNodes.clear();
 
-    // Stop local tracks
+    // Stop local tracks (both raw and processed)
+    if (this.rawStream) {
+      this.rawStream.getTracks().forEach(t => t.stop());
+      this.rawStream = null;
+    }
     if (this.localStream) {
       this.localStream.getTracks().forEach(t => t.stop());
       this.localStream = null;
@@ -208,6 +241,11 @@ class VoiceManager {
 
   toggleMute() {
     this.isMuted = !this.isMuted;
+    if (this.rawStream) {
+      this.rawStream.getAudioTracks().forEach(track => {
+        track.enabled = !this.isMuted;
+      });
+    }
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
         track.enabled = !this.isMuted;
@@ -418,6 +456,55 @@ class VoiceManager {
     } catch { return 1; }
   }
 
+  // ── Noise Gate ───────────────────────────────────────────
+
+  toggleNoiseSuppression() {
+    this.noiseSuppression = !this.noiseSuppression;
+    // Immediately open gate if disabling
+    if (!this.noiseSuppression && this._noiseGateGain) {
+      this._noiseGateGain.gain.setTargetAtTime(1, this.audioCtx.currentTime, 0.01);
+    }
+    return this.noiseSuppression;
+  }
+
+  _startNoiseGate() {
+    if (this._noiseGateInterval) return;
+    const analyser = this._noiseGateAnalyser;
+    const gain = this._noiseGateGain;
+    if (!analyser || !gain) return;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const THRESHOLD = 12;    // Noise floor — below this = silence
+    const ATTACK = 0.015;    // Gate opens fast (seconds, ~15ms)
+    const RELEASE = 0.12;    // Gate closes gently (seconds, ~120ms)
+
+    this._noiseGateInterval = setInterval(() => {
+      if (!this.noiseSuppression) {
+        gain.gain.value = 1;
+        return;
+      }
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const avg = sum / dataArray.length;
+
+      if (avg > THRESHOLD) {
+        gain.gain.setTargetAtTime(1, this.audioCtx.currentTime, ATTACK);
+      } else {
+        gain.gain.setTargetAtTime(0, this.audioCtx.currentTime, RELEASE);
+      }
+    }, 20);
+  }
+
+  _stopNoiseGate() {
+    if (this._noiseGateInterval) {
+      clearInterval(this._noiseGateInterval);
+      this._noiseGateInterval = null;
+    }
+    this._noiseGateAnalyser = null;
+    this._noiseGateGain = null;
+  }
+
   // ── Talking Detection ───────────────────────────────────
 
   _startAnalyser(userId, analyserNode, dataArray) {
@@ -468,21 +555,21 @@ class VoiceManager {
   }
 
   _startLocalTalkDetection() {
-    if (!this.localStream || this._localTalkInterval) return;
+    if (!this.rawStream || this._localTalkInterval) return;
     try {
       if (!this.audioCtx) {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
       if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
 
-      const source = this.audioCtx.createMediaStreamSource(this.localStream);
+      const source = this.audioCtx.createMediaStreamSource(this.rawStream);
       const analyser = this.audioCtx.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.5;
       source.connect(analyser);
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const THRESHOLD = 20;
+      const THRESHOLD = 15; // Slightly higher than noise gate to avoid flickering
       let wasTalking = false;
       let holdTimer = null;
       const HOLD_MS = 300;

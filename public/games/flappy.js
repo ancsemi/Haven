@@ -135,6 +135,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let best = parseInt(localStorage.getItem('haven_shippy_best') || '0');
   let state = 'waiting';
   let frameCount = 0;
+  let lastTime = 0;            // For delta-time physics
+  let pipeTimer = 0;           // Time-based pipe spawning (ms)
+  const TARGET_DT = 1000 / 60; // Baseline 60 fps
+  const PIPE_INTERVAL = 1500;  // Spawn pipe every 1.5 seconds
 
   document.getElementById('best-display').textContent = best;
 
@@ -143,6 +147,8 @@ document.addEventListener('DOMContentLoaded', () => {
     pipes = [];
     score = 0;
     frameCount = 0;
+    pipeTimer = 0;
+    lastTime = 0;
     document.getElementById('score-display').textContent = '0';
   }
 
@@ -184,20 +190,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function update() {
+  function update(dt) {
     if (state !== 'playing') return;
 
-    frameCount++;
-    bird.vy += 0.35;
-    bird.y += bird.vy;
+    // Normalize physics to 60 fps baseline; cap to prevent huge jumps on tab-switch
+    const scale = Math.min(dt / TARGET_DT, 3);
 
-    if (frameCount % 90 === 0) {
+    frameCount++;
+    bird.vy += 0.35 * scale;
+    bird.y += bird.vy * scale;
+
+    pipeTimer += dt;
+    if (pipeTimer >= PIPE_INTERVAL) {
+      pipeTimer -= PIPE_INTERVAL;
       spawnPipe();
     }
 
     for (let i = pipes.length - 1; i >= 0; i--) {
       const p = pipes[i];
-      p.x -= PIPE_SPEED;
+      p.x -= PIPE_SPEED * scale;
 
       if (!p.scored && p.x + PIPE_W < bird.x) {
         p.scored = true;
@@ -279,11 +290,13 @@ document.addEventListener('DOMContentLoaded', () => {
     ctx.fillText(sub, W / 2, H / 2 + 18);
   }
 
-  function gameLoop() {
-    update();
+  function gameLoop(timestamp) {
+    const dt = lastTime ? (timestamp - lastTime) : TARGET_DT;
+    lastTime = timestamp;
+    update(dt);
     draw();
     requestAnimationFrame(gameLoop);
   }
 
-  gameLoop();
+  requestAnimationFrame(gameLoop);
 });
