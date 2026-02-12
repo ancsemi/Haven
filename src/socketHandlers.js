@@ -723,6 +723,43 @@ function setupSocketHandlers(io, db) {
       }
     });
 
+    // ── Music Sharing ─────────────────────────────────────
+
+    socket.on('music-share', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8)) return;
+      if (!isString(data.url, 1, 500)) return;
+
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+
+      // Broadcast to all voice users in the channel (including sender)
+      for (const [uid, user] of voiceRoom) {
+        io.to(user.socketId).emit('music-shared', {
+          userId: socket.user.id,
+          username: socket.user.displayName,
+          url: data.url,
+          channelCode: data.code
+        });
+      }
+    });
+
+    socket.on('music-stop', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8)) return;
+
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+
+      for (const [uid, user] of voiceRoom) {
+        io.to(user.socketId).emit('music-stopped', {
+          userId: socket.user.id,
+          username: socket.user.displayName,
+          channelCode: data.code
+        });
+      }
+    });
+
     // ═══════════════ REACTIONS ═════════════════════════════════
 
     socket.on('add-reaction', (data) => {

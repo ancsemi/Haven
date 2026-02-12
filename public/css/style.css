@@ -3648,6 +3648,14 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   /* Screen share — smaller on phone */
   .screen-share-container { max-height: 35vh; min-height: 120px; }
 
+  /* Stream audio controls — always visible on touch */
+  .stream-audio-controls { opacity: 1; }
+  .stream-vol-slider { width: 50px; }
+
+  /* Music panel — compact on phone */
+  .music-panel-header { padding: 4px 8px; font-size: 11px; }
+  .music-embed-container { max-height: 180px; }
+
   /* Status bar — hidden on phones */
   .status-bar { display: none; }
 
@@ -4041,6 +4049,210 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   padding: 2px 8px;
   border-radius: 4px;
   pointer-events: none;
+}
+
+/* ── Stream Audio Controls (per-tile overlay) ──────────── */
+
+.stream-audio-controls {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 3px 8px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+
+.screen-share-tile:hover .stream-audio-controls {
+  opacity: 1;
+}
+
+.stream-mute-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.stream-mute-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.stream-mute-btn.muted {
+  color: var(--danger, #e74c3c);
+}
+
+.stream-vol-slider {
+  width: 60px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  cursor: pointer;
+  outline: none;
+  vertical-align: middle;
+}
+
+.stream-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent, #7c5cfc);
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(124, 92, 252, 0.4);
+}
+
+.stream-vol-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent, #7c5cfc);
+  cursor: pointer;
+  border: none;
+}
+
+.stream-vol-pct {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+  min-width: 28px;
+  text-align: center;
+  user-select: none;
+}
+
+/* ── Screen share audio indicator badge ──────────────── */
+
+.stream-audio-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--accent, #7c5cfc);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MUSIC PANEL
+   ═══════════════════════════════════════════════════════════ */
+
+.music-panel {
+  display: none;
+  flex-direction: column;
+  background: var(--bg-tertiary);
+  border-bottom: 2px solid var(--accent);
+  position: relative;
+}
+
+.music-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.music-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.music-panel-controls .stream-vol-slider {
+  width: 80px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.music-embed-container {
+  min-height: 80px;
+  max-height: 260px;
+  overflow: hidden;
+  background: #000;
+}
+
+.music-embed-container iframe {
+  width: 100%;
+  border: none;
+  display: block;
+}
+
+.music-embed-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+  gap: 8px;
+}
+
+/* ── Music Modal extras ────────────────────────────────── */
+
+.music-link-preview {
+  min-height: 0;
+  transition: all 0.2s;
+}
+
+.music-link-preview.active {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.music-platforms-hint {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 4px;
+  flex-wrap: wrap;
+}
+
+.platform-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.platform-badge.spotify {
+  background: rgba(29, 185, 84, 0.15);
+  color: #1db954;
+}
+
+.platform-badge.youtube {
+  background: rgba(255, 0, 0, 0.12);
+  color: #ff4444;
+}
+
+.platform-badge.soundcloud {
+  background: rgba(255, 85, 0, 0.12);
+  color: #ff5500;
 }
 
 .btn-voice.sharing {

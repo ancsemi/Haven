@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Haven — Help &amp; Support</title>
+  <meta name="description" content="Get help with Haven. Troubleshooting, bug reports, and contact info.">
+  <link rel="canonical" href="https://ancsemi.github.io/Haven/support.html">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep: #15172a;
+      --bg-card: #1c1e33;
+      --bg-card-hover: #252840;
+      --bg-surface: #191b28;
+      --bg-hover: #2c2f4a;
+      --bg-active: #333660;
+      --bg-input: #15172a;
+      --accent: #7c5cfc;
+      --accent-bright: #9478ff;
+      --accent-dim: #5a3fd4;
+      --accent-glow: rgba(124, 92, 252, 0.25);
+      --accent-glow-strong: rgba(124, 92, 252, 0.45);
+      --green: #43b581;
+      --danger: #f04747;
+      --warning: #faa61a;
+      --text: #e2e4f0;
+      --text-muted: #9498b3;
+      --text-dim: #5d6180;
+      --text-link: #82aaff;
+      --border: #2d3050;
+      --border-light: #383b5e;
+      --radius: 8px;
+      --radius-lg: 16px;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4 { line-height: 1.2; font-weight: 700; }
+    h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.02em; }
+    h2 { font-size: clamp(1.4rem, 3vw, 2rem); letter-spacing: -0.02em; }
+    h3 { font-size: 1.15rem; }
+    p { color: var(--text-muted); font-size: 1.05rem; }
+    a { color: var(--text-link); text-decoration: none; transition: color 0.15s; }
+    a:hover { color: var(--accent-bright); }
+
+    .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      background: rgba(21, 23, 42, 0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .nav-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.2rem; color: #fff; text-decoration: none; }
+    .nav-brand .hex { font-size: 1.6rem; color: var(--accent); text-shadow: 0 0 12px var(--accent-glow); }
+    .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+    .nav-links a { color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta { background: var(--accent); color: #fff !important; padding: 8px 20px; border-radius: var(--radius); font-weight: 600; font-size: 0.9rem; box-shadow: 0 0 16px var(--accent-glow); }
+    .nav-cta:hover { background: var(--accent-bright); transform: translateY(-1px); }
+    .nav-mobile-toggle { display: none; background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer; }
+
+    /* ── Page header ── */
+    .page-header {
+      padding-top: 120px;
+      padding-bottom: 48px;
+      text-align: center;
+    }
+    .page-header h1 { color: #fff; margin-bottom: 12px; }
+    .page-header p { max-width: 560px; margin: 0 auto; font-size: 1.15rem; }
+
+    /* ── Sections ── */
+    section { padding: 48px 0; }
+
+    .section-title {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 24px;
+    }
+    .section-title .icon { font-size: 1.6rem; }
+    .section-title h2 { color: #fff; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 20px;
+    }
+
+    .card h3 { color: #fff; margin-bottom: 8px; }
+    .card p { font-size: 0.95rem; margin-bottom: 12px; }
+    .card p:last-child { margin-bottom: 0; }
+
+    /* ── FAQ accordion ── */
+    .faq-item { border-bottom: 1px solid var(--border); }
+    .faq-item:last-child { border-bottom: none; }
+
+    .faq-q {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 0; cursor: pointer; user-select: none;
+      color: #fff; font-weight: 600; font-size: 1rem;
+      background: none; border: none; width: 100%; text-align: left;
+      font-family: var(--font);
+    }
+    .faq-q:hover { color: var(--accent-bright); }
+    .faq-q .arrow { transition: transform 0.25s; font-size: 0.8rem; color: var(--text-dim); }
+    .faq-q.open .arrow { transform: rotate(180deg); }
+
+    .faq-a {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.35s ease;
+      padding: 0 0;
+    }
+    .faq-a.open { max-height: 400px; padding: 0 0 18px; }
+    .faq-a p { font-size: 0.95rem; line-height: 1.7; }
+
+    /* ── Steps ── */
+    .steps-list { counter-reset: step; list-style: none; }
+    .steps-list li {
+      counter-increment: step;
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .steps-list li:last-child { border-bottom: none; }
+    .steps-list li::before {
+      content: counter(step);
+      flex-shrink: 0; width: 32px; height: 32px;
+      background: var(--accent); color: #fff;
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem;
+    }
+    .steps-list li p { margin: 0; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 28px; border-radius: var(--radius);
+      font-weight: 600; font-size: 1rem; cursor: pointer; border: none;
+      text-decoration: none; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 20px var(--accent-glow); }
+    .btn-primary:hover { background: var(--accent-bright); color: #fff; transform: translateY(-2px); box-shadow: 0 8px 30px var(--accent-glow-strong); }
+    .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); color: #fff; transform: translateY(-1px); }
+
+    .btn-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+
+    /* ── Troubleshooting table ── */
+    .trouble-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    .trouble-table th {
+      text-align: left; padding: 12px 16px;
+      background: var(--bg-active); color: #fff;
+      font-size: 0.85rem; font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+    .trouble-table td {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      font-size: 0.9rem; color: var(--text-muted);
+      vertical-align: top;
+    }
+    .trouble-table tr:last-child td { border-bottom: none; }
+    .trouble-table td:first-child { color: var(--text); font-weight: 500; white-space: nowrap; }
+    .trouble-table code {
+      background: rgba(124,92,252,0.12); color: var(--accent-bright);
+      padding: 2px 6px; border-radius: 4px; font-size: 0.85rem;
+    }
+
+    /* ── Contact card ── */
+    .contact-card {
+      background: linear-gradient(135deg, rgba(124,92,252,0.08) 0%, rgba(67,181,129,0.06) 100%);
+      border: 1px solid rgba(124,92,252,0.25);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      text-align: center;
+      margin-top: 32px;
+    }
+    .contact-card h2 { color: #fff; margin-bottom: 12px; }
+    .contact-card p { max-width: 480px; margin: 0 auto 24px; }
+    .contact-methods {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 16px;
+    }
+    .contact-methods a {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      padding: 12px 24px; border-radius: var(--radius);
+      color: var(--text); font-weight: 500; font-size: 0.95rem;
+      transition: all 0.15s;
+    }
+    .contact-methods a:hover {
+      border-color: var(--accent); background: var(--bg-card-hover);
+      transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    .contact-methods .cm-icon { font-size: 1.2rem; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 0; text-align: center;
+    }
+    .footer-brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; font-size: 1.1rem; color: #fff; margin-bottom: 12px; }
+    .footer-brand .hex { font-size: 1.4rem; color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
+    footer p { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 16px; }
+    .footer-links { display: flex; justify-content: center; gap: 24px; list-style: none; }
+    .footer-links a { color: var(--text-muted); font-size: 0.85rem; }
+    .footer-links a:hover { color: #fff; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .nav-links.open {
+        display: flex; flex-direction: column;
+        position: absolute; top: 64px; left: 0; right: 0;
+        background: rgba(21, 23, 42, 0.97); backdrop-filter: blur(20px);
+        padding: 24px; gap: 20px; border-bottom: 1px solid var(--border);
+      }
+      .nav-mobile-toggle { display: block; }
+      .trouble-table td:first-child { white-space: normal; }
+      .btn-row { flex-direction: column; }
+      .btn { width: 100%; justify-content: center; }
+      .contact-methods { flex-direction: column; align-items: center; }
+    }
+
+    /* ── Animations ── */
+    .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.5s, transform 0.5s; }
+    .fade-in.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+  <!-- ===== NAV ===== -->
+  <nav>
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand"><span class="hex">⬡</span> HAVEN</a>
+      <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+      <ul class="nav-links">
+        <li><a href="index.html#features">Features</a></li>
+        <li><a href="index.html#download">Download</a></li>
+        <li><a href="support.html" style="color: var(--accent-bright);">Help &amp; Support</a></li>
+        <li><a href="https://github.com/ancsemi/Haven" target="_blank" class="nav-cta">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ===== HEADER ===== -->
+  <div class="page-header">
+    <h1>Help &amp; Support</h1>
+    <p>Having trouble? You're in the right place. Most issues have a quick fix.</p>
+  </div>
+
+  <div class="container">
+
+    <!-- ===== QUICK TROUBLESHOOTING ===== -->
+    <section class="fade-in">
+      <div class="section-title">
+        <span class="icon">🔧</span>
+        <h2>Common Issues</h2>
+      </div>
+
+      <div class="card" style="overflow-x: auto;">
+        <table class="trouble-table">
+          <thead>
+            <tr>
+              <th>Problem</th>
+              <th>Fix</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Haven won't start</td>
+              <td>Make sure <a href="https://nodejs.org/" target="_blank">Node.js</a> is installed. After installing, <strong>restart your computer</strong>, then try again.</td>
+            </tr>
+            <tr>
+              <td>SSL_ERROR_RX_RECORD_TOO_LONG</td>
+              <td>Your browser is trying HTTPS but Haven is running HTTP. Go to <code>http://localhost:3000</code> (not https). See <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md#troubleshooting" target="_blank">the guide</a> for details.</td>
+            </tr>
+            <tr>
+              <td>Friends can't connect</td>
+              <td>They need your <strong>public IP</strong> (Google "what is my ip") + port 3000. You may need to <strong>port forward</strong> 3000 on your router. Your firewall must also allow it.</td>
+            </tr>
+            <tr>
+              <td>Voice chat not working</td>
+              <td>Voice requires HTTPS <em>or</em> localhost. If friends are connecting over the internet without HTTPS, voice won't work in most browsers. Install <a href="https://slproweb.com/products/Win32OpenSSL.html" target="_blank">OpenSSL</a> and restart Haven to enable HTTPS automatically.</td>
+            </tr>
+            <tr>
+              <td>"Port 3000 already in use"</td>
+              <td>Another program is using port 3000, or Haven is already running. Close the other terminal window, or restart your PC to free the port.</td>
+            </tr>
+            <tr>
+              <td>Page loads but looks broken</td>
+              <td>Hard-refresh with <code>Ctrl+Shift+R</code> (or Cmd+Shift+R on Mac). Old cached files sometimes cause this after updates.</td>
+            </tr>
+            <tr>
+              <td>GIFs not working</td>
+              <td>The admin needs to set a GIPHY API key. Go to Settings &rarr; Admin &rarr; paste your free key from <a href="https://developers.giphy.com/" target="_blank">developers.giphy.com</a>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== REPORT A BUG ===== -->
+    <section class="fade-in">
+      <div class="section-title">
+        <span class="icon">🐛</span>
+        <h2>Report a Bug</h2>
+      </div>
+
+      <div class="card">
+        <p>Found something broken? Here's how to let us know &mdash; <strong>no GitHub account needed</strong> for the email option.</p>
+
+        <h3 style="margin-top: 20px;">What to include</h3>
+        <p>The more detail you give, the faster we can fix it:</p>
+        <ul class="steps-list" style="margin-top: 12px;">
+          <li><p><strong>What happened?</strong> &mdash; Describe what went wrong. "Voice chat disconnects after 2 minutes" is better than "voice broken."</p></li>
+          <li><p><strong>What did you expect?</strong> &mdash; What should have happened instead?</p></li>
+          <li><p><strong>Steps to reproduce</strong> &mdash; What were you doing when it broke? Can you make it happen again?</p></li>
+          <li><p><strong>Your setup</strong> &mdash; Windows/Mac/Linux? Which browser? Are you the host or a guest?</p></li>
+        </ul>
+
+        <h3 style="margin-top: 24px;">How to report</h3>
+        <div class="btn-row">
+          <a href="https://github.com/ancsemi/Haven/issues/new" target="_blank" class="btn btn-primary">
+            Open a GitHub Issue
+          </a>
+          <a href="mailto:ancsemi@proton.me?subject=Haven%20Bug%20Report&body=What%20happened%3A%0A%0AWhat%20I%20expected%3A%0A%0ASteps%20to%20reproduce%3A%0A%0AMy%20setup%20(OS%2C%20browser)%3A%0A" class="btn btn-secondary">
+            ✉️ Send an Email Instead
+          </a>
+        </div>
+        <p style="margin-top: 12px; font-size: 0.85rem; color: var(--text-dim);">
+          GitHub Issues is preferred (it's public so others with the same problem can find the fix), but email works too.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===== FAQ ===== -->
+    <section class="fade-in">
+      <div class="section-title">
+        <span class="icon">💡</span>
+        <h2>FAQ</h2>
+      </div>
+
+      <div class="card">
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            How do I update Haven?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="faq-a">
+            <p>Download the latest zip from <a href="https://github.com/ancsemi/Haven/releases" target="_blank">GitHub Releases</a> and replace your files. Your data (messages, accounts, uploads) is stored separately in your AppData folder, so it won't be lost.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            Where is my data stored?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="faq-a">
+            <p><strong>Windows:</strong> <code>%APPDATA%\Haven</code> (type that into File Explorer's address bar)<br>
+            <strong>Mac/Linux:</strong> <code>~/.haven</code><br><br>
+            This folder has your database, uploaded files, and settings. Haven's program files are separate from your data, so updates won't erase anything.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            Can I move Haven to a different computer?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="faq-a">
+            <p>Yes. Copy the data folder (see above) to the same location on the new machine, then run Haven there. All your messages, accounts, and settings will carry over.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            Do my friends need to create an account?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="faq-a">
+            <p>They create an account on YOUR server (just a username and password). No email, no phone number, no third-party sign-up. The account only exists on your machine.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            Is voice chat peer-to-peer?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="faq-a">
+            <p>Yes. Audio streams go directly between users via WebRTC. The server only handles signaling (connecting people). Your voice data doesn't pass through the Haven server.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            Can I run Haven 24/7?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="faq-a">
+            <p>Absolutely. It's lightweight &mdash; it'll happily run in the background on any modern computer. Some people run it on a Raspberry Pi or an old laptop they leave on.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+            How do I get HTTPS working?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="faq-a">
+            <p>Install <a href="https://slproweb.com/products/Win32OpenSSL.html" target="_blank">OpenSSL</a> (Windows) or use your system's package manager (Mac/Linux). Restart Haven and it'll automatically generate certificates and switch to HTTPS. Check the <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">Setup Guide</a> for full instructions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CONTACT ===== -->
+    <section class="fade-in">
+      <div class="contact-card">
+        <h2>Still stuck?</h2>
+        <p>Reach out directly. I usually respond within a day or two.</p>
+        <div class="contact-methods">
+          <a href="https://github.com/ancsemi/Haven/issues/new" target="_blank">
+            <span class="cm-icon">📋</span> GitHub Issues
+          </a>
+          <a href="mailto:ancsemi@proton.me?subject=Haven%20Support">
+            <span class="cm-icon">✉️</span> ancsemi@proton.me
+          </a>
+          <a href="https://ko-fi.com/ancsemi" target="_blank">
+            <span class="cm-icon">💬</span> Ko-fi (DM me)
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <div class="container">
+      <div class="footer-brand"><span class="hex">⬡</span> HAVEN</div>
+      <p>Your server. Your rules. No cloud. No one reading your messages.</p>
+      <ul class="footer-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="https://github.com/ancsemi/Haven" target="_blank">GitHub</a></li>
+        <li><a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">Setup Guide</a></li>
+        <li><a href="https://github.com/ancsemi/Haven/blob/main/CHANGELOG.md" target="_blank">Changelog</a></li>
+        <li><a href="https://github.com/ancsemi/Haven/blob/main/LICENSE" target="_blank">License</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+    document.querySelectorAll('.nav-links a').forEach(link => {
+      link.addEventListener('click', () => document.querySelector('.nav-links').classList.remove('open'));
+    });
+    window.addEventListener('scroll', () => {
+      document.querySelector('nav').style.background = window.scrollY > 100 ? 'rgba(21, 23, 42, 0.97)' : 'rgba(21, 23, 42, 0.85)';
+    });
+  </script>
+
+</body>
+</html>

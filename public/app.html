@@ -170,6 +170,7 @@
                 <button id="voice-mute-btn" class="btn-voice">🔇 Mute</button>
                 <button id="voice-deafen-btn" class="btn-voice">🔇 Deafen</button>
                 <button id="screen-share-btn" class="btn-voice" title="Share Screen">🖥️ Share</button>
+                <button id="music-btn" class="btn-voice" title="Music Streaming">🎵 Music</button>
                 <div class="voice-ns-wrap">
                   <label class="ns-label" title="Noise suppression sensitivity">🤫</label>
                   <input type="range" id="voice-ns-slider" class="ns-slider" min="0" max="100" value="10" title="Noise gate: 0 = off, 100 = aggressive">
@@ -206,6 +207,19 @@
               </div>
             </div>
             <div id="screen-share-grid" class="screen-share-grid"></div>
+          </div>
+          <!-- Music Player Panel -->
+          <div id="music-panel" class="music-panel" style="display:none">
+            <div class="music-panel-header">
+              <span id="music-panel-label">🎵 Music</span>
+              <div class="music-panel-controls">
+                <button id="music-mute-btn" class="icon-btn small" title="Mute music">🔊</button>
+                <input type="range" id="music-volume-slider" class="stream-vol-slider" min="0" max="100" value="80" title="Music volume">
+                <button id="music-stop-btn" class="icon-btn small" title="Stop music">⏹</button>
+                <button id="music-close-btn" class="icon-btn small" title="Minimize">&times;</button>
+              </div>
+            </div>
+            <div id="music-embed-container" class="music-embed-container"></div>
           </div>
           <div id="search-results-panel" class="search-results-panel" style="display:none">
             <div class="search-results-header">
@@ -579,6 +593,28 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="close-bans-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Music Share Modal -->
+  <div class="modal-overlay" id="music-modal" style="display:none">
+    <div class="modal">
+      <h3>🎵 Share Music</h3>
+      <p class="modal-desc">Paste a link from Spotify, YouTube, or SoundCloud to listen together</p>
+      <div class="form-group">
+        <label>Music Link</label>
+        <input type="text" id="music-link-input" placeholder="https://open.spotify.com/track/..." maxlength="500">
+      </div>
+      <div class="music-link-preview" id="music-link-preview"></div>
+      <div class="music-platforms-hint">
+        <span class="platform-badge spotify">Spotify</span>
+        <span class="platform-badge youtube">YouTube</span>
+        <span class="platform-badge soundcloud">SoundCloud</span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="cancel-music-btn">Cancel</button>
+        <button class="btn-sm btn-accent" id="share-music-btn">Share with Channel</button>
       </div>
     </div>
   </div>

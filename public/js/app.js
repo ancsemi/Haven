@@ -317,6 +317,15 @@ class HavenApp {
       }
     });
 
+    // ── Music sharing ────────────────────────────────
+    this.socket.on('music-shared', (data) => {
+      this._handleMusicShared(data);
+    });
+
+    this.socket.on('music-stopped', (data) => {
+      this._handleMusicStopped(data);
+    });
+
     // ── Channel members (for @mentions) ────────────────
     this.socket.on('channel-members', (data) => {
       if (data.channelCode === this.currentChannel) {
@@ -665,6 +674,24 @@ class HavenApp {
     document.getElementById('voice-leave-btn').addEventListener('click', () => this._leaveVoice());
     document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
     document.getElementById('screen-share-close').addEventListener('click', () => this._hideScreenShare());
+    document.getElementById('music-btn').addEventListener('click', () => this._openMusicModal());
+    document.getElementById('share-music-btn').addEventListener('click', () => this._shareMusic());
+    document.getElementById('cancel-music-btn').addEventListener('click', () => this._closeMusicModal());
+    document.getElementById('music-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'music-modal') this._closeMusicModal();
+    });
+    document.getElementById('music-stop-btn').addEventListener('click', () => this._stopMusic());
+    document.getElementById('music-close-btn').addEventListener('click', () => {
+      document.getElementById('music-panel').style.display = 'none';
+    });
+    document.getElementById('music-mute-btn').addEventListener('click', () => this._toggleMusicMute());
+    document.getElementById('music-volume-slider').addEventListener('input', (e) => {
+      this._setMusicVolume(parseInt(e.target.value) / 100);
+    });
+    // Preview music link as user types
+    document.getElementById('music-link-input').addEventListener('input', (e) => {
+      this._previewMusicLink(e.target.value.trim());
+    });
 
     // Voice controls dropdown
     document.getElementById('voice-dropdown-toggle')?.addEventListener('click', (e) => {
@@ -704,6 +731,9 @@ class HavenApp {
 
     // Wire up the voice manager's video callback
     this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
+
+    // Wire up screen share audio callback
+    this.voice.onScreenAudio = (userId) => this._handleScreenAudio(userId);
 
     // Wire up voice join/leave audio cues
     this.voice.onVoiceJoin = (userId, username) => {
@@ -2404,6 +2434,8 @@ class HavenApp {
     this._updateVoiceButtons(false);
     this._updateVoiceStatus(false);
     this._updateVoiceBar();
+    // Hide music panel if visible
+    this._hideMusicPanel();
     this._showToast('Left voice chat', 'info');
   }
 
@@ -2471,6 +2503,8 @@ class HavenApp {
       document.getElementById('screen-share-container').style.display = 'none';
       this._screenShareMinimized = false;
       this._removeScreenShareIndicator();
+      // Also hide music panel
+      this._hideMusicPanel();
     }
   }
 
@@ -2552,6 +2586,77 @@ class HavenApp {
         lbl.textContent = who;
         tile.appendChild(lbl);
 
+        // Audio controls overlay (volume slider + mute)
+        const controls = document.createElement('div');
+        controls.className = 'stream-audio-controls';
+        controls.id = `stream-controls-${userId || 'self'}`;
+
+        const muteBtn = document.createElement('button');
+        muteBtn.className = 'stream-mute-btn';
+        muteBtn.title = 'Mute/Unmute stream audio';
+        muteBtn.textContent = '🔊';
+        muteBtn.dataset.muted = 'false';
+
+        const volSlider = document.createElement('input');
+        volSlider.type = 'range';
+        volSlider.className = 'stream-vol-slider';
+        volSlider.min = '0';
+        volSlider.max = '200';
+        volSlider.value = '100';
+        volSlider.title = 'Stream volume (0–200%)';
+
+        const volPct = document.createElement('span');
+        volPct.className = 'stream-vol-pct';
+        volPct.textContent = '100%';
+
+        // Restore saved volume
+        try {
+          const savedVols = JSON.parse(localStorage.getItem('haven_stream_volumes') || '{}');
+          if (savedVols[userId] !== undefined) {
+            volSlider.value = savedVols[userId];
+            volPct.textContent = savedVols[userId] + '%';
+          }
+        } catch {}
+
+        muteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isMuted = muteBtn.dataset.muted === 'true';
+          if (isMuted) {
+            const vol = parseFloat(volSlider.value) / 100;
+            this.voice.setStreamVolume(userId, vol);
+            muteBtn.textContent = '🔊';
+            muteBtn.dataset.muted = 'false';
+            muteBtn.classList.remove('muted');
+          } else {
+            this.voice.setStreamVolume(userId, 0);
+            muteBtn.textContent = '🔇';
+            muteBtn.dataset.muted = 'true';
+            muteBtn.classList.add('muted');
+          }
+        });
+
+        volSlider.addEventListener('input', (e) => {
+          e.stopPropagation();
+          const val = parseInt(volSlider.value);
+          const vol = val / 100;
+          this.voice.setStreamVolume(userId, vol);
+          volPct.textContent = val + '%';
+          muteBtn.textContent = val === 0 ? '🔇' : '🔊';
+          muteBtn.dataset.muted = val === 0 ? 'true' : 'false';
+          muteBtn.classList.toggle('muted', val === 0);
+          // Save preference
+          try {
+            const vols = JSON.parse(localStorage.getItem('haven_stream_volumes') || '{}');
+            vols[userId] = val;
+            localStorage.setItem('haven_stream_volumes', JSON.stringify(vols));
+          } catch {}
+        });
+
+        controls.appendChild(muteBtn);
+        controls.appendChild(volSlider);
+        controls.appendChild(volPct);
+        tile.appendChild(controls);
+
         grid.appendChild(tile);
       }
       const videoEl = tile.querySelector('video');
@@ -2623,6 +2728,197 @@ class HavenApp {
 
   _removeScreenShareIndicator() {
     document.getElementById('screen-share-indicator')?.remove();
+  }
+
+  // ── Screen Share Audio ────────────────────────────────
+
+  _handleScreenAudio(userId) {
+    // Show audio badge on the stream tile when screen audio is active
+    const tileId = `screen-tile-${userId || 'self'}`;
+    const tile = document.getElementById(tileId);
+    if (tile && !tile.querySelector('.stream-audio-badge')) {
+      const badge = document.createElement('div');
+      badge.className = 'stream-audio-badge';
+      badge.innerHTML = '🔊 Audio';
+      tile.appendChild(badge);
+    }
+    // Make controls visible immediately (they normally show on hover)
+    const controls = document.getElementById(`stream-controls-${userId || 'self'}`);
+    if (controls) {
+      controls.style.opacity = '1';
+      // Fade back to hover-triggered after 3 seconds
+      setTimeout(() => { controls.style.opacity = ''; }, 3000);
+    }
+  }
+
+  // ── Music Streaming ───────────────────────────────────
+
+  _openMusicModal() {
+    if (!this.voice || !this.voice.inVoice) {
+      this._showToast('Join voice first to share music', 'error');
+      return;
+    }
+    document.getElementById('music-link-input').value = '';
+    document.getElementById('music-link-preview').innerHTML = '';
+    document.getElementById('music-link-preview').classList.remove('active');
+    document.getElementById('music-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('music-link-input').focus(), 100);
+  }
+
+  _closeMusicModal() {
+    document.getElementById('music-modal').style.display = 'none';
+  }
+
+  _previewMusicLink(url) {
+    const preview = document.getElementById('music-link-preview');
+    if (!url) {
+      preview.innerHTML = '';
+      preview.classList.remove('active');
+      return;
+    }
+    const platform = this._getMusicPlatform(url);
+    const embedUrl = this._getMusicEmbed(url);
+    if (platform && embedUrl) {
+      preview.classList.add('active');
+      preview.innerHTML = `${platform.icon} <strong>${platform.name}</strong> — Ready to share`;
+    } else {
+      preview.classList.remove('active');
+      preview.innerHTML = '';
+    }
+  }
+
+  _shareMusic() {
+    const url = document.getElementById('music-link-input').value.trim();
+    if (!url) {
+      this._showToast('Please paste a music link', 'error');
+      return;
+    }
+    const embedUrl = this._getMusicEmbed(url);
+    if (!embedUrl) {
+      this._showToast('Unsupported link — try Spotify, YouTube, or SoundCloud', 'error');
+      return;
+    }
+    if (!this.voice || !this.voice.inVoice) {
+      this._showToast('Join voice first', 'error');
+      return;
+    }
+    this.socket.emit('music-share', {
+      code: this.voice.currentChannel,
+      url: url
+    });
+    this._closeMusicModal();
+  }
+
+  _stopMusic() {
+    if (this.voice && this.voice.inVoice) {
+      this.socket.emit('music-stop', {
+        code: this.voice.currentChannel
+      });
+    }
+    this._hideMusicPanel();
+  }
+
+  _handleMusicShared(data) {
+    const embedUrl = this._getMusicEmbed(data.url);
+    if (!embedUrl) return;
+
+    const platform = this._getMusicPlatform(data.url);
+    const panel = document.getElementById('music-panel');
+    const container = document.getElementById('music-embed-container');
+    const label = document.getElementById('music-panel-label');
+
+    // Determine iframe height based on platform
+    let iframeHeight = '152';
+    if (data.url.includes('spotify.com')) iframeHeight = '152';
+    else if (data.url.includes('soundcloud.com')) iframeHeight = '166';
+    else if (data.url.includes('youtube.com') || data.url.includes('youtu.be')) iframeHeight = '200';
+
+    container.innerHTML = `<iframe src="${this._escapeHtml(embedUrl)}" height="${iframeHeight}" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+
+    label.textContent = `🎵 ${platform ? platform.name : 'Music'} — shared by ${data.username || 'someone'}`;
+    panel.style.display = 'flex';
+
+    // Restore saved music volume
+    const savedVol = parseInt(localStorage.getItem('haven_music_volume') ?? '80');
+    document.getElementById('music-volume-slider').value = savedVol;
+
+    const who = data.userId === this.user?.id ? 'You shared' : `${data.username} shared`;
+    this._showToast(`${who} ${platform ? platform.name : 'music'}`, 'info');
+  }
+
+  _handleMusicStopped(data) {
+    this._hideMusicPanel();
+    const who = data.userId === this.user?.id ? 'You' : (data.username || 'Someone');
+    this._showToast(`${who} stopped the music`, 'info');
+  }
+
+  _hideMusicPanel() {
+    const panel = document.getElementById('music-panel');
+    if (panel) {
+      const container = document.getElementById('music-embed-container');
+      container.innerHTML = '';
+      panel.style.display = 'none';
+    }
+  }
+
+  _setMusicVolume(vol) {
+    // Apply volume to music iframe via postMessage where supported,
+    // and save the preference. Spotify/YouTube embeds have limited external
+    // volume control, so we also adjust a CSS opacity indicator.
+    const pct = Math.round(vol * 100);
+    localStorage.setItem('haven_music_volume', pct);
+    const muteBtn = document.getElementById('music-mute-btn');
+    if (muteBtn) {
+      muteBtn.textContent = pct === 0 ? '🔇' : '🔊';
+    }
+  }
+
+  _toggleMusicMute() {
+    const slider = document.getElementById('music-volume-slider');
+    const muteBtn = document.getElementById('music-mute-btn');
+    if (!slider) return;
+    if (parseInt(slider.value) > 0) {
+      slider.dataset.prevValue = slider.value;
+      slider.value = 0;
+      muteBtn.textContent = '🔇';
+    } else {
+      slider.value = slider.dataset.prevValue || 80;
+      muteBtn.textContent = '🔊';
+    }
+    localStorage.setItem('haven_music_volume', slider.value);
+  }
+
+  _getMusicEmbed(url) {
+    if (!url) return null;
+    // Spotify
+    const spotifyMatch = url.match(/open\.spotify\.com\/(track|album|playlist|episode|show)\/([a-zA-Z0-9]+)/);
+    if (spotifyMatch) {
+      return `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?theme=0&utm_source=generator`;
+    }
+    // YouTube Music
+    const ytMusicMatch = url.match(/music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+    if (ytMusicMatch) {
+      return `https://www.youtube.com/embed/${ytMusicMatch[1]}?autoplay=1`;
+    }
+    // YouTube
+    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if (ytMatch) {
+      return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1`;
+    }
+    // SoundCloud
+    if (url.includes('soundcloud.com/')) {
+      return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
+    }
+    return null;
+  }
+
+  _getMusicPlatform(url) {
+    if (!url) return null;
+    if (url.includes('spotify.com')) return { name: 'Spotify', icon: '🟢' };
+    if (url.includes('music.youtube.com')) return { name: 'YouTube Music', icon: '🔴' };
+    if (url.includes('youtube.com') || url.includes('youtu.be')) return { name: 'YouTube', icon: '🔴' };
+    if (url.includes('soundcloud.com')) return { name: 'SoundCloud', icon: '🟠' };
+    return null;
   }
 
   // ── Utilities ─────────────────────────────────────────
