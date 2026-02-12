@@ -50,6 +50,16 @@ function setupSocketHandlers(io, db) {
     if (ban) return next(new Error('You have been banned from this server'));
 
     socket.user = user;
+
+    // Load user status from DB
+    try {
+      const statusRow = db.prepare('SELECT status, status_text FROM users WHERE id = ?').get(user.id);
+      if (statusRow) {
+        socket.user.status = statusRow.status || 'online';
+        socket.user.statusText = statusRow.status_text || '';
+      }
+    } catch { /* columns may not exist on old db */ }
+
     next();
   });
 
@@ -108,12 +118,56 @@ function setupSocketHandlers(io, db) {
     // ── Get user's channels ─────────────────────────────────
     socket.on('get-channels', () => {
       const channels = db.prepare(`
-        SELECT c.id, c.name, c.code, c.created_by
+        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ?
-        ORDER BY c.name
+        ORDER BY c.is_dm, c.name
       `).all(socket.user.id);
+
+      // Batch-fetch read positions and latest message IDs for unread counts
+      if (channels.length > 0) {
+        const channelIds = channels.map(c => c.id);
+        const placeholders = channelIds.map(() => '?').join(',');
+
+        // Get read positions
+        const readRows = db.prepare(
+          `SELECT channel_id, last_read_message_id FROM read_positions WHERE user_id = ? AND channel_id IN (${placeholders})`
+        ).all(socket.user.id, ...channelIds);
+        const readMap = {};
+        readRows.forEach(r => { readMap[r.channel_id] = r.last_read_message_id; });
+
+        // Get latest message ID per channel
+        const latestRows = db.prepare(
+          `SELECT channel_id, MAX(id) as latest_id FROM messages WHERE channel_id IN (${placeholders}) GROUP BY channel_id`
+        ).all(...channelIds);
+        const latestMap = {};
+        latestRows.forEach(r => { latestMap[r.channel_id] = r.latest_id; });
+
+        // Get unread count per channel
+        channels.forEach(ch => {
+          const lastRead = readMap[ch.id] || 0;
+          const latestId = latestMap[ch.id] || 0;
+          if (latestId > lastRead) {
+            const countRow = db.prepare(
+              'SELECT COUNT(*) as cnt FROM messages WHERE channel_id = ? AND id > ?'
+            ).get(ch.id, lastRead);
+            ch.unreadCount = countRow ? countRow.cnt : 0;
+          } else {
+            ch.unreadCount = 0;
+          }
+
+          // For DMs, fetch the other user's info
+          if (ch.is_dm) {
+            const otherUser = db.prepare(`
+              SELECT u.id, u.username FROM users u
+              JOIN channel_members cm ON u.id = cm.user_id
+              WHERE cm.channel_id = ? AND u.id != ?
+            `).get(ch.id, socket.user.id);
+            ch.dm_target = otherUser || null;
+          }
+        });
+      }
 
       // Join all channel rooms for message delivery
       channels.forEach(ch => socket.join(`channel:${ch.code}`));
@@ -156,7 +210,9 @@ function setupSocketHandlers(io, db) {
           id: result.lastInsertRowid,
           name: name.trim(),
           code,
-          created_by: socket.user.id
+          created_by: socket.user.id,
+          topic: '',
+          is_dm: 0
         };
 
         socket.join(`channel:${code}`);
@@ -204,7 +260,9 @@ function setupSocketHandlers(io, db) {
         id: channel.id,
         name: channel.name,
         code: channel.code,
-        created_by: channel.created_by
+        created_by: channel.created_by,
+        topic: channel.topic || '',
+        is_dm: channel.is_dm || 0
       });
     });
 
@@ -239,7 +297,9 @@ function setupSocketHandlers(io, db) {
       channelUsers.get(code).set(socket.user.id, {
         id: socket.user.id,
         username: socket.user.username,
-        socketId: socket.id
+        socketId: socket.id,
+        status: socket.user.status || 'online',
+        statusText: socket.user.statusText || ''
       });
 
       // Broadcast online users
@@ -1428,6 +1488,161 @@ function setupSocketHandlers(io, db) {
       }
     });
 
+    // ═══════════════ USER STATUS ════════════════════════════
+
+    socket.on('set-status', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const validStatuses = ['online', 'away', 'dnd', 'invisible'];
+      const status = validStatuses.includes(data.status) ? data.status : 'online';
+      const statusText = isString(data.statusText, 0, 128) ? data.statusText.trim() : '';
+
+      try {
+        db.prepare('UPDATE users SET status = ?, status_text = ? WHERE id = ?')
+          .run(status, statusText, socket.user.id);
+      } catch (err) {
+        console.error('Set status error:', err);
+        return;
+      }
+
+      socket.user.status = status;
+      socket.user.statusText = statusText;
+
+      // Refresh online users in all channels this user is in
+      for (const [code, users] of channelUsers) {
+        if (users.has(socket.user.id)) {
+          users.get(socket.user.id).status = status;
+          users.get(socket.user.id).statusText = statusText;
+          emitOnlineUsers(code);
+        }
+      }
+
+      socket.emit('status-updated', { status, statusText });
+    });
+
+    // ═══════════════ CHANNEL TOPICS ════════════════════════
+
+    socket.on('set-channel-topic', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin) {
+        return socket.emit('error-msg', 'Only admins can set channel topics');
+      }
+
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+
+      const topic = isString(data.topic, 0, 256) ? data.topic.trim() : '';
+
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      if (!channel) return;
+
+      try {
+        db.prepare('UPDATE channels SET topic = ? WHERE id = ?').run(topic, channel.id);
+      } catch (err) {
+        console.error('Set topic error:', err);
+        return socket.emit('error-msg', 'Failed to update topic');
+      }
+
+      io.to(`channel:${code}`).emit('channel-topic-changed', { code, topic });
+    });
+
+    // ═══════════════ DIRECT MESSAGES ═══════════════════════
+
+    socket.on('start-dm', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const targetId = isInt(data.targetUserId) ? data.targetUserId : null;
+      if (!targetId || targetId === socket.user.id) return;
+
+      // Verify target user exists and isn't banned
+      const target = db.prepare(
+        'SELECT u.id, u.username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id = ? AND b.id IS NULL'
+      ).get(targetId);
+      if (!target) return socket.emit('error-msg', 'User not found');
+
+      // Check if DM channel already exists between these two users
+      const existingDm = db.prepare(`
+        SELECT c.id, c.code, c.name FROM channels c
+        WHERE c.is_dm = 1
+        AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
+        AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
+      `).get(socket.user.id, targetId);
+
+      if (existingDm) {
+        // Already exists — just tell client to switch to it
+        socket.emit('dm-opened', {
+          id: existingDm.id,
+          code: existingDm.code,
+          name: existingDm.name,
+          is_dm: 1,
+          dm_target: { id: target.id, username: target.username }
+        });
+        return;
+      }
+
+      // Create new DM channel
+      const code = generateChannelCode();
+      const name = `DM`;
+
+      try {
+        const result = db.prepare(
+          'INSERT INTO channels (name, code, created_by, is_dm) VALUES (?, ?, ?, 1)'
+        ).run(name, code, socket.user.id);
+
+        const channelId = result.lastInsertRowid;
+        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, socket.user.id);
+        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, targetId);
+
+        socket.join(`channel:${code}`);
+
+        const dmData = {
+          id: channelId,
+          code,
+          name,
+          is_dm: 1,
+          dm_target: { id: target.id, username: target.username }
+        };
+        socket.emit('dm-opened', dmData);
+
+        // Also notify the target if they're online
+        for (const [, s] of io.of('/').sockets) {
+          if (s.user && s.user.id === targetId) {
+            s.join(`channel:${code}`);
+            s.emit('dm-opened', {
+              id: channelId,
+              code,
+              name,
+              is_dm: 1,
+              dm_target: { id: socket.user.id, username: socket.user.username }
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Start DM error:', err);
+        socket.emit('error-msg', 'Failed to create DM');
+      }
+    });
+
+    // ═══════════════ READ POSITIONS ════════════════════════
+
+    socket.on('mark-read', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      if (!isInt(data.messageId) || data.messageId <= 0) return;
+
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      if (!channel) return;
+
+      try {
+        db.prepare(`
+          INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
+          VALUES (?, ?, ?)
+          ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
+        `).run(socket.user.id, channel.id, data.messageId);
+      } catch (err) {
+        console.error('Mark read error:', err);
+      }
+    });
+
     // ═══════════════ DISCONNECT ═════════════════════════════
 
     socket.on('disconnect', () => {
@@ -1495,26 +1710,35 @@ function setupSocketHandlers(io, db) {
         scoreRows.forEach(r => { scores[r.user_id] = r.score; });
       } catch { /* table may not exist yet */ }
 
+      // Fetch user statuses
+      const statusMap = {};
+      try {
+        const statusRows = db.prepare('SELECT id, status, status_text FROM users').all();
+        statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '' }; });
+      } catch { /* columns may not exist yet */ }
+
       let users;
       if (mode === 'none') {
         users = [];
       } else if (mode === 'all') {
-        // Show ALL registered users on the server, mark online ones
-        // Exclude banned users
         const allUsers = db.prepare(
           'SELECT u.id, u.username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE b.id IS NULL ORDER BY u.username'
         ).all();
         const onlineIds = room ? new Set(room.keys()) : new Set();
         users = allUsers.map(m => ({
           id: m.id, username: m.username, online: onlineIds.has(m.id),
-          highScore: scores[m.id] || 0
+          highScore: scores[m.id] || 0,
+          status: statusMap[m.id]?.status || 'online',
+          statusText: statusMap[m.id]?.statusText || ''
         }));
       } else {
         // 'online' — only currently online users
         if (!room) return;
         users = Array.from(room.values()).map(u => ({
           id: u.id, username: u.username, online: true,
-          highScore: scores[u.id] || 0
+          highScore: scores[u.id] || 0,
+          status: statusMap[u.id]?.status || 'online',
+          statusText: statusMap[u.id]?.statusText || ''
         }));
       }
 

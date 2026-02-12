@@ -168,6 +168,49 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_pinned_channel ON pinned_messages(channel_id);
   `);
 
+  // ── Migration: user status columns ──────────────────────
+  try {
+    db.prepare("SELECT status FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'online'");
+  }
+  try {
+    db.prepare("SELECT status_text FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN status_text TEXT DEFAULT ''");
+  }
+
+  // ── Migration: channel topic column ─────────────────────
+  try {
+    db.prepare("SELECT topic FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN topic TEXT DEFAULT ''");
+  }
+
+  // ── Migration: DM flag on channels ──────────────────────
+  try {
+    db.prepare("SELECT is_dm FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN is_dm INTEGER DEFAULT 0");
+  }
+
+  // ── Migration: read positions table ─────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS read_positions (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      last_read_message_id INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, channel_id)
+    );
+  `);
+
+  // ── Migration: original_name on messages for file uploads ──
+  try {
+    db.prepare("SELECT original_name FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN original_name TEXT DEFAULT NULL");
+  }
+
   return db;
 }
 
