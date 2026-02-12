@@ -180,6 +180,13 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN status_text TEXT DEFAULT ''");
   }
 
+  // ── Migration: display_name column ────────────────────────
+  try {
+    db.prepare("SELECT display_name FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN display_name TEXT DEFAULT NULL");
+  }
+
   // ── Migration: channel topic column ─────────────────────
   try {
     db.prepare("SELECT topic FROM channels LIMIT 0").get();

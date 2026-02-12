@@ -1217,7 +1217,9 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* dynamic viewport height — accounts for mobile browser chrome */
   width: 100vw;
+  overflow: hidden;
 }
 
 #app-body {
@@ -1260,11 +1262,27 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   border-radius: var(--radius-sm);
 }
 
+.user-names {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+}
+
 .current-user {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.login-name {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.7;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3235,6 +3253,14 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 
 .mobile-overlay.active { display: block; }
 
+/* Mobile-only voice join button (inside right sidebar) */
+.mobile-voice-join {
+  display: none;     /* hidden on desktop, shown via mobile media query */
+  width: 100%;
+  margin-bottom: 8px;
+  justify-content: center;
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    RESPONSIVE — Tablet (≤ 900px)
@@ -3328,6 +3354,36 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   /* Voice buttons — smaller on tablet */
   .btn-voice { padding: 5px 10px; font-size: 12px; }
 
+  /* Hide header clutter — search/pin/delete tucked into long-press or sidebar */
+  #delete-channel-btn,
+  #search-toggle-btn,
+  #pinned-toggle-btn,
+  #copy-code-btn { display: none !important; }
+
+  /* Voice join moves to right sidebar on mobile */
+  #voice-join-btn { display: none !important; }
+  .mobile-voice-join { display: flex !important; }
+
+  /* Message toolbar — hidden until tapped */
+  .msg-toolbar {
+    position: static;
+    display: none;
+    margin-top: 4px;
+    box-shadow: none;
+    border: none;
+    background: none;
+    padding: 0;
+    gap: 4px;
+  }
+
+  .msg-selected .msg-toolbar { display: flex; }
+  .msg-selected { background: rgba(255,255,255,0.04); border-radius: var(--radius); }
+
+  .msg-toolbar button {
+    width: 34px; height: 34px; font-size: 16px;
+    background: var(--bg-tertiary); border-radius: var(--radius);
+  }
+
   /* Messages area */
   .messages { padding: 12px; }
   .message-input-area { padding: 8px 12px 12px; gap: 6px; }
@@ -3338,10 +3394,8 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   /* Screen share — constrained */
   .screen-share-container { max-height: 40vh; }
 
-  /* Status bar — compact */
-  .status-bar { padding: 4px 10px; gap: 10px; font-size: 10px; }
-  .status-bar .label { display: none; }
-  .status-bar .divider { display: none; }
+  /* Status bar — hidden on mobile to save vertical space */
+  .status-bar { display: none; }
 }
 
 
@@ -3501,14 +3555,8 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   /* Screen share — smaller on phone */
   .screen-share-container { max-height: 35vh; min-height: 120px; }
 
-  /* Status bar — minimal */
-  .status-bar {
-    padding: 3px 8px calc(3px + env(safe-area-inset-bottom, 0px));
-    min-height: 24px;
-    font-size: 9px;
-  }
-
-  .status-item .value { font-size: 10px; }
+  /* Status bar — hidden on phones */
+  .status-bar { display: none; }
 
   /* Welcome screen */
   .welcome-icon { font-size: 48px; }

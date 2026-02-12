@@ -38,8 +38,11 @@
           </div>
           <div class="user-bar">
             <span class="led on" id="connection-led" title="Server connection"></span>
-            <span class="current-user" id="current-user"></span>
-            <button id="rename-btn" class="icon-btn small" title="Change username">✏️</button>
+            <div class="user-names">
+              <span class="current-user" id="current-user"></span>
+              <span class="login-name" id="login-name" title="Your login username"></span>
+            </div>
+            <button id="rename-btn" class="icon-btn small" title="Change display name">✏️</button>
             <button id="logout-btn" class="icon-btn" title="Logout">⏻</button>
           </div>
         </div>
@@ -236,10 +239,10 @@
             <button id="gif-btn" class="btn-gif" title="Search GIFs">GIF</button>
             <div id="gif-picker" class="gif-picker" style="display:none">
               <div class="gif-picker-header">
-                <input type="text" id="gif-search-input" placeholder="Search Tenor..." maxlength="100" autocomplete="off">
+                <input type="text" id="gif-search-input" placeholder="Search GIPHY..." maxlength="100" autocomplete="off">
               </div>
               <div class="gif-picker-grid" id="gif-grid"></div>
-              <div class="gif-picker-footer">Powered by Tenor</div>
+              <div class="gif-picker-footer">Powered by GIPHY</div>
             </div>
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
             <div id="slash-dropdown" class="slash-dropdown" style="display:none"></div>
@@ -259,6 +262,7 @@
       <aside class="right-sidebar" id="right-sidebar">
         <div class="panel">
           <h5 class="panel-title">🔊 Voice</h5>
+          <button id="voice-join-mobile" class="btn-voice mobile-voice-join" style="display:none">🎤 Join Voice</button>
           <div id="voice-users" class="user-list">
             <p class="muted-text">No one in voice</p>
           </div>
@@ -349,11 +353,11 @@
   <!-- Rename Modal -->
   <div class="modal-overlay" id="rename-modal" style="display:none">
     <div class="modal">
-      <h3>Change Username</h3>
-      <p class="modal-desc">Letters, numbers, and underscores only (3–20 chars)</p>
+      <h3>Change Display Name</h3>
+      <p class="modal-desc">Letters, numbers, underscores, and spaces (2–20 chars)</p>
       <div class="form-group">
-        <label>New Username</label>
-        <input type="text" id="rename-input" placeholder="New username..." maxlength="20">
+        <label>New Display Name</label>
+        <input type="text" id="rename-input" placeholder="New display name..." maxlength="20">
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-rename-btn">Cancel</button>

@@ -107,7 +107,9 @@ class HavenApp {
     this.socket.emit('get-preferences');
     this.socket.emit('get-high-scores', { game: 'flappy' });
 
-    document.getElementById('current-user').textContent = this.user.username;
+    document.getElementById('current-user').textContent = this.user.displayName || this.user.username;
+    const loginEl = document.getElementById('login-name');
+    if (loginEl) loginEl.textContent = `@${this.user.username}`;
 
     if (this.user.isAdmin) {
       document.getElementById('admin-controls').style.display = 'block';
@@ -305,8 +307,10 @@ class HavenApp {
       this.user = data.user;
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));
-      document.getElementById('current-user').textContent = data.user.username;
-      this._showToast(`You are now "${data.user.username}"`, 'success');
+      document.getElementById('current-user').textContent = data.user.displayName || data.user.username;
+      const loginEl = document.getElementById('login-name');
+      if (loginEl) loginEl.textContent = `@${data.user.username}`;
+      this._showToast(`Display name changed to "${data.user.displayName || data.user.username}"`, 'success');
       // Refresh admin UI in case admin status changed
       if (data.user.isAdmin) {
         document.getElementById('admin-controls').style.display = 'block';
@@ -593,6 +597,10 @@ class HavenApp {
 
     // Voice buttons
     document.getElementById('voice-join-btn').addEventListener('click', () => this._joinVoice());
+    document.getElementById('voice-join-mobile')?.addEventListener('click', () => {
+      this._joinVoice();
+      this._closeMobilePanels();
+    });
     document.getElementById('voice-mute-btn').addEventListener('click', () => this._toggleMute());
     document.getElementById('voice-deafen-btn').addEventListener('click', () => this._toggleDeafen());
     document.getElementById('voice-leave-btn').addEventListener('click', () => this._leaveVoice());
@@ -832,7 +840,7 @@ class HavenApp {
     document.getElementById('rename-btn').addEventListener('click', () => {
       document.getElementById('rename-modal').style.display = 'flex';
       const input = document.getElementById('rename-input');
-      input.value = this.user.username;
+      input.value = this.user.displayName || this.user.username;
       input.focus();
       input.select();
     });
@@ -1278,12 +1286,12 @@ class HavenApp {
 
   _saveRename() {
     const input = document.getElementById('rename-input');
-    const newName = input.value.trim();
-    if (!newName || newName.length < 3) {
-      return this._showToast('Username must be at least 3 characters', 'error');
+    const newName = input.value.trim().replace(/\s+/g, ' ');
+    if (!newName || newName.length < 2) {
+      return this._showToast('Display name must be at least 2 characters', 'error');
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(newName)) {
-      return this._showToast('Letters, numbers, and underscores only', 'error');
+    if (!/^[a-zA-Z0-9_ ]+$/.test(newName)) {
+      return this._showToast('Letters, numbers, underscores, and spaces only', 'error');
     }
     this.socket.emit('rename-user', { username: newName });
     document.getElementById('rename-modal').style.display = 'none';
@@ -1429,6 +1437,8 @@ class HavenApp {
       document.getElementById('voice-join-btn').style.display = 'inline-flex';
       document.getElementById('voice-dropdown-toggle').style.display = 'none';
       document.getElementById('voice-leave-btn').style.display = 'none';
+      const mobileJoin = document.getElementById('voice-join-mobile');
+      if (mobileJoin) mobileJoin.style.display = '';
     }
     document.getElementById('search-toggle-btn').style.display = 'inline-flex';
     document.getElementById('pinned-toggle-btn').style.display = 'inline-flex';
@@ -1509,6 +1519,8 @@ class HavenApp {
     document.getElementById('voice-join-btn').style.display = 'none';
     document.getElementById('voice-dropdown-toggle').style.display = 'none';
     document.getElementById('voice-leave-btn').style.display = 'none';
+    const mobileJoin = document.getElementById('voice-join-mobile');
+    if (mobileJoin) mobileJoin.style.display = 'none';
     document.getElementById('search-toggle-btn').style.display = 'none';
     document.getElementById('pinned-toggle-btn').style.display = 'none';
     document.getElementById('status-channel').textContent = 'None';
@@ -2099,6 +2111,10 @@ class HavenApp {
     document.getElementById('voice-join-btn').style.display = inVoice ? 'none' : 'inline-flex';
     document.getElementById('voice-dropdown-toggle').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('voice-leave-btn').style.display = inVoice ? 'inline-flex' : 'none';
+
+    // Mobile voice join in right sidebar
+    const mobileJoin = document.getElementById('voice-join-mobile');
+    if (mobileJoin) mobileJoin.style.display = inVoice ? 'none' : '';
 
     if (!inVoice) {
       document.getElementById('voice-dropdown-panel').style.display = 'none';

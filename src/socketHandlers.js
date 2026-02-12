@@ -51,6 +51,14 @@ function setupSocketHandlers(io, db) {
 
     socket.user = user;
 
+    // Look up current display_name from DB (JWT may be stale)
+    try {
+      const uRow = db.prepare('SELECT display_name FROM users WHERE id = ?').get(user.id);
+      socket.user.displayName = (uRow && uRow.display_name) ? uRow.display_name : user.username;
+    } catch {
+      socket.user.displayName = user.displayName || user.username;
+    }
+
     // Load user status from DB
     try {
       const statusRow = db.prepare('SELECT status, status_text FROM users WHERE id = ?').get(user.id);
@@ -160,7 +168,7 @@ function setupSocketHandlers(io, db) {
           // For DMs, fetch the other user's info
           if (ch.is_dm) {
             const otherUser = db.prepare(`
-              SELECT u.id, u.username FROM users u
+              SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u
               JOIN channel_members cm ON u.id = cm.user_id
               WHERE cm.channel_id = ? AND u.id != ?
             `).get(ch.id, socket.user.id);
@@ -252,7 +260,7 @@ function setupSocketHandlers(io, db) {
       // Notify channel
       io.to(`channel:${code}`).emit('user-joined', {
         channelCode: code,
-        user: { id: socket.user.id, username: socket.user.username }
+        user: { id: socket.user.id, username: socket.user.displayName }
       });
 
       // Send channel info to joiner
@@ -296,7 +304,7 @@ function setupSocketHandlers(io, db) {
       if (!channelUsers.has(code)) channelUsers.set(code, new Map());
       channelUsers.get(code).set(socket.user.id, {
         id: socket.user.id,
-        username: socket.user.username,
+        username: socket.user.displayName,
         socketId: socket.id,
         status: socket.user.status || 'online',
         statusText: socket.user.statusText || ''
@@ -326,7 +334,7 @@ function setupSocketHandlers(io, db) {
       if (before) {
         messages = db.prepare(`
           SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at,
-                 COALESCE(u.username, '[Deleted User]') as username, u.id as user_id
+                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ? AND m.id < ?
           ORDER BY m.created_at DESC LIMIT ?
@@ -334,7 +342,7 @@ function setupSocketHandlers(io, db) {
       } else {
         messages = db.prepare(`
           SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at,
-                 COALESCE(u.username, '[Deleted User]') as username, u.id as user_id
+                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ?
           ORDER BY m.created_at DESC LIMIT ?
@@ -351,7 +359,7 @@ function setupSocketHandlers(io, db) {
       if (replyIds.length > 0) {
         const ph = replyIds.map(() => '?').join(',');
         db.prepare(`
-          SELECT m.id, m.content, COALESCE(u.username, '[Deleted User]') as username
+          SELECT m.id, m.content, COALESCE(u.display_name, u.username, '[Deleted User]') as username
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.id IN (${ph})
         `).all(...replyIds).forEach(r => replyMap.set(r.id, r));
@@ -362,7 +370,7 @@ function setupSocketHandlers(io, db) {
       if (msgIds.length > 0) {
         const ph = msgIds.map(() => '?').join(',');
         db.prepare(`
-          SELECT r.message_id, r.emoji, r.user_id, u.username
+          SELECT r.message_id, r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username
           FROM reactions r JOIN users u ON r.user_id = u.id
           WHERE r.message_id IN (${ph})
         `).all(...msgIds).forEach(r => {
@@ -410,7 +418,7 @@ function setupSocketHandlers(io, db) {
       const escapedQuery = query.replace(/[%_\\]/g, '\\$&');
       const results = db.prepare(`
         SELECT m.id, m.content, m.created_at,
-               COALESCE(u.username, '[Deleted User]') as username, u.id as user_id
+               COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.content LIKE ? ESCAPE '\\'
         ORDER BY m.created_at DESC LIMIT 25
@@ -463,7 +471,7 @@ function setupSocketHandlers(io, db) {
       if (slashMatch) {
         const cmd = slashMatch[1].toLowerCase();
         const arg = (slashMatch[2] || '').trim();
-        const slashResult = processSlashCommand(cmd, arg, socket.user.username);
+        const slashResult = processSlashCommand(cmd, arg, socket.user.displayName);
         if (slashResult) {
           const finalContent = slashResult.content;
 
@@ -475,7 +483,7 @@ function setupSocketHandlers(io, db) {
             id: result.lastInsertRowid,
             content: finalContent,
             created_at: new Date().toISOString(),
-            username: socket.user.username,
+            username: socket.user.displayName,
             user_id: socket.user.id,
             reply_to: null,
             replyContext: null,
@@ -501,7 +509,7 @@ function setupSocketHandlers(io, db) {
         id: result.lastInsertRowid,
         content: content.trim(),
         created_at: new Date().toISOString(),
-        username: socket.user.username,
+        username: socket.user.displayName,
         user_id: socket.user.id,
         reply_to: replyTo,
         replyContext: null,
@@ -512,7 +520,7 @@ function setupSocketHandlers(io, db) {
       // Attach reply context if replying
       if (replyTo) {
         message.replyContext = db.prepare(`
-          SELECT m.id, m.content, COALESCE(u.username, '[Deleted User]') as username FROM messages m
+          SELECT m.id, m.content, COALESCE(u.display_name, u.username, '[Deleted User]') as username FROM messages m
           LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?
         `).get(replyTo) || null;
       }
@@ -528,7 +536,7 @@ function setupSocketHandlers(io, db) {
       if (data.code !== socket.currentChannel) return;
       socket.to(`channel:${data.code}`).emit('user-typing', {
         channelCode: data.code,
-        username: socket.user.username
+        username: socket.user.displayName
       });
     });
 
@@ -560,7 +568,7 @@ function setupSocketHandlers(io, db) {
       // Add new voice user
       voiceUsers.get(code).set(socket.user.id, {
         id: socket.user.id,
-        username: socket.user.username,
+        username: socket.user.displayName,
         socketId: socket.id
       });
 
@@ -574,7 +582,7 @@ function setupSocketHandlers(io, db) {
       existingUsers.forEach(u => {
         io.to(u.socketId).emit('voice-user-joined', {
           channelCode: code,
-          user: { id: socket.user.id, username: socket.user.username }
+          user: { id: socket.user.id, username: socket.user.displayName }
         });
       });
 
@@ -590,7 +598,7 @@ function setupSocketHandlers(io, db) {
       const target = voiceUsers.get(data.code)?.get(data.targetUserId);
       if (target) {
         io.to(target.socketId).emit('voice-offer', {
-          from: { id: socket.user.id, username: socket.user.username },
+          from: { id: socket.user.id, username: socket.user.displayName },
           offer: data.offer,
           channelCode: data.code
         });
@@ -604,7 +612,7 @@ function setupSocketHandlers(io, db) {
       const target = voiceUsers.get(data.code)?.get(data.targetUserId);
       if (target) {
         io.to(target.socketId).emit('voice-answer', {
-          from: { id: socket.user.id, username: socket.user.username },
+          from: { id: socket.user.id, username: socket.user.displayName },
           answer: data.answer,
           channelCode: data.code
         });
@@ -618,7 +626,7 @@ function setupSocketHandlers(io, db) {
       const target = voiceUsers.get(data.code)?.get(data.targetUserId);
       if (target) {
         io.to(target.socketId).emit('voice-ice-candidate', {
-          from: { id: socket.user.id, username: socket.user.username },
+          from: { id: socket.user.id, username: socket.user.displayName },
           candidate: data.candidate,
           channelCode: data.code
         });
@@ -643,7 +651,7 @@ function setupSocketHandlers(io, db) {
         if (uid !== socket.user.id) {
           io.to(user.socketId).emit('screen-share-started', {
             userId: socket.user.id,
-            username: socket.user.username,
+            username: socket.user.displayName,
             channelCode: data.code
           });
         }
@@ -692,7 +700,7 @@ function setupSocketHandlers(io, db) {
 
         // Broadcast updated reactions for this message
         const reactions = db.prepare(`
-          SELECT r.emoji, r.user_id, u.username FROM reactions r
+          SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
           JOIN users u ON r.user_id = u.id WHERE r.message_id = ?
         `).all(data.messageId);
 
@@ -722,7 +730,7 @@ function setupSocketHandlers(io, db) {
       ).run(data.messageId, socket.user.id, data.emoji);
 
       const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, u.username FROM reactions r
+        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
         JOIN users u ON r.user_id = u.id WHERE r.message_id = ?
       `).all(data.messageId);
 
@@ -749,10 +757,10 @@ function setupSocketHandlers(io, db) {
       if (!member) return;
 
       const members = db.prepare(`
-        SELECT u.id, u.username FROM users u
+        SELECT u.id, COALESCE(u.display_name, u.username) as username, u.username as loginName FROM users u
         JOIN channel_members cm ON u.id = cm.user_id
         WHERE cm.channel_id = ?
-        ORDER BY u.username
+        ORDER BY COALESCE(u.display_name, u.username)
       `).all(channel.id);
 
       socket.emit('channel-members', { channelCode: code, members });
@@ -762,44 +770,32 @@ function setupSocketHandlers(io, db) {
 
     socket.on('rename-user', (data) => {
       if (!data || typeof data !== 'object') return;
-      const newName = typeof data.username === 'string' ? data.username.trim() : '';
+      const newName = typeof data.username === 'string' ? data.username.trim().replace(/\s+/g, ' ') : '';
 
-      if (!newName || newName.length < 3 || newName.length > 20) {
-        return socket.emit('error-msg', 'Username must be 3-20 characters');
+      if (!newName || newName.length < 2 || newName.length > 20) {
+        return socket.emit('error-msg', 'Display name must be 2-20 characters');
       }
-      if (!/^[a-zA-Z0-9_]+$/.test(newName)) {
-        return socket.emit('error-msg', 'Letters, numbers, and underscores only');
-      }
-
-      // Check if name is taken by someone else
-      const existing = db.prepare(
-        'SELECT id FROM users WHERE username = ? COLLATE NOCASE AND id != ?'
-      ).get(newName, socket.user.id);
-      if (existing) {
-        return socket.emit('error-msg', 'Username already taken');
+      if (!/^[a-zA-Z0-9_ ]+$/.test(newName)) {
+        return socket.emit('error-msg', 'Letters, numbers, underscores, and spaces only');
       }
 
-      // Block renaming to the admin username (privilege escalation prevention)
-      const adminName = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
-      if (newName.toLowerCase() === adminName && !socket.user.isAdmin) {
-        return socket.emit('error-msg', 'That username is reserved');
-      }
-
+      // Display names don't need to be unique — multiple users can share a name
       try {
-        db.prepare('UPDATE users SET username = ? WHERE id = ?').run(newName, socket.user.id);
+        db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(newName, socket.user.id);
       } catch (err) {
         console.error('Rename error:', err);
-        return socket.emit('error-msg', 'Failed to update username');
+        return socket.emit('error-msg', 'Failed to update display name');
       }
 
-      const oldName = socket.user.username;
-      socket.user.username = newName;
+      const oldName = socket.user.displayName;
+      socket.user.displayName = newName;
 
-      // Issue fresh JWT with new username
+      // Issue fresh JWT with new display name (login username unchanged)
       const newToken = generateToken({
         id: socket.user.id,
-        username: newName,
-        isAdmin: socket.user.isAdmin
+        username: socket.user.username,
+        isAdmin: socket.user.isAdmin,
+        displayName: newName
       });
 
       // Update online tracking maps
@@ -820,7 +816,7 @@ function setupSocketHandlers(io, db) {
       // Send new credentials to client
       socket.emit('renamed', {
         token: newToken,
-        user: { id: socket.user.id, username: newName, isAdmin: socket.user.isAdmin },
+        user: { id: socket.user.id, username: socket.user.username, isAdmin: socket.user.isAdmin, displayName: newName },
         oldName
       });
 
@@ -990,7 +986,7 @@ function setupSocketHandlers(io, db) {
       io.to(`channel:${code}`).emit('message-pinned', {
         channelCode: code,
         messageId: data.messageId,
-        pinnedBy: socket.user.username
+        pinnedBy: socket.user.displayName
       });
     });
 
@@ -1040,8 +1036,8 @@ function setupSocketHandlers(io, db) {
 
       const pins = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.edited_at,
-               COALESCE(u.username, '[Deleted User]') as username, u.id as user_id,
-               pm.pinned_at, COALESCE(pb.username, '[Deleted User]') as pinned_by
+               COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id,
+               pm.pinned_at, COALESCE(pb.display_name, pb.username, '[Deleted User]') as pinned_by
         FROM pinned_messages pm
         JOIN messages m ON pm.message_id = m.id
         LEFT JOIN users u ON m.user_id = u.id
@@ -1119,7 +1115,7 @@ function setupSocketHandlers(io, db) {
       const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : '';
 
       // Get username before banning (works for ANY user, online or offline)
-      const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(data.userId);
+      const targetUser = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
       if (!targetUser) return socket.emit('error-msg', 'User not found');
 
       try {
@@ -1157,12 +1153,12 @@ function setupSocketHandlers(io, db) {
       if (!isInt(data.userId)) return;
 
       db.prepare('DELETE FROM bans WHERE user_id = ?').run(data.userId);
-      const targetUser = db.prepare('SELECT username FROM users WHERE id = ?').get(data.userId);
+      const targetUser = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
       socket.emit('error-msg', `Unbanned ${targetUser ? targetUser.username : 'user'}`);
 
       // Send updated ban list to admin
       const bans = db.prepare(`
-        SELECT b.id, b.user_id, b.reason, b.created_at, u.username
+        SELECT b.id, b.user_id, b.reason, b.created_at, COALESCE(u.display_name, u.username) as username
         FROM bans b JOIN users u ON b.user_id = u.id ORDER BY b.created_at DESC
       `).all();
       socket.emit('ban-list', bans);
@@ -1180,7 +1176,7 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'You can\'t delete yourself');
       }
 
-      const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(data.userId);
+      const targetUser = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
       if (!targetUser) return socket.emit('error-msg', 'User not found');
 
       // Disconnect the user if online
@@ -1232,7 +1228,7 @@ function setupSocketHandlers(io, db) {
 
       // Refresh ban list for admin
       const bans = db.prepare(`
-        SELECT b.id, b.user_id, b.reason, b.created_at, u.username
+        SELECT b.id, b.user_id, b.reason, b.created_at, COALESCE(u.display_name, u.username) as username
         FROM bans b JOIN users u ON b.user_id = u.id ORDER BY b.created_at DESC
       `).all();
       socket.emit('ban-list', bans);
@@ -1256,7 +1252,7 @@ function setupSocketHandlers(io, db) {
         ? data.duration : 10; // default 10 min, max 30 days
       const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : '';
 
-      const targetUser = db.prepare('SELECT username FROM users WHERE id = ?').get(data.userId);
+      const targetUser = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
       if (!targetUser) return socket.emit('error-msg', 'User not found');
 
       try {
@@ -1288,7 +1284,7 @@ function setupSocketHandlers(io, db) {
       if (!isInt(data.userId)) return;
 
       db.prepare('DELETE FROM mutes WHERE user_id = ?').run(data.userId);
-      const targetUser = db.prepare('SELECT username FROM users WHERE id = ?').get(data.userId);
+      const targetUser = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
       socket.emit('error-msg', `Unmuted ${targetUser ? targetUser.username : 'user'}`);
     });
 
@@ -1297,7 +1293,7 @@ function setupSocketHandlers(io, db) {
     socket.on('get-bans', () => {
       if (!socket.user.isAdmin) return;
       const bans = db.prepare(`
-        SELECT b.id, b.user_id, b.reason, b.created_at, u.username
+        SELECT b.id, b.user_id, b.reason, b.created_at, COALESCE(u.display_name, u.username) as username
         FROM bans b JOIN users u ON b.user_id = u.id ORDER BY b.created_at DESC
       `).all();
       socket.emit('ban-list', bans);
@@ -1411,7 +1407,7 @@ function setupSocketHandlers(io, db) {
         // Broadcast personal high score to channel
         if (socket.currentChannel) {
           io.to(socket.currentChannel).emit('new-high-score', {
-            username: socket.user.username,
+            username: socket.user.displayName,
             game,
             score,
             previous: current ? current.score : 0
@@ -1421,7 +1417,7 @@ function setupSocketHandlers(io, db) {
 
       // Broadcast updated leaderboard
       const leaderboard = db.prepare(`
-        SELECT hs.user_id, u.username, hs.score
+        SELECT hs.user_id, COALESCE(u.display_name, u.username) as username, hs.score
         FROM high_scores hs JOIN users u ON hs.user_id = u.id
         WHERE hs.game = ? AND hs.score > 0
         ORDER BY hs.score DESC LIMIT 50
@@ -1433,7 +1429,7 @@ function setupSocketHandlers(io, db) {
       if (!data || typeof data !== 'object') return;
       const game = typeof data.game === 'string' ? data.game.trim() : 'flappy';
       const leaderboard = db.prepare(`
-        SELECT hs.user_id, u.username, hs.score
+        SELECT hs.user_id, COALESCE(u.display_name, u.username) as username, hs.score
         FROM high_scores hs JOIN users u ON hs.user_id = u.id
         WHERE hs.game = ? AND hs.score > 0
         ORDER BY hs.score DESC LIMIT 50
@@ -1564,7 +1560,7 @@ function setupSocketHandlers(io, db) {
 
       // Verify target user exists and isn't banned
       const target = db.prepare(
-        'SELECT u.id, u.username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id = ? AND b.id IS NULL'
+        'SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id = ? AND b.id IS NULL'
       ).get(targetId);
       if (!target) return socket.emit('error-msg', 'User not found');
 
@@ -1621,7 +1617,7 @@ function setupSocketHandlers(io, db) {
               code,
               name,
               is_dm: 1,
-              dm_target: { id: socket.user.id, username: socket.user.username }
+              dm_target: { id: socket.user.id, username: socket.user.displayName }
             });
           }
         }
@@ -1692,7 +1688,7 @@ function setupSocketHandlers(io, db) {
       for (const [, user] of voiceRoom) {
         io.to(user.socketId).emit('voice-user-left', {
           channelCode: code,
-          user: { id: socket.user.id, username: socket.user.username }
+          user: { id: socket.user.id, username: socket.user.displayName }
         });
       }
 
@@ -1739,7 +1735,7 @@ function setupSocketHandlers(io, db) {
         users = [];
       } else if (mode === 'all') {
         const allUsers = db.prepare(
-          'SELECT u.id, u.username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE b.id IS NULL ORDER BY u.username'
+          'SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE b.id IS NULL ORDER BY COALESCE(u.display_name, u.username)'
         ).all();
         const onlineIds = room ? new Set(room.keys()) : new Set();
         users = allUsers.map(m => ({
@@ -1755,7 +1751,7 @@ function setupSocketHandlers(io, db) {
           if (s.user && !onlineMap.has(s.user.id)) {
             onlineMap.set(s.user.id, {
               id: s.user.id,
-              username: s.user.username,
+              username: s.user.displayName,
               online: true,
               highScore: scores[s.user.id] || 0,
               status: statusMap[s.user.id]?.status || 'online',

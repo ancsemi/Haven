@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.4.0] — 2025-02-16
+
+### Added
+- **Display name ≠ login name** — users now have a separate display name that is shown everywhere (messages, voice, leaderboards, online list). The login username is set at registration and never changes, so nobody forgets their credentials. Display names allow spaces, don't need to be unique, and can be changed at will via the ✏️ button. The immutable login name is shown as a small `@username` subtitle in the sidebar.
+- **Mobile voice join** — "🎤 Join Voice" button added to the right-sidebar users panel, accessible on phones where the header voice button is hidden.
+
+### Fixed
+- **Mobile viewport — message input visible** — switched from `100vh` (which doesn't account for browser chrome) to `100dvh` (dynamic viewport height). The text input no longer hides behind the phone's URL bar.
+- **Mobile header decluttered** — delete, search, pin, and copy-code buttons are now hidden on screens ≤ 768 px. Features are still accessible via long-press or sidebar.
+- **GIF picker branding** — corrected "Search Tenor…" / "Powered by Tenor" to "Search GIPHY…" / "Powered by GIPHY" to match the actual API in use.
+- **Mobile toolbar tap-to-reveal at 768 px** — the message action toolbar (react, reply, pin, edit, delete) now hides/shows on tap across all mobile breakpoints, not just ≤ 480 px.
+
+### Improved
+- **Status bar hidden on mobile** — the ping / server / encryption status bar is suppressed on phones to reclaim vertical space.
+
+---
+
 ## [1.3.9] — 2025-02-16
 
 ### Fixed

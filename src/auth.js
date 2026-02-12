@@ -106,7 +106,7 @@ router.post('/register', async (req, res) => {
     ).run(username, hash, isAdmin);
 
     const token = jwt.sign(
-      { id: result.lastInsertRowid, username, isAdmin: !!isAdmin },
+      { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -122,7 +122,7 @@ router.post('/register', async (req, res) => {
 
     res.json({
       token,
-      user: { id: result.lastInsertRowid, username, isAdmin: !!isAdmin }
+      user: { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username }
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -166,8 +166,9 @@ router.post('/login', async (req, res) => {
       user.is_admin = shouldBeAdmin;
     }
 
+    const displayName = user.display_name || user.username;
     const token = jwt.sign(
-      { id: user.id, username: user.username, isAdmin: !!user.is_admin },
+      { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -183,7 +184,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin }
+      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName }
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -221,7 +222,7 @@ router.post('/change-password', async (req, res) => {
 
     // Issue a fresh token so the session stays alive
     const freshToken = jwt.sign(
-      { id: user.id, username: user.username, isAdmin: !!user.is_admin },
+      { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName: user.display_name || user.username },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
