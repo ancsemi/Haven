@@ -243,6 +243,16 @@ app.get('/api/link-preview', async (req, res) => {
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       return res.status(400).json({ error: 'Only http/https URLs allowed' });
     }
+    // Block private/internal IPs (SSRF protection)
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
+        host === '::1' || host === '[::1]' ||
+        host.startsWith('10.') || host.startsWith('192.168.') ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+        host === '169.254.169.254' ||
+        host.endsWith('.local') || host.endsWith('.internal')) {
+      return res.status(400).json({ error: 'Private addresses not allowed' });
+    }
   } catch { return res.status(400).json({ error: 'Invalid URL' }); }
 
   // Cache check

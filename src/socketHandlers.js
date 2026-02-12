@@ -281,27 +281,47 @@ function setupSocketHandlers(io, db) {
         `).all(channel.id, limit);
       }
 
-      // Attach reply context and reactions to each message
-      const getReplyStmt = db.prepare(`
-        SELECT m.id, m.content, COALESCE(u.username, '[Deleted User]') as username FROM messages m
-        LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?
-      `);
-      const getReactionsStmt = db.prepare(`
-        SELECT r.emoji, r.user_id, u.username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ?
-      `);
+      // Batch-enrich messages (reply context, reactions, pin status) in 3 queries
+      // instead of N+1 per-message lookups.
+      const msgIds = messages.map(m => m.id);
+      const replyIds = [...new Set(messages.filter(m => m.reply_to).map(m => m.reply_to))];
 
-      const isPinnedStmt = db.prepare(
-        'SELECT 1 FROM pinned_messages WHERE message_id = ?'
-      );
+      // Batch reply context
+      const replyMap = new Map();
+      if (replyIds.length > 0) {
+        const ph = replyIds.map(() => '?').join(',');
+        db.prepare(`
+          SELECT m.id, m.content, COALESCE(u.username, '[Deleted User]') as username
+          FROM messages m LEFT JOIN users u ON m.user_id = u.id
+          WHERE m.id IN (${ph})
+        `).all(...replyIds).forEach(r => replyMap.set(r.id, r));
+      }
+
+      // Batch reactions
+      const reactionMap = new Map(); // messageId → [reactions]
+      if (msgIds.length > 0) {
+        const ph = msgIds.map(() => '?').join(',');
+        db.prepare(`
+          SELECT r.message_id, r.emoji, r.user_id, u.username
+          FROM reactions r JOIN users u ON r.user_id = u.id
+          WHERE r.message_id IN (${ph})
+        `).all(...msgIds).forEach(r => {
+          if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
+          reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
+        });
+
+        // Batch pin status
+        var pinnedSet = new Set(
+          db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${ph})`)
+            .all(...msgIds).map(r => r.message_id)
+        );
+      }
 
       const enriched = messages.map(m => {
         const obj = { ...m };
-        if (m.reply_to) {
-          obj.replyContext = getReplyStmt.get(m.reply_to) || null;
-        }
-        obj.reactions = getReactionsStmt.all(m.id);
-        obj.pinned = !!isPinnedStmt.get(m.id);
+        obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
+        obj.reactions = reactionMap.get(m.id) || [];
+        obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
         return obj;
       });
 
@@ -326,13 +346,15 @@ function setupSocketHandlers(io, db) {
       ).get(channel.id, socket.user.id);
       if (!member) return;
 
+      // Escape LIKE wildcards so user can't match everything with % or _
+      const escapedQuery = query.replace(/[%_\\]/g, '\\$&');
       const results = db.prepare(`
         SELECT m.id, m.content, m.created_at,
                COALESCE(u.username, '[Deleted User]') as username, u.id as user_id
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.content LIKE ?
+        WHERE m.channel_id = ? AND m.content LIKE ? ESCAPE '\\'
         ORDER BY m.created_at DESC LIMIT 25
-      `).all(channel.id, `%${query}%`);
+      `).all(channel.id, `%${escapedQuery}%`);
 
       socket.emit('search-results', { results, query });
     });
@@ -442,6 +464,8 @@ function setupSocketHandlers(io, db) {
     socket.on('typing', (data) => {
       if (!data || typeof data !== 'object') return;
       if (!isString(data.code, 8, 8)) return;
+      // Only allow typing in the channel the user is currently in
+      if (data.code !== socket.currentChannel) return;
       socket.to(`channel:${data.code}`).emit('user-typing', {
         channelCode: data.code,
         username: socket.user.username
@@ -501,6 +525,8 @@ function setupSocketHandlers(io, db) {
     socket.on('voice-offer', (data) => {
       if (!data || typeof data !== 'object') return;
       if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.offer) return;
+      // Verify sender is in the voice room
+      if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
       const target = voiceUsers.get(data.code)?.get(data.targetUserId);
       if (target) {
         io.to(target.socketId).emit('voice-offer', {
@@ -514,6 +540,7 @@ function setupSocketHandlers(io, db) {
     socket.on('voice-answer', (data) => {
       if (!data || typeof data !== 'object') return;
       if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.answer) return;
+      if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
       const target = voiceUsers.get(data.code)?.get(data.targetUserId);
       if (target) {
         io.to(target.socketId).emit('voice-answer', {
@@ -527,6 +554,7 @@ function setupSocketHandlers(io, db) {
     socket.on('voice-ice-candidate', (data) => {
       if (!data || typeof data !== 'object') return;
       if (!isString(data.code, 8, 8) || !isInt(data.targetUserId)) return;
+      if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
       const target = voiceUsers.get(data.code)?.get(data.targetUserId);
       if (target) {
         io.to(target.socketId).emit('voice-ice-candidate', {
@@ -623,6 +651,12 @@ function setupSocketHandlers(io, db) {
       const code = socket.currentChannel;
       if (!code) return;
 
+      // Verify message belongs to this channel
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      if (!channel) return;
+      const msgCheck = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+      if (!msgCheck) return;
+
       db.prepare(
         'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
       ).run(data.messageId, socket.user.id, data.emoji);
@@ -685,17 +719,17 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'Username already taken');
       }
 
+      // Block renaming to the admin username (privilege escalation prevention)
+      const adminName = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
+      if (newName.toLowerCase() === adminName && !socket.user.isAdmin) {
+        return socket.emit('error-msg', 'That username is reserved');
+      }
+
       try {
         db.prepare('UPDATE users SET username = ? WHERE id = ?').run(newName, socket.user.id);
       } catch (err) {
         console.error('Rename error:', err);
         return socket.emit('error-msg', 'Failed to update username');
-      }
-
-      // Block renaming to the admin username (privilege escalation prevention)
-      const adminName = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
-      if (newName.toLowerCase() === adminName && socket.user.id !== db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(adminName)?.id) {
-        return socket.emit('error-msg', 'That username is reserved');
       }
 
       const oldName = socket.user.username;
@@ -756,8 +790,9 @@ function setupSocketHandlers(io, db) {
       if (!channel) return;
 
       const deleteAll = db.transaction((chId) => {
-        // Delete reactions first (they reference messages)
+        // Delete child records first (reactions, pins reference messages)
         db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
+        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
         db.prepare('DELETE FROM messages WHERE channel_id = ?').run(chId);
         db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(chId);
         db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
@@ -795,9 +830,14 @@ function setupSocketHandlers(io, db) {
       const newContent = data.content.trim();
       if (!newContent) return;
 
-      db.prepare(
-        'UPDATE messages SET content = ?, edited_at = datetime(\'now\') WHERE id = ?'
-      ).run(newContent, data.messageId);
+      try {
+        db.prepare(
+          'UPDATE messages SET content = ?, edited_at = datetime(\'now\') WHERE id = ?'
+        ).run(newContent, data.messageId);
+      } catch (err) {
+        console.error('Edit message error:', err);
+        return socket.emit('error-msg', 'Failed to edit message');
+      }
 
       io.to(`channel:${code}`).emit('message-edited', {
         channelCode: code,
@@ -829,8 +869,14 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'You can only delete your own messages');
       }
 
-      db.prepare('DELETE FROM reactions WHERE message_id = ?').run(data.messageId);
-      db.prepare('DELETE FROM messages WHERE id = ?').run(data.messageId);
+      try {
+        db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+        db.prepare('DELETE FROM reactions WHERE message_id = ?').run(data.messageId);
+        db.prepare('DELETE FROM messages WHERE id = ?').run(data.messageId);
+      } catch (err) {
+        console.error('Delete message error:', err);
+        return socket.emit('error-msg', 'Failed to delete message');
+      }
 
       io.to(`channel:${code}`).emit('message-deleted', {
         channelCode: code,
@@ -872,9 +918,14 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'Channel has reached the 50-pin limit');
       }
 
-      db.prepare(
-        'INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)'
-      ).run(data.messageId, channel.id, socket.user.id);
+      try {
+        db.prepare(
+          'INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)'
+        ).run(data.messageId, channel.id, socket.user.id);
+      } catch (err) {
+        console.error('Pin message error:', err);
+        return socket.emit('error-msg', 'Failed to pin message');
+      }
 
       io.to(`channel:${code}`).emit('message-pinned', {
         channelCode: code,
@@ -901,7 +952,12 @@ function setupSocketHandlers(io, db) {
       ).get(data.messageId, channel.id);
       if (!pin) return socket.emit('error-msg', 'Message is not pinned');
 
-      db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+      try {
+        db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+      } catch (err) {
+        console.error('Unpin message error:', err);
+        return socket.emit('error-msg', 'Failed to unpin message');
+      }
 
       io.to(`channel:${code}`).emit('message-unpinned', {
         channelCode: code,
@@ -1095,6 +1151,11 @@ function setupSocketHandlers(io, db) {
         db.prepare('DELETE FROM mutes WHERE user_id = ?').run(uid);
         db.prepare('DELETE FROM bans WHERE user_id = ?').run(uid);
         db.prepare('DELETE FROM channel_members WHERE user_id = ?').run(uid);
+        // Re-assign pins to the admin performing the deletion, then nullify messages
+        db.prepare('UPDATE pinned_messages SET pinned_by = ? WHERE pinned_by = ?').run(socket.user.id, uid);
+        db.prepare('DELETE FROM high_scores WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM eula_acceptances WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM user_preferences WHERE user_id = ?').run(uid);
         // Mark their messages as [deleted user] instead of deleting (preserves chat history)
         db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
         db.prepare('DELETE FROM users WHERE id = ?').run(uid);
@@ -1187,7 +1248,11 @@ function setupSocketHandlers(io, db) {
     socket.on('get-server-settings', () => {
       const rows = db.prepare('SELECT key, value FROM server_settings').all();
       const settings = {};
-      rows.forEach(r => { settings[r.key] = r.value; });
+      const sensitiveKeys = ['tenor_api_key'];
+      rows.forEach(r => {
+        if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
+        settings[r.key] = r.value;
+      });
       socket.emit('server-settings', settings);
     });
 

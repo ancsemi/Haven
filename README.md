@@ -6,7 +6,7 @@
 
 > **Your server. Your rules. No cloud. No accounts with Big Tech. No one reading your messages.**
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
@@ -30,9 +30,12 @@ You launch it, your friends connect to your IP address, and you have a private g
 
 | Category | What You Get |
 |----------|-------------|
-| **Chat** | Real-time messaging, image uploads (paste/drag/drop), typing indicators, message editing, replies, emoji reactions, @mentions with autocomplete |
-| **Voice** | Peer-to-peer audio chat, per-user volume sliders, mute/deafen |
-| **Formatting** | **Bold**, *italic*, ~~strikethrough~~, `code`, \|\|spoilers\|\|, auto-linked URLs |
+| **Chat** | Real-time messaging, image uploads (paste/drag/drop), typing indicators, message editing, replies, emoji reactions, @mentions with autocomplete, message pinning (admin) |
+| **Voice** | Peer-to-peer audio chat, per-user volume sliders, mute/deafen, join/leave audio cues, talking indicators |
+| **Screen Share** | Multi-stream screen sharing with tiled grid layout, per-user video tiles, one-click close |
+| **Formatting** | **Bold**, *italic*, ~~strikethrough~~, `code`, \|\|spoilers\|\|, auto-linked URLs, fenced code blocks with language labels, blockquotes |
+| **Link Previews** | Automatic OG metadata previews for shared URLs with title, description, and thumbnail |
+| **GIF Search** | Tenor-powered GIF picker — search and send GIFs inline (admin-configurable API key) |
 | **Slash Commands** | `/shrug`, `/tableflip`, `/roll 2d20`, `/flip`, `/me`, `/spoiler`, `/tts`, and more — type `/` to see them all |
 | **Search** | Search messages in any channel with Ctrl+F |
 | **Themes** | 12 built-in themes: Haven, Discord, Matrix, Tron, HALO, LoTR, Cyberpunk, Nord, Dracula, Bloodborne, Ice, Abyss |
@@ -202,6 +205,10 @@ Your theme choice persists across sessions.
 5. Click **📞 Leave** when done
 
 Voice is peer-to-peer — audio goes directly between users, not through the server. Requires HTTPS.
+
+- **Join / leave cues** — synthesized audio tones when users enter or leave voice.
+- **Talking indicators** — usernames glow green when speaking (300 ms hysteresis for smooth animation).
+- **Screen sharing** — click **🖥️ Share Screen** to broadcast your display. Multiple users can share simultaneously in a tiled grid.
 
 ---
 

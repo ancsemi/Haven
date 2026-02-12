@@ -103,6 +103,14 @@ class HavenApp {
       this._setLed('status-server-led', 'on');
       document.getElementById('status-server-text').textContent = 'Connected';
       this._startPingMonitor();
+      // Re-join channel after reconnect (server lost our room membership)
+      this.socket.emit('get-channels');
+      this.socket.emit('get-server-settings');
+      if (this.currentChannel) {
+        this.socket.emit('enter-channel', { code: this.currentChannel });
+        this.socket.emit('get-messages', { code: this.currentChannel });
+        this.socket.emit('get-channel-members', { code: this.currentChannel });
+      }
     });
 
     this.socket.on('disconnect', () => {
@@ -1394,7 +1402,7 @@ class HavenApp {
     // Fetch link previews for this message
     this._fetchLinkPreviews(msgEl);
     if (wasAtBottom) {
-      this._scrollToBottom();
+      this._scrollToBottom(true);
       // Also scroll after images load (they shift content down)
       const imgs = container.lastElementChild?.querySelectorAll('img');
       if (imgs) imgs.forEach(img => {
@@ -1901,6 +1909,12 @@ class HavenApp {
   _hideScreenShare() {
     const container = document.getElementById('screen-share-container');
     const grid = document.getElementById('screen-share-grid');
+    // Stop our own screen share if active (don't just hide the UI!)
+    if (this.voice && this.voice.isScreenSharing) {
+      this.voice.stopScreenShare();
+      document.getElementById('screen-share-btn').textContent = '🖥️ Share';
+      document.getElementById('screen-share-btn').classList.remove('sharing');
+    }
     // Stop all video elements and clear grid
     grid.querySelectorAll('video').forEach(v => { v.srcObject = null; });
     grid.innerHTML = '';
@@ -1912,7 +1926,7 @@ class HavenApp {
   _escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   _isImageUrl(str) {
@@ -2241,11 +2255,11 @@ class HavenApp {
   _sendGifMessage(url) {
     if (!this.currentChannel || !url) return;
     const payload = {
-      channelCode: this.currentChannel,
+      code: this.currentChannel,
       content: url,
     };
-    if (this.replyTo) {
-      payload.replyTo = this.replyTo;
+    if (this.replyingTo) {
+      payload.replyTo = this.replyingTo.id;
       this._clearReply();
     }
     this.socket.emit('send-message', payload);

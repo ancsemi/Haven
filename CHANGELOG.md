@@ -6,6 +6,64 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.2.0] — 2026-02-12
+
+### Added — Voice UX
+- **Join / leave audio cues** — synthesized tones play when users enter or leave voice chat.
+- **Talking indicators** — usernames glow green while speaking, with 300 ms hysteresis for smooth animation.
+- **Multi-stream screen sharing** — multiple users can share screens simultaneously in a CSS Grid tiled layout with per-user video tiles, labels, and close buttons.
+
+### Added — Message Pinning
+- **Pin / unpin messages** (admin-only) — pin button in message hover toolbar.
+- **Pinned messages panel** — sidebar panel listing all pinned messages in a channel with jump-to-message.
+- **50-pin cap per channel** to prevent abuse.
+- **Database-backed** — new `pinned_messages` table with foreign keys; pins survive restarts.
+
+### Added — Enhanced Markdown
+- **Fenced code blocks** — triple-backtick blocks with optional language labels render with styled monospace containers.
+- **Blockquotes** — lines starting with `>` render with left-border accent styling.
+
+### Added — Link Previews
+- **Automatic OpenGraph previews** — shared URLs fetch title, description, and thumbnail server-side.
+- **30-minute cache** — previews are cached to avoid repeated fetches.
+- **SSRF protection** — private/internal IPs are blocked from the preview fetcher.
+
+### Added — GIF Search
+- **Tenor-powered GIF picker** — search and send GIFs inline from the message input.
+- **Admin-configurable API key** — Tenor API key can be set from the admin GIF picker UI with an inline setup guide.
+- **Server-stored key** — API key saved in `server_settings` DB table (never exposed to non-admins).
+
+### Fixed — Security
+- **Admin username hijack via rename** — non-admin users can no longer claim the admin username through `/nick` or rename.
+- **XSS via attribute injection** — `_escapeHtml` now escapes `"` and `'` characters, preventing injection through OG metadata or user content.
+- **SSRF in link previews** — `/api/link-preview` now blocks requests to localhost, private ranges (10.x, 192.168.x, 172.16-31.x), link-local (169.254.169.254), and internal domains.
+- **API key leak** — `get-server-settings` no longer sends sensitive keys (e.g. `tenor_api_key`) to non-admin users.
+- **Cross-channel reaction removal** — `remove-reaction` now verifies the message belongs to the current channel.
+- **Voice signaling without membership** — `voice-offer`, `voice-answer`, and `voice-ice-candidate` now verify the sender is in the voice room.
+- **Typing indicator channel check** — typing events now verify the user is in the claimed channel.
+
+### Fixed — Bugs
+- **Voice audio broken** — eliminated duplicate `MediaStreamSource` creation; single source now splits to analyser and gain node.
+- **Spotty talking indicator** — added 300 ms sustain hysteresis to prevent flicker during natural speech pauses.
+- **Screen share invisible** — added SDP rollback for renegotiation glare, `event.streams[0]` for proper stream association, `track.onunmute`, and explicit `play()` on muted video tiles.
+- **GIF send completely broken** — fixed wrong property names (`channelCode` → `code`, `this.replyTo` → `this.replyingTo`) that silently dropped every GIF message.
+- **Reconnect dead channel** — socket reconnect now re-emits `enter-channel`, `get-messages`, `get-channel-members`, and other state-restoring events.
+- **Screen share privacy leak** — closing the screen share viewer now actually stops the broadcast (calls `stopScreenShare()`) instead of just hiding the UI.
+- **Auto-scroll failure** — `_scrollToBottom` after appending messages now uses the force flag to prevent large messages from blocking scroll.
+- **Delete-user FK violation** — user deletion now cleans up `pinned_messages`, `high_scores`, `eula_acceptances`, and `user_preferences` to prevent foreign key errors.
+- **Delete-channel incomplete** — channel deletion now explicitly removes associated pinned messages.
+- **Delete-message incomplete** — message deletion now removes associated pinned message entries.
+- **LIKE wildcard injection** — search-messages now escapes `%`, `_`, and `\` in search queries.
+
+### Changed — Performance
+- **N+1 query eliminated** — `get-messages` replaced 240 individual queries (for 80 messages) with 3 batch queries using `WHERE ... IN (...)` for reply context, reactions, and pin status.
+
+### Changed
+- `edit-message`, `delete-message`, `pin-message`, `unpin-message` DB operations wrapped in try/catch for graceful error handling.
+- Version bumped to 1.2.0.
+
+---
+
 ## [1.1.0] — 2026-02-11
 
 ### 🔒 Data Isolation
