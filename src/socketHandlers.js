@@ -10,6 +10,7 @@ function isInt(v) {
 }
 
 function setupSocketHandlers(io, db) {
+  const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
   // ── Socket connection rate limiting (per IP) ────────────
   const connTracker = new Map(); // ip → { count, resetTime }
@@ -51,10 +52,18 @@ function setupSocketHandlers(io, db) {
 
     socket.user = user;
 
-    // Look up current display_name from DB (JWT may be stale)
+    // Refresh display_name AND is_admin from DB (JWT may be stale)
     try {
-      const uRow = db.prepare('SELECT display_name FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username FROM users WHERE id = ?').get(user.id);
       socket.user.displayName = (uRow && uRow.display_name) ? uRow.display_name : user.username;
+      if (uRow) {
+        // Sync admin status from .env (handles ADMIN_USERNAME changes)
+        const shouldBeAdmin = uRow.username.toLowerCase() === ADMIN_USERNAME ? 1 : 0;
+        if (uRow.is_admin !== shouldBeAdmin) {
+          db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(shouldBeAdmin, user.id);
+        }
+        socket.user.isAdmin = !!shouldBeAdmin;
+      }
     } catch {
       socket.user.displayName = user.displayName || user.username;
     }
@@ -93,6 +102,15 @@ function setupSocketHandlers(io, db) {
 
     console.log(`✅ ${socket.user.username} connected`);
     socket.currentChannel = null;
+
+    // Push authoritative user info to the client on every connect/reconnect
+    // so stale localStorage is always corrected
+    socket.emit('session-info', {
+      id: socket.user.id,
+      username: socket.user.username,
+      isAdmin: socket.user.isAdmin,
+      displayName: socket.user.displayName
+    });
 
     // ── Per-socket flood protection ─────────────────────────
     const floodBuckets = { message: [], event: [] };

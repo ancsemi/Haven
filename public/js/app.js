@@ -121,6 +121,23 @@ class HavenApp {
   // ── Socket Event Listeners ────────────────────────────
 
   _setupSocketListeners() {
+    // Authoritative user info pushed by server on every connect
+    this.socket.on('session-info', (data) => {
+      this.user = { ...this.user, ...data };
+      localStorage.setItem('haven_user', JSON.stringify(this.user));
+      // Refresh display name + admin UI with authoritative data
+      document.getElementById('current-user').textContent = this.user.displayName || this.user.username;
+      const loginEl = document.getElementById('login-name');
+      if (loginEl) loginEl.textContent = `@${this.user.username}`;
+      if (this.user.isAdmin) {
+        document.getElementById('admin-controls').style.display = 'block';
+        document.getElementById('admin-mod-panel').style.display = 'block';
+      } else {
+        document.getElementById('admin-controls').style.display = 'none';
+        document.getElementById('admin-mod-panel').style.display = 'none';
+      }
+    });
+
     this.socket.on('connect', () => {
       this._setLed('connection-led', 'on');
       this._setLed('status-server-led', 'on');

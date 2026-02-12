@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.4.2] — 2025-02-16
+
+### Fixed
+- **Admin status & display name lost on reconnect** — the socket auth middleware now refreshes both `is_admin` and `display_name` from the database on every connection, instead of trusting the JWT payload which could be stale. Additionally, admin status is synced from `.env ADMIN_USERNAME` on every socket connect (not just login), so `.env` changes take effect without requiring a re-login.
+- **Server pushes authoritative user info on connect** — a new `session-info` event fires on every socket connect/reconnect, overwriting the client's `localStorage` with the server's truth (id, username, isAdmin, displayName). This prevents stale or corrupted local data from hiding the display name or admin controls.
+
+---
+
 ## [1.4.1] — 2025-02-16
 
 ### Added
