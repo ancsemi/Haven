@@ -64,9 +64,15 @@ class VoiceManager {
       }
 
       try {
-        await peer.connection.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await peer.connection.createAnswer();
-        await peer.connection.setLocalDescription(answer);
+        const conn = peer.connection;
+        // Handle renegotiation glare: if we have a pending local offer,
+        // roll it back first so we can accept the incoming one.
+        if (conn.signalingState !== 'stable') {
+          await conn.setLocalDescription({ type: 'rollback' });
+        }
+        await conn.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await conn.createAnswer();
+        await conn.setLocalDescription(answer);
 
         this.socket.emit('voice-answer', {
           code: this.currentChannel,
@@ -83,7 +89,11 @@ class VoiceManager {
       const peer = this.peers.get(data.from.id);
       if (peer) {
         try {
-          await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+          // Only accept answer if we're actually waiting for one
+          // (we may have rolled back our offer due to glare)
+          if (peer.connection.signalingState === 'have-local-offer') {
+            await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+          }
         } catch (err) {
           console.error('Error handling voice answer:', err);
         }
@@ -322,9 +332,14 @@ class VoiceManager {
     connection.ontrack = (event) => {
       const track = event.track;
       if (track.kind === 'video') {
-        // Incoming screen share — build a dedicated video stream
-        const videoStream = new MediaStream([track]);
+        // Incoming screen share — prefer the sender's stream for proper track association
+        const videoStream = event.streams?.[0] || new MediaStream([track]);
         if (this.onScreenStream) this.onScreenStream(userId, videoStream);
+
+        // Re-fire when track actually starts receiving data (may arrive muted)
+        track.onunmute = () => {
+          if (this.onScreenStream) this.onScreenStream(userId, videoStream);
+        };
         track.onended = () => {
           if (this.onScreenStream) this.onScreenStream(userId, null);
         };
@@ -405,39 +420,41 @@ class VoiceManager {
 
   // ── Talking Detection ───────────────────────────────────
 
-  _startAnalyser(userId, stream) {
-    try {
-      if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+  _startAnalyser(userId, analyserNode, dataArray) {
+    // Reuse an already-connected AnalyserNode; just start polling
+    if (this.analysers.has(userId)) return; // already running
 
-      const source = this.audioCtx.createMediaStreamSource(stream);
-      const analyser = this.audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.4;
-      source.connect(analyser);
+    const THRESHOLD = 20;
+    let wasTalking = false;
+    let holdTimer = null;
+    const HOLD_MS = 300; // keep indicator lit for 300ms after speech stops
 
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const THRESHOLD = 25; // min average RMS to count as "talking"
-      let wasTalking = false;
+    const interval = setInterval(() => {
+      analyserNode.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const avg = sum / dataArray.length;
+      const isTalking = avg > THRESHOLD;
 
-      const interval = setInterval(() => {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        const avg = sum / dataArray.length;
-        const isTalking = avg > THRESHOLD;
-
-        if (isTalking !== wasTalking) {
-          wasTalking = isTalking;
-          this.talkingState.set(userId, isTalking);
-          if (this.onTalkingChange) this.onTalkingChange(userId, isTalking);
+      if (isTalking) {
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        if (!wasTalking) {
+          wasTalking = true;
+          this.talkingState.set(userId, true);
+          if (this.onTalkingChange) this.onTalkingChange(userId, true);
         }
-      }, 100);
+      } else if (wasTalking && !holdTimer) {
+        // Start hold timer — keep "talking" for HOLD_MS after silence
+        holdTimer = setTimeout(() => {
+          wasTalking = false;
+          holdTimer = null;
+          this.talkingState.set(userId, false);
+          if (this.onTalkingChange) this.onTalkingChange(userId, false);
+        }, HOLD_MS);
+      }
+    }, 60);
 
-      this.analysers.set(userId, { analyser, dataArray, interval, source });
-    } catch { /* analyser not available */ }
+    this.analysers.set(userId, { analyser: analyserNode, dataArray, interval });
   }
 
   _stopAnalyser(userId) {
@@ -461,18 +478,21 @@ class VoiceManager {
       const source = this.audioCtx.createMediaStreamSource(this.localStream);
       const analyser = this.audioCtx.createAnalyser();
       analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.4;
+      analyser.smoothingTimeConstant = 0.5;
       source.connect(analyser);
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const THRESHOLD = 25;
+      const THRESHOLD = 20;
       let wasTalking = false;
+      let holdTimer = null;
+      const HOLD_MS = 300;
 
       this._localTalkAnalyser = { analyser, source };
       this._localTalkInterval = setInterval(() => {
         if (this.isMuted) {
           if (wasTalking) {
             wasTalking = false;
+            if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
             if (this.onTalkingChange) this.onTalkingChange('self', false);
           }
           return;
@@ -483,11 +503,20 @@ class VoiceManager {
         const avg = sum / dataArray.length;
         const isTalking = avg > THRESHOLD;
 
-        if (isTalking !== wasTalking) {
-          wasTalking = isTalking;
-          if (this.onTalkingChange) this.onTalkingChange('self', isTalking);
+        if (isTalking) {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          if (!wasTalking) {
+            wasTalking = true;
+            if (this.onTalkingChange) this.onTalkingChange('self', true);
+          }
+        } else if (wasTalking && !holdTimer) {
+          holdTimer = setTimeout(() => {
+            wasTalking = false;
+            holdTimer = null;
+            if (this.onTalkingChange) this.onTalkingChange('self', false);
+          }, HOLD_MS);
         }
-      }, 100);
+      }, 60);
     } catch { /* analyser not available */ }
   }
 
@@ -511,10 +540,17 @@ class VoiceManager {
     }
     audioEl.srcObject = stream;
 
-    // Start talking analyser for this remote user
-    this._startAnalyser(userId, stream);
+    // Only set up the Web Audio graph once per user.
+    // ontrack fires per-track, so _playAudio can be called several times
+    // for the same user when tracks are added (mic + screen audio).
+    if (this.gainNodes.has(userId)) {
+      audioEl.volume = 0;
+      return;
+    }
 
-    // Route through Web Audio API for volume boost support (gain > 1.0)
+    // Route through Web Audio API for volume boost AND talking analysis
+    // CRITICAL: use ONE MediaStreamSource for both analyser & gain to avoid
+    // browsers muting the stream when multiple sources compete.
     try {
       if (!this.audioCtx) {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -522,6 +558,16 @@ class VoiceManager {
       if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
 
       const source = this.audioCtx.createMediaStreamSource(stream);
+
+      // Analyser branch (tee off from source)
+      const analyser = this.audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.5;
+      source.connect(analyser);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      this._startAnalyser(userId, analyser, dataArray);
+
+      // Gain branch (source → gain → destination)
       const gainNode = this.audioCtx.createGain();
       gainNode.gain.value = this._getSavedVolume(userId);
       source.connect(gainNode);

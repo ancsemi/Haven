@@ -1845,7 +1845,7 @@ class HavenApp {
         const vid = document.createElement('video');
         vid.autoplay = true;
         vid.playsInline = true;
-        if (userId === null || userId === this.user.id) vid.muted = true;
+        vid.muted = true; // Always mute — screen audio routes through WebRTC audio track
         tile.appendChild(vid);
 
         const lbl = document.createElement('div');
@@ -1867,7 +1867,9 @@ class HavenApp {
 
         grid.appendChild(tile);
       }
-      tile.querySelector('video').srcObject = stream;
+      const videoEl = tile.querySelector('video');
+      videoEl.srcObject = stream;
+      videoEl.play().catch(() => {}); // ensure autoplay isn't blocked
       container.style.display = 'flex';
       const count = grid.children.length;
       label.textContent = `🖥️ ${count} stream${count > 1 ? 's' : ''}`;
@@ -2141,6 +2143,10 @@ class HavenApp {
     fetch('/api/gif/trending?limit=20')
       .then(r => r.json())
       .then(data => {
+        if (data.error === 'gif_not_configured') {
+          this._showGifSetupGuide(grid);
+          return;
+        }
         if (data.error) {
           grid.innerHTML = `<div class="gif-picker-empty">${data.error}</div>`;
           return;
@@ -2158,6 +2164,10 @@ class HavenApp {
     fetch(`/api/gif/search?q=${encodeURIComponent(query)}&limit=20`)
       .then(r => r.json())
       .then(data => {
+        if (data.error === 'gif_not_configured') {
+          this._showGifSetupGuide(grid);
+          return;
+        }
         if (data.error) {
           grid.innerHTML = `<div class="gif-picker-empty">${data.error}</div>`;
           return;
@@ -2172,6 +2182,46 @@ class HavenApp {
       .catch(() => {
         grid.innerHTML = '<div class="gif-picker-empty">Search failed</div>';
       });
+  }
+
+  _showGifSetupGuide(grid) {
+    const isAdmin = this.user && this.user.isAdmin;
+    if (isAdmin) {
+      grid.innerHTML = `
+        <div class="gif-setup-guide">
+          <h3>🎞️ Set Up GIF Search</h3>
+          <p>GIF search is powered by <strong>Tenor</strong> (Google) and needs a free API key.</p>
+          <ol>
+            <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console → Credentials</a></li>
+            <li>Create a project (or pick an existing one)</li>
+            <li>Click <b>+ CREATE CREDENTIALS → API key</b></li>
+            <li>Copy the key and paste it below</li>
+          </ol>
+          <div class="gif-setup-input-row">
+            <input type="text" id="gif-tenor-key-input" placeholder="Paste your Tenor API key…" spellcheck="false" autocomplete="off" />
+            <button id="gif-tenor-key-save">Save</button>
+          </div>
+          <p class="gif-setup-note">💡 No billing required — the Tenor API is completely free.</p>
+        </div>`;
+      const saveBtn = document.getElementById('gif-tenor-key-save');
+      const input = document.getElementById('gif-tenor-key-input');
+      saveBtn.addEventListener('click', () => {
+        const key = input.value.trim();
+        if (!key) return;
+        this.socket.emit('update-server-setting', { key: 'tenor_api_key', value: key });
+        grid.innerHTML = '<div class="gif-picker-empty">Saved! Loading GIFs…</div>';
+        setTimeout(() => this._loadTrendingGifs(), 500);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveBtn.click();
+      });
+    } else {
+      grid.innerHTML = `
+        <div class="gif-setup-guide">
+          <h3>🎞️ GIF Search Not Available</h3>
+          <p>An admin needs to set up the Tenor API key before GIF search can work.</p>
+        </div>`;
+    }
   }
 
   _renderGifGrid(results) {
