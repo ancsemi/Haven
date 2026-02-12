@@ -1315,7 +1315,7 @@ function setupSocketHandlers(io, db) {
       const key = typeof data.key === 'string' ? data.key.trim() : '';
       const value = typeof data.value === 'string' ? data.value.trim() : '';
 
-      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb'];
+      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'tenor_api_key'];
       if (!allowedKeys.includes(key)) return;
 
       if (key === 'member_visibility' && !['all', 'online', 'none'].includes(value)) return;
@@ -1327,6 +1327,10 @@ function setupSocketHandlers(io, db) {
       if (key === 'cleanup_max_size_mb') {
         const n = parseInt(value);
         if (isNaN(n) || n < 0 || n > 100000) return;
+      }
+      if (key === 'tenor_api_key') {
+        // Allow empty value to clear the key, otherwise validate format
+        if (value && (value.length < 10 || value.length > 100)) return;
       }
 
       db.prepare(
