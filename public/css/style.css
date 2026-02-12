@@ -3599,3 +3599,240 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Channel Topic Bar
+   ═══════════════════════════════════════════════════════════ */
+
+.channel-topic-bar {
+  padding: 4px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 24px;
+  line-height: 24px;
+}
+
+.channel-topic-bar:hover {
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   User Status Dots
+   ═══════════════════════════════════════════════════════════ */
+
+.user-dot.dnd {
+  background-color: var(--danger) !important;
+  box-shadow: 0 0 4px var(--danger);
+}
+
+.user-dot.away {
+  background-color: #faa61a !important;
+  box-shadow: 0 0 4px rgba(250, 166, 26, 0.4);
+}
+
+.user-dot.invisible {
+  background-color: var(--text-muted) !important;
+  box-shadow: none;
+}
+
+.user-status-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Status Picker
+   ═══════════════════════════════════════════════════════════ */
+
+.status-picker-dot {
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.status-picker-dot:hover {
+  transform: scale(1.4);
+}
+
+.status-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 180px;
+  z-index: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.status-option {
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.status-option:hover {
+  background: var(--bg-hover);
+}
+
+.status-option .user-dot {
+  position: static;
+  flex-shrink: 0;
+}
+
+.status-text-row {
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+.status-text-row input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.status-text-row input:focus {
+  border-color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DM Section in Sidebar
+   ═══════════════════════════════════════════════════════════ */
+
+.dm-section-label {
+  margin-top: 12px !important;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.dm-item .channel-hash {
+  color: var(--accent);
+}
+
+.user-dm-btn {
+  font-size: 12px !important;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.user-item:hover .user-dm-btn {
+  opacity: 0.7;
+}
+
+.user-dm-btn:hover {
+  opacity: 1 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   File Attachments
+   ═══════════════════════════════════════════════════════════ */
+
+#file-upload-btn {
+  font-size: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+#file-upload-btn:hover {
+  opacity: 1;
+}
+
+.file-attachment {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  max-width: 400px;
+  margin: 4px 0;
+}
+
+.file-download-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: color 0.15s;
+}
+
+.file-download-link:hover {
+  color: var(--accent);
+}
+
+.file-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.file-name {
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.file-size {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.file-download-arrow {
+  margin-left: auto;
+  font-size: 16px;
+  opacity: 0.5;
+}
+
+.file-download-link:hover .file-download-arrow {
+  opacity: 1;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.file-attachment audio {
+  width: 100%;
+  height: 32px;
+}
+
+.file-video {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.user-bar {
+  position: relative;
+}

@@ -27,6 +27,9 @@ class HavenApp {
     this.serverSettings = {};      // server-wide settings
     this.adminActionTarget = null; // { userId, username, action } for modal
     this.highScores = {};          // { flappy: [{user_id, username, score}] }
+    this.userStatus = 'online';    // current user's status
+    this.userStatusText = '';      // custom status text
+    this.idleTimer = null;         // auto-away timer
 
     // Slash command definitions for autocomplete
     this.slashCommands = [
@@ -81,6 +84,9 @@ class HavenApp {
     this._setupGifPicker();
     this._startStatusBar();
     this._setupMobile();
+    this._setupStatusPicker();
+    this._setupFileUpload();
+    this._setupIdleDetection();
 
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
@@ -160,6 +166,7 @@ class HavenApp {
     this.socket.on('new-message', (data) => {
       if (data.channelCode === this.currentChannel) {
         this._appendMessage(data.message);
+        this._markRead(data.message.id);
         if (data.message.user_id !== this.user.id) {
           // Check if message contains @mention of current user
           const mentionRegex = new RegExp(`@${this.user.username}\\b`, 'i');
@@ -246,6 +253,31 @@ class HavenApp {
       if (data.channelCode === this.currentChannel) {
         this.channelMembers = data.members;
       }
+    });
+
+    // ── Channel topic changed ───────────────────────
+    this.socket.on('channel-topic-changed', (data) => {
+      const ch = this.channels.find(c => c.code === data.code);
+      if (ch) ch.topic = data.topic;
+      if (data.code === this.currentChannel) {
+        this._updateTopicBar(data.topic);
+      }
+    });
+
+    // ── DM opened ───────────────────────────────────
+    this.socket.on('dm-opened', (data) => {
+      if (!this.channels.find(c => c.code === data.code)) {
+        this.channels.push(data);
+        this._renderChannels();
+      }
+      this.switchChannel(data.code);
+    });
+
+    // ── Status updated ──────────────────────────────
+    this.socket.on('status-updated', (data) => {
+      this.userStatus = data.status;
+      this.userStatusText = data.statusText;
+      this._updateStatusPickerUI();
     });
 
     // ── Username rename ──────────────────────────────
@@ -1232,16 +1264,25 @@ class HavenApp {
 
     this.currentChannel = code;
     const channel = this.channels.find(c => c.code === code);
+    const isDm = channel && channel.is_dm;
+    const displayName = isDm && channel.dm_target
+      ? `@ ${channel.dm_target.username}`
+      : channel ? `# ${channel.name}` : code;
 
-    document.getElementById('channel-header-name').textContent = channel ? `# ${channel.name}` : code;
-    document.getElementById('channel-code-display').textContent = code;
-    document.getElementById('copy-code-btn').style.display = 'inline-flex';
+    document.getElementById('channel-header-name').textContent = displayName;
+    document.getElementById('channel-code-display').textContent = isDm ? '' : code;
+    document.getElementById('copy-code-btn').style.display = isDm ? 'none' : 'inline-flex';
     document.getElementById('voice-join-btn').style.display = 'inline-flex';
     document.getElementById('search-toggle-btn').style.display = 'inline-flex';
     document.getElementById('pinned-toggle-btn').style.display = 'inline-flex';
 
-    if (this.user.isAdmin) {
+    // Show/hide topic bar
+    this._updateTopicBar(channel?.topic || '');
+
+    if (this.user.isAdmin && !isDm) {
       document.getElementById('delete-channel-btn').style.display = 'inline-flex';
+    } else {
+      document.getElementById('delete-channel-btn').style.display = 'none';
     }
 
     document.getElementById('messages').innerHTML = '';
@@ -1255,12 +1296,50 @@ class HavenApp {
     this.unreadCounts[code] = 0;
     this._updateBadge(code);
 
-    document.getElementById('status-channel').textContent = channel ? channel.name : code;
+    document.getElementById('status-channel').textContent = isDm && channel.dm_target
+      ? `DM: ${channel.dm_target.username}` : channel ? channel.name : code;
 
     this.socket.emit('enter-channel', { code });
     this.socket.emit('get-messages', { code });
     this.socket.emit('get-channel-members', { code });
     this._clearReply();
+  }
+
+  _updateTopicBar(topic) {
+    let bar = document.getElementById('channel-topic-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'channel-topic-bar';
+      bar.className = 'channel-topic-bar';
+      const header = document.querySelector('.channel-header');
+      header.parentNode.insertBefore(bar, header.nextSibling);
+    }
+    if (topic) {
+      bar.textContent = topic;
+      bar.style.display = 'block';
+      bar.title = this.user.isAdmin ? 'Click to edit topic' : topic;
+      bar.onclick = this.user.isAdmin ? () => this._editTopic() : null;
+      bar.style.cursor = this.user.isAdmin ? 'pointer' : 'default';
+    } else {
+      if (this.user.isAdmin) {
+        bar.textContent = 'Click to set a topic...';
+        bar.style.display = 'block';
+        bar.style.opacity = '0.4';
+        bar.style.cursor = 'pointer';
+        bar.onclick = () => this._editTopic();
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+    if (topic) bar.style.opacity = '1';
+  }
+
+  _editTopic() {
+    const channel = this.channels.find(c => c.code === this.currentChannel);
+    const current = channel?.topic || '';
+    const newTopic = prompt('Set channel topic (max 256 chars):', current);
+    if (newTopic === null) return; // cancelled
+    this.socket.emit('set-channel-topic', { code: this.currentChannel, topic: newTopic.slice(0, 256) });
   }
 
   _showWelcome() {
@@ -1279,13 +1358,19 @@ class HavenApp {
     document.getElementById('pinned-toggle-btn').style.display = 'none';
     document.getElementById('status-channel').textContent = 'None';
     document.getElementById('status-online-count').textContent = '0';
+    const topicBar = document.getElementById('channel-topic-bar');
+    if (topicBar) topicBar.style.display = 'none';
   }
 
   _renderChannels() {
     const list = document.getElementById('channel-list');
     list.innerHTML = '';
 
-    this.channels.forEach(ch => {
+    const regularChannels = this.channels.filter(c => !c.is_dm);
+    const dmChannels = this.channels.filter(c => c.is_dm);
+
+    // Regular channels
+    regularChannels.forEach(ch => {
       const el = document.createElement('div');
       el.className = 'channel-item' + (ch.code === this.currentChannel ? ' active' : '');
       el.dataset.code = ch.code;
@@ -1294,16 +1379,47 @@ class HavenApp {
         <span class="channel-name">${this._escapeHtml(ch.name)}</span>
       `;
 
-      if (this.unreadCounts[ch.code] > 0) {
+      const count = this.unreadCounts[ch.code] || ch.unreadCount || 0;
+      if (count > 0) {
         const badge = document.createElement('span');
         badge.className = 'channel-badge';
-        badge.textContent = this.unreadCounts[ch.code];
+        badge.textContent = count > 99 ? '99+' : count;
         el.appendChild(badge);
       }
 
       el.addEventListener('click', () => this.switchChannel(ch.code));
       list.appendChild(el);
     });
+
+    // DM section
+    if (dmChannels.length > 0) {
+      const dmLabel = document.createElement('h5');
+      dmLabel.className = 'section-label dm-section-label';
+      dmLabel.textContent = 'Direct Messages';
+      list.appendChild(dmLabel);
+
+      dmChannels.forEach(ch => {
+        const el = document.createElement('div');
+        el.className = 'channel-item dm-item' + (ch.code === this.currentChannel ? ' active' : '');
+        el.dataset.code = ch.code;
+        const dmName = ch.dm_target ? ch.dm_target.username : 'Unknown';
+        el.innerHTML = `
+          <span class="channel-hash">@</span>
+          <span class="channel-name">${this._escapeHtml(dmName)}</span>
+        `;
+
+        const count = this.unreadCounts[ch.code] || ch.unreadCount || 0;
+        if (count > 0) {
+          const badge = document.createElement('span');
+          badge.className = 'channel-badge';
+          badge.textContent = count > 99 ? '99+' : count;
+          el.appendChild(badge);
+        }
+
+        el.addEventListener('click', () => this.switchChannel(ch.code));
+        list.appendChild(el);
+      });
+    }
   }
 
   _updateBadge(code) {
@@ -1381,6 +1497,10 @@ class HavenApp {
     });
     // Fetch link previews for all messages
     this._fetchLinkPreviews(container);
+    // Mark as read (last message ID)
+    if (messages.length > 0) {
+      this._markRead(messages[messages.length - 1].id);
+    }
   }
 
   _appendMessage(message) {
@@ -1637,7 +1757,7 @@ class HavenApp {
 
     // Bind admin action buttons
     if (this.user.isAdmin) {
-      el.querySelectorAll('.user-action-btn').forEach(btn => {
+      el.querySelectorAll('.user-action-btn[data-action]').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const action = btn.dataset.action;
@@ -1647,6 +1767,15 @@ class HavenApp {
         });
       });
     }
+
+    // Bind DM buttons
+    el.querySelectorAll('.user-dm-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const targetId = parseInt(btn.dataset.dmUid);
+        this.socket.emit('start-dm', { targetUserId: targetId });
+      });
+    });
   }
 
   _renderUserItem(u, scoreLookup) {
@@ -1655,17 +1784,32 @@ class HavenApp {
     const scoreBadge = score > 0
       ? `<span class="user-score-badge" title="Flappy Container: ${score}">🚢${score}</span>`
       : '';
+
+    // Status dot color
+    const statusClass = u.status === 'dnd' ? 'dnd' : u.status === 'away' ? 'away'
+      : u.status === 'invisible' ? 'invisible' : (u.online === false ? 'away' : '');
+
+    const statusTextHtml = u.statusText
+      ? `<span class="user-status-text" title="${this._escapeHtml(u.statusText)}">${this._escapeHtml(u.statusText)}</span>`
+      : '';
+
+    const dmBtn = u.id !== this.user.id
+      ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="Direct Message">💬</button>`
+      : '';
+
     const adminBtns = this.user.isAdmin && u.id !== this.user.id
       ? `<div class="user-admin-actions">
+           ${dmBtn}
            <button class="user-action-btn" data-action="kick" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Kick">👢</button>
            <button class="user-action-btn" data-action="mute" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Mute">🔇</button>
            <button class="user-action-btn" data-action="ban" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Ban">⛔</button>
          </div>`
-      : '';
+      : (dmBtn ? `<div class="user-admin-actions">${dmBtn}</div>` : '');
     return `
       <div class="user-item${onlineClass}">
-        <span class="user-dot${u.online === false ? ' away' : ''}"></span>
+        <span class="user-dot${statusClass ? ' ' + statusClass : ''}"></span>
         <span class="user-item-name">${this._escapeHtml(u.username)}</span>
+        ${statusTextHtml}
         ${scoreBadge}
         ${adminBtns}
       </div>
@@ -1946,6 +2090,40 @@ class HavenApp {
   }
 
   _formatContent(str) {
+    // Render file attachments [file:name](url|size)
+    const fileMatch = str.match(/^\[file:(.+?)\]\((.+?)\|(.+?)\)$/);
+    if (fileMatch) {
+      const fileName = this._escapeHtml(fileMatch[1]);
+      const fileUrl = this._escapeHtml(fileMatch[2]);
+      const fileSize = this._escapeHtml(fileMatch[3]);
+      const ext = fileName.split('.').pop().toLowerCase();
+      const icon = { pdf: '📄', zip: '📦', '7z': '📦', rar: '📦',
+        mp3: '🎵', ogg: '🎵', wav: '🎵', mp4: '🎬', webm: '🎬',
+        doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', ppt: '📊', pptx: '📊',
+        txt: '📄', csv: '📄', json: '📄', md: '📄' }[ext] || '📎';
+      // Audio/video get inline players
+      if (['mp3', 'ogg', 'wav', 'webm'].includes(ext) && /^audio\//.test('audio/')) {
+        return `<div class="file-attachment">
+          <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+          <audio controls preload="none" src="${fileUrl}"></audio>
+        </div>`;
+      }
+      if (['mp4', 'webm'].includes(ext)) {
+        return `<div class="file-attachment">
+          <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+          <video controls preload="none" src="${fileUrl}" class="file-video"></video>
+        </div>`;
+      }
+      return `<div class="file-attachment">
+        <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" class="file-download-link" download="${fileName}">
+          <span class="file-icon">${icon}</span>
+          <span class="file-name">${fileName}</span>
+          <span class="file-size">(${fileSize})</span>
+          <span class="file-download-arrow">⬇</span>
+        </a>
+      </div>`;
+    }
+
     // Render server-hosted images inline (early return)
     if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(str.trim())) {
       return `<img src="${this._escapeHtml(str.trim())}" class="chat-image" alt="image" loading="lazy">`;
@@ -2715,6 +2893,196 @@ class HavenApp {
     this._hideSlashDropdown();
     // If no args needed and not a "needs space" command, could auto-send
     // but user might want to add optional args, so just fill it in
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── User Status Picker ────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+
+  _setupStatusPicker() {
+    const userBar = document.querySelector('.user-bar');
+    if (!userBar) return;
+
+    // Insert status dot before username
+    const statusDot = document.createElement('span');
+    statusDot.id = 'user-status-dot';
+    statusDot.className = 'user-dot status-picker-dot';
+    statusDot.title = 'Set status';
+    statusDot.addEventListener('click', () => this._toggleStatusPicker());
+    const currentUser = document.getElementById('current-user');
+    userBar.insertBefore(statusDot, currentUser);
+
+    // Build dropdown
+    const picker = document.createElement('div');
+    picker.id = 'status-picker';
+    picker.className = 'status-picker';
+    picker.style.display = 'none';
+    picker.innerHTML = `
+      <div class="status-option" data-status="online"><span class="user-dot"></span> Online</div>
+      <div class="status-option" data-status="away"><span class="user-dot away"></span> Away</div>
+      <div class="status-option" data-status="dnd"><span class="user-dot dnd"></span> Do Not Disturb</div>
+      <div class="status-option" data-status="invisible"><span class="user-dot invisible"></span> Invisible</div>
+      <div class="status-text-row">
+        <input type="text" id="status-text-input" placeholder="Custom status..." maxlength="128">
+      </div>
+    `;
+    userBar.appendChild(picker);
+
+    picker.querySelectorAll('.status-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const status = opt.dataset.status;
+        const statusText = document.getElementById('status-text-input').value.trim();
+        this.socket.emit('set-status', { status, statusText });
+        picker.style.display = 'none';
+      });
+    });
+
+    document.getElementById('status-text-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const statusText = e.target.value.trim();
+        this.socket.emit('set-status', { status: this.userStatus, statusText });
+        picker.style.display = 'none';
+      }
+    });
+
+    // Close picker on outside click
+    document.addEventListener('click', (e) => {
+      if (!picker.contains(e.target) && e.target !== statusDot) {
+        picker.style.display = 'none';
+      }
+    });
+  }
+
+  _toggleStatusPicker() {
+    const picker = document.getElementById('status-picker');
+    picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+  }
+
+  _updateStatusPickerUI() {
+    const dot = document.getElementById('user-status-dot');
+    if (dot) {
+      dot.className = 'user-dot status-picker-dot';
+      if (this.userStatus === 'away') dot.classList.add('away');
+      else if (this.userStatus === 'dnd') dot.classList.add('dnd');
+      else if (this.userStatus === 'invisible') dot.classList.add('invisible');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── Idle Detection (auto-away after 5 min) ────────────
+  // ═══════════════════════════════════════════════════════
+
+  _setupIdleDetection() {
+    const resetIdle = () => {
+      if (this.userStatus === 'away' && this._wasAutoAway) {
+        this._wasAutoAway = false;
+        this.socket.emit('set-status', { status: 'online', statusText: this.userStatusText });
+      }
+      clearTimeout(this.idleTimer);
+      this.idleTimer = setTimeout(() => {
+        if (this.userStatus === 'online') {
+          this._wasAutoAway = true;
+          this.socket.emit('set-status', { status: 'away', statusText: this.userStatusText });
+        }
+      }, 5 * 60 * 1000);
+    };
+
+    ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
+      document.addEventListener(evt, resetIdle, { passive: true });
+    });
+    resetIdle();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── General File Upload ───────────────────────────────
+  // ═══════════════════════════════════════════════════════
+
+  _setupFileUpload() {
+    // Expand the existing file input to accept all file types
+    // Add a separate file upload button next to the image upload
+    const inputArea = document.querySelector('.message-input-area');
+    const uploadBtn = document.getElementById('upload-btn');
+
+    const fileBtn = document.createElement('button');
+    fileBtn.id = 'file-upload-btn';
+    fileBtn.className = 'btn-upload';
+    fileBtn.title = 'Upload File';
+    fileBtn.innerHTML = '📎';
+    inputArea.insertBefore(fileBtn, uploadBtn.nextSibling);
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.id = 'general-file-input';
+    fileInput.style.display = 'none';
+    inputArea.appendChild(fileInput);
+
+    fileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => this._handleFileUpload(fileInput));
+  }
+
+  _handleFileUpload(input) {
+    if (!input.files.length || !this.currentChannel) return;
+    const file = input.files[0];
+    if (file.size > 25 * 1024 * 1024) {
+      this._showToast('File too large (max 25 MB)', 'error');
+      input.value = '';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    this._showToast('Uploading file...', 'info');
+
+    fetch('/api/upload-file', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.token}` },
+      body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        this._showToast(data.error, 'error');
+        return;
+      }
+      // Send as a message with file attachment format
+      const sizeStr = this._formatFileSize(data.fileSize);
+      let content;
+      if (data.isImage) {
+        content = data.url; // images render inline already
+      } else {
+        // Use a special file attachment format: [file:name](url|size)
+        content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+      }
+      this.socket.emit('send-message', {
+        code: this.currentChannel,
+        content,
+        replyTo: this.replyingTo ? this.replyingTo.id : null
+      });
+      this._clearReply();
+    })
+    .catch(() => this._showToast('Upload failed', 'error'));
+
+    input.value = '';
+  }
+
+  _formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── Mark-Read Helper ──────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+
+  _markRead(messageId) {
+    if (!this.currentChannel || !messageId) return;
+    // Debounce: don't spam the server
+    clearTimeout(this._markReadTimer);
+    this._markReadTimer = setTimeout(() => {
+      this.socket.emit('mark-read', { code: this.currentChannel, messageId });
+    }, 500);
   }
 }
 

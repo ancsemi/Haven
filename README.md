@@ -6,7 +6,7 @@
 
 > **Your server. Your rules. No cloud. No accounts with Big Tech. No one reading your messages.**
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
@@ -36,6 +36,11 @@ You launch it, your friends connect to your IP address, and you have a private g
 | **Formatting** | **Bold**, *italic*, ~~strikethrough~~, `code`, \|\|spoilers\|\|, auto-linked URLs, fenced code blocks with language labels, blockquotes |
 | **Link Previews** | Automatic OG metadata previews for shared URLs with title, description, and thumbnail |
 | **GIF Search** | Tenor-powered GIF picker — search and send GIFs inline (admin-configurable API key) |
+| **Direct Messages** | Private 1-on-1 conversations — click 💬 on any user in the member list |
+| **User Status** | Online, Away, Do Not Disturb, Invisible — with custom status text and auto-away after 5 min idle |
+| **Channel Topics** | Admin-settable topic line below the channel header — click to edit |
+| **File Sharing** | Upload and share PDFs, documents, audio, video, archives (up to 25 MB) with inline players |
+| **Persistent Unread** | Server-tracked read state — unread badges survive page refreshes and reconnects |
 | **Slash Commands** | `/shrug`, `/tableflip`, `/roll 2d20`, `/flip`, `/me`, `/spoiler`, `/tts`, and more — type `/` to see them all |
 | **Search** | Search messages in any channel with Ctrl+F |
 | **Themes** | 12 built-in themes: Haven, Discord, Matrix, Tron, HALO, LoTR, Cyberpunk, Nord, Dracula, Bloodborne, Ice, Abyss |

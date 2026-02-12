@@ -6,6 +6,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.3.0] — 2026-02-12
+
+### Added — Direct Messages
+- **Private 1-on-1 conversations** — click 💬 on any user in the member list to open a DM.
+- DMs appear in a separate "Direct Messages" section in the sidebar.
+- If a DM already exists with that user, it reopens instead of creating a duplicate.
+- Both users are notified in real-time when a DM is created.
+
+### Added — User Status
+- **4 status modes** — Online (green), Away (yellow), Do Not Disturb (red), Invisible (grey).
+- **Custom status text** — set a short message (up to 128 chars) visible in the member list.
+- **Status picker** — click the status dot next to your username in the sidebar.
+- **Auto-away** — automatically switches to Away after 5 minutes of inactivity; returns to Online on activity.
+- **Persisted in database** — status survives reconnects and page refreshes.
+
+### Added — Channel Topics
+- **Admin-settable topic** — thin topic bar below the channel header with the channel's description.
+- Click the topic bar to edit (admin-only). Non-admins see the topic as read-only.
+- Topics are stored in the database and broadcast to all channel members on change.
+
+### Added — General File Sharing
+- **Upload files up to 25 MB** — PDFs, documents (Word/Excel/PowerPoint), audio (MP3/OGG/WAV), video (MP4/WebM), archives (ZIP/7z/RAR), text, CSV, JSON, Markdown.
+- **File attachment cards** — styled download cards with file type icons, names, sizes, and download buttons.
+- **Inline audio/video players** — audio and video files render with native HTML5 players directly in chat.
+- **Separate upload endpoint** — `/api/upload-file` with expanded MIME whitelist and 25 MB limit.
+
+### Added — Persistent Read State
+- **Server-tracked unread counts** — `read_positions` table tracks the last-read message per user per channel.
+- Unread badges now survive page refreshes, reconnects, and browser restarts.
+- Mark-read is debounced (500 ms) and fires on message load and new message receipt.
+- Channels list includes accurate unread counts from the server on load.
+
+### Changed — Database
+- New `read_positions` table for persistent unread tracking.
+- New columns on `users`: `status`, `status_text`.
+- New columns on `channels`: `topic`, `is_dm`.
+- New column on `messages`: `original_name` (for file upload metadata).
+- All migrations are safe — existing databases upgrade automatically.
+
+### Changed
+- Version bumped to 1.3.0.
+- Member list now shows status dots (colored by status) and custom status text.
+- Member list includes a DM button (💬) on each user for quick DM access.
+- Channel list split into regular channels and DM section.
+- `get-channels` now returns topic, is_dm, dm_target, and server-computed unread counts.
+- `emitOnlineUsers` now includes user status and status text in the payload.
+
+---
+
 ## [1.2.0] — 2026-02-12
 
 ### Added — Voice UX

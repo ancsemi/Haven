@@ -82,7 +82,7 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
   maxAge: '1h',
 }));
 
-// ── File uploads (images, max 5 MB) ─────────────────────
+// ── File uploads (images max 5 MB, general files max 25 MB) ──
 const uploadDir = UPLOADS_DIR;
 
 const uploadStorage = multer.diskStorage({
@@ -93,12 +93,37 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
+// Image-only upload (existing endpoint)
 const upload = multer({
   storage: uploadStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
     else cb(new Error('Only images allowed (jpg, png, gif, webp)'));
+  }
+});
+
+// General file upload (expanded MIME whitelist)
+const ALLOWED_FILE_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'text/plain', 'text/csv', 'text/markdown',
+  'application/zip', 'application/x-zip-compressed',
+  'application/x-7z-compressed', 'application/x-rar-compressed',
+  'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm',
+  'video/mp4', 'video/webm',
+  'application/json',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]);
+
+const fileUpload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_FILE_TYPES.has(file.mimetype)) cb(null, true);
+    else cb(new Error('File type not allowed'));
   }
 });
 
@@ -176,6 +201,34 @@ app.post('/api/upload', uploadLimiter, (req, res) => {
       return res.json({ url: `/uploads/${safeName}` });
     }
     res.json({ url: `/uploads/${req.file.filename}` });
+  });
+});
+
+// ── General file upload (authenticated + not banned) ─────
+app.post('/api/upload-file', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { getDb } = require('./src/database');
+  const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
+  if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
+
+  fileUpload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const isImage = /^image\//.test(req.file.mimetype);
+    const originalName = req.file.originalname || 'file';
+    const fileSize = req.file.size;
+
+    res.json({
+      url: `/uploads/${req.file.filename}`,
+      originalName,
+      fileSize,
+      isImage,
+      mimetype: req.file.mimetype
+    });
   });
 });
 
