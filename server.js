@@ -51,7 +51,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles needed for themes
       imgSrc: ["'self'", "data:", "blob:", "https:"],  // https: for link preview OG images + GIPHY
       connectSrc: ["'self'", "wss:"],            // Socket.IO (wss only — no plaintext ws:)
-      mediaSrc: ["'self'", "blob:"],            // WebRTC audio
+      mediaSrc: ["'self'", "blob:", "data:"],  // WebRTC audio + notification sounds
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
@@ -268,6 +268,103 @@ app.post('/api/upload-file', uploadLimiter, (req, res) => {
       mimetype: req.file.mimetype
     });
   });
+});
+
+// ── Avatar upload (authenticated, image only, max 2 MB) ──
+app.post('/api/upload-avatar', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  upload.single('image')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (req.file.size > 2 * 1024 * 1024) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Avatar must be under 2 MB' });
+    }
+
+    // Validate magic bytes
+    try {
+      const fd = fs.openSync(req.file.path, 'r');
+      const hdr = Buffer.alloc(12);
+      fs.readSync(fd, hdr, 0, 12, 0);
+      fs.closeSync(fd);
+      let validMagic = false;
+      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
+      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
+      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
+      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
+      if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    const { getDb } = require('./src/database');
+    getDb().prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarUrl, user.id);
+    res.json({ url: avatarUrl });
+  });
+});
+
+// ── Sound upload (admin only, wav/mp3/ogg, max 1 MB) ────
+const soundUpload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 1 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (/^audio\/(mpeg|ogg|wav|webm)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error('Only audio files allowed (mp3, ogg, wav, webm)'));
+  }
+});
+
+app.post('/api/upload-sound', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  soundUpload.single('sound')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    let name = (req.body.name || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
+    if (name.length > 30) name = name.slice(0, 30);
+
+    const { getDb } = require('./src/database');
+    try {
+      getDb().prepare(
+        'INSERT OR REPLACE INTO custom_sounds (name, filename, uploaded_by) VALUES (?, ?, ?)'
+      ).run(name, req.file.filename, user.id);
+      res.json({ name, url: `/uploads/${req.file.filename}` });
+    } catch { res.status(500).json({ error: 'Failed to save sound' }); }
+  });
+});
+
+app.get('/api/sounds', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const { getDb } = require('./src/database');
+  try {
+    const sounds = getDb().prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
+    res.json({ sounds: sounds.map(s => ({ name: s.name, url: `/uploads/${s.filename}` })) });
+  } catch { res.json({ sounds: [] }); }
+});
+
+app.delete('/api/sounds/:name', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  const name = req.params.name;
+  const { getDb } = require('./src/database');
+  try {
+    const row = getDb().prepare('SELECT filename FROM custom_sounds WHERE name = ?').get(name);
+    if (row) {
+      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
+      getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
+    }
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Failed to delete sound' }); }
 });
 
 // ── GIF search proxy (GIPHY API — keeps key server-side) ──

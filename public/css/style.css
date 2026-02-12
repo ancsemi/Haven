@@ -130,7 +130,7 @@
 /* Matrix accent overrides — glitch aesthetic */
 [data-theme="matrix"] .brand-text { text-shadow: 0 0 8px rgba(0, 255, 65, 0.4); }
 [data-theme="matrix"] .channel-badge { background: #00ff41; color: #000; }
-[data-theme="matrix"] .message-avatar { border: 1px solid rgba(0, 255, 65, 0.3); }
+[data-theme="matrix"] .message-avatar, [data-theme="matrix"] .message-avatar-img { border: 1px solid rgba(0, 255, 65, 0.3); }
 
 /* ─── THEME: Tron ──────────────────────────────────────── */
 [data-theme="tron"] {
@@ -174,7 +174,7 @@
 [data-theme="tron"] .server-icon.home { background: transparent; border: 2px solid #6fecff; box-shadow: 0 0 8px rgba(111, 236, 255, 0.4); }
 [data-theme="tron"] .channel-item.active::before { background: #6fecff; box-shadow: 0 0 6px rgba(111, 236, 255, 0.5); }
 [data-theme="tron"] .btn-send { box-shadow: 0 0 8px rgba(111, 236, 255, 0.3); }
-[data-theme="tron"] .message-avatar { border: 1px solid rgba(111, 236, 255, 0.25); }
+[data-theme="tron"] .message-avatar, [data-theme="tron"] .message-avatar-img { border: 1px solid rgba(111, 236, 255, 0.25); }
 
 /* ─── THEME: HALO ──────────────────────────────────────── */
 [data-theme="halo"] {
@@ -450,7 +450,7 @@
 [data-theme="bloodborne"] .server-icon.home { background: linear-gradient(135deg, #660010, #cc0020); box-shadow: 0 0 10px rgba(204, 0, 32, 0.4); }
 [data-theme="bloodborne"] .channel-item.active::before { background: #ff0030; box-shadow: 0 0 8px rgba(255, 0, 48, 0.6); }
 [data-theme="bloodborne"] .btn-send { box-shadow: 0 0 8px rgba(204, 0, 32, 0.4); }
-[data-theme="bloodborne"] .message-avatar { border: 1px solid rgba(204, 0, 32, 0.3); }
+[data-theme="bloodborne"] .message-avatar, [data-theme="bloodborne"] .message-avatar-img { border: 1px solid rgba(204, 0, 32, 0.3); }
 [data-theme="bloodborne"] .channel-badge { background: #cc0020; color: #fff; }
 [data-theme="bloodborne"] .inline-code { color: #ff4060; }
 
@@ -498,7 +498,7 @@
 [data-theme="ice"] .server-icon.home { background: linear-gradient(135deg, #005580, #00d4ff); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
 [data-theme="ice"] .channel-item.active::before { background: #00d4ff; box-shadow: 0 0 8px rgba(0, 212, 255, 0.5); }
 [data-theme="ice"] .btn-send { box-shadow: 0 0 8px rgba(0, 212, 255, 0.3); }
-[data-theme="ice"] .message-avatar { border: 1px solid rgba(0, 212, 255, 0.25); }
+[data-theme="ice"] .message-avatar, [data-theme="ice"] .message-avatar-img { border: 1px solid rgba(0, 212, 255, 0.25); }
 [data-theme="ice"] .channel-badge { background: #00d4ff; color: #0a1520; }
 [data-theme="ice"] .inline-code { color: #40e0ff; }
 
@@ -546,7 +546,7 @@
 [data-theme="abyss"] .server-icon.home { background: linear-gradient(135deg, #0a2060, #1a5aff); box-shadow: 0 0 10px rgba(26, 90, 255, 0.3); }
 [data-theme="abyss"] .channel-item.active::before { background: #1a5aff; box-shadow: 0 0 8px rgba(26, 90, 255, 0.5); }
 [data-theme="abyss"] .btn-send { box-shadow: 0 0 8px rgba(26, 90, 255, 0.3); }
-[data-theme="abyss"] .message-avatar { border: 1px solid rgba(26, 90, 255, 0.25); }
+[data-theme="abyss"] .message-avatar, [data-theme="abyss"] .message-avatar-img { border: 1px solid rgba(26, 90, 255, 0.25); }
 [data-theme="abyss"] .channel-badge { background: #1a5aff; color: #fff; }
 [data-theme="abyss"] .inline-code { color: #4488ff; }
 
@@ -593,7 +593,7 @@
 [data-theme="darksouls"] .server-icon.home { background: linear-gradient(135deg, #5a4420, #c8a84e); box-shadow: 0 0 8px rgba(200, 168, 78, 0.3); }
 [data-theme="darksouls"] .channel-item.active::before { background: #c8a84e; box-shadow: 0 0 6px rgba(200, 168, 78, 0.5); }
 [data-theme="darksouls"] .inline-code { color: #dcc06a; }
-[data-theme="darksouls"] .message-avatar { border: 1px solid rgba(200, 168, 78, 0.2); }
+[data-theme="darksouls"] .message-avatar, [data-theme="darksouls"] .message-avatar-img { border: 1px solid rgba(200, 168, 78, 0.2); }
 
 /* ─── THEME: Elden Ring ────────────────────────────────── */
 [data-theme="eldenring"] {
@@ -638,7 +638,7 @@
 [data-theme="eldenring"] .server-icon.home { background: linear-gradient(135deg, #3a3060, #d4a832); box-shadow: 0 0 10px rgba(212, 168, 50, 0.3); }
 [data-theme="eldenring"] .channel-item.active::before { background: #d4a832; box-shadow: 0 0 8px rgba(212, 168, 50, 0.5); }
 [data-theme="eldenring"] .inline-code { color: #80a0d0; }
-[data-theme="eldenring"] .message-avatar { border: 1px solid rgba(212, 168, 50, 0.2); }
+[data-theme="eldenring"] .message-avatar, [data-theme="eldenring"] .message-avatar-img { border: 1px solid rgba(212, 168, 50, 0.2); }
 
 /* ─── THEME: Minecraft ─────────────────────────────────── */
 [data-theme="minecraft"] {
@@ -683,7 +683,7 @@
 [data-theme="minecraft"] .server-icon:hover { border-radius: 4px; }
 [data-theme="minecraft"] .channel-item.active::before { background: #55bb55; }
 [data-theme="minecraft"] .inline-code { color: #55bbff; }
-[data-theme="minecraft"] .message-avatar { border: 2px solid #3a3a3a; border-radius: 4px; }
+[data-theme="minecraft"] .message-avatar, [data-theme="minecraft"] .message-avatar-img { border: 2px solid #3a3a3a; border-radius: 4px; }
 [data-theme="minecraft"] .channel-badge { background: #55bb55; color: #1a1a1a; }
 
 /* ─── THEME: Final Fantasy X ───────────────────────────── */
@@ -729,7 +729,7 @@
 [data-theme="ffx"] .server-icon.home { background: linear-gradient(135deg, #1a4070, #40a8e0); box-shadow: 0 0 10px rgba(64, 168, 224, 0.3); }
 [data-theme="ffx"] .channel-item.active::before { background: #40a8e0; box-shadow: 0 0 8px rgba(64, 168, 224, 0.4); }
 [data-theme="ffx"] .inline-code { color: #60c0f0; }
-[data-theme="ffx"] .message-avatar { border: 1px solid rgba(64, 168, 224, 0.25); }
+[data-theme="ffx"] .message-avatar, [data-theme="ffx"] .message-avatar-img { border: 1px solid rgba(64, 168, 224, 0.25); }
 
 /* ─── THEME: Legend of Zelda ───────────────────────────── */
 [data-theme="zelda"] {
@@ -774,7 +774,7 @@
 [data-theme="zelda"] .channel-item.active::before { background: #44bb44; box-shadow: 0 0 6px rgba(68, 187, 68, 0.5); }
 [data-theme="zelda"] .inline-code { color: #70c870; }
 [data-theme="zelda"] .mention { background: rgba(68, 187, 68, 0.15); color: #60d060; }
-[data-theme="zelda"] .message-avatar { border: 1px solid rgba(68, 187, 68, 0.25); }
+[data-theme="zelda"] .message-avatar, [data-theme="zelda"] .message-avatar-img { border: 1px solid rgba(68, 187, 68, 0.25); }
 [data-theme="zelda"] .channel-badge { background: #44bb44; color: #0a120a; }
 
 
@@ -1612,6 +1612,78 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   flex-shrink: 0;
   margin-top: 2px;
 }
+
+.message-avatar-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* User list avatars */
+.user-item-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 10px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.user-item-avatar-img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Avatar settings */
+.avatar-settings { padding: 4px 0; }
+.avatar-preview-row { display: flex; align-items: center; gap: 16px; }
+.avatar-preview-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+}
+.avatar-preview-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.avatar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Custom sounds admin */
+.custom-sound-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.custom-sound-item:last-child { border-bottom: none; }
+.custom-sound-name { flex: 1; font-size: 13px; color: var(--text-primary); }
+.btn-xs {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-xs:hover { background: var(--bg-tertiary); }
 
 .message-body { flex: 1; min-width: 0; }
 
@@ -3466,6 +3538,8 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .messages { padding: 8px; }
   .message-row { gap: 8px; padding: 4px; }
   .message-avatar { width: 30px; height: 30px; font-size: 12px; }
+  .message-avatar-img { width: 30px; height: 30px; }
+  .user-item-avatar, .user-item-avatar-img { width: 20px; height: 20px; font-size: 9px; }
   .message-author { font-size: 13px; }
   .message-content { font-size: 14px; line-height: 1.45; word-break: break-word; }
   .message-time { font-size: 10px; }
@@ -3610,6 +3684,8 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   .channel-info h3 { font-size: 12px; max-width: 90px; }
   .btn-voice { font-size: 11px; padding: 5px 6px; }
   .message-avatar { width: 26px; height: 26px; font-size: 11px; }
+  .message-avatar-img { width: 26px; height: 26px; }
+  .user-item-avatar, .user-item-avatar-img { width: 18px; height: 18px; font-size: 8px; }
   .message-compact { padding-left: 40px; }
   .message-row { gap: 6px; }
   .message-content { font-size: 13px; }

@@ -57,14 +57,16 @@ class HavenApp {
 
     // Emoji palette organized by category
     this.emojiCategories = {
-      'Smileys':  ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','🙄','😏','😣','😥','😮','😯','😴','😛','😜','😝','😒','😔','🙃','😲','😤','😭','😢','😱','🥺','😠','😡','🤬','😈','💀','💩','🤡','👻','😺','😸','🫠'],
-      'People':   ['👋','🤚','✋','🖖','👌','🤌','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','👍','👎','✊','👊','🤛','🤜','👏','🙌','🤝','🙏','💪','🫡','🫶','💅','💃','🕺','🤳','🖕'],
-      'Animals':  ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🦆','🦅','🦉','🐺','🐴','🦄','🐝','🦋','🐌','🐞','🐢','🐍','🐙','🐬','🐳','🦈','🐊','🦖'],
-      'Food':     ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍒','🍑','🥭','🍍','🥝','🍅','🥑','🌽','🌶️','🍕','🍔','🍟','🌭','🍿','🧁','🍩','🍪','🍰','☕','🍺','🍷','🥤','🧊'],
-      'Activities':['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🎮','🕹️','🎲','🧩','🎯','🎳','🎭','🎨','🎼','🎵','🎸','🥁','🎹','🏆','🥇','🏅','🎪','🎬'],
-      'Travel':   ['🚗','🚕','🚀','✈️','🚁','🛸','🚢','🏠','🏢','🏰','🗼','🗽','⛩️','🌋','🏔️','🌊','🌅','🌄','🌉','🎡','🎢','🗺️','🧭','🏖️','🏕️'],
-      'Objects':  ['⌚','📱','💻','⌨️','🖥️','💾','📷','🔭','🔬','💡','🔦','📚','📝','✏️','📎','📌','🔑','🔒','🔓','🛡️','⚔️','🔧','💰','💎','📦','🎁','✉️','🔔'],
-      'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❣️','💕','💞','💓','💗','✨','⭐','🌟','💫','🔥','💯','✅','❌','‼️','⁉️','❓','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲']
+      'Smileys':  ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','🙄','😏','😣','😥','😮','😯','😴','😛','😜','😝','😒','😔','🙃','😲','😤','😭','😢','😱','🥺','😠','😡','🤬','😈','💀','💩','🤡','👻','😺','😸','🫠','🫣','🫢','🫥','🫤','🥹','🥲','😶‍🌫️','🤭','🫡','🤫','🤥','😬','🫨','😵','😵‍💫','🥴','😮‍💨','😤','🥱','😇','🤠','🤑','🤓','😈','👿','🫶','🤧','😷','🤒','🤕','💅'],
+      'People':   ['👋','🤚','✋','🖖','👌','🤌','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🤝','🙏','💪','🫡','🫶','💅','💃','🕺','🤳','🖕','🫰','🫳','🫴','👐','🤲','🫱','🫲','🤷','🤦','🙇','💁','🙆','🙅','🤷‍♂️','🤷‍♀️','🙋','🙋‍♂️','🙋‍♀️','🧏','🧑‍🤝‍🧑','👫','👬','👭'],
+      'Monkeys':  ['🙈','🙉','🙊','🐵','🐒','🦍','🦧'],
+      'Animals':  ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐔','🐧','🐦','🦆','🦅','🦉','🐺','🐴','🦄','🐝','🦋','🐌','🐞','🐢','🐍','🐙','🐬','🐳','🦈','🐊','🦖','🦕','🐋','🦭','🦦','🦫','🦥','🐿️','🦔','🦇','🐓','🦃','🦚','🦜','🦢','🦩','🐕','🐈','🐈‍⬛'],
+      'Faces':    ['👀','👁️','👁️‍🗨️','👅','👄','🫦','💋','🧠','🦷','🦴','👃','👂','🦻','🦶','🦵','💀','☠️','👽','🤖','🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾'],
+      'Food':     ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍒','🍑','🥭','🍍','🥝','🍅','🥑','🌽','🌶️','🫑','🥦','🧄','🧅','🥕','🍕','🍔','🍟','🌭','🍿','🧁','🍩','🍪','🍰','🎂','🧀','🥚','🥓','🥩','🍗','🌮','🌯','🫔','🥙','🍜','🍝','🍣','🍱','☕','🍺','🍷','🥤','🧊','🧋','🍵','🥂','🍾'],
+      'Activities':['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🎮','🕹️','🎲','🧩','🎯','🎳','🎭','🎨','🎼','🎵','🎸','🥁','🎹','🏆','🥇','🏅','🎪','🎬','🎤','🎧','🎺','🪘','🎻','🪗'],
+      'Travel':   ['🚗','🚕','🚀','✈️','🚁','🛸','🚢','🏠','🏢','🏰','🗼','🗽','⛩️','🌋','🏔️','🌊','🌅','🌄','🌉','🎡','🎢','🗺️','🧭','🏖️','🏕️','🌍','🌎','🌏','🛳️','⛵','🚂','🚇','🏎️','🏍️','🛵','🛶'],
+      'Objects':  ['⌚','📱','💻','⌨️','🖥️','💾','📷','🔭','🔬','💡','🔦','📚','📝','✏️','📎','📌','🔑','🔒','🔓','🛡️','⚔️','🔧','💰','💎','📦','🎁','✉️','🔔','🪙','💸','🏷️','🔨','🪛','🧲','🧪','🧫','💊','🩺','🩹','🧬'],
+      'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','✨','⭐','🌟','💫','🔥','💯','✅','❌','‼️','⁉️','❓','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲','♾️','🏳️‍🌈','🏴‍☠️','⚡','☀️','🌙','🌈','☁️','❄️','💨','🌪️']
     };
 
     // Flat list for quick access (used by search)
@@ -97,6 +99,8 @@ class HavenApp {
     this._setupFileUpload();
     this._setupIdleDetection();
     this._initSliderFills();
+    this._setupAvatarUpload();
+    this._setupSoundManagement();
 
     // CSP-safe image error handling (no inline onerror attributes)
     document.getElementById('messages')?.addEventListener('error', (e) => {
@@ -125,10 +129,17 @@ class HavenApp {
     this.socket.on('session-info', (data) => {
       this.user = { ...this.user, ...data };
       localStorage.setItem('haven_user', JSON.stringify(this.user));
+      // Show server version in status bar
+      if (data.version) {
+        const vEl = document.getElementById('status-version');
+        if (vEl) vEl.textContent = 'v' + data.version;
+      }
       // Refresh display name + admin UI with authoritative data
       document.getElementById('current-user').textContent = this.user.displayName || this.user.username;
       const loginEl = document.getElementById('login-name');
       if (loginEl) loginEl.textContent = `@${this.user.username}`;
+      // Update avatar preview in settings if present
+      this._updateAvatarPreview();
       if (this.user.isAdmin) {
         document.getElementById('admin-controls').style.display = 'block';
         document.getElementById('admin-mod-panel').style.display = 'block';
@@ -136,6 +147,14 @@ class HavenApp {
         document.getElementById('admin-controls').style.display = 'none';
         document.getElementById('admin-mod-panel').style.display = 'none';
       }
+    });
+
+    // Avatar updated confirmation
+    this.socket.on('avatar-updated', (data) => {
+      this.user.avatar = data.url;
+      localStorage.setItem('haven_user', JSON.stringify(this.user));
+      this._updateAvatarPreview();
+      this._showToast('Avatar updated!', 'success');
     });
 
     this.socket.on('connect', () => {
@@ -1372,6 +1391,236 @@ class HavenApp {
   }
 
   // ═══════════════════════════════════════════════════════
+  // AVATAR UPLOAD
+  // ═══════════════════════════════════════════════════════
+
+  _updateAvatarPreview() {
+    const preview = document.getElementById('avatar-preview');
+    if (!preview) return;
+    if (this.user.avatar) {
+      preview.innerHTML = `<img src="${this._escapeHtml(this.user.avatar)}" alt="Avatar">`;
+    } else {
+      const color = this._getUserColor(this.user.username);
+      const initial = this.user.username.charAt(0).toUpperCase();
+      preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:24px;color:white">${initial}</div>`;
+    }
+  }
+
+  _setupAvatarUpload() {
+    const uploadBtn = document.getElementById('avatar-upload-btn');
+    const removeBtn = document.getElementById('avatar-remove-btn');
+    const fileInput = document.getElementById('avatar-file-input');
+    if (!uploadBtn || !fileInput) return;
+
+    this._updateAvatarPreview();
+
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        this._showToast('Avatar too large (max 2 MB)', 'error');
+        fileInput.value = '';
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        this._showToast('Please select an image file', 'error');
+        fileInput.value = '';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      try {
+        this._showToast('Uploading avatar...', 'info');
+        const res = await fetch('/api/upload-avatar', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.token}` },
+          body: formData
+        });
+        if (!res.ok) {
+          let errMsg = `Upload failed (${res.status})`;
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          return this._showToast(errMsg, 'error');
+        }
+        const data = await res.json();
+        // Notify server via socket to update all connected clients
+        this.socket.emit('set-avatar', { url: data.url });
+      } catch {
+        this._showToast('Upload failed — check your connection', 'error');
+      }
+      fileInput.value = '';
+    });
+
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        this.socket.emit('set-avatar', { url: '' });
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // CUSTOM SOUND MANAGEMENT (Admin)
+  // ═══════════════════════════════════════════════════════
+
+  _setupSoundManagement() {
+    const uploadBtn = document.getElementById('sound-upload-btn');
+    const fileInput = document.getElementById('sound-file-input');
+    const nameInput = document.getElementById('sound-name-input');
+    if (!uploadBtn || !fileInput) return;
+
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      const name = nameInput ? nameInput.value.trim() : '';
+      if (!file) return this._showToast('Select an audio file', 'error');
+      if (!name) return this._showToast('Enter a sound name', 'error');
+      if (file.size > 1024 * 1024) return this._showToast('Sound file too large (max 1 MB)', 'error');
+
+      const formData = new FormData();
+      formData.append('sound', file);
+      formData.append('name', name);
+
+      try {
+        this._showToast('Uploading sound...', 'info');
+        const res = await fetch('/api/upload-sound', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.token}` },
+          body: formData
+        });
+        if (!res.ok) {
+          let errMsg = `Upload failed (${res.status})`;
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          return this._showToast(errMsg, 'error');
+        }
+        this._showToast(`Sound "${name}" uploaded!`, 'success');
+        fileInput.value = '';
+        nameInput.value = '';
+        this._loadCustomSounds();
+      } catch {
+        this._showToast('Upload failed', 'error');
+      }
+    });
+
+    // Load custom sounds on init
+    this._loadCustomSounds();
+  }
+
+  async _loadCustomSounds() {
+    try {
+      const res = await fetch('/api/sounds', {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      if (!res.ok) return;
+      const sounds = await res.json();
+      this.customSounds = sounds; // [{name, url}]
+
+      // Update all sound select dropdowns with custom sounds
+      this._updateSoundSelects(sounds);
+
+      // Render admin sound list
+      this._renderSoundList(sounds);
+    } catch { /* ignore */ }
+  }
+
+  _updateSoundSelects(sounds) {
+    const selects = ['notif-msg-sound', 'notif-mention-sound'];
+    selects.forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+
+      // Remove old custom options
+      sel.querySelectorAll('option[data-custom]').forEach(o => o.remove());
+      // Remove old AIM optgroup
+      sel.querySelectorAll('optgroup[data-aim]').forEach(o => o.remove());
+      sel.querySelectorAll('optgroup[data-custom-group]').forEach(o => o.remove());
+
+      const noneOpt = sel.querySelector('option[value="none"]');
+
+      // Add AIM sounds optgroup
+      const aimGroup = document.createElement('optgroup');
+      aimGroup.label = '🔊 AIM Classic';
+      aimGroup.dataset.aim = '1';
+      ['aim_message', 'aim_door_open', 'aim_door_close', 'aim_nudge'].forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s.replace('aim_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        aimGroup.appendChild(opt);
+      });
+      sel.insertBefore(aimGroup, noneOpt);
+
+      // Add custom sounds optgroup
+      if (sounds.length > 0) {
+        const customGroup = document.createElement('optgroup');
+        customGroup.label = '🎵 Custom';
+        customGroup.dataset.customGroup = '1';
+        sounds.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = `custom:${s.name}`;
+          opt.textContent = s.name;
+          opt.dataset.custom = '1';
+          opt.dataset.url = s.url;
+          customGroup.appendChild(opt);
+        });
+        sel.insertBefore(customGroup, noneOpt);
+      }
+
+      // Restore value
+      const currentVal = sel.value;
+      if (currentVal) sel.value = currentVal;
+    });
+  }
+
+  _renderSoundList(sounds) {
+    const list = document.getElementById('custom-sounds-list');
+    if (!list) return;
+
+    if (sounds.length === 0) {
+      list.innerHTML = '<p class="muted-text">No custom sounds uploaded</p>';
+      return;
+    }
+
+    list.innerHTML = sounds.map(s => `
+      <div class="custom-sound-item">
+        <span class="custom-sound-name">${this._escapeHtml(s.name)}</span>
+        <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="Preview">▶</button>
+        <button class="btn-xs sound-delete-btn" data-name="${this._escapeHtml(s.name)}" title="Delete">🗑️</button>
+      </div>
+    `).join('');
+
+    // Preview buttons
+    list.querySelectorAll('.sound-preview-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const audio = new Audio(btn.dataset.url);
+        audio.volume = this.notifications.volume;
+        audio.play().catch(() => {});
+      });
+    });
+
+    // Delete buttons
+    list.querySelectorAll('.sound-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.name;
+        try {
+          const res = await fetch(`/api/sounds/${encodeURIComponent(name)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${this.token}` }
+          });
+          if (res.ok) {
+            this._showToast(`Sound "${name}" deleted`, 'success');
+            this._loadCustomSounds();
+          } else {
+            this._showToast('Delete failed', 'error');
+          }
+        } catch {
+          this._showToast('Delete failed', 'error');
+        }
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
   // NOTIFICATIONS
   // ═══════════════════════════════════════════════════════
 
@@ -1381,12 +1630,16 @@ class HavenApp {
     const msgSound = document.getElementById('notif-msg-sound');
     const mentionVolume = document.getElementById('notif-mention-volume');
     const mentionSound = document.getElementById('notif-mention-sound');
+    const joinSound = document.getElementById('notif-join-sound');
+    const leaveSound = document.getElementById('notif-leave-sound');
 
     toggle.checked = this.notifications.enabled;
     volume.value = this.notifications.volume * 100;
     msgSound.value = this.notifications.sounds.message;
     mentionVolume.value = this.notifications.mentionVolume * 100;
     mentionSound.value = this.notifications.sounds.mention;
+    if (joinSound) joinSound.value = this.notifications.sounds.join;
+    if (leaveSound) leaveSound.value = this.notifications.sounds.leave;
 
     toggle.addEventListener('change', () => {
       this.notifications.setEnabled(toggle.checked);
@@ -1409,6 +1662,20 @@ class HavenApp {
       this.notifications.setSound('mention', mentionSound.value);
       this.notifications.play('mention'); // Preview the selected sound
     });
+
+    if (joinSound) {
+      joinSound.addEventListener('change', () => {
+        this.notifications.setSound('join', joinSound.value);
+        this.notifications.play('join');
+      });
+    }
+
+    if (leaveSound) {
+      leaveSound.addEventListener('change', () => {
+        this.notifications.setSound('leave', leaveSound.value);
+        this.notifications.play('leave');
+      });
+    }
   }
 
   // ── Theme System ──────────────────────────────────────
@@ -1805,6 +2072,9 @@ class HavenApp {
 
     const color = this._getUserColor(msg.username);
     const initial = msg.username.charAt(0).toUpperCase();
+    const avatarHtml = msg.avatar
+      ? `<img class="message-avatar message-avatar-img" src="${this._escapeHtml(msg.avatar)}" alt="${initial}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="message-avatar" style="background-color:${color};display:none">${initial}</div>`
+      : `<div class="message-avatar" style="background-color:${color}">${initial}</div>`;
 
     const el = document.createElement('div');
     el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '');
@@ -1815,7 +2085,7 @@ class HavenApp {
     el.innerHTML = `
       ${replyHtml}
       <div class="message-row">
-        <div class="message-avatar" style="background-color:${color}">${initial}</div>
+        ${avatarHtml}
         <div class="message-body">
           <div class="message-header">
             <span class="message-author" style="color:${color}">${this._escapeHtml(msg.username)}</span>
@@ -2028,6 +2298,13 @@ class HavenApp {
       ? `<span class="user-status-text" title="${this._escapeHtml(u.statusText)}">${this._escapeHtml(u.statusText)}</span>`
       : '';
 
+    // Avatar: image or letter fallback
+    const color = this._getUserColor(u.username);
+    const initial = u.username.charAt(0).toUpperCase();
+    const avatarHtml = u.avatar
+      ? `<img class="user-item-avatar user-item-avatar-img" src="${this._escapeHtml(u.avatar)}" alt="${initial}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="user-item-avatar" style="background-color:${color};display:none">${initial}</div>`
+      : `<div class="user-item-avatar" style="background-color:${color}">${initial}</div>`;
+
     const dmBtn = u.id !== this.user.id
       ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="Direct Message">💬</button>`
       : '';
@@ -2042,6 +2319,7 @@ class HavenApp {
       : (dmBtn ? `<div class="user-admin-actions">${dmBtn}</div>` : '');
     return `
       <div class="user-item${onlineClass}">
+        ${avatarHtml}
         <span class="user-dot${statusClass ? ' ' + statusClass : ''}"></span>
         <span class="user-item-name">${this._escapeHtml(u.username)}</span>
         ${statusTextHtml}

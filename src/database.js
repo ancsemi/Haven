@@ -187,6 +187,24 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN display_name TEXT DEFAULT NULL");
   }
 
+  // ── Migration: avatar column ──────────────────────────────
+  try {
+    db.prepare("SELECT avatar FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: custom_sounds table (admin-uploaded notification sounds) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS custom_sounds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      filename TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // ── Migration: channel topic column ─────────────────────
   try {
     db.prepare("SELECT topic FROM channels LIMIT 0").get();

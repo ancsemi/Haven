@@ -1,4 +1,13 @@
 const { verifyToken, generateChannelCode, generateToken } = require('./auth');
+const HAVEN_VERSION = require('../package.json').version;
+
+// ── Normalize SQLite timestamps to UTC ISO 8601 ────────
+// SQLite CURRENT_TIMESTAMP produces UTC without 'Z' suffix;
+// browsers mis-interpret bare datetime strings as local time.
+function utcStamp(s) {
+  if (!s || s.endsWith('Z')) return s;
+  return s.replace(' ', 'T') + 'Z';
+}
 
 // ── Input validation helpers ────────────────────────────
 function isString(v, min = 0, max = Infinity) {
@@ -52,10 +61,11 @@ function setupSocketHandlers(io, db) {
 
     socket.user = user;
 
-    // Refresh display_name AND is_admin from DB (JWT may be stale)
+    // Refresh display_name, avatar AND is_admin from DB (JWT may be stale)
     try {
-      const uRow = db.prepare('SELECT display_name, is_admin, username FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar FROM users WHERE id = ?').get(user.id);
       socket.user.displayName = (uRow && uRow.display_name) ? uRow.display_name : user.username;
+      socket.user.avatar = (uRow && uRow.avatar) ? uRow.avatar : null;
       if (uRow) {
         // Sync admin status from .env (handles ADMIN_USERNAME changes)
         const shouldBeAdmin = uRow.username.toLowerCase() === ADMIN_USERNAME ? 1 : 0;
@@ -109,7 +119,9 @@ function setupSocketHandlers(io, db) {
       id: socket.user.id,
       username: socket.user.username,
       isAdmin: socket.user.isAdmin,
-      displayName: socket.user.displayName
+      displayName: socket.user.displayName,
+      avatar: socket.user.avatar || null,
+      version: HAVEN_VERSION
     });
 
     // ── Per-socket flood protection ─────────────────────────
@@ -325,7 +337,8 @@ function setupSocketHandlers(io, db) {
         username: socket.user.displayName,
         socketId: socket.id,
         status: socket.user.status || 'online',
-        statusText: socket.user.statusText || ''
+        statusText: socket.user.statusText || '',
+        avatar: socket.user.avatar || null
       });
 
       // Broadcast online users
@@ -352,7 +365,7 @@ function setupSocketHandlers(io, db) {
       if (before) {
         messages = db.prepare(`
           SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at,
-                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id
+                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ? AND m.id < ?
           ORDER BY m.created_at DESC LIMIT ?
@@ -360,7 +373,7 @@ function setupSocketHandlers(io, db) {
       } else {
         messages = db.prepare(`
           SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at,
-                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id
+                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ?
           ORDER BY m.created_at DESC LIMIT ?
@@ -405,6 +418,9 @@ function setupSocketHandlers(io, db) {
 
       const enriched = messages.map(m => {
         const obj = { ...m };
+        // Normalize SQLite UTC timestamps to proper ISO 8601 with Z suffix
+        if (obj.created_at && !obj.created_at.endsWith('Z')) obj.created_at = utcStamp(obj.created_at);
+        if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
         obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
         obj.reactions = reactionMap.get(m.id) || [];
         obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
@@ -442,6 +458,10 @@ function setupSocketHandlers(io, db) {
         ORDER BY m.created_at DESC LIMIT 25
       `).all(channel.id, `%${escapedQuery}%`);
 
+      // Normalize SQLite UTC timestamps for search results
+      results.forEach(r => {
+        if (r.created_at && !r.created_at.endsWith('Z')) r.created_at = utcStamp(r.created_at);
+      });
       socket.emit('search-results', { results, query });
     });
 
@@ -503,6 +523,7 @@ function setupSocketHandlers(io, db) {
             created_at: new Date().toISOString(),
             username: socket.user.displayName,
             user_id: socket.user.id,
+            avatar: socket.user.avatar || null,
             reply_to: null,
             replyContext: null,
             reactions: [],
@@ -529,6 +550,7 @@ function setupSocketHandlers(io, db) {
         created_at: new Date().toISOString(),
         username: socket.user.displayName,
         user_id: socket.user.id,
+        avatar: socket.user.avatar || null,
         reply_to: replyTo,
         replyContext: null,
         reactions: [],
@@ -1074,6 +1096,13 @@ function setupSocketHandlers(io, db) {
         ORDER BY pm.pinned_at DESC
       `).all(channel.id);
 
+      // Normalize UTC timestamps
+      pins.forEach(p => {
+        p.created_at = utcStamp(p.created_at);
+        p.edited_at = utcStamp(p.edited_at);
+        p.pinned_at = utcStamp(p.pinned_at);
+      });
+
       socket.emit('pinned-messages', { channelCode: code, pins });
     });
 
@@ -1189,6 +1218,7 @@ function setupSocketHandlers(io, db) {
         SELECT b.id, b.user_id, b.reason, b.created_at, COALESCE(u.display_name, u.username) as username
         FROM bans b JOIN users u ON b.user_id = u.id ORDER BY b.created_at DESC
       `).all();
+      bans.forEach(b => { b.created_at = utcStamp(b.created_at); });
       socket.emit('ban-list', bans);
     });
 
@@ -1259,6 +1289,7 @@ function setupSocketHandlers(io, db) {
         SELECT b.id, b.user_id, b.reason, b.created_at, COALESCE(u.display_name, u.username) as username
         FROM bans b JOIN users u ON b.user_id = u.id ORDER BY b.created_at DESC
       `).all();
+      bans.forEach(b => { b.created_at = utcStamp(b.created_at); });
       socket.emit('ban-list', bans);
 
       console.log(`🗑️  Admin deleted user "${targetUser.username}" (id: ${data.userId})`);
@@ -1324,6 +1355,7 @@ function setupSocketHandlers(io, db) {
         SELECT b.id, b.user_id, b.reason, b.created_at, COALESCE(u.display_name, u.username) as username
         FROM bans b JOIN users u ON b.user_id = u.id ORDER BY b.created_at DESC
       `).all();
+      bans.forEach(b => { b.created_at = utcStamp(b.created_at); });
       socket.emit('ban-list', bans);
     });
 
@@ -1345,6 +1377,7 @@ function setupSocketHandlers(io, db) {
     socket.on('get-whitelist', () => {
       if (!socket.user.isAdmin) return;
       const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
+      rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
       socket.emit('whitelist-list', rows);
     });
 
@@ -1364,6 +1397,7 @@ function setupSocketHandlers(io, db) {
         socket.emit('error-msg', `Added "${username}" to whitelist`);
         // Send updated list
         const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
+        rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
         socket.emit('whitelist-list', rows);
       } catch {
         socket.emit('error-msg', 'Failed to add to whitelist');
@@ -1380,6 +1414,7 @@ function setupSocketHandlers(io, db) {
       socket.emit('error-msg', `Removed "${username}" from whitelist`);
       // Send updated list
       const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
+      rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
       socket.emit('whitelist-list', rows);
     });
 
@@ -1523,6 +1558,27 @@ function setupSocketHandlers(io, db) {
     });
 
     // ═══════════════ USER STATUS ════════════════════════════
+
+    socket.on('set-avatar', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const url = typeof data.url === 'string' ? data.url.trim() : '';
+      // Allow clearing avatar with empty string, or setting a /uploads/ path
+      if (url && !url.startsWith('/uploads/')) return;
+      try {
+        db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(url || null, socket.user.id);
+        socket.user.avatar = url || null;
+        // Refresh online users in all channels this user is in
+        for (const [code, users] of channelUsers) {
+          if (users.has(socket.user.id)) {
+            users.get(socket.user.id).avatar = url || null;
+            emitOnlineUsers(code);
+          }
+        }
+        socket.emit('avatar-updated', { url: url || null });
+      } catch (err) {
+        console.error('Set avatar error:', err);
+      }
+    });
 
     socket.on('set-status', (data) => {
       if (!data || typeof data !== 'object') return;
@@ -1755,11 +1811,11 @@ function setupSocketHandlers(io, db) {
         scoreRows.forEach(r => { scores[r.user_id] = r.score; });
       } catch { /* table may not exist yet */ }
 
-      // Fetch user statuses
+      // Fetch user statuses and avatars
       const statusMap = {};
       try {
-        const statusRows = db.prepare('SELECT id, status, status_text FROM users').all();
-        statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '' }; });
+        const statusRows = db.prepare('SELECT id, status, status_text, avatar FROM users').all();
+        statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null }; });
       } catch { /* columns may not exist yet */ }
 
       let users;
@@ -1774,7 +1830,8 @@ function setupSocketHandlers(io, db) {
           id: m.id, username: m.username, online: onlineIds.has(m.id),
           highScore: scores[m.id] || 0,
           status: statusMap[m.id]?.status || 'online',
-          statusText: statusMap[m.id]?.statusText || ''
+          statusText: statusMap[m.id]?.statusText || '',
+          avatar: statusMap[m.id]?.avatar || null
         }));
       } else {
         // 'online' — all connected users across the server
@@ -1787,7 +1844,8 @@ function setupSocketHandlers(io, db) {
               online: true,
               highScore: scores[s.user.id] || 0,
               status: statusMap[s.user.id]?.status || 'online',
-              statusText: statusMap[s.user.id]?.statusText || ''
+              statusText: statusMap[s.user.id]?.statusText || '',
+              avatar: statusMap[s.user.id]?.avatar || s.user.avatar || null
             });
           }
         }

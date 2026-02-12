@@ -6,6 +6,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.4.4] — 2025-07-18
+
+### Added
+- **User profile pictures (PFP)** — users can upload a custom avatar (max 2 MB) via Settings. Avatars appear in chat messages and the online-users list. Letter-based fallback when no avatar is set.
+- **Avatar upload endpoint** — `POST /api/upload-avatar` with magic-byte validation for PNG/JPEG/GIF/WebP.
+- **Socket-based avatar sync** — `set-avatar` event propagates avatar changes to all connected clients in real-time; online-user lists update immediately.
+- **Modernized emoji picker** — expanded from ~300 to ~500+ emojis across 10 categories. New "Monkeys" category (🙈🙉🙊🐵🐒🦍🦧), new "Faces" category (👀👁️👅💋🧠🦷🦴). Smileys expanded with 🫣🫢🫥🫤🥹🥲🫠🤫🤥🫨🤠🤑🤓🥴🤧😷🤒🤕. People expanded with pointing gestures, shrug/facepalm, bowing, and couple emojis. Animals, Food, Travel, Objects, and Symbols categories all substantially expanded.
+- **AIM Classic notification sounds** — four synthesized approximations of the original AOL Instant Messenger sounds:
+  - **AIM Message** — the iconic rising two-tone "ding ding" with overtone shimmer
+  - **AIM Door Open** — ascending creaky chime (buddy sign-on)
+  - **AIM Door Close** — descending thump with low slam (buddy sign-off)
+  - **AIM Nudge** — buzzy sawtooth vibration pattern
+- **Join/Leave sound selectors** — new "User Joined" and "User Left" dropdowns in Settings > Sounds, with AIM Door Open/Close as built-in options.
+- **Admin custom sound uploads** — admins can upload custom notification audio files (max 1 MB, MP3/OGG/WAV/WebM) via Settings > Admin > Custom Sounds. Custom sounds appear as options in all notification dropdowns.
+- **Custom sound management** — preview and delete buttons for each uploaded sound. Sounds stored in `custom_sounds` database table with file-on-disk storage.
+- **Audio file playback engine** — `NotificationManager` gains `_playFile(url)` method with `Audio` object caching for efficient custom sound playback.
+
+### Changed
+- **Emoji categories restructured** — reorganized into 10 categories (was 8): Smileys, People, Monkeys, Animals, Faces, Food, Activities, Travel, Objects, Symbols.
+- **Message avatar rendering** — messages now render `<img>` tags for users with profile pictures, with automatic fallback to letter-avatar on load error.
+- **Online-users list** — each user entry now shows a small avatar circle (24px) before the username.
+- **CSP mediaSrc** — added `"data:"` to Content Security Policy for audio data URI support.
+
+---
+
 ## [1.4.3] — 2026-02-16
 
 ### Added

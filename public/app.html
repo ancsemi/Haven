@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Haven</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
 </head>
@@ -321,6 +322,10 @@
       <div class="status-item">
         <span class="value" id="status-clock"></span>
       </div>
+      <div class="divider"></div>
+      <div class="status-item">
+        <span class="value" id="status-version"></span>
+      </div>
     </div>
   </div>
 
@@ -394,6 +399,22 @@
         <button class="settings-close-btn" id="close-settings-btn">&times;</button>
       </div>
 
+      <!-- Avatar Section -->
+      <div class="settings-section">
+        <h5 class="settings-section-title">🖼️ Avatar</h5>
+        <div class="avatar-settings">
+          <div class="avatar-preview-row">
+            <div class="avatar-preview-circle" id="avatar-preview"></div>
+            <div class="avatar-actions">
+              <button class="btn-sm btn-accent" id="avatar-upload-btn">Upload Image</button>
+              <button class="btn-sm" id="avatar-remove-btn">Remove</button>
+              <input type="file" id="avatar-file-input" accept="image/*" style="display:none">
+            </div>
+          </div>
+          <small class="settings-hint">Max 2 MB. Square images work best.</small>
+        </div>
+      </div>
+
       <!-- Sounds Section -->
       <div class="settings-section">
         <h5 class="settings-section-title">🔔 Sounds</h5>
@@ -434,6 +455,30 @@
               <option value="chime">Chime</option>
               <option value="blip">Blip</option>
               <option value="drop">Drop</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <div class="notif-divider"></div>
+          <label class="select-row">
+            <span>User Joined</span>
+            <select id="notif-join-sound">
+              <option value="chime">Chime</option>
+              <option value="aim_door_open">AIM Door Open</option>
+              <option value="bell">Bell</option>
+              <option value="ping">Ping</option>
+              <option value="blip">Blip</option>
+              <option value="chord">Chord</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <label class="select-row">
+            <span>User Left</span>
+            <select id="notif-leave-sound">
+              <option value="drop">Drop</option>
+              <option value="aim_door_close">AIM Door Close</option>
+              <option value="chime">Chime</option>
+              <option value="ping">Ping</option>
+              <option value="blip">Blip</option>
               <option value="none">None</option>
             </select>
           </label>
@@ -506,6 +551,20 @@
           </label>
           <small class="settings-hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
           <button class="btn-sm btn-full" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 Run Cleanup Now</button>
+        </div>
+        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🔊 Custom Sounds</h5>
+          <small class="settings-hint">Upload audio files for custom notification sounds (max 1 MB each)</small>
+          <div style="margin-top:8px;">
+            <div class="whitelist-add-row">
+              <input type="text" id="sound-name-input" placeholder="Sound name..." maxlength="30" class="settings-text-input">
+              <input type="file" id="sound-file-input" accept="audio/*" style="max-width:120px;font-size:11px">
+              <button class="btn-sm btn-accent" id="sound-upload-btn">Upload</button>
+            </div>
+            <div id="custom-sounds-list" style="margin-top:8px;">
+              <p class="muted-text">No custom sounds uploaded</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
