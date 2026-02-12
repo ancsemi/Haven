@@ -95,6 +95,7 @@ class HavenApp {
     this._setupStatusPicker();
     this._setupFileUpload();
     this._setupIdleDetection();
+    this._initSliderFills();
 
     // CSP-safe image error handling (no inline onerror attributes)
     document.getElementById('messages')?.addEventListener('error', (e) => {
@@ -478,6 +479,12 @@ class HavenApp {
       if (this._lastOnlineUsers) {
         this._renderOnlineUsers(this._lastOnlineUsers);
       }
+      // Relay to game window if open
+      try { if (this._gameWindow && !this._gameWindow.closed) this._gameWindow.postMessage({ type: 'leaderboard-data', leaderboard: data.leaderboard }, window.location.origin); } catch {}
+    });
+
+    this.socket.on('new-high-score', (data) => {
+      this._showToast(`🏆 ${data.username} set a new Shippy Container record: ${data.score}!`, 'success');
     });
   }
 
@@ -591,6 +598,20 @@ class HavenApp {
     document.getElementById('voice-leave-btn').addEventListener('click', () => this._leaveVoice());
     document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
     document.getElementById('screen-share-close').addEventListener('click', () => this._hideScreenShare());
+
+    // Voice controls dropdown
+    document.getElementById('voice-dropdown-toggle')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const panel = document.getElementById('voice-dropdown-panel');
+      panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+    });
+    // Close dropdown when clicking elsewhere
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('voice-dropdown-panel');
+      if (panel && panel.style.display !== 'none' && !e.target.closest('.voice-dropdown')) {
+        panel.style.display = 'none';
+      }
+    });
     // Stream size slider
     const streamSizeSlider = document.getElementById('stream-size-slider');
     if (streamSizeSlider) {
@@ -613,9 +634,6 @@ class HavenApp {
         this.voice.setNoiseSensitivity(parseInt(e.target.value, 10));
       }
     });
-
-    // Leaderboard
-    document.getElementById('leaderboard-btn')?.addEventListener('click', () => this._showLeaderboard());
 
     // Wire up the voice manager's video callback
     this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
@@ -719,18 +737,19 @@ class HavenApp {
     // Flappy Container game (sidebar button) — single delegated listener with origin check
     if (!this._gameScoreListenerAdded) {
       window.addEventListener('message', (e) => {
-        if (e.origin !== window.location.origin) return; // reject cross-origin
+        if (e.origin !== window.location.origin) return;
         if (e.data && e.data.type === 'flappy-score' && typeof e.data.score === 'number') {
           this.socket.emit('submit-high-score', { game: 'flappy', score: e.data.score });
+        }
+        if (e.data && e.data.type === 'get-leaderboard') {
+          const scores = this.highScores?.flappy || [];
+          e.source?.postMessage({ type: 'leaderboard-data', leaderboard: scores }, e.origin);
         }
       });
       this._gameScoreListenerAdded = true;
     }
     document.getElementById('play-flappy-btn')?.addEventListener('click', () => {
-      window.open('/games/flappy', '_blank', 'noopener,width=520,height=760');
-    });
-    document.getElementById('close-leaderboard-btn')?.addEventListener('click', () => {
-      document.getElementById('leaderboard-modal').style.display = 'none';
+      this._gameWindow = window.open('/games/flappy', '_blank', 'width=520,height=760');
     });
 
     // Image click + spoiler click delegation (CSP-safe — no inline handlers)
@@ -1375,13 +1394,10 @@ class HavenApp {
     if (this.voice && this.voice.inVoice) {
       this._updateVoiceButtons(true);
     } else {
-      // Show just the join button (not mute/deafen/leave)
+      // Show just the join button (not the dropdown/leave)
       document.getElementById('voice-join-btn').style.display = 'inline-flex';
-      document.getElementById('voice-mute-btn').style.display = 'none';
-      document.getElementById('voice-deafen-btn').style.display = 'none';
+      document.getElementById('voice-dropdown-toggle').style.display = 'none';
       document.getElementById('voice-leave-btn').style.display = 'none';
-      document.getElementById('screen-share-btn').style.display = 'none';
-      document.getElementById('voice-ns-wrap').style.display = 'none';
     }
     document.getElementById('search-toggle-btn').style.display = 'inline-flex';
     document.getElementById('pinned-toggle-btn').style.display = 'inline-flex';
@@ -1460,10 +1476,8 @@ class HavenApp {
     document.getElementById('copy-code-btn').style.display = 'none';
     document.getElementById('delete-channel-btn').style.display = 'none';
     document.getElementById('voice-join-btn').style.display = 'none';
-    document.getElementById('voice-mute-btn').style.display = 'none';
-    document.getElementById('voice-deafen-btn').style.display = 'none';
+    document.getElementById('voice-dropdown-toggle').style.display = 'none';
     document.getElementById('voice-leave-btn').style.display = 'none';
-    document.getElementById('screen-share-btn').style.display = 'none';
     document.getElementById('search-toggle-btn').style.display = 'none';
     document.getElementById('pinned-toggle-btn').style.display = 'none';
     document.getElementById('status-channel').textContent = 'None';
@@ -2052,13 +2066,11 @@ class HavenApp {
 
   _updateVoiceButtons(inVoice) {
     document.getElementById('voice-join-btn').style.display = inVoice ? 'none' : 'inline-flex';
-    document.getElementById('voice-mute-btn').style.display = inVoice ? 'inline-flex' : 'none';
-    document.getElementById('voice-deafen-btn').style.display = inVoice ? 'inline-flex' : 'none';
+    document.getElementById('voice-dropdown-toggle').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('voice-leave-btn').style.display = inVoice ? 'inline-flex' : 'none';
-    document.getElementById('screen-share-btn').style.display = inVoice ? 'inline-flex' : 'none';
-    document.getElementById('voice-ns-wrap').style.display = inVoice ? 'inline-flex' : 'none';
 
     if (!inVoice) {
+      document.getElementById('voice-dropdown-panel').style.display = 'none';
       document.getElementById('voice-mute-btn').textContent = '🔇 Mute';
       document.getElementById('voice-mute-btn').classList.remove('muted');
       document.getElementById('voice-deafen-btn').textContent = '🔇 Deafen';
@@ -2102,23 +2114,6 @@ class HavenApp {
   }
 
   // NS slider is handled directly via the input event listener in _setupUI
-
-  _showLeaderboard() {
-    const modal = document.getElementById('leaderboard-modal');
-    if (!modal) return;
-    const list = document.getElementById('leaderboard-list');
-    const scores = this.highScores?.flappy || [];
-    if (!scores.length) {
-      list.innerHTML = '<p class="muted-text">No scores yet — play Shippy Container!</p>';
-    } else {
-      const rows = scores.slice(0, 20).map((s, i) => {
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-        return `<div class="lb-row"><span class="lb-rank">${medal}</span><span class="lb-name">${this._escapeHtml(s.username)}</span><span class="lb-score">${s.score}</span></div>`;
-      }).join('');
-      list.innerHTML = rows;
-    }
-    modal.style.display = 'flex';
-  }
 
   // ── Screen Share ──────────────────────────────────────
 
@@ -3338,6 +3333,26 @@ class HavenApp {
     this._markReadTimer = setTimeout(() => {
       this.socket.emit('mark-read', { code: this.currentChannel, messageId });
     }, 500);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── Slider Fill Helper ────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+
+  _initSliderFills() {
+    const update = (slider) => {
+      const min = parseFloat(slider.min) || 0;
+      const max = parseFloat(slider.max) || 100;
+      const val = parseFloat(slider.value) || 0;
+      const pct = ((val - min) / (max - min)) * 100;
+      slider.style.setProperty('--fill', pct + '%');
+    };
+    document.querySelectorAll('input[type="range"]').forEach(s => {
+      update(s);
+      s.addEventListener('input', () => update(s));
+    });
+    // Observe future sliders (e.g. settings modal)
+    this._sliderFillUpdate = update;
   }
 }
 

@@ -86,8 +86,13 @@
               <button class="theme-btn" data-theme="nord" title="Nord"><span class="theme-icon">❄</span></button>
               <button class="theme-btn" data-theme="dracula" title="Dracula"><span class="theme-icon">🧛</span></button>
               <button class="theme-btn" data-theme="bloodborne" title="Bloodborne"><span class="theme-icon">🩸</span></button>
+              <button class="theme-btn" data-theme="darksouls" title="Dark Souls"><span class="theme-icon">🔥</span></button>
+              <button class="theme-btn" data-theme="eldenring" title="Elden Ring"><span class="theme-icon">💍</span></button>
               <button class="theme-btn" data-theme="ice" title="Ice"><span class="theme-icon">🧊</span></button>
               <button class="theme-btn" data-theme="abyss" title="Abyss"><span class="theme-icon">🌊</span></button>
+              <button class="theme-btn" data-theme="minecraft" title="Minecraft"><span class="theme-icon">⛏️</span></button>
+              <button class="theme-btn" data-theme="ffx" title="Final Fantasy X"><span class="theme-icon">⚔️</span></button>
+              <button class="theme-btn" data-theme="zelda" title="Zelda"><span class="theme-icon">🗡️</span></button>
               <button class="theme-btn" data-theme="custom" title="Custom"><span class="theme-icon" id="custom-theme-swatch">🎨</span></button>
               <button class="theme-btn" data-theme="rgb" title="RGB"><span class="theme-icon">🌈</span></button>
             </div>
@@ -112,7 +117,6 @@
           <div class="sidebar-bottom-bar">
             <button id="theme-popup-toggle" class="sidebar-bottom-btn" title="Themes">🎨</button>
             <button class="sidebar-bottom-btn" id="play-flappy-btn" title="Shippy Container">🚢</button>
-            <button class="sidebar-bottom-btn" id="leaderboard-btn" title="Leaderboard">🏆</button>
             <div id="voice-bar" class="voice-bar" style="display:none"></div>
           </div>
         </div>
@@ -154,21 +158,22 @@
             <button id="voice-join-btn" class="btn-voice" style="display:none">
               🎤 Join Voice
             </button>
-            <button id="voice-mute-btn" class="btn-voice" style="display:none">
-              🔇 Mute
-            </button>
-            <button id="voice-deafen-btn" class="btn-voice" style="display:none">
-              🔇 Deafen
-            </button>
-            <button id="screen-share-btn" class="btn-voice" style="display:none" title="Share Screen">
-              🖥️ Share
-            </button>
-            <div id="voice-ns-wrap" class="voice-ns-wrap" style="display:none">
-              <label class="ns-label" title="Noise suppression sensitivity">🤫</label>
-              <input type="range" id="voice-ns-slider" class="ns-slider" min="0" max="100" value="10" title="Noise gate: 0 = off, 100 = aggressive">
+            <div class="voice-dropdown" style="position:relative">
+              <button id="voice-dropdown-toggle" class="btn-voice voice-active-btn" style="display:none" title="Voice Controls">
+                🎤 Voice ▾
+              </button>
+              <div id="voice-dropdown-panel" class="voice-dropdown-panel" style="display:none">
+                <button id="voice-mute-btn" class="btn-voice">🔇 Mute</button>
+                <button id="voice-deafen-btn" class="btn-voice">🔇 Deafen</button>
+                <button id="screen-share-btn" class="btn-voice" title="Share Screen">🖥️ Share</button>
+                <div class="voice-ns-wrap">
+                  <label class="ns-label" title="Noise suppression sensitivity">🤫</label>
+                  <input type="range" id="voice-ns-slider" class="ns-slider" min="0" max="100" value="10" title="Noise gate: 0 = off, 100 = aggressive">
+                </div>
+              </div>
             </div>
             <button id="voice-leave-btn" class="btn-voice btn-danger" style="display:none">
-              📞 Leave
+              ✕
             </button>
           </div>
         </header>
@@ -511,19 +516,6 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="close-bans-btn">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Leaderboard Modal -->
-  <div class="modal-overlay" id="leaderboard-modal" style="display:none">
-    <div class="modal modal-leaderboard">
-      <h3>🏆 Shippy Container — Leaderboard</h3>
-      <div id="leaderboard-list" class="leaderboard-list">
-        <p class="muted-text">No scores yet</p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-sm" id="close-leaderboard-btn">Close</button>
       </div>
     </div>
   </div>

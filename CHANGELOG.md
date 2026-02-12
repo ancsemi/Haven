@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.3.8] — 2025-02-16
+
+### Fixed
+- **Leaderboard scoring now persists** — removed `noopener` from the Shippy Container popup so `postMessage` score submissions actually reach the main app. Scores are saved correctly again.
+- **Dracula theme darkened** — replaced grey background values with much darker tones so the theme lives up to its name.
+
+### Added
+- **In-game leaderboard** — the Shippy Container game now shows a live leaderboard panel beside the canvas, updated on launch and after every run. The old sidebar leaderboard button and modal are removed.
+- **High-score announcements** — when a player beats their personal best, a 🏆 status toast is broadcast to the channel.
+- **Voice controls dropdown** — mute, deafen, screen share, and noise suppression are tucked behind a single "🎤 Voice ▾" button; a compact "✕" leave button stays visible. Keeps the header clean.
+- **5 new themes** — Dark Souls 🔥, Elden Ring 💍, Minecraft ⛏️, Final Fantasy X ⚔️, and Legend of Zelda 🗡️ join the theme picker.
+- **Themed slider fills** — all range sliders (volume, noise suppression, stream size) now fill their left portion with accent-colored gradients and glow effects that match the active theme.
+
+---
+
 ## [1.3.7] — 2025-02-15
 
 ### Fixed

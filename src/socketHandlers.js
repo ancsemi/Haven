@@ -1407,6 +1407,16 @@ function setupSocketHandlers(io, db) {
         db.prepare(
           'INSERT OR REPLACE INTO high_scores (user_id, game, score, updated_at) VALUES (?, ?, ?, datetime(\'now\'))'
         ).run(socket.user.id, game, score);
+
+        // Broadcast personal high score to channel
+        if (socket.currentChannel) {
+          io.to(socket.currentChannel).emit('new-high-score', {
+            username: socket.user.username,
+            game,
+            score,
+            previous: current ? current.score : 0
+          });
+        }
       }
 
       // Broadcast updated leaderboard

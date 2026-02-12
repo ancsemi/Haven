@@ -80,22 +80,61 @@
     .plot-bar strong {
       color: var(--accent, #7c5cfc);
     }
+    /* ── Leaderboard Panel ─────────────────────── */
+    .game-bottom { display: flex; gap: 12px; align-items: flex-start; margin-top: 10px; }
+    .game-left { display: flex; flex-direction: column; align-items: center; }
+    .leaderboard-panel {
+      width: 200px;
+      max-height: 360px;
+      overflow-y: auto;
+      background: var(--bg-secondary, #161b22);
+      border: 1px solid var(--border, #30363d);
+      border-radius: 8px;
+      padding: 8px;
+    }
+    .leaderboard-panel h3 {
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 6px;
+      color: var(--accent, #7c5cfc);
+      font-weight: 700;
+    }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 4px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .lb-row:nth-child(odd) { background: var(--bg-primary, #0d1117); }
+    .lb-rank { width: 22px; text-align: center; font-weight: 700; color: var(--accent, #7c5cfc); flex-shrink: 0; }
+    .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary, #e6e6e6); }
+    .lb-score { font-weight: 700; color: var(--accent, #7c5cfc); font-family: monospace; }
   </style>
 </head>
 <body>
   <div class="game-header">
     <button class="back-btn" id="back-btn">← Back to Haven</button>
-    <h1>� Shippy Container</h1>
+    <h1>🚢 Shippy Container</h1>
   </div>
-  <canvas id="game" width="480" height="640"></canvas>
-  <div class="score-bar">
-    Score: <span id="score-display">0</span>
-    &nbsp;|&nbsp;
-    Best: <span id="best-display">0</span>
-  </div>
-  <div class="instructions">Click, tap, or press Space / ↑ to flap</div>
-  <div class="plot-bar">
-    <strong>🚢</strong> Drew's shipment got hung up. Help him find his casual clothes from Albany.
+  <div class="game-bottom">
+    <div class="game-left">
+      <canvas id="game" width="480" height="640"></canvas>
+      <div class="score-bar">
+        Score: <span id="score-display">0</span>
+        &nbsp;|&nbsp;
+        Best: <span id="best-display">0</span>
+      </div>
+      <div class="instructions">Click, tap, or press Space / ↑ to flap</div>
+      <div class="plot-bar">
+        <strong>🚢</strong> Drew's shipment got hung up. Help him find his casual clothes from Albany.
+      </div>
+    </div>
+    <div class="leaderboard-panel" id="leaderboard-panel">
+      <h3>🏆 Leaderboard</h3>
+      <div id="leaderboard-list"><p style="font-size:11px;color:var(--text-muted)">Loading…</p></div>
+    </div>
   </div>
 </body>
 </html>
