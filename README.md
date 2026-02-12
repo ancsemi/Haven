@@ -7,7 +7,7 @@
 > **Your server. Your rules. No cloud. No accounts with Big Tech. No one reading your messages.**
 
 ![Version](https://img.shields.io/badge/version-1.3.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-MIT--NC-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 
@@ -48,7 +48,7 @@ You launch it, your friends connect to your IP address, and you have a private g
 | **Notifications** | 5 notification sounds, per-channel volume controls |
 | **Moderation** | Admin: kick, mute (timed), ban, delete users, delete channels, auto-cleanup |
 | **Security** | Bcrypt passwords, JWT auth, HTTPS/SSL, rate limiting, CSP headers, input validation |
-| **Game** | Built-in Shippy Container mini-game with server-wide leaderboard |
+| **Game** | Shippy Container — Drew's shipment got hung up. Server-wide leaderboard. |
 
 ---
 
@@ -281,9 +281,49 @@ Copy the entire folder somewhere safe to back up everything. The Haven code dire
 
 ---
 
+## GIF Search — Tenor API Setup
+
+Haven has a built-in GIF picker powered by **Tenor**. To enable it you need a free Google Cloud API key.
+
+### 1. Create a Google Cloud Project
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/)
+2. Sign in with any Google account
+3. If you don't have a project yet, create one (any name is fine, e.g. "Haven GIFs")
+
+### 2. Enable the Tenor API
+
+1. In the Google Cloud Console, go to **APIs & Services → Library**
+2. Search for **"Tenor API"** (Tenor API v2)
+3. Click **Enable**
+
+### 3. Create an API Key
+
+1. Go to **APIs & Services → Credentials**
+2. Click **+ Create Credentials → API Key**
+3. A key is generated — copy it
+4. *(Optional)* Click the key name to restrict it:
+   - **Application restrictions:** None (or Websites if you want to lock it to your domain)
+   - **API restrictions:** Restrict to **Tenor API** only
+
+### 4. Add the Key in Haven
+
+1. Log into Haven as your **admin** account
+2. Click the **GIF button** (🎞️) in the message input area
+3. You'll see a setup prompt — paste your API key and save
+4. The key is stored server-side in the database — only admins can see or change it
+
+That's it. All users can now search and send GIFs.
+
+> **Free tier:** Google gives you a generous free quota for Tenor API calls. For a private chat server you'll never come close to the limit.
+
+---
+
 ## License
 
-MIT — free to use, modify, and share.
+MIT-NC — free to use, modify, and share. **Not for resale.** See [LICENSE](LICENSE).
+
+Original project: [github.com/ancsemi/Haven](https://github.com/ancsemi/Haven)
 
 ---
 

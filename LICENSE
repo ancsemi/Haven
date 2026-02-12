@@ -1,16 +1,29 @@
-MIT License
+MIT License — Non-Commercial
 
 Copyright (c) 2026 Haven Contributors
+Original author: ancsemi (https://github.com/ancsemi/Haven)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+to use, copy, modify, merge, publish, and distribute copies of the Software,
+and to permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. The above copyright notice, this permission notice, and the non-commercial
+   restriction below shall be included in all copies or substantial portions
+   of the Software.
+
+2. **Non-Commercial Restriction.** The Software may not be sold, sublicensed
+   for a fee, or otherwise commercially monetized — in whole or in part —
+   without explicit written permission from the original author. This includes,
+   but is not limited to, selling the Software as a product, bundling it into
+   a paid service, or charging users for access to a hosted instance of the
+   Software. Forks, modifications, and self-hosting for personal or community
+   use are encouraged and remain fully permitted.
+
+3. Attribution to the original project (https://github.com/ancsemi/Haven)
+   must be preserved in any distributed copy or derivative work.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
