@@ -84,11 +84,23 @@
             <button class="theme-btn" data-theme="ice" title="Ice"><span class="theme-icon">🧊</span></button>
             <button class="theme-btn" data-theme="abyss" title="Abyss"><span class="theme-icon">🌊</span></button>
             <button class="theme-btn" data-theme="custom" title="Custom"><span class="theme-icon" id="custom-theme-swatch">🎨</span></button>
+            <button class="theme-btn" data-theme="rgb" title="RGB"><span class="theme-icon">🌈</span></button>
           </div>
           <!-- Custom theme triangle picker (hidden until Custom is selected) -->
           <div id="custom-theme-editor" style="display:none">
             <canvas id="custom-hue-bar" width="206" height="18"></canvas>
             <canvas id="custom-triangle" width="206" height="180"></canvas>
+          </div>
+          <!-- RGB theme controls (hidden until RGB is selected) -->
+          <div id="rgb-theme-editor" class="rgb-theme-editor" style="display:none">
+            <label class="rgb-slider-row">
+              <span class="rgb-slider-label">Speed</span>
+              <input type="range" id="rgb-speed-slider" min="1" max="100" value="30" class="slider-sm rgb-slider">
+            </label>
+            <label class="rgb-slider-row">
+              <span class="rgb-slider-label">Vibrancy</span>
+              <input type="range" id="rgb-vibrancy-slider" min="10" max="100" value="75" class="slider-sm rgb-slider">
+            </label>
           </div>
           <button class="btn-game-sidebar" id="play-flappy-btn" title="Play Shippy Container">� Shippy Container</button>          <button class="btn-game-sidebar btn-leaderboard" id="leaderboard-btn" title="View Leaderboard">🏆 Leaderboard</button>
           <!-- Persistent voice bar (shows when in voice) -->
@@ -140,9 +152,10 @@
             <button id="screen-share-btn" class="btn-voice" style="display:none" title="Share Screen">
               🖥️ Share
             </button>
-            <button id="voice-ns-btn" class="btn-voice ns-active" style="display:none" title="Noise Suppression">
-              🤫 NS
-            </button>
+            <div id="voice-ns-wrap" class="voice-ns-wrap" style="display:none">
+              <label class="ns-label" title="Noise suppression sensitivity">🤫</label>
+              <input type="range" id="voice-ns-slider" class="ns-slider" min="0" max="100" value="50" title="Noise gate: 0 = off, 100 = aggressive">
+            </div>
             <button id="voice-leave-btn" class="btn-voice btn-danger" style="display:none">
               📞 Leave
             </button>

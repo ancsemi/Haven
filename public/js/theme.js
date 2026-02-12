@@ -19,28 +19,46 @@ function rgbToHex(r, g, b) { return '#' + [r, g, b].map(c => c.toString(16).padS
 function hsvToHex(h, s, v) { return rgbToHex(...hsvToRgb(h, s, v)); }
 
 // ── Generate full theme palette from a single HSV accent ─
-function generateCustomPalette(h, s, v) {
+// vibrancy: 0-1, controls how much the hue tints backgrounds/text/borders
+function generateCustomPalette(h, s, v, vibrancy) {
+  if (vibrancy === undefined) vibrancy = 0.5;
+  const vib = Math.max(0, Math.min(1, vibrancy));
   const rgb = hsvToRgb(h, s, v);
+
+  // Background saturation scales with vibrancy (0.05 at 0, 0.35 at 1)
+  const bgSat = 0.05 + vib * 0.30;
+  // Border & hover saturation
+  const bdrSat = 0.05 + vib * 0.25;
+  // Text tinting: at high vibrancy, text leans toward the hue
+  const txtS   = vib * 0.12;
+  const txtPri = hsvToHex(h, txtS, 0.90 + vib * 0.05);
+  const txtSec = hsvToHex(h, txtS + 0.02, 0.62 + vib * 0.05);
+  const txtMut = hsvToHex(h, txtS, 0.38 + vib * 0.04);
+
   return {
     '--accent':        hsvToHex(h, s, v),
     '--accent-hover':  hsvToHex(h, Math.max(s - 0.15, 0), Math.min(v + 0.15, 1)),
     '--accent-dim':    hsvToHex(h, Math.min(s + 0.1, 1), Math.max(v - 0.2, 0)),
-    '--accent-glow':   `rgba(${rgb.join(',')}, 0.25)`,
-    '--bg-primary':    hsvToHex(h, 0.15, 0.10),
-    '--bg-secondary':  hsvToHex(h, 0.12, 0.13),
-    '--bg-tertiary':   hsvToHex(h, 0.10, 0.16),
-    '--bg-hover':      hsvToHex(h, 0.10, 0.20),
-    '--bg-active':     hsvToHex(h, 0.10, 0.24),
-    '--bg-input':      hsvToHex(h, 0.15, 0.08),
-    '--bg-card':       hsvToHex(h, 0.12, 0.12),
-    '--text-primary':  '#e2e4f0',
-    '--text-secondary':'#9498b3',
-    '--text-muted':    '#5d6180',
-    '--text-link':     hsvToHex((h + 210) % 360, 0.5, 1),
-    '--border':        hsvToHex(h, 0.12, 0.20),
-    '--border-light':  hsvToHex(h, 0.12, 0.25),
-    '--success': '#43b581', '--danger': '#f04747', '--warning': '#faa61a',
-    '--led-on': '#43b581', '--led-off': '#555', '--led-glow': 'rgba(67,181,129,0.5)',
+    '--accent-glow':   `rgba(${rgb.join(',')}, ${(0.15 + vib * 0.20).toFixed(2)})`,
+    '--bg-primary':    hsvToHex(h, bgSat, 0.07 + vib * 0.03),
+    '--bg-secondary':  hsvToHex(h, bgSat * 0.85, 0.09 + vib * 0.04),
+    '--bg-tertiary':   hsvToHex(h, bgSat * 0.7, 0.12 + vib * 0.04),
+    '--bg-hover':      hsvToHex(h, bgSat * 0.7, 0.15 + vib * 0.05),
+    '--bg-active':     hsvToHex(h, bgSat * 0.7, 0.18 + vib * 0.06),
+    '--bg-input':      hsvToHex(h, bgSat, 0.05 + vib * 0.03),
+    '--bg-card':       hsvToHex(h, bgSat * 0.85, 0.08 + vib * 0.04),
+    '--text-primary':  txtPri,
+    '--text-secondary': txtSec,
+    '--text-muted':    txtMut,
+    '--text-link':     hsvToHex((h + 180) % 360, 0.5 + vib * 0.2, 0.95),
+    '--border':        hsvToHex(h, bdrSat, 0.16 + vib * 0.06),
+    '--border-light':  hsvToHex(h, bdrSat, 0.21 + vib * 0.06),
+    '--success':       hsvToHex((h + 140) % 360, 0.55, 0.72),
+    '--danger':        hsvToHex((h + 350) % 360, 0.70, 0.94),
+    '--warning':       hsvToHex((h + 50) % 360, 0.75, 0.94),
+    '--led-on':        hsvToHex((h + 140) % 360, 0.55, 0.72),
+    '--led-off':       '#555',
+    '--led-glow':      `rgba(${hsvToRgb((h + 140) % 360, 0.55, 0.72).join(',')}, 0.5)`,
   };
 }
 
@@ -56,6 +74,78 @@ function clearCustomVars() {
     '--text-link','--border','--border-light','--success','--danger','--warning',
     '--led-on','--led-off','--led-glow'];
   keys.forEach(k => document.documentElement.style.removeProperty(k));
+}
+
+// ═══════════════════════════════════════════════════════════
+// RGB CYCLING THEME
+// ═══════════════════════════════════════════════════════════
+let _rgbInterval = null;
+let _rgbHue = 0;
+
+function startRgbCycle() {
+  stopRgbCycle();
+  const saved = JSON.parse(localStorage.getItem('haven_rgb_settings') || 'null');
+  let speed    = saved ? saved.speed    : 30;   // 1-100
+  let vibrancy = saved ? saved.vibrancy : 75;   // 10-100
+
+  // Update interval: speed 1 = 120ms, speed 100 = 8ms — maps to visual smoothness
+  function getInterval() { return Math.round(120 - (speed / 100) * 112); }
+
+  _rgbInterval = setInterval(() => {
+    _rgbHue = (_rgbHue + 0.4) % 360;
+    const vib = vibrancy / 100;
+    const palette = generateCustomPalette(_rgbHue, 0.75, 0.95, vib);
+    applyCustomVars(palette);
+  }, getInterval());
+
+  // Expose updaters so sliders can adjust live
+  startRgbCycle._setSpeed = (v) => {
+    speed = v;
+    localStorage.setItem('haven_rgb_settings', JSON.stringify({ speed, vibrancy }));
+    // Restart with new interval
+    if (_rgbInterval) { clearInterval(_rgbInterval); }
+    _rgbInterval = setInterval(() => {
+      _rgbHue = (_rgbHue + 0.4) % 360;
+      const vib = vibrancy / 100;
+      const palette = generateCustomPalette(_rgbHue, 0.75, 0.95, vib);
+      applyCustomVars(palette);
+    }, getInterval());
+  };
+  startRgbCycle._setVibrancy = (v) => {
+    vibrancy = v;
+    localStorage.setItem('haven_rgb_settings', JSON.stringify({ speed, vibrancy }));
+  };
+}
+
+function stopRgbCycle() {
+  if (_rgbInterval) { clearInterval(_rgbInterval); _rgbInterval = null; }
+  startRgbCycle._setSpeed = null;
+  startRgbCycle._setVibrancy = null;
+}
+
+function initRgbEditor() {
+  const editor = document.getElementById('rgb-theme-editor');
+  if (!editor) return;
+
+  const speedSlider    = document.getElementById('rgb-speed-slider');
+  const vibrancySlider = document.getElementById('rgb-vibrancy-slider');
+  if (!speedSlider || !vibrancySlider) return;
+
+  const saved = JSON.parse(localStorage.getItem('haven_rgb_settings') || 'null');
+  if (saved) {
+    speedSlider.value    = saved.speed;
+    vibrancySlider.value = saved.vibrancy;
+  }
+
+  speedSlider.addEventListener('input', () => {
+    if (startRgbCycle._setSpeed) startRgbCycle._setSpeed(parseInt(speedSlider.value, 10));
+  });
+  vibrancySlider.addEventListener('input', () => {
+    if (startRgbCycle._setVibrancy) startRgbCycle._setVibrancy(parseInt(vibrancySlider.value, 10));
+  });
+
+  editor._show = () => { editor.style.display = 'block'; };
+  editor._hide = () => { editor.style.display = 'none'; };
 }
 
 // ── Barycentric maths for the triangle ──────────────────
@@ -83,7 +173,6 @@ function drawHueBar(ctx, w, h, selectedHue) {
 
 // ── Draw SV triangle on canvas ──────────────────────────
 function drawTriangle(ctx, w, h, hue, selS, selV) {
-  // Triangle vertices: A=top (pure hue), B=bottom-left (white), C=bottom-right (black)
   const pad = 8;
   const ax = w / 2, ay = pad;
   const bx = pad,   by = h - pad;
@@ -108,17 +197,13 @@ function drawTriangle(ctx, w, h, hue, selS, selV) {
   }
   ctx.putImageData(img, 0, 0);
 
-  // Draw triangle border
   ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(cx, cy); ctx.closePath(); ctx.stroke();
 
-  // Compute selected point from S, V
-  // S = u/(u+v), V = u+v => u = S*V, v = (1-S)*V, w = 1-V
   const su = selS * selV, sv = (1 - selS) * selV, sw = 1 - selV;
   const px = su * ax + sv * bx + sw * cx;
   const py = su * ay + sv * by + sw * cy;
 
-  // Draw indicator circle
   ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
   ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2);
@@ -137,7 +222,6 @@ function initCustomThemeEditor() {
   const hueCtx = hueCanvas.getContext('2d');
   const triCtx = triCanvas.getContext('2d');
 
-  // Load saved values or defaults (purple)
   const saved = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
   let hue = saved ? saved.h : 260;
   let sat = saved ? saved.s : 0.75;
@@ -150,7 +234,6 @@ function initCustomThemeEditor() {
     const palette = generateCustomPalette(hue, sat, val);
     applyCustomVars(palette);
     localStorage.setItem('haven_custom_hsv', JSON.stringify({ h: hue, s: sat, v: val }));
-    // Update the custom theme button swatch
     const swatch = document.getElementById('custom-theme-swatch');
     if (swatch) swatch.style.background = palette['--accent'];
   }
@@ -180,13 +263,10 @@ function initCustomThemeEditor() {
     const r = triCanvas.getBoundingClientRect();
     const ex = (e.clientX ?? e.touches[0].clientX) - r.left;
     const ey = (e.clientY ?? e.touches[0].clientY) - r.top;
-    // Scale to canvas coords
     const px = ex * (tw / r.width), py = ey * (th / r.height);
     const bc = bary(px, py, ax, ay, bx, by, cx, cy);
-    // Clamp to triangle
     let u = Math.max(0, bc.u), v = Math.max(0, bc.v), w = Math.max(0, bc.w);
     const sum = u + v + w; u /= sum; v /= sum; w /= sum;
-    // Extract S, V from barycentric
     val = Math.max(0.01, u + v);
     sat = val > 0 ? u / val : 0;
     render();
@@ -198,10 +278,8 @@ function initCustomThemeEditor() {
   triCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); triFromEvent(e); });
   triCanvas.addEventListener('touchmove',  (e) => { e.preventDefault(); triFromEvent(e); });
 
-  // Initial render
   render();
 
-  // Expose show/hide helpers
   editor._show = () => { editor.style.display = 'block'; render(); };
   editor._hide = () => { editor.style.display = 'none'; };
 }
@@ -214,12 +292,17 @@ function initThemeSwitcher(containerId, socket) {
   if (!container) return;
 
   const saved = localStorage.getItem('haven_theme') || 'haven';
-  const editor = document.getElementById('custom-theme-editor');
+  const customEditor = document.getElementById('custom-theme-editor');
+  const rgbEditor    = document.getElementById('rgb-theme-editor');
 
   // If custom was saved, apply vars immediately
   if (saved === 'custom') {
     const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
     if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v));
+  }
+  // If rgb was saved, start cycling
+  if (saved === 'rgb') {
+    startRgbCycle();
   }
 
   // Set active button
@@ -231,34 +314,45 @@ function initThemeSwitcher(containerId, socket) {
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('haven_theme', theme);
 
-      // Update active state on ALL theme selectors on the page
       document.querySelectorAll('.theme-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.theme === theme);
       });
 
-      // Persist to server if socket available
       if (socket && socket.connected) {
         socket.emit('set-preference', { key: 'theme', value: theme });
       }
 
-      // Toggle custom theme editor
+      // Stop RGB cycle whenever switching away
+      stopRgbCycle();
+
       if (theme === 'custom') {
         const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
         if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v));
-        if (editor && editor._show) editor._show();
+        if (customEditor && customEditor._show) customEditor._show();
+        if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
+      } else if (theme === 'rgb') {
+        clearCustomVars();
+        startRgbCycle();
+        if (customEditor && customEditor._hide) customEditor._hide();
+        if (rgbEditor && rgbEditor._show) rgbEditor._show();
       } else {
         clearCustomVars();
-        if (editor && editor._hide) editor._hide();
+        if (customEditor && customEditor._hide) customEditor._hide();
+        if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
       }
     });
   });
 
-  // Initialise the custom editor canvases
+  // Initialise editors
   initCustomThemeEditor();
+  initRgbEditor();
 
-  // Show editor on load if custom was saved
-  if (saved === 'custom' && editor && editor._show) {
-    setTimeout(() => editor._show(), 50);
+  // Show correct editor on load
+  if (saved === 'custom' && customEditor && customEditor._show) {
+    setTimeout(() => customEditor._show(), 50);
+  }
+  if (saved === 'rgb' && rgbEditor && rgbEditor._show) {
+    setTimeout(() => rgbEditor._show(), 50);
   }
 }
 
@@ -269,14 +363,22 @@ function applyThemeFromServer(theme) {
   document.querySelectorAll('.theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === theme);
   });
+  stopRgbCycle();
   if (theme === 'custom') {
     const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
     if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v));
     const editor = document.getElementById('custom-theme-editor');
     if (editor && editor._show) editor._show();
+  } else if (theme === 'rgb') {
+    clearCustomVars();
+    startRgbCycle();
+    const editor = document.getElementById('rgb-theme-editor');
+    if (editor && editor._show) editor._show();
   } else {
     clearCustomVars();
-    const editor = document.getElementById('custom-theme-editor');
-    if (editor && editor._hide) editor._hide();
+    const customEditor = document.getElementById('custom-theme-editor');
+    if (customEditor && customEditor._hide) customEditor._hide();
+    const rgbEditor = document.getElementById('rgb-theme-editor');
+    if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
   }
 }

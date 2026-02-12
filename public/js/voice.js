@@ -14,7 +14,7 @@ class VoiceManager {
     this.isMuted = false;
     this.isDeafened = false;
     this.inVoice = false;
-    this.noiseSuppression = true;   // Noise gate enabled by default
+    this.noiseSensitivity = 50;     // Noise gate sensitivity 0 (off) to 100 (aggressive)
     this.audioCtx = null;           // Web Audio context for volume boost
     this.gainNodes = new Map();     // userId → GainNode
     this.onScreenStream = null;     // callback(userId, stream|null) — set by app.js
@@ -458,13 +458,14 @@ class VoiceManager {
 
   // ── Noise Gate ───────────────────────────────────────────
 
-  toggleNoiseSuppression() {
-    this.noiseSuppression = !this.noiseSuppression;
-    // Immediately open gate if disabling
-    if (!this.noiseSuppression && this._noiseGateGain) {
+  setNoiseSensitivity(value) {
+    // value: 0 (off / gate open) → 100 (aggressive gating)
+    this.noiseSensitivity = Math.max(0, Math.min(100, value));
+    // Immediately open gate if set to 0
+    if (this.noiseSensitivity === 0 && this._noiseGateGain) {
       this._noiseGateGain.gain.setTargetAtTime(1, this.audioCtx.currentTime, 0.01);
     }
-    return this.noiseSuppression;
+    return this.noiseSensitivity;
   }
 
   _startNoiseGate() {
@@ -474,21 +475,22 @@ class VoiceManager {
     if (!analyser || !gain) return;
 
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    const THRESHOLD = 12;    // Noise floor — below this = silence
     const ATTACK = 0.015;    // Gate opens fast (seconds, ~15ms)
     const RELEASE = 0.12;    // Gate closes gently (seconds, ~120ms)
 
     this._noiseGateInterval = setInterval(() => {
-      if (!this.noiseSuppression) {
+      if (this.noiseSensitivity === 0) {
         gain.gain.value = 1;
         return;
       }
+      // Map sensitivity 1-100 → threshold 2-40
+      const threshold = 2 + (this.noiseSensitivity / 100) * 38;
       analyser.getByteFrequencyData(dataArray);
       let sum = 0;
       for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
       const avg = sum / dataArray.length;
 
-      if (avg > THRESHOLD) {
+      if (avg > threshold) {
         gain.gain.setTargetAtTime(1, this.audioCtx.currentTime, ATTACK);
       } else {
         gain.gain.setTargetAtTime(0, this.audioCtx.currentTime, RELEASE);

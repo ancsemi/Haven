@@ -721,6 +721,17 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 .theme-btn[data-theme="ice"]    { background: #0a1520; color: #00d4ff; }
 .theme-btn[data-theme="abyss"]  { background: #040810; color: #1a5aff; }
 .theme-btn[data-theme="custom"] { background: linear-gradient(135deg, #ff2d6f, #faa61a, #43b581, #7c5cfc); color: #fff; }
+.theme-btn[data-theme="rgb"] {
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+  background-size: 200% 100%;
+  animation: rgb-btn-cycle 3s linear infinite;
+  color: #fff;
+  text-shadow: 0 0 2px rgba(0,0,0,0.6);
+}
+@keyframes rgb-btn-cycle {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
 
 .theme-btn .theme-icon { pointer-events: none; }
 
@@ -746,6 +757,36 @@ input, textarea { font-family: inherit; outline: none; border: none; }
   cursor: crosshair;
   display: block;
   border-radius: var(--radius-sm);
+}
+
+/* ─── RGB Theme Editor ───────────────────────── */
+.rgb-theme-editor {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.rgb-slider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  cursor: default;
+}
+.rgb-slider-row:last-child { margin-bottom: 0; }
+.rgb-slider-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 50px;
+}
+.rgb-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 
@@ -1103,7 +1144,27 @@ input, textarea { font-family: inherit; outline: none; border: none; }
 .btn-voice.btn-danger { background: var(--danger); color: white; }
 .btn-voice.btn-danger:hover { background: #d93636; }
 .btn-voice.muted { background: var(--warning); color: #1a1a2e; }
-.btn-voice.ns-active { background: var(--success); color: white; }
+
+/* ── Noise Suppression Slider ───────────────── */
+.voice-ns-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+}
+.ns-label {
+  font-size: 14px;
+  line-height: 1;
+  cursor: default;
+}
+.ns-slider {
+  width: 60px;
+  height: 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 /* ── Welcome Screen ────────────────────────────────────── */
 

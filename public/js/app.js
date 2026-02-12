@@ -591,7 +591,11 @@ class HavenApp {
     document.getElementById('voice-leave-btn').addEventListener('click', () => this._leaveVoice());
     document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
     document.getElementById('screen-share-close').addEventListener('click', () => this._hideScreenShare());
-    document.getElementById('voice-ns-btn').addEventListener('click', () => this._toggleNoiseSuppression());
+    document.getElementById('voice-ns-slider').addEventListener('input', (e) => {
+      if (this.voice && this.voice.inVoice) {
+        this.voice.setNoiseSensitivity(parseInt(e.target.value, 10));
+      }
+    });
 
     // Leaderboard
     document.getElementById('leaderboard-btn')?.addEventListener('click', () => this._showLeaderboard());
@@ -1349,7 +1353,7 @@ class HavenApp {
       document.getElementById('voice-deafen-btn').style.display = 'none';
       document.getElementById('voice-leave-btn').style.display = 'none';
       document.getElementById('screen-share-btn').style.display = 'none';
-      document.getElementById('voice-ns-btn').style.display = 'none';
+      document.getElementById('voice-ns-wrap').style.display = 'none';
     }
     document.getElementById('search-toggle-btn').style.display = 'inline-flex';
     document.getElementById('pinned-toggle-btn').style.display = 'inline-flex';
@@ -2022,7 +2026,7 @@ class HavenApp {
     document.getElementById('voice-deafen-btn').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('voice-leave-btn').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('screen-share-btn').style.display = inVoice ? 'inline-flex' : 'none';
-    document.getElementById('voice-ns-btn').style.display = inVoice ? 'inline-flex' : 'none';
+    document.getElementById('voice-ns-wrap').style.display = inVoice ? 'inline-flex' : 'none';
 
     if (!inVoice) {
       document.getElementById('voice-mute-btn').textContent = '🔇 Mute';
@@ -2031,8 +2035,7 @@ class HavenApp {
       document.getElementById('voice-deafen-btn').classList.remove('muted');
       document.getElementById('screen-share-btn').textContent = '🖥️ Share';
       document.getElementById('screen-share-btn').classList.remove('sharing');
-      document.getElementById('voice-ns-btn').textContent = '🤫 NS';
-      document.getElementById('voice-ns-btn').classList.add('ns-active');
+      document.getElementById('voice-ns-slider').value = 50;
       this._hideScreenShare();
     }
   }
@@ -2062,20 +2065,7 @@ class HavenApp {
     }
   }
 
-  _toggleNoiseSuppression() {
-    if (!this.voice || !this.voice.inVoice) return;
-    const enabled = this.voice.toggleNoiseSuppression();
-    const btn = document.getElementById('voice-ns-btn');
-    if (enabled) {
-      btn.textContent = '🤫 NS';
-      btn.classList.add('ns-active');
-      this._showToast('Noise suppression ON', 'success');
-    } else {
-      btn.textContent = '🤫 NS';
-      btn.classList.remove('ns-active');
-      this._showToast('Noise suppression OFF', 'info');
-    }
-  }
+  // NS slider is handled directly via the input event listener in _setupUI
 
   _showLeaderboard() {
     const modal = document.getElementById('leaderboard-modal');

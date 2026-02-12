@@ -16,22 +16,29 @@
         }
         function _hex(h,s,v){var c=_hsvRgb(h,s,v);return'#'+c.map(function(x){return x.toString(16).padStart(2,'0')}).join('')}
         var el = document.documentElement;
+        var vib = 0.5; // default vibrancy
+        var bgSat = 0.05 + vib * 0.30;
+        var bdrSat = 0.05 + vib * 0.25;
         el.style.setProperty('--accent', _hex(h,s,v));
         el.style.setProperty('--accent-hover', _hex(h,Math.max(s-.15,0),Math.min(v+.15,1)));
         el.style.setProperty('--accent-dim', _hex(h,Math.min(s+.1,1),Math.max(v-.2,0)));
         var rgb=_hsvRgb(h,s,v);
         el.style.setProperty('--accent-glow', 'rgba('+rgb.join(',')+',0.25)');
-        el.style.setProperty('--bg-primary', _hex(h,.15,.10));
-        el.style.setProperty('--bg-secondary', _hex(h,.12,.13));
-        el.style.setProperty('--bg-tertiary', _hex(h,.10,.16));
-        el.style.setProperty('--bg-hover', _hex(h,.10,.20));
-        el.style.setProperty('--bg-active', _hex(h,.10,.24));
-        el.style.setProperty('--bg-input', _hex(h,.15,.08));
-        el.style.setProperty('--bg-card', _hex(h,.12,.12));
-        el.style.setProperty('--border', _hex(h,.12,.20));
-        el.style.setProperty('--border-light', _hex(h,.12,.25));
-        el.style.setProperty('--text-link', _hex((h+210)%360,.5,1));
+        el.style.setProperty('--bg-primary', _hex(h,bgSat,0.07+vib*0.03));
+        el.style.setProperty('--bg-secondary', _hex(h,bgSat*0.85,0.09+vib*0.04));
+        el.style.setProperty('--bg-tertiary', _hex(h,bgSat*0.7,0.12+vib*0.04));
+        el.style.setProperty('--bg-hover', _hex(h,bgSat*0.7,0.15+vib*0.05));
+        el.style.setProperty('--bg-active', _hex(h,bgSat*0.7,0.18+vib*0.06));
+        el.style.setProperty('--bg-input', _hex(h,bgSat,0.05+vib*0.03));
+        el.style.setProperty('--bg-card', _hex(h,bgSat*0.85,0.08+vib*0.04));
+        el.style.setProperty('--border', _hex(h,bdrSat,0.16+vib*0.06));
+        el.style.setProperty('--border-light', _hex(h,bdrSat,0.21+vib*0.06));
+        el.style.setProperty('--text-link', _hex((h+180)%360,.7,.95));
       }
     } catch(e) {}
+  }
+  // RGB theme: set a neutral dark bg immediately; the cycle starts once theme.js loads
+  if (t === 'rgb') {
+    document.documentElement.setAttribute('data-theme', 'haven');
   }
 })();
