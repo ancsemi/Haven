@@ -2462,9 +2462,12 @@ class HavenApp {
     // Avatar: image or letter fallback
     const color = this._getUserColor(u.username);
     const initial = u.username.charAt(0).toUpperCase();
-    const avatarHtml = u.avatar
+    const avatarImg = u.avatar
       ? `<img class="user-item-avatar user-item-avatar-img" src="${this._escapeHtml(u.avatar)}" alt="${initial}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="user-item-avatar" style="background-color:${color};display:none">${initial}</div>`
       : `<div class="user-item-avatar" style="background-color:${color}">${initial}</div>`;
+
+    // Wrap avatar + status dot together (Discord-style overlay)
+    const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;
 
     const dmBtn = u.id !== this.user.id
       ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="Direct Message">💬</button>`
@@ -2481,7 +2484,6 @@ class HavenApp {
     return `
       <div class="user-item${onlineClass}">
         ${avatarHtml}
-        <span class="user-dot${statusClass ? ' ' + statusClass : ''}"></span>
         <span class="user-item-name">${this._escapeHtml(u.username)}</span>
         ${statusTextHtml}
         ${scoreBadge}

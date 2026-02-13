@@ -1651,6 +1651,42 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 }
 
 /* User list avatars */
+/* Discord-style avatar wrapper with overlaid status dot */
+.user-avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.user-status-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--success);
+  border: 2px solid var(--bg-secondary);
+  box-sizing: border-box;
+}
+
+.user-status-dot.away {
+  background: #faa61a;
+}
+
+.user-status-dot.dnd {
+  background: var(--danger);
+}
+
+.user-status-dot.invisible {
+  background: var(--text-muted);
+}
+
+.user-item.offline .user-status-dot {
+  background: var(--text-muted);
+}
+
 .user-item-avatar {
   width: 24px;
   height: 24px;
@@ -2461,7 +2497,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   font-size: 13px;
 }
 
-/* GIF setup guide (shown when Tenor key not configured) */
+/* GIF setup guide (shown when GIPHY key not configured) */
 .gif-setup-guide {
   grid-column: 1 / -1;
   padding: 16px 20px;
@@ -3616,6 +3652,8 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   .message-avatar { width: 30px; height: 30px; font-size: 12px; }
   .message-avatar-img { width: 30px; height: 30px; }
   .user-item-avatar, .user-item-avatar-img { width: 20px; height: 20px; font-size: 9px; }
+  .user-avatar-wrapper { width: 20px; height: 20px; }
+  .user-status-dot { width: 8px; height: 8px; bottom: -2px; right: -2px; }
   .message-author { font-size: 13px; }
   .message-content { font-size: 14px; line-height: 1.45; word-break: break-word; }
   .message-time { font-size: 10px; }
@@ -3768,6 +3806,8 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   .message-avatar { width: 26px; height: 26px; font-size: 11px; }
   .message-avatar-img { width: 26px; height: 26px; }
   .user-item-avatar, .user-item-avatar-img { width: 18px; height: 18px; font-size: 8px; }
+  .user-avatar-wrapper { width: 18px; height: 18px; }
+  .user-status-dot { width: 7px; height: 7px; bottom: -2px; right: -2px; }
   .message-compact { padding-left: 40px; }
   .message-row { gap: 6px; }
   .message-content { font-size: 13px; }
