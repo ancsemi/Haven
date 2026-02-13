@@ -119,18 +119,19 @@
     .lb-toggle-btn {
       display: none;
       position: fixed;
-      top: 10px;
-      right: 10px;
+      bottom: 14px;
+      right: 14px;
       z-index: 1001;
       background: var(--accent, #7c5cfc);
       color: #fff;
       border: none;
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      padding: 8px 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      font-size: 20px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      line-height: 1;
     }
     .lb-toggle-btn:hover { filter: brightness(1.15); }
     /* Mobile leaderboard overlay backdrop */
@@ -202,7 +203,7 @@
   </style>
 </head>
 <body>
-  <button class="lb-toggle-btn" id="lb-toggle-btn">🏆 Leaderboard</button>
+  <button class="lb-toggle-btn" id="lb-toggle-btn" title="Leaderboard">🏆</button>
   <div class="lb-backdrop" id="lb-backdrop"></div>
   <div class="game-header">
     <button class="back-btn" id="back-btn">← Back to Haven</button>
@@ -216,7 +217,7 @@
         &nbsp;|&nbsp;
         Best: <span id="best-display">0</span>
       </div>
-      <div class="instructions">Click, tap, or press Space / ↑ to flap</div>
+      <div class="instructions">Click, tap, or press Space / ↑ to jump</div>
       <div class="plot-bar">
         <strong>🚢</strong> Drew's shipment got hung up. Help him find his casual clothes from Albany.
       </div>
