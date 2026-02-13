@@ -169,6 +169,12 @@ class HavenApp {
         this.socket.emit('enter-channel', { code: this.currentChannel });
         this.socket.emit('get-messages', { code: this.currentChannel });
         this.socket.emit('get-channel-members', { code: this.currentChannel });
+        // Request fresh voice list for this channel
+        this.socket.emit('request-voice-users', { code: this.currentChannel });
+      }
+      // Re-join voice if we were in voice before reconnect
+      if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
+        this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
       }
     });
 
@@ -1832,11 +1838,12 @@ class HavenApp {
       }
     }, 5000);
 
-    // Periodic member list refresh every 30s to keep sidebar in sync
+    // Periodic member list + voice refresh every 30s to keep sidebar in sync
     if (this._memberRefreshInterval) clearInterval(this._memberRefreshInterval);
     this._memberRefreshInterval = setInterval(() => {
       if (this.socket && this.socket.connected && this.currentChannel) {
         this.socket.emit('request-online-users', { code: this.currentChannel });
+        this.socket.emit('request-voice-users', { code: this.currentChannel });
       }
     }, 30000);
 

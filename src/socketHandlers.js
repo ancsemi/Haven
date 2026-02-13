@@ -883,6 +883,70 @@ function setupSocketHandlers(io, db) {
       emitOnlineUsers(code);
     });
 
+    // On-demand voice user list fetch — client can request at any time
+    socket.on('request-voice-users', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const room = voiceUsers.get(code);
+      const users = room
+        ? Array.from(room.values()).map(u => ({ id: u.id, username: u.username }))
+        : [];
+      socket.emit('voice-users-update', { channelCode: code, users });
+    });
+
+    // Voice re-join after socket reconnect — server lost state during disconnect
+    socket.on('voice-rejoin', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+
+      // Verify channel membership
+      const vch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      if (!vch) return;
+      const vMember = db.prepare(
+        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+      ).get(vch.id, socket.user.id);
+      if (!vMember) return;
+
+      // Leave any other voice rooms first
+      for (const [prevCode, room] of voiceUsers) {
+        if (room.has(socket.user.id) && prevCode !== code) {
+          handleVoiceLeave(socket, prevCode);
+        }
+      }
+
+      if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
+
+      // Re-join the voice socket.io room
+      socket.join(`voice:${code}`);
+
+      // Re-add to voice users (update socketId to new socket)
+      voiceUsers.get(code).set(socket.user.id, {
+        id: socket.user.id,
+        username: socket.user.displayName,
+        socketId: socket.id
+      });
+
+      // Tell existing peers about the re-joined user so they can re-establish WebRTC
+      const existingUsers = Array.from(voiceUsers.get(code).values())
+        .filter(u => u.id !== socket.user.id);
+
+      socket.emit('voice-existing-users', {
+        channelCode: code,
+        users: existingUsers.map(u => ({ id: u.id, username: u.username }))
+      });
+
+      existingUsers.forEach(u => {
+        io.to(u.socketId).emit('voice-user-joined', {
+          channelCode: code,
+          user: { id: socket.user.id, username: socket.user.displayName }
+        });
+      });
+
+      broadcastVoiceUsers(code);
+    });
+
     socket.on('get-channel-members', (data) => {
       if (!data || typeof data !== 'object') return;
       const code = typeof data.code === 'string' ? data.code.trim() : '';
@@ -1829,24 +1893,38 @@ function setupSocketHandlers(io, db) {
       if (!socket.user) return; // safety guard
       console.log(`❌ ${socket.user.username} disconnected`);
 
-      // Remove from channel tracking
+      // Collect channels this user was actually in before removing
+      const affectedChannels = new Set();
       for (const [code, users] of channelUsers) {
         if (users.has(socket.user.id)) {
-          users.delete(socket.user.id);
+          // Only remove if no other socket from same user is still connected
+          let otherSocketAlive = false;
+          for (const [, s] of io.of('/').sockets) {
+            if (s.user && s.user.id === socket.user.id && s.id !== socket.id) {
+              // Another socket for same user exists — update socketId instead of removing
+              users.set(socket.user.id, { ...users.get(socket.user.id), socketId: s.id });
+              otherSocketAlive = true;
+              break;
+            }
+          }
+          if (!otherSocketAlive) {
+            users.delete(socket.user.id);
+          }
+          affectedChannels.add(code);
         }
       }
 
-      // Broadcast updated online list to ALL active channels
-      const rooms = io.of('/').adapter.rooms;
-      for (const [roomName] of rooms) {
-        if (roomName.startsWith('channel:')) {
-          emitOnlineUsers(roomName.slice(8));
-        }
+      // Only broadcast to channels the user was actually in
+      for (const code of affectedChannels) {
+        emitOnlineUsers(code);
       }
 
-      // Remove from all voice channels
-      for (const [code] of voiceUsers) {
-        handleVoiceLeave(socket, code);
+      // Remove from voice channels — only if this was the socket in the voice room
+      for (const [code, room] of voiceUsers) {
+        const voiceEntry = room.get(socket.user.id);
+        if (voiceEntry && voiceEntry.socketId === socket.id) {
+          handleVoiceLeave(socket, code);
+        }
       }
     });
 

@@ -4842,18 +4842,27 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   filter: brightness(1.2);
 }
 
-/* Dim tile when popped out */
-.screen-share-tile.stream-popped-out video { opacity: 0.4; }
+/* Collapse tile when popped out — free up Haven space */
+.screen-share-tile.stream-popped-out {
+  height: 28px !important;
+  min-height: 0 !important;
+  overflow: hidden;
+  flex: none !important;
+}
+.screen-share-tile.stream-popped-out video { display: none; }
+.screen-share-tile.stream-popped-out .stream-controls { display: none; }
 .screen-share-tile.stream-popped-out::after {
-  content: 'Popped Out';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: rgba(255,255,255,0.6);
-  font-size: 12px;
-  font-weight: 600;
-  pointer-events: none;
+  content: '⧉ Popped out — click to restore';
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 28px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--bg-tertiary);
 }
 
 /* ═══════════════════════════════════════════════════════════
