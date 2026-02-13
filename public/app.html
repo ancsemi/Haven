@@ -119,6 +119,13 @@
                 <input type="range" id="rgb-vibrancy-slider" min="10" max="100" value="75" class="slider-sm rgb-slider">
               </label>
             </div>
+            <!-- Effect speed slider (dynamic-effect themes) -->
+            <div id="effect-speed-editor" class="rgb-theme-editor" style="display:none">
+              <label class="rgb-slider-row">
+                <span class="rgb-slider-label">Effect Speed</span>
+                <input type="range" id="effect-speed-slider" min="10" max="200" value="100" class="slider-sm rgb-slider">
+              </label>
+            </div>
           </div>
           <!-- Bottom bar -->
           <div class="sidebar-bottom-bar">
@@ -149,13 +156,6 @@
           <div class="header-left-actions">
             <button id="search-toggle-btn" class="icon-btn small" title="Search messages (Ctrl+F)" style="display:none">🔍</button>
             <button id="pinned-toggle-btn" class="icon-btn small" title="Pinned messages" style="display:none">📌</button>
-            <!-- Channel settings gear (contains delete) -->
-            <div class="channel-settings-wrap" id="channel-settings-wrap" style="display:none;position:relative">
-              <button id="channel-settings-btn" class="icon-btn small" title="Channel settings">⚙️</button>
-              <div id="channel-settings-dropdown" class="channel-settings-dropdown" style="display:none">
-                <button id="delete-channel-btn" class="channel-settings-item danger">🗑️ Delete Channel</button>
-              </div>
-            </div>
             <div class="search-container" id="search-container" style="display:none">
               <input type="text" id="search-input" class="search-input" placeholder="Search messages..." maxlength="100">
               <button id="search-close-btn" class="icon-btn small" title="Close search">&times;</button>
@@ -651,6 +651,16 @@
         <button class="btn-sm btn-accent" id="share-music-btn">Share with Channel</button>
       </div>
     </div>
+  </div>
+
+  <!-- Channel context menu (appears on "..." hover button) -->
+  <div id="channel-ctx-menu" class="channel-ctx-menu" style="display:none">
+    <button class="channel-ctx-item" data-action="mute">🔔 Mute Channel</button>
+    <hr class="channel-ctx-sep">
+    <button class="channel-ctx-item admin-only" data-action="toggle-streams">🖥️ Toggle Streams</button>
+    <button class="channel-ctx-item admin-only" data-action="toggle-music">🎵 Toggle Music</button>
+    <hr class="channel-ctx-sep admin-only">
+    <button class="channel-ctx-item admin-only danger" data-action="delete">🗑️ Delete Channel</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

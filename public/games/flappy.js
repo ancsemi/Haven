@@ -247,6 +247,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ── Auth token from URL hash (for REST API fallback) ──
+  const _hashParams = new URLSearchParams(location.hash.replace('#', ''));
+  const _authToken = _hashParams.get('token') || localStorage.getItem('haven_token') || '';
+  const _useRest = !window.opener; // mobile browsers null-out opener
+
   function die() {
     state = 'dead';
     if (score > best) {
@@ -254,22 +259,40 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('haven_shippy_best', String(best));
       document.getElementById('best-display').textContent = best;
     }
-    try {
-      if (window.opener) {
-        window.opener.postMessage({ type: 'flappy-score', score: score }, '*');
+
+    if (_useRest) {
+      // Mobile / no opener — submit via REST and fetch leaderboard
+      if (_authToken && score > 0) {
+        fetch('/api/high-scores', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _authToken },
+          body: JSON.stringify({ game: 'flappy', score })
+        }).then(r => r.json()).then(d => renderLeaderboard(d.leaderboard)).catch(() => {});
+      } else {
+        requestLeaderboard();
       }
-    } catch { /* cross-origin or closed */ }
-    // Refresh leaderboard after each death
-    requestLeaderboard();
+    } else {
+      try { window.opener.postMessage({ type: 'flappy-score', score: score }, '*'); } catch {}
+      requestLeaderboard();
+    }
   }
 
-  // ── Leaderboard via postMessage ───────────────────────
+  // ── Leaderboard (postMessage primary, REST fallback) ──
   function requestLeaderboard() {
+    if (_useRest) {
+      fetch('/api/high-scores/flappy')
+        .then(r => r.json())
+        .then(d => renderLeaderboard(d.leaderboard))
+        .catch(() => {});
+      return;
+    }
     try {
       if (window.opener) {
         window.opener.postMessage({ type: 'get-leaderboard' }, '*');
       }
-    } catch { /* opener closed */ }
+    } catch { /* opener closed — try REST */
+      fetch('/api/high-scores/flappy').then(r => r.json()).then(d => renderLeaderboard(d.leaderboard)).catch(() => {});
+    }
   }
 
   function renderLeaderboard(data) {

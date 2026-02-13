@@ -1290,7 +1290,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 [data-theme="crt"] .main::before {
   content: ''; position: fixed; inset: 0; z-index: 99998; pointer-events: none;
   background: radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.6) 100%);
-  animation: crt-flicker 0.06s infinite alternate;
+  animation: crt-flicker calc(0.06s * var(--fx-mult, 1)) infinite alternate;
 }
 @keyframes crt-flicker {
   0%   { opacity: 0.97; }
@@ -1313,7 +1313,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     transparent 100%
   );
   background-size: 100% 200%;
-  animation: ffx-water 5s ease-in-out infinite;
+  animation: ffx-water calc(5s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 [data-theme="ffx"] .main { position: relative; }
 [data-theme="ffx"] .main::after {
@@ -1323,7 +1323,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     transparent, rgba(64,168,224,0.6), rgba(100,200,255,0.8), rgba(64,168,224,0.6), transparent
   );
   background-size: 200% 100%;
-  animation: ffx-wave-bar 3s ease-in-out infinite;
+  animation: ffx-wave-bar calc(3s * var(--fx-mult, 1)) ease-in-out infinite;
   filter: blur(1px);
 }
 @keyframes ffx-water {
@@ -1349,7 +1349,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   mask-size: 200px 12px;
   -webkit-mask-repeat: repeat-x;
   mask-repeat: repeat-x;
-  animation: ice-drip 3s ease-in-out infinite;
+  animation: ice-drip calc(3s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 [data-theme="ice"] .sidebar-header { position: relative; overflow: visible !important; }
 [data-theme="ice"] .sidebar-header::after {
@@ -1381,7 +1381,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     radial-gradient(2px 2px at 90% 80%, rgba(200,235,255,0.7), transparent),
     radial-gradient(3px 3px at 35% 45%, rgba(200,235,255,0.5), transparent),
     radial-gradient(2px 2px at 80% 10%, rgba(200,235,255,0.6), transparent);
-  animation: ice-shimmer 4s ease-in-out infinite;
+  animation: ice-shimmer calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 @keyframes ice-shimmer {
   0%, 100% { opacity: 0.4; }
@@ -1413,7 +1413,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     100% 85vh, 100% 115vh, 100% 75vh, 100% 100vh,
     100% 88vh, 100% 108vh;
   opacity: 0.7;
-  animation: nord-snow 6s linear infinite;
+  animation: nord-snow calc(6s * var(--fx-mult, 1)) linear infinite;
 }
 @keyframes nord-snow {
   0%   { background-position:
@@ -1428,55 +1428,75 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     75%  103vh, 90%  107vh; }
 }
 
-/* ── Dark Souls: Ember / campfire glow ─────────────── */
+/* ── Dark Souls: Campfire glow (muted, sporadic flicker) ── */
 [data-theme="darksouls"] .sidebar::after {
-  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 300px;
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 55vh;
   pointer-events: none; z-index: 1;
   background: linear-gradient(0deg,
-    rgba(255, 100, 20, 0.55) 0%,
-    rgba(255, 60, 0, 0.30) 30%,
-    rgba(255, 40, 0, 0.10) 60%,
+    rgba(180, 70, 10, 0.22) 0%,
+    rgba(140, 45, 5, 0.12) 25%,
+    rgba(100, 30, 0, 0.05) 50%,
     transparent 100%
   );
-  animation: ds-ember 2s ease-in-out infinite;
+  animation: ds-ember calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 [data-theme="darksouls"] .main { position: relative; }
 [data-theme="darksouls"] .main::before {
-  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 16px;
+  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 10px;
   pointer-events: none; z-index: 99998;
   background: linear-gradient(90deg,
     transparent 0%,
-    rgba(255, 80, 10, 0.7) 15%,
-    rgba(255, 160, 40, 0.95) 35%,
-    rgba(255, 220, 80, 1) 50%,
-    rgba(255, 160, 40, 0.95) 65%,
-    rgba(255, 80, 10, 0.7) 85%,
+    rgba(180, 60, 5, 0.25) 15%,
+    rgba(200, 110, 20, 0.4) 35%,
+    rgba(210, 140, 40, 0.5) 50%,
+    rgba(200, 110, 20, 0.4) 65%,
+    rgba(180, 60, 5, 0.25) 85%,
     transparent 100%
   );
-  filter: blur(4px);
-  animation: ds-fireline 2.5s ease-in-out infinite alternate;
+  filter: blur(5px);
+  animation: ds-fireline calc(3s * var(--fx-mult, 1)) ease-in-out infinite alternate;
 }
 [data-theme="darksouls"] .main::after {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99997;
-  background: radial-gradient(ellipse at 50% 100%, rgba(255, 100, 20, 0.22), transparent 55%);
-  animation: ds-ambient 3s ease-in-out infinite;
+  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 50vh;
+  pointer-events: none; z-index: 99997;
+  background: radial-gradient(ellipse 80% 70% at 50% 100%,
+    rgba(180, 70, 10, 0.10) 0%,
+    rgba(140, 45, 5, 0.05) 40%,
+    transparent 100%
+  );
+  animation: ds-ambient calc(5s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 @keyframes ds-ember {
-  0%, 100% { opacity: 0.65; transform: scaleY(1); }
-  25%      { opacity: 1; transform: scaleY(1.03); }
-  50%      { opacity: 0.85; transform: scaleY(0.98); }
-  75%      { opacity: 1; transform: scaleY(1.01); }
+  0%       { opacity: 0.5; }
+  8%       { opacity: 0.85; }
+  15%      { opacity: 0.35; }
+  22%      { opacity: 0.7; }
+  30%      { opacity: 0.45; }
+  45%      { opacity: 0.9; }
+  52%      { opacity: 0.30; }
+  60%      { opacity: 0.65; }
+  70%      { opacity: 0.85; }
+  78%      { opacity: 0.40; }
+  88%      { opacity: 0.75; }
+  100%     { opacity: 0.5; }
 }
 @keyframes ds-fireline {
-  0%   { opacity: 0.6; filter: blur(3px); height: 14px; }
-  33%  { opacity: 1; filter: blur(5px); height: 18px; }
-  66%  { opacity: 0.85; filter: blur(4px); height: 15px; }
-  100% { opacity: 0.7; filter: blur(3px); height: 16px; }
+  0%   { opacity: 0.3; filter: blur(4px); height: 8px; }
+  12%  { opacity: 0.55; filter: blur(6px); height: 12px; }
+  28%  { opacity: 0.2; filter: blur(3px); height: 6px; }
+  45%  { opacity: 0.5; filter: blur(5px); height: 11px; }
+  60%  { opacity: 0.15; filter: blur(3px); height: 7px; }
+  75%  { opacity: 0.45; filter: blur(6px); height: 13px; }
+  90%  { opacity: 0.25; filter: blur(4px); height: 9px; }
+  100% { opacity: 0.35; filter: blur(5px); height: 10px; }
 }
 @keyframes ds-ambient {
-  0%, 100% { opacity: 0.5; }
-  30%      { opacity: 0.85; }
-  60%      { opacity: 0.7; }
+  0%, 100% { opacity: 0.3; }
+  15%      { opacity: 0.55; }
+  30%      { opacity: 0.2; }
+  50%      { opacity: 0.6; }
+  65%      { opacity: 0.25; }
+  80%      { opacity: 0.5; }
 }
 
 /* ── Bloodborne: Blood vignette pulse ──────────────── */
@@ -1484,7 +1504,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 [data-theme="bloodborne"] .main::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(120, 10, 10, 0.35) 100%);
-  animation: bb-vignette 4s ease-in-out infinite;
+  animation: bb-vignette calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 @keyframes bb-vignette {
   0%, 100% { opacity: 0.5; }
@@ -1499,7 +1519,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     transparent 0px, transparent 18px,
     rgba(0, 255, 0, 0.15) 18px, rgba(0, 255, 0, 0.15) 20px
   );
-  animation: matrix-rain 1.5s linear infinite;
+  animation: matrix-rain calc(1.5s * var(--fx-mult, 1)) linear infinite;
 }
 @keyframes matrix-rain {
   0%   { transform: translateY(-20px); }
@@ -1508,7 +1528,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 
 /* ── Cyberpunk: Glitch effect on header ────────────── */
 [data-theme="cyberpunk"] .brand-text {
-  animation: cp-glitch 4s infinite;
+  animation: cp-glitch calc(4s * var(--fx-mult, 1)) infinite;
 }
 @keyframes cp-glitch {
   0%, 92%, 100% { transform: none; text-shadow: 0 0 8px rgba(255,0,100,0.6); }
@@ -1530,7 +1550,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 [data-theme="lotr"] .sidebar::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse at 50% 100%, rgba(220, 170, 60, 0.2), transparent 60%);
-  animation: lotr-candle 3s ease-in-out infinite;
+  animation: lotr-candle calc(3s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 @keyframes lotr-candle {
   0%, 100% { opacity: 0.4; }
@@ -1963,24 +1983,43 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   flex-shrink: 0;
 }
 
-/* Channel settings gear dropdown */
-.channel-settings-wrap { position: relative; }
-.channel-settings-dropdown {
-  display: none;
-  flex-direction: column;
+/* Channel context menu (sidebar "..." hover button) */
+.channel-item { position: relative; }
+.channel-more-btn {
   position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 4px;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s;
+  line-height: 1;
+}
+.channel-item:hover .channel-more-btn,
+.channel-item .channel-more-btn:focus {
+  opacity: 1;
+  pointer-events: auto;
+}
+.channel-more-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.channel-ctx-menu {
+  position: fixed;
+  z-index: 9999;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 4px 16px rgba(0,0,0,0.35);
-  z-index: 1000;
-  min-width: 160px;
+  min-width: 170px;
   padding: 4px;
 }
-.channel-settings-item {
+.channel-ctx-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1995,9 +2034,14 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   width: 100%;
   text-align: left;
 }
-.channel-settings-item:hover { background: var(--bg-hover); }
-.channel-settings-item.danger { color: var(--danger); }
-.channel-settings-item.danger:hover { background: rgba(var(--danger), 0.1); background: #3a1515; }
+.channel-ctx-item:hover { background: var(--bg-hover); }
+.channel-ctx-item.danger { color: var(--danger); }
+.channel-ctx-item.danger:hover { background: #3a1515; }
+.channel-ctx-sep {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 3px 6px;
+}
 
 .channel-info h3 {
   font-size: 16px;

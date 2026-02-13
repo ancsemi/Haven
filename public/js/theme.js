@@ -142,6 +142,44 @@ function initRgbEditor() {
   editor._hide = () => { editor.style.display = 'none'; };
 }
 
+// ════════════════════════════════════════════════════════════
+// EFFECT SPEED SLIDER (for themes with CSS animations)
+// ════════════════════════════════════════════════════════════
+const DYNAMIC_THEMES = ['crt','ffx','ice','nord','darksouls','bloodborne','matrix','cyberpunk','lotr'];
+
+function initEffectSpeedEditor() {
+  const editor = document.getElementById('effect-speed-editor');
+  const slider = document.getElementById('effect-speed-slider');
+  if (!editor || !slider) return;
+
+  // Restore saved multiplier
+  const saved = parseFloat(localStorage.getItem('haven_fx_mult'));
+  if (!isNaN(saved)) {
+    slider.value = Math.round(saved * 100);
+    document.documentElement.style.setProperty('--fx-mult', saved);
+  }
+
+  slider.addEventListener('input', () => {
+    // slider 10-200 → multiplier 0.1-2.0  (lower = faster, higher = slower)
+    const mult = parseInt(slider.value, 10) / 100;
+    document.documentElement.style.setProperty('--fx-mult', mult);
+    localStorage.setItem('haven_fx_mult', mult);
+  });
+
+  editor._show = () => { editor.style.display = 'block'; };
+  editor._hide = () => { editor.style.display = 'none'; };
+}
+
+function showEffectEditorIfDynamic(theme) {
+  const editor = document.getElementById('effect-speed-editor');
+  if (!editor) return;
+  if (DYNAMIC_THEMES.includes(theme)) {
+    if (editor._show) editor._show();
+  } else {
+    if (editor._hide) editor._hide();
+  }
+}
+
 // ── Barycentric maths for the triangle ──────────────────
 function bary(px, py, ax, ay, bx, by, cx, cy) {
   const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
@@ -334,12 +372,14 @@ function initThemeSwitcher(containerId, socket) {
         if (customEditor && customEditor._hide) customEditor._hide();
         if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
       }
+      showEffectEditorIfDynamic(theme);
     });
   });
 
   // Initialise editors
   initCustomThemeEditor();
   initRgbEditor();
+  initEffectSpeedEditor();
 
   // Show correct editor on load
   if (saved === 'custom' && customEditor && customEditor._show) {
@@ -348,6 +388,7 @@ function initThemeSwitcher(containerId, socket) {
   if (saved === 'rgb' && rgbEditor && rgbEditor._show) {
     setTimeout(() => rgbEditor._show(), 50);
   }
+  showEffectEditorIfDynamic(saved);
 }
 
 function applyThemeFromServer(theme) {
@@ -375,4 +416,5 @@ function applyThemeFromServer(theme) {
     const rgbEditor = document.getElementById('rgb-theme-editor');
     if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
   }
+  showEffectEditorIfDynamic(theme);
 }

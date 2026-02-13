@@ -573,6 +573,47 @@ app.get('/api/link-preview', previewLimiter, async (req, res) => {
   }
 });
 
+// ── High-scores REST API (mobile-safe fallback for postMessage) ──
+app.get('/api/high-scores/:game', (req, res) => {
+  const game = req.params.game;
+  if (!['flappy'].includes(game)) return res.status(400).json({ error: 'Unknown game' });
+  const { getDb } = require('./src/database');
+  const leaderboard = getDb().prepare(`
+    SELECT hs.user_id, COALESCE(u.display_name, u.username) as username, hs.score
+    FROM high_scores hs JOIN users u ON hs.user_id = u.id
+    WHERE hs.game = ? AND hs.score > 0
+    ORDER BY hs.score DESC LIMIT 50
+  `).all(game);
+  res.json({ game, leaderboard });
+});
+
+app.post('/api/high-scores', express.json(), (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const game = typeof req.body.game === 'string' ? req.body.game.trim() : '';
+  const score = Number(req.body.score);
+  if (!game || !['flappy'].includes(game)) return res.status(400).json({ error: 'Unknown game' });
+  if (!Number.isInteger(score) || score < 0) return res.status(400).json({ error: 'Invalid score' });
+
+  const { getDb } = require('./src/database');
+  const db = getDb();
+  const current = db.prepare('SELECT score FROM high_scores WHERE user_id = ? AND game = ?').get(user.id, game);
+  if (!current || score > current.score) {
+    db.prepare(
+      "INSERT OR REPLACE INTO high_scores (user_id, game, score, updated_at) VALUES (?, ?, ?, datetime('now'))"
+    ).run(user.id, game, score);
+  }
+  const leaderboard = db.prepare(`
+    SELECT hs.user_id, COALESCE(u.display_name, u.username) as username, hs.score
+    FROM high_scores hs JOIN users u ON hs.user_id = u.id
+    WHERE hs.game = ? AND hs.score > 0
+    ORDER BY hs.score DESC LIMIT 50
+  `).all(game);
+  res.json({ game, leaderboard });
+});
+
 // ── Catch-all: 404 ──────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

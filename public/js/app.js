@@ -393,13 +393,9 @@ class HavenApp {
       if (data.user.isAdmin) {
         document.getElementById('admin-controls').style.display = 'block';
         document.getElementById('admin-mod-panel').style.display = 'block';
-        if (this.currentChannel) {
-          document.getElementById('channel-settings-wrap').style.display = '';
-        }
       } else {
         document.getElementById('admin-controls').style.display = 'none';
         document.getElementById('admin-mod-panel').style.display = 'none';
-        document.getElementById('channel-settings-wrap').style.display = 'none';
       }
     });
 
@@ -673,24 +669,47 @@ class HavenApp {
     });
 
     // Delete channel
-    // Channel settings gear dropdown toggle
-    document.getElementById('channel-settings-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      const dd = document.getElementById('channel-settings-dropdown');
-      dd.style.display = dd.style.display === 'none' ? 'flex' : 'none';
-    });
-    // Close dropdown on outside click
-    document.addEventListener('click', () => {
-      document.getElementById('channel-settings-dropdown').style.display = 'none';
-    });
-    // Delete channel with TWO confirmations
-    document.getElementById('delete-channel-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.getElementById('channel-settings-dropdown').style.display = 'none';
-      if (!this.currentChannel) return;
+    // ── Channel context menu ("..." on hover) ──────────
+    this._initChannelContextMenu();
+    // Delete channel with TWO confirmations (from ctx menu)
+    document.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
       if (!confirm('⚠️ Delete this channel?\nAll messages will be permanently lost.')) return;
       if (!confirm('⚠️ Are you ABSOLUTELY sure?\nThis action cannot be undone!')) return;
-      this.socket.emit('delete-channel', { code: this.currentChannel });
+      this.socket.emit('delete-channel', { code });
+    });
+    // Mute channel toggle
+    document.querySelector('[data-action="mute"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+      const idx = muted.indexOf(code);
+      if (idx >= 0) { muted.splice(idx, 1); this._showToast('Channel unmuted', 'success'); }
+      else { muted.push(code); this._showToast('Channel muted', 'success'); }
+      localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
+    });
+    // Toggle streams permission
+    document.querySelector('[data-action="toggle-streams"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      this.socket.emit('toggle-channel-permission', { code, permission: 'streams' });
+    });
+    // Toggle music permission
+    document.querySelector('[data-action="toggle-music"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      this.socket.emit('toggle-channel-permission', { code, permission: 'music' });
+    });
+    // Close context menu on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.channel-ctx-menu') && !e.target.closest('.channel-more-btn')) {
+        this._closeChannelCtxMenu();
+      }
     });
 
     // Voice buttons
@@ -897,7 +916,8 @@ class HavenApp {
       this._gameScoreListenerAdded = true;
     }
     document.getElementById('play-flappy-btn')?.addEventListener('click', () => {
-      this._gameWindow = window.open('/games/flappy', '_blank', 'width=740,height=860');
+      const tok = localStorage.getItem('haven_token') || '';
+      this._gameWindow = window.open('/games/flappy#token=' + encodeURIComponent(tok), '_blank', 'width=740,height=860');
     });
 
     // Image click + spoiler click delegation (CSP-safe — no inline handlers)
@@ -1905,12 +1925,6 @@ class HavenApp {
     // Show/hide topic bar
     this._updateTopicBar(channel?.topic || '');
 
-    if (this.user.isAdmin && !isDm) {
-      document.getElementById('channel-settings-wrap').style.display = '';
-    } else {
-      document.getElementById('channel-settings-wrap').style.display = 'none';
-    }
-
     document.getElementById('messages').innerHTML = '';
     document.getElementById('message-area').style.display = 'flex';
     document.getElementById('no-channel-msg').style.display = 'none';
@@ -1974,7 +1988,6 @@ class HavenApp {
     document.getElementById('channel-header-name').textContent = 'Select a channel';
     document.getElementById('channel-code-display').textContent = '';
     document.getElementById('copy-code-btn').style.display = 'none';
-    document.getElementById('channel-settings-wrap').style.display = 'none';
     document.getElementById('voice-join-btn').style.display = 'none';
     document.getElementById('voice-dropdown-toggle').style.display = 'none';
     document.getElementById('voice-leave-btn').style.display = 'none';
@@ -1986,6 +1999,51 @@ class HavenApp {
     document.getElementById('status-online-count').textContent = '0';
     const topicBar = document.getElementById('channel-topic-bar');
     if (topicBar) topicBar.style.display = 'none';
+  }
+
+  /* ── Channel context menu helpers ─────────────────────── */
+  _initChannelContextMenu() {
+    this._ctxMenuChannel = null;
+    this._ctxMenuEl = document.getElementById('channel-ctx-menu');
+    // Delegate clicks on "..." buttons inside the channel list
+    document.getElementById('channel-list')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.channel-more-btn');
+      if (!btn) return;
+      e.stopPropagation();
+      const code = btn.closest('.channel-item')?.dataset.code;
+      if (code) this._openChannelCtxMenu(code, btn);
+    });
+  }
+
+  _openChannelCtxMenu(code, btnEl) {
+    this._ctxMenuChannel = code;
+    const menu = this._ctxMenuEl;
+    if (!menu) return;
+    // Show/hide admin-only items
+    const isAdmin = this.user && this.user.isAdmin;
+    menu.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = isAdmin ? '' : 'none';
+    });
+    // Update mute label
+    const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+    const muteBtn = menu.querySelector('[data-action="mute"]');
+    if (muteBtn) muteBtn.textContent = muted.includes(code) ? '🔕 Unmute Channel' : '🔔 Mute Channel';
+    // Position near the button
+    const rect = btnEl.getBoundingClientRect();
+    menu.style.display = 'block';
+    menu.style.top  = rect.bottom + 4 + 'px';
+    menu.style.left = rect.left + 'px';
+    // Keep menu inside viewport
+    requestAnimationFrame(() => {
+      const mr = menu.getBoundingClientRect();
+      if (mr.right > window.innerWidth) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
+      if (mr.bottom > window.innerHeight) menu.style.top = (rect.top - mr.height - 4) + 'px';
+    });
+  }
+
+  _closeChannelCtxMenu() {
+    if (this._ctxMenuEl) this._ctxMenuEl.style.display = 'none';
+    this._ctxMenuChannel = null;
   }
 
   _renderChannels() {
@@ -2003,6 +2061,7 @@ class HavenApp {
       el.innerHTML = `
         <span class="channel-hash">#</span>
         <span class="channel-name">${this._escapeHtml(ch.name)}</span>
+        <button class="channel-more-btn" title="Channel options">⋯</button>
       `;
 
       const count = this.unreadCounts[ch.code] || ch.unreadCount || 0;
