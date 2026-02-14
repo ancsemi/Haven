@@ -2130,19 +2130,34 @@ function setupSocketHandlers(io, db) {
         statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null }; });
       } catch { /* columns may not exist yet */ }
 
+      // Build set of user IDs who are members of THIS channel
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      const memberIds = new Set();
+      if (channel) {
+        const rows = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id);
+        rows.forEach(r => memberIds.add(r.user_id));
+      }
+
       let users;
       if (mode === 'none') {
         users = [];
       } else if (mode === 'all') {
-        const allUsers = db.prepare(
-          'SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE b.id IS NULL ORDER BY COALESCE(u.display_name, u.username)'
-        ).all();
-        // Check all connected sockets (not just current channel) for true online status
+        // All channel members (online + offline), filtered to this channel
+        const allMembers = db.prepare(
+          `SELECT u.id, COALESCE(u.display_name, u.username) as username
+           FROM users u
+           JOIN channel_members cm ON u.id = cm.user_id
+           JOIN channels c ON cm.channel_id = c.id
+           LEFT JOIN bans b ON u.id = b.user_id
+           WHERE c.code = ? AND b.id IS NULL
+           ORDER BY COALESCE(u.display_name, u.username)`
+        ).all(code);
+        // Check all connected sockets for true online status
         const globalOnlineIds = new Set();
         for (const [, s] of io.of('/').sockets) {
           if (s.user) globalOnlineIds.add(s.user.id);
         }
-        users = allUsers.map(m => ({
+        users = allMembers.map(m => ({
           id: m.id, username: m.username, online: globalOnlineIds.has(m.id),
           highScore: scores[m.id] || 0,
           status: statusMap[m.id]?.status || 'online',
@@ -2150,10 +2165,10 @@ function setupSocketHandlers(io, db) {
           avatar: statusMap[m.id]?.avatar || null
         }));
       } else {
-        // 'online' — all connected users across the server
+        // 'online' — connected users who are members of this channel
         const onlineMap = new Map();
         for (const [, s] of io.of('/').sockets) {
-          if (s.user && !onlineMap.has(s.user.id)) {
+          if (s.user && !onlineMap.has(s.user.id) && memberIds.has(s.user.id)) {
             onlineMap.set(s.user.id, {
               id: s.user.id,
               username: s.user.displayName,
