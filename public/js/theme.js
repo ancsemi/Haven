@@ -179,6 +179,42 @@ function showEffectEditorIfDynamic(theme) {
   } else {
     if (editor._hide) editor._hide();
   }
+  // Show sacred intensity slider if religious effects are active
+  const sacredEditor = document.getElementById('sacred-intensity-editor');
+  if (!sacredEditor) return;
+  const SACRED = ['scripture', 'chapel', 'gospel'];
+  const hasSacred = [..._activeFx].some(fx => SACRED.includes(fx));
+  if (hasSacred) {
+    if (sacredEditor._show) sacredEditor._show();
+  } else {
+    if (sacredEditor._hide) sacredEditor._hide();
+  }
+}
+
+// ── Sacred-effect intensity slider ──────────────────────────
+const SACRED_THEMES = ['scripture', 'chapel', 'gospel'];
+
+function initSacredIntensityEditor() {
+  const editor = document.getElementById('sacred-intensity-editor');
+  const slider = document.getElementById('sacred-intensity-slider');
+  if (!editor || !slider) return;
+
+  // Restore saved intensity
+  const saved = parseFloat(localStorage.getItem('haven_fx_sacred_intensity'));
+  if (!isNaN(saved)) {
+    slider.value = Math.round(saved * 100);
+    document.documentElement.style.setProperty('--fx-religious-intensity', saved);
+  }
+
+  slider.addEventListener('input', () => {
+    // slider 20-250 → intensity 0.2 – 2.5
+    const val = parseInt(slider.value, 10) / 100;
+    document.documentElement.style.setProperty('--fx-religious-intensity', val);
+    localStorage.setItem('haven_fx_sacred_intensity', val);
+  });
+
+  editor._show = () => { editor.style.display = 'block'; };
+  editor._hide = () => { editor.style.display = 'none'; };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -341,7 +377,7 @@ function _startMatrixRain() {
   initDrops();
 
   function draw() {
-    _matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+    _matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.045)';
     _matrixCtx.fillRect(0, 0, canvas.width, canvas.height);
     _matrixCtx.font = fontSize + 'px monospace';
 
@@ -405,34 +441,42 @@ function _startEmbers() {
   _embers = [];
 
   function spawnEmber() {
+    // Spawn concentrated toward center (flame-shaped distribution)
+    const cx = canvas.width / 2;
+    const spread = canvas.width * 0.25;
+    const x = cx + (Math.random() - 0.5) * spread * 2 + (Math.random() - 0.5) * spread * 0.5;
     _embers.push({
-      x: Math.random() * canvas.width,
-      y: canvas.height + 5 + Math.random() * 20,
-      vx: (Math.random() - 0.5) * 0.6,
-      vy: -(0.8 + Math.random() * 1.8),
-      size: 0.8 + Math.random() * 2,
+      x: x,
+      y: canvas.height + 5 + Math.random() * 10,
+      vx: (Math.random() - 0.5) * 0.35,
+      vy: -(1.2 + Math.random() * 2.5),
+      size: 0.4 + Math.random() * 1.0,
       life: 1,
-      decay: 0.008 + Math.random() * 0.018,
+      decay: 0.003 + Math.random() * 0.008,
       hue: 12 + Math.random() * 30,
-      flicker: Math.random() * Math.PI * 2
+      flicker: Math.random() * Math.PI * 2,
+      driftAmp: 0.2 + Math.random() * 0.4
     });
   }
 
   function draw() {
     _emberCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Spawn new embers (steady stream from bottom)
-    const spawnRate = Math.max(1, Math.floor(canvas.width / 60));
+    // Spawn fewer embers, concentrated in center
+    const spawnRate = Math.max(1, Math.floor(canvas.width / 200));
     for (let s = 0; s < spawnRate; s++) {
-      if (_embers.length < 120 && Math.random() > 0.65) spawnEmber();
+      if (_embers.length < 35 && Math.random() > 0.7) spawnEmber();
     }
 
     for (let i = _embers.length - 1; i >= 0; i--) {
       const e = _embers[i];
-      e.flicker += 0.15;
-      e.x += e.vx + Math.sin(e.flicker) * 0.3;
-      e.y += e.vy;
-      e.life -= e.decay;
+      e.flicker += 0.12;
+      e.x += e.vx + Math.sin(e.flicker) * e.driftAmp;
+      // Center embers rise higher, edge embers die sooner
+      const centerDist = Math.abs(e.x - canvas.width / 2) / (canvas.width / 2);
+      const heightMult = 1 - centerDist * 0.4;
+      e.y += e.vy * heightMult;
+      e.life -= e.decay * (1 + centerDist * 0.8);
 
       if (e.life <= 0 || e.y < -10) { _embers.splice(i, 1); continue; }
 
@@ -446,11 +490,15 @@ function _startEmbers() {
       _emberCtx.arc(e.x, e.y, sz, 0, Math.PI * 2);
       _emberCtx.fill();
 
-      // Glow
+      // Flame-shaped glow (taller than wide)
       _emberCtx.globalAlpha = alpha * 0.35;
+      _emberCtx.save();
+      _emberCtx.translate(e.x, e.y);
+      _emberCtx.scale(1, 1.8);
       _emberCtx.beginPath();
-      _emberCtx.arc(e.x, e.y, sz * 3.5, 0, Math.PI * 2);
+      _emberCtx.arc(0, 0, sz * 3, 0, Math.PI * 2);
       _emberCtx.fill();
+      _emberCtx.restore();
     }
     _emberCtx.globalAlpha = 1;
     _emberRAF = requestAnimationFrame(draw);
@@ -763,6 +811,7 @@ function initThemeSwitcher(containerId, socket) {
   initCustomThemeEditor();
   initRgbEditor();
   initEffectSpeedEditor();
+  initSacredIntensityEditor();
   initEffectSelector();
 
   // Show correct editor on load

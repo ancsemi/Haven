@@ -1930,10 +1930,10 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 /* ── CRT vignette overlay ─────────────────────────────── */
 .fx-crt-vignette {
   position: fixed; inset: 0;
-  background: radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.55) 65%, rgba(0,0,0,0.85) 100%);
-  animation: crt-flicker calc(0.06s * var(--fx-mult, 1)) infinite alternate;
+  background: radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.45) 65%, rgba(0,0,0,0.70) 100%);
+  animation: crt-flicker calc(0.09s * var(--fx-mult, 1)) infinite alternate;
   border-radius: 10px;
-  box-shadow: inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 250px rgba(0,0,0,0.5);
+  box-shadow: inset 0 0 80px rgba(0,0,0,0.7), inset 0 0 200px rgba(0,0,0,0.35);
 }
 
 /* ── Matrix sidebar bars overlay ──────────────────────── */
@@ -2042,9 +2042,9 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 .fx-ds-ember-glow {
   position: absolute; bottom: 0; left: 0; right: 0; height: 100%;
   pointer-events: none; z-index: 1;
-  background: linear-gradient(0deg,
-    rgba(180,70,10,0.22) 0%, rgba(140,45,5,0.12) 25%,
-    rgba(100,30,0,0.05) 50%, transparent 100%);
+  background: radial-gradient(ellipse 60% 80% at 50% 100%,
+    rgba(180,70,10,0.28) 0%, rgba(140,45,5,0.15) 20%,
+    rgba(100,30,0,0.06) 45%, transparent 80%);
   animation: ds-ember calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
@@ -2061,9 +2061,9 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 
 /* ── Dark Souls ambient glow overlay ──────────────────── */
 .fx-ds-ambient {
-  position: fixed; bottom: 0; left: 0; right: 0; height: 50vh;
-  background: radial-gradient(ellipse 80% 70% at 50% 100%,
-    rgba(180,70,10,0.10) 0%, rgba(140,45,5,0.05) 40%, transparent 100%);
+  position: fixed; bottom: 0; left: 0; right: 0; height: 65vh;
+  background: radial-gradient(ellipse 50% 80% at 50% 100%,
+    rgba(180,70,10,0.14) 0%, rgba(140,45,5,0.07) 35%, transparent 85%);
   animation: ds-ambient calc(5s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
@@ -2098,11 +2098,12 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
   background:
-    linear-gradient(to bottom, transparent 10%, rgba(200,168,76,0.08) 25%, rgba(200,168,76,0.14) 40%, rgba(200,168,76,0.08) 55%, transparent 75%) center / 6% 100% no-repeat,
-    linear-gradient(to right, transparent 25%, rgba(200,168,76,0.08) 38%, rgba(200,168,76,0.12) 46%, rgba(200,168,76,0.12) 54%, rgba(200,168,76,0.08) 62%, transparent 75%) center 30% / 100% 5% no-repeat,
-    radial-gradient(ellipse 30% 50% at 50% 38%, rgba(200,168,76,0.06) 0%, transparent 70%);
+    linear-gradient(to bottom, transparent 5%, rgba(200,168,76,0.18) 22%, rgba(200,168,76,0.30) 40%, rgba(200,168,76,0.18) 58%, transparent 80%) center / 8% 100% no-repeat,
+    linear-gradient(to right, transparent 20%, rgba(200,168,76,0.16) 35%, rgba(200,168,76,0.25) 46%, rgba(200,168,76,0.25) 54%, rgba(200,168,76,0.16) 65%, transparent 80%) center 30% / 100% 6% no-repeat,
+    radial-gradient(ellipse 35% 55% at 50% 38%, rgba(200,168,76,0.12) 0%, transparent 70%);
   animation: scripture-cross-pulse 8s ease-in-out infinite;
   mix-blend-mode: screen;
+  opacity: var(--fx-religious-intensity, 1);
 }
 
 /* ── Chapel stained glass overlay ─────────────────────── */
@@ -2110,12 +2111,13 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
   background:
-    linear-gradient(155deg, transparent 15%, rgba(138,92,240,0.06) 25%, rgba(102,51,204,0.09) 35%, transparent 50%) no-repeat,
-    linear-gradient(175deg, transparent 20%, rgba(200,80,140,0.05) 35%, rgba(220,100,160,0.08) 45%, transparent 60%) no-repeat,
-    linear-gradient(195deg, transparent 30%, rgba(200,168,76,0.04) 45%, rgba(220,190,100,0.07) 55%, transparent 70%) no-repeat,
-    radial-gradient(ellipse 40% 35% at 50% 25%, rgba(138,92,240,0.04) 0%, transparent 70%);
+    linear-gradient(155deg, transparent 10%, rgba(138,92,240,0.14) 22%, rgba(102,51,204,0.22) 35%, transparent 55%) no-repeat,
+    linear-gradient(175deg, transparent 15%, rgba(200,80,140,0.12) 30%, rgba(220,100,160,0.18) 45%, transparent 65%) no-repeat,
+    linear-gradient(195deg, transparent 25%, rgba(200,168,76,0.10) 40%, rgba(220,190,100,0.16) 55%, transparent 75%) no-repeat,
+    radial-gradient(ellipse 45% 40% at 50% 25%, rgba(138,92,240,0.10) 0%, transparent 70%);
   animation: chapel-glass-shift 12s ease-in-out infinite;
   mix-blend-mode: screen;
+  opacity: var(--fx-religious-intensity, 1);
 }
 
 /* ── Gospel radiance overlay ──────────────────────────── */
@@ -2123,10 +2125,11 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
   background:
-    linear-gradient(180deg, rgba(200,168,76,0.06) 0%, rgba(220,195,120,0.04) 15%, transparent 45%) no-repeat,
-    radial-gradient(ellipse 50% 40% at 50% 20%, rgba(139,32,50,0.04) 0%, rgba(200,168,76,0.02) 40%, transparent 70%),
-    radial-gradient(circle at 50% 10%, rgba(255,250,240,0.05) 0%, transparent 50%);
+    linear-gradient(180deg, rgba(200,168,76,0.14) 0%, rgba(220,195,120,0.10) 15%, transparent 50%) no-repeat,
+    radial-gradient(ellipse 55% 45% at 50% 18%, rgba(139,32,50,0.10) 0%, rgba(200,168,76,0.06) 40%, transparent 70%),
+    radial-gradient(circle at 50% 8%, rgba(255,250,240,0.12) 0%, transparent 55%);
   animation: gospel-radiance 10s ease-in-out infinite;
+  opacity: var(--fx-religious-intensity, 1);
 }
 
 /* ── Ice parent helpers ───────────────────────────────── */
