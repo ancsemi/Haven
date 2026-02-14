@@ -11,6 +11,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.4.7] — 2026-02-13
+
+### Fixed
+- **YouTube "Video unavailable" for host** — the browser was sending a `Referer` header containing the page's localhost / private-IP origin, which YouTube blocks. Added `referrerpolicy="no-referrer"` to YouTube iframes so no referrer is sent.
+- **No time bar on YouTube music player** — the transparent overlay that blocked direct clicks on the embed has been removed for YouTube (was already removed for Spotify). Users can now interact with YouTube's native seek bar, progress indicator, and controls directly.
+- **YouTube play/pause desync** — added an `onStateChange` handler to the YouTube iframe API so Haven's play/pause button stays in sync when users interact with YouTube's native controls.
+- **Profile picture upload silently failing** — the `<label for="…">` pattern was unreliable in some browser / modal contexts. Added explicit JS click handlers (with `preventDefault`) as a bulletproof fallback for both the Settings and Edit Profile avatar upload buttons.
+- **Gray wasted space in stream area** — when all stream tiles were hidden, the stream container (with its 180 px min-height and black background) remained visible. Now it collapses automatically when no visible tiles remain, while the "streams hidden" restore bar stays in the header.
+
+### Added
+- **Late joiner screen share support** — users who join a voice channel after someone has started screen sharing now receive the stream automatically. The server tracks active screen sharers per voice room and triggers WebRTC renegotiation so late joiners get the video tracks.
+
+### Changed
+- Version bumped to 1.4.7.
+
+---
+
+## [1.4.6] — 2026-02-13
+
+### Fixed
+- **Voice panel empty on channel switch** — switching to a DM and back no longer shows an empty voice user list. The client now requests the voice roster whenever changing channels.
+- **Spotify embed unresponsive** — removed the click-blocking overlay that prevented all interaction with the Spotify player. Spotify embeds now allow direct click-through for play, pause, and song selection.
+- **Spotify not playing for other users** — added `autoplay=1` parameter to the Spotify embed URL so playback starts automatically for all voice participants, not just the sharer.
+- **Spotify play/pause destroying embed** — Haven's play button no longer blanks the iframe and reloads it. Spotify pause now stores the src for clean resume.
+- **Profile picture upload broken** — the avatar upload `<label>` already triggered the file input natively via its `for` attribute; a redundant JS `.click()` call was causing a double-open that silently broke the `change` event. Removed the duplicate handler.
+- **Stream viewer cut off on start** — streams now auto-apply the saved size on first display so they don't start at an inconsistent height.
+- **Stream size slider jerky / hard to drag** — replaced raw per-frame DOM style updates with debounced resizing. The slider is now wider with a visible track bar, labeled, and drags smoothly.
+- **Changelog dates from the future** — corrected twelve changelog entries that had dates of Feb 14–16 (future) or 2025 (wrong year). All dates now reflect their actual release day.
+
+### Added
+- **PiP opacity slider** — music player and stream pop-out windows now have an opacity slider (👁 20–100%) so you can see through them while gaming or browsing. Preference is saved to localStorage.
+- **Spotify volume disclaimer** — when Spotify is the active music source, the Haven volume slider shows a tooltip indicating volume must be controlled within the Spotify embed (no external API available).
+
+### Changed
+- **Stream pop-out is now in-page** — stream windows pop out as draggable floating overlays (like the music PiP) instead of new browser windows, enabling opacity control and eliminating pop-up blocker issues.
+- Version bumped to 1.4.6.
+
+---
+
 ## [1.4.5] — 2026-02-12
 
 ### Fixed
@@ -22,7 +61,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.4.4] — 2025-07-18
+## [1.4.4] — 2026-02-12
 
 ### Added
 - **User profile pictures (PFP)** — users can upload a custom avatar (max 2 MB) via Settings. Avatars appear in chat messages and the online-users list. Letter-based fallback when no avatar is set.
@@ -47,7 +86,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.4.3] — 2026-02-16
+## [1.4.3] — 2026-02-12
 
 ### Added
 - **Comprehensive Terms of Service & EULA v2.0** — rewrote the 8-clause Release of Liability into a full 12-section Terms of Service, End User License Agreement & Release of Liability covering: age restriction & eligibility, service description, no warranty, assumption of risk, release of liability & limitation of damages, indemnification, user conduct & content, data handling & privacy, intellectual property, dispute resolution & governing law (with 1-year limitation period, class action waiver), termination (with survival of key sections), and general provisions (severability, waiver, modification, assignment).
@@ -63,7 +102,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.4.2] — 2026-02-16
+## [1.4.2] — 2026-02-12
 
 ### Fixed
 - **Admin status & display name lost on reconnect** — the socket auth middleware now refreshes both `is_admin` and `display_name` from the database on every connection, instead of trusting the JWT payload which could be stale. Additionally, admin status is synced from `.env ADMIN_USERNAME` on every socket connect (not just login), so `.env` changes take effect without requiring a re-login.
@@ -71,7 +110,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.4.1] — 2026-02-16
+## [1.4.1] — 2026-02-12
 
 ### Added
 - **Independent voice & text channels** — voice and text are now fully decoupled, matching Discord's model. You can be in voice on one channel while reading/typing in another. Voice persists across text channel switches. The server uses dedicated `voice:<code>` socket.io rooms so voice signaling and updates reach participants regardless of which text channel they're viewing.
@@ -85,7 +124,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.4.0] — 2026-02-16
+## [1.4.0] — 2026-02-12
 
 ### Added
 - **Display name ≠ login name** — users now have a separate display name that is shown everywhere (messages, voice, leaderboards, online list). The login username is set at registration and never changes, so nobody forgets their credentials. Display names allow spaces, don't need to be unique, and can be changed at will via the ✏️ button. The immutable login name is shown as a small `@username` subtitle in the sidebar.
@@ -102,7 +141,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.3.9] — 2026-02-16
+## [1.3.9] — 2026-02-12
 
 ### Fixed
 - **Slash commands working after every deploy** — static file caching dropped from 1 h to always-revalidate (ETag). Previously, browsers could serve stale JS for up to an hour after a server restart, causing commands and other new features to appear broken.
@@ -112,7 +151,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.3.8] — 2026-02-16
+## [1.3.8] — 2026-02-12
 
 ### Fixed
 - **Leaderboard scoring now persists** — removed `noopener` from the Shippy Container popup so `postMessage` score submissions actually reach the main app. Scores are saved correctly again.
@@ -127,7 +166,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.3.7] — 2026-02-15
+## [1.3.7] — 2026-02-12
 
 ### Fixed
 - **Voice leave audio cue** — leaving voice chat now plays the descending tone (matching the cue other users already heard) so you get audible confirmation.
@@ -139,7 +178,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.3.6] — 2026-02-11
+## [1.3.6] — 2026-02-12
 
 ### Fixed
 - **Noise suppression default lowered to 10%** — 50% was too aggressive for most microphones; new users now start at 10%.
@@ -155,7 +194,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.3.5] — 2026-02-14
+## [1.3.5] — 2026-02-12
 
 ### Changed
 - **Noise suppression → sensitivity slider** — replaced the on/off NS toggle button with an adjustable slider (0–100). Sensitivity maps to the noise gate threshold (0 = off, 100 = aggressive gating). The slider sits inline in the voice controls when in a call.
@@ -166,7 +205,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.3.4] — 2026-02-14
+## [1.3.4] — 2026-02-12
 
 ### Added
 - **Noise suppression (noise gate)** — Web Audio noise gate silences background noise (keyboard, fans, breathing) before sending audio to peers. Runs at 20 ms polling with fast 15 ms attack / gentle 120 ms release. Toggle on/off with the 🤫 NS button in voice controls (enabled by default).
@@ -178,7 +217,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [1.3.3] — 2026-02-13
+## [1.3.3] — 2026-02-12
 
 ### Fixed — Bug Fixes
 - **Upload error handling** — both image and file upload handlers now check HTTP status before parsing JSON, giving users clear error messages instead of cryptic "Not Found" toasts.

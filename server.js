@@ -54,7 +54,7 @@ app.use(helmet({
       mediaSrc: ["'self'", "blob:", "data:"],  // WebRTC audio + notification sounds
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
-      frameSrc: ["https://open.spotify.com", "https://www.youtube.com", "https://w.soundcloud.com"],  // Listen Together embeds
+      frameSrc: ["https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com"],  // Listen Together embeds
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"],               // prevent clickjacking

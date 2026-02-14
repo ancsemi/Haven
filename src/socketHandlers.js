@@ -18,6 +18,86 @@ function isInt(v) {
   return Number.isInteger(v);
 }
 
+// ── Spotify → YouTube resolution ──────────────────────────
+// Spotify embeds only give 30-second previews to non-premium users
+// and have no external JS API for sync/volume. We resolve the track
+// title via Spotify oEmbed, then find it on YouTube for full playback.
+async function resolveSpotifyToYouTube(spotifyUrl) {
+  try {
+    // 1. Get track title from Spotify oEmbed (no auth needed)
+    const oembedRes = await fetch(
+      `https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`
+    );
+    if (!oembedRes.ok) return null;
+    const oembed = await oembedRes.json();
+    const title = oembed.title; // e.g. "Thank You - Dido"
+    if (!title) return null;
+
+    // 2. Search YouTube for the track (return first result)
+    const results = await searchYouTube(title + ' official audio', 1);
+    return results.length > 0 ? `https://www.youtube.com/watch?v=${results[0].videoId}` : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── YouTube search helper ─────────────────────────────────
+// Scrapes YouTube search results HTML and extracts video info.
+// Returns array of { videoId, title, channel, duration, thumbnail }
+const YT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+async function searchYouTube(query, count = 5, offset = 0) {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+      { headers: { 'User-Agent': YT_UA } }
+    );
+    const html = await res.text();
+
+    // Extract ytInitialData JSON which contains structured search results
+    const dataMatch = html.match(/var\s+ytInitialData\s*=\s*({.+?});\s*<\/script>/s);
+    if (dataMatch) {
+      try {
+        const ytData = JSON.parse(dataMatch[1]);
+        const contents = ytData?.contents?.twoColumnSearchResultsRenderer
+          ?.primaryContents?.sectionListRenderer?.contents;
+        if (contents) {
+          const videos = [];
+          for (const section of contents) {
+            const items = section?.itemSectionRenderer?.contents;
+            if (!items) continue;
+            for (const item of items) {
+              const vr = item.videoRenderer;
+              if (!vr || !vr.videoId) continue;
+              videos.push({
+                videoId: vr.videoId,
+                title: vr.title?.runs?.[0]?.text || 'Unknown',
+                channel: vr.ownerText?.runs?.[0]?.text || '',
+                duration: vr.lengthText?.simpleText || '',
+                thumbnail: vr.thumbnail?.thumbnails?.[0]?.url || ''
+              });
+            }
+          }
+          return videos.slice(offset, offset + count);
+        }
+      } catch { /* JSON parse failed, fall through to regex */ }
+    }
+
+    // Fallback: regex extraction (less info, just videoId)
+    const matches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
+    const seen = new Set();
+    const results = [];
+    for (const m of matches) {
+      if (!seen.has(m[1])) {
+        seen.add(m[1]);
+        results.push({ videoId: m[1], title: '', channel: '', duration: '', thumbnail: '' });
+      }
+    }
+    return results.slice(offset, offset + count);
+  } catch {
+    return [];
+  }
+}
 function setupSocketHandlers(io, db) {
   const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -103,6 +183,8 @@ function setupSocketHandlers(io, db) {
   const voiceUsers = new Map();
   // Active music per voice room:  code → { url, userId, username } | null
   const activeMusic = new Map();
+  // Active screen sharers per voice room:  code → Set<userId>
+  const activeScreenSharers = new Map();
 
   io.on('connection', (socket) => {
     // Guard: if auth middleware somehow didn't attach user, disconnect
@@ -648,17 +730,35 @@ function setupSocketHandlers(io, db) {
           userId: music.userId,
           username: music.username,
           url: music.url,
-          channelCode: code
+          channelCode: code,
+          resolvedFrom: music.resolvedFrom
         });
       }
 
-      // Send active screen share info to late joiner
-      const sharers = [];
-      for (const [uid, u] of voiceUsers.get(code)) {
-        if (uid !== socket.user.id) {
-          // We don't track screen-share state per user on server,
-          // but WebRTC renegotiation handles this automatically
-        }
+      // Send active screen share info to late joiner — tell screen sharers to renegotiate
+      const sharers = activeScreenSharers.get(code);
+      if (sharers && sharers.size > 0) {
+        // Notify the late joiner about active sharers (for UI indicators)
+        socket.emit('active-screen-sharers', {
+          channelCode: code,
+          sharers: Array.from(sharers).map(uid => {
+            const u = voiceUsers.get(code)?.get(uid);
+            return u ? { id: uid, username: u.username } : null;
+          }).filter(Boolean)
+        });
+        // After a short delay (let initial offer/answer complete), tell each
+        // screen sharer to renegotiate so the late joiner receives video tracks.
+        setTimeout(() => {
+          for (const sharerId of sharers) {
+            const sharerInfo = voiceUsers.get(code)?.get(sharerId);
+            if (sharerInfo) {
+              io.to(sharerInfo.socketId).emit('renegotiate-screen', {
+                targetUserId: socket.user.id,
+                channelCode: code
+              });
+            }
+          }
+        }, 2000);
       }
     });
 
@@ -718,6 +818,9 @@ function setupSocketHandlers(io, db) {
       if (!isString(data.code, 8, 8)) return;
       const voiceRoom = voiceUsers.get(data.code);
       if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      // Track active screen sharer
+      if (!activeScreenSharers.has(data.code)) activeScreenSharers.set(data.code, new Set());
+      activeScreenSharers.get(data.code).add(socket.user.id);
       // Broadcast to all voice users in the channel
       for (const [uid, user] of voiceRoom) {
         if (uid !== socket.user.id) {
@@ -736,6 +839,9 @@ function setupSocketHandlers(io, db) {
       if (!isString(data.code, 8, 8)) return;
       const voiceRoom = voiceUsers.get(data.code);
       if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      // Untrack screen sharer
+      const sharers = activeScreenSharers.get(data.code);
+      if (sharers) { sharers.delete(socket.user.id); if (sharers.size === 0) activeScreenSharers.delete(data.code); }
       for (const [uid, user] of voiceRoom) {
         if (uid !== socket.user.id) {
           io.to(user.socketId).emit('screen-share-stopped', {
@@ -748,24 +854,40 @@ function setupSocketHandlers(io, db) {
 
     // ── Music Sharing ───────────────────────────────────
 
-    socket.on('music-share', (data) => {
+    socket.on('music-share', async (data) => {
       if (!data || typeof data !== 'object') return;
       if (!isString(data.code, 8, 8)) return;
       if (!isString(data.url, 1, 500)) return;
       const voiceRoom = voiceUsers.get(data.code);
       if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+
+      let playUrl = data.url;
+      let resolvedFrom = null;
+
+      // Convert Spotify tracks → YouTube for universal full playback + sync
+      const spotifyTrack = data.url.match(/open\.spotify\.com\/(track)\/([a-zA-Z0-9]+)/);
+      if (spotifyTrack) {
+        const ytUrl = await resolveSpotifyToYouTube(data.url);
+        if (ytUrl) {
+          playUrl = ytUrl;
+          resolvedFrom = 'spotify';
+        }
+      }
+
       // Store active music for late joiners
       activeMusic.set(data.code, {
-        url: data.url,
+        url: playUrl,
         userId: socket.user.id,
-        username: socket.user.displayName
+        username: socket.user.displayName,
+        resolvedFrom
       });
       for (const [uid, user] of voiceRoom) {
         io.to(user.socketId).emit('music-shared', {
           userId: socket.user.id,
           username: socket.user.displayName,
-          url: data.url,
-          channelCode: data.code
+          url: playUrl,
+          channelCode: data.code,
+          resolvedFrom
         });
       }
     });
@@ -802,6 +924,24 @@ function setupSocketHandlers(io, db) {
           username: socket.user.displayName,
           channelCode: data.code
         });
+      }
+    });
+
+    // Music search — user types /play <query> to search by name
+    socket.on('music-search', async (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.query, 1, 200)) return;
+      const offset = isInt(data.offset) && data.offset >= 0 ? data.offset : 0;
+
+      try {
+        const results = await searchYouTube(data.query, 5, offset);
+        socket.emit('music-search-results', {
+          results,
+          query: data.query,
+          offset
+        });
+      } catch {
+        socket.emit('music-search-results', { results: [], query: data.query, offset });
       }
     });
 
@@ -1937,6 +2077,10 @@ function setupSocketHandlers(io, db) {
       voiceRoom.delete(socket.user.id);
       socket.leave(`voice:${code}`);
 
+      // Untrack screen sharer if they were sharing
+      const sharers = activeScreenSharers.get(code);
+      if (sharers) { sharers.delete(socket.user.id); if (sharers.size === 0) activeScreenSharers.delete(code); }
+
       // Tell remaining peers to close connection to this user
       for (const [, user] of voiceRoom) {
         io.to(user.socketId).emit('voice-user-left', {
@@ -1993,9 +2137,13 @@ function setupSocketHandlers(io, db) {
         const allUsers = db.prepare(
           'SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE b.id IS NULL ORDER BY COALESCE(u.display_name, u.username)'
         ).all();
-        const onlineIds = room ? new Set(room.keys()) : new Set();
+        // Check all connected sockets (not just current channel) for true online status
+        const globalOnlineIds = new Set();
+        for (const [, s] of io.of('/').sockets) {
+          if (s.user) globalOnlineIds.add(s.user.id);
+        }
         users = allUsers.map(m => ({
-          id: m.id, username: m.username, online: onlineIds.has(m.id),
+          id: m.id, username: m.username, online: globalOnlineIds.has(m.id),
           highScore: scores[m.id] || 0,
           status: statusMap[m.id]?.status || 'online',
           statusText: statusMap[m.id]?.statusText || '',

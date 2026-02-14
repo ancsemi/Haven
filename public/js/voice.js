@@ -147,6 +147,33 @@ class VoiceManager {
       this.screenSharers.delete(data.userId);
       if (this.onScreenStream) this.onScreenStream(data.userId, null);
     });
+
+    // Late joiner: server tells us about active screen sharers
+    this.socket.on('active-screen-sharers', (data) => {
+      if (data && data.sharers) {
+        data.sharers.forEach(s => this.screenSharers.add(s.id));
+      }
+    });
+
+    // Server asks us to renegotiate our screen share with a late joiner
+    this.socket.on('renegotiate-screen', async (data) => {
+      if (!this.screenStream || !this.isScreenSharing) return;
+      const peer = this.peers.get(data.targetUserId);
+      if (!peer) return;
+      const conn = peer.connection;
+
+      // Add screen share tracks if they weren't negotiated in the initial exchange
+      const senders = conn.getSenders();
+      const hasVideo = senders.some(s => s.track && s.track.kind === 'video');
+      if (!hasVideo) {
+        this.screenStream.getTracks().forEach(track => {
+          conn.addTrack(track, this.screenStream);
+        });
+      }
+
+      // Renegotiate to include the video tracks
+      await this._renegotiate(data.targetUserId, conn);
+    });
   }
 
   // ── Public API ──────────────────────────────────────────

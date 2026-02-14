@@ -53,7 +53,7 @@ class HavenApp {
       { cmd: 'roll',       args: '[NdN]',    desc: 'Roll dice (e.g. /roll 2d6)' },
       { cmd: 'hug',        args: '<@user>',  desc: 'Send a hug to someone' },
       { cmd: 'wave',       args: '[text]',   desc: 'Wave at the chat 👋' },
-      { cmd: 'play',       args: '<url>',    desc: 'Share music (Spotify/YouTube/SoundCloud)' },
+      { cmd: 'play',       args: '<name or url>',    desc: 'Search & play music (e.g. /play Cut Your Teeth Kygo)' },
     ];
 
     // Emoji palette organized by category
@@ -332,6 +332,9 @@ class HavenApp {
     });
     this.socket.on('music-control', (data) => {
       this._handleMusicControl(data);
+    });
+    this.socket.on('music-search-results', (data) => {
+      this._showMusicSearchResults(data);
     });
 
     // ── Channel members (for @mentions) ────────────────
@@ -722,7 +725,8 @@ class HavenApp {
     document.getElementById('voice-deafen-btn').addEventListener('click', () => this._toggleDeafen());
     document.getElementById('voice-leave-btn').addEventListener('click', () => this._leaveVoice());
     document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
-    document.getElementById('screen-share-close').addEventListener('click', () => this._hideScreenShare());
+    document.getElementById('screen-share-minimize').addEventListener('click', () => this._hideScreenShare());
+    document.getElementById('screen-share-close').addEventListener('click', () => this._closeScreenShare());
 
     // Music controls
     document.getElementById('music-share-btn').addEventListener('click', () => this._openMusicModal());
@@ -780,14 +784,19 @@ class HavenApp {
     if (streamSizeSlider) {
       const savedSize = localStorage.getItem('haven_stream_size');
       if (savedSize) streamSizeSlider.value = savedSize;
+      let _resizeRAF = null;
       const applySize = () => {
-        const vh = parseInt(streamSizeSlider.value, 10);
-        const container = document.getElementById('screen-share-container');
-        container.style.maxHeight = vh + 'vh';
-        const grid = document.getElementById('screen-share-grid');
-        grid.style.maxHeight = (vh - 2) + 'vh';
-        document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
-        localStorage.setItem('haven_stream_size', vh);
+        if (_resizeRAF) cancelAnimationFrame(_resizeRAF);
+        _resizeRAF = requestAnimationFrame(() => {
+          const vh = parseInt(streamSizeSlider.value, 10);
+          const container = document.getElementById('screen-share-container');
+          container.style.maxHeight = vh + 'vh';
+          const grid = document.getElementById('screen-share-grid');
+          grid.style.maxHeight = (vh - 2) + 'vh';
+          document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
+          localStorage.setItem('haven_stream_size', vh);
+          _resizeRAF = null;
+        });
       };
       applySize();
       streamSizeSlider.addEventListener('input', applySize);
@@ -1530,7 +1539,12 @@ class HavenApp {
 
     this._updateAvatarPreview();
 
-    uploadBtn.addEventListener('click', () => fileInput.click());
+    // Explicit click handler — some browsers / CSS contexts don't reliably
+    // trigger the hidden file input via <label for="…">, so we handle it in JS.
+    uploadBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      fileInput.click();
+    });
 
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files[0];
@@ -1581,7 +1595,11 @@ class HavenApp {
     const renameRemoveBtn = document.getElementById('rename-avatar-remove-btn');
     const renameFileInput = document.getElementById('rename-avatar-file-input');
     if (renameUploadBtn && renameFileInput) {
-      renameUploadBtn.addEventListener('click', () => renameFileInput.click());
+      // Explicit click handler — bulletproof fallback for <label for="…"> in modals
+      renameUploadBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        renameFileInput.click();
+      });
       renameFileInput.addEventListener('change', async () => {
         const file = renameFileInput.files[0];
         if (!file) return;
@@ -1942,6 +1960,7 @@ class HavenApp {
     this.socket.emit('enter-channel', { code });
     this.socket.emit('get-messages', { code });
     this.socket.emit('get-channel-members', { code });
+    this.socket.emit('request-voice-users', { code });
     this._clearReply();
   }
 
@@ -2192,10 +2211,18 @@ class HavenApp {
           return;
         }
         if (cmd === 'play') {
-          if (!arg) { this._showToast('Usage: /play <url>', 'error'); }
+          if (!arg) { this._showToast('Usage: /play <song name> or /play <url>', 'error'); }
           else if (!this.voice || !this.voice.inVoice) { this._showToast('Join voice first to share music', 'error'); }
-          else if (!this._getMusicEmbed(arg)) { this._showToast('Unsupported link \u2014 try Spotify, YouTube, or SoundCloud', 'error'); }
-          else { this.socket.emit('music-share', { code: this.voice.currentChannel, url: arg }); }
+          else if (this._getMusicEmbed(arg)) {
+            // Direct URL — share immediately
+            this.socket.emit('music-share', { code: this.voice.currentChannel, url: arg });
+          } else {
+            // Not a URL — treat as a search query
+            this._musicSearchQuery = arg;
+            this._musicSearchOffset = 0;
+            this.socket.emit('music-search', { query: arg, offset: 0 });
+            this._showToast('Searching…', 'info');
+          }
           input.value = '';
           input.style.height = 'auto';
           this._hideMentionDropdown();
@@ -2906,6 +2933,14 @@ class HavenApp {
       container.style.display = 'flex';
       this._screenShareMinimized = false;
       this._removeScreenShareIndicator();
+      // Apply saved stream size so it doesn't start at default/cut-off height
+      const savedStreamSize = localStorage.getItem('haven_stream_size');
+      if (savedStreamSize) {
+        const vh = parseInt(savedStreamSize, 10);
+        container.style.maxHeight = vh + 'vh';
+        grid.style.maxHeight = (vh - 2) + 'vh';
+        document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
+      }
       const count = grid.children.length;
       label.textContent = `🖥️ ${count} stream${count > 1 ? 's' : ''}`;
     } else {
@@ -2934,9 +2969,14 @@ class HavenApp {
       this._removeScreenShareIndicator();
       // Clean up hidden streams bar
       document.getElementById('hidden-streams-bar')?.remove();
+    } else if (visibleCount === 0) {
+      // All tiles hidden — collapse the container to avoid empty gray space,
+      // but keep the "hidden streams" bar in the header so user can restore.
+      container.style.display = 'none';
     } else if (this._screenShareMinimized) {
       this._showScreenShareIndicator(totalCount);
     } else {
+      container.style.display = 'flex';
       const labelParts = [`🖥️ ${visibleCount} stream${visibleCount !== 1 ? 's' : ''}`];
       if (hiddenCount > 0) labelParts.push(`(${hiddenCount} hidden)`);
       label.textContent = labelParts.join(' ');
@@ -3026,8 +3066,22 @@ class HavenApp {
       this._updateScreenShareVisibility();
     });
 
-    // Ensure container stays visible when streams are hidden
-    container.style.display = 'flex';
+    // Show the container only if there are still visible tiles — _updateScreenShareVisibility handles this.
+    // (Removed forced container.style.display = 'flex' that caused empty gray space.)
+  }
+
+  _closeScreenShare() {
+    // Actually stop your screen share if sharing, otherwise just close viewer
+    if (this.voice && this.voice.screenStream) {
+      this._toggleScreenShare(); // stops sharing
+    }
+    const container = document.getElementById('screen-share-container');
+    const grid = document.getElementById('screen-share-grid');
+    container.style.display = 'none';
+    this._screenShareMinimized = false;
+    // Remove any lingering indicator
+    const ind = document.getElementById('screen-share-indicator');
+    if (ind) ind.remove();
   }
 
   // ── Screen Share Audio ──────────────────────────────
@@ -3141,55 +3195,85 @@ class HavenApp {
     const video = tile.querySelector('video');
     if (!video || !video.srcObject) return;
 
-    // Fallback: open in a new window
     const stream = video.srcObject;
     const peer = this.voice.peers.get(userId);
     const who = userId === null || userId === this.user.id ? 'You' : (peer ? peer.username : 'Stream');
-    const popWin = window.open('', `haven-stream-${userId || 'self'}`, 'width=800,height=500,resizable=yes');
-    if (!popWin) {
-      this._showToast('Pop-up blocked — please allow pop-ups for this site', 'error');
-      return;
-    }
 
-    popWin.document.title = `${who}'s Stream — Haven`;
-    popWin.document.body.style.cssText = 'margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden';
-    const popVideo = popWin.document.createElement('video');
-    popVideo.autoplay = true;
-    popVideo.playsInline = true;
-    popVideo.muted = true;
-    popVideo.srcObject = stream;
-    popVideo.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain';
-    popWin.document.body.appendChild(popVideo);
-    popVideo.play().catch(() => {});
+    // Create floating in-page overlay (like music PiP) instead of window.open
+    const pipId = `stream-pip-${userId || 'self'}`;
+    if (document.getElementById(pipId)) return; // already open
+
+    const savedOpacity = parseInt(localStorage.getItem('haven_pip_opacity') ?? '100');
+    const pip = document.createElement('div');
+    pip.id = pipId;
+    pip.className = 'music-pip-overlay stream-pip-overlay';
+    pip.style.opacity = savedOpacity / 100;
+    pip.style.width = '480px';
+    pip.style.minHeight = '320px';
+
+    pip.innerHTML = `
+      <div class="music-pip-header stream-pip-drag">
+        <button class="music-pip-btn stream-pip-popin" title="Minimize (back to inline)">─</button>
+        <span class="music-pip-label">🖥️ ${who}</span>
+        <button class="music-pip-btn stream-pip-close" title="Close">✕</button>
+      </div>
+      <div class="music-pip-embed stream-pip-video"></div>
+      <div class="music-pip-controls">
+        <span class="music-pip-vol-icon stream-pip-opacity-icon" title="Window opacity">👁</span>
+        <input type="range" class="music-pip-vol pip-opacity-slider stream-pip-opacity" min="20" max="100" value="${savedOpacity}">
+      </div>
+    `;
+
+    document.body.appendChild(pip);
+
+    // Clone video into PiP (keep original in tile for when user pops back in)
+    const pipVideo = document.createElement('video');
+    pipVideo.autoplay = true;
+    pipVideo.playsInline = true;
+    pipVideo.muted = true;
+    pipVideo.srcObject = stream;
+    pipVideo.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block';
+    pip.querySelector('.stream-pip-video').appendChild(pipVideo);
+    pipVideo.play().catch(() => {});
 
     const popoutBtn = tile.querySelector('.stream-popout-btn');
-    if (popoutBtn) {
-      popoutBtn.textContent = '⧈';
-      popoutBtn.title = 'Pop in stream';
-    }
+    if (popoutBtn) { popoutBtn.textContent = '⧈'; popoutBtn.title = 'Pop in stream'; }
     tile.classList.add('stream-popped-out');
 
-    // When the pop-out window is closed, restore the tile
-    const checkClosed = setInterval(() => {
-      if (popWin.closed) {
-        clearInterval(checkClosed);
-        if (popoutBtn) {
-          popoutBtn.textContent = '⧉';
-          popoutBtn.title = 'Pop out stream';
-        }
-        tile.classList.remove('stream-popped-out');
-      }
-    }, 500);
+    // Pop-in handler (minimize — return to inline grid)
+    const popIn = () => {
+      pip.remove();
+      if (popoutBtn) { popoutBtn.textContent = '⧉'; popoutBtn.title = 'Pop out stream'; }
+      tile.classList.remove('stream-popped-out');
+    };
 
-    // Also handle when stream ends
-    const origOnEnded = video.querySelector ? null : null;
+    // Close handler (destroy the PiP overlay)
+    const closePip = () => {
+      pip.remove();
+      if (popoutBtn) { popoutBtn.textContent = '⧉'; popoutBtn.title = 'Pop out stream'; }
+      tile.classList.remove('stream-popped-out');
+    };
+
+    pip.querySelector('.stream-pip-popin').addEventListener('click', popIn);
+    pip.querySelector('.stream-pip-close').addEventListener('click', closePip);
+
+    // Opacity slider
+    pip.querySelector('.stream-pip-opacity').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      pip.style.opacity = val / 100;
+      localStorage.setItem('haven_pip_opacity', val);
+    });
+
+    // Dragging
+    this._initPipDrag(pip, pip.querySelector('.stream-pip-drag'));
+
+    // Clean up if stream ends
     const streamTrack = stream.getVideoTracks()[0];
     if (streamTrack) {
       const prevOnEnded = streamTrack.onended;
       streamTrack.onended = () => {
         if (prevOnEnded) prevOnEnded();
-        if (!popWin.closed) popWin.close();
-        clearInterval(checkClosed);
+        popIn();
       };
     }
   }
@@ -3245,6 +3329,85 @@ class HavenApp {
     this._hideMusicPanel();
   }
 
+  _showMusicSearchResults(data) {
+    // Remove any existing search picker
+    this._closeMusicSearchPicker();
+
+    const { results, query, offset } = data;
+    if (!results || results.length === 0) {
+      this._showToast(offset > 0 ? 'No more results' : `No results for "${query}"`, 'error');
+      return;
+    }
+
+    const picker = document.createElement('div');
+    picker.id = 'music-search-picker';
+    picker.className = 'music-search-picker';
+    picker.innerHTML = `
+      <div class="music-search-picker-header">
+        <span>🔍 Results for "<strong>${this._escapeHtml(query)}</strong>"</span>
+        <button class="music-search-picker-close" title="Cancel">✕</button>
+      </div>
+      <div class="music-search-picker-list">
+        ${results.map((r, i) => `
+          <div class="music-search-picker-item" data-video-id="${r.videoId}">
+            <div class="music-search-picker-thumb">
+              ${r.thumbnail ? `<img src="${this._escapeHtml(r.thumbnail)}" alt="" loading="lazy">` : '<span>🎵</span>'}
+            </div>
+            <div class="music-search-picker-info">
+              <div class="music-search-picker-title">${this._escapeHtml(r.title || `Result ${offset + i + 1}`)}</div>
+              <div class="music-search-picker-meta">${this._escapeHtml(r.channel)}${r.duration ? ` · ${r.duration}` : ''}</div>
+            </div>
+            <button class="music-search-picker-play" data-video-id="${r.videoId}" title="Play this">▶</button>
+          </div>
+        `).join('')}
+      </div>
+      <div class="music-search-picker-footer">
+        <button class="music-search-picker-more">More results</button>
+        <button class="music-search-picker-cancel">Cancel</button>
+      </div>
+    `;
+
+    // Insert above the message input area
+    const msgArea = document.getElementById('message-area');
+    msgArea.appendChild(picker);
+
+    // Event handlers
+    picker.querySelector('.music-search-picker-close').addEventListener('click', () => this._closeMusicSearchPicker());
+    picker.querySelector('.music-search-picker-cancel').addEventListener('click', () => this._closeMusicSearchPicker());
+    picker.querySelector('.music-search-picker-more').addEventListener('click', () => {
+      const newOffset = (offset || 0) + 5;
+      this._musicSearchOffset = newOffset;
+      this.socket.emit('music-search', { query: this._musicSearchQuery, offset: newOffset });
+      this._closeMusicSearchPicker();
+      this._showToast('Loading more…', 'info');
+    });
+
+    picker.querySelectorAll('.music-search-picker-play').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const videoId = btn.dataset.videoId;
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        this.socket.emit('music-share', { code: this.voice.currentChannel, url });
+        this._closeMusicSearchPicker();
+      });
+    });
+
+    // Also allow clicking the whole row
+    picker.querySelectorAll('.music-search-picker-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.music-search-picker-play')) return; // already handled
+        const videoId = item.dataset.videoId;
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        this.socket.emit('music-share', { code: this.voice.currentChannel, url });
+        this._closeMusicSearchPicker();
+      });
+    });
+  }
+
+  _closeMusicSearchPicker() {
+    const existing = document.getElementById('music-search-picker');
+    if (existing) existing.remove();
+  }
+
   _handleMusicShared(data) {
     const embedUrl = this._getMusicEmbed(data.url);
     if (!embedUrl) return;
@@ -3267,18 +3430,43 @@ class HavenApp {
     else if (data.url.includes('soundcloud.com')) iframeH = '166';
     else if (data.url.includes('youtube.com') || data.url.includes('youtu.be')) iframeH = '200';
 
-    // Wrap iframe in a container that blocks direct interaction — all sync goes through Haven controls
-    container.innerHTML = `<div class="music-embed-wrapper"><iframe id="music-iframe" src="${embedUrl}" width="100%" height="${iframeH}" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe><div class="music-embed-overlay"></div></div>`;
-    label.textContent = `🎵 ${platform ? platform.name : 'Music'} — shared by ${data.username || 'someone'}`;
+    // Wrap iframe in a container; overlay blocks direct clicks for SoundCloud (Haven has API control)
+    // For Spotify & YouTube, no overlay — user interacts with their native controls (seek bar, etc.)
+    const isSpotify = data.url.includes('spotify.com');
+    const isYouTube = data.url.includes('youtube.com') || data.url.includes('youtu.be') || data.url.includes('music.youtube.com');
+    const needsOverlay = !isSpotify && !isYouTube; // only SoundCloud gets the click-blocker now
+    // referrerpolicy="no-referrer" prevents the browser from sending localhost/private-IP Referer
+    // headers that cause YouTube to show "Video unavailable" for self-hosted instances.
+    const refPolicy = isYouTube ? ' referrerpolicy="no-referrer"' : '';
+    container.innerHTML = `<div class="music-embed-wrapper"><iframe id="music-iframe" src="${embedUrl}" width="100%" height="${iframeH}" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"${refPolicy}></iframe>${needsOverlay ? '<div class="music-embed-overlay"></div>' : ''}</div>`;
+    if (data.resolvedFrom === 'spotify') {
+      label.textContent = `🎵 🟢 Spotify (via YouTube) — shared by ${data.username || 'someone'}`;
+    } else {
+      label.textContent = `🎵 ${platform ? platform.name : 'Music'} — shared by ${data.username || 'someone'}`;
+    }
     panel.style.display = 'flex';
 
-    // Update play/pause button
+    // Update play/pause button — hide for Spotify (no external API)
     const ppBtn = document.getElementById('music-play-pause-btn');
-    if (ppBtn) ppBtn.textContent = '⏸';
+    if (ppBtn) {
+      ppBtn.textContent = isSpotify ? '' : '⏸';
+      ppBtn.style.display = isSpotify ? 'none' : '';
+    }
 
     // Apply saved volume
     const savedVol = parseInt(localStorage.getItem('haven_music_volume') ?? '80');
     document.getElementById('music-volume-slider').value = savedVol;
+
+    // For Spotify: volume can only be controlled inside the embed — show disclaimer
+    const volSlider = document.getElementById('music-volume-slider');
+    const muteBtn = document.getElementById('music-mute-btn');
+    if (isSpotify) {
+      if (volSlider) { volSlider.disabled = true; volSlider.title = 'Use Spotify\'s built-in controls for volume'; }
+      if (muteBtn) { muteBtn.disabled = true; muteBtn.title = 'Use Spotify\'s built-in controls for volume'; }
+    } else {
+      if (volSlider) { volSlider.disabled = false; volSlider.title = ''; }
+      if (muteBtn) { muteBtn.disabled = false; muteBtn.title = 'Mute/Unmute'; }
+    }
 
 
     // Initialize platform-specific APIs for volume & sync control
@@ -3292,7 +3480,8 @@ class HavenApp {
     }
 
     const who = data.userId === this.user?.id ? 'You shared' : `${data.username} shared`;
-    this._showToast(`${who} ${platform ? platform.name : 'music'}`, 'info');
+    const platformLabel = data.resolvedFrom === 'spotify' ? 'Spotify (via YouTube)' : (platform ? platform.name : 'music');
+    this._showToast(`${who} ${platformLabel}`, 'info');
   }
 
   _initYouTubePlayer(iframe, volume) {
@@ -3323,6 +3512,20 @@ class HavenApp {
         events: {
           onReady: (e) => {
             e.target.setVolume(volume);
+          },
+          onStateChange: (e) => {
+            // Sync Haven's play/pause state when user interacts with YT's native controls
+            const ppBtn = document.getElementById('music-play-pause-btn');
+            const pipPP = document.getElementById('music-pip-pp');
+            if (e.data === YT.PlayerState.PLAYING) {
+              this._musicPlaying = true;
+              if (ppBtn) ppBtn.textContent = '⏸';
+              if (pipPP) pipPP.textContent = '⏸';
+            } else if (e.data === YT.PlayerState.PAUSED) {
+              this._musicPlaying = false;
+              if (ppBtn) ppBtn.textContent = '▶';
+              if (pipPP) pipPP.textContent = '▶';
+            }
           }
         }
       });
@@ -3407,9 +3610,13 @@ class HavenApp {
       } else if (this._musicSCWidget) {
         this._musicSCWidget.play();
       } else {
-        // Spotify or fallback — reload iframe to resume
+        // Spotify or fallback — restore paused src to resume
         const iframe = document.getElementById('music-iframe');
-        if (iframe) { const src = iframe.src; iframe.src = src; }
+        if (iframe) {
+          const src = iframe.dataset.pausedSrc || iframe.src;
+          delete iframe.dataset.pausedSrc;
+          if (src && src !== 'about:blank') iframe.src = src;
+        }
       }
     } catch { /* player may be destroyed */ }
   }
@@ -3477,19 +3684,26 @@ class HavenApp {
     const platform = this._musicPlatform || 'Music';
     const playing = this._musicPlaying;
 
+    const savedOpacity = parseInt(localStorage.getItem('haven_pip_opacity') ?? '100');
+
     pip.innerHTML = `
       <div class="music-pip-header" id="music-pip-drag">
-        <button class="music-pip-btn" id="music-pip-popin" title="Pop back in">⧈</button>
+        <button class="music-pip-btn" id="music-pip-popin" title="Minimize (back to panel)">─</button>
         <span class="music-pip-label">🎵 ${platform}</span>
-        <button class="music-pip-btn" id="music-pip-close" title="Close">✕</button>
+        <button class="music-pip-btn" id="music-pip-close" title="Close / stop music">✕</button>
       </div>
       <div class="music-pip-embed" id="music-pip-embed"></div>
       <div class="music-pip-controls">
         <button class="music-pip-btn" id="music-pip-pp" title="Play/Pause">${playing ? '⏸' : '▶'}</button>
         <span class="music-pip-vol-icon" id="music-pip-mute" title="Mute">🔊</span>
         <input type="range" class="music-pip-vol" id="music-pip-vol" min="0" max="100" value="${volume}">
+        <span class="pip-opacity-divider"></span>
+        <span class="music-pip-vol-icon" id="music-pip-opacity-icon" title="Window opacity">👁</span>
+        <input type="range" class="music-pip-vol pip-opacity-slider" id="music-pip-opacity" min="20" max="100" value="${savedOpacity}">
       </div>
     `;
+
+    pip.style.opacity = savedOpacity / 100;
 
     document.body.appendChild(pip);
 
@@ -3513,7 +3727,7 @@ class HavenApp {
 
     // ── PiP controls ──
     document.getElementById('music-pip-popin').addEventListener('click', () => this._popInMusicPlayer());
-    document.getElementById('music-pip-close').addEventListener('click', () => this._popInMusicPlayer());
+    document.getElementById('music-pip-close').addEventListener('click', () => this._stopMusic());
     document.getElementById('music-pip-pp').addEventListener('click', () => {
       this._toggleMusicPlayPause();
       document.getElementById('music-pip-pp').textContent = this._musicPlaying ? '⏸' : '▶';
@@ -3527,6 +3741,13 @@ class HavenApp {
       const v = parseInt(document.getElementById('music-volume-slider')?.value ?? '0');
       document.getElementById('music-pip-vol').value = v;
       document.getElementById('music-pip-mute').textContent = v === 0 ? '🔇' : '🔊';
+    });
+
+    // ── Opacity ──
+    document.getElementById('music-pip-opacity').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      pip.style.opacity = val / 100;
+      localStorage.setItem('haven_pip_opacity', val);
     });
 
     // ── Dragging ──
@@ -3657,11 +3878,11 @@ class HavenApp {
   _getMusicEmbed(url) {
     if (!url) return null;
     const spotifyMatch = url.match(/open\.spotify\.com\/(track|album|playlist|episode|show)\/([a-zA-Z0-9]+)/);
-    if (spotifyMatch) return `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?theme=0&utm_source=generator`;
+    if (spotifyMatch) return `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?theme=0&utm_source=generator&autoplay=1`;
     const ytMusicMatch = url.match(/music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
-    if (ytMusicMatch) return `https://www.youtube.com/embed/${ytMusicMatch[1]}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+    if (ytMusicMatch) return `https://www.youtube-nocookie.com/embed/${ytMusicMatch[1]}?autoplay=1&enablejsapi=1`;
     const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
-    if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+    if (ytMatch) return `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&enablejsapi=1`;
     if (url.includes('soundcloud.com/')) {
       return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
     }
