@@ -26,7 +26,7 @@ Haven is a **private chat server** you run on your own computer. Think Discord, 
 - **No account with anyone** — no email, no phone number, no verification
 - **Free forever** — no subscriptions, no Nitro, no ads
 
-You launch it, your friends connect to your IP address, and you have a private group chat with voice, images, themes, and games. That's it.
+You launch it, your friends connect to your IP address, and you have a private group chat with voice, images, streaming, music, themes, and games. That's it.
 
 ---
 
