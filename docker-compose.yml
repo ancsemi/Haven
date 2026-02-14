@@ -1,0 +1,12 @@
+services:
+  haven:
+    build: .
+    container_name: haven
+    ports:
+      - "3000:3000"
+    volumes:
+      - haven_data:/data
+    restart: unless-stopped
+
+volumes:
+  haven_data:
