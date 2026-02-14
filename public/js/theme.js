@@ -173,13 +173,394 @@ function initEffectSpeedEditor() {
 function showEffectEditorIfDynamic(theme) {
   const editor = document.getElementById('effect-speed-editor');
   if (!editor) return;
-  const effect = localStorage.getItem('haven_effects') || 'auto';
-  const activeEffect = (effect !== 'auto' && effect !== 'none') ? effect : theme;
-  if (DYNAMIC_THEMES.includes(theme) || DYNAMIC_THEMES.includes(activeEffect)) {
+  const hasDynamic = [..._activeFx].some(fx => DYNAMIC_THEMES.includes(fx));
+  if (hasDynamic) {
     if (editor._show) editor._show();
   } else {
     if (editor._hide) editor._hide();
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// STACKABLE EFFECT LAYER SYSTEM
+// ═══════════════════════════════════════════════════════════
+const THEME_DEFAULT_FX = {
+  crt: ['crt'], matrix: ['matrix'], fallout: ['fallout'], ffx: ['ffx'],
+  ice: ['ice'], nord: ['nord'], darksouls: ['darksouls'], bloodborne: ['bloodborne'],
+  cyberpunk: ['cyberpunk'], lotr: ['lotr'], abyss: ['abyss'],
+  scripture: ['scripture'], chapel: ['chapel'], gospel: ['gospel']
+};
+
+let _activeFx = new Set();
+let _matrixCtx = null, _matrixRAF = null, _matrixDrops = [];
+let _emberCtx = null, _emberRAF = null, _embers = [];
+
+// Layer definitions: each effect -> array of { id, parent, cls }
+const FX_LAYERS = {
+  crt:        [{ id: 'fx-crt-vignette', parent: '#fx-layers', cls: 'fx-crt-vignette' }],
+  matrix:     [{ id: 'fx-matrix-bars', parent: '.sidebar', cls: 'fx-matrix-bars' }],
+  fallout:    [{ id: 'fx-fallout-vignette', parent: '#fx-layers', cls: 'fx-fallout-vignette' }],
+  ffx:        [{ id: 'fx-ffx-water', parent: '.sidebar', cls: 'fx-ffx-water' },
+               { id: 'fx-ffx-wave', parent: '#fx-layers', cls: 'fx-ffx-wave' }],
+  ice:        [{ id: 'fx-ice-shimmer', parent: '#fx-layers', cls: 'fx-ice-shimmer' },
+               { id: 'fx-ice-icicle-ch', parent: '.channel-header', cls: 'fx-ice-icicle' },
+               { id: 'fx-ice-icicle-sb', parent: '.sidebar-header', cls: 'fx-ice-icicle-sb' }],
+  nord:       [{ id: 'fx-nord-snow', parent: '#fx-layers', cls: 'fx-nord-snow' }],
+  darksouls:  [{ id: 'fx-ds-ember-glow', parent: '.sidebar', cls: 'fx-ds-ember-glow' },
+               { id: 'fx-ds-fireline', parent: '#fx-layers', cls: 'fx-ds-fireline' },
+               { id: 'fx-ds-ambient', parent: '#fx-layers', cls: 'fx-ds-ambient' }],
+  bloodborne: [{ id: 'fx-bb-vignette', parent: '#fx-layers', cls: 'fx-bb-vignette' }],
+  cyberpunk:  [],
+  lotr:       [{ id: 'fx-lotr-candle', parent: '.sidebar', cls: 'fx-lotr-candle' }],
+  abyss:      [{ id: 'fx-abyss-vignette', parent: '#fx-layers', cls: 'fx-abyss-vignette' }],
+  scripture:  [{ id: 'fx-scripture-cross', parent: '.main', cls: 'fx-scripture-cross' }],
+  chapel:     [{ id: 'fx-chapel-glass', parent: '.main', cls: 'fx-chapel-glass' }],
+  gospel:     [{ id: 'fx-gospel-radiance', parent: '.main', cls: 'fx-gospel-radiance' }]
+};
+
+// CSS classes added to <html>
+const FX_CLASSES = { crt: 'fx-crt', cyberpunk: 'fx-cyberpunk' };
+
+// Effects that use JS canvas
+const FX_CANVAS = {
+  matrix: { start: _startMatrixRain, stop: _stopMatrixRain },
+  darksouls: { start: _startEmbers, stop: _stopEmbers }
+};
+
+function _ensureFxLayers() {
+  let c = document.getElementById('fx-layers');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'fx-layers';
+    document.body.appendChild(c);
+  }
+  return c;
+}
+
+function _activateEffect(name) {
+  if (_activeFx.has(name)) return;
+  _activeFx.add(name);
+
+  // CSS class on <html>
+  if (FX_CLASSES[name]) document.documentElement.classList.add(FX_CLASSES[name]);
+
+  // Overlay layers
+  (FX_LAYERS[name] || []).forEach(layer => {
+    if (document.getElementById(layer.id)) return;
+    const parent = layer.parent === '#fx-layers'
+      ? _ensureFxLayers()
+      : document.querySelector(layer.parent);
+    if (!parent) return;
+    // Ensure parent is positioned
+    if (layer.parent !== '#fx-layers') {
+      const pos = getComputedStyle(parent).position;
+      if (pos === 'static') parent.style.position = 'relative';
+    }
+    // Ice icicles need overflow visible
+    if (name === 'ice' && (layer.cls === 'fx-ice-icicle' || layer.cls === 'fx-ice-icicle-sb')) {
+      parent.classList.add('fx-ice-overflow');
+    }
+    const el = document.createElement('div');
+    el.id = layer.id;
+    el.className = 'fx-layer ' + layer.cls;
+    parent.appendChild(el);
+  });
+
+  // Canvas-based effects
+  if (FX_CANVAS[name]) FX_CANVAS[name].start();
+}
+
+function _deactivateEffect(name) {
+  if (!_activeFx.has(name)) return;
+  _activeFx.delete(name);
+
+  if (FX_CLASSES[name]) document.documentElement.classList.remove(FX_CLASSES[name]);
+
+  (FX_LAYERS[name] || []).forEach(layer => {
+    const el = document.getElementById(layer.id);
+    if (el) {
+      // Clean up ice overflow
+      if (name === 'ice' && el.parentElement) {
+        el.parentElement.classList.remove('fx-ice-overflow');
+      }
+      el.remove();
+    }
+  });
+
+  if (FX_CANVAS[name]) FX_CANVAS[name].stop();
+}
+
+function _deactivateAllEffects() {
+  [..._activeFx].forEach(_deactivateEffect);
+}
+
+function applyEffects(mode) {
+  _deactivateAllEffects();
+
+  // Always strip theme pseudo-element effects — JS manages all overlays now
+  document.documentElement.setAttribute('data-fx-custom', '');
+
+  if (mode === 'none') return;
+
+  if (mode === 'auto') {
+    const theme = localStorage.getItem('haven_theme') || 'haven';
+    const defaults = THEME_DEFAULT_FX[theme];
+    if (defaults) defaults.forEach(_activateEffect);
+    return;
+  }
+
+  // Custom array of effects
+  if (Array.isArray(mode)) mode.forEach(_activateEffect);
+}
+
+// ── Matrix Digital Rain (canvas) ────────────────────────
+function _startMatrixRain() {
+  _stopMatrixRain();
+  const container = _ensureFxLayers();
+  const canvas = document.createElement('canvas');
+  canvas.id = 'fx-matrix-rain';
+  canvas.className = 'fx-canvas';
+  canvas.style.zIndex = '-1';
+  canvas.style.opacity = '0.35';
+  container.appendChild(canvas);
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+
+  _matrixCtx = canvas.getContext('2d');
+  const fontSize = 14;
+  const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  function initDrops() {
+    const cols = Math.ceil(canvas.width / fontSize);
+    _matrixDrops = new Array(cols).fill(0).map(() => Math.random() * -50);
+  }
+  initDrops();
+
+  function draw() {
+    _matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+    _matrixCtx.fillRect(0, 0, canvas.width, canvas.height);
+    _matrixCtx.font = fontSize + 'px monospace';
+
+    const cols = Math.ceil(canvas.width / fontSize);
+    for (let i = 0; i < cols; i++) {
+      if (i >= _matrixDrops.length) _matrixDrops.push(Math.random() * -50);
+      const ch = chars[Math.floor(Math.random() * chars.length)];
+      const x = i * fontSize;
+      const y = _matrixDrops[i] * fontSize;
+
+      // Depth: varying brightness
+      const bright = Math.random();
+      if (bright > 0.92) {
+        _matrixCtx.fillStyle = '#fff';
+      } else {
+        const g = Math.floor(60 + bright * 195);
+        _matrixCtx.fillStyle = 'rgb(0,' + g + ',0)';
+      }
+      _matrixCtx.fillText(ch, x, y);
+
+      if (y > canvas.height && Math.random() > 0.975) {
+        _matrixDrops[i] = 0;
+      }
+      _matrixDrops[i] += 0.4 + Math.random() * 0.6;
+    }
+    _matrixRAF = requestAnimationFrame(draw);
+  }
+  draw();
+
+  canvas._resizeHandler = () => { resize(); initDrops(); };
+  window.addEventListener('resize', canvas._resizeHandler);
+}
+
+function _stopMatrixRain() {
+  if (_matrixRAF) { cancelAnimationFrame(_matrixRAF); _matrixRAF = null; }
+  const c = document.getElementById('fx-matrix-rain');
+  if (c) {
+    if (c._resizeHandler) window.removeEventListener('resize', c._resizeHandler);
+    c.remove();
+  }
+  _matrixCtx = null;
+}
+
+// ── Dark Souls Rising Embers (canvas) ───────────────────
+function _startEmbers() {
+  _stopEmbers();
+  const container = _ensureFxLayers();
+  const canvas = document.createElement('canvas');
+  canvas.id = 'fx-ds-embers';
+  canvas.className = 'fx-canvas';
+  canvas.style.zIndex = '1';
+  container.appendChild(canvas);
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+
+  _emberCtx = canvas.getContext('2d');
+  _embers = [];
+
+  function spawnEmber() {
+    _embers.push({
+      x: Math.random() * canvas.width,
+      y: canvas.height + 5 + Math.random() * 20,
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: -(0.8 + Math.random() * 1.8),
+      size: 0.8 + Math.random() * 2,
+      life: 1,
+      decay: 0.008 + Math.random() * 0.018,
+      hue: 12 + Math.random() * 30,
+      flicker: Math.random() * Math.PI * 2
+    });
+  }
+
+  function draw() {
+    _emberCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Spawn new embers (steady stream from bottom)
+    const spawnRate = Math.max(1, Math.floor(canvas.width / 60));
+    for (let s = 0; s < spawnRate; s++) {
+      if (_embers.length < 120 && Math.random() > 0.65) spawnEmber();
+    }
+
+    for (let i = _embers.length - 1; i >= 0; i--) {
+      const e = _embers[i];
+      e.flicker += 0.15;
+      e.x += e.vx + Math.sin(e.flicker) * 0.3;
+      e.y += e.vy;
+      e.life -= e.decay;
+
+      if (e.life <= 0 || e.y < -10) { _embers.splice(i, 1); continue; }
+
+      const alpha = e.life * 0.9;
+      const sz = e.size * (0.3 + e.life * 0.7);
+
+      // Core
+      _emberCtx.globalAlpha = alpha;
+      _emberCtx.fillStyle = 'hsl(' + e.hue + ',100%,' + Math.floor(50 + e.life * 35) + '%)';
+      _emberCtx.beginPath();
+      _emberCtx.arc(e.x, e.y, sz, 0, Math.PI * 2);
+      _emberCtx.fill();
+
+      // Glow
+      _emberCtx.globalAlpha = alpha * 0.35;
+      _emberCtx.beginPath();
+      _emberCtx.arc(e.x, e.y, sz * 3.5, 0, Math.PI * 2);
+      _emberCtx.fill();
+    }
+    _emberCtx.globalAlpha = 1;
+    _emberRAF = requestAnimationFrame(draw);
+  }
+  draw();
+
+  canvas._resizeHandler = resize;
+  window.addEventListener('resize', canvas._resizeHandler);
+}
+
+function _stopEmbers() {
+  if (_emberRAF) { cancelAnimationFrame(_emberRAF); _emberRAF = null; }
+  const c = document.getElementById('fx-ds-embers');
+  if (c) {
+    if (c._resizeHandler) window.removeEventListener('resize', c._resizeHandler);
+    c.remove();
+  }
+  _emberCtx = null;
+  _embers = [];
+}
+
+// ── Effect mode helpers ─────────────────────────────────
+function _getStoredEffectMode() {
+  const stored = localStorage.getItem('haven_effects') || 'auto';
+  if (stored === 'auto' || stored === 'none') return stored;
+  try {
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) return parsed;
+  } catch(e) {}
+  // Legacy: single effect string from old system → convert to array
+  if (typeof stored === 'string' && stored.length > 0 && stored !== 'auto' && stored !== 'none') {
+    const arr = [stored];
+    localStorage.setItem('haven_effects', JSON.stringify(arr));
+    return arr;
+  }
+  return 'auto';
+}
+
+function _getCurrentCustomList() {
+  const mode = _getStoredEffectMode();
+  if (Array.isArray(mode)) return [...mode];
+  if (mode === 'auto') {
+    const theme = localStorage.getItem('haven_theme') || 'haven';
+    return [...(THEME_DEFAULT_FX[theme] || [])];
+  }
+  return [];
+}
+
+function _updateEffectButtons(container, mode) {
+  container.querySelectorAll('.effect-btn').forEach(btn => {
+    const fx = btn.dataset.effect;
+    if (mode === 'auto') {
+      btn.classList.toggle('active', fx === 'auto');
+    } else if (mode === 'none') {
+      btn.classList.toggle('active', fx === 'none');
+    } else if (Array.isArray(mode)) {
+      if (fx === 'auto' || fx === 'none') {
+        btn.classList.remove('active');
+      } else {
+        btn.classList.toggle('active', mode.includes(fx));
+      }
+    }
+  });
+}
+
+function initEffectSelector() {
+  const container = document.getElementById('effect-selector');
+  if (!container) return;
+
+  const mode = _getStoredEffectMode();
+  applyEffects(mode);
+  _updateEffectButtons(container, mode);
+
+  container.querySelectorAll('.effect-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fx = btn.dataset.effect;
+
+      if (fx === 'auto') {
+        localStorage.setItem('haven_effects', 'auto');
+        applyEffects('auto');
+        _updateEffectButtons(container, 'auto');
+      } else if (fx === 'none') {
+        localStorage.setItem('haven_effects', 'none');
+        applyEffects('none');
+        _updateEffectButtons(container, 'none');
+      } else {
+        // Toggle this effect
+        const current = _getCurrentCustomList();
+        const idx = current.indexOf(fx);
+        if (idx >= 0) {
+          current.splice(idx, 1);
+        } else {
+          current.push(fx);
+        }
+
+        if (current.length === 0) {
+          localStorage.setItem('haven_effects', 'none');
+          applyEffects('none');
+          _updateEffectButtons(container, 'none');
+        } else {
+          localStorage.setItem('haven_effects', JSON.stringify(current));
+          applyEffects(current);
+          _updateEffectButtons(container, current);
+        }
+      }
+
+      const theme = localStorage.getItem('haven_theme') || 'haven';
+      showEffectEditorIfDynamic(theme);
+    });
+  });
 }
 
 // ── Barycentric maths for the triangle ──────────────────
@@ -197,7 +578,6 @@ function drawHueBar(ctx, w, h, selectedHue) {
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(x, 0, 1, h);
   }
-  // Indicator line
   const ix = Math.round((selectedHue / 360) * w);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(ix, 0); ctx.lineTo(ix, h); ctx.stroke();
@@ -274,7 +654,6 @@ function initCustomThemeEditor() {
 
   function render() { redrawHue(); redrawTri(); apply(); }
 
-  // ── Hue bar interaction ──
   function hueFromEvent(e) {
     const r = hueCanvas.getBoundingClientRect();
     const x = Math.max(0, Math.min((e.clientX ?? e.touches[0].clientX) - r.left, r.width));
@@ -288,7 +667,6 @@ function initCustomThemeEditor() {
   hueCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); hueFromEvent(e); });
   hueCanvas.addEventListener('touchmove',  (e) => { e.preventDefault(); hueFromEvent(e); });
 
-  // ── Triangle interaction ──
   const pad = 8;
   const tw = triCanvas.width, th = triCanvas.height;
   const ax = tw / 2, ay = pad, bx = pad, by = th - pad, cx = tw - pad, cy = th - pad;
@@ -316,43 +694,6 @@ function initCustomThemeEditor() {
 
   editor._show = () => { editor.style.display = 'block'; render(); };
   editor._hide = () => { editor.style.display = 'none'; };
-}
-
-// ═══════════════════════════════════════════════════════════
-// MASHUP: EFFECT OVERLAY SELECTOR
-// ═══════════════════════════════════════════════════════════
-function applyEffect(effect) {
-  if (!effect || effect === 'auto') {
-    document.documentElement.removeAttribute('data-effects');
-  } else {
-    document.documentElement.setAttribute('data-effects', effect);
-  }
-}
-
-function initEffectSelector() {
-  const container = document.getElementById('effect-selector');
-  if (!container) return;
-
-  const saved = localStorage.getItem('haven_effects') || 'auto';
-  applyEffect(saved);
-
-  container.querySelectorAll('.effect-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.effect === saved);
-
-    btn.addEventListener('click', () => {
-      const effect = btn.dataset.effect;
-      localStorage.setItem('haven_effects', effect);
-      applyEffect(effect);
-
-      container.querySelectorAll('.effect-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.effect === effect);
-      });
-
-      // Update effect speed editor visibility
-      const theme = localStorage.getItem('haven_theme') || 'haven';
-      showEffectEditorIfDynamic(theme);
-    });
-  });
 }
 
 // ────────────────────────────────────────────────────────
@@ -411,6 +752,9 @@ function initThemeSwitcher(containerId, socket) {
         if (customEditor && customEditor._hide) customEditor._hide();
         if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
       }
+      // Re-apply effects (AUTO mode picks up new theme's defaults)
+      const fxMode = _getStoredEffectMode();
+      applyEffects(fxMode);
       showEffectEditorIfDynamic(theme);
     });
   });
@@ -456,5 +800,8 @@ function applyThemeFromServer(theme) {
     const rgbEditor = document.getElementById('rgb-theme-editor');
     if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
   }
+  // Re-apply effects for new theme
+  const fxMode = _getStoredEffectMode();
+  applyEffects(fxMode);
   showEffectEditorIfDynamic(theme);
 }

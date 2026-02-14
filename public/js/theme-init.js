@@ -2,9 +2,19 @@
 (function() {
   var t = localStorage.getItem('haven_theme');
   if (t) document.documentElement.setAttribute('data-theme', t);
-  // Apply saved effect overlay (mashup system)
-  var fx = localStorage.getItem('haven_effects');
-  if (fx && fx !== 'auto') document.documentElement.setAttribute('data-effects', fx);
+  // Apply effect overlay system (stackable) — always strip theme pseudo-element effects
+  document.documentElement.setAttribute('data-fx-custom', '');
+  var fxRaw = localStorage.getItem('haven_effects') || 'auto';
+  var fxMode;
+  try { fxMode = JSON.parse(fxRaw); } catch(e) { fxMode = fxRaw; }
+  // Apply CRT class early for scanline var + font (prevents FOUC)
+  var fxList = [];
+  if (Array.isArray(fxMode)) { fxList = fxMode; }
+  else if (fxMode === 'auto' && t) {
+    var defaults = {crt:1,matrix:1,fallout:1,ffx:1,ice:1,nord:1,darksouls:1,bloodborne:1,cyberpunk:1,lotr:1,abyss:1,scripture:1,chapel:1,gospel:1};
+    if (defaults[t]) fxList = [t];
+  }
+  if (fxList.indexOf('crt') >= 0) document.documentElement.classList.add('fx-crt');
   // Apply custom theme variables if custom theme is active
   if (t === 'custom') {
     try {

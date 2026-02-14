@@ -1876,83 +1876,108 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 
 
 /* ═══════════════════════════════════════════════════════════
-   MASHUP: INDEPENDENT EFFECT OVERLAYS (data-effects)
-   Mix-and-match visual effects with any color palette.
-   When data-effects is set, these rules override native theme effects.
+   STACKABLE EFFECT OVERLAY SYSTEM
+   Effects are managed via JS-injected DOM elements so they
+   can stack. When [data-fx-custom] is on <html>, theme-native
+   pseudo-element effects are stripped and only the JS-managed
+   overlay layers render.
    ═══════════════════════════════════════════════════════════ */
 
-/* Base reset: clear scanlines when an explicit effect is set */
-[data-effects] { --scanline: none; }
+/* Strip base theme pseudo-element effects when custom layers are active */
+[data-fx-custom] .main::before,
+[data-fx-custom] .main::after,
+[data-fx-custom] .sidebar::after,
+[data-fx-custom] .sidebar-header::after,
+[data-fx-custom] .channel-header::after { content: none !important; }
+[data-fx-custom] .brand-text { animation: none !important; }
+[data-fx-custom] .sidebar,
+[data-fx-custom] .main { position: relative; }
 
-/* ── None: strip ALL visual overlays ─────────────────── */
-[data-effects="none"] .main::before,
-[data-effects="none"] .main::after,
-[data-effects="none"] .sidebar::after,
-[data-effects="none"] .sidebar-header::after,
-[data-effects="none"] .channel-header::after { content: none !important; }
-[data-effects="none"] .brand-text { animation: none !important; }
+/* Full-screen overlay container */
+#fx-layers {
+  position: fixed; inset: 0; z-index: 99990;
+  pointer-events: none; overflow: hidden;
+}
+#fx-layers > * { pointer-events: none; }
 
-/* ── CRT: Scanlines + flicker + phosphor + mono font ── */
-[data-effects="crt"] {
-  --scanline: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.25) 1px, rgba(0,0,0,0.25) 2px);
+/* Canvas layers (matrix rain, embers) */
+.fx-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+  width: 100%; height: 100%;
+}
+
+/* Sidebar-injected overlay base */
+.fx-sidebar-layer {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
+}
+
+/* Main-injected overlay base */
+.fx-main-layer {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
+}
+
+/* ── CRT class on <html> (scanlines + font) ───────────── */
+.fx-crt {
+  --scanline: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.35) 1px, rgba(0,0,0,0.35) 2px);
   --font-main: 'VT323', 'Courier New', monospace;
   --font-heading: 'VT323', 'Courier New', monospace;
   --font-mono: 'VT323', 'Courier New', monospace;
 }
-[data-effects="crt"] .main {
-  position: relative; border-radius: 14px;
-  box-shadow: inset 0 0 120px var(--accent-glow, rgba(255,176,0,0.1)), inset 0 0 12px rgba(0,0,0,0.9);
-  overflow: hidden;
-}
-[data-effects="crt"] .main::before {
-  content: ''; position: fixed; inset: 0; z-index: 99998; pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.6) 100%);
+
+/* ── CRT vignette overlay ─────────────────────────────── */
+.fx-crt-vignette {
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.55) 65%, rgba(0,0,0,0.85) 100%);
   animation: crt-flicker calc(0.06s * var(--fx-mult, 1)) infinite alternate;
+  border-radius: 10px;
+  box-shadow: inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 250px rgba(0,0,0,0.5);
 }
 
-/* ── Matrix: Scanlines + digital rain ────────────────── */
-[data-effects="matrix"] {
-  --scanline: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,65,0.015) 2px, rgba(0,255,65,0.015) 4px);
-}
-[data-effects="matrix"] .sidebar { position: relative; overflow: hidden; }
-[data-effects="matrix"] .sidebar::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: repeating-linear-gradient(0deg, transparent 0px, transparent 18px, rgba(0,255,0,0.15) 18px, rgba(0,255,0,0.15) 20px);
+/* ── Matrix sidebar bars overlay ──────────────────────── */
+.fx-matrix-bars {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(0deg,
+    transparent 0px, transparent 18px,
+    rgba(0,255,0,0.15) 18px, rgba(0,255,0,0.15) 20px);
   animation: matrix-rain calc(1.5s * var(--fx-mult, 1)) linear infinite;
 }
 
-/* ── Fallout: Phosphor glow + vignette ───────────────── */
-[data-effects="fallout"] .main {
-  position: relative;
-  box-shadow: inset 0 0 120px rgba(20,254,23,0.12);
-}
-[data-effects="fallout"] .main::before {
-  content: ''; position: fixed; inset: 0; z-index: 99998; pointer-events: none;
+/* ── Fallout vignette overlay ─────────────────────────── */
+.fx-fallout-vignette {
+  position: fixed; inset: 0;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(0,10,0,0.55) 100%);
 }
 
-/* ── FFX: Water overlay + wave bar ───────────────────── */
-[data-effects="ffx"] .sidebar { position: relative; }
-[data-effects="ffx"] .sidebar::after {
-  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background: linear-gradient(180deg, transparent 0%, rgba(64,168,224,0.25) 15%, transparent 30%, rgba(64,168,224,0.20) 50%, transparent 65%, rgba(64,168,224,0.15) 80%, transparent 100%);
+/* ── FFX water (sidebar) overlay ──────────────────────── */
+.fx-ffx-water {
+  position: absolute; inset: 0; z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    transparent 0%, rgba(64,168,224,0.25) 15%, transparent 30%,
+    rgba(64,168,224,0.20) 50%, transparent 65%,
+    rgba(64,168,224,0.15) 80%, transparent 100%);
   background-size: 100% 200%;
   animation: ffx-water calc(5s * var(--fx-mult, 1)) ease-in-out infinite;
 }
-[data-effects="ffx"] .main { position: relative; }
-[data-effects="ffx"] .main::after {
-  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 6px;
-  pointer-events: none; z-index: 99998;
-  background: linear-gradient(90deg, transparent, rgba(64,168,224,0.6), rgba(100,200,255,0.8), rgba(64,168,224,0.6), transparent);
+
+/* ── FFX wave bar overlay ─────────────────────────────── */
+.fx-ffx-wave {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 6px;
+  background: linear-gradient(90deg,
+    transparent, rgba(64,168,224,0.6), rgba(100,200,255,0.8),
+    rgba(64,168,224,0.6), transparent);
   background-size: 200% 100%;
   animation: ffx-wave-bar calc(3s * var(--fx-mult, 1)) ease-in-out infinite;
   filter: blur(1px);
 }
 
-/* ── Ice: Frost shimmer ──────────────────────────────── */
-[data-effects="ice"] .main { position: relative; }
-[data-effects="ice"] .main::after {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+/* ── Ice shimmer overlay ──────────────────────────────── */
+.fx-ice-shimmer {
+  position: fixed; inset: 0;
   background:
     radial-gradient(3px 3px at 10% 25%, rgba(200,235,255,0.8), transparent),
     radial-gradient(2px 2px at 25% 60%, rgba(200,235,255,0.6), transparent),
@@ -1965,10 +1990,30 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   animation: ice-shimmer calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* ── Nord: Snowfall ──────────────────────────────────── */
-[data-effects="nord"] .main { position: relative; }
-[data-effects="nord"] .main::before {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+/* ── Ice icicles overlays ─────────────────────────────── */
+.fx-ice-icicle {
+  position: absolute; bottom: -12px; left: 0; right: 0; height: 12px;
+  pointer-events: none; z-index: 2;
+  background: linear-gradient(180deg, rgba(180,230,255,0.7), rgba(180,230,255,0.0));
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 8,0 10,10 12,0 20,0 22,7 24,0 32,0 35,12 38,0 46,0 48,8 50,0 58,0 61,11 64,0 72,0 74,6 76,0 84,0 87,12 90,0 98,0 100,9 102,0 110,0 113,11 116,0 124,0 126,7 128,0 136,0 139,12 142,0 150,0 152,8 154,0 162,0 165,10 168,0 176,0 178,6 180,0 188,0 191,12 194,0 200,0 200,0 0,0'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 8,0 10,10 12,0 20,0 22,7 24,0 32,0 35,12 38,0 46,0 48,8 50,0 58,0 61,11 64,0 72,0 74,6 76,0 84,0 87,12 90,0 98,0 100,9 102,0 110,0 113,11 116,0 124,0 126,7 128,0 136,0 139,12 142,0 150,0 152,8 154,0 162,0 165,10 168,0 176,0 178,6 180,0 188,0 191,12 194,0 200,0 200,0 0,0'/%3E%3C/svg%3E");
+  -webkit-mask-size: 200px 12px; mask-size: 200px 12px;
+  -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x;
+  animation: ice-drip calc(3s * var(--fx-mult, 1)) ease-in-out infinite;
+}
+.fx-ice-icicle-sb {
+  position: absolute; bottom: -10px; left: 0; right: 0; height: 10px;
+  pointer-events: none; z-index: 2;
+  background: linear-gradient(180deg, rgba(180,230,255,0.6), rgba(180,230,255,0.0));
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 8,0 10,10 12,0 20,0 22,7 24,0 32,0 35,12 38,0 46,0 48,8 50,0 58,0 61,11 64,0 72,0 74,6 76,0 84,0 87,12 90,0 98,0 100,9 102,0 110,0 113,11 116,0 124,0 126,7 128,0 136,0 139,12 142,0 150,0 152,8 154,0 162,0 165,10 168,0 176,0 178,6 180,0 188,0 191,12 194,0 200,0 200,0 0,0'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 8,0 10,10 12,0 20,0 22,7 24,0 32,0 35,12 38,0 46,0 48,8 50,0 58,0 61,11 64,0 72,0 74,6 76,0 84,0 87,12 90,0 98,0 100,9 102,0 110,0 113,11 116,0 124,0 126,7 128,0 136,0 139,12 142,0 150,0 152,8 154,0 162,0 165,10 168,0 176,0 178,6 180,0 188,0 191,12 194,0 200,0 200,0 0,0'/%3E%3C/svg%3E");
+  -webkit-mask-size: 200px 10px; mask-size: 200px 10px;
+  -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x;
+}
+
+/* ── Nord snowfall overlay ────────────────────────────── */
+.fx-nord-snow {
+  position: fixed; inset: 0;
   background-image:
     radial-gradient(3px 3px at 10% 0%, rgba(216,222,233,0.8), transparent),
     radial-gradient(2px 2px at 25% 0%, rgba(216,222,233,0.8), transparent),
@@ -1976,7 +2021,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     radial-gradient(2px 2px at 55% 0%, rgba(216,222,233,0.8), transparent),
     radial-gradient(3px 3px at 70% 0%, rgba(216,222,233,0.8), transparent),
     radial-gradient(2px 2px at 85% 0%, rgba(216,222,233,0.8), transparent),
-    radial-gradient(2px 2px at 5% 0%, rgba(216,222,233,0.8), transparent),
+    radial-gradient(2px 2px at  5% 0%, rgba(216,222,233,0.8), transparent),
     radial-gradient(3px 3px at 95% 0%, rgba(216,222,233,0.8), transparent),
     radial-gradient(2px 2px at 18% 0%, rgba(216,222,233,0.8), transparent),
     radial-gradient(3px 3px at 33% 0%, rgba(216,222,233,0.8), transparent),
@@ -1993,61 +2038,65 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   animation: nord-snow calc(6s * var(--fx-mult, 1)) linear infinite;
 }
 
-/* ── Dark Souls: Campfire ────────────────────────────── */
-[data-effects="darksouls"] .sidebar { position: relative; }
-[data-effects="darksouls"] .sidebar::after {
-  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 55vh;
+/* ── Dark Souls ember glow (sidebar) overlay ──────────── */
+.fx-ds-ember-glow {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 100%;
   pointer-events: none; z-index: 1;
-  background: linear-gradient(0deg, rgba(180,70,10,0.22) 0%, rgba(140,45,5,0.12) 25%, rgba(100,30,0,0.05) 50%, transparent 100%);
+  background: linear-gradient(0deg,
+    rgba(180,70,10,0.22) 0%, rgba(140,45,5,0.12) 25%,
+    rgba(100,30,0,0.05) 50%, transparent 100%);
   animation: ds-ember calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
-[data-effects="darksouls"] .main { position: relative; }
-[data-effects="darksouls"] .main::before {
-  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 10px;
-  pointer-events: none; z-index: 99998;
-  background: linear-gradient(90deg, transparent 0%, rgba(180,60,5,0.25) 15%, rgba(200,110,20,0.4) 35%, rgba(210,140,40,0.5) 50%, rgba(200,110,20,0.4) 65%, rgba(180,60,5,0.25) 85%, transparent 100%);
+
+/* ── Dark Souls fireline overlay ──────────────────────── */
+.fx-ds-fireline {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 10px;
+  background: linear-gradient(90deg,
+    transparent 0%, rgba(180,60,5,0.25) 15%, rgba(200,110,20,0.4) 35%,
+    rgba(210,140,40,0.5) 50%, rgba(200,110,20,0.4) 65%,
+    rgba(180,60,5,0.25) 85%, transparent 100%);
   filter: blur(5px);
   animation: ds-fireline calc(3s * var(--fx-mult, 1)) ease-in-out infinite alternate;
 }
-[data-effects="darksouls"] .main::after {
-  content: ''; position: fixed; bottom: 0; left: 0; right: 0; height: 50vh;
-  pointer-events: none; z-index: 99997;
-  background: radial-gradient(ellipse 80% 70% at 50% 100%, rgba(180,70,10,0.10) 0%, rgba(140,45,5,0.05) 40%, transparent 100%);
+
+/* ── Dark Souls ambient glow overlay ──────────────────── */
+.fx-ds-ambient {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 50vh;
+  background: radial-gradient(ellipse 80% 70% at 50% 100%,
+    rgba(180,70,10,0.10) 0%, rgba(140,45,5,0.05) 40%, transparent 100%);
   animation: ds-ambient calc(5s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* ── Bloodborne: Blood vignette ──────────────────────── */
-[data-effects="bloodborne"] .main { position: relative; }
-[data-effects="bloodborne"] .main::before {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+/* ── Bloodborne blood vignette overlay ────────────────── */
+.fx-bb-vignette {
+  position: fixed; inset: 0;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(120,10,10,0.35) 100%);
   animation: bb-vignette calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* ── Cyberpunk: Glitch ───────────────────────────────── */
-[data-effects="cyberpunk"] .brand-text {
+/* ── Cyberpunk class on <html> (glitch) ───────────────── */
+.fx-cyberpunk .brand-text {
   animation: cp-glitch calc(4s * var(--fx-mult, 1)) infinite;
 }
 
-/* ── LOTR: Candlelight ───────────────────────────────── */
-[data-effects="lotr"] .sidebar { position: relative; }
-[data-effects="lotr"] .sidebar::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+/* ── LOTR candle (sidebar) overlay ────────────────────── */
+.fx-lotr-candle {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse at 50% 100%, rgba(220,170,60,0.2), transparent 60%);
   animation: lotr-candle calc(3s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* ── Abyss: Ocean vignette ───────────────────────────── */
-[data-effects="abyss"] .main { position: relative; }
-[data-effects="abyss"] .main::before {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+/* ── Abyss ocean vignette overlay ─────────────────────── */
+.fx-abyss-vignette {
+  position: fixed; inset: 0;
   background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,40,0.35) 100%);
 }
 
-/* ── Scripture: Pulsating cross ──────────────────────── */
-[data-effects="scripture"] .main { position: relative; }
-[data-effects="scripture"] .main::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+/* ── Scripture cross overlay ──────────────────────────── */
+.fx-scripture-cross {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
   background:
     linear-gradient(to bottom, transparent 10%, rgba(200,168,76,0.08) 25%, rgba(200,168,76,0.14) 40%, rgba(200,168,76,0.08) 55%, transparent 75%) center / 6% 100% no-repeat,
     linear-gradient(to right, transparent 25%, rgba(200,168,76,0.08) 38%, rgba(200,168,76,0.12) 46%, rgba(200,168,76,0.12) 54%, rgba(200,168,76,0.08) 62%, transparent 75%) center 30% / 100% 5% no-repeat,
@@ -2056,10 +2105,10 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   mix-blend-mode: screen;
 }
 
-/* ── Chapel: Stained glass ───────────────────────────── */
-[data-effects="chapel"] .main { position: relative; }
-[data-effects="chapel"] .main::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+/* ── Chapel stained glass overlay ─────────────────────── */
+.fx-chapel-glass {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
   background:
     linear-gradient(155deg, transparent 15%, rgba(138,92,240,0.06) 25%, rgba(102,51,204,0.09) 35%, transparent 50%) no-repeat,
     linear-gradient(175deg, transparent 20%, rgba(200,80,140,0.05) 35%, rgba(220,100,160,0.08) 45%, transparent 60%) no-repeat,
@@ -2069,16 +2118,19 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   mix-blend-mode: screen;
 }
 
-/* ── Gospel: Divine radiance ─────────────────────────── */
-[data-effects="gospel"] .main { position: relative; }
-[data-effects="gospel"] .main::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+/* ── Gospel radiance overlay ──────────────────────────── */
+.fx-gospel-radiance {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
   background:
     linear-gradient(180deg, rgba(200,168,76,0.06) 0%, rgba(220,195,120,0.04) 15%, transparent 45%) no-repeat,
     radial-gradient(ellipse 50% 40% at 50% 20%, rgba(139,32,50,0.04) 0%, rgba(200,168,76,0.02) 40%, transparent 70%),
     radial-gradient(circle at 50% 10%, rgba(255,250,240,0.05) 0%, transparent 50%);
   animation: gospel-radiance 10s ease-in-out infinite;
 }
+
+/* ── Ice parent helpers ───────────────────────────────── */
+.fx-ice-overflow { position: relative !important; overflow: visible !important; }
 
 
 /* ─── Custom Theme Triangle Picker ───────────────────── */
