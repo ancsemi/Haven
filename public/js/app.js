@@ -2227,17 +2227,18 @@ class HavenApp {
       const isCollapsed = hasSubs && localStorage.getItem(`haven_subs_collapsed_${ch.code}`) === 'true';
 
       el.innerHTML = `
-        <span class="channel-hash${hasSubs ? ' has-subs' : ''}${isCollapsed ? ' collapsed' : ''}" title="${hasSubs ? 'Click to expand/collapse sub-channels' : ''}">${isSub ? '↳' : '#'}</span>
+        <span class="channel-hash">${isSub ? '↳' : '#'}</span>
         <span class="channel-name">${this._escapeHtml(ch.name)}</span>
+        ${hasSubs ? `<span class="channel-collapse-arrow${isCollapsed ? ' collapsed' : ''}" title="Expand/collapse sub-channels">▾</span>` : ''}
         <button class="channel-more-btn" title="Channel options">⋯</button>
       `;
 
-      // If parent has sub-channels, clicking the # toggles them
+      // If parent has sub-channels, clicking the arrow toggles them
       if (hasSubs) {
-        const hash = el.querySelector('.channel-hash');
-        hash.addEventListener('click', (e) => {
+        const arrow = el.querySelector('.channel-collapse-arrow');
+        arrow.addEventListener('click', (e) => {
           e.stopPropagation();
-          const collapsed = hash.classList.toggle('collapsed');
+          const collapsed = arrow.classList.toggle('collapsed');
           localStorage.setItem(`haven_subs_collapsed_${ch.code}`, collapsed);
           // Toggle visibility of all sub-channel items for this parent
           document.querySelectorAll(`.sub-channel-item[data-parent-id="${ch.id}"]`).forEach(sub => {

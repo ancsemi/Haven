@@ -885,6 +885,46 @@
 [data-theme="scripture"] .modal { border: 1px solid rgba(200, 168, 76, 0.2); box-shadow: 0 0 20px rgba(200, 168, 76, 0.08); }
 [data-theme="scripture"] ::selection { background: #c8a84c; color: #1a1610; }
 
+/* Scripture ambient: sunlight through a crucifix window */
+@keyframes scripture-cross-pulse {
+  0%, 100% { opacity: 0.03; }
+  50%      { opacity: 0.07; }
+}
+[data-theme="scripture"] .main {
+  position: relative;
+}
+[data-theme="scripture"] .main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* vertical beam */
+    linear-gradient(to bottom,
+      transparent 10%,
+      rgba(200, 168, 76, 0.08) 25%,
+      rgba(200, 168, 76, 0.14) 40%,
+      rgba(200, 168, 76, 0.08) 55%,
+      transparent 75%)
+    center / 6% 100% no-repeat,
+    /* horizontal beam */
+    linear-gradient(to right,
+      transparent 25%,
+      rgba(200, 168, 76, 0.08) 38%,
+      rgba(200, 168, 76, 0.12) 46%,
+      rgba(200, 168, 76, 0.12) 54%,
+      rgba(200, 168, 76, 0.08) 62%,
+      transparent 75%)
+    center 30% / 100% 5% no-repeat,
+    /* warm radial glow behind the cross */
+    radial-gradient(ellipse 30% 50% at 50% 38%,
+      rgba(200, 168, 76, 0.06) 0%,
+      transparent 70%);
+  animation: scripture-cross-pulse 8s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
 /* ─── THEME: Chapel (Stained Glass) ────────────────────── */
 [data-theme="chapel"] {
   --bg-primary:    #0e0c18;
@@ -931,6 +971,52 @@
 [data-theme="chapel"] .channel-badge { background: #8a5cf0; color: #0e0c18; }
 [data-theme="chapel"] .modal { border: 1px solid rgba(138, 92, 240, 0.2); box-shadow: 0 0 20px rgba(138, 92, 240, 0.1); }
 [data-theme="chapel"] ::selection { background: #8a5cf0; color: #0e0c18; }
+
+/* Chapel ambient: prismatic stained glass light beams */
+@keyframes chapel-glass-shift {
+  0%   { opacity: 0.04; filter: hue-rotate(0deg); }
+  33%  { opacity: 0.07; filter: hue-rotate(15deg); }
+  66%  { opacity: 0.05; filter: hue-rotate(-10deg); }
+  100% { opacity: 0.04; filter: hue-rotate(0deg); }
+}
+[data-theme="chapel"] .main {
+  position: relative;
+}
+[data-theme="chapel"] .main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* left violet beam */
+    linear-gradient(155deg,
+      transparent 15%,
+      rgba(138, 92, 240, 0.06) 25%,
+      rgba(102, 51, 204, 0.09) 35%,
+      transparent 50%)
+    no-repeat,
+    /* center rose beam */
+    linear-gradient(175deg,
+      transparent 20%,
+      rgba(200, 80, 140, 0.05) 35%,
+      rgba(220, 100, 160, 0.08) 45%,
+      transparent 60%)
+    no-repeat,
+    /* right gold beam */
+    linear-gradient(195deg,
+      transparent 30%,
+      rgba(200, 168, 76, 0.04) 45%,
+      rgba(220, 190, 100, 0.07) 55%,
+      transparent 70%)
+    no-repeat,
+    /* warm highlight core */
+    radial-gradient(ellipse 40% 35% at 50% 25%,
+      rgba(138, 92, 240, 0.04) 0%,
+      transparent 70%);
+  animation: chapel-glass-shift 12s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
 
 /* ─── THEME: Gospel (Light Cream & Ruby) ───────────────── */
 [data-theme="gospel"] {
@@ -979,6 +1065,39 @@
 [data-theme="gospel"] .sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border); }
 [data-theme="gospel"] .modal { border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
 [data-theme="gospel"] ::selection { background: #8b2032; color: #f5f0e8; }
+
+/* Gospel ambient: soft divine radiance descending */
+@keyframes gospel-radiance {
+  0%, 100% { opacity: 0.04; transform: scale(1); }
+  50%      { opacity: 0.08; transform: scale(1.03); }
+}
+[data-theme="gospel"] .main {
+  position: relative;
+}
+[data-theme="gospel"] .main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* warm descending ray from top center */
+    linear-gradient(180deg,
+      rgba(200, 168, 76, 0.06) 0%,
+      rgba(220, 195, 120, 0.04) 15%,
+      transparent 45%)
+    no-repeat,
+    /* ruby tinted glow */
+    radial-gradient(ellipse 50% 40% at 50% 20%,
+      rgba(139, 32, 50, 0.04) 0%,
+      rgba(200, 168, 76, 0.02) 40%,
+      transparent 70%),
+    /* soft dove-like light spread */
+    radial-gradient(circle at 50% 10%,
+      rgba(255, 250, 240, 0.05) 0%,
+      transparent 50%);
+  animation: gospel-radiance 10s ease-in-out infinite;
+}
 
 /* ─── THEME: CRT ───────────────────────────────────────── */
 [data-theme="crt"] {
@@ -6484,14 +6603,14 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 /* ── Sub-channel styling ─────────────────────────────── */
 .sub-channel-item {
   padding-left: 28px !important;
-  font-size: 13px;
+  font-size: 14px;
 }
 .sub-channel-item .channel-hash {
-  font-size: 11px;
+  font-size: 14px;
   opacity: 0.7;
 }
 .sub-channel-item .channel-name {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 /* ── Role badge (user list & messages) ───────────────── */
@@ -6517,23 +6636,26 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   display: inline;
 }
 
-/* ── Collapsible sub-channel toggle ──────────────────── */
-.channel-hash.has-subs {
+/* ── Collapsible sub-channel toggle arrow ────────────── */
+.channel-collapse-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: transform 0.15s ease, color 0.15s;
   user-select: none;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, color 0.15s;
+  margin-left: auto;
+  order: 99;
 }
-.channel-hash.has-subs:hover {
+.channel-collapse-arrow:hover {
   color: var(--accent);
 }
-.channel-hash.has-subs::before {
-  content: '▾';
-  display: inline-block;
-  font-size: 9px;
-  margin-right: 2px;
-  transition: transform 0.15s ease;
-}
-.channel-hash.has-subs.collapsed::before {
+.channel-collapse-arrow.collapsed {
   transform: rotate(-90deg);
 }
 
