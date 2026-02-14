@@ -357,7 +357,7 @@ function _startMatrixRain() {
   canvas.id = 'fx-matrix-rain';
   canvas.className = 'fx-canvas';
   canvas.style.zIndex = '-1';
-  canvas.style.opacity = '0.35';
+  canvas.style.opacity = '0.18';
   container.appendChild(canvas);
 
   function resize() {
@@ -377,7 +377,7 @@ function _startMatrixRain() {
   initDrops();
 
   function draw() {
-    _matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.045)';
+    _matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.03)';
     _matrixCtx.fillRect(0, 0, canvas.width, canvas.height);
     _matrixCtx.font = fontSize + 'px monospace';
 

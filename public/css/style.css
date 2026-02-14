@@ -2922,18 +2922,72 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 .avatar-preview-circle {
   width: 64px;
   height: 64px;
-  border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
   border: 2px solid var(--border);
+  border-radius: 50%;
 }
 .avatar-preview-circle img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
 }
 .avatar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* PFP Customizer */
+.pfp-option-group { margin-top: 10px; }
+.pfp-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px; }
+
+/* Avatar Shape Picker */
+.avatar-shape-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.avatar-shape-btn {
+  width: 38px; height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-tertiary, #2a2a2e); border: 2px solid var(--border);
+  border-radius: 6px; cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.avatar-shape-btn:hover { border-color: var(--text-secondary); }
+.avatar-shape-btn.active { border-color: var(--accent); box-shadow: 0 0 8px rgba(var(--accent-rgb, 88,101,242), 0.4); }
+.shape-preview { width: 20px; height: 20px; background: var(--accent, #5865f2); }
+.shape-circle   { border-radius: 50%; }
+.shape-rounded  { border-radius: 4px; }
+.shape-squircle { border-radius: 28%; }
+.shape-hex      { clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.shape-diamond  { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+
+/* Avatar Shape Classes — applied to .message-avatar and .message-avatar-img */
+.avatar-circle   { border-radius: 50% !important; }
+.avatar-rounded  { border-radius: 6px !important; }
+.avatar-squircle { border-radius: 28% !important; }
+.avatar-hex      { clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); border-radius: 0 !important; }
+.avatar-diamond  { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); border-radius: 0 !important; }
+
+/* Size slider */
+#avatar-size-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary, #2a2a2e);
+  outline: none;
+}
+#avatar-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent, #5865f2);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary, #1e1e22);
+}
+#avatar-size-slider::-moz-range-thumb {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent, #5865f2);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary, #1e1e22);
+}
 
 /* Custom sounds admin */
 .custom-sound-item {
