@@ -110,16 +110,17 @@ class HavenApp {
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback
-    document.getElementById('messages')?.addEventListener('error', (e) => {
+    const avatarErrorHandler = (e) => {
       if (e.target.tagName === 'IMG') {
         e.target.style.display = 'none';
-        // Show the letter-initial fallback div if it exists as the next sibling
         const fallback = e.target.nextElementSibling;
-        if (fallback && fallback.classList.contains('message-avatar')) {
+        if (fallback && (fallback.classList.contains('message-avatar') || fallback.classList.contains('user-item-avatar'))) {
           fallback.style.display = 'flex';
         }
       }
-    }, true);
+    };
+    document.getElementById('messages')?.addEventListener('error', avatarErrorHandler, true);
+    document.getElementById('online-users')?.addEventListener('error', avatarErrorHandler, true);
 
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
@@ -1664,128 +1665,181 @@ class HavenApp {
   }
 
   // ═══════════════════════════════════════════════════════
-  // AVATAR UPLOAD
+  // AVATAR / PFP CUSTOMIZER
   // ═══════════════════════════════════════════════════════
 
   _updateAvatarPreview() {
-    const preview = document.getElementById('avatar-preview');
-    if (!preview) return;
-    if (this.user.avatar) {
-      preview.innerHTML = `<img src="${this._escapeHtml(this.user.avatar)}" alt="Avatar">`;
-    } else {
-      const color = this._getUserColor(this.user.username);
-      const initial = this.user.username.charAt(0).toUpperCase();
-      preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:24px;color:white">${initial}</div>`;
-    }
-    // Also update rename modal's avatar preview
-    this._updateRenameAvatarPreview();
-  }
-
-  _updateRenameAvatarPreview() {
-    const preview = document.getElementById('rename-avatar-preview');
-    if (!preview) return;
-    if (this.user.avatar) {
-      preview.innerHTML = `<img src="${this._escapeHtml(this.user.avatar)}" alt="Avatar">`;
-    } else {
-      const color = this._getUserColor(this.user.username);
-      const initial = this.user.username.charAt(0).toUpperCase();
-      preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:24px;color:white">${initial}</div>`;
-    }
+    const shapeClass = 'avatar-' + (this._avatarShape || 'circle');
+    ['avatar-preview', 'rename-avatar-preview'].forEach(id => {
+      const preview = document.getElementById(id);
+      if (!preview) return;
+      if (this.user.avatar) {
+        preview.innerHTML = `<img src="${this._escapeHtml(this.user.avatar)}" alt="Avatar" class="${shapeClass}">`;
+      } else {
+        const color = this._getUserColor(this.user.username);
+        const initial = this.user.username.charAt(0).toUpperCase();
+        preview.innerHTML = `<div class="${shapeClass}" style="background-color:${color};width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:24px;color:white">${initial}</div>`;
+      }
+    });
   }
 
   _setupAvatarUpload() {
-    this._updateAvatarPreview();
+    // Load saved shape preference
+    this._avatarShape = localStorage.getItem('haven_avatar_shape') || 'circle';
+    this._avatarSize = parseInt(localStorage.getItem('haven_avatar_size') || '256', 10);
+    this._pendingAvatarFile = null; // raw Image element for re-processing
 
-    // Helper: wire up avatar upload for a given set of elements
-    const wireUpload = (btnId, inputId, removeBtnId) => {
-      const uploadBtn = document.getElementById(btnId);
-      const fileInput = document.getElementById(inputId);
-      const removeBtn = document.getElementById(removeBtnId);
-      if (!uploadBtn || !fileInput) {
-        console.warn(`[Avatar] Missing elements: #${btnId}=${!!uploadBtn}, #${inputId}=${!!fileInput}`);
+    this._updateAvatarPreview();
+    this._setupAvatarShapePicker();
+    this._setupAvatarImageUpload();
+    this._setupAvatarSizeSlider();
+    this._applyAvatarShape();
+  }
+
+  _setupAvatarShapePicker() {
+    const picker = document.getElementById('avatar-shape-picker');
+    if (!picker) return;
+    picker.querySelectorAll('.avatar-shape-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.shape === this._avatarShape);
+      btn.addEventListener('click', () => {
+        picker.querySelectorAll('.avatar-shape-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._avatarShape = btn.dataset.shape;
+        localStorage.setItem('haven_avatar_shape', btn.dataset.shape);
+        this._applyAvatarShape();
+        this._updateAvatarPreview();
+        // Re-process current image with new shape if we have one loaded
+        if (this._pendingAvatarFile) this._processAndUploadAvatar(this._pendingAvatarFile);
+      });
+    });
+  }
+
+  _setupAvatarSizeSlider() {
+    const slider = document.getElementById('avatar-size-slider');
+    const valueEl = document.getElementById('avatar-size-value');
+    if (!slider) return;
+    slider.value = this._avatarSize;
+    if (valueEl) valueEl.textContent = this._avatarSize;
+
+    slider.addEventListener('input', () => {
+      this._avatarSize = parseInt(slider.value, 10);
+      if (valueEl) valueEl.textContent = this._avatarSize;
+      localStorage.setItem('haven_avatar_size', this._avatarSize);
+      // Re-process with new size if we have an image loaded
+      if (this._pendingAvatarFile) this._processAndUploadAvatar(this._pendingAvatarFile);
+    });
+  }
+
+  _setupAvatarImageUpload() {
+    const uploadBtn = document.getElementById('avatar-upload-btn');
+    const removeBtn = document.getElementById('avatar-remove-btn');
+    const fileInput = document.getElementById('avatar-file-input');
+    if (!uploadBtn || !fileInput) return;
+
+    // Create fresh file input to avoid stale-listener issues
+    const freshInput = document.createElement('input');
+    freshInput.type = 'file';
+    freshInput.accept = 'image/*';
+    freshInput.style.display = 'none';
+    freshInput.id = 'avatar-file-input';
+    fileInput.parentNode.replaceChild(freshInput, fileInput);
+
+    uploadBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      freshInput.value = '';
+      freshInput.click();
+    });
+
+    freshInput.addEventListener('change', () => {
+      const file = freshInput.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        this._showToast('Image too large (max 10 MB)', 'error');
+        freshInput.value = '';
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        this._showToast('Please select an image file', 'error');
+        freshInput.value = '';
         return;
       }
 
-      // Create a FRESH hidden file input to avoid stale-listener issues across browsers.
-      // Some environments (reverse proxies, embedded browsers) misbehave when reusing
-      // a hidden file input that was wired before the DOM was fully interactive.
-      const freshInput = document.createElement('input');
-      freshInput.type = 'file';
-      freshInput.accept = 'image/*';
-      freshInput.style.display = 'none';
-      freshInput.id = inputId;
-      fileInput.parentNode.replaceChild(freshInput, fileInput);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          this._pendingAvatarFile = img;
+          // Show the resize slider since we have an image
+          const resizeGroup = document.getElementById('avatar-resize-group');
+          if (resizeGroup) resizeGroup.style.display = '';
+          this._processAndUploadAvatar(img);
+        };
+        img.onerror = () => this._showToast('Could not load image', 'error');
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      freshInput.value = '';
+    });
 
-      // Direct click handler — no clone-and-replace needed (called once at init)
-      uploadBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        freshInput.value = ''; // Reset so re-selecting same file triggers change
-        freshInput.click();
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        this._pendingAvatarFile = null;
+        const resizeGroup = document.getElementById('avatar-resize-group');
+        if (resizeGroup) resizeGroup.style.display = 'none';
+        this.user.avatar = null;
+        localStorage.setItem('haven_user', JSON.stringify(this.user));
+        this._updateAvatarPreview();
+        this.socket.emit('set-avatar', { url: '' });
       });
+    }
+  }
 
-      freshInput.addEventListener('change', async () => {
-        const file = freshInput.files[0];
-        if (!file) { console.warn('[Avatar] change fired but no file selected'); return; }
-        console.log(`[Avatar] File selected: ${file.name} (${file.size} bytes, ${file.type})`);
+  _processAndUploadAvatar(img) {
+    // Canvas center-crop and resize
+    const size = this._avatarSize || 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
 
-        if (file.size > 2 * 1024 * 1024) {
-          this._showToast('Avatar too large (max 2 MB)', 'error');
-          freshInput.value = '';
-          return;
-        }
-        if (!file.type.startsWith('image/')) {
-          this._showToast('Please select an image file', 'error');
-          freshInput.value = '';
-          return;
-        }
+    // Center-crop: take the largest centered square from the source
+    const srcSize = Math.min(img.naturalWidth, img.naturalHeight);
+    const sx = (img.naturalWidth - srcSize) / 2;
+    const sy = (img.naturalHeight - srcSize) / 2;
+    ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
 
-        const formData = new FormData();
-        formData.append('image', file);
-
-        try {
-          this._showToast('Uploading avatar...', 'info');
-          const res = await fetch('/api/upload-avatar', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${this.token}` },
-            body: formData
-          });
-          console.log(`[Avatar] Upload response: ${res.status}`);
-          if (!res.ok) {
-            let errMsg = `Upload failed (${res.status})`;
-            try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
-            console.error(`[Avatar] Upload error: ${errMsg}`);
-            return this._showToast(errMsg, 'error');
-          }
-          const data = await res.json();
-          console.log(`[Avatar] Upload OK: ${data.url}`);
-
-          // Update local state immediately for instant feedback
-          this.user.avatar = data.url;
-          localStorage.setItem('haven_user', JSON.stringify(this.user));
-          this._updateAvatarPreview();
-
-          // Notify server via socket to update all connected clients
-          this.socket.emit('set-avatar', { url: data.url });
-        } catch (err) {
-          console.error('[Avatar] Upload exception:', err);
-          this._showToast('Upload failed — check your connection', 'error');
-        }
-        freshInput.value = '';
-      });
-
-      if (removeBtn) {
-        removeBtn.addEventListener('click', () => {
-          this.socket.emit('set-avatar', { url: '' });
-        });
+    // Export as WebP (smaller) with fallback to PNG
+    let dataUrl;
+    try {
+      dataUrl = canvas.toDataURL('image/webp', 0.85);
+      // Some browsers don't support WebP canvas export — falls back to PNG
+      if (!dataUrl.startsWith('data:image/webp')) {
+        dataUrl = canvas.toDataURL('image/png');
       }
+    } catch {
+      dataUrl = canvas.toDataURL('image/png');
+    }
 
-      console.log(`[Avatar] Wired: #${btnId} → #${inputId}`);
-    };
+    console.log(`[Avatar] Processed: ${size}x${size}, ${(dataUrl.length / 1024).toFixed(1)} KB`);
 
-    // Wire both settings modal and rename/profile modal avatar uploads
-    wireUpload('avatar-upload-btn', 'avatar-file-input', 'avatar-remove-btn');
-    wireUpload('rename-avatar-upload-btn', 'rename-avatar-file-input', 'rename-avatar-remove-btn');
+    // Update local state immediately
+    this.user.avatar = dataUrl;
+    localStorage.setItem('haven_user', JSON.stringify(this.user));
+    this._updateAvatarPreview();
+
+    // Send to server for persistence + broadcast to other users
+    this.socket.emit('set-avatar', { url: dataUrl });
+    this._showToast('Avatar updated!', 'success');
+  }
+
+  _applyAvatarShape() {
+    const shape = this._avatarShape || 'circle';
+    const shapeClass = 'avatar-' + shape;
+    document.querySelectorAll('.message-avatar, .message-avatar-img').forEach(el => {
+      el.classList.remove('avatar-circle', 'avatar-rounded', 'avatar-squircle', 'avatar-hex', 'avatar-diamond');
+      el.classList.add(shapeClass);
+    });
   }
 
   // ═══════════════════════════════════════════════════════
@@ -2546,9 +2600,10 @@ class HavenApp {
 
     const color = this._getUserColor(msg.username);
     const initial = msg.username.charAt(0).toUpperCase();
+    const shapeClass = 'avatar-' + (this._avatarShape || 'circle');
     const avatarHtml = msg.avatar
-      ? `<img class="message-avatar message-avatar-img" src="${this._escapeHtml(msg.avatar)}" alt="${initial}"><div class="message-avatar" style="background-color:${color};display:none">${initial}</div>`
-      : `<div class="message-avatar" style="background-color:${color}">${initial}</div>`;
+      ? `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(msg.avatar)}" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
+      : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
     // Look up user's role from online users list
     const onlineUser = this.users ? this.users.find(u => u.id === msg.user_id) : null;
@@ -2787,9 +2842,10 @@ class HavenApp {
     // Avatar: image or letter fallback
     const color = this._getUserColor(u.username);
     const initial = u.username.charAt(0).toUpperCase();
+    const shapeClass = 'avatar-' + (this._avatarShape || 'circle');
     const avatarImg = u.avatar
-      ? `<img class="user-item-avatar user-item-avatar-img" src="${this._escapeHtml(u.avatar)}" alt="${initial}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="user-item-avatar" style="background-color:${color};display:none">${initial}</div>`
-      : `<div class="user-item-avatar" style="background-color:${color}">${initial}</div>`;
+      ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}" src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
+      : `<div class="user-item-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
     // Wrap avatar + status dot together (Discord-style overlay)
     const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;

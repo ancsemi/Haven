@@ -2067,12 +2067,14 @@ function setupSocketHandlers(io, db) {
     socket.on('set-avatar', (data) => {
       if (!data || typeof data !== 'object') return;
       const url = typeof data.url === 'string' ? data.url.trim() : '';
-      // Allow clearing avatar with empty string, or setting a /uploads/ path
-      if (url && !url.startsWith('/uploads/')) return;
+      // Allow clearing avatar (empty), /uploads/ paths, or data:image/ URLs (canvas-based)
+      if (url && !url.startsWith('/uploads/') && !url.startsWith('data:image/')) return;
+      // Sanity-check: data URLs must be reasonable size (< 200 KB base64 ≈ ~270 KB string)
+      if (url.startsWith('data:') && url.length > 300000) return;
       try {
         db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(url || null, socket.user.id);
         socket.user.avatar = url || null;
-        console.log(`[Avatar] ${socket.user.username} set avatar: ${url || '(removed)'}`);
+        console.log(`[Avatar] ${socket.user.username} set avatar: ${url ? (url.startsWith('data:') ? `data URL (${(url.length / 1024).toFixed(1)} KB)` : url) : '(removed)'}`);
         // Refresh online users in all channels this user is in
         for (const [code, users] of channelUsers) {
           if (users.has(socket.user.id)) {

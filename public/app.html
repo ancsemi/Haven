@@ -469,17 +469,12 @@
     <div class="modal">
       <h3>Edit Profile</h3>
 
-      <!-- Avatar Section -->
+      <!-- Avatar Preview (edit in Settings) -->
       <div class="avatar-settings" style="margin-bottom: 16px;">
         <div class="avatar-preview-row">
           <div class="avatar-preview-circle" id="rename-avatar-preview"></div>
-          <div class="avatar-actions">
-            <button type="button" class="btn-sm btn-accent" id="rename-avatar-upload-btn">Upload Image</button>
-            <button class="btn-sm" id="rename-avatar-remove-btn">Remove</button>
-            <input type="file" id="rename-avatar-file-input" accept="image/*" style="display:none">
-          </div>
+          <small class="settings-hint">Use ⚙️ Settings to customize your avatar</small>
         </div>
-        <small class="settings-hint">Max 2 MB. Square images work best.</small>
       </div>
 
       <!-- Display Name -->
@@ -523,10 +518,11 @@
         <button class="settings-close-btn" id="close-settings-btn">&times;</button>
       </div>
 
-      <!-- Avatar Section -->
+      <!-- Avatar / PFP Customizer Section -->
       <div class="settings-section">
-        <h5 class="settings-section-title">🖼️ Avatar</h5>
+        <h5 class="settings-section-title">🖼️ Customize Avatar</h5>
         <div class="avatar-settings">
+          <!-- Live Preview -->
           <div class="avatar-preview-row">
             <div class="avatar-preview-circle" id="avatar-preview"></div>
             <div class="avatar-actions">
@@ -535,7 +531,25 @@
               <input type="file" id="avatar-file-input" accept="image/*" style="display:none">
             </div>
           </div>
-          <small class="settings-hint">Max 2 MB. Square images work best.</small>
+          <small class="settings-hint">Max 10 MB. Will be resized automatically.</small>
+
+          <!-- Resize Slider -->
+          <div class="pfp-option-group" id="avatar-resize-group" style="display:none">
+            <label class="pfp-label">Size <span id="avatar-size-value">256</span>px</label>
+            <input type="range" id="avatar-size-slider" min="64" max="512" value="256" step="16" class="slider-sm">
+          </div>
+
+          <!-- Shape Picker -->
+          <div class="pfp-option-group">
+            <label class="pfp-label">Shape</label>
+            <div class="avatar-shape-picker" id="avatar-shape-picker">
+              <button class="avatar-shape-btn active" data-shape="circle" title="Circle"><div class="shape-preview shape-circle"></div></button>
+              <button class="avatar-shape-btn" data-shape="rounded" title="Rounded"><div class="shape-preview shape-rounded"></div></button>
+              <button class="avatar-shape-btn" data-shape="squircle" title="Squircle"><div class="shape-preview shape-squircle"></div></button>
+              <button class="avatar-shape-btn" data-shape="hex" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
+              <button class="avatar-shape-btn" data-shape="diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
+            </div>
+          </div>
         </div>
       </div>
 
