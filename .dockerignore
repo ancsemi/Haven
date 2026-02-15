@@ -1,0 +1,29 @@
+# Dependencies (will be installed fresh in the container)
+node_modules/
+npm-debug.log*
+
+# Data files (these live in the /data volume, not in the image)
+*.db
+*.db-shm
+*.db-wal
+.env
+
+# SSL certs (auto-generated at runtime)
+certs/
+
+# User uploads (stored in /data volume)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Repo / editor files
+.git/
+.gitignore
+.vscode/
+*.md
+LICENSE
+Start Haven.bat
+start.sh
+
+# Website (not needed in the container)
+website/
+docs/

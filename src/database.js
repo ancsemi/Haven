@@ -154,6 +154,9 @@ function initDatabase() {
   insertSetting.run('cleanup_max_age_days', '0');      // delete messages older than N days (0 = disabled)
   insertSetting.run('cleanup_max_size_mb', '0');       // delete oldest messages when DB exceeds N MB (0 = disabled)
   insertSetting.run('whitelist_enabled', 'false');     // whitelist toggle
+  insertSetting.run('server_name', 'HAVEN');           // displayed in sidebar header + server bar
+  insertSetting.run('server_icon', '');                // path to uploaded server icon image
+  insertSetting.run('permission_thresholds', '{}');    // JSON: { permission: minLevel } — auto-grant perms at level
 
   // ── Migration: pinned_messages table ──────────────────
   db.exec(`
@@ -343,7 +346,10 @@ function initDatabase() {
     const serverMod = insertRole.run('Server Mod', 50, 'server', '#3498db');
     const serverModPerms = [
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
-      'set_channel_topic', 'manage_sub_channels'
+      'set_channel_topic', 'manage_sub_channels', 'rename_channel',
+      'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
+      'upload_files', 'use_voice', 'view_history',
+      'delete_own_messages', 'edit_own_messages'
     ];
     serverModPerms.forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
 
@@ -351,9 +357,29 @@ function initDatabase() {
     const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
     const channelModPerms = [
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
-      'manage_sub_channels'
+      'manage_sub_channels', 'rename_sub_channel', 'delete_lower_messages',
+      'upload_files', 'use_voice', 'view_history',
+      'delete_own_messages', 'edit_own_messages'
     ];
     channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
+
+    // User — level 1 (default role for all new users)
+    const userRole = insertRole.run('User', 1, 'server', '#95a5a6');
+    const userPerms = [
+      'delete_own_messages', 'edit_own_messages', 'upload_files',
+      'use_voice', 'view_history'
+    ];
+    userPerms.forEach(p => insertPerm.run(userRole.lastInsertRowid, p));
+  }
+
+  // ── Migration: auto-assign "User" role to all existing users who lack any role ──
+  const userRole = db.prepare("SELECT id FROM roles WHERE name = 'User' AND level = 1 AND scope = 'server'").get();
+  if (userRole) {
+    db.prepare(`
+      INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by)
+      SELECT u.id, ?, NULL, NULL FROM users u
+      WHERE u.id NOT IN (SELECT DISTINCT user_id FROM user_roles WHERE channel_id IS NULL)
+    `).run(userRole.id);
   }
 
   // ── Migration: push notification subscriptions ──────────
@@ -385,6 +411,18 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_webhooks_token ON webhooks(token);
     CREATE INDEX IF NOT EXISTS idx_webhooks_channel ON webhooks(channel_id);
   `);
+
+  // ── Migration: channel feature toggles & QoL ────────────
+  const channelQolCols = [
+    { name: 'streams_enabled',    sql: "ALTER TABLE channels ADD COLUMN streams_enabled INTEGER DEFAULT 1" },
+    { name: 'music_enabled',      sql: "ALTER TABLE channels ADD COLUMN music_enabled INTEGER DEFAULT 1" },
+    { name: 'slow_mode_interval', sql: "ALTER TABLE channels ADD COLUMN slow_mode_interval INTEGER DEFAULT 0" },
+    { name: 'category',           sql: "ALTER TABLE channels ADD COLUMN category TEXT DEFAULT NULL" },
+    { name: 'sort_alphabetical',  sql: "ALTER TABLE channels ADD COLUMN sort_alphabetical INTEGER DEFAULT 0" },
+  ];
+  for (const col of channelQolCols) {
+    try { db.prepare(`SELECT ${col.name} FROM channels LIMIT 0`).get(); } catch { db.exec(col.sql); }
+  }
 
   return db;
 }

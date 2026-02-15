@@ -96,6 +96,7 @@ class HavenApp {
     // Permission helper — true if user is admin or has mod role
     this._canModerate = () => this.user.isAdmin || (this.user.effectiveLevel || 0) >= 25;
     this._isServerMod = () => this.user.isAdmin || (this.user.effectiveLevel || 0) >= 50;
+    this._hasPerm = (p) => this.user.isAdmin || (this.user.permissions || []).includes('*') || (this.user.permissions || []).includes(p);
 
     this._init();
   }
@@ -125,6 +126,8 @@ class HavenApp {
     // this._setupAvatarUpload(); // Moved to top of _init
     this._setupSoundManagement();
     this._initRoleManagement();
+    this._initServerBranding();
+    this._initPermThresholds();
     this._setupResizableSidebars();
     this._setupDensityPicker();
     this._setupOnlineOverlay();
@@ -167,6 +170,13 @@ class HavenApp {
       this.user = { ...this.user, ...data };
       this.user.roles = data.roles || [];
       this.user.effectiveLevel = data.effectiveLevel || 0;
+      this.user.permissions = data.permissions || [];
+      if (data.status) {
+        this.userStatus = data.status;
+        this.userStatusText = data.statusText || '';
+        this._manualStatusOverride = (data.status !== 'online' && data.status !== 'away');
+        this._updateStatusPickerUI();
+      }
       // Sync avatar shape from server
       if (data.avatarShape) {
         this.user.avatarShape = data.avatarShape;
@@ -208,6 +218,7 @@ class HavenApp {
     this.socket.on('roles-updated', (data) => {
       this.user.roles = data.roles || [];
       this.user.effectiveLevel = data.effectiveLevel || 0;
+      this.user.permissions = data.permissions || [];
       localStorage.setItem('haven_user', JSON.stringify(this.user));
       // Refresh UI to reflect new permissions
       const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
@@ -864,12 +875,118 @@ class HavenApp {
       this._closeChannelCtxMenu();
       this.socket.emit('toggle-channel-permission', { code, permission: 'music' });
     });
+    // Move channel up/down
+    document.querySelector('[data-action="organize"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      this._openOrganizeModal(code);
+    });
+    // Organize modal controls
+    document.getElementById('organize-global-sort')?.addEventListener('change', (e) => {
+      if (!this._organizeParentCode) return;
+      const sortMode = e.target.value; // 'manual', 'alpha', 'created', 'oldest'
+      this.socket.emit('set-sort-alphabetical', { code: this._organizeParentCode, enabled: sortMode === 'alpha', mode: sortMode });
+      const parent = this.channels.find(c => c.code === this._organizeParentCode);
+      if (parent) parent.sort_alphabetical = sortMode === 'alpha' ? 1 : sortMode === 'created' ? 2 : sortMode === 'oldest' ? 3 : 0;
+      this._renderOrganizeList();
+    });
+    document.getElementById('organize-move-up')?.addEventListener('click', () => {
+      if (!this._organizeSelected) return;
+      const idx = this._organizeList.findIndex(c => c.code === this._organizeSelected);
+      if (idx <= 0) return;
+      [this._organizeList[idx], this._organizeList[idx - 1]] = [this._organizeList[idx - 1], this._organizeList[idx]];
+      this._organizeList.forEach((c, i) => c.position = i);
+      this._renderOrganizeList();
+      this.socket.emit('reorder-channels', { order: this._organizeList.map((c, i) => ({ code: c.code, position: i })) });
+    });
+    document.getElementById('organize-move-down')?.addEventListener('click', () => {
+      if (!this._organizeSelected) return;
+      const idx = this._organizeList.findIndex(c => c.code === this._organizeSelected);
+      if (idx < 0 || idx >= this._organizeList.length - 1) return;
+      [this._organizeList[idx], this._organizeList[idx + 1]] = [this._organizeList[idx + 1], this._organizeList[idx]];
+      this._organizeList.forEach((c, i) => c.position = i);
+      this._renderOrganizeList();
+      this.socket.emit('reorder-channels', { order: this._organizeList.map((c, i) => ({ code: c.code, position: i })) });
+    });
+    document.getElementById('organize-set-tag')?.addEventListener('click', () => {
+      if (!this._organizeSelected) return;
+      const tag = document.getElementById('organize-tag-input').value.trim();
+      if (!tag) return;
+      this.socket.emit('set-channel-category', { code: this._organizeSelected, category: tag });
+      const ch = this._organizeList.find(c => c.code === this._organizeSelected);
+      if (ch) ch.category = tag;
+      // Also update main channels array
+      const mainCh = this.channels.find(c => c.code === this._organizeSelected);
+      if (mainCh) mainCh.category = tag;
+      this._renderOrganizeList();
+    });
+    document.getElementById('organize-remove-tag')?.addEventListener('click', () => {
+      if (!this._organizeSelected) return;
+      this.socket.emit('set-channel-category', { code: this._organizeSelected, category: '' });
+      const ch = this._organizeList.find(c => c.code === this._organizeSelected);
+      if (ch) ch.category = null;
+      const mainCh = this.channels.find(c => c.code === this._organizeSelected);
+      if (mainCh) mainCh.category = null;
+      document.getElementById('organize-tag-input').value = '';
+      this._renderOrganizeList();
+    });
+    document.getElementById('organize-done-btn')?.addEventListener('click', () => {
+      document.getElementById('organize-modal').style.display = 'none';
+      this._organizeParentCode = null;
+      this._organizeList = null;
+      this._organizeSelected = null;
+    });
+    document.getElementById('organize-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'organize-modal') {
+        document.getElementById('organize-modal').style.display = 'none';
+        this._organizeParentCode = null;
+        this._organizeList = null;
+        this._organizeSelected = null;
+      }
+    });
+    // Slow mode
+    document.querySelector('[data-action="slow-mode"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      const ch = this.channels.find(c => c.code === code);
+      const current = (ch && ch.slow_mode_interval) || 0;
+      const input = prompt('Slow mode interval in seconds (0 = off, max 3600):', current);
+      if (input !== null) {
+        const interval = parseInt(input);
+        if (!isNaN(interval)) {
+          this.socket.emit('set-slow-mode', { code, interval });
+        }
+      }
+    });
     // Webhooks management
     document.querySelector('[data-action="webhooks"]')?.addEventListener('click', () => {
       const code = this._ctxMenuChannel;
       if (!code) return;
       this._closeChannelCtxMenu();
       this._openWebhookModal(code);
+    });
+    // Channel Roles management
+    document.querySelector('[data-action="channel-roles"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      this._openChannelRolesModal(code);
+    });
+    document.getElementById('channel-roles-done-btn')?.addEventListener('click', () => {
+      document.getElementById('channel-roles-modal').style.display = 'none';
+    });
+    document.getElementById('channel-roles-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'channel-roles-modal') {
+        document.getElementById('channel-roles-modal').style.display = 'none';
+      }
+    });
+    document.getElementById('channel-roles-assign-btn')?.addEventListener('click', () => {
+      this._assignChannelRole();
+    });
+    document.getElementById('channel-roles-create-btn')?.addEventListener('click', () => {
+      this._createChannelRole();
     });
     document.getElementById('webhook-create-btn')?.addEventListener('click', () => {
       const name = document.getElementById('webhook-name-input').value.trim();
@@ -979,34 +1096,29 @@ class HavenApp {
       this._previewMusicLink(e.target.value.trim());
     });
 
-    // Voice controls dropdown
-    // Create mobile backdrop element
-    const backdrop = document.createElement('div');
-    backdrop.className = 'voice-dropdown-backdrop';
-    document.body.appendChild(backdrop);
-
-    const toggleVoiceDropdown = (show) => {
-      const panel = document.getElementById('voice-dropdown-panel');
-      if (show) {
-        panel.style.display = 'flex';
-        backdrop.style.display = '';  // let CSS media query control visibility
-      } else {
-        panel.style.display = 'none';
-        backdrop.style.display = 'none';
-      }
-    };
-
+    // Voice controls — now in right sidebar
+    // The voice-dropdown-toggle in the header is just a static indicator on desktop,
+    // and opens the RIGHT sidebar on mobile to reveal the voice panel.
     document.getElementById('voice-dropdown-toggle')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      const panel = document.getElementById('voice-dropdown-panel');
-      toggleVoiceDropdown(panel.style.display === 'none');
+      // On mobile, open the RIGHT sidebar so the user can access voice controls
+      const appBody = document.getElementById('app-body');
+      if (window.innerWidth <= 900 && appBody) {
+        appBody.classList.add('mobile-right-open');
+      }
     });
-    backdrop.addEventListener('click', () => toggleVoiceDropdown(false));
-    // Close dropdown when clicking elsewhere
-    document.addEventListener('click', (e) => {
-      const panel = document.getElementById('voice-dropdown-panel');
-      if (panel && panel.style.display !== 'none' && !e.target.closest('.voice-dropdown')) {
-        toggleVoiceDropdown(false);
+
+    // Voice settings slide-up toggle
+    document.getElementById('voice-settings-toggle')?.addEventListener('click', () => {
+      const panel = document.getElementById('voice-settings-panel');
+      if (!panel) return;
+      const btn = document.getElementById('voice-settings-toggle');
+      if (panel.style.display === 'none') {
+        panel.style.display = '';
+        if (btn) btn.classList.add('active');
+      } else {
+        panel.style.display = 'none';
+        if (btn) btn.classList.remove('active');
       }
     });
     // Stream size slider
@@ -1641,7 +1753,7 @@ class HavenApp {
       fileInput.value = '';
     });
 
-    // Paste image from clipboard — QUEUE instead of uploading immediately
+    // Paste from clipboard — images get queued, other files go to general upload
     document.getElementById('message-input').addEventListener('paste', (e) => {
       const items = e.clipboardData?.items;
       if (!items) return;
@@ -1649,6 +1761,12 @@ class HavenApp {
         if (item.type.startsWith('image/')) {
           e.preventDefault();
           this._queueImage(item.getAsFile());
+          return;
+        }
+        if (item.kind === 'file') {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) this._uploadGeneralFile(file);
           return;
         }
       }
@@ -1668,8 +1786,11 @@ class HavenApp {
       e.preventDefault();
       messageArea.classList.remove('drag-over');
       const file = e.dataTransfer?.files[0];
-      if (file && file.type.startsWith('image/')) {
+      if (!file) return;
+      if (file.type.startsWith('image/')) {
         this._queueImage(file);
+      } else {
+        this._uploadGeneralFile(file);
       }
     });
   }
@@ -1702,6 +1823,10 @@ class HavenApp {
 
     // Overlay click — close everything
     overlay.addEventListener('click', () => this._closeMobilePanels());
+
+    // Close buttons inside panels
+    document.getElementById('mobile-sidebar-close')?.addEventListener('click', () => this._closeMobilePanels());
+    document.getElementById('mobile-right-close')?.addEventListener('click', () => this._closeMobilePanels());
 
     // Close sidebar when switching channels on mobile
     const origSwitch = this.switchChannel.bind(this);
@@ -2467,13 +2592,23 @@ class HavenApp {
       return;
     }
 
+    // Service workers require HTTPS (or localhost)
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isSecure) {
+      if (toggle) toggle.disabled = true;
+      if (statusEl) statusEl.textContent = 'Requires HTTPS — see Guide for setup';
+      console.warn('Push notifications require HTTPS. Access Haven via https:// or localhost.');
+      return;
+    }
+
     // Register service worker
     try {
       this._swRegistration = await navigator.serviceWorker.register('/sw.js');
     } catch (err) {
       console.error('SW registration failed:', err);
       if (toggle) toggle.disabled = true;
-      if (statusEl) statusEl.textContent = 'Service worker failed';
+      const hint = location.protocol !== 'https:' ? ' (HTTPS required)' : '';
+      if (statusEl) statusEl.textContent = 'Service worker failed' + hint;
       return;
     }
 
@@ -2662,6 +2797,10 @@ class HavenApp {
     if (codeSettingsBtn) {
       codeSettingsBtn.style.display = (!isDm && this.user.isAdmin) ? 'inline-flex' : 'none';
     }
+
+    // Show the header actions box
+    const actionsBox = document.getElementById('header-actions-box');
+    if (actionsBox) actionsBox.style.display = 'flex';
     // Update voice button state — persist controls if in voice anywhere
     if (this.voice && this.voice.inVoice) {
       this._updateVoiceButtons(true);
@@ -2673,8 +2812,8 @@ class HavenApp {
       const mobileJoin = document.getElementById('voice-join-mobile');
       if (mobileJoin) mobileJoin.style.display = '';
     }
-    document.getElementById('search-toggle-btn').style.display = 'inline-flex';
-    document.getElementById('pinned-toggle-btn').style.display = 'inline-flex';
+    document.getElementById('search-toggle-btn').style.display = '';
+    document.getElementById('pinned-toggle-btn').style.display = '';
 
     // Show/hide topic bar
     this._updateTopicBar(channel?.topic || '');
@@ -2751,8 +2890,8 @@ class HavenApp {
     document.getElementById('voice-leave-btn').style.display = 'none';
     const mobileJoin = document.getElementById('voice-join-mobile');
     if (mobileJoin) mobileJoin.style.display = 'none';
-    document.getElementById('search-toggle-btn').style.display = 'none';
-    document.getElementById('pinned-toggle-btn').style.display = 'none';
+    const actionsBox = document.getElementById('header-actions-box');
+    if (actionsBox) actionsBox.style.display = 'none';
     document.getElementById('status-channel').textContent = 'None';
     document.getElementById('status-online-count').textContent = '0';
     const topicBar = document.getElementById('channel-topic-bar');
@@ -2792,6 +2931,35 @@ class HavenApp {
     if (createSubBtn && ch && ch.parent_channel_id) {
       createSubBtn.style.display = 'none';
     }
+    // Show "Organize" only for parent channels that have sub-channels
+    const organizeBtn = menu.querySelector('[data-action="organize"]');
+    if (organizeBtn) {
+      const hasSubs = ch && !ch.parent_channel_id && this.channels.some(c => c.parent_channel_id === ch.id);
+      organizeBtn.style.display = (isAdmin && hasSubs) ? '' : 'none';
+    }
+    // Update toggle indicators for streams/music
+    const streamsBtn = menu.querySelector('[data-action="toggle-streams"]');
+    const musicBtn = menu.querySelector('[data-action="toggle-music"]');
+    if (streamsBtn && ch) {
+      const on = ch.streams_enabled !== 0;
+      streamsBtn.innerHTML = on
+        ? '🖥️ Streams <span class="ctx-indicator ctx-on">✅ ON</span>'
+        : '🖥️ Streams <span class="ctx-indicator ctx-off">❌ OFF</span>';
+    }
+    if (musicBtn && ch) {
+      const on = ch.music_enabled !== 0;
+      musicBtn.innerHTML = on
+        ? '🎵 Music <span class="ctx-indicator ctx-on">✅ ON</span>'
+        : '🎵 Music <span class="ctx-indicator ctx-off">❌ OFF</span>';
+    }
+    // Update slow mode indicator
+    const slowBtn = menu.querySelector('[data-action="slow-mode"]');
+    if (slowBtn && ch) {
+      const interval = ch.slow_mode_interval || 0;
+      slowBtn.innerHTML = interval > 0
+        ? `🐢 Slow Mode <span class="ctx-indicator ctx-on">${interval}s</span>`
+        : '🐢 Slow Mode <span class="ctx-indicator ctx-off">OFF</span>';
+    }
     // Update mute label
     const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
     const muteBtn = menu.querySelector('[data-action="mute"]');
@@ -2812,6 +2980,143 @@ class HavenApp {
   _closeChannelCtxMenu() {
     if (this._ctxMenuEl) this._ctxMenuEl.style.display = 'none';
     this._ctxMenuChannel = null;
+  }
+
+  /* ── Organize sub-channels modal ─────────────────────── */
+
+  _openOrganizeModal(parentCode) {
+    const parent = this.channels.find(c => c.code === parentCode);
+    if (!parent) return;
+
+    const subs = this.channels.filter(c => c.parent_channel_id === parent.id);
+    this._organizeParentCode = parentCode;
+    this._organizeParentId = parent.id;
+    this._organizeList = [...subs].sort((a, b) => (a.position || 0) - (b.position || 0));
+    this._organizeSelected = null;
+    // Per-tag sort overrides: tag → 'manual'|'alpha'|'created'|'oldest' (persisted in localStorage)
+    this._organizeTagSorts = JSON.parse(localStorage.getItem(`haven_tag_sorts_${parentCode}`) || '{}');
+
+    document.getElementById('organize-modal-parent-name').textContent = `# ${parent.name}`;
+    // Map sort_alphabetical: 0=manual, 1=alpha, 2=created
+    const sortSel = document.getElementById('organize-global-sort');
+    sortSel.value = parent.sort_alphabetical === 1 ? 'alpha' : parent.sort_alphabetical === 2 ? 'created' : parent.sort_alphabetical === 3 ? 'oldest' : 'manual';
+    document.getElementById('organize-tag-input').value = '';
+    this._renderOrganizeList();
+    document.getElementById('organize-modal').style.display = 'flex';
+  }
+
+  _renderOrganizeList() {
+    const listEl = document.getElementById('organize-channel-list');
+    const globalSort = document.getElementById('organize-global-sort').value;
+
+    let displayList = [...(this._organizeList || [])];
+
+    // Collect unique tags
+    const allTags = [...new Set(displayList.filter(c => c.category).map(c => c.category))].sort((a, b) => a.localeCompare(b));
+    const hasTags = allTags.length > 0;
+
+    // Sort within each tag group
+    const sortGroup = (arr, mode) => {
+      if (mode === 'alpha') {
+        arr.sort((a, b) => a.name.localeCompare(b.name));
+      } else if (mode === 'created') {
+        arr.sort((a, b) => (b.id || 0) - (a.id || 0)); // Higher ID = newer
+      } else if (mode === 'oldest') {
+        arr.sort((a, b) => (a.id || 0) - (b.id || 0)); // Lower ID = older
+      } else {
+        arr.sort((a, b) => (a.position || 0) - (b.position || 0));
+      }
+      return arr;
+    };
+
+    // Build grouped display
+    let grouped = [];
+    if (hasTags) {
+      // Tagged groups first, then untagged
+      for (const tag of allTags) {
+        const tagSort = this._organizeTagSorts[tag] || globalSort;
+        const tagItems = sortGroup(displayList.filter(c => c.category === tag), tagSort);
+        grouped.push({ tag, items: tagItems, sort: tagSort });
+      }
+      const untagged = displayList.filter(c => !c.category);
+      if (untagged.length) {
+        const untaggedSort = this._organizeTagSorts['__untagged__'] || globalSort;
+        grouped.push({ tag: '', items: sortGroup(untagged, untaggedSort), sort: untaggedSort });
+      }
+    } else {
+      grouped.push({ tag: '', items: sortGroup(displayList, globalSort), sort: globalSort });
+    }
+
+    let html = '';
+    for (const group of grouped) {
+      // Tag header
+      if (hasTags) {
+        const tagKey = group.tag || '__untagged__';
+        const label = group.tag ? this._escapeHtml(group.tag) : 'Untagged';
+        html += `<div class="organize-tag-header" data-tag-key="${this._escapeHtml(tagKey)}">
+          <span>${label}</span>
+          <select class="tag-sort-select" data-tag="${this._escapeHtml(tagKey)}" title="Sort this group">
+            <option value="manual"${group.sort === 'manual' ? ' selected' : ''}>Manual</option>
+            <option value="alpha"${group.sort === 'alpha' ? ' selected' : ''}>A→Z</option>
+            <option value="created"${group.sort === 'created' ? ' selected' : ''}>Newest</option>
+            <option value="oldest"${group.sort === 'oldest' ? ' selected' : ''}>Oldest</option>
+          </select>
+        </div>`;
+      }
+
+      for (const ch of group.items) {
+        const sel = this._organizeSelected === ch.code;
+        const tagBadge = ch.category ? `<span class="organize-tag-badge">${this._escapeHtml(ch.category)}</span>` : '';
+        html += `<div class="organize-item${sel ? ' selected' : ''}" data-code="${ch.code}">
+          <span style="opacity:0.5">${ch.is_private ? '🔒' : '↳'}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(ch.name)}</span>
+          ${tagBadge}
+        </div>`;
+      }
+    }
+
+    if (!displayList.length) {
+      html = '<div style="padding:24px;text-align:center;opacity:0.4;font-size:0.9rem">No sub-channels yet</div>';
+    }
+
+    listEl.innerHTML = html;
+
+    // Click to select
+    listEl.querySelectorAll('.organize-item').forEach(el => {
+      el.addEventListener('click', () => {
+        this._organizeSelected = el.dataset.code;
+        const ch = this._organizeList.find(c => c.code === el.dataset.code);
+        document.getElementById('organize-tag-input').value = (ch && ch.category) || '';
+        this._renderOrganizeList();
+      });
+    });
+
+    // Per-tag sort dropdowns
+    listEl.querySelectorAll('.tag-sort-select').forEach(sel => {
+      sel.addEventListener('click', (e) => e.stopPropagation());
+      sel.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const tagKey = sel.dataset.tag;
+        this._organizeTagSorts[tagKey] = sel.value;
+        // Persist per-tag sorts so sidebar respects them
+        localStorage.setItem(`haven_tag_sorts_${this._organizeParentCode}`, JSON.stringify(this._organizeTagSorts));
+        this._renderOrganizeList();
+      });
+    });
+
+    // Disable up/down when not manual sort or nothing selected
+    const effectiveSort = this._organizeSelected
+      ? (() => {
+          const ch = this._organizeList.find(c => c.code === this._organizeSelected);
+          const tag = ch && ch.category ? ch.category : '__untagged__';
+          return this._organizeTagSorts[tag] || globalSort;
+        })()
+      : globalSort;
+    const isManual = effectiveSort === 'manual';
+    document.getElementById('organize-move-up').disabled = !isManual || !this._organizeSelected;
+    document.getElementById('organize-move-down').disabled = !isManual || !this._organizeSelected;
+    document.getElementById('organize-set-tag').disabled = !this._organizeSelected;
+    document.getElementById('organize-remove-tag').disabled = !this._organizeSelected;
   }
 
   _openWebhookModal(channelCode) {
@@ -2876,8 +3181,59 @@ class HavenApp {
       if (!subChannelMap[c.parent_channel_id]) subChannelMap[c.parent_channel_id] = [];
       subChannelMap[c.parent_channel_id].push(c);
     });
-    // Sort sub-channels by position
-    Object.values(subChannelMap).forEach(arr => arr.sort((a, b) => (a.position || 0) - (b.position || 0)));
+
+    // Sort sub-channels — respect parent's sort_alphabetical setting & per-tag overrides
+    // sort_alphabetical: 0=manual, 1=alpha, 2=created, 3=oldest
+    // Per-tag overrides (from organize modal) are stored in localStorage
+    Object.entries(subChannelMap).forEach(([parentId, arr]) => {
+      const parent = parentChannels.find(p => p.id === parseInt(parentId));
+      const globalSortMode = parent ? parent.sort_alphabetical : 0;
+      const hasTags = arr.some(c => c.category);
+
+      // Load per-tag sort overrides
+      const tagOverrides = parent ? JSON.parse(localStorage.getItem(`haven_tag_sorts_${parent.code}`) || '{}') : {};
+
+      // Tag grouping helper (groups by tag name)
+      const tagGroup = (a, b) => {
+        const tagA = (a.category || '').toLowerCase();
+        const tagB = (b.category || '').toLowerCase();
+        if (tagA !== tagB) {
+          if (!tagA) return 1;
+          if (!tagB) return -1;
+          return tagA.localeCompare(tagB);
+        }
+        return 0;
+      };
+
+      // Sort function for a given mode
+      const sortByMode = (a, b, mode) => {
+        if (mode === 1 || mode === 'alpha') return a.name.localeCompare(b.name);
+        if (mode === 2 || mode === 'created') return (b.id || 0) - (a.id || 0);
+        if (mode === 3 || mode === 'oldest') return (a.id || 0) - (b.id || 0);
+        return (a.position || 0) - (b.position || 0); // manual
+      };
+
+      // Map string modes to numbers for consistency
+      const modeToNum = (m) => m === 'alpha' ? 1 : m === 'created' ? 2 : m === 'oldest' ? 3 : m === 'manual' ? 0 : m;
+
+      if (hasTags) {
+        // Sort by tag group first, then within each group use per-tag override or global
+        arr.sort((a, b) => {
+          const g = tagGroup(a, b);
+          if (g !== 0) return g;
+          // Same tag group — check per-tag override
+          const tag = a.category || '__untagged__';
+          const override = tagOverrides[tag];
+          const effectiveMode = override !== undefined ? modeToNum(override) : globalSortMode;
+          return sortByMode(a, b, effectiveMode);
+        });
+      } else {
+        arr.sort((a, b) => sortByMode(a, b, globalSortMode));
+      }
+    });
+
+    // Sort parent channels by position, then name
+    parentChannels.sort((a, b) => (a.position || 0) - (b.position || 0) || a.name.localeCompare(b.name));
 
     const renderChannelItem = (ch, isSub) => {
       const el = document.createElement('div');
@@ -2890,10 +3246,21 @@ class HavenApp {
 
       const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : '#';
 
+      // Build small status indicators for channel features
+      let indicators = '';
+      if (!isSub) {
+        const badges = [];
+        if (ch.streams_enabled === 0) badges.push('<span title="Streams disabled" style="opacity:0.4;font-size:0.65rem">🖥️</span>');
+        if (ch.music_enabled === 0) badges.push('<span title="Music disabled" style="opacity:0.4;font-size:0.65rem">🎵</span>');
+        if (ch.slow_mode_interval > 0) badges.push('<span title="Slow mode: ' + ch.slow_mode_interval + 's" style="opacity:0.5;font-size:0.65rem">🐢</span>');
+        if (badges.length) indicators = `<span class="channel-indicators" style="margin-left:auto;display:flex;gap:2px;flex-shrink:0">${badges.join('')}</span>`;
+      }
+
       el.innerHTML = `
-        <span class="channel-hash">${hashIcon}</span>
         ${hasSubs ? `<span class="channel-collapse-arrow${isCollapsed ? ' collapsed' : ''}" title="Expand/collapse sub-channels">▾</span>` : ''}
+        <span class="channel-hash">${hashIcon}</span>
         <span class="channel-name">${this._escapeHtml(ch.name)}</span>
+        ${indicators}
         <button class="channel-more-btn" title="Channel options">⋯</button>
       `;
 
@@ -2904,8 +3271,7 @@ class HavenApp {
           e.stopPropagation();
           const collapsed = arrow.classList.toggle('collapsed');
           localStorage.setItem(`haven_subs_collapsed_${ch.code}`, collapsed);
-          // Toggle visibility of all sub-channel items for this parent
-          document.querySelectorAll(`.sub-channel-item[data-parent-id="${ch.id}"]`).forEach(sub => {
+          document.querySelectorAll(`.sub-channel-item[data-parent-id="${ch.id}"], .sub-tag-label[data-parent-id="${ch.id}"]`).forEach(sub => {
             sub.style.display = collapsed ? 'none' : '';
           });
         });
@@ -2923,41 +3289,127 @@ class HavenApp {
       return el;
     };
 
-    // Regular channels with sub-channels nested beneath parents
-    parentChannels.forEach(ch => {
-      list.appendChild(renderChannelItem(ch, false));
-      const subs = subChannelMap[ch.id] || [];
-      const isCollapsed = localStorage.getItem(`haven_subs_collapsed_${ch.code}`) === 'true';
-      subs.forEach(sub => {
-        const subEl = renderChannelItem(sub, true);
-        if (isCollapsed) subEl.style.display = 'none';
-        list.appendChild(subEl);
-      });
-    });
+    // ── Channels toggle (collapsible) ──
+    const channelsCollapsed = localStorage.getItem('haven_channels_collapsed') === 'true';
+    const channelsArrow = document.getElementById('channels-toggle-arrow');
+    if (channelsArrow) {
+      channelsArrow.classList.toggle('collapsed', channelsCollapsed);
+    }
 
-    // DM section (collapsible)
-    if (dmChannels.length > 0) {
-      const dmToggle = document.createElement('h5');
-      dmToggle.className = 'section-label dm-section-label dm-toggle';
-      const isCollapsed = localStorage.getItem('haven_dm_collapsed') === 'true';
-      const totalUnread = dmChannels.reduce((sum, ch) => sum + (this.unreadCounts[ch.code] || ch.unreadCount || 0), 0);
-      dmToggle.innerHTML = `<span class="dm-toggle-arrow${isCollapsed ? ' collapsed' : ''}">▾</span> Direct Messages${totalUnread > 0 ? ` <span class="dm-unread-count">${totalUnread > 99 ? '99+' : totalUnread}</span>` : ''}`;
-      dmToggle.style.cursor = 'pointer';
-      dmToggle.addEventListener('click', () => {
-        const dmList = document.getElementById('dm-list');
-        const arrow = dmToggle.querySelector('.dm-toggle-arrow');
-        if (dmList) {
-          const nowCollapsed = dmList.style.display === 'none';
-          dmList.style.display = nowCollapsed ? '' : 'none';
-          arrow.classList.toggle('collapsed', !nowCollapsed);
-          localStorage.setItem('haven_dm_collapsed', !nowCollapsed);
+    // Set up channels toggle click (only once)
+    if (!this._channelsToggleBound) {
+      this._channelsToggleBound = true;
+      document.getElementById('channels-toggle')?.addEventListener('click', () => {
+        const nowCollapsed = list.style.display !== 'none';
+        list.style.display = nowCollapsed ? 'none' : '';
+        const arrow = document.getElementById('channels-toggle-arrow');
+        if (arrow) arrow.classList.toggle('collapsed', nowCollapsed);
+        localStorage.setItem('haven_channels_collapsed', nowCollapsed);
+        // Adjust pane flex so DMs fill when channels collapsed
+        const channelsPane = document.getElementById('channels-pane');
+        const dmPane = document.getElementById('dm-pane');
+        if (nowCollapsed) {
+          channelsPane.style.flex = '0 0 auto';
+          dmPane.style.flex = '1 1 0';
+        } else {
+          const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
+          const ratio = savedRatio ? parseFloat(savedRatio) : 0.6;
+          channelsPane.style.flex = `${ratio} 1 0`;
+          dmPane.style.flex = `${1 - ratio} 1 0`;
         }
       });
-      list.appendChild(dmToggle);
+    }
+    if (channelsCollapsed) {
+      list.style.display = 'none';
+      const cp = document.getElementById('channels-pane');
+      const dp = document.getElementById('dm-pane');
+      if (cp) cp.style.flex = '0 0 auto';
+      if (dp) dp.style.flex = '1 1 0';
+    }
 
-      const dmList = document.createElement('div');
-      dmList.id = 'dm-list';
-      if (isCollapsed) dmList.style.display = 'none';
+    // ── Render channels grouped by category ──
+    const categories = new Map();
+    parentChannels.forEach(ch => {
+      const cat = ch.category || '';
+      if (!categories.has(cat)) categories.set(cat, []);
+      categories.get(cat).push(ch);
+    });
+
+    const sortedCats = [...categories.keys()].sort((a, b) => {
+      if (!a) return -1; if (!b) return 1;
+      return a.localeCompare(b);
+    });
+
+    for (const cat of sortedCats) {
+      if (cat) {
+        const catLabel = document.createElement('h5');
+        catLabel.className = 'section-label category-label';
+        catLabel.style.cssText = 'padding:10px 12px 4px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.5;user-select:none';
+        catLabel.textContent = cat;
+        list.appendChild(catLabel);
+      }
+
+      categories.get(cat).forEach(ch => {
+        list.appendChild(renderChannelItem(ch, false));
+        const subs = subChannelMap[ch.id] || [];
+        const isCollapsed = localStorage.getItem(`haven_subs_collapsed_${ch.code}`) === 'true';
+        const subHasTags = subs.some(s => s.category);
+        let lastSubTag = undefined;
+        subs.forEach(sub => {
+          if (subHasTags && sub.category !== lastSubTag) {
+            const tagLabel = document.createElement('div');
+            tagLabel.className = 'sub-channel-item sub-tag-label';
+            tagLabel.dataset.parentId = ch.id;
+            tagLabel.style.cssText = 'padding:4px 12px 2px 28px;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.35;user-select:none;font-weight:600';
+            tagLabel.textContent = sub.category || 'Untagged';
+            if (isCollapsed) tagLabel.style.display = 'none';
+            list.appendChild(tagLabel);
+            lastSubTag = sub.category;
+          }
+          const subEl = renderChannelItem(sub, true);
+          if (isCollapsed) subEl.style.display = 'none';
+          list.appendChild(subEl);
+        });
+      });
+    }
+
+    // ── DM section (separate pane) ──
+    const dmList = document.getElementById('dm-list');
+    if (dmList) {
+      dmList.innerHTML = '';
+      const dmCollapsed = localStorage.getItem('haven_dm_collapsed') === 'true';
+      const dmArrow = document.getElementById('dm-toggle-arrow');
+
+      // Set up DM toggle click (only once)
+      if (!this._dmToggleBound) {
+        this._dmToggleBound = true;
+        document.getElementById('dm-toggle-header')?.addEventListener('click', () => {
+          const nowCollapsed = dmList.style.display !== 'none';
+          dmList.style.display = nowCollapsed ? 'none' : '';
+          const arrow = document.getElementById('dm-toggle-arrow');
+          if (arrow) arrow.classList.toggle('collapsed', nowCollapsed);
+          localStorage.setItem('haven_dm_collapsed', nowCollapsed);
+        });
+      }
+
+      if (dmArrow) dmArrow.classList.toggle('collapsed', dmCollapsed);
+      if (dmCollapsed) dmList.style.display = 'none';
+
+      // Update unread badge
+      const totalUnread = dmChannels.reduce((sum, ch) => sum + (this.unreadCounts[ch.code] || ch.unreadCount || 0), 0);
+      const badge = document.getElementById('dm-unread-badge');
+      if (badge) {
+        if (totalUnread > 0) {
+          badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+          badge.style.display = '';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+
+      // Show/hide DM pane
+      const dmPane = document.getElementById('dm-pane');
+      if (dmPane) dmPane.style.display = dmChannels.length ? '' : 'none';
 
       dmChannels.forEach(ch => {
         const el = document.createElement('div');
@@ -2980,8 +3432,6 @@ class HavenApp {
         el.addEventListener('click', () => this.switchChannel(ch.code));
         dmList.appendChild(el);
       });
-
-      list.appendChild(dmList);
     }
 
     // Render voice indicators for channels with active voice users
@@ -3007,20 +3457,16 @@ class HavenApp {
   }
 
   _updateDmSectionBadge() {
-    const dmToggle = document.querySelector('.dm-toggle');
-    if (!dmToggle) return;
+    const badge = document.getElementById('dm-unread-badge');
+    if (!badge) return;
     const dmChannels = (this.channels || []).filter(c => c.is_dm);
     const total = dmChannels.reduce((sum, ch) => sum + (this.unreadCounts[ch.code] || 0), 0);
-    let badge = dmToggle.querySelector('.dm-unread-count');
     if (total > 0) {
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'dm-unread-count';
-        dmToggle.appendChild(badge);
-      }
       badge.textContent = total > 99 ? '99+' : total;
-    } else if (badge) {
-      badge.remove();
+      badge.style.display = '';
+    } else {
+      badge.textContent = '';
+      badge.style.display = 'none';
     }
   }
 
@@ -3467,7 +3913,7 @@ class HavenApp {
     el.innerHTML = html;
 
     // Bind admin/mod action buttons
-    if (this.user.isAdmin || this._canModerate()) {
+    if (this.user.isAdmin || this._canModerate() || this._hasPerm('promote_user')) {
       el.querySelectorAll('.user-action-btn[data-action]').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -3475,8 +3921,11 @@ class HavenApp {
           const userId = parseInt(btn.dataset.uid);
           const username = btn.dataset.uname;
           if (action === 'assign-role') {
-            this._loadRoles();
-            this._openAssignRoleModal(userId, username);
+            this._loadRoles(() => {
+              this._openAssignRoleModal(userId, username);
+            });
+          } else if (action === 'transfer-admin') {
+            this._confirmTransferAdmin(userId, username);
           } else {
             this._showAdminActionModal(action, userId, username);
           }
@@ -3519,7 +3968,7 @@ class HavenApp {
     // Avatar: image or letter fallback
     const color = this._getUserColor(u.username);
     const initial = u.username.charAt(0).toUpperCase();
-    const shapeClass = 'avatar-' + (this._avatarShape || 'circle');
+    const shapeClass = 'avatar-' + (u.avatarShape || 'circle');
     const avatarImg = u.avatar
       ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}" src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
       : `<div class="user-item-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
@@ -3550,15 +3999,19 @@ class HavenApp {
 
     // Show mod actions for admins AND users with mod roles (kick/mute for mods, ban only for admins)
     const canModThis = (this.user.isAdmin || this._canModerate()) && u.id !== this.user.id;
+    const canPromote = this._hasPerm('promote_user') && u.id !== this.user.id;
     const modBtns = canModThis
       ? `<div class="user-admin-actions">
            ${dmBtn}
-           ${this.user.isAdmin ? `<button class="user-action-btn" data-action="assign-role" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Assign Role">👑</button>` : ''}
+           ${canPromote ? `<button class="user-action-btn" data-action="assign-role" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Assign Role">👑</button>` : ''}
            <button class="user-action-btn" data-action="kick" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Kick">👢</button>
            <button class="user-action-btn" data-action="mute" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Mute">🔇</button>
            ${this.user.isAdmin ? `<button class="user-action-btn" data-action="ban" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Ban">⛔</button>` : ''}
+           ${this.user.isAdmin ? `<button class="user-action-btn" data-action="transfer-admin" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Transfer Admin">🔑</button>` : ''}
          </div>`
-      : (dmBtn ? `<div class="user-admin-actions">${dmBtn}</div>` : '');
+      : (canPromote && u.id !== this.user.id
+          ? `<div class="user-admin-actions">${dmBtn}<button class="user-action-btn" data-action="assign-role" data-uid="${u.id}" data-uname="${this._escapeHtml(u.username)}" title="Assign Role">👑</button></div>`
+          : (dmBtn ? `<div class="user-admin-actions">${dmBtn}</div>` : ''));
     return `
       <div class="user-item${onlineClass}" data-user-id="${u.id}">
         ${avatarHtml}
@@ -3866,7 +4319,8 @@ class HavenApp {
   _toggleMute() {
     const muted = this.voice.toggleMute();
     const btn = document.getElementById('voice-mute-btn');
-    btn.textContent = muted ? '🔊 Unmute' : '🔇 Mute';
+    btn.textContent = muted ? '🔊' : '🔇';
+    btn.title = muted ? 'Unmute' : 'Mute';
     btn.classList.toggle('muted', muted);
 
     // Audible cue
@@ -3884,7 +4338,8 @@ class HavenApp {
   _toggleDeafen() {
     const deafened = this.voice.toggleDeafen();
     const btn = document.getElementById('voice-deafen-btn');
-    btn.textContent = deafened ? '🔈 Undeafen' : '🔇 Deafen';
+    btn.textContent = deafened ? '🔈' : '🔈';
+    btn.title = deafened ? 'Undeafen' : 'Deafen';
     btn.classList.toggle('muted', deafened);
 
     // Audible cue
@@ -3907,19 +4362,30 @@ class HavenApp {
     document.getElementById('voice-dropdown-toggle').style.display = inVoice ? 'inline-flex' : 'none';
     document.getElementById('voice-leave-btn').style.display = inVoice ? 'inline-flex' : 'none';
 
+    // Show/hide the sidebar voice controls panel
+    const voicePanel = document.getElementById('voice-panel');
+    if (voicePanel) voicePanel.style.display = inVoice ? 'flex' : 'none';
+
     // Mobile voice join in right sidebar
     const mobileJoin = document.getElementById('voice-join-mobile');
     if (mobileJoin) mobileJoin.style.display = inVoice ? 'none' : '';
 
     if (!inVoice) {
-      document.getElementById('voice-dropdown-panel').style.display = 'none';
-      document.getElementById('voice-mute-btn').textContent = '🔇 Mute';
+      document.getElementById('voice-mute-btn').textContent = '🔇';
+      document.getElementById('voice-mute-btn').title = 'Mute';
       document.getElementById('voice-mute-btn').classList.remove('muted');
-      document.getElementById('voice-deafen-btn').textContent = '🔇 Deafen';
+      document.getElementById('voice-deafen-btn').textContent = '🔈';
+      document.getElementById('voice-deafen-btn').title = 'Deafen';
       document.getElementById('voice-deafen-btn').classList.remove('muted');
-      document.getElementById('screen-share-btn').textContent = '🖥️ Share';
+      document.getElementById('screen-share-btn').textContent = '🖥️';
+      document.getElementById('screen-share-btn').title = 'Share Screen';
       document.getElementById('screen-share-btn').classList.remove('sharing');
       document.getElementById('voice-ns-slider').value = 10;
+      // Hide voice settings sub-panel
+      const vsPanel = document.getElementById('voice-settings-panel');
+      if (vsPanel) vsPanel.style.display = 'none';
+      const vsBtn = document.getElementById('voice-settings-toggle');
+      if (vsBtn) vsBtn.classList.remove('active');
       // Clear all stream tiles so no ghost tiles persist after leaving voice
       const grid = document.getElementById('screen-share-grid');
       grid.querySelectorAll('video').forEach(v => { v.srcObject = null; });
@@ -3965,13 +4431,15 @@ class HavenApp {
 
     if (this.voice.isScreenSharing) {
       this.voice.stopScreenShare();
-      document.getElementById('screen-share-btn').textContent = '🖥️ Share';
+      document.getElementById('screen-share-btn').textContent = '🖥️';
+      document.getElementById('screen-share-btn').title = 'Share Screen';
       document.getElementById('screen-share-btn').classList.remove('sharing');
       this._showToast('Stopped screen sharing', 'info');
     } else {
       const ok = await this.voice.shareScreen();
       if (ok) {
-        document.getElementById('screen-share-btn').textContent = '🛑 Stop';
+        document.getElementById('screen-share-btn').textContent = '🛑';
+        document.getElementById('screen-share-btn').title = 'Stop Sharing';
         document.getElementById('screen-share-btn').classList.add('sharing');
         this._showToast('Screen sharing started', 'success');
         // Show our own screen in the viewer
@@ -5761,11 +6229,36 @@ class HavenApp {
     modal.style.display = 'flex';
   }
 
+  _confirmTransferAdmin(userId, username) {
+    const confirmed = confirm(
+      `⚠️ Transfer Admin to ${username}?\n\nThis will:\n• Make ${username} the new server Admin\n• Demote you to "Former Admin" (Lv.99)\n\nThis action cannot be undone by you.`
+    );
+    if (!confirmed) return;
+    // Double confirmation
+    const doubleConfirm = confirm(`Are you absolutely sure? Type-level confirmation:\nYou are about to give FULL admin control to ${username}.`);
+    if (!doubleConfirm) return;
+
+    this.socket.emit('transfer-admin', { userId }, (res) => {
+      if (res && res.error) {
+        this._showToast(res.error, 'error');
+      } else if (res && res.success) {
+        this._showToast(res.message || 'Admin transferred', 'info');
+      }
+    });
+  }
+
   _applyServerSettings() {
     const vis = document.getElementById('member-visibility-select');
     if (vis && this.serverSettings.member_visibility) {
       vis.value = this.serverSettings.member_visibility;
     }
+    // Server branding
+    const nameInput = document.getElementById('server-name-input');
+    if (nameInput && this.serverSettings.server_name !== undefined) {
+      nameInput.value = this.serverSettings.server_name || '';
+    }
+    this._applyServerBranding();
+    this._renderPermThresholds();
     // Cleanup settings
     const cleanupEnabled = document.getElementById('cleanup-enabled');
     if (cleanupEnabled) {
@@ -5807,6 +6300,165 @@ class HavenApp {
       btn.addEventListener('click', () => {
         this.socket.emit('whitelist-remove', { username: btn.dataset.username });
       });
+    });
+  }
+
+  /* ── Server Branding (icon + name) ──────────────────── */
+
+  _applyServerBranding() {
+    const name = this.serverSettings.server_name || 'HAVEN';
+    const icon = this.serverSettings.server_icon || '';
+
+    // Sidebar brand text
+    const brandText = document.querySelector('.brand-text');
+    if (brandText) brandText.textContent = name;
+
+    // Sidebar brand icon
+    const logoSm = document.querySelector('.logo-sm');
+    if (logoSm) {
+      if (icon) {
+        logoSm.style.display = 'none';
+        let brandIcon = document.querySelector('.brand-icon');
+        if (!brandIcon) {
+          brandIcon = document.createElement('img');
+          brandIcon.className = 'brand-icon';
+          logoSm.parentNode.insertBefore(brandIcon, logoSm);
+        }
+        brandIcon.src = icon;
+        brandIcon.style.display = '';
+      } else {
+        logoSm.style.display = '';
+        const brandIcon = document.querySelector('.brand-icon');
+        if (brandIcon) brandIcon.style.display = 'none';
+      }
+    }
+
+    // Server bar icon
+    const homeServer = document.getElementById('home-server');
+    if (homeServer) {
+      const existingImg = homeServer.querySelector('img');
+      const iconText = homeServer.querySelector('.server-icon-text');
+      if (icon) {
+        if (iconText) iconText.style.display = 'none';
+        if (!existingImg) {
+          const img = document.createElement('img');
+          img.src = icon;
+          img.alt = name;
+          homeServer.insertBefore(img, homeServer.firstChild);
+        } else {
+          existingImg.src = icon;
+          existingImg.style.display = '';
+        }
+      } else {
+        if (existingImg) existingImg.style.display = 'none';
+        if (iconText) iconText.style.display = '';
+      }
+      homeServer.title = name;
+    }
+
+    // Admin preview
+    const preview = document.getElementById('server-icon-preview');
+    if (preview) {
+      if (icon) {
+        preview.innerHTML = `<img src="${icon}" alt="Server Icon">`;
+      } else {
+        preview.innerHTML = '<span class="server-icon-text">⬡</span>';
+      }
+    }
+  }
+
+  _initServerBranding() {
+    // Server name change
+    const nameInput = document.getElementById('server-name-input');
+    if (nameInput) {
+      let nameTimeout;
+      nameInput.addEventListener('input', () => {
+        clearTimeout(nameTimeout);
+        nameTimeout = setTimeout(() => {
+          this.socket.emit('update-server-setting', { key: 'server_name', value: nameInput.value.trim() || 'HAVEN' });
+        }, 600);
+      });
+    }
+
+    // Server icon upload
+    document.getElementById('server-icon-upload-btn')?.addEventListener('click', async () => {
+      const fileInput = document.getElementById('server-icon-file');
+      if (!fileInput || !fileInput.files[0]) return this._showToast('Select an image first', 'error');
+      const form = new FormData();
+      form.append('image', fileInput.files[0]);
+      try {
+        const res = await fetch('/api/upload-server-icon', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.token}` },
+          body: form
+        });
+        const data = await res.json();
+        if (data.error) return this._showToast(data.error, 'error');
+        this.socket.emit('update-server-setting', { key: 'server_icon', value: data.url });
+        this._showToast('Server icon updated', 'success');
+        fileInput.value = '';
+      } catch (err) {
+        this._showToast('Upload failed', 'error');
+      }
+    });
+
+    // Server icon remove
+    document.getElementById('server-icon-remove-btn')?.addEventListener('click', () => {
+      this.socket.emit('update-server-setting', { key: 'server_icon', value: '' });
+      this._showToast('Server icon removed', 'success');
+    });
+  }
+
+  _initPermThresholds() {
+    this._renderPermThresholds();
+  }
+
+  _renderPermThresholds() {
+    const container = document.getElementById('perm-thresholds-list');
+    if (!container) return;
+
+    const allPerms = [
+      'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
+      'pin_message', 'kick_user', 'mute_user', 'ban_user',
+      'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
+      'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
+      'promote_user', 'transfer_admin'
+    ];
+    const permLabels = {
+      edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
+      delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
+      pin_message: 'Pin Messages', kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
+      rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
+      set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
+      upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
+      manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
+      view_history: 'View Message History',
+      promote_user: 'Promote Users', transfer_admin: 'Transfer Admin'
+    };
+
+    let thresholds = {};
+    try { thresholds = JSON.parse(this.serverSettings.permission_thresholds || '{}'); } catch {}
+
+    container.innerHTML = `
+      <div class="perm-thresholds-grid">
+        ${allPerms.map(p => `
+          <div class="perm-threshold-row">
+            <span class="perm-threshold-label">${permLabels[p] || p}</span>
+            <input type="number" class="perm-threshold-input settings-number-input" data-perm="${p}" value="${thresholds[p] || ''}" min="0" max="100" placeholder="—" title="Min level to auto-grant (0 = disabled)">
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn-sm btn-accent" id="save-perm-thresholds-btn" style="margin-top:8px;">Save Thresholds</button>
+    `;
+
+    document.getElementById('save-perm-thresholds-btn')?.addEventListener('click', () => {
+      const obj = {};
+      container.querySelectorAll('.perm-threshold-input').forEach(inp => {
+        const val = parseInt(inp.value);
+        if (val > 0 && val <= 100) obj[inp.dataset.perm] = val;
+      });
+      this.socket.emit('update-server-setting', { key: 'permission_thresholds', value: JSON.stringify(obj) });
+      this._showToast('Permission thresholds saved', 'success');
     });
   }
 
@@ -6049,6 +6701,8 @@ class HavenApp {
       opt.addEventListener('click', () => {
         const status = opt.dataset.status;
         const statusText = document.getElementById('status-text-input').value.trim();
+        // Track whether user manually chose a non-online status (away/dnd/invisible)
+        this._manualStatusOverride = (status !== 'online');
         this.socket.emit('set-status', { status, statusText });
         picker.style.display = 'none';
       });
@@ -6090,21 +6744,24 @@ class HavenApp {
   // ═══════════════════════════════════════════════════════
 
   _setupIdleDetection() {
+    const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
     const resetIdle = () => {
-      if (this.userStatus === 'away' && this._wasAutoAway) {
-        this._wasAutoAway = false;
+      // If user is 'away' and didn't manually choose it, restore to online
+      // This handles: auto-idle from this session, OR stale 'away' from a previous session
+      if (this.userStatus === 'away' && !this._manualStatusOverride) {
         this.socket.emit('set-status', { status: 'online', statusText: this.userStatusText });
       }
       clearTimeout(this.idleTimer);
       this.idleTimer = setTimeout(() => {
+        // Only auto-idle users who are 'online' (don't touch dnd/invisible/manual away)
         if (this.userStatus === 'online') {
-          this._wasAutoAway = true;
           this.socket.emit('set-status', { status: 'away', statusText: this.userStatusText });
         }
-      }, 10 * 60 * 1000);
+      }, IDLE_TIMEOUT);
     };
 
-    ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt => {
       document.addEventListener(evt, resetIdle, { passive: true });
     });
     resetIdle();
@@ -6140,16 +6797,22 @@ class HavenApp {
   _handleFileUpload(input) {
     if (!input.files.length || !this.currentChannel) return;
     const file = input.files[0];
+    this._uploadGeneralFile(file);
+    input.value = '';
+  }
+
+  /** Upload any file via /api/upload-file — used by drag & drop, paste, and 📎 button */
+  _uploadGeneralFile(file) {
+    if (!this.currentChannel) return this._showToast('Select a channel first', 'error');
     if (file.size > 25 * 1024 * 1024) {
       this._showToast('File too large (max 25 MB)', 'error');
-      input.value = '';
       return;
     }
 
     const formData = new FormData();
     formData.append('file', file);
 
-    this._showToast('Uploading file...', 'info');
+    this._showToast(`Uploading ${file.name}…`, 'info');
 
     fetch('/api/upload-file', {
       method: 'POST',
@@ -6182,8 +6845,6 @@ class HavenApp {
       this._clearReply();
     })
     .catch(() => this._showToast('Upload failed', 'error'));
-
-    input.value = '';
   }
 
   _formatFileSize(bytes) {
@@ -6260,6 +6921,47 @@ class HavenApp {
         localStorage.setItem('haven_right_sidebar_width', parseInt(rightSidebar.style.width));
       });
     }
+
+    // Sidebar split handle (channels/DM divider)
+    const splitHandle = document.getElementById('sidebar-split-handle');
+    const splitContainer = document.getElementById('sidebar-split');
+    const channelsPane = document.getElementById('channels-pane');
+    const dmPane = document.getElementById('dm-pane');
+    if (splitHandle && splitContainer && channelsPane && dmPane) {
+      const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
+      if (savedRatio) {
+        channelsPane.style.flex = `${savedRatio} 1 0`;
+        dmPane.style.flex = `${1 - parseFloat(savedRatio)} 1 0`;
+      }
+
+      let dragging = false;
+      splitHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        dragging = true;
+        splitHandle.classList.add('dragging');
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const rect = splitContainer.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const total = rect.height;
+        let ratio = y / total;
+        ratio = Math.max(0.15, Math.min(0.85, ratio));
+        channelsPane.style.flex = `${ratio} 1 0`;
+        dmPane.style.flex = `${1 - ratio} 1 0`;
+      });
+      document.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        splitHandle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        const chFlex = parseFloat(channelsPane.style.flex) || 0.6;
+        localStorage.setItem('haven_sidebar_split_ratio', chFlex);
+      });
+    }
   }
 
   // ── Role Management ───────────────────────────────────
@@ -6309,7 +7011,7 @@ class HavenApp {
     this.socket.on('roles-updated', () => this._loadRoles());
   }
 
-  _loadRoles() {
+  _loadRoles(cb) {
     this.socket.emit('get-roles', {}, (res) => {
       if (res.error) return;
       this._allRoles = res.roles || [];
@@ -6317,6 +7019,7 @@ class HavenApp {
       if (document.getElementById('role-modal').style.display !== 'none') {
         this._renderRoleSidebar();
       }
+      if (typeof cb === 'function') cb();
     });
   }
 
@@ -6364,7 +7067,24 @@ class HavenApp {
     const role = this._allRoles.find(r => r.id === this._selectedRoleId);
     if (!role) { panel.innerHTML = '<p class="muted-text" style="padding:20px;text-align:center">Select a role</p>'; return; }
 
-    const allPerms = ['kick_user', 'mute_user', 'delete_message', 'pin_message', 'set_channel_topic', 'manage_sub_channels', 'ban_user'];
+    const allPerms = [
+      'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
+      'pin_message', 'kick_user', 'mute_user', 'ban_user',
+      'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
+      'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
+      'promote_user', 'transfer_admin'
+    ];
+    const permLabels = {
+      edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
+      delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
+      pin_message: 'Pin Messages', kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
+      rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
+      set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
+      upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
+      manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
+      view_history: 'View Message History',
+      promote_user: 'Promote Users', transfer_admin: 'Transfer Admin'
+    };
     const rolePerms = role.permissions || [];
 
     panel.innerHTML = `
@@ -6378,7 +7098,7 @@ class HavenApp {
         <h5 class="settings-section-subtitle" style="margin-top:12px;">Permissions</h5>
         ${allPerms.map(p => `
           <label class="toggle-row">
-            <span>${p.replace(/_/g, ' ')}</span>
+            <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
             <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}>
           </label>
         `).join('')}
@@ -6416,21 +7136,348 @@ class HavenApp {
     });
   }
 
+  // ═══════════════════════════════════════════════════════
+  // ── Channel Roles Modal ───────────────────────────────
+  // ═══════════════════════════════════════════════════════
+
+  _openChannelRolesModal(channelCode) {
+    this._channelRolesCode = channelCode;
+    this._channelRolesSelectedUser = null;
+    this._channelRolesMembers = [];
+    this._channelRolesChannelId = null;
+    this._channelRolesSelectedRole = null;
+
+    const modal = document.getElementById('channel-roles-modal');
+    const ch = this.channels.find(c => c.code === channelCode);
+    document.getElementById('channel-roles-channel-name').textContent = ch ? `# ${ch.name}` : '';
+    document.getElementById('channel-roles-member-list').innerHTML = '<p class="channel-roles-no-members">Loading…</p>';
+    document.getElementById('channel-roles-actions').style.display = 'none';
+    document.getElementById('channel-roles-role-detail').innerHTML =
+      '<p class="muted-text" style="padding:12px;text-align:center;font-size:0.82rem">Select a role to configure</p>';
+    modal.style.display = 'flex';
+
+    // Fetch members + roles and all available roles in parallel
+    this._loadRoles(() => {
+      this._renderChannelRolesRoleList();
+      this.socket.emit('get-channel-member-roles', { code: channelCode }, (res) => {
+        if (res.error) {
+          document.getElementById('channel-roles-member-list').innerHTML =
+            `<p class="channel-roles-no-members">${this._escapeHtml(res.error)}</p>`;
+          return;
+        }
+        this._channelRolesMembers = res.members || [];
+        this._channelRolesChannelId = res.channelId;
+        this._renderChannelRolesMembers();
+        // Populate role dropdown
+        const roleSel = document.getElementById('channel-roles-role-select');
+        roleSel.innerHTML = '<option value="">-- Select Role --</option>' +
+          this._allRoles.map(r =>
+            `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
+          ).join('');
+      });
+    });
+  }
+
+  _renderChannelRolesMembers() {
+    const list = document.getElementById('channel-roles-member-list');
+    if (!this._channelRolesMembers.length) {
+      list.innerHTML = '<p class="channel-roles-no-members">No members in this channel</p>';
+      return;
+    }
+
+    // Sort alphabetically by display name
+    const sorted = [...this._channelRolesMembers].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })
+    );
+
+    list.innerHTML = sorted.map(m => {
+      const sel = this._channelRolesSelectedUser === m.id ? ' selected' : '';
+      const avatarSrc = m.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(m.loginName)}`;
+      const shapeClass = m.avatarShape === 'square' ? ' square' : '';
+      const badges = m.isAdmin
+        ? '<span class="channel-roles-badge badge-admin"><span class="badge-dot" style="background:#e74c3c"></span>Admin</span>'
+        : (m.roles || []).map(r =>
+            `<span class="channel-roles-badge"><span class="badge-dot" style="background:${r.color || '#aaa'}"></span>${this._escapeHtml(r.name)}<span class="badge-scope">${r.scope === 'channel' ? '📌 Channel' : '🌐 Server'}</span><span class="revoke-btn" data-uid="${m.id}" data-rid="${r.roleId}" data-scope="${r.scope}" title="Revoke">✕</span></span>`
+          ).join('') || '<span class="channel-roles-no-role">No roles</span>';
+
+      return `<div class="channel-roles-member${sel}" data-uid="${m.id}">
+        <img class="channel-roles-member-avatar${shapeClass}" src="${avatarSrc}" alt="">
+        <div class="channel-roles-member-info">
+          <span class="channel-roles-member-name">${this._escapeHtml(m.displayName)}</span>
+          <span class="channel-roles-member-login">@${this._escapeHtml(m.loginName)}</span>
+          <div class="channel-roles-member-badges">${badges}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Member click → select
+    list.querySelectorAll('.channel-roles-member').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.revoke-btn')) return; // handled below
+        const uid = parseInt(el.dataset.uid);
+        this._channelRolesSelectedUser = uid;
+        this._renderChannelRolesMembers();
+        this._showChannelRolesActions(uid);
+      });
+    });
+
+    // Revoke button clicks
+    list.querySelectorAll('.revoke-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const uid = parseInt(btn.dataset.uid);
+        const rid = parseInt(btn.dataset.rid);
+        const scope = btn.dataset.scope;
+        const channelId = scope === 'channel' ? this._channelRolesChannelId : null;
+        this.socket.emit('revoke-role', { userId: uid, roleId: rid, channelId });
+        this._showToast('Role revoked', 'success');
+        // Refresh after a short delay
+        setTimeout(() => this._refreshChannelRoles(), 400);
+      });
+    });
+  }
+
+  _showChannelRolesActions(userId) {
+    const panel = document.getElementById('channel-roles-actions');
+    const member = this._channelRolesMembers.find(m => m.id === userId);
+    if (!member) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    document.getElementById('channel-roles-selected-name').textContent = member.displayName;
+
+    const currentDiv = document.getElementById('channel-roles-current-roles');
+
+    // Admins cannot modify their own roles
+    if (member.isAdmin && member.id === this.user.id) {
+      currentDiv.innerHTML = '<span class="channel-roles-badge" style="background:rgba(231,76,60,0.2);color:#e74c3c"><span class="badge-dot" style="background:#e74c3c"></span>Admin</span>';
+      const assignArea = panel.querySelector('.channel-roles-assign-area');
+      if (assignArea) assignArea.style.display = 'none';
+      return;
+    }
+    // Show assign area for non-self-admin targets
+    const assignArea = panel.querySelector('.channel-roles-assign-area');
+    if (assignArea) assignArea.style.display = '';
+
+    if (member.isAdmin) {
+      currentDiv.innerHTML = '<span class="channel-roles-badge badge-admin"><span class="badge-dot" style="background:#e74c3c"></span>Admin</span>';
+    } else if (member.roles.length) {
+      currentDiv.innerHTML = member.roles.map(r =>
+        `<span class="channel-roles-badge"><span class="badge-dot" style="background:${r.color || '#aaa'}"></span>${this._escapeHtml(r.name)} <span class="badge-scope">${r.scope === 'channel' ? '📌 Channel' : '🌐 Server'}</span></span>`
+      ).join('');
+    } else {
+      currentDiv.innerHTML = '<span style="font-size:0.78rem;color:var(--text-muted)">No roles assigned</span>';
+    }
+  }
+
+  _assignChannelRole() {
+    const userId = this._channelRolesSelectedUser;
+    if (!userId) return this._showToast('Select a member first', 'error');
+
+    const roleId = parseInt(document.getElementById('channel-roles-role-select').value);
+    if (!roleId) return this._showToast('Select a role', 'error');
+
+    const scopeVal = document.getElementById('channel-roles-scope-select').value;
+    const channelId = scopeVal === 'channel' ? this._channelRolesChannelId : null;
+
+    this.socket.emit('assign-role', { userId, roleId, channelId }, (res) => {
+      if (res.error) return this._showToast(res.error, 'error');
+      this._showToast('Role assigned', 'success');
+      // Reset selection
+      document.getElementById('channel-roles-role-select').value = '';
+      // Refresh member list
+      setTimeout(() => this._refreshChannelRoles(), 400);
+    });
+  }
+
+  _refreshChannelRoles() {
+    if (!this._channelRolesCode) return;
+    this.socket.emit('get-channel-member-roles', { code: this._channelRolesCode }, (res) => {
+      if (res.error) return;
+      this._channelRolesMembers = res.members || [];
+      this._renderChannelRolesMembers();
+      // Re-select user if still valid
+      if (this._channelRolesSelectedUser) {
+        this._showChannelRolesActions(this._channelRolesSelectedUser);
+      }
+    });
+  }
+
+  /* ── Channel Roles: Role configuration panel ────────── */
+
+  _renderChannelRolesRoleList() {
+    const list = document.getElementById('channel-roles-role-list');
+    if (!list) return;
+    if (!this._allRoles.length) {
+      list.innerHTML = '<p style="font-size:0.82rem;color:var(--text-muted);text-align:center;padding:8px">No roles yet</p>';
+      return;
+    }
+    list.innerHTML = this._allRoles.map(r =>
+      `<div class="channel-roles-role-item${this._channelRolesSelectedRole === r.id ? ' active' : ''}" data-role-id="${r.id}">
+        <span class="role-color-dot" style="background:${r.color || '#aaa'}"></span>
+        <span class="channel-roles-role-name">${this._escapeHtml(r.name)}</span>
+        <span class="channel-roles-role-level">Lv.${r.level}</span>
+      </div>`
+    ).join('');
+    list.querySelectorAll('.channel-roles-role-item').forEach(el => {
+      el.addEventListener('click', () => {
+        this._channelRolesSelectedRole = parseInt(el.dataset.roleId, 10);
+        this._renderChannelRolesRoleList();
+        this._renderChannelRolesRoleDetail();
+      });
+    });
+  }
+
+  _renderChannelRolesRoleDetail() {
+    const panel = document.getElementById('channel-roles-role-detail');
+    const role = this._allRoles.find(r => r.id === this._channelRolesSelectedRole);
+    if (!role) {
+      panel.innerHTML = '<p class="muted-text" style="padding:12px;text-align:center;font-size:0.82rem">Select a role to configure</p>';
+      return;
+    }
+
+    const allPerms = [
+      'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
+      'pin_message', 'kick_user', 'mute_user', 'ban_user',
+      'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
+      'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
+      'promote_user', 'transfer_admin'
+    ];
+    const permLabels = {
+      edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
+      delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
+      pin_message: 'Pin Messages', kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
+      rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
+      set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
+      upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
+      manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
+      view_history: 'View Message History',
+      promote_user: 'Promote Users', transfer_admin: 'Transfer Admin'
+    };
+    const rolePerms = role.permissions || [];
+
+    panel.innerHTML = `
+      <div class="cr-role-form">
+        <div class="cr-role-form-row">
+          <label class="cr-role-label">Name</label>
+          <input type="text" class="settings-text-input" id="cr-role-name" value="${this._escapeHtml(role.name)}" maxlength="30">
+        </div>
+        <div class="cr-role-form-row cr-role-inline">
+          <div>
+            <label class="cr-role-label">Level (1-99)</label>
+            <input type="number" class="settings-number-input" id="cr-role-level" value="${role.level}" min="1" max="99" style="width:60px">
+          </div>
+          <div>
+            <label class="cr-role-label">Color</label>
+            <input type="color" id="cr-role-color" value="${role.color || '#aaaaaa'}" style="width:36px;height:28px;border:none;cursor:pointer;background:none">
+          </div>
+        </div>
+        <label class="cr-role-label" style="margin-top:4px">Permissions</label>
+        <div class="cr-role-perms">
+          ${allPerms.map(p => `
+            <label class="cr-perm-toggle">
+              <input type="checkbox" class="cr-perm-cb" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}>
+              <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
+            </label>
+          `).join('')}
+        </div>
+        <div class="cr-role-btns">
+          <button class="btn-sm btn-accent" id="cr-save-role-btn">Save</button>
+          <button class="btn-sm danger" id="cr-delete-role-btn">Delete</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('cr-save-role-btn').addEventListener('click', () => {
+      const perms = [...panel.querySelectorAll('.cr-perm-cb:checked')].map(cb => cb.dataset.perm);
+      const newLevel = parseInt(document.getElementById('cr-role-level').value, 10);
+      if (isNaN(newLevel) || newLevel < 1 || newLevel > 99) { this._showToast('Level must be 1–99', 'error'); return; }
+      this.socket.emit('update-role', {
+        roleId: role.id,
+        name: document.getElementById('cr-role-name').value.trim(),
+        level: newLevel,
+        color: document.getElementById('cr-role-color').value,
+        permissions: perms
+      }, (res) => {
+        if (res.error) { this._showToast(res.error, 'error'); return; }
+        this._showToast('Role updated', 'success');
+        this._loadRoles(() => {
+          this._renderChannelRolesRoleList();
+          this._renderChannelRolesRoleDetail();
+          this._refreshChannelRolesDropdown();
+          this._refreshChannelRoles();
+        });
+      });
+    });
+
+    document.getElementById('cr-delete-role-btn').addEventListener('click', () => {
+      if (!confirm(`Delete role "${role.name}"? Users with this role will lose it.`)) return;
+      this.socket.emit('delete-role', { roleId: role.id }, (res) => {
+        if (res.error) { this._showToast(res.error, 'error'); return; }
+        this._showToast('Role deleted', 'success');
+        this._channelRolesSelectedRole = null;
+        this._loadRoles(() => {
+          this._renderChannelRolesRoleList();
+          this._renderChannelRolesRoleDetail();
+          this._refreshChannelRolesDropdown();
+          this._refreshChannelRoles();
+        });
+      });
+    });
+  }
+
+  _createChannelRole() {
+    const name = prompt('Enter role name:');
+    if (!name || !name.trim()) return;
+    const level = parseInt(prompt('Role level (1-99, higher = more authority):\nServer Mod default = 50, Channel Mod default = 25', '25'), 10);
+    if (isNaN(level) || level < 1 || level > 99) { this._showToast('Level must be 1–99', 'error'); return; }
+    this.socket.emit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
+      if (res.error) { this._showToast(res.error, 'error'); return; }
+      this._showToast('Role created', 'success');
+      this._loadRoles(() => {
+        this._renderChannelRolesRoleList();
+        this._refreshChannelRolesDropdown();
+      });
+    });
+  }
+
+  _refreshChannelRolesDropdown() {
+    const roleSel = document.getElementById('channel-roles-role-select');
+    if (!roleSel) return;
+    roleSel.innerHTML = '<option value="">-- Select Role --</option>' +
+      this._allRoles.map(r =>
+        `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
+      ).join('');
+  }
+
   _openAssignRoleModal(userId, username) {
     const modal = document.getElementById('assign-role-modal');
     modal.dataset.userId = userId;
     document.getElementById('assign-role-user-label').textContent = `Assigning role to: ${username}`;
-    // Populate role select
+
+    // Populate role select with color-coded level info
     const sel = document.getElementById('assign-role-select');
     sel.innerHTML = '<option value="">-- Select Role --</option>' + this._allRoles.map(r =>
-      `<option value="${r.id}">${this._escapeHtml(r.name)} (Lv.${r.level})</option>`
+      `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
     ).join('');
-    // Populate scope (server or per-channel)
+
+    // Populate scope with structured parent → sub-channel grouping
     const scopeSel = document.getElementById('assign-role-scope');
-    const nonDmChannels = this.channels.filter(c => !c.is_dm);
-    scopeSel.innerHTML = '<option value="server">Server-wide</option>' + nonDmChannels.map(c =>
-      `<option value="${c.id}"># ${this._escapeHtml(c.name)}</option>`
-    ).join('');
+    const nonDm = this.channels.filter(c => !c.is_dm);
+    const parents = nonDm.filter(c => !c.parent_channel_id);
+    const subMap = {};
+    nonDm.filter(c => c.parent_channel_id).forEach(c => {
+      if (!subMap[c.parent_channel_id]) subMap[c.parent_channel_id] = [];
+      subMap[c.parent_channel_id].push(c);
+    });
+
+    let scopeHtml = '<option value="server">🌐 Server-wide</option>';
+    parents.forEach(p => {
+      scopeHtml += `<option value="${p.id}"># ${this._escapeHtml(p.name)}</option>`;
+      const subs = subMap[p.id] || [];
+      subs.forEach(s => {
+        scopeHtml += `<option value="${s.id}">&nbsp;&nbsp;└ ${this._escapeHtml(s.name)}</option>`;
+      });
+    });
+    scopeSel.innerHTML = scopeHtml;
     modal.style.display = 'flex';
   }
 
