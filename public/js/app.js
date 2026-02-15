@@ -4754,8 +4754,14 @@ class HavenApp {
         grid.appendChild(tile);
       }
       const videoEl = tile.querySelector('video');
+      // Force re-render if the same stream is re-assigned (otherwise it's a no-op → black screen)
+      if (videoEl.srcObject === stream) {
+        videoEl.srcObject = null;
+      }
       videoEl.srcObject = stream;
-      videoEl.play().catch(() => {}); // ensure autoplay isn't blocked
+      videoEl.play().catch(() => {});
+      // Also re-play when metadata loads (handles late-arriving tracks)
+      videoEl.onloadedmetadata = () => { videoEl.play().catch(() => {}); };
       // Auto-show container (even if minimized) when new stream arrives
       container.style.display = 'flex';
       this._screenShareMinimized = false;
@@ -4984,10 +4990,11 @@ class HavenApp {
     if (!wasFocused) {
       tile.classList.add('stream-focused');
       container.classList.add('stream-focus-mode');
-      // Override inline max-height set by the slider so the stream can expand
-      container.style.maxHeight = 'none';
-      grid.style.maxHeight = 'none';
-      tile.querySelector('video')?.style && (tile.querySelector('video').style.maxHeight = 'none');
+      // Clear inline max-height so CSS flex constraints take over (viewport-bounded)
+      container.style.maxHeight = '';
+      grid.style.maxHeight = '';
+      const vid = tile.querySelector('video');
+      if (vid) vid.style.maxHeight = '';
     } else {
       // Restore slider-based size
       const saved = localStorage.getItem('haven_stream_size') || '50';

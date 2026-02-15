@@ -437,7 +437,14 @@ class VoiceManager {
         const videoStream = sourceStream || new MediaStream([track]);
         if (this.onScreenStream) this.onScreenStream(userId, videoStream);
         track.onunmute = () => {
-          if (this.onScreenStream) this.onScreenStream(userId, videoStream);
+          // Create a fresh MediaStream so the video element detects a new srcObject
+          // (re-assigning the same object is a no-op in Chrome → black screen)
+          const freshStream = new MediaStream(videoStream.getTracks());
+          if (this.onScreenStream) this.onScreenStream(userId, freshStream);
+        };
+        track.onmute = () => {
+          // Track temporarily stopped sending — force video to re-render
+          // when it resumes via onunmute above
         };
         track.onended = () => {
           if (this.onScreenStream) this.onScreenStream(userId, null);

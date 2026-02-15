@@ -1457,10 +1457,12 @@ function setupSocketHandlers(io, db) {
       if (!data || typeof data !== 'object') return;
       const code = typeof data.code === 'string' ? data.code.trim() : '';
       if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      const channelId = channel ? channel.id : null;
       const room = voiceUsers.get(code);
       const users = room
         ? Array.from(room.values()).map(u => {
-            const role = getUserHighestRole(u.id);
+            const role = getUserHighestRole(u.id, channelId);
             return { id: u.id, username: u.username, roleColor: role ? role.color : null };
           })
         : [];
@@ -2812,10 +2814,12 @@ function setupSocketHandlers(io, db) {
     }
 
     function broadcastVoiceUsers(code) {
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      const channelId = channel ? channel.id : null;
       const room = voiceUsers.get(code);
       const users = room
         ? Array.from(room.values()).map(u => {
-            const role = getUserHighestRole(u.id);
+            const role = getUserHighestRole(u.id, channelId);
             return { id: u.id, username: u.username, roleColor: role ? role.color : null };
           })
         : [];
