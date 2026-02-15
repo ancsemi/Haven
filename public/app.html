@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
   <link rel="stylesheet" href="/css/style.css?v=webhooks1">
@@ -49,27 +50,29 @@
           </div>
         </div>
 
-        <div class="sidebar-section">
-          <h5 class="section-label">Join a Channel</h5>
-          <div class="input-row">
-            <input type="text" id="channel-code-input"
-                   placeholder="Enter code..." maxlength="8" spellcheck="false">
-            <button id="join-channel-btn" class="btn-sm">Join</button>
+        <div class="sidebar-mod-container" id="sidebar-mod-container">
+          <div class="sidebar-section" data-mod-id="join">
+            <h5 class="section-label">Join a Channel</h5>
+            <div class="input-row">
+              <input type="text" id="channel-code-input"
+                     placeholder="Enter code..." maxlength="8" spellcheck="false">
+              <button id="join-channel-btn" class="btn-sm">Join</button>
+            </div>
           </div>
-        </div>
 
-        <div class="sidebar-section" id="admin-controls" style="display:none">
-          <h5 class="section-label">Create Channel</h5>
-          <div class="input-row">
-            <input type="text" id="new-channel-name"
-                   placeholder="Channel name..." maxlength="50">
-            <button id="create-channel-btn" class="btn-sm btn-accent">+</button>
+          <div class="sidebar-section" id="admin-controls" data-mod-id="create" style="display:none">
+            <h5 class="section-label">Create Channel</h5>
+            <div class="input-row">
+              <input type="text" id="new-channel-name"
+                     placeholder="Channel name..." maxlength="50">
+              <button id="create-channel-btn" class="btn-sm btn-accent">+</button>
+            </div>
           </div>
-        </div>
 
-        <div class="sidebar-section channel-section">
-          <h5 class="section-label">Channels</h5>
-          <div class="channel-list" id="channel-list"></div>
+          <div class="sidebar-section channel-section" data-mod-id="channels">
+            <h5 class="section-label">Channels</h5>
+            <div class="channel-list" id="channel-list"></div>
+          </div>
         </div>
 
         <!-- Pinned bottom area (never pushed off screen) -->
@@ -173,6 +176,7 @@
           <div class="sidebar-bottom-bar">
             <button id="theme-popup-toggle" class="sidebar-bottom-btn" title="Themes">🎨</button>
             <button class="sidebar-bottom-btn" id="play-flappy-btn" title="Shippy Container">🚢</button>
+            <button id="mod-mode-toggle" class="sidebar-bottom-btn" title="Mod Mode — rearrange sections and panels">🔧</button>
             <div id="voice-bar" class="voice-bar" style="display:none"></div>
             <span style="flex:1"></span>
             <a href="https://ko-fi.com/haven_app" target="_blank" rel="noopener noreferrer" class="sidebar-bottom-btn donate-btn" title="Support Haven">❤️</a>
@@ -769,6 +773,27 @@
             <p class="muted-text">Loading roles...</p>
           </div>
         </div>
+        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🧭 Tunnel</h5>
+          <label class="toggle-row">
+            <span>Enabled</span>
+            <input type="checkbox" id="tunnel-enabled">
+          </label>
+          <label class="select-row">
+            <span>Provider</span>
+            <select id="tunnel-provider-select">
+              <option value="localtunnel">LocalTunnel</option>
+              <option value="cloudflared">Cloudflared</option>
+            </select>
+          </label>
+          <div id="tunnel-status-display" class="muted-text" style="margin-top:4px;font-size:11px;">Inactive</div>
+        </div>
+        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🔧 Mod Mode</h5>
+          <small class="settings-hint">Rearrange sidebar sections and snap server/sidebar/status panels</small>
+          <button class="btn-sm btn-full" id="mod-mode-settings-toggle" style="margin-top:6px;">🔧 Toggle Mod Mode</button>
+          <button class="btn-sm btn-full" id="mod-mode-reset" style="margin-top:6px;">↺ Reset Layout</button>
+        </div>
       </div>
     </div>
   </div>
@@ -919,6 +944,7 @@
   <script src="/js/notifications.js"></script>
   <script src="/js/servers.js"></script>
   <script src="/js/voice.js"></script>
+  <script src="/js/modmode.js"></script>
   <script src="/js/app.js?v=webhooks1"></script>
 </body>
 </html>

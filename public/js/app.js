@@ -126,6 +126,8 @@ class HavenApp {
     this._setupSoundManagement();
     this._initRoleManagement();
     this._setupResizableSidebars();
+    this.modMode = typeof ModMode === 'function' ? new ModMode() : null;
+    this.modMode?.init();
     this._setupDensityPicker();
     this._setupOnlineOverlay();
     this._checkForUpdates();
@@ -157,6 +159,8 @@ class HavenApp {
       document.getElementById('admin-controls').style.display = 'block';
       document.getElementById('admin-mod-panel').style.display = 'block';
     }
+
+    document.getElementById('mod-mode-settings-toggle')?.addEventListener('click', () => this.modMode?.toggle());
   }
 
   // ── Socket Event Listeners ────────────────────────────
@@ -1468,6 +1472,28 @@ class HavenApp {
     this.socket.on('whitelist-list', (list) => {
       this._renderWhitelist(list);
     });
+
+    const tunnelEnabledEl = document.getElementById('tunnel-enabled');
+    if (tunnelEnabledEl) {
+      tunnelEnabledEl.addEventListener('change', () => {
+        this.socket.emit('update-server-setting', {
+          key: 'tunnel_enabled',
+          value: tunnelEnabledEl.checked ? 'true' : 'false'
+        });
+        this._syncTunnelState();
+      });
+    }
+
+    const tunnelProvEl = document.getElementById('tunnel-provider-select');
+    if (tunnelProvEl) {
+      tunnelProvEl.addEventListener('change', () => {
+        this.socket.emit('update-server-setting', {
+          key: 'tunnel_provider',
+          value: tunnelProvEl.value
+        });
+        this._syncTunnelState();
+      });
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -2460,6 +2486,21 @@ class HavenApp {
     const toggle = document.getElementById('push-notif-enabled');
     const statusEl = document.getElementById('push-notif-status');
 
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+    const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    if (!window.isSecureContext) {
+      if (toggle) toggle.disabled = true;
+      if (statusEl) statusEl.textContent = 'Push requires HTTPS (or localhost)';
+      return;
+    }
+
+    if (isIOS && !isStandalone) {
+      if (toggle) toggle.disabled = true;
+      if (statusEl) statusEl.textContent = 'On iOS: Add to Home Screen, then enable push';
+      return;
+    }
+
     // Check browser support
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       if (toggle) toggle.disabled = true;
@@ -2490,6 +2531,14 @@ class HavenApp {
     if (toggle) toggle.checked = !!existingSub;
     if (statusEl) statusEl.textContent = existingSub ? 'Enabled' : 'Disabled';
 
+    if (existingSub) {
+      const subJson = existingSub.toJSON();
+      this.socket.emit('push-subscribe', {
+        endpoint: subJson.endpoint,
+        keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth }
+      });
+    }
+
     // Listen for server confirmation
     this.socket.on('push-subscribed', () => {
       if (statusEl) statusEl.textContent = 'Enabled';
@@ -2513,6 +2562,13 @@ class HavenApp {
   async _subscribePush() {
     const statusEl = document.getElementById('push-notif-status');
     try {
+      if (Notification.permission === 'denied') {
+        const toggle = document.getElementById('push-notif-enabled');
+        if (toggle) toggle.checked = false;
+        if (statusEl) statusEl.textContent = 'Blocked in browser settings';
+        return;
+      }
+
       // Request notification permission
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
@@ -5784,9 +5840,60 @@ class HavenApp {
     if (whitelistToggle) {
       whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
     }
+    const tunnelToggle = document.getElementById('tunnel-enabled');
+    if (tunnelToggle) {
+      tunnelToggle.checked = this.serverSettings.tunnel_enabled === 'true';
+    }
+    const tunnelProvider = document.getElementById('tunnel-provider-select');
+    if (tunnelProvider && this.serverSettings.tunnel_provider) {
+      tunnelProvider.value = this.serverSettings.tunnel_provider;
+    }
     // Fetch whitelist entries when admin opens settings
     if (this.user && this.user.isAdmin) {
       this.socket.emit('get-whitelist');
+      this._refreshTunnelStatus();
+    }
+  }
+
+  async _syncTunnelState() {
+    if (!this.user?.isAdmin || !this.token) return;
+    const display = document.getElementById('tunnel-status-display');
+    if (display) display.textContent = 'Updating tunnel...';
+    try {
+      await fetch('/api/tunnel/sync', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      });
+    } catch {}
+    this._refreshTunnelStatus();
+  }
+
+  async _refreshTunnelStatus() {
+    if (!this.user?.isAdmin || !this.token) return;
+    const display = document.getElementById('tunnel-status-display');
+    if (!display) return;
+    try {
+      const res = await fetch('/api/tunnel/status', { headers: { 'Authorization': `Bearer ${this.token}` } });
+      const info = await res.json();
+      if (!res.ok) {
+        display.textContent = info?.error || 'Tunnel status unavailable';
+        return;
+      }
+      if (info.starting) {
+        display.textContent = `Starting ${info.provider || 'tunnel'}...`;
+      } else if (info.active) {
+        display.textContent = `Active (${info.provider}): ${info.url}`;
+      } else if (info.error) {
+        display.textContent = `Error: ${info.error}`;
+      } else {
+        display.textContent = 'Inactive';
+      }
+    } catch {
+      display.textContent = 'Tunnel status unavailable';
     }
   }
 
@@ -6204,19 +6311,22 @@ class HavenApp {
       if (savedLeft) sidebar.style.width = savedLeft + 'px';
 
       let dragging = false;
+      let startX = 0;
+      let startW = 0;
       leftHandle.addEventListener('mousedown', (e) => {
         e.preventDefault();
         dragging = true;
+        startX = e.clientX;
+        startW = sidebar.getBoundingClientRect().width;
         leftHandle.classList.add('dragging');
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
       });
       document.addEventListener('mousemove', (e) => {
         if (!dragging) return;
-        // Account for the server bar width (~52px)
-        const serverBar = document.querySelector('.server-bar');
-        const offset = serverBar ? serverBar.offsetWidth : 52;
-        let w = e.clientX - offset;
+        const sidebarOnRight = sidebar.dataset.panelPos === 'right';
+        const factor = sidebarOnRight ? -1 : 1;
+        let w = startW + (e.clientX - startX) * factor;
         w = Math.max(200, Math.min(400, w));
         sidebar.style.width = w + 'px';
       });

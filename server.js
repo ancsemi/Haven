@@ -54,6 +54,7 @@ webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VA
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers } = require('./src/socketHandlers');
+const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 
 const app = express();
 
@@ -264,6 +265,30 @@ app.post('/api/set-avatar-shape', express.json(), (req, res) => {
   } catch (err) {
     console.error('Avatar shape error:', err);
     res.status(500).json({ error: 'Failed to save shape' });
+  }
+});
+
+app.get('/api/tunnel/status', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  res.json(getTunnelStatus());
+});
+
+app.post('/api/tunnel/sync', express.json(), async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  try {
+    const { getDb } = require('./src/database');
+    const db = getDb();
+    const enabled = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_enabled'").get()?.value === 'true';
+    const provider = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_provider'").get()?.value || 'localtunnel';
+    if (!enabled) await stopTunnel();
+    else await startTunnel(PORT, provider);
+    res.json(getTunnelStatus());
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Tunnel sync failed' });
   }
 });
 
@@ -899,6 +924,7 @@ const io = new Server(server, {
 // Initialize
 const db = initDatabase();
 setupSocketHandlers(io, db);
+registerProcessCleanup();
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────
 function runAutoCleanup() {
@@ -1009,4 +1035,14 @@ server.listen(PORT, HOST, () => {
 ║  Admin:   ${(process.env.ADMIN_USERNAME || 'admin').padEnd(29)}║
 ╚══════════════════════════════════════════╝
   `);
+  try {
+    const enabled = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_enabled'").get()?.value === 'true';
+    const provider = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_provider'").get()?.value || 'localtunnel';
+    if (enabled) {
+      startTunnel(PORT, provider).then((s) => {
+        if (s.active) console.log(`🧭 Tunnel active (${s.provider}): ${s.url}`);
+        else if (s.error) console.log(`🧭 Tunnel failed: ${s.error}`);
+      });
+    }
+  } catch {}
 });

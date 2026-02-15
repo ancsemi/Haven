@@ -318,7 +318,7 @@ function setupSocketHandlers(io, db) {
         body,
         channelCode,
         tag: `haven-${channelCode}`,
-        url: '/app.html'
+        url: '/app'
       });
 
       for (const sub of subs) {
@@ -2135,7 +2135,7 @@ function setupSocketHandlers(io, db) {
       const key = typeof data.key === 'string' ? data.key.trim() : '';
       const value = typeof data.value === 'string' ? data.value.trim() : '';
 
-      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key'];
+      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key', 'tunnel_enabled', 'tunnel_provider'];
       if (!allowedKeys.includes(key)) return;
 
       if (key === 'member_visibility' && !['all', 'online', 'none'].includes(value)) return;
@@ -2152,6 +2152,8 @@ function setupSocketHandlers(io, db) {
         // Allow empty value to clear the key, otherwise validate format
         if (value && (value.length < 10 || value.length > 100)) return;
       }
+      if (key === 'tunnel_enabled' && !['true', 'false'].includes(value)) return;
+      if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
 
       db.prepare(
         'INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)'

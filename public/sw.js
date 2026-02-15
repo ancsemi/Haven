@@ -35,13 +35,13 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || '/app.html';
+  const targetUrl = event.notification.data?.url || '/app';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       // If Haven is already open, focus it and navigate
       for (const client of windowClients) {
-        if (client.url.includes('/app.html')) {
+        if (client.url.includes('/app')) {
           client.focus();
           // Post the channel code so the app can switch channels
           if (event.notification.data?.channelCode) {

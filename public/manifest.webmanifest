@@ -1,0 +1,10 @@
+{
+  "name": "Haven",
+  "short_name": "Haven",
+  "description": "Private chat, your rules",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e"
+}
