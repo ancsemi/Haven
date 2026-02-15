@@ -230,7 +230,7 @@ function initSacredIntensityEditor() {
 // STACKABLE EFFECT LAYER SYSTEM
 // ═══════════════════════════════════════════════════════════
 const THEME_DEFAULT_FX = {
-  crt: ['crt'], matrix: ['matrix'], fallout: ['fallout'], ffx: ['ffx'],
+  crt: ['crt'], matrix: ['matrix','matrixbars'], fallout: ['fallout'], ffx: ['ffx'],
   ice: ['ice'], nord: ['nord'], darksouls: ['darksouls'], eldenring: ['eldenring'],
   bloodborne: ['bloodborne'], cyberpunk: ['cyberpunk'], lotr: ['lotr'], abyss: ['abyss'],
   scripture: ['scripture'], chapel: ['chapel'], gospel: ['gospel']
@@ -248,7 +248,8 @@ let _scrambleTargets = [];  // tracked { el, original } for multi-element scramb
 // Layer definitions: each effect -> array of { id, parent, cls }
 const FX_LAYERS = {
   crt:        [{ id: 'fx-crt-vignette', parent: '#fx-layers', cls: 'fx-crt-vignette' }],
-  matrix:     [{ id: 'fx-matrix-bars', parent: '.sidebar', cls: 'fx-matrix-bars' }],
+  matrix:     [],  // digital rain handled entirely by JS canvas
+  matrixbars: [{ id: 'fx-matrix-bars', parent: '.sidebar', cls: 'fx-matrix-bars' }],
   fallout:    [{ id: 'fx-fallout-vignette', parent: '#fx-layers', cls: 'fx-fallout-vignette' }],
   ffx:        [{ id: 'fx-ffx-water', parent: '.sidebar', cls: 'fx-ffx-water' },
                { id: 'fx-ffx-wave', parent: '#fx-layers', cls: 'fx-ffx-wave' }],
@@ -373,7 +374,11 @@ function _scrambleElement(el, original) {
   if (!el || el._scrambling) return;
   el._scrambling = true;
 
-  const len = original.length;
+  // Store the true original in a data attribute so it survives corruption
+  if (!el.dataset.originalText) el.dataset.originalText = original;
+  const trueOriginal = el.dataset.originalText;
+
+  const len = trueOriginal.length;
   const totalFrames = Math.min(30, 10 + len * 2);  // scale frames to text length
   const resolveStart = Math.floor(totalFrames * 0.25);
   let frame = 0;
@@ -383,10 +388,10 @@ function _scrambleElement(el, original) {
   const interval = setInterval(() => {
     let display = '';
     for (let i = 0; i < len; i++) {
-      if (original[i] === ' ') { display += ' '; continue; }
+      if (trueOriginal[i] === ' ') { display += ' '; continue; }
       const charResolveFrame = resolveStart + (i * ((totalFrames - resolveStart) / len));
       if (frame >= charResolveFrame) {
-        display += original[i];
+        display += trueOriginal[i];
       } else {
         display += _SCRAMBLE_CHARS[Math.floor(Math.random() * _SCRAMBLE_CHARS.length)];
       }
@@ -396,48 +401,47 @@ function _scrambleElement(el, original) {
 
     if (frame > totalFrames) {
       clearInterval(interval);
-      el.textContent = original;
+      el.textContent = trueOriginal;
       el.classList.remove('scrambling');
       el._scrambling = false;
     }
   }, 50);
+
+  // Track the interval so we can force-stop it
+  el._scrambleInterval = interval;
 }
 
 // Collect all scramble-able text elements currently on screen
 function _collectScrambleTargets() {
   const targets = [];
 
+  function addTarget(el) {
+    if (!el) return;
+    // Use stored original if available, otherwise snapshot current text
+    const original = el.dataset.originalText || el.textContent.trim();
+    if (!original) return;
+    // Always persist the true original so it can never be lost
+    if (!el.dataset.originalText) el.dataset.originalText = original;
+    targets.push({ el, original });
+  }
+
   // 1. Brand text (HAVEN logo) — always included
-  const brand = document.querySelector('.brand-text');
-  if (brand) targets.push({ el: brand, original: brand.textContent.trim() });
+  addTarget(document.querySelector('.brand-text'));
 
   // 2. Current username
-  const currentUser = document.getElementById('current-user');
-  if (currentUser && currentUser.textContent.trim())
-    targets.push({ el: currentUser, original: currentUser.textContent.trim() });
+  addTarget(document.getElementById('current-user'));
 
   // 3. Channel names in sidebar
-  document.querySelectorAll('.channel-name').forEach(el => {
-    const text = el.textContent.trim();
-    if (text) targets.push({ el, original: text });
-  });
+  document.querySelectorAll('.channel-name').forEach(addTarget);
 
   // 4. Section labels
-  document.querySelectorAll('.section-label').forEach(el => {
-    const text = el.textContent.trim();
-    if (text) targets.push({ el, original: text });
-  });
+  document.querySelectorAll('.section-label').forEach(addTarget);
 
   // 5. Channel header name
-  const headerName = document.getElementById('channel-header-name');
-  if (headerName && headerName.textContent.trim())
-    targets.push({ el: headerName, original: headerName.textContent.trim() });
+  addTarget(document.getElementById('channel-header-name'));
 
   // 6. User names in member list
-  document.querySelectorAll('.user-item-name').forEach(el => {
-    const text = el.textContent.trim();
-    if (text) targets.push({ el, original: text });
-  });
+  document.querySelectorAll('.user-item-name').forEach(addTarget);
 
   return targets;
 }
@@ -483,8 +487,17 @@ function _stopTextScramble() {
     clearTimeout(_scrambleTimer);
     _scrambleTimer = null;
   }
-  // Restore all originals
+  // Force-stop any in-progress scrambles and restore original text
   document.querySelectorAll('.scrambling').forEach(el => {
+    if (el._scrambleInterval) { clearInterval(el._scrambleInterval); el._scrambleInterval = null; }
+    if (el.dataset.originalText) el.textContent = el.dataset.originalText;
+    el.classList.remove('scrambling');
+    el._scrambling = false;
+  });
+  // Also restore any element that was previously scrambled (has stored original)
+  document.querySelectorAll('[data-original-text]').forEach(el => {
+    if (el._scrambleInterval) { clearInterval(el._scrambleInterval); el._scrambleInterval = null; }
+    el.textContent = el.dataset.originalText;
     el.classList.remove('scrambling');
     el._scrambling = false;
   });

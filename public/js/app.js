@@ -20,6 +20,7 @@ class HavenApp {
     this.serverManager = new ServerManager();
     this.notifications = new NotificationManager();
     this.replyingTo = null;        // message object being replied to
+    this._imageQueue = [];         // queued images awaiting send
     this.channelMembers = [];      // for @mention autocomplete
     this.mentionQuery = '';        // current partial @mention being typed
     this.mentionStart = -1;        // cursor position of the '@'
@@ -73,6 +74,20 @@ class HavenApp {
     // Flat list for quick access (used by search)
     this.emojis = Object.values(this.emojiCategories).flat();
 
+    // Emoji name map for search (emoji → keywords)
+    this.emojiNames = {
+      '😀':'grinning happy','😁':'beaming grin','😂':'joy tears laughing lol','🤣':'rofl rolling laughing','😃':'smiley happy','😄':'smile happy','😅':'sweat nervous','😆':'laughing satisfied','😉':'wink','😊':'blush happy shy','😋':'yummy delicious','😎':'cool sunglasses','😍':'heart eyes love','🥰':'loving smiling hearts','😘':'kiss blowing','🙂':'slight smile','🤗':'hug hugging open hands','🤩':'starstruck star eyes','🤔':'thinking hmm','😐':'neutral expressionless','🙄':'eye roll','😏':'smirk','😣':'persevere','😥':'sad relieved disappointed','😮':'open mouth wow surprised','😯':'hushed surprised','😴':'sleeping zzz','😛':'tongue playful','😜':'wink tongue crazy','😝':'squinting tongue','😒':'unamused','😔':'pensive sad','🙃':'upside down','😲':'astonished shocked','😤':'triumph huff angry steam','😭':'crying sob loudly','😢':'cry sad tear','😱':'scream fear horrified','🥺':'pleading puppy eyes please','😠':'angry mad','😡':'rage pouting furious','🤬':'cursing swearing angry','😈':'devil smiling imp','💀':'skull dead','💩':'poop poo','🤡':'clown','👻':'ghost boo','😺':'cat smile','😸':'cat grin','🫠':'melting face','🫣':'peeking eye','🫢':'hand over mouth','🫥':'dotted line face','🫤':'diagonal mouth','🥹':'holding back tears','🥲':'smile tear','😶‍🌫️':'face in clouds','🤭':'giggling hand over mouth','🫡':'salute','🤫':'shush quiet secret','🤥':'lying pinocchio','😬':'grimace awkward','🫨':'shaking face','😵':'dizzy','😵‍💫':'face spiral eyes','🥴':'woozy drunk','😮‍💨':'exhale sigh relief','🥱':'yawn tired boring','😇':'angel innocent halo','🤠':'cowboy yeehaw','🤑':'money face rich','🤓':'nerd glasses','👿':'devil angry imp','🫶':'heart hands','🤧':'sneeze sick','😷':'mask sick','🤒':'thermometer sick','🤕':'bandage hurt','💅':'nail polish sassy',
+      '👋':'wave hello hi bye','🤚':'raised back hand','✋':'hand stop high five','🖖':'vulcan spock','👌':'ok okay perfect','🤌':'pinched italian','✌️':'peace victory','🤞':'crossed fingers luck','🤟':'love you hand','🤘':'rock on metal','🤙':'call me shaka hang loose','👈':'point left','👉':'point right','👆':'point up','👇':'point down','☝️':'index up','👍':'thumbs up like good yes','👎':'thumbs down dislike bad no','✊':'fist bump','👊':'punch fist bump','🤛':'left fist bump','🤜':'right fist bump','👏':'clap applause','🙌':'raising hands celebrate','🤝':'handshake deal','🙏':'pray please thank you namaste','💪':'strong muscle flex bicep','💃':'dancer dancing woman','🕺':'man dancing','🤳':'selfie','🖕':'middle finger','🫰':'pinch','🫳':'palm down','🫴':'palm up','👐':'open hands','🤲':'palms up','🫱':'right hand','🫲':'left hand','🤷':'shrug idk','🤦':'facepalm','🙇':'bow','💁':'info','🙆':'ok gesture','🙅':'no gesture','🙋':'raising hand hi','🧏':'deaf',
+      '🐶':'dog puppy','🐱':'cat kitty','🐭':'mouse','🐹':'hamster','🐰':'rabbit bunny','🦊':'fox','🐻':'bear','🐼':'panda','🐨':'koala','🐯':'tiger','🦁':'lion','🐮':'cow','🐷':'pig','🐸':'frog','🐔':'chicken','🐧':'penguin','🐦':'bird','🦆':'duck','🦅':'eagle','🦉':'owl','🐺':'wolf','🐴':'horse','🦄':'unicorn','🐝':'bee','🦋':'butterfly','🐌':'snail','🐞':'ladybug','🐢':'turtle','🐍':'snake','🐙':'octopus','🐬':'dolphin','🐳':'whale','🦈':'shark','🐊':'crocodile alligator','🦖':'trex dinosaur','🦕':'dinosaur brontosaurus',
+      '🍎':'apple red','🍐':'pear','🍊':'orange tangerine','🍋':'lemon','🍌':'banana','🍉':'watermelon','🍇':'grapes','🍓':'strawberry','🍒':'cherry','🍑':'peach','🍍':'pineapple','🍕':'pizza','🍔':'burger hamburger','🍟':'fries french','🌭':'hotdog','🍿':'popcorn','🧁':'cupcake','🍩':'donut','🍪':'cookie','🍰':'cake','🎂':'birthday cake','🧀':'cheese','🥚':'egg','🥓':'bacon','🌮':'taco','🍜':'noodles ramen','🍝':'spaghetti pasta','🍣':'sushi','☕':'coffee','🍺':'beer','🍷':'wine','🍾':'champagne',
+      '⚽':'soccer football','🏀':'basketball','🏈':'football american','🎮':'gaming controller video game','🕹️':'joystick arcade','🎲':'dice','🧩':'puzzle jigsaw','🎯':'bullseye target dart','🎨':'art palette paint','🎵':'music note','🎸':'guitar','🏆':'trophy winner','🎧':'headphones music','🎤':'microphone karaoke sing',
+      '🚗':'car automobile','🚀':'rocket space launch','✈️':'airplane plane travel','🏠':'house home','🏰':'castle','🌊':'wave ocean water','🌅':'sunrise','🌍':'globe earth world','🌈':'rainbow',
+      '❤️':'red heart love','🧡':'orange heart','💛':'yellow heart','💚':'green heart','💙':'blue heart','💜':'purple heart','🖤':'black heart','🤍':'white heart','💔':'broken heart','✨':'sparkles stars','⭐':'star','🔥':'fire hot lit','💯':'hundred perfect','✅':'check mark yes','❌':'cross mark no wrong','💤':'sleep zzz','⚠️':'warning caution','⚡':'lightning bolt zap','☀️':'sun sunny','🌙':'moon crescent night','❄️':'snowflake cold winter','🌪️':'tornado',
+      '🙈':'see no evil monkey','🙉':'hear no evil monkey','🙊':'speak no evil monkey',
+      '👀':'eyes looking','👅':'tongue','👄':'mouth lips','💋':'kiss lips','🧠':'brain smart','🦷':'tooth','🦴':'bone','💀':'skull dead','☠️':'skull crossbones','👽':'alien','🤖':'robot','🎃':'jack o lantern pumpkin halloween',
+      '📱':'phone mobile','💻':'laptop computer','📷':'camera photo','📚':'books reading','📝':'memo note write','🔑':'key','🔒':'lock locked','💎':'gem diamond jewel','🎁':'gift present','🔔':'bell notification','💰':'money bag rich','🔨':'hammer tool'
+    };
+
     if (!this.token || !this.user) {
       window.location.href = '/';
       return;
@@ -99,6 +114,7 @@ class HavenApp {
     this._setupThemes();
     this._setupServerBar();
     this._setupNotifications();
+    this._setupPushNotifications();
     this._setupImageUpload();
     this._setupGifPicker();
     this._startStatusBar();
@@ -110,6 +126,9 @@ class HavenApp {
     this._setupSoundManagement();
     this._initRoleManagement();
     this._setupResizableSidebars();
+    this._setupDensityPicker();
+    this._setupOnlineOverlay();
+    this._checkForUpdates();
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback
@@ -252,7 +271,11 @@ class HavenApp {
     // Channel renamed — update header if we're in that channel
     this.socket.on('channel-renamed', (data) => {
       if (data.code === this.currentChannel) {
-        document.getElementById('channel-header-name').textContent = '# ' + data.name;
+        const el = document.getElementById('channel-header-name');
+        el.textContent = '# ' + data.name;
+        // Clear scramble cache so the effect picks up the renamed channel
+        delete el.dataset.originalText;
+        el._scrambling = false;
       }
     });
 
@@ -312,6 +335,11 @@ class HavenApp {
         this.onlineCount = data.users.length;
         this._renderOnlineUsers(data.users);
         document.getElementById('status-online-count').textContent = data.users.length;
+        // Refresh online overlay if open
+        const overlay = document.getElementById('online-overlay');
+        if (overlay && overlay.style.display !== 'none') {
+          this._renderOnlineOverlay();
+        }
       }
     });
 
@@ -494,6 +522,15 @@ class HavenApp {
       this._updateStatusPickerUI();
     });
 
+    // ── User profile popup data ─────────────────────
+    this.socket.on('user-profile', (profile) => {
+      this._showProfilePopup(profile);
+    });
+
+    this.socket.on('bio-updated', (data) => {
+      this._showToast('Bio updated', 'success');
+    });
+
     // ── Username rename ──────────────────────────────
     this.socket.on('renamed', (data) => {
       this.token = data.token;
@@ -544,7 +581,14 @@ class HavenApp {
     this.socket.on('message-deleted', (data) => {
       if (data.channelCode === this.currentChannel) {
         const msgEl = document.querySelector(`[data-msg-id="${data.messageId}"]`);
-        if (msgEl) msgEl.remove();
+        if (msgEl) {
+          // If the next sibling is a compact message (grouped), promote it to a full message
+          const next = msgEl.nextElementSibling;
+          if (next && next.classList.contains('message-compact')) {
+            this._promoteCompactToFull(next);
+          }
+          msgEl.remove();
+        }
       }
     });
 
@@ -1205,6 +1249,35 @@ class HavenApp {
       this._updateRenameAvatarPreview();
     });
 
+    // ── Profile popup: click on message author name or avatar ──
+    document.getElementById('messages').addEventListener('click', (e) => {
+      const author = e.target.closest('.message-author');
+      const avatar = e.target.closest('.message-avatar, .message-avatar-img');
+      if (!author && !avatar) return;
+      // Don't trigger if clicking toolbar buttons
+      if (e.target.closest('.msg-toolbar')) return;
+      const msgEl = e.target.closest('.message, .message-compact');
+      if (!msgEl) return;
+      const userId = parseInt(msgEl.dataset.userId);
+      if (!isNaN(userId)) {
+        this._profilePopupAnchor = e.target;
+        this.socket.emit('get-user-profile', { userId });
+      }
+    });
+
+    // ── Profile popup: click on user item in sidebar ──
+    document.getElementById('online-users').addEventListener('click', (e) => {
+      // Don't trigger for action buttons (DM, kick, etc.)
+      if (e.target.closest('.user-action-btn') || e.target.closest('.user-admin-actions')) return;
+      const userItem = e.target.closest('.user-item');
+      if (!userItem) return;
+      const userId = parseInt(userItem.dataset.userId);
+      if (!isNaN(userId)) {
+        this._profilePopupAnchor = userItem;
+        this.socket.emit('get-user-profile', { userId });
+      }
+    });
+
     document.getElementById('cancel-rename-btn').addEventListener('click', () => {
       document.getElementById('rename-modal').style.display = 'none';
     });
@@ -1564,24 +1637,24 @@ class HavenApp {
     });
 
     fileInput.addEventListener('change', () => {
-      if (fileInput.files[0]) this._uploadImage(fileInput.files[0]);
+      if (fileInput.files[0]) this._queueImage(fileInput.files[0]);
       fileInput.value = '';
     });
 
-    // Paste image from clipboard
+    // Paste image from clipboard — QUEUE instead of uploading immediately
     document.getElementById('message-input').addEventListener('paste', (e) => {
       const items = e.clipboardData?.items;
       if (!items) return;
       for (const item of items) {
         if (item.type.startsWith('image/')) {
           e.preventDefault();
-          this._uploadImage(item.getAsFile());
+          this._queueImage(item.getAsFile());
           return;
         }
       }
     });
 
-    // Drag & drop
+    // Drag & drop — QUEUE instead of uploading immediately
     messageArea.addEventListener('dragover', (e) => {
       e.preventDefault();
       messageArea.classList.add('drag-over');
@@ -1596,7 +1669,7 @@ class HavenApp {
       messageArea.classList.remove('drag-over');
       const file = e.dataTransfer?.files[0];
       if (file && file.type.startsWith('image/')) {
-        this._uploadImage(file);
+        this._queueImage(file);
       }
     });
   }
@@ -1670,32 +1743,63 @@ class HavenApp {
       }
     }, { passive: true });
 
-    // ── Tap-to-show message toolbar on mobile ──
+    // ── Long-press to show message toolbar on mobile ──
     const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
     if (isTouchDevice) {
       const messagesEl = document.getElementById('messages');
+      let longPressTimer = null;
+      let longPressTriggered = false;
 
-      messagesEl.addEventListener('click', (e) => {
-        // Don't interfere with toolbar button clicks, links, images, reactions, spoilers
+      messagesEl.addEventListener('touchstart', (e) => {
+        // Don't interfere with toolbar buttons, links, images, reactions, spoilers
         if (e.target.closest('.msg-toolbar') || e.target.closest('a') ||
             e.target.closest('img') || e.target.closest('.reaction-badge') ||
             e.target.closest('.spoiler') || e.target.closest('.reply-banner')) return;
 
+        longPressTriggered = false;
         const msgEl = e.target.closest('.message, .message-compact');
-        if (!msgEl) {
-          // Tapped empty space — deselect all
-          messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
-          return;
-        }
 
-        const wasSelected = msgEl.classList.contains('msg-selected');
-        // Deselect all
+        longPressTimer = setTimeout(() => {
+          longPressTriggered = true;
+          // Deselect any previously selected message
+          messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
+          if (msgEl) {
+            msgEl.classList.add('msg-selected');
+            // Haptic feedback if available
+            if (navigator.vibrate) navigator.vibrate(30);
+          }
+        }, 500);
+      }, { passive: true });
+
+      // Cancel long-press if finger moves (scrolling)
+      messagesEl.addEventListener('touchmove', () => {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }, { passive: true });
+
+      messagesEl.addEventListener('touchend', (e) => {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+        if (longPressTriggered) {
+          // Prevent the synthesised click from firing after a long-press
+          e.preventDefault();
+          longPressTriggered = false;
+        }
+      }, { passive: false });
+
+      // Normal tap anywhere in messages: dismiss any open toolbar
+      messagesEl.addEventListener('click', (e) => {
+        // Let toolbar button taps through — handled by data-action handler
+        if (e.target.closest('.msg-toolbar')) return;
+        // Let interactive elements through
+        if (e.target.closest('a') || e.target.closest('img') ||
+            e.target.closest('.reaction-badge') || e.target.closest('.spoiler') ||
+            e.target.closest('.reply-banner')) return;
+        // Dismiss any open toolbar on normal tap
         messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
-        // Toggle — if it wasn't selected, select it
-        if (!wasSelected) msgEl.classList.add('msg-selected');
       });
 
-      // Deselect when tapping input area or outside messages
+      // Deselect when tapping input area
       document.getElementById('message-input').addEventListener('focus', () => {
         messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
       });
@@ -1753,6 +1857,75 @@ class HavenApp {
       });
     } catch {
       this._showToast('Upload failed — check your connection', 'error');
+    }
+  }
+
+  // ── Image Queue (paste/drop → preview → send on Enter) ──
+
+  _queueImage(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    if (file.size > 5 * 1024 * 1024) {
+      return this._showToast('Image too large (max 5 MB)', 'error');
+    }
+    if (!this._imageQueue) this._imageQueue = [];
+    if (this._imageQueue.length >= 5) {
+      return this._showToast('Max 5 images at once', 'error');
+    }
+    this._imageQueue.push(file);
+    this._renderImageQueue();
+    document.getElementById('message-input').focus();
+  }
+
+  _renderImageQueue() {
+    const bar = document.getElementById('image-queue-bar');
+    if (!bar) return;
+    if (!this._imageQueue || this._imageQueue.length === 0) {
+      bar.style.display = 'none';
+      bar.innerHTML = '';
+      return;
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = '';
+    this._imageQueue.forEach((file, idx) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'image-queue-thumb';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.alt = file.name;
+      img.onload = () => URL.revokeObjectURL(img.src);
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'image-queue-remove';
+      removeBtn.title = 'Remove';
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        this._imageQueue.splice(idx, 1);
+        this._renderImageQueue();
+      });
+      thumb.appendChild(img);
+      thumb.appendChild(removeBtn);
+      bar.appendChild(thumb);
+    });
+    // Add a "clear all" button if multiple
+    if (this._imageQueue.length > 1) {
+      const clearAll = document.createElement('button');
+      clearAll.className = 'image-queue-clear-all';
+      clearAll.textContent = 'Clear All';
+      clearAll.addEventListener('click', () => this._clearImageQueue());
+      bar.appendChild(clearAll);
+    }
+  }
+
+  _clearImageQueue() {
+    this._imageQueue = [];
+    this._renderImageQueue();
+  }
+
+  async _flushImageQueue() {
+    if (!this._imageQueue || this._imageQueue.length === 0) return;
+    const files = [...this._imageQueue];
+    this._clearImageQueue();
+    for (const file of files) {
+      await this._uploadImage(file);
     }
   }
 
@@ -2009,7 +2182,8 @@ class HavenApp {
         headers: { 'Authorization': `Bearer ${this.token}` }
       });
       if (!res.ok) return;
-      const sounds = await res.json();
+      const data = await res.json();
+      const sounds = data.sounds || [];
       this.customSounds = sounds; // [{name, url}]
 
       // Update all sound select dropdowns with custom sounds
@@ -2117,6 +2291,112 @@ class HavenApp {
   }
 
   // ═══════════════════════════════════════════════════════
+  // LAYOUT DENSITY
+  // ═══════════════════════════════════════════════════════
+
+  _setupDensityPicker() {
+    const picker = document.getElementById('density-picker');
+    if (!picker) return;
+
+    // Restore saved density
+    const saved = localStorage.getItem('haven-density') || 'cozy';
+    document.documentElement.dataset.density = saved;
+    picker.querySelectorAll('.density-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.density === saved);
+    });
+
+    picker.addEventListener('click', (e) => {
+      const btn = e.target.closest('.density-btn');
+      if (!btn) return;
+      const density = btn.dataset.density;
+      document.documentElement.dataset.density = density;
+      localStorage.setItem('haven-density', density);
+      picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ONLINE OVERLAY (status bar popup)
+  // ═══════════════════════════════════════════════════════
+
+  _setupOnlineOverlay() {
+    const trigger = document.getElementById('status-online-trigger');
+    const overlay = document.getElementById('online-overlay');
+    const closeBtn = document.getElementById('online-overlay-close');
+    if (!trigger || !overlay) return;
+
+    trigger.style.cursor = 'pointer';
+
+    trigger.addEventListener('click', () => {
+      const isOpen = overlay.style.display !== 'none';
+      if (isOpen) {
+        overlay.style.display = 'none';
+        return;
+      }
+      this._renderOnlineOverlay();
+      overlay.style.display = '';
+
+      // Position above the trigger
+      const rect = trigger.getBoundingClientRect();
+      overlay.style.left = rect.left + 'px';
+      overlay.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+    });
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => { overlay.style.display = 'none'; });
+    }
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (overlay.style.display === 'none') return;
+      if (!overlay.contains(e.target) && !trigger.contains(e.target)) {
+        overlay.style.display = 'none';
+      }
+    });
+  }
+
+  _renderOnlineOverlay() {
+    const list = document.getElementById('online-overlay-list');
+    if (!list) return;
+
+    const users = this._lastOnlineUsers || [];
+    if (users.length === 0) {
+      list.innerHTML = '<p class="muted-text" style="padding:8px">No users</p>';
+      return;
+    }
+
+    const online = users.filter(u => u.online !== false);
+    const offline = users.filter(u => u.online === false);
+
+    let html = '';
+    if (online.length > 0) {
+      html += `<div class="online-overlay-group">Online — ${online.length}</div>`;
+      html += online.map(u => this._renderOverlayUserItem(u)).join('');
+    }
+    if (offline.length > 0) {
+      html += `<div class="online-overlay-group offline">Offline — ${offline.length}</div>`;
+      html += offline.map(u => this._renderOverlayUserItem(u)).join('');
+    }
+    list.innerHTML = html;
+  }
+
+  _renderOverlayUserItem(u) {
+    const initial = (u.username || '?')[0].toUpperCase();
+    const color = u.roleColor || u.avatarColor || '#7c5cfc';
+    const statusClass = u.online !== false ? 'online' : 'offline';
+    const avatar = u.avatarUrl
+      ? `<img src="${this._escapeHtml(u.avatarUrl)}" class="online-overlay-avatar-img" alt="">`
+      : `<div class="online-overlay-avatar" style="background:${color}">${initial}</div>`;
+    const nameColor = u.roleColor ? ` style="color:${u.roleColor}"` : '';
+    return `<div class="online-overlay-user ${statusClass}">
+      ${avatar}
+      <span class="online-overlay-username"${nameColor}>${this._escapeHtml(u.username)}</span>
+      <span class="online-overlay-status-dot ${statusClass}"></span>
+    </div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════
   // NOTIFICATIONS
   // ═══════════════════════════════════════════════════════
 
@@ -2171,6 +2451,134 @@ class HavenApp {
         this.notifications.setSound('leave', leaveSound.value);
         this.notifications.play('leave');
       });
+    }
+  }
+
+  // ── Push Notifications (Web Push API) ──────────────────
+
+  async _setupPushNotifications() {
+    const toggle = document.getElementById('push-notif-enabled');
+    const statusEl = document.getElementById('push-notif-status');
+
+    // Check browser support
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      if (toggle) toggle.disabled = true;
+      if (statusEl) statusEl.textContent = 'Not supported in this browser';
+      return;
+    }
+
+    // Register service worker
+    try {
+      this._swRegistration = await navigator.serviceWorker.register('/sw.js');
+    } catch (err) {
+      console.error('SW registration failed:', err);
+      if (toggle) toggle.disabled = true;
+      if (statusEl) statusEl.textContent = 'Service worker failed';
+      return;
+    }
+
+    // Listen for notification clicks from service worker (channel switch)
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'push-notification-click' && event.data.channelCode) {
+        this.switchChannel(event.data.channelCode);
+      }
+    });
+
+    // Check current subscription state
+    const existingSub = await this._swRegistration.pushManager.getSubscription();
+    this._pushSubscription = existingSub;
+    if (toggle) toggle.checked = !!existingSub;
+    if (statusEl) statusEl.textContent = existingSub ? 'Enabled' : 'Disabled';
+
+    // Listen for server confirmation
+    this.socket.on('push-subscribed', () => {
+      if (statusEl) statusEl.textContent = 'Enabled';
+    });
+    this.socket.on('push-unsubscribed', () => {
+      if (statusEl) statusEl.textContent = 'Disabled';
+    });
+
+    // Toggle handler
+    if (toggle) {
+      toggle.addEventListener('change', async () => {
+        if (toggle.checked) {
+          await this._subscribePush();
+        } else {
+          await this._unsubscribePush();
+        }
+      });
+    }
+  }
+
+  async _subscribePush() {
+    const statusEl = document.getElementById('push-notif-status');
+    try {
+      // Request notification permission
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        const toggle = document.getElementById('push-notif-enabled');
+        if (toggle) toggle.checked = false;
+        if (statusEl) statusEl.textContent = 'Permission denied';
+        return;
+      }
+
+      // Fetch VAPID public key from server
+      const res = await fetch('/api/push/vapid-key');
+      if (!res.ok) throw new Error('Server error fetching push key');
+      const { publicKey } = await res.json();
+
+      // Convert VAPID key to Uint8Array
+      const urlBase64ToUint8Array = (base64String) => {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = atob(base64);
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+        return arr;
+      };
+
+      // Subscribe to push
+      const sub = await this._swRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+
+      this._pushSubscription = sub;
+      const subJson = sub.toJSON();
+
+      // Send subscription to server
+      this.socket.emit('push-subscribe', {
+        endpoint: subJson.endpoint,
+        keys: {
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth
+        }
+      });
+
+      if (statusEl) statusEl.textContent = 'Subscribing...';
+    } catch (err) {
+      console.error('Push subscribe error:', err);
+      const toggle = document.getElementById('push-notif-enabled');
+      if (toggle) toggle.checked = false;
+      if (statusEl) statusEl.textContent = 'Failed — ' + err.message;
+    }
+  }
+
+  async _unsubscribePush() {
+    const statusEl = document.getElementById('push-notif-status');
+    try {
+      if (this._pushSubscription) {
+        const endpoint = this._pushSubscription.endpoint;
+        await this._pushSubscription.unsubscribe();
+        this._pushSubscription = null;
+
+        // Tell server to remove subscription
+        this.socket.emit('push-unsubscribe', { endpoint });
+      }
+      if (statusEl) statusEl.textContent = 'Disabled';
+    } catch (err) {
+      console.error('Push unsubscribe error:', err);
+      if (statusEl) statusEl.textContent = 'Error';
     }
   }
 
@@ -2229,6 +2637,9 @@ class HavenApp {
   switchChannel(code) {
     if (this.currentChannel === code) return;
 
+    // Clear any pending image queue from previous channel
+    this._clearImageQueue();
+
     // Voice persists across channel switches — no auto-disconnect
 
     this.currentChannel = code;
@@ -2239,6 +2650,9 @@ class HavenApp {
       : channel ? `# ${channel.name}` : code;
 
     document.getElementById('channel-header-name').textContent = displayName;
+    // Clear scramble cache so the effect picks up the new channel name
+    const headerEl = document.getElementById('channel-header-name');
+    if (headerEl) { delete headerEl.dataset.originalText; headerEl._scrambling = false; }
     const isMaskedCode = (code === '••••••••');
     document.getElementById('channel-code-display').textContent = isDm ? '' : code;
     document.getElementById('copy-code-btn').style.display = (isDm || isMaskedCode) ? 'none' : 'inline-flex';
@@ -2327,6 +2741,9 @@ class HavenApp {
     document.getElementById('message-area').style.display = 'none';
     document.getElementById('no-channel-msg').style.display = 'flex';
     document.getElementById('channel-header-name').textContent = 'Select a channel';
+    // Clear scramble cache when going back to welcome
+    const welcomeHeader = document.getElementById('channel-header-name');
+    if (welcomeHeader) { delete welcomeHeader.dataset.originalText; welcomeHeader._scrambling = false; }
     document.getElementById('channel-code-display').textContent = '';
     document.getElementById('copy-code-btn').style.display = 'none';
     document.getElementById('voice-join-btn').style.display = 'none';
@@ -2584,6 +3001,27 @@ class HavenApp {
     } else if (badge) {
       badge.remove();
     }
+
+    // Update the DM section header total badge
+    this._updateDmSectionBadge();
+  }
+
+  _updateDmSectionBadge() {
+    const dmToggle = document.querySelector('.dm-toggle');
+    if (!dmToggle) return;
+    const dmChannels = (this.channels || []).filter(c => c.is_dm);
+    const total = dmChannels.reduce((sum, ch) => sum + (this.unreadCounts[ch.code] || 0), 0);
+    let badge = dmToggle.querySelector('.dm-unread-count');
+    if (total > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'dm-unread-count';
+        dmToggle.appendChild(badge);
+      }
+      badge.textContent = total > 99 ? '99+' : total;
+    } else if (badge) {
+      badge.remove();
+    }
   }
 
   _updateChannelVoiceIndicators() {
@@ -2609,7 +3047,9 @@ class HavenApp {
   _sendMessage() {
     const input = document.getElementById('message-input');
     const content = input.value.trim();
-    if (!content || !this.currentChannel) return;
+    const hasImages = this._imageQueue && this._imageQueue.length > 0;
+    if (!content && !hasImages) return;
+    if (!this.currentChannel) return;
 
     // Client-side slash commands (not sent to server)
     if (content.startsWith('/')) {
@@ -2660,7 +3100,16 @@ class HavenApp {
       payload.replyTo = this.replyingTo.id;
     }
 
-    this.socket.emit('send-message', payload);
+    // Send text message if there is one
+    if (content) {
+      this.socket.emit('send-message', payload);
+    }
+
+    // Upload queued images
+    if (hasImages) {
+      this._flushImageQueue();
+    }
+
     input.value = '';
     input.style.height = 'auto';
     input.focus();
@@ -2805,6 +3254,64 @@ class HavenApp {
       </div>
     `;
     return el;
+  }
+
+  /**
+   * Promote a compact (grouped) message to a full message with avatar + header.
+   * Called when the root message of a group is deleted.
+   */
+  _promoteCompactToFull(compactEl) {
+    const userId = parseInt(compactEl.dataset.userId);
+    const username = compactEl.dataset.username || 'Unknown';
+    const time = compactEl.dataset.time;
+    const msgId = compactEl.dataset.msgId;
+    const isPinned = compactEl.dataset.pinned === '1';
+
+    // Grab existing inner content & toolbar before replacing
+    const contentEl = compactEl.querySelector('.message-content');
+    const contentHtml = contentEl ? contentEl.innerHTML : '';
+    const toolbarEl = compactEl.querySelector('.msg-toolbar');
+    const toolbarHtml = toolbarEl ? toolbarEl.outerHTML : '';
+    const reactionsEl = compactEl.querySelector('.reactions');
+    const reactionsHtml = reactionsEl ? reactionsEl.outerHTML : '';
+    const pinnedTag = isPinned ? '<span class="pinned-tag" title="Pinned message">📌</span>' : '';
+
+    const color = this._getUserColor(username);
+    const initial = username.charAt(0).toUpperCase();
+    const onlineUser = this.users ? this.users.find(u => u.id === userId) : null;
+    const msgShape = (onlineUser && onlineUser.avatarShape) || 'circle';
+    const shapeClass = 'avatar-' + msgShape;
+    const avatar = onlineUser && onlineUser.avatar;
+    const avatarHtml = avatar
+      ? `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(avatar)}" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
+      : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
+
+    const msgRoleBadge = onlineUser && onlineUser.role
+      ? `<span class="user-role-badge msg-role-badge" style="color:${onlineUser.role.color || 'var(--text-muted)'}">${this._escapeHtml(onlineUser.role.name)}</span>`
+      : '';
+
+    // Replace the compact element in-place
+    compactEl.className = 'message' + (isPinned ? ' pinned' : '');
+    compactEl.dataset.userId = userId;
+    compactEl.dataset.time = time;
+    compactEl.dataset.msgId = msgId;
+    if (isPinned) compactEl.dataset.pinned = '1';
+    compactEl.innerHTML = `
+      <div class="message-row">
+        ${avatarHtml}
+        <div class="message-body">
+          <div class="message-header">
+            <span class="message-author" style="color:${color}">${this._escapeHtml(username)}</span>
+            ${msgRoleBadge}
+            <span class="message-time">${this._formatTime(time)}</span>
+            ${pinnedTag}
+          </div>
+          <div class="message-content">${contentHtml}</div>
+          ${reactionsHtml}
+        </div>
+        ${toolbarHtml}
+      </div>
+    `;
   }
 
   _appendSystemMessage(text) {
@@ -3053,7 +3560,7 @@ class HavenApp {
          </div>`
       : (dmBtn ? `<div class="user-admin-actions">${dmBtn}</div>` : '');
     return `
-      <div class="user-item${onlineClass}">
+      <div class="user-item${onlineClass}" data-user-id="${u.id}">
         ${avatarHtml}
         ${roleDot}
         <span class="user-item-name">${this._escapeHtml(u.username)}</span>
@@ -3065,6 +3572,216 @@ class HavenApp {
       </div>
     `;
   }
+
+  // ── Profile Popup (Discord-style mini profile) ────────
+
+  _showProfilePopup(profile) {
+    this._closeProfilePopup();
+
+    const isSelf = profile.id === this.user.id;
+    const color = this._getUserColor(profile.username);
+    const initial = profile.username.charAt(0).toUpperCase();
+    const shapeClass = 'avatar-' + (profile.avatarShape || 'circle');
+
+    const avatarHtml = profile.avatar
+      ? `<img class="profile-popup-avatar ${shapeClass}" src="${this._escapeHtml(profile.avatar)}" alt="${initial}">`
+      : `<div class="profile-popup-avatar profile-popup-avatar-fallback ${shapeClass}" style="background-color:${color}">${initial}</div>`;
+
+    // Status dot
+    const statusClass = profile.status === 'dnd' ? 'dnd' : profile.status === 'away' ? 'away'
+      : profile.status === 'invisible' ? 'invisible' : (!profile.online ? 'away' : '');
+    const statusLabel = profile.status === 'dnd' ? 'Do Not Disturb' : profile.status === 'away' ? 'Away'
+      : profile.status === 'invisible' ? 'Invisible' : (profile.online ? 'Online' : 'Offline');
+
+    // Roles
+    const rolesHtml = (profile.roles && profile.roles.length > 0)
+      ? profile.roles.map(r =>
+          `<span class="profile-popup-role" style="border-color:${r.color || 'var(--border-light)'}; color:${r.color || 'var(--text-secondary)'}"><span class="profile-role-dot" style="background:${r.color || 'var(--text-muted)'}"></span>${this._escapeHtml(r.name)}</span>`
+        ).join('')
+      : '';
+
+    // Status text badge
+    const statusTextHtml = profile.statusText
+      ? `<div class="profile-popup-status-text">${this._escapeHtml(profile.statusText)}</div>`
+      : '';
+
+    // Bio (with "View Full Bio" toggle for long bios)
+    const bioText = profile.bio || '';
+    const bioShort = bioText.length > 80 ? bioText.slice(0, 80) + '…' : bioText;
+    const bioHtml = bioText
+      ? `<div class="profile-popup-bio">
+           <span class="profile-bio-short">${this._escapeHtml(bioShort)}</span>
+           ${bioText.length > 80 ? `<span class="profile-bio-full" style="display:none">${this._escapeHtml(bioText)}</span><button class="profile-bio-toggle">View Full Bio</button>` : ''}
+         </div>`
+      : (isSelf ? `<div class="profile-popup-bio profile-bio-empty">No bio yet — click Edit Profile to add one</div>` : '');
+
+    // Join date
+    const joinDate = profile.createdAt ? new Date(profile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+
+    // Action buttons
+    const actionsHtml = isSelf
+      ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ Edit Profile</button>`
+      : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 Message</button>`;
+
+    const popup = document.createElement('div');
+    popup.id = 'profile-popup';
+    popup.className = 'profile-popup';
+    popup.innerHTML = `
+      <div class="profile-popup-banner" style="background:linear-gradient(135deg, ${color}44, ${color}22)">
+        <button class="profile-popup-close" title="Close">&times;</button>
+      </div>
+      <div class="profile-popup-avatar-wrapper">
+        ${avatarHtml}
+        <span class="profile-popup-status-dot ${statusClass}" title="${statusLabel}"></span>
+      </div>
+      <div class="profile-popup-body">
+        <div class="profile-popup-names">
+          <span class="profile-popup-displayname">${this._escapeHtml(profile.displayName)}</span>
+          <span class="profile-popup-username">@${this._escapeHtml(profile.username)}</span>
+        </div>
+        ${statusTextHtml}
+        ${bioHtml}
+        <div class="profile-popup-divider"></div>
+        ${rolesHtml ? `<div class="profile-popup-section-label">Roles</div><div class="profile-popup-roles">${rolesHtml}</div>` : ''}
+        ${joinDate ? `<div class="profile-popup-section-label">Member Since</div><div class="profile-popup-join-date">${joinDate}</div>` : ''}
+        <div class="profile-popup-actions">${actionsHtml}</div>
+      </div>
+    `;
+
+    document.body.appendChild(popup);
+
+    // Position near the anchor element
+    this._positionProfilePopup(popup);
+
+    // Close button
+    popup.querySelector('.profile-popup-close').addEventListener('click', () => this._closeProfilePopup());
+
+    // Bio toggle
+    const bioToggle = popup.querySelector('.profile-bio-toggle');
+    if (bioToggle) {
+      bioToggle.addEventListener('click', () => {
+        const short = popup.querySelector('.profile-bio-short');
+        const full = popup.querySelector('.profile-bio-full');
+        if (full.style.display === 'none') {
+          full.style.display = '';
+          short.style.display = 'none';
+          bioToggle.textContent = 'Show Less';
+        } else {
+          full.style.display = 'none';
+          short.style.display = '';
+          bioToggle.textContent = 'View Full Bio';
+        }
+      });
+    }
+
+    // DM button
+    const dmBtnEl = popup.querySelector('.profile-dm-btn');
+    if (dmBtnEl) {
+      dmBtnEl.addEventListener('click', () => {
+        const targetId = parseInt(dmBtnEl.dataset.dmUid);
+        this.socket.emit('start-dm', { targetUserId: targetId });
+        this._closeProfilePopup();
+        this._showToast(`Opening DM with ${profile.displayName}…`, 'info');
+      });
+    }
+
+    // Edit profile button (for self)
+    const editBtnEl = popup.querySelector('#profile-popup-edit-btn');
+    if (editBtnEl) {
+      editBtnEl.addEventListener('click', () => {
+        this._closeProfilePopup();
+        this._openEditProfileModal(profile);
+      });
+    }
+
+    // Close on outside click (delay to avoid instant close)
+    setTimeout(() => {
+      this._profilePopupOutsideHandler = (e) => {
+        if (!popup.contains(e.target)) this._closeProfilePopup();
+      };
+      document.addEventListener('click', this._profilePopupOutsideHandler);
+    }, 50);
+  }
+
+  _positionProfilePopup(popup) {
+    const anchor = this._profilePopupAnchor;
+    if (!anchor) {
+      // Center fallback
+      popup.style.left = '50%';
+      popup.style.top = '50%';
+      popup.style.transform = 'translate(-50%, -50%)';
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const pw = 320; // popup width
+    const ph = 400; // estimated max height
+
+    let left = rect.left + rect.width / 2 - pw / 2;
+    let top = rect.bottom + 8;
+
+    // Keep within viewport
+    if (left < 8) left = 8;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (top + ph > window.innerHeight - 8) {
+      top = rect.top - ph - 8;
+      if (top < 8) top = 8;
+    }
+
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+  }
+
+  _closeProfilePopup() {
+    const existing = document.getElementById('profile-popup');
+    if (existing) existing.remove();
+    if (this._profilePopupOutsideHandler) {
+      document.removeEventListener('click', this._profilePopupOutsideHandler);
+      this._profilePopupOutsideHandler = null;
+    }
+  }
+
+  _openEditProfileModal(profile) {
+    // Create a simple modal for editing bio and status
+    this._closeProfilePopup();
+    const existing = document.getElementById('edit-profile-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'edit-profile-modal';
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+      <div class="modal edit-profile-modal-box">
+        <h3>Edit Profile</h3>
+        <label class="edit-profile-label">Bio <span class="muted-text">(max 190 chars)</span></label>
+        <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" placeholder="Tell people about yourself…">${this._escapeHtml(profile.bio || '')}</textarea>
+        <div class="edit-profile-char-count"><span id="edit-profile-chars">${(profile.bio || '').length}</span>/190</div>
+        <div class="modal-actions">
+          <button class="btn-sm" id="edit-profile-cancel">Cancel</button>
+          <button class="btn-sm btn-accent" id="edit-profile-save">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const bioInput = document.getElementById('edit-profile-bio');
+    const charCount = document.getElementById('edit-profile-chars');
+
+    bioInput.addEventListener('input', () => {
+      charCount.textContent = bioInput.value.length;
+    });
+    bioInput.focus();
+
+    document.getElementById('edit-profile-cancel').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    document.getElementById('edit-profile-save').addEventListener('click', () => {
+      this.socket.emit('set-bio', { bio: bioInput.value });
+      modal.remove();
+    });
+  }
+
+  // ── Voice Users ───────────────────────────────────────
 
   _renderVoiceUsers(users) {
     const el = document.getElementById('voice-users');
@@ -4601,21 +5318,23 @@ class HavenApp {
       grid.innerHTML = '';
       let emojis;
       if (filter) {
-        // Simple search: match emoji by checking if any category name contains the query,
-        // or just show all matches from every category
-        emojis = self.emojis.filter(() => true); // show all, we filter visually below
-        // Actually let's just filter all emojis - since we can't search by name,
-        // show emojis from categories whose name matches the query
-        emojis = [];
-        for (const [cat, list] of Object.entries(self.emojiCategories)) {
-          if (cat.toLowerCase().includes(filter.toLowerCase())) {
-            emojis.push(...list);
-          }
+        const q = filter.toLowerCase();
+        const matched = new Set();
+        // Search by emoji name keywords
+        for (const [emoji, keywords] of Object.entries(self.emojiNames)) {
+          if (keywords.toLowerCase().includes(q)) matched.add(emoji);
         }
-        // If no category matched, show all (user might be looking visually)
-        if (emojis.length === 0) emojis = self.emojis;
+        // Also search by category name
+        for (const [cat, list] of Object.entries(self.emojiCategories)) {
+          if (cat.toLowerCase().includes(q)) list.forEach(e => matched.add(e));
+        }
+        emojis = matched.size > 0 ? [...matched] : [];
       } else {
         emojis = self.emojiCategories[self._emojiActiveCategory] || self.emojis;
+      }
+      if (filter && emojis.length === 0) {
+        grid.innerHTML = '<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">No emoji found</p>';
+        return;
       }
       emojis.forEach(emoji => {
         const btn = document.createElement('button');
@@ -5297,21 +6016,20 @@ class HavenApp {
     const userBar = document.querySelector('.user-bar');
     if (!userBar) return;
 
-    // Insert status dot before username
+    // Insert status dot to the right of the username block
     const statusDot = document.createElement('span');
     statusDot.id = 'user-status-dot';
     statusDot.className = 'user-dot status-picker-dot';
     statusDot.title = 'Set status';
-    statusDot.addEventListener('click', () => this._toggleStatusPicker());
-    const currentUser = document.getElementById('current-user');
-    // currentUser lives inside .user-names, not directly in .user-bar
-    if (currentUser && currentUser.parentNode) {
-      currentUser.parentNode.insertBefore(statusDot, currentUser);
+    statusDot.addEventListener('click', (e) => { e.stopPropagation(); this._toggleStatusPicker(); });
+    const userNames = userBar.querySelector('.user-names');
+    if (userNames && userNames.nextSibling) {
+      userBar.insertBefore(statusDot, userNames.nextSibling);
     } else {
-      userBar.prepend(statusDot);
+      userBar.appendChild(statusDot);
     }
 
-    // Build dropdown
+    // Build dropdown (opens downward to avoid clipping)
     const picker = document.createElement('div');
     picker.id = 'status-picker';
     picker.className = 'status-picker';
@@ -5368,7 +6086,7 @@ class HavenApp {
   }
 
   // ═══════════════════════════════════════════════════════
-  // ── Idle Detection (auto-away after 5 min) ────────────
+  // ── Idle Detection (auto-away after 10 min) ───────────
   // ═══════════════════════════════════════════════════════
 
   _setupIdleDetection() {
@@ -5383,7 +6101,7 @@ class HavenApp {
           this._wasAutoAway = true;
           this.socket.emit('set-status', { status: 'away', statusText: this.userStatusText });
         }
-      }, 5 * 60 * 1000);
+      }, 10 * 60 * 1000);
     };
 
     ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
@@ -5727,6 +6445,58 @@ class HavenApp {
     this._markReadTimer = setTimeout(() => {
       this.socket.emit('mark-read', { code: this.currentChannel, messageId });
     }, 500);
+  }
+
+  // ── Update Checker ─────────────────────────────────────
+  async _checkForUpdates() {
+    try {
+      // Get local version from the server
+      const localRes = await fetch('/api/version');
+      if (!localRes.ok) return;
+      const { version: localVersion } = await localRes.json();
+
+      // Check GitHub for latest release
+      const ghRes = await fetch('https://api.github.com/repos/ancsemi/Haven/releases/latest', {
+        headers: { Accept: 'application/vnd.github.v3+json' }
+      });
+      if (!ghRes.ok) return;
+      const release = await ghRes.json();
+
+      const remoteVersion = (release.tag_name || '').replace(/^v/, '');
+      if (!remoteVersion || !localVersion) return;
+
+      if (this._isNewerVersion(remoteVersion, localVersion)) {
+        const banner = document.getElementById('update-banner');
+        if (banner) {
+          banner.style.display = 'inline-flex';
+          banner.querySelector('.update-text').textContent = `Update v${remoteVersion}`;
+          banner.title = `Haven v${remoteVersion} is available (you have v${localVersion}). Click to view.`;
+          // Link to release page (or zip download if available)
+          const zipAsset = (release.assets || []).find(a => a.name && a.name.endsWith('.zip'));
+          banner.href = zipAsset ? zipAsset.browser_download_url : release.html_url;
+        }
+      }
+    } catch (e) {
+      // Silently fail — update check is non-critical
+    }
+
+    // Re-check every 30 minutes
+    setTimeout(() => this._checkForUpdates(), 30 * 60 * 1000);
+  }
+
+  /**
+   * Compare semver strings. Returns true if remote > local.
+   */
+  _isNewerVersion(remote, local) {
+    const r = remote.split('.').map(Number);
+    const l = local.split('.').map(Number);
+    for (let i = 0; i < Math.max(r.length, l.length); i++) {
+      const rv = r[i] || 0;
+      const lv = l[i] || 0;
+      if (rv > lv) return true;
+      if (rv < lv) return false;
+    }
+    return false;
   }
 }
 

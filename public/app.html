@@ -115,6 +115,7 @@
                 <button class="effect-btn" data-effect="none" title="No effects">🚫</button>
                 <button class="effect-btn" data-effect="crt" title="CRT Scanlines">📺</button>
                 <button class="effect-btn" data-effect="matrix" title="Matrix Rain">Ⅿ</button>
+                <button class="effect-btn" data-effect="matrixbars" title="Matrix Scan Lines">▤</button>
                 <button class="effect-btn" data-effect="nord" title="Snowfall">❄</button>
                 <button class="effect-btn" data-effect="darksouls" title="Campfire">🔥</button>
                 <button class="effect-btn" data-effect="eldenring" title="Golden Grace">💍</button>
@@ -173,6 +174,8 @@
             <button id="theme-popup-toggle" class="sidebar-bottom-btn" title="Themes">🎨</button>
             <button class="sidebar-bottom-btn" id="play-flappy-btn" title="Shippy Container">🚢</button>
             <div id="voice-bar" class="voice-bar" style="display:none"></div>
+            <span style="flex:1"></span>
+            <a href="https://ko-fi.com/haven_app" target="_blank" rel="noopener noreferrer" class="sidebar-bottom-btn donate-btn" title="Support Haven">❤️</a>
           </div>
         </div>
       </aside>
@@ -204,6 +207,11 @@
               <button id="search-close-btn" class="icon-btn small" title="Close search">&times;</button>
             </div>
           </div>
+          <!-- Update available banner -->
+          <a id="update-banner" class="update-banner" href="#" style="display:none" target="_blank" rel="noopener">
+            <span class="update-pulse"></span>
+            <span class="update-text">Update Available</span>
+          </a>
           <!-- Spacer pushes voice controls to the right -->
           <div style="flex:1"></div>
           <!-- Right-side: dynamic indicators, then voice (always furthest right) -->
@@ -305,6 +313,7 @@
             <span class="reply-bar-text" id="reply-preview-text"></span>
             <button class="reply-bar-close" id="reply-close-btn" title="Cancel reply">&times;</button>
           </div>
+          <div id="image-queue-bar" class="image-queue-bar" style="display:none"></div>
           <div class="message-input-area">
             <button id="upload-btn" class="btn-upload" title="Upload Image">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -393,7 +402,7 @@
         <span class="value" id="status-channel">None</span>
       </div>
       <div class="divider"></div>
-      <div class="status-item">
+      <div class="status-item status-online-trigger" id="status-online-trigger" title="Click to see who's online">
         <span class="label">Online</span>
         <span class="value" id="status-online-count">0</span>
       </div>
@@ -405,6 +414,15 @@
       <div class="status-item">
         <span class="value" id="status-version"></span>
       </div>
+    </div>
+
+    <!-- Online users overlay (floats above status bar) -->
+    <div id="online-overlay" class="online-overlay" style="display:none">
+      <div class="online-overlay-header">
+        <span class="online-overlay-title">Users</span>
+        <button id="online-overlay-close" class="icon-btn small" title="Close">&times;</button>
+      </div>
+      <div id="online-overlay-list" class="online-overlay-list"></div>
     </div>
   </div>
 
@@ -557,6 +575,25 @@
         </div>
       </div>
 
+      <!-- Layout Density Section -->
+      <div class="settings-section">
+        <h5 class="settings-section-title">📐 Layout Density</h5>
+        <div class="density-picker" id="density-picker">
+          <button type="button" class="density-btn" data-density="compact" title="Compact — tighter spacing, smaller avatars">
+            <span class="density-icon">▪️</span>
+            <span class="density-label">Compact</span>
+          </button>
+          <button type="button" class="density-btn active" data-density="cozy" title="Cozy — default balanced layout">
+            <span class="density-icon">◾</span>
+            <span class="density-label">Cozy</span>
+          </button>
+          <button type="button" class="density-btn" data-density="spacious" title="Spacious — more breathing room">
+            <span class="density-icon">⬛</span>
+            <span class="density-label">Spacious</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Sounds Section -->
       <div class="settings-section">
         <h5 class="settings-section-title">🔔 Sounds</h5>
@@ -624,6 +661,19 @@
               <option value="none">None</option>
             </select>
           </label>
+        </div>
+      </div>
+
+      <!-- Push Notifications Section -->
+      <div class="settings-section">
+        <h5 class="settings-section-title">📲 Push Notifications</h5>
+        <div class="notif-settings">
+          <label class="toggle-row">
+            <span>Enable Push</span>
+            <input type="checkbox" id="push-notif-enabled">
+          </label>
+          <small class="settings-hint" id="push-notif-status">Checking...</small>
+          <small class="settings-hint" style="opacity:0.5">Receive notifications even when Haven is closed</small>
         </div>
       </div>
 

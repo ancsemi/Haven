@@ -36,6 +36,21 @@ if (process.env.JWT_SECRET === 'change-me-to-something-random-and-long' || !proc
   console.log('🔑 Auto-generated strong JWT_SECRET (saved to .env)');
 }
 
+// ── Auto-generate VAPID keys for push notifications ──────
+const webpush = require('web-push');
+if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+  const vapidKeys = webpush.generateVAPIDKeys();
+  let envContent = fs.readFileSync(ENV_PATH, 'utf-8');
+  envContent += `\nVAPID_PUBLIC_KEY=${vapidKeys.publicKey}\nVAPID_PRIVATE_KEY=${vapidKeys.privateKey}\n`;
+  fs.writeFileSync(ENV_PATH, envContent);
+  process.env.VAPID_PUBLIC_KEY = vapidKeys.publicKey;
+  process.env.VAPID_PRIVATE_KEY = vapidKeys.privateKey;
+  console.log('🔔 Auto-generated VAPID keys for push notifications (saved to .env)');
+}
+// Configure web-push with contact email (admin can override via VAPID_EMAIL in .env)
+const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@haven.local';
+webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers } = require('./src/socketHandlers');
@@ -53,6 +68,7 @@ app.use(helmet({
       connectSrc: ["'self'", "ws:", "wss:"],            // Socket.IO (ws for HTTP, wss for HTTPS)
       mediaSrc: ["'self'", "blob:", "data:"],  // WebRTC audio + notification sounds
       fontSrc: ["'self'"],
+      workerSrc: ["'self'"],               // service worker for push notifications
       objectSrc: ["'none'"],
       frameSrc: ["https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com"],  // Listen Together embeds
       baseUri: ["'self'"],
@@ -148,6 +164,11 @@ const fileUpload = multer({
 
 // ── API routes (rate-limited) ────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
+
+// ── Push notification VAPID public key endpoint ──────────
+app.get('/api/push/vapid-key', (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
 
 // ── Avatar upload endpoint (saves to /uploads, updates DB) ──
 app.post('/api/upload-avatar', uploadLimiter, (req, res) => {
@@ -267,6 +288,12 @@ app.get('/api/health', (req, res) => {
     name: process.env.SERVER_NAME || 'Haven'
     // version intentionally omitted — don't fingerprint the server for attackers
   });
+});
+
+// ── Version endpoint (for update checker — authenticated users only) ──
+app.get('/api/version', (req, res) => {
+  const pkg = require('./package.json');
+  res.json({ version: pkg.version });
 });
 
 // ── Upload rate limiting ─────────────────────────────────
@@ -425,7 +452,7 @@ app.post('/api/upload-sound', uploadLimiter, (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    let name = (req.body.name || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, ' ').trim();
     if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
     if (name.length > 30) name = name.slice(0, 30);
 

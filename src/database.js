@@ -201,6 +201,13 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN avatar_shape TEXT DEFAULT 'circle'");
   }
 
+  // ── Migration: bio column ─────────────────────────────────
+  try {
+    db.prepare("SELECT bio FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''");
+  }
+
   // ── Migration: custom_sounds table (admin-uploaded notification sounds) ──
   db.exec(`
     CREATE TABLE IF NOT EXISTS custom_sounds (
@@ -348,6 +355,20 @@ function initDatabase() {
     ];
     channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
   }
+
+  // ── Migration: push notification subscriptions ──────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, endpoint)
+    );
+    CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
+  `);
 
   // ── Migration: webhooks / bot integrations ───────────────
   db.exec(`

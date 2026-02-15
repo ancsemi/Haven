@@ -1,5 +1,6 @@
 const { verifyToken, generateChannelCode, generateToken } = require('./auth');
 const crypto = require('crypto');
+const webpush = require('web-push');
 const HAVEN_VERSION = require('../package.json').version;
 
 // ── Normalize SQLite timestamps to UTC ISO 8601 ────────
@@ -285,6 +286,64 @@ function setupSocketHandlers(io, db) {
   // Active screen sharers per voice room:  code → Set<userId>
   const activeScreenSharers = new Map();
 
+  // ── Push notification helper ──────────────────────────────
+  // Sends push notifications for a new message to all channel members
+  // who are NOT currently connected via Socket.IO.
+  function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent) {
+    try {
+      // Get all connected user IDs
+      const connectedUserIds = new Set();
+      for (const [, s] of io.sockets.sockets) {
+        if (s.user) connectedUserIds.add(s.user.id);
+      }
+
+      // Get push subscriptions for channel members who are offline
+      const subs = db.prepare(`
+        SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id
+        FROM push_subscriptions ps
+        JOIN channel_members cm ON cm.user_id = ps.user_id
+        WHERE cm.channel_id = ?
+          AND ps.user_id != ?
+      `).all(channelId, senderUserId);
+
+      if (!subs.length) return;
+
+      // Truncate message for notification body
+      const body = messageContent.length > 120
+        ? messageContent.slice(0, 117) + '...'
+        : messageContent;
+
+      const payload = JSON.stringify({
+        title: `${senderUsername} in #${channelName}`,
+        body,
+        channelCode,
+        tag: `haven-${channelCode}`,
+        url: '/app.html'
+      });
+
+      for (const sub of subs) {
+        // Skip users who are currently connected (they get real-time events)
+        if (connectedUserIds.has(sub.user_id)) continue;
+
+        const pushSub = {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth }
+        };
+
+        webpush.sendNotification(pushSub, payload).catch((err) => {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            // Subscription expired or invalid — remove it
+            try {
+              db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
+            } catch { /* non-critical */ }
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Push notification error:', err.message);
+    }
+  }
+
   // ── Time-based channel code rotation (check every 30s) ───
   setInterval(() => {
     try {
@@ -398,8 +457,8 @@ function setupSocketHandlers(io, db) {
       next();
     });
 
-    // ── Get user's channels ─────────────────────────────────
-    socket.on('get-channels', () => {
+    // ── Helper: get enriched channel list for a user ───────
+    function getEnrichedChannels(userId, isAdmin, joinRooms) {
       const channels = db.prepare(`
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
@@ -408,62 +467,76 @@ function setupSocketHandlers(io, db) {
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ?
         ORDER BY c.is_dm, c.name
-      `).all(socket.user.id);
+      `).all(userId);
 
-      // Batch-fetch read positions and latest message IDs for unread counts
       if (channels.length > 0) {
         const channelIds = channels.map(c => c.id);
         const placeholders = channelIds.map(() => '?').join(',');
 
-        // Get read positions
         const readRows = db.prepare(
           `SELECT channel_id, last_read_message_id FROM read_positions WHERE user_id = ? AND channel_id IN (${placeholders})`
-        ).all(socket.user.id, ...channelIds);
+        ).all(userId, ...channelIds);
         const readMap = {};
         readRows.forEach(r => { readMap[r.channel_id] = r.last_read_message_id; });
 
-        // Get latest message ID per channel
         const latestRows = db.prepare(
           `SELECT channel_id, MAX(id) as latest_id FROM messages WHERE channel_id IN (${placeholders}) GROUP BY channel_id`
         ).all(...channelIds);
         const latestMap = {};
         latestRows.forEach(r => { latestMap[r.channel_id] = r.latest_id; });
 
-        // Get unread count per channel
         channels.forEach(ch => {
           const lastRead = readMap[ch.id] || 0;
           const latestId = latestMap[ch.id] || 0;
           if (latestId > lastRead) {
             const countRow = db.prepare(
-              'SELECT COUNT(*) as cnt FROM messages WHERE channel_id = ? AND id > ?'
-            ).get(ch.id, lastRead);
+              'SELECT COUNT(*) as cnt FROM messages WHERE channel_id = ? AND id > ? AND user_id != ?'
+            ).get(ch.id, lastRead, userId);
             ch.unreadCount = countRow ? countRow.cnt : 0;
           } else {
             ch.unreadCount = 0;
           }
 
-          // For DMs, fetch the other user's info
           if (ch.is_dm) {
             const otherUser = db.prepare(`
               SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u
               JOIN channel_members cm ON u.id = cm.user_id
               WHERE cm.channel_id = ? AND u.id != ?
-            `).get(ch.id, socket.user.id);
+            `).get(ch.id, userId);
             ch.dm_target = otherUser || null;
           }
         });
       }
 
-      // Join all channel rooms for message delivery
-      channels.forEach(ch => socket.join(`channel:${ch.code}`));
+      if (joinRooms) {
+        channels.forEach(ch => joinRooms(`channel:${ch.code}`));
+      }
 
-      // Hide channel codes for non-admins when visibility is private
-      if (!socket.user.isAdmin) {
+      if (!isAdmin) {
         channels.forEach(ch => {
           if (ch.code_visibility === 'private') ch.code = '••••••••';
         });
       }
 
+      return channels;
+    }
+
+    // Helper: broadcast enriched channel list to all connected clients
+    function broadcastChannelLists() {
+      for (const [, s] of io.sockets.sockets) {
+        if (s.user) {
+          s.emit('channels-list', getEnrichedChannels(s.user.id, s.user.isAdmin, null));
+        }
+      }
+    }
+
+    // ── Get user's channels ─────────────────────────────────
+    socket.on('get-channels', () => {
+      const channels = getEnrichedChannels(
+        socket.user.id,
+        socket.user.isAdmin,
+        (room) => socket.join(room)
+      );
       socket.emit('channels-list', channels);
     });
 
@@ -798,7 +871,7 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
       }
 
-      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      const channel = db.prepare('SELECT id, name FROM channels WHERE code = ?').get(code);
       if (!channel) return;
 
       const member = db.prepare(
@@ -840,6 +913,18 @@ function setupSocketHandlers(io, db) {
           if (slashResult.tts) message.tts = true;
 
           io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
+
+          // Send push notifications to offline channel members
+          sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, slashResult.content);
+
+          // Auto-update sender's read position for slash command messages too
+          try {
+            db.prepare(`
+              INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
+              VALUES (?, ?, ?)
+              ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
+            `).run(socket.user.id, channel.id, result.lastInsertRowid);
+          } catch (e) { /* non-critical */ }
           return;
         }
         // Unknown command — tell the user
@@ -875,6 +960,18 @@ function setupSocketHandlers(io, db) {
       }
 
       io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
+
+      // Send push notifications to offline channel members
+      sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, content.trim());
+
+      // Auto-update sender's read position so own messages never count as unread
+      try {
+        db.prepare(`
+          INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
+          VALUES (?, ?, ?)
+          ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
+        `).run(socket.user.id, channel.id, result.lastInsertRowid);
+      } catch (e) { /* non-critical */ }
     });
 
     // ── Typing indicator ────────────────────────────────────
@@ -2158,6 +2255,95 @@ function setupSocketHandlers(io, db) {
       socket.emit('status-updated', { status, statusText });
     });
 
+    // ═══════════════ USER PROFILE ══════════════════════════
+
+    socket.on('get-user-profile', (data) => {
+      if (!data || typeof data.userId !== 'number') return;
+      try {
+        const row = db.prepare(
+          `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
+                  u.avatar, u.avatar_shape, u.status, u.status_text, u.bio, u.created_at
+           FROM users u WHERE u.id = ?`
+        ).get(data.userId);
+        if (!row) return;
+
+        // Get user's roles
+        const roles = db.prepare(
+          `SELECT r.id, r.name, r.level, r.color
+           FROM roles r
+           JOIN user_roles ur ON r.id = ur.role_id
+           WHERE ur.user_id = ?
+           ORDER BY r.level DESC`
+        ).all(data.userId);
+
+        // Check online status
+        let isOnline = false;
+        for (const [, s] of io.of('/').sockets) {
+          if (s.user && s.user.id === data.userId) { isOnline = true; break; }
+        }
+
+        socket.emit('user-profile', {
+          id: row.id,
+          username: row.username,
+          displayName: row.displayName,
+          avatar: row.avatar || null,
+          avatarShape: row.avatar_shape || 'circle',
+          status: row.status || 'online',
+          statusText: row.status_text || '',
+          bio: row.bio || '',
+          roles: roles,
+          online: isOnline,
+          createdAt: row.created_at
+        });
+      } catch (err) {
+        console.error('Get user profile error:', err);
+      }
+    });
+
+    socket.on('set-bio', (data) => {
+      if (!data || typeof data.bio !== 'string') return;
+      const bio = data.bio.trim().slice(0, 190);
+      try {
+        db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(bio, socket.user.id);
+        socket.emit('bio-updated', { bio });
+      } catch (err) {
+        console.error('Set bio error:', err);
+      }
+    });
+
+    // ═══════════════ PUSH NOTIFICATIONS ═════════════════════
+
+    socket.on('push-subscribe', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const { endpoint, keys } = data;
+      if (!endpoint || !keys || !keys.p256dh || !keys.auth) return;
+
+      try {
+        db.prepare(`
+          INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth
+        `).run(socket.user.id, endpoint, keys.p256dh, keys.auth);
+        socket.emit('push-subscribed');
+      } catch (err) {
+        console.error('Push subscribe error:', err);
+      }
+    });
+
+    socket.on('push-unsubscribe', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const endpoint = typeof data.endpoint === 'string' ? data.endpoint : '';
+      if (!endpoint) return;
+
+      try {
+        db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?')
+          .run(socket.user.id, endpoint);
+        socket.emit('push-unsubscribed');
+      } catch (err) {
+        console.error('Push unsubscribe error:', err);
+      }
+    });
+
     // ═══════════════ CHANNEL TOPICS ════════════════════════
 
     socket.on('set-channel-topic', (data) => {
@@ -2568,11 +2754,37 @@ function setupSocketHandlers(io, db) {
         return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
       });
 
-      io.to(`channel:${code}`).emit('online-users', {
-        channelCode: code,
-        users,
-        visibilityMode: mode
-      });
+      // Send per-socket: invisible users appear offline to others, but normal to themselves
+      const hasInvisible = users.some(u => u.status === 'invisible');
+      if (!hasInvisible) {
+        // Fast path: no invisible users, broadcast to everyone
+        io.to(`channel:${code}`).emit('online-users', {
+          channelCode: code,
+          users,
+          visibilityMode: mode
+        });
+      } else {
+        // Slow path: customize the list per recipient
+        for (const [, s] of io.of('/').sockets) {
+          if (!s.user || !s.rooms || !s.rooms.has(`channel:${code}`)) continue;
+          const viewerId = s.user.id;
+          const customUsers = users.map(u => {
+            if (u.status === 'invisible' && u.id !== viewerId) {
+              return { ...u, online: false, status: 'offline' };
+            }
+            return u;
+          });
+          customUsers.sort((a, b) => {
+            if (a.online !== b.online) return a.online ? -1 : 1;
+            return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
+          });
+          s.emit('online-users', {
+            channelCode: code,
+            users: customUsers,
+            visibilityMode: mode
+          });
+        }
+      }
     }
 
     // ═══════════════ ROLE MANAGEMENT ═════════════════════════
@@ -2773,21 +2985,8 @@ function setupSocketHandlers(io, db) {
       try {
         db.prepare('UPDATE channels SET name = ? WHERE id = ?').run(name, channel.id);
 
-        // Broadcast updated channel list to all connected clients
-        for (const [, s] of io.sockets.sockets) {
-          if (s.user) {
-            const chs = db.prepare(`
-              SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
-                     c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-                     c.parent_channel_id, c.position, c.is_private
-              FROM channels c
-              JOIN channel_members cm ON c.id = cm.channel_id
-              WHERE cm.user_id = ?
-              ORDER BY c.is_dm, c.name
-            `).all(s.user.id);
-            s.emit('channels-list', chs);
-          }
-        }
+        // Broadcast enriched channel list to all connected clients
+        broadcastChannelLists();
         // Also update the header for anyone currently in this channel
         io.to(code).emit('channel-renamed', { code, name });
       } catch (err) {
@@ -2844,21 +3043,8 @@ function setupSocketHandlers(io, db) {
         const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
         membersToAdd.forEach(m => insertMember.run(result.lastInsertRowid, m.user_id));
 
-        // Broadcast updated channel list to all connected clients
-        for (const [, s] of io.sockets.sockets) {
-          if (s.user) {
-            const chs = db.prepare(`
-              SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
-                     c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-                     c.parent_channel_id, c.position, c.is_private
-              FROM channels c
-              JOIN channel_members cm ON c.id = cm.channel_id
-              WHERE cm.user_id = ?
-              ORDER BY c.is_dm, c.name
-            `).all(s.user.id);
-            s.emit('channels-list', chs);
-          }
-        }
+        // Broadcast enriched channel list to all connected clients
+        broadcastChannelLists();
       } catch (err) {
         console.error('Create sub-channel error:', err);
         socket.emit('error-msg', 'Failed to create sub-channel');
@@ -2886,21 +3072,8 @@ function setupSocketHandlers(io, db) {
         db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
         db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
 
-        // Broadcast updated channel list
-        for (const [, s] of io.sockets.sockets) {
-          if (s.user) {
-            const channels = db.prepare(`
-              SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
-                     c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-                     c.parent_channel_id, c.position, c.is_private
-              FROM channels c
-              JOIN channel_members cm ON c.id = cm.channel_id
-              WHERE cm.user_id = ?
-              ORDER BY c.is_dm, c.name
-            `).all(s.user.id);
-            s.emit('channels-list', channels);
-          }
-        }
+        // Broadcast enriched channel list
+        broadcastChannelLists();
 
         socket.emit('error-msg', `Sub-channel deleted`);
       } catch (err) {
