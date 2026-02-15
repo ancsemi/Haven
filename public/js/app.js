@@ -110,6 +110,10 @@ class HavenApp {
     this._setupSoundManagement();
     this._initRoleManagement();
     this._setupResizableSidebars();
+    this._setupDensitySettings();
+    this.modMode = new ModMode();
+    this.modMode.init();
+    document.getElementById('mod-mode-settings-toggle')?.addEventListener('click', () => this.modMode.toggle());
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback
@@ -1099,6 +1103,19 @@ class HavenApp {
       localStorage.removeItem('haven_user');
       window.location.href = '/';
     });
+    document.getElementById('status-online-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ov = document.getElementById('online-overlay');
+      ov.style.display = ov.style.display === 'none' ? 'flex' : 'none';
+    });
+    document.getElementById('online-overlay-close')?.addEventListener('click', () => {
+      document.getElementById('online-overlay').style.display = 'none';
+    });
+    document.addEventListener('click', (e) => {
+      const ov = document.getElementById('online-overlay');
+      const btn = document.getElementById('status-online-btn');
+      if (ov && ov.style.display !== 'none' && !ov.contains(e.target) && !btn.contains(e.target)) ov.style.display = 'none';
+    });
 
     // Flappy Container game (sidebar button) — single delegated listener with origin check
     if (!this._gameScoreListenerAdded) {
@@ -1394,6 +1411,14 @@ class HavenApp {
     // Listen for whitelist list updates
     this.socket.on('whitelist-list', (list) => {
       this._renderWhitelist(list);
+    });
+    const tunnelEnabledEl = document.getElementById('tunnel-enabled');
+    if (tunnelEnabledEl) tunnelEnabledEl.addEventListener('change', () => {
+      this.socket.emit('update-server-setting', { key: 'tunnel_enabled', value: tunnelEnabledEl.checked ? 'true' : 'false' });
+    });
+    const tunnelProvEl = document.getElementById('tunnel-provider-select');
+    if (tunnelProvEl) tunnelProvEl.addEventListener('change', () => {
+      this.socket.emit('update-server-setting', { key: 'tunnel_provider', value: tunnelProvEl.value });
     });
   }
 
@@ -2917,6 +2942,8 @@ class HavenApp {
     const el = document.getElementById('online-users');
     if (users.length === 0) {
       el.innerHTML = '<p class="muted-text">No one here</p>';
+      const ovList = document.getElementById('online-overlay-list');
+      if (ovList) ovList.innerHTML = '<p class="muted-text">No one here</p>';
       return;
     }
 
@@ -2958,6 +2985,25 @@ class HavenApp {
     }
 
     el.innerHTML = html;
+    const ovList = document.getElementById('online-overlay-list');
+    if (ovList) {
+      let ovHtml = '';
+      if (onlineUsers.length > 0) {
+        ovHtml += `<div class="user-group-label">Online — ${onlineUsers.length}</div>`;
+        ovHtml += onlineUsers.map(u => {
+          const dn = u.displayName || u.username;
+          return `<div class="user-item" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="user-dot"></span><span class="user-item-name">${this._escapeHtml(dn)}</span></div>`;
+        }).join('');
+      }
+      if (offlineUsers.length > 0) {
+        ovHtml += `<div class="user-group-label offline-label">Offline — ${offlineUsers.length}</div>`;
+        ovHtml += offlineUsers.map(u => {
+          const dn = u.displayName || u.username;
+          return `<div class="user-item offline" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="user-dot away"></span><span class="user-item-name">${this._escapeHtml(dn)}</span></div>`;
+        }).join('');
+      }
+      ovList.innerHTML = ovHtml || '<p class="muted-text">No one here</p>';
+    }
 
     // Bind admin/mod action buttons
     if (this.user.isAdmin || this._canModerate()) {
@@ -5065,9 +5111,16 @@ class HavenApp {
     if (whitelistToggle) {
       whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
     }
-    // Fetch whitelist entries when admin opens settings
+    const tunnelToggle = document.getElementById('tunnel-enabled');
+    if (tunnelToggle) tunnelToggle.checked = this.serverSettings.tunnel_enabled === 'true';
+    const tunnelProv = document.getElementById('tunnel-provider-select');
+    if (tunnelProv && this.serverSettings.tunnel_provider) tunnelProv.value = this.serverSettings.tunnel_provider;
     if (this.user && this.user.isAdmin) {
       this.socket.emit('get-whitelist');
+      fetch('/api/tunnel/status', { headers: { 'Authorization': `Bearer ${this.token}` } }).then(r => r.json()).then(s => {
+        const disp = document.getElementById('tunnel-status-display');
+        if (disp) disp.textContent = s.active ? `Active: ${s.url}` : 'Inactive';
+      }).catch(() => {});
     }
   }
 
@@ -5722,11 +5775,27 @@ class HavenApp {
 
   _markRead(messageId) {
     if (!this.currentChannel || !messageId) return;
-    // Debounce: don't spam the server
     clearTimeout(this._markReadTimer);
     this._markReadTimer = setTimeout(() => {
       this.socket.emit('mark-read', { code: this.currentChannel, messageId });
     }, 500);
+  }
+  _setupDensitySettings() {
+    const picker = document.getElementById('density-picker');
+    const saved = localStorage.getItem('haven_layout_density') || 'cozy';
+    document.documentElement.setAttribute('data-density', saved);
+    if (picker) {
+      picker.querySelectorAll('.density-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.density === saved);
+        btn.addEventListener('click', () => {
+          picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const density = btn.dataset.density;
+          document.documentElement.setAttribute('data-density', density);
+          localStorage.setItem('haven_layout_density', density);
+        });
+      });
+    }
   }
 }
 

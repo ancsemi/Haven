@@ -67,11 +67,12 @@
           </div>
         </div>
 
-        <div class="sidebar-section channel-section">
+        <div class="sidebar-mod-container" id="sidebar-mod-container">
+        <div class="sidebar-section channel-section" data-mod-id="channels">
           <h5 class="section-label">Channels</h5>
           <div class="channel-list" id="channel-list"></div>
         </div>
-
+        </div>
         <!-- Pinned bottom area (never pushed off screen) -->
         <div class="sidebar-bottom">
           <!-- Theme popup (floats above bottom bar) -->
@@ -172,6 +173,10 @@
           <div class="sidebar-bottom-bar">
             <button id="theme-popup-toggle" class="sidebar-bottom-btn" title="Themes">🎨</button>
             <button class="sidebar-bottom-btn" id="play-flappy-btn" title="Shippy Container">🚢</button>
+            <button id="mod-mode-toggle" class="sidebar-bottom-btn" title="Mod Mode — rearrange sidebar">🔧</button>
+            <a href="https://ko-fi.com/ancsemi" target="_blank" rel="noopener" class="sidebar-bottom-btn donate-btn" title="Support Haven ♥">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </a>
             <div id="voice-bar" class="voice-bar" style="display:none"></div>
           </div>
         </div>
@@ -393,9 +398,18 @@
         <span class="value" id="status-channel">None</span>
       </div>
       <div class="divider"></div>
-      <div class="status-item">
+      <div class="status-item status-online-btn" id="status-online-btn" title="Click to see who's online">
         <span class="label">Online</span>
         <span class="value" id="status-online-count">0</span>
+      </div>
+      <div class="online-overlay" id="online-overlay" style="display:none">
+        <div class="online-overlay-header">
+          <span>👥 Users</span>
+          <button class="online-overlay-close" id="online-overlay-close">✕</button>
+        </div>
+        <div class="online-overlay-list" id="online-overlay-list">
+          <p class="muted-text">No one here</p>
+        </div>
       </div>
       <span class="spacer"></span>
       <div class="status-item">
@@ -559,7 +573,24 @@
 
       <!-- Sounds Section -->
       <div class="settings-section">
-        <h5 class="settings-section-title">🔔 Sounds</h5>
+        <h5 class="settings-section-title">� Layout Density</h5>
+        <div class="density-picker" id="density-picker">
+          <button class="density-btn" data-density="compact" title="Compact">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="1"/><rect x="1" y="6" width="14" height="2" rx="1"/><rect x="1" y="10" width="14" height="2" rx="1"/></svg>
+            <span>Compact</span>
+          </button>
+          <button class="density-btn active" data-density="cozy" title="Cozy">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="14" height="3" rx="1"/><rect x="1" y="6" width="14" height="3" rx="1"/><rect x="1" y="11" width="14" height="3" rx="1"/></svg>
+            <span>Cozy</span>
+          </button>
+          <button class="density-btn" data-density="spacious" title="Spacious">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="0" width="14" height="4" rx="1"/><rect x="1" y="6" width="14" height="4" rx="1"/><rect x="1" y="12" width="14" height="4" rx="1"/></svg>
+            <span>Spacious</span>
+          </button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h5 class="settings-section-title">�🔔 Sounds</h5>
         <div class="notif-settings">
           <label class="toggle-row">
             <span>Notifications</span>
@@ -719,6 +750,26 @@
             <p class="muted-text">Loading roles...</p>
           </div>
         </div>
+        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🌐 Tunnel</h5>
+          <label class="toggle-row">
+            <span>Enabled</span>
+            <input type="checkbox" id="tunnel-enabled">
+          </label>
+          <label class="select-row">
+            <span>Provider</span>
+            <select id="tunnel-provider-select">
+              <option value="localtunnel">LocalTunnel</option>
+              <option value="cloudflared">Cloudflared</option>
+            </select>
+          </label>
+          <div id="tunnel-status-display" class="muted-text" style="margin-top:4px;font-size:11px;"></div>
+        </div>
+        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🔧 Mod Mode</h5>
+          <small class="settings-hint">Rearrange sidebar sections by dragging</small>
+          <button class="btn-sm btn-full" id="mod-mode-settings-toggle" style="margin-top:6px;">🔧 Toggle Mod Mode</button>
+        </div>
       </div>
     </div>
   </div>
@@ -869,6 +920,7 @@
   <script src="/js/notifications.js"></script>
   <script src="/js/servers.js"></script>
   <script src="/js/voice.js"></script>
+  <script src="/js/modmode.js"></script>
   <script src="/js/app.js?v=webhooks1"></script>
 </body>
 </html>

@@ -39,6 +39,7 @@ if (process.env.JWT_SECRET === 'change-me-to-something-random-and-long' || !proc
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers } = require('./src/socketHandlers');
+const { startTunnel, stopTunnel, getTunnelStatus } = require('./src/tunnel');
 
 const app = express();
 
@@ -772,8 +773,12 @@ app.post('/api/webhooks/:token', express.json({ limit: '64kb' }), (req, res) => 
 
   res.status(200).json({ success: true, message_id: result.lastInsertRowid });
 });
-
-// ── Catch-all: 404 ──────────────────────────────────────
+app.get('/api/tunnel/status', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const u = token ? verifyToken(token) : null;
+  if (!u || !u.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  res.json(getTunnelStatus());
+});
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
@@ -982,4 +987,12 @@ server.listen(PORT, HOST, () => {
 ║  Admin:   ${(process.env.ADMIN_USERNAME || 'admin').padEnd(29)}║
 ╚══════════════════════════════════════════╝
   `);
+  try {
+    const { getDb } = require('./src/database');
+    const tunRow = getDb().prepare("SELECT value FROM server_settings WHERE key = 'tunnel_enabled'").get();
+    if (tunRow && tunRow.value === 'true') {
+      const url = startTunnel(PORT);
+      if (url) console.log(`🌐 Tunnel active: ${url}`);
+    }
+  } catch {}
 });
