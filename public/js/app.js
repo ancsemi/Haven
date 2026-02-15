@@ -463,6 +463,30 @@ class HavenApp {
       }
     });
 
+    // ── Webhook events ──────────────────────────────
+    this.socket.on('webhook-created', (wh) => {
+      // Show token once
+      const reveal = document.getElementById('webhook-token-reveal');
+      const urlDisplay = document.getElementById('webhook-url-display');
+      const baseUrl = window.location.origin;
+      urlDisplay.value = `${baseUrl}/api/webhooks/${wh.token}`;
+      reveal.style.display = 'block';
+      // Refresh the list
+      const code = document.getElementById('webhook-modal')._channelCode;
+      if (code) this.socket.emit('get-webhooks', { channelCode: code });
+    });
+    this.socket.on('webhooks-list', (data) => {
+      this._renderWebhookList(data.webhooks, data.channelCode);
+    });
+    this.socket.on('webhook-deleted', (data) => {
+      const code = document.getElementById('webhook-modal')._channelCode;
+      if (code) this.socket.emit('get-webhooks', { channelCode: code });
+    });
+    this.socket.on('webhook-toggled', (data) => {
+      const code = document.getElementById('webhook-modal')._channelCode;
+      if (code) this.socket.emit('get-webhooks', { channelCode: code });
+    });
+
     // ── Status updated ──────────────────────────────
     this.socket.on('status-updated', (data) => {
       this.userStatus = data.status;
@@ -795,6 +819,34 @@ class HavenApp {
       if (!code) return;
       this._closeChannelCtxMenu();
       this.socket.emit('toggle-channel-permission', { code, permission: 'music' });
+    });
+    // Webhooks management
+    document.querySelector('[data-action="webhooks"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      this._openWebhookModal(code);
+    });
+    document.getElementById('webhook-create-btn')?.addEventListener('click', () => {
+      const name = document.getElementById('webhook-name-input').value.trim();
+      if (!name) return;
+      const code = document.getElementById('webhook-modal')._channelCode;
+      if (!code) return;
+      this.socket.emit('create-webhook', { channelCode: code, name });
+      document.getElementById('webhook-name-input').value = '';
+    });
+    document.getElementById('webhook-copy-url-btn')?.addEventListener('click', () => {
+      const urlEl = document.getElementById('webhook-url-display');
+      navigator.clipboard.writeText(urlEl.value).then(() => {
+        document.getElementById('webhook-copy-url-btn').textContent = '✅ Copied';
+        setTimeout(() => { document.getElementById('webhook-copy-url-btn').textContent = '📋 Copy'; }, 2000);
+      });
+    });
+    document.getElementById('webhook-close-btn')?.addEventListener('click', () => {
+      document.getElementById('webhook-modal').style.display = 'none';
+    });
+    document.getElementById('webhook-modal')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
     });
     // Create sub-channel
     document.querySelector('[data-action="create-sub-channel"]')?.addEventListener('click', () => {
@@ -2345,6 +2397,54 @@ class HavenApp {
     this._ctxMenuChannel = null;
   }
 
+  _openWebhookModal(channelCode) {
+    const ch = this.channels.find(c => c.code === channelCode);
+    const modal = document.getElementById('webhook-modal');
+    modal._channelCode = channelCode;
+    document.getElementById('webhook-modal-channel-name').textContent = ch ? `# ${ch.name}` : '';
+    document.getElementById('webhook-name-input').value = '';
+    document.getElementById('webhook-token-reveal').style.display = 'none';
+    document.getElementById('webhook-list').innerHTML = '<p style="opacity:0.5;font-size:0.85rem">Loading…</p>';
+    modal.style.display = 'flex';
+    this.socket.emit('get-webhooks', { channelCode });
+  }
+
+  _renderWebhookList(webhooks, channelCode) {
+    const container = document.getElementById('webhook-list');
+    if (!webhooks.length) {
+      container.innerHTML = '<p style="opacity:0.5;font-size:0.85rem">No webhooks yet. Create one above.</p>';
+      return;
+    }
+    container.innerHTML = webhooks.map(wh => {
+      const maskedToken = wh.token.slice(0, 8) + '••••••••';
+      const statusLabel = wh.is_active ? '🟢 Active' : '🔴 Disabled';
+      const toggleLabel = wh.is_active ? 'Disable' : 'Enable';
+      return `
+        <div class="webhook-item" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:rgba(255,255,255,0.04);margin-bottom:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:0.9rem">${this._escapeHtml(wh.name)}</div>
+            <div style="font-size:0.75rem;opacity:0.5;font-family:monospace">${maskedToken}</div>
+          </div>
+          <span style="font-size:0.75rem;white-space:nowrap">${statusLabel}</span>
+          <button class="btn-xs webhook-toggle-btn" data-id="${wh.id}" style="font-size:0.75rem">${toggleLabel}</button>
+          <button class="btn-xs webhook-delete-btn" data-id="${wh.id}" style="font-size:0.75rem;color:#ff4444">🗑️</button>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('.webhook-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (confirm('Delete this webhook? This cannot be undone.')) {
+          this.socket.emit('delete-webhook', { webhookId: parseInt(btn.dataset.id) });
+        }
+      });
+    });
+    container.querySelectorAll('.webhook-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.socket.emit('toggle-webhook', { webhookId: parseInt(btn.dataset.id) });
+      });
+    });
+  }
+
   _renderChannels() {
     const list = document.getElementById('channel-list');
     list.innerHTML = '';
@@ -2678,8 +2778,10 @@ class HavenApp {
       ? `<span class="user-role-badge msg-role-badge" style="color:${onlineUser.role.color || 'var(--text-muted)'}">${this._escapeHtml(onlineUser.role.name)}</span>`
       : '';
 
+    const botBadge = msg.is_webhook ? '<span class="bot-badge">BOT</span>' : '';
+
     const el = document.createElement('div');
-    el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '');
+    el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '') + (msg.is_webhook ? ' webhook-message' : '');
     el.dataset.userId = msg.user_id;
     el.dataset.time = msg.created_at;
     el.dataset.msgId = msg.id;
@@ -2691,6 +2793,7 @@ class HavenApp {
         <div class="message-body">
           <div class="message-header">
             <span class="message-author" style="color:${color}">${this._escapeHtml(msg.username)}</span>
+            ${botBadge}
             ${msgRoleBadge}
             <span class="message-time">${this._formatTime(msg.created_at)}</span>
             ${pinnedTag}

@@ -6960,6 +6960,23 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   display: inline;
 }
 
+/* ── BOT badge for webhook messages ───────────────── */
+.bot-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent-color, #5865f2);
+  color: #fff;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.webhook-message .message-avatar {
+  border: 2px solid var(--accent-color, #5865f2);
+}
+
 /* ── Collapsible sub-channel toggle arrow ────────────── */
 .channel-collapse-arrow {
   display: flex;

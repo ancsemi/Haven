@@ -1,4 +1,5 @@
 const { verifyToken, generateChannelCode, generateToken } = require('./auth');
+const crypto = require('crypto');
 const HAVEN_VERSION = require('../package.json').version;
 
 // ── Normalize SQLite timestamps to UTC ISO 8601 ────────
@@ -664,16 +665,16 @@ function setupSocketHandlers(io, db) {
       let messages;
       if (before) {
         messages = db.prepare(`
-          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at,
-                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username,
+                 COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ? AND m.id < ?
           ORDER BY m.created_at DESC LIMIT ?
         `).all(channel.id, before, limit);
       } else {
         messages = db.prepare(`
-          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at,
-                 COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username,
+                 COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ?
           ORDER BY m.created_at DESC LIMIT ?
@@ -724,6 +725,12 @@ function setupSocketHandlers(io, db) {
         obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
         obj.reactions = reactionMap.get(m.id) || [];
         obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
+        // Flag webhook messages so the client renders a BOT badge
+        if (m.is_webhook) {
+          obj.is_webhook = true;
+          obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
+          obj.avatar_shape = 'square';
+        }
         return obj;
       });
 
@@ -2900,6 +2907,97 @@ function setupSocketHandlers(io, db) {
         console.error('Delete sub-channel error:', err);
         socket.emit('error-msg', 'Failed to delete sub-channel');
       }
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // WEBHOOK / BOT MANAGEMENT
+    // ═══════════════════════════════════════════════════════════
+
+    // Create a webhook for a channel
+    socket.on('create-webhook', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can create webhooks');
+
+      const channelCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : '';
+      if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
+
+      const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
+      if (!channel) return socket.emit('error-msg', 'Channel not found');
+
+      const name = typeof data.name === 'string' ? data.name.trim().slice(0, 32) : 'Bot';
+      if (!name) return socket.emit('error-msg', 'Webhook name is required');
+
+      const token = crypto.randomBytes(32).toString('hex'); // 64-char token
+
+      try {
+        const result = db.prepare(
+          'INSERT INTO webhooks (channel_id, name, token, created_by) VALUES (?, ?, ?, ?)'
+        ).run(channel.id, name, token, socket.user.id);
+
+        socket.emit('webhook-created', {
+          id: result.lastInsertRowid,
+          channel_id: channel.id,
+          channel_code: channel.code,
+          name,
+          token,
+          is_active: 1,
+          created_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('Create webhook error:', err);
+        socket.emit('error-msg', 'Failed to create webhook');
+      }
+    });
+
+    // List webhooks for a channel
+    socket.on('get-webhooks', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can view webhooks');
+
+      const channelCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : '';
+      if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
+
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode);
+      if (!channel) return;
+
+      const webhooks = db.prepare(
+        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
+      ).all(channel.id);
+
+      socket.emit('webhooks-list', { channelCode, webhooks });
+    });
+
+    // Delete a webhook
+    socket.on('delete-webhook', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can delete webhooks');
+
+      const webhookId = parseInt(data.webhookId);
+      if (!webhookId || isNaN(webhookId)) return;
+
+      try {
+        db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId);
+        socket.emit('webhook-deleted', { webhookId });
+      } catch (err) {
+        console.error('Delete webhook error:', err);
+        socket.emit('error-msg', 'Failed to delete webhook');
+      }
+    });
+
+    // Toggle webhook active/inactive
+    socket.on('toggle-webhook', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can manage webhooks');
+
+      const webhookId = parseInt(data.webhookId);
+      if (!webhookId || isNaN(webhookId)) return;
+
+      const webhook = db.prepare('SELECT is_active FROM webhooks WHERE id = ?').get(webhookId);
+      if (!webhook) return socket.emit('error-msg', 'Webhook not found');
+
+      const newState = webhook.is_active ? 0 : 1;
+      db.prepare('UPDATE webhooks SET is_active = ? WHERE id = ?').run(newState, webhookId);
+      socket.emit('webhook-toggled', { webhookId, is_active: newState });
     });
 
     // ── Slash command processor ──────────────────────────────

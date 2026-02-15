@@ -713,6 +713,66 @@ app.post('/api/high-scores', express.json(), (req, res) => {
   res.json({ game, leaderboard });
 });
 
+// ═══════════════════════════════════════════════════════════
+// WEBHOOK / BOT INTEGRATION — incoming message endpoint
+// ═══════════════════════════════════════════════════════════
+app.post('/api/webhooks/:token', express.json({ limit: '64kb' }), (req, res) => {
+  const { getDb } = require('./src/database');
+  const db = getDb();
+  const { token } = req.params;
+
+  if (!token || typeof token !== 'string' || token.length !== 64) {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
+
+  const webhook = db.prepare(
+    'SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1'
+  ).get(token);
+
+  if (!webhook) {
+    return res.status(404).json({ error: 'Webhook not found or inactive' });
+  }
+
+  const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
+  if (!content || content.length > 4000) {
+    return res.status(400).json({ error: 'Content required (max 4000 chars)' });
+  }
+
+  // Optional overrides per-message
+  const username = typeof req.body.username === 'string' ? req.body.username.trim().slice(0, 32) : webhook.name;
+  const avatarUrl = typeof req.body.avatar_url === 'string' ? req.body.avatar_url.trim().slice(0, 512) : webhook.avatar_url;
+
+  // Insert the message into the DB
+  const result = db.prepare(
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username) VALUES (?, ?, ?, 1, ?)'
+  ).run(webhook.channel_id, null, content, username);
+
+  const message = {
+    id: result.lastInsertRowid,
+    content,
+    created_at: new Date().toISOString(),
+    username: `[BOT] ${username}`,
+    user_id: null,
+    avatar: avatarUrl || null,
+    avatar_shape: 'square',
+    reply_to: null,
+    replyContext: null,
+    reactions: [],
+    is_webhook: true,
+    webhook_name: username
+  };
+
+  // Broadcast to all clients in this channel
+  if (io) {
+    io.to(`channel:${webhook.channel_code}`).emit('new-message', {
+      channelCode: webhook.channel_code,
+      message
+    });
+  }
+
+  res.status(200).json({ success: true, message_id: result.lastInsertRowid });
+});
+
 // ── Catch-all: 404 ──────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

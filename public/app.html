@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=scramble2">
+  <link rel="stylesheet" href="/css/style.css?v=webhooks1">
   <script src="/js/theme-init.js"></script>
 </head>
 <body>
@@ -805,8 +805,42 @@
     <hr class="channel-ctx-sep mod-only">
     <button class="channel-ctx-item admin-only" data-action="toggle-streams">🖥️ Toggle Streams</button>
     <button class="channel-ctx-item admin-only" data-action="toggle-music">🎵 Toggle Music</button>
+    <button class="channel-ctx-item admin-only" data-action="webhooks">🤖 Webhooks</button>
     <hr class="channel-ctx-sep admin-only">
     <button class="channel-ctx-item admin-only danger" data-action="delete">🗑️ Delete Channel</button>
+  </div>
+
+  <!-- Webhook Management Modal -->
+  <div class="modal-overlay" id="webhook-modal" style="display:none">
+    <div class="modal" style="max-width:520px">
+      <h3>🤖 Webhooks</h3>
+      <p class="modal-desc" id="webhook-modal-channel-name"></p>
+
+      <!-- Create new webhook -->
+      <div class="form-group" style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1">
+          <label>New Webhook Name</label>
+          <input type="text" id="webhook-name-input" class="input" maxlength="32" placeholder="My Bot" style="width:100%">
+        </div>
+        <button class="btn-sm btn-accent" id="webhook-create-btn" style="height:36px">Create</button>
+      </div>
+
+      <!-- Webhook list -->
+      <div id="webhook-list" style="margin-top:14px;max-height:280px;overflow-y:auto"></div>
+
+      <!-- Token reveal (shown once after creation) -->
+      <div id="webhook-token-reveal" style="display:none;margin-top:14px;padding:12px;border-radius:8px;background:rgba(0,0,0,0.25);border:1px solid var(--accent-color, #00e5ff)">
+        <p style="font-size:0.85rem;margin:0 0 8px;opacity:0.7">⚠️ Copy this URL now — you won't see the full token again!</p>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="webhook-url-display" class="input" readonly style="flex:1;font-size:0.8rem;font-family:monospace">
+          <button class="btn-sm" id="webhook-copy-url-btn">📋 Copy</button>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn-sm" id="webhook-close-btn">Close</button>
+      </div>
+    </div>
   </div>
 
   <!-- Create Sub-channel Modal -->
@@ -835,6 +869,6 @@
   <script src="/js/notifications.js"></script>
   <script src="/js/servers.js"></script>
   <script src="/js/voice.js"></script>
-  <script src="/js/app.js?v=fixed6"></script>
+  <script src="/js/app.js?v=webhooks1"></script>
 </body>
 </html>

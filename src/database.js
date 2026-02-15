@@ -282,6 +282,18 @@ function initDatabase() {
     db.exec("ALTER TABLE channels ADD COLUMN is_private INTEGER DEFAULT 0");
   }
 
+  // ── Migration: webhook message tracking ─────────────────
+  try {
+    db.prepare("SELECT is_webhook FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN is_webhook INTEGER DEFAULT 0");
+  }
+  try {
+    db.prepare("SELECT webhook_username FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN webhook_username TEXT DEFAULT NULL");
+  }
+
   // ── Migration: roles system ─────────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
@@ -336,6 +348,22 @@ function initDatabase() {
     ];
     channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
   }
+
+  // ── Migration: webhooks / bot integrations ───────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT 'Bot',
+      token TEXT UNIQUE NOT NULL,
+      avatar_url TEXT DEFAULT NULL,
+      created_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_active INTEGER DEFAULT 1
+    );
+    CREATE INDEX IF NOT EXISTS idx_webhooks_token ON webhooks(token);
+    CREATE INDEX IF NOT EXISTS idx_webhooks_channel ON webhooks(channel_id);
+  `);
 
   return db;
 }
