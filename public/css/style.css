@@ -2021,6 +2021,19 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     0 0 12px rgba(255,0,100,0.9),
     0 0 30px rgba(0,255,255,0.5);
 }
+/* Scramble glow on sidebar / header text */
+.fx-cyberpunk .scrambling {
+  text-shadow:
+    -1px 0 rgba(255,0,102,0.6), 1px 0 rgba(0,255,255,0.6),
+    0 0 6px rgba(255,0,102,0.4);
+}
+.fx-cyberpunk .channel-name,
+.fx-cyberpunk .section-label,
+.fx-cyberpunk .user-item-name,
+.fx-cyberpunk #channel-header-name,
+.fx-cyberpunk #current-user {
+  transition: text-shadow 0.2s;
+}
 
 /* ── LOTR candle (sidebar) overlay ────────────────────── */
 .fx-lotr-candle {

@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=scramble1">
+  <link rel="stylesheet" href="/css/style.css?v=scramble2">
   <script src="/js/theme-init.js"></script>
 </head>
 <body>
@@ -158,6 +158,13 @@
               <label class="rgb-slider-row">
                 <span class="rgb-slider-label">Sacred Intensity</span>
                 <input type="range" id="sacred-intensity-slider" min="20" max="250" value="100" class="slider-sm rgb-slider">
+              </label>
+            </div>
+            <!-- Glitch frequency slider (cyberpunk) -->
+            <div id="glitch-freq-editor" class="rgb-theme-editor" style="display:none">
+              <label class="rgb-slider-row">
+                <span class="rgb-slider-label">Glitch Frequency</span>
+                <input type="range" id="glitch-freq-slider" min="5" max="100" value="50" class="slider-sm rgb-slider">
               </label>
             </div>
           </div>
@@ -806,7 +813,7 @@
   <div id="fx-layers"></div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/theme.js?v=scramble1"></script>
+  <script src="/js/theme.js?v=scramble2"></script>
   <script src="/js/notifications.js"></script>
   <script src="/js/servers.js"></script>
   <script src="/js/voice.js"></script>

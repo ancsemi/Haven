@@ -189,6 +189,15 @@ function showEffectEditorIfDynamic(theme) {
   } else {
     if (sacredEditor._hide) sacredEditor._hide();
   }
+  // Show glitch frequency slider when cyberpunk is active
+  const glitchEditor = document.getElementById('glitch-freq-editor');
+  if (glitchEditor) {
+    if (_activeFx.has('cyberpunk')) {
+      if (glitchEditor._show) glitchEditor._show();
+    } else {
+      if (glitchEditor._hide) glitchEditor._hide();
+    }
+  }
 }
 
 // ── Sacred-effect intensity slider ──────────────────────────
@@ -233,6 +242,8 @@ let _emberCtx = null, _emberRAF = null, _embers = [];
 let _graceCtx = null, _graceRAF = null, _graceEmbers = [];
 let _snowCtx = null, _snowRAF = null, _snowflakes = [];
 let _scrambleTimer = null, _scrambleOriginal = 'HAVEN';
+let _scrambleFreq = 50;  // 5-100 slider value; lower = less frequent, higher = more
+let _scrambleTargets = [];  // tracked { el, original } for multi-element scramble
 
 // Layer definitions: each effect -> array of { id, parent, cls }
 const FX_LAYERS = {
@@ -355,17 +366,16 @@ function applyEffects(mode) {
   if (Array.isArray(mode)) mode.forEach(_activateEffect);
 }
 
-// ── Cyberpunk Text Scramble — decodes "HAVEN" with random chars ─
+// ── Cyberpunk Text Scramble — decodes text with random chars ─
 const _SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^';
 
-function _scrambleOnce() {
-  const el = document.querySelector('.brand-text');
-  if (!el) return;
+function _scrambleElement(el, original) {
+  if (!el || el._scrambling) return;
+  el._scrambling = true;
 
-  const original = _scrambleOriginal;
   const len = original.length;
-  const totalFrames = 30;           // how many animation frames per cycle
-  const resolveStart = 8;           // frame at which chars start locking in
+  const totalFrames = Math.min(30, 10 + len * 2);  // scale frames to text length
+  const resolveStart = Math.floor(totalFrames * 0.25);
   let frame = 0;
 
   el.classList.add('scrambling');
@@ -373,7 +383,7 @@ function _scrambleOnce() {
   const interval = setInterval(() => {
     let display = '';
     for (let i = 0; i < len; i++) {
-      // Each char resolves at a staggered frame
+      if (original[i] === ' ') { display += ' '; continue; }
       const charResolveFrame = resolveStart + (i * ((totalFrames - resolveStart) / len));
       if (frame >= charResolveFrame) {
         display += original[i];
@@ -388,32 +398,118 @@ function _scrambleOnce() {
       clearInterval(interval);
       el.textContent = original;
       el.classList.remove('scrambling');
+      el._scrambling = false;
     }
-  }, 50);  // ~50ms per frame = smooth scramble
+  }, 50);
+}
+
+// Collect all scramble-able text elements currently on screen
+function _collectScrambleTargets() {
+  const targets = [];
+
+  // 1. Brand text (HAVEN logo) — always included
+  const brand = document.querySelector('.brand-text');
+  if (brand) targets.push({ el: brand, original: brand.textContent.trim() });
+
+  // 2. Current username
+  const currentUser = document.getElementById('current-user');
+  if (currentUser && currentUser.textContent.trim())
+    targets.push({ el: currentUser, original: currentUser.textContent.trim() });
+
+  // 3. Channel names in sidebar
+  document.querySelectorAll('.channel-name').forEach(el => {
+    const text = el.textContent.trim();
+    if (text) targets.push({ el, original: text });
+  });
+
+  // 4. Section labels
+  document.querySelectorAll('.section-label').forEach(el => {
+    const text = el.textContent.trim();
+    if (text) targets.push({ el, original: text });
+  });
+
+  // 5. Channel header name
+  const headerName = document.getElementById('channel-header-name');
+  if (headerName && headerName.textContent.trim())
+    targets.push({ el: headerName, original: headerName.textContent.trim() });
+
+  // 6. User names in member list
+  document.querySelectorAll('.user-item-name').forEach(el => {
+    const text = el.textContent.trim();
+    if (text) targets.push({ el, original: text });
+  });
+
+  return targets;
+}
+
+// Get the scramble interval based on the frequency slider (5-100)
+// Slider 5 → ~12s base interval (rare), 100 → ~1.5s (constant chaos)
+function _getScrambleInterval() {
+  const freq = _scrambleFreq;
+  const base = 12000 - (freq * 105);  // 12000ms at 5 → ~1500ms at 100
+  return Math.max(800, base + Math.random() * base * 0.5);
+}
+
+function _scrambleTick() {
+  const targets = _collectScrambleTargets();
+  if (!targets.length) return;
+
+  // Pick 1-3 random targets depending on frequency
+  const pickCount = _scrambleFreq > 70 ? 3 : _scrambleFreq > 35 ? 2 : 1;
+  const shuffled = targets.sort(() => Math.random() - 0.5);
+
+  for (let i = 0; i < Math.min(pickCount, shuffled.length); i++) {
+    const t = shuffled[i];
+    _scrambleElement(t.el, t.original);
+  }
+
+  // Schedule next tick with jittered interval
+  _scrambleTimer = setTimeout(_scrambleTick, _getScrambleInterval());
 }
 
 function _startTextScramble() {
   _stopTextScramble();
-  const el = document.querySelector('.brand-text');
-  if (el) _scrambleOriginal = el.textContent.trim() || 'HAVEN';
 
-  // Run once immediately, then repeat every 4-8 seconds (random)
-  _scrambleOnce();
-  _scrambleTimer = setInterval(() => {
-    _scrambleOnce();
-  }, 4000 + Math.random() * 4000);
+  // Restore saved frequency
+  const saved = parseInt(localStorage.getItem('haven_glitch_freq'));
+  if (!isNaN(saved)) _scrambleFreq = saved;
+
+  // Start the tick loop
+  _scrambleTick();
 }
 
 function _stopTextScramble() {
   if (_scrambleTimer) {
-    clearInterval(_scrambleTimer);
+    clearTimeout(_scrambleTimer);
     _scrambleTimer = null;
   }
-  const el = document.querySelector('.brand-text');
-  if (el) {
-    el.textContent = _scrambleOriginal;
+  // Restore all originals
+  document.querySelectorAll('.scrambling').forEach(el => {
     el.classList.remove('scrambling');
+    el._scrambling = false;
+  });
+}
+
+function initGlitchFreqEditor() {
+  const editor = document.getElementById('glitch-freq-editor');
+  const slider = document.getElementById('glitch-freq-slider');
+  if (!editor || !slider) return;
+
+  // Restore saved frequency
+  const saved = parseInt(localStorage.getItem('haven_glitch_freq'));
+  if (!isNaN(saved)) {
+    slider.value = saved;
+    _scrambleFreq = saved;
   }
+
+  slider.addEventListener('input', () => {
+    const val = parseInt(slider.value, 10);
+    _scrambleFreq = val;
+    localStorage.setItem('haven_glitch_freq', val);
+  });
+
+  editor._show = () => { editor.style.display = 'block'; };
+  editor._hide = () => { editor.style.display = 'none'; };
 }
 
 // ── Matrix Digital Rain (canvas) — scoped to .main area ─
@@ -1104,6 +1200,7 @@ function initThemeSwitcher(containerId, socket) {
   initRgbEditor();
   initEffectSpeedEditor();
   initSacredIntensityEditor();
+  initGlitchFreqEditor();
   initEffectSelector();
 
   // Show correct editor on load
