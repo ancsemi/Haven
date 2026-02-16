@@ -647,7 +647,6 @@
             <span>User Joined</span>
             <select id="notif-join-sound">
               <option value="chime">Chime</option>
-              <option value="aim_door_open">AIM Door Open</option>
               <option value="bell">Bell</option>
               <option value="ping">Ping</option>
               <option value="blip">Blip</option>
@@ -659,7 +658,6 @@
             <span>User Left</span>
             <select id="notif-leave-sound">
               <option value="drop">Drop</option>
-              <option value="aim_door_close">AIM Door Close</option>
               <option value="chime">Chime</option>
               <option value="ping">Ping</option>
               <option value="blip">Blip</option>
@@ -857,35 +855,6 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="close-bans-btn">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Screen Share Audio Picker Modal -->
-  <div class="modal-overlay" id="screen-audio-modal" style="display:none">
-    <div class="modal" style="max-width:360px">
-      <h3>🖥️ Share Screen</h3>
-      <p class="modal-desc">Choose audio mode for your stream</p>
-      <div class="screen-audio-options">
-        <button class="screen-audio-option" data-mode="app" title="Captures audio from the shared tab or application only">
-          <span class="screen-audio-icon">🔊</span>
-          <span class="screen-audio-label">Application Audio</span>
-          <span class="screen-audio-desc">Audio from the shared tab/app only</span>
-          <span class="screen-audio-default">Recommended</span>
-        </button>
-        <button class="screen-audio-option" data-mode="system" title="Captures all system audio — may cause echo in voice chat">
-          <span class="screen-audio-icon">🖥️</span>
-          <span class="screen-audio-label">System Audio</span>
-          <span class="screen-audio-desc">All system sound — may echo in VC</span>
-        </button>
-        <button class="screen-audio-option" data-mode="none" title="Stream video only, no audio">
-          <span class="screen-audio-icon">🔇</span>
-          <span class="screen-audio-label">No Audio</span>
-          <span class="screen-audio-desc">Video only, no sound</span>
-        </button>
-      </div>
-      <div class="modal-actions">
-        <button id="screen-audio-cancel-btn" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
   </div>

@@ -2519,23 +2519,9 @@ class HavenApp {
 
       // Remove old custom options
       sel.querySelectorAll('option[data-custom]').forEach(o => o.remove());
-      // Remove old AIM optgroup
-      sel.querySelectorAll('optgroup[data-aim]').forEach(o => o.remove());
       sel.querySelectorAll('optgroup[data-custom-group]').forEach(o => o.remove());
 
       const noneOpt = sel.querySelector('option[value="none"]');
-
-      // Add AIM sounds optgroup
-      const aimGroup = document.createElement('optgroup');
-      aimGroup.label = '🔊 AIM Classic';
-      aimGroup.dataset.aim = '1';
-      ['aim_message', 'aim_door_open', 'aim_door_close', 'aim_nudge'].forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s;
-        opt.textContent = s.replace('aim_', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        aimGroup.appendChild(opt);
-      });
-      sel.insertBefore(aimGroup, noneOpt);
 
       // Add custom sounds optgroup
       if (sounds.length > 0) {
@@ -4794,7 +4780,7 @@ class HavenApp {
 
   // ── Screen Share ──────────────────────────────────────
 
-  async _toggleScreenShare(audioMode) {
+  async _toggleScreenShare() {
     if (!this.voice.inVoice) return;
 
     if (this.voice.isScreenSharing) {
@@ -4804,12 +4790,7 @@ class HavenApp {
       document.getElementById('screen-share-btn').classList.remove('sharing');
       this._showToast('Stopped screen sharing', 'info');
     } else {
-      // If no audio mode specified, show the picker modal
-      if (!audioMode) {
-        this._showScreenAudioPicker();
-        return;
-      }
-      const ok = await this.voice.shareScreen(audioMode);
+      const ok = await this.voice.shareScreen();
       if (ok) {
         document.getElementById('screen-share-btn').textContent = '🛑';
         document.getElementById('screen-share-btn').title = 'Stop Sharing';
@@ -4827,32 +4808,6 @@ class HavenApp {
         this._showToast('Screen share cancelled or not supported', 'error');
       }
     }
-  }
-
-  _showScreenAudioPicker() {
-    const modal = document.getElementById('screen-audio-modal');
-    modal.style.display = 'flex';
-
-    // Bind option buttons (remove old listeners by cloning)
-    modal.querySelectorAll('.screen-audio-option').forEach(btn => {
-      const clone = btn.cloneNode(true);
-      btn.replaceWith(clone);
-      clone.addEventListener('click', () => {
-        modal.style.display = 'none';
-        this._toggleScreenShare(clone.dataset.mode);
-      });
-    });
-
-    // Cancel button
-    const cancelBtn = document.getElementById('screen-audio-cancel-btn');
-    const cancelClone = cancelBtn.cloneNode(true);
-    cancelBtn.replaceWith(cancelClone);
-    cancelClone.addEventListener('click', () => { modal.style.display = 'none'; });
-
-    // Close on overlay click
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    }, { once: true });
   }
 
   _handleScreenStream(userId, stream) {
@@ -4965,16 +4920,27 @@ class HavenApp {
         });
         tile.appendChild(popoutBtn);
 
-        // Hide button — collapses tile with restore option
-        const hideBtn = document.createElement('button');
-        hideBtn.className = 'stream-hide-btn';
-        hideBtn.title = 'Hide this stream';
-        hideBtn.textContent = '👁‍🗨';
-        hideBtn.addEventListener('click', (e) => {
+        // Minimize button — hides tile but KEEPS audio playing
+        const minBtn = document.createElement('button');
+        minBtn.className = 'stream-minimize-btn';
+        minBtn.title = 'Minimize (keep audio)';
+        minBtn.textContent = '─';
+        minBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          this._hideStreamTile(tile, userId, who);
+          this._hideStreamTile(tile, userId, who, false);
         });
-        tile.appendChild(hideBtn);
+        tile.appendChild(minBtn);
+
+        // Close button — hides tile AND mutes its audio
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'stream-close-btn';
+        closeBtn.title = 'Close (stop audio)';
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._hideStreamTile(tile, userId, who, true);
+        });
+        tile.appendChild(closeBtn);
 
         grid.appendChild(tile);
       }
@@ -5076,18 +5042,30 @@ class HavenApp {
 
   // ── Hide / Show individual stream tiles ─────────────
 
-  _hideStreamTile(tile, userId, who) {
+  _hideStreamTile(tile, userId, who, muteAudio = false) {
     tile.style.display = 'none';
     tile.dataset.hidden = 'true';
+    if (muteAudio) {
+      tile.dataset.muted = 'true';
+      // Mute this stream's audio
+      this.voice.setStreamVolume(userId, 0);
+    }
     this._updateHiddenStreamsBar();
     this._updateScreenShareVisibility();
   }
 
-  _showStreamTile(tileId) {
+  _showStreamTile(tileId, userId) {
     const tile = document.getElementById(tileId);
     if (tile) {
       tile.style.display = '';
       delete tile.dataset.hidden;
+      // Restore audio if it was muted by close
+      if (tile.dataset.muted === 'true') {
+        delete tile.dataset.muted;
+        const volSlider = tile.querySelector('.stream-vol-slider');
+        const vol = volSlider ? parseInt(volSlider.value) / 100 : 1;
+        if (userId) this.voice.setStreamVolume(userId, vol);
+      }
     }
     this._updateHiddenStreamsBar();
     this._updateScreenShareVisibility();
@@ -5119,6 +5097,14 @@ class HavenApp {
       hiddenTiles.forEach(t => {
         t.style.display = '';
         delete t.dataset.hidden;
+        // Restore audio if it was muted by close
+        if (t.dataset.muted === 'true') {
+          delete t.dataset.muted;
+          const uid = t.id.replace('screen-tile-', '');
+          const volSlider = t.querySelector('.stream-vol-slider');
+          const vol = volSlider ? parseInt(volSlider.value) / 100 : 1;
+          this.voice.setStreamVolume(uid, vol);
+        }
       });
       this._updateHiddenStreamsBar();
       this._updateScreenShareVisibility();
@@ -5135,15 +5121,25 @@ class HavenApp {
     }
     const container = document.getElementById('screen-share-container');
     const grid = document.getElementById('screen-share-grid');
-    const tileCount = grid ? grid.querySelectorAll('.screen-share-tile').length : 0;
+    const tiles = grid ? grid.querySelectorAll('.screen-share-tile') : [];
+
+    // Mute all remote stream audio when closing the container
+    tiles.forEach(t => {
+      const uid = t.id.replace('screen-tile-', '');
+      t.dataset.muted = 'true';
+      this.voice.setStreamVolume(uid, 0);
+    });
 
     container.style.display = 'none';
     container.classList.remove('stream-focus-mode');
     this._screenShareMinimized = true;
 
     // If there are still active streams running, show the indicator so user can reopen
-    if (tileCount > 0) {
-      this._showScreenShareIndicator(tileCount);
+    if (tiles.length > 0) {
+      // Mark them hidden so the restore bar works
+      tiles.forEach(t => { t.style.display = 'none'; t.dataset.hidden = 'true'; });
+      this._updateHiddenStreamsBar();
+      this._showScreenShareIndicator(tiles.length);
     } else {
       this._screenShareMinimized = false;
       this._removeScreenShareIndicator();

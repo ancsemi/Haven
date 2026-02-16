@@ -319,25 +319,16 @@ class VoiceManager {
 
   // ── Screen Sharing ──────────────────────────────────────
 
-  async shareScreen(audioMode = 'app') {
+  async shareScreen() {
     if (!this.inVoice || this.isScreenSharing) return false;
     try {
       const displayMediaOptions = {
         video: { cursor: 'always' },
+        audio: true,
         surfaceSwitching: 'exclude', // prevent re-picker on alt-tab / focus changes
         selfBrowserSurface: 'include',
         monitorTypeSurfaces: 'include'
       };
-
-      // Audio mode: 'none' = no audio, 'app' = application/tab audio only, 'system' = all system audio
-      if (audioMode === 'none') {
-        displayMediaOptions.audio = false;
-      } else {
-        displayMediaOptions.audio = true;
-        // systemAudio: 'exclude' prevents capturing system-wide audio (avoids VC echo)
-        // systemAudio: 'include' allows capturing all system audio
-        displayMediaOptions.systemAudio = audioMode === 'system' ? 'include' : 'exclude';
-      }
 
       // Use CaptureController if available to manage the capture session
       if (typeof CaptureController !== 'undefined') {

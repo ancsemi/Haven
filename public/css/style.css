@@ -6224,12 +6224,12 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 .screen-share-tile:hover .stream-popout-btn { opacity: 1; }
 .stream-popout-btn:hover { background: rgba(255,255,255,0.2); }
 
-/* ── Stream Hide Button ─────────────────────────────── */
+/* ── Stream Minimize Button (top-right, keeps audio) ───── */
 
-.stream-hide-btn {
+.stream-minimize-btn {
   position: absolute;
   top: 4px;
-  left: 34px;
+  right: 30px;
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
   border: none;
@@ -6242,8 +6242,29 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   z-index: 3;
   line-height: 1;
 }
-.screen-share-tile:hover .stream-hide-btn { opacity: 1; }
-.stream-hide-btn:hover { background: rgba(255,255,255,0.2); }
+.screen-share-tile:hover .stream-minimize-btn { opacity: 1; }
+.stream-minimize-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Stream Close Button (top-right corner, mutes audio) ─ */
+
+.stream-close-btn {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 3;
+  line-height: 1;
+}
+.screen-share-tile:hover .stream-close-btn { opacity: 1; }
+.stream-close-btn:hover { background: rgba(220,53,69,0.7); }
 
 /* ── Hidden Streams Bar (inside voice-controls) ──────── */
 
@@ -7212,67 +7233,6 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   font-size: 11px;
   line-height: 1.5;
   border-top: 1px solid var(--border-light);
-}
-
-/* ═══════════════════════════════════════════════════════════
-   SCREEN SHARE AUDIO PICKER MODAL
-   ═══════════════════════════════════════════════════════════ */
-
-.screen-audio-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.screen-audio-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  background: var(--bg-primary);
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-  position: relative;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 13px;
-}
-
-.screen-audio-option:hover {
-  border-color: var(--accent);
-  background: var(--bg-hover);
-}
-
-.screen-audio-icon {
-  font-size: 22px;
-  flex-shrink: 0;
-  width: 32px;
-  text-align: center;
-}
-
-.screen-audio-label {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.screen-audio-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  flex: 1;
-}
-
-.screen-audio-default {
-  font-size: 10px;
-  background: var(--accent);
-  color: #fff;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
-  flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════
