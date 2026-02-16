@@ -4858,6 +4858,33 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   gap: 10px;
 }
 
+/* Admin save bar — sticky at bottom of admin section */
+.admin-save-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 24px 20px;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  z-index: 10;
+  margin-top: 10px;
+}
+.btn-admin-save {
+  width: 100%;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-admin-save:hover { filter: brightness(1.15); }
+.btn-admin-save:active { transform: scale(0.97); }
+
 .btn-full {
   width: 100%;
   text-align: center;

@@ -322,13 +322,22 @@ class VoiceManager {
   async shareScreen() {
     if (!this.inVoice || this.isScreenSharing) return false;
     try {
+      // Audio constraints: echo cancellation + noise suppression help reduce feedback
+      // when system audio (fallback) captures Haven's own voice playback.
+      // windowAudio: 'window' (Chrome 141+) captures ONLY the selected window's audio,
+      // which naturally excludes Haven's voice chat — the ideal scenario.
+      // On older browsers, the picker falls back to tab/system audio.
       const displayMediaOptions = {
         video: { cursor: 'always' },
-        audio: true,
-        surfaceSwitching: 'exclude', // prevent re-picker on alt-tab / focus changes
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        surfaceSwitching: 'exclude',
         selfBrowserSurface: 'include',
         monitorTypeSurfaces: 'include',
-        windowAudio: 'window'         // capture ONLY the selected window's audio (Chrome 141+)
+        windowAudio: 'window'         // Chrome 141+: capture ONLY the selected window's audio
       };
 
       // Use CaptureController if available to manage the capture session

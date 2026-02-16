@@ -1449,13 +1449,17 @@ class HavenApp {
 
     // ── Settings popout modal ────────────────────────────
     document.getElementById('open-settings-btn').addEventListener('click', () => {
+      this._snapshotAdminSettings();
       document.getElementById('settings-modal').style.display = 'flex';
     });
     document.getElementById('close-settings-btn').addEventListener('click', () => {
-      document.getElementById('settings-modal').style.display = 'none';
+      this._cancelAdminSettings();
     });
     document.getElementById('settings-modal').addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+      if (e.target === e.currentTarget) this._cancelAdminSettings();
+    });
+    document.getElementById('admin-save-btn')?.addEventListener('click', () => {
+      this._saveAdminSettings();
     });
 
     // ── Password change ──────────────────────────────────
@@ -1500,16 +1504,7 @@ class HavenApp {
       }
     });
 
-    // Member visibility select (admin)
-    const visSelect = document.getElementById('member-visibility-select');
-    if (visSelect) {
-      visSelect.addEventListener('change', () => {
-        this.socket.emit('update-server-setting', {
-          key: 'member_visibility',
-          value: visSelect.value
-        });
-      });
-    }
+    // Member visibility select (admin) — saved via admin Save button
 
     // View bans button
     document.getElementById('view-bans-btn').addEventListener('click', () => {
@@ -1525,38 +1520,19 @@ class HavenApp {
       if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
     });
 
-    // ── Cleanup controls (admin) ─────────────────────────
-    const cleanupEnabled = document.getElementById('cleanup-enabled');
-    if (cleanupEnabled) {
-      cleanupEnabled.addEventListener('change', () => {
-        this.socket.emit('update-server-setting', {
-          key: 'cleanup_enabled',
-          value: cleanupEnabled.checked ? 'true' : 'false'
-        });
-      });
-    }
-
+    // ── Cleanup controls (admin) — saved via admin Save button ──
     const cleanupAge = document.getElementById('cleanup-max-age');
     if (cleanupAge) {
       cleanupAge.addEventListener('change', () => {
         const val = Math.max(0, Math.min(3650, parseInt(cleanupAge.value) || 0));
         cleanupAge.value = val;
-        this.socket.emit('update-server-setting', {
-          key: 'cleanup_max_age_days',
-          value: String(val)
-        });
       });
     }
-
     const cleanupSize = document.getElementById('cleanup-max-size');
     if (cleanupSize) {
       cleanupSize.addEventListener('change', () => {
         const val = Math.max(0, Math.min(100000, parseInt(cleanupSize.value) || 0));
         cleanupSize.value = val;
-        this.socket.emit('update-server-setting', {
-          key: 'cleanup_max_size_mb',
-          value: String(val)
-        });
       });
     }
 
@@ -1569,16 +1545,7 @@ class HavenApp {
     }
 
     // ── Whitelist controls (admin) ───────────────────────
-    const whitelistToggle = document.getElementById('whitelist-enabled');
-    if (whitelistToggle) {
-      whitelistToggle.addEventListener('change', () => {
-        this.socket.emit('whitelist-toggle', { enabled: whitelistToggle.checked });
-        this.socket.emit('update-server-setting', {
-          key: 'whitelist_enabled',
-          value: whitelistToggle.checked ? 'true' : 'false'
-        });
-      });
-    }
+    // Whitelist toggle — saved via admin Save button
 
     document.getElementById('whitelist-add-btn').addEventListener('click', () => {
       const input = document.getElementById('whitelist-username-input');
@@ -4795,14 +4762,15 @@ class HavenApp {
         document.getElementById('screen-share-btn').textContent = '🛑';
         document.getElementById('screen-share-btn').title = 'Stop Sharing';
         document.getElementById('screen-share-btn').classList.add('sharing');
-        this._showToast('Screen sharing started', 'success');
         // Show our own screen in the viewer
         this._handleScreenStream(this.user.id, this.voice.screenStream);
         // Show audio/no-audio badge
         if (this.voice.screenHasAudio) {
           this._handleScreenAudio(this.user.id);
+          this._showToast('Sharing with audio — window audio only on Chrome 141+, full system audio on older browsers', 'success');
         } else {
           this._handleScreenNoAudio(this.user.id);
+          this._showToast('Sharing screen (video only — grant audio in the browser picker for sound)', 'info');
         }
       } else {
         this._showToast('Screen share cancelled or not supported', 'error');
@@ -6750,39 +6718,128 @@ class HavenApp {
   }
 
   _applyServerSettings() {
-    const vis = document.getElementById('member-visibility-select');
-    if (vis && this.serverSettings.member_visibility) {
-      vis.value = this.serverSettings.member_visibility;
+    // Don't overwrite admin form inputs when settings modal is open (user may be editing)
+    const modalOpen = document.getElementById('settings-modal')?.style.display === 'flex';
+
+    if (!modalOpen) {
+      const vis = document.getElementById('member-visibility-select');
+      if (vis && this.serverSettings.member_visibility) {
+        vis.value = this.serverSettings.member_visibility;
+      }
+      const nameInput = document.getElementById('server-name-input');
+      if (nameInput && this.serverSettings.server_name !== undefined) {
+        nameInput.value = this.serverSettings.server_name || '';
+      }
+      const cleanupEnabled = document.getElementById('cleanup-enabled');
+      if (cleanupEnabled) {
+        cleanupEnabled.checked = this.serverSettings.cleanup_enabled === 'true';
+      }
+      const cleanupAge = document.getElementById('cleanup-max-age');
+      if (cleanupAge && this.serverSettings.cleanup_max_age_days) {
+        cleanupAge.value = this.serverSettings.cleanup_max_age_days;
+      }
+      const cleanupSize = document.getElementById('cleanup-max-size');
+      if (cleanupSize && this.serverSettings.cleanup_max_size_mb) {
+        cleanupSize.value = this.serverSettings.cleanup_max_size_mb;
+      }
+      const whitelistToggle = document.getElementById('whitelist-enabled');
+      if (whitelistToggle) {
+        whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
+      }
+      this._renderPermThresholds();
     }
-    // Server branding
-    const nameInput = document.getElementById('server-name-input');
-    if (nameInput && this.serverSettings.server_name !== undefined) {
-      nameInput.value = this.serverSettings.server_name || '';
-    }
+
+    // Always update visual branding regardless of modal state
     this._applyServerBranding();
-    this._renderPermThresholds();
-    // Cleanup settings
-    const cleanupEnabled = document.getElementById('cleanup-enabled');
-    if (cleanupEnabled) {
-      cleanupEnabled.checked = this.serverSettings.cleanup_enabled === 'true';
-    }
-    const cleanupAge = document.getElementById('cleanup-max-age');
-    if (cleanupAge && this.serverSettings.cleanup_max_age_days) {
-      cleanupAge.value = this.serverSettings.cleanup_max_age_days;
-    }
-    const cleanupSize = document.getElementById('cleanup-max-size');
-    if (cleanupSize && this.serverSettings.cleanup_max_size_mb) {
-      cleanupSize.value = this.serverSettings.cleanup_max_size_mb;
-    }
-    // Whitelist setting
-    const whitelistToggle = document.getElementById('whitelist-enabled');
-    if (whitelistToggle) {
-      whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
-    }
-    // Fetch whitelist entries when admin opens settings
-    if (this.user && this.user.isAdmin) {
+
+    if (!modalOpen && this.user && this.user.isAdmin) {
       this.socket.emit('get-whitelist');
     }
+  }
+
+  /* ── Admin settings save / cancel ───────────────────── */
+
+  _snapshotAdminSettings() {
+    this._adminSnapshot = {
+      server_name: this.serverSettings.server_name || 'HAVEN',
+      member_visibility: this.serverSettings.member_visibility || 'online',
+      cleanup_enabled: this.serverSettings.cleanup_enabled || 'false',
+      cleanup_max_age_days: this.serverSettings.cleanup_max_age_days || '0',
+      cleanup_max_size_mb: this.serverSettings.cleanup_max_size_mb || '0',
+      whitelist_enabled: this.serverSettings.whitelist_enabled || 'false'
+    };
+  }
+
+  _saveAdminSettings() {
+    if (!this.user?.isAdmin) {
+      document.getElementById('settings-modal').style.display = 'none';
+      return;
+    }
+    const snap = this._adminSnapshot || {};
+    let changed = false;
+
+    const name = document.getElementById('server-name-input')?.value.trim() || 'HAVEN';
+    if (name !== snap.server_name) {
+      this.socket.emit('update-server-setting', { key: 'server_name', value: name });
+      changed = true;
+    }
+
+    const vis = document.getElementById('member-visibility-select')?.value;
+    if (vis && vis !== snap.member_visibility) {
+      this.socket.emit('update-server-setting', { key: 'member_visibility', value: vis });
+      changed = true;
+    }
+
+    const cleanEnabled = document.getElementById('cleanup-enabled')?.checked ? 'true' : 'false';
+    if (cleanEnabled !== snap.cleanup_enabled) {
+      this.socket.emit('update-server-setting', { key: 'cleanup_enabled', value: cleanEnabled });
+      changed = true;
+    }
+
+    const cleanAge = String(Math.max(0, Math.min(3650, parseInt(document.getElementById('cleanup-max-age')?.value) || 0)));
+    if (cleanAge !== (snap.cleanup_max_age_days || '0')) {
+      this.socket.emit('update-server-setting', { key: 'cleanup_max_age_days', value: cleanAge });
+      changed = true;
+    }
+
+    const cleanSize = String(Math.max(0, Math.min(100000, parseInt(document.getElementById('cleanup-max-size')?.value) || 0)));
+    if (cleanSize !== (snap.cleanup_max_size_mb || '0')) {
+      this.socket.emit('update-server-setting', { key: 'cleanup_max_size_mb', value: cleanSize });
+      changed = true;
+    }
+
+    const wlEnabled = document.getElementById('whitelist-enabled')?.checked ? 'true' : 'false';
+    if (wlEnabled !== snap.whitelist_enabled) {
+      this.socket.emit('whitelist-toggle', { enabled: wlEnabled === 'true' });
+      this.socket.emit('update-server-setting', { key: 'whitelist_enabled', value: wlEnabled });
+      changed = true;
+    }
+
+    if (changed) {
+      this._showToast('Settings saved', 'success');
+    } else {
+      this._showToast('No changes to save', 'info');
+    }
+    document.getElementById('settings-modal').style.display = 'none';
+  }
+
+  _cancelAdminSettings() {
+    const snap = this._adminSnapshot;
+    if (snap) {
+      const ni = document.getElementById('server-name-input');
+      if (ni) ni.value = snap.server_name;
+      const vis = document.getElementById('member-visibility-select');
+      if (vis) vis.value = snap.member_visibility;
+      const ce = document.getElementById('cleanup-enabled');
+      if (ce) ce.checked = snap.cleanup_enabled === 'true';
+      const ca = document.getElementById('cleanup-max-age');
+      if (ca) ca.value = snap.cleanup_max_age_days;
+      const cs = document.getElementById('cleanup-max-size');
+      if (cs) cs.value = snap.cleanup_max_size_mb;
+      const wl = document.getElementById('whitelist-enabled');
+      if (wl) wl.checked = snap.whitelist_enabled === 'true';
+    }
+    document.getElementById('settings-modal').style.display = 'none';
   }
 
   _renderWhitelist(list) {
@@ -6870,18 +6927,7 @@ class HavenApp {
   }
 
   _initServerBranding() {
-    // Server name change
-    const nameInput = document.getElementById('server-name-input');
-    if (nameInput) {
-      let nameTimeout;
-      nameInput.addEventListener('input', () => {
-        clearTimeout(nameTimeout);
-        nameTimeout = setTimeout(() => {
-          this.socket.emit('update-server-setting', { key: 'server_name', value: nameInput.value.trim() || 'HAVEN' });
-          this._showToast('Server name saved', 'success');
-        }, 600);
-      });
-    }
+    // Server name — saved via admin Save button (no auto-save)
 
     // Server icon upload
     document.getElementById('server-icon-upload-btn')?.addEventListener('click', async () => {

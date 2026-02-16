@@ -373,7 +373,7 @@
         <div id="voice-panel" class="voice-panel" style="display:none">
           <button id="voice-mute-btn" class="voice-panel-btn" title="Mute">🔇</button>
           <button id="voice-deafen-btn" class="voice-panel-btn" title="Deafen">🔈</button>
-          <button id="screen-share-btn" class="voice-panel-btn" title="Share Screen">🖥️</button>
+          <button id="screen-share-btn" class="voice-panel-btn" title="Share Screen&#10;🔊 Audio: captures selected window's audio (Chrome 141+)&#10;⚠️ Older browsers may share all system audio">🖥️</button>
           <button id="music-share-btn" class="voice-panel-btn" title="Listen Together">🎵</button>
           <button id="voice-settings-toggle" class="voice-panel-btn" title="Voice Settings">⚙️</button>
           <button id="voice-leave-sidebar-btn" class="voice-panel-btn voice-panel-leave" title="Leave Voice">✕</button>
@@ -800,6 +800,11 @@
           <div id="roles-list-preview" style="margin-top:8px;">
             <p class="muted-text">Loading roles...</p>
           </div>
+        </div>
+        <!-- Admin save bar — changes only apply when Save is clicked -->
+        <div class="admin-save-bar">
+          <button class="btn-accent btn-admin-save" id="admin-save-btn">💾 Save Settings</button>
+          <small class="settings-hint" style="text-align:center;margin-top:4px">Changes only apply when you click Save. Close (✕) to cancel.</small>
         </div>
       </div>
     </div>
