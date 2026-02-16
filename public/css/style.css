@@ -7202,6 +7202,78 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+.voice-user-menu-action.active {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+}
+.voice-user-menu-hint {
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  border-top: 1px solid var(--border-light);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCREEN SHARE AUDIO PICKER MODAL
+   ═══════════════════════════════════════════════════════════ */
+
+.screen-audio-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.screen-audio-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  position: relative;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.screen-audio-option:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.screen-audio-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+
+.screen-audio-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.screen-audio-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.screen-audio-default {
+  font-size: 10px;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
 
 /* ═══════════════════════════════════════════════════════════
    VOICE CONTROLS PANEL (right sidebar, below voice users)

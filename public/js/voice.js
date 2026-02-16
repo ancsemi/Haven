@@ -28,6 +28,7 @@ class VoiceManager {
     this.talkingState = new Map();  // userId → boolean
     this.analysers = new Map();     // userId → { analyser, dataArray, interval }
     this.onScreenShareStarted = null; // callback(userId, username) — someone started streaming
+    this.deafenedUsers = new Set();   // userIds we've muted our audio towards
     this._localTalkInterval = null;
     this._noiseGateInterval = null;
     this._noiseGateGain = null;
@@ -318,16 +319,25 @@ class VoiceManager {
 
   // ── Screen Sharing ──────────────────────────────────────
 
-  async shareScreen() {
+  async shareScreen(audioMode = 'app') {
     if (!this.inVoice || this.isScreenSharing) return false;
     try {
       const displayMediaOptions = {
         video: { cursor: 'always' },
-        audio: true, // capture tab/system audio if available
         surfaceSwitching: 'exclude', // prevent re-picker on alt-tab / focus changes
         selfBrowserSurface: 'include',
         monitorTypeSurfaces: 'include'
       };
+
+      // Audio mode: 'none' = no audio, 'app' = application/tab audio only, 'system' = all system audio
+      if (audioMode === 'none') {
+        displayMediaOptions.audio = false;
+      } else {
+        displayMediaOptions.audio = true;
+        // systemAudio: 'exclude' prevents capturing system-wide audio (avoids VC echo)
+        // systemAudio: 'include' allows capturing all system audio
+        displayMediaOptions.systemAudio = audioMode === 'system' ? 'include' : 'exclude';
+      }
 
       // Use CaptureController if available to manage the capture session
       if (typeof CaptureController !== 'undefined') {
@@ -542,6 +552,59 @@ class VoiceManager {
       const audioEl = document.getElementById(`voice-audio-${userId}`);
       if (audioEl) audioEl.volume = Math.max(0, Math.min(1, volume));
     }
+  }
+
+  // ── Per-user Deafen (stop sending our audio to a specific peer) ──
+
+  deafenUser(userId) {
+    const peer = this.peers.get(userId);
+    if (!peer) return;
+    this.deafenedUsers.add(userId);
+
+    // Replace our audio track with a silent one for this peer
+    const senders = peer.connection.getSenders();
+    const audioSender = senders.find(s => s.track && s.track.kind === 'audio' &&
+      (!this.screenStream || !this.screenStream.getAudioTracks().includes(s.track)));
+    if (audioSender) {
+      // Create a silent audio track
+      const silentTrack = this._createSilentAudioTrack();
+      // Store original track for restore
+      peer._originalAudioTrack = audioSender.track;
+      audioSender.replaceTrack(silentTrack).catch(() => {});
+    }
+  }
+
+  undeafenUser(userId) {
+    const peer = this.peers.get(userId);
+    if (!peer) return;
+    this.deafenedUsers.delete(userId);
+
+    // Restore the original audio track
+    if (peer._originalAudioTrack) {
+      const senders = peer.connection.getSenders();
+      const audioSender = senders.find(s => s.track && s.track.kind === 'audio' &&
+        (!this.screenStream || !this.screenStream.getAudioTracks().includes(s.track)));
+      if (audioSender) {
+        audioSender.replaceTrack(peer._originalAudioTrack).catch(() => {});
+      }
+      peer._originalAudioTrack = null;
+    }
+  }
+
+  isUserDeafened(userId) {
+    return this.deafenedUsers.has(userId);
+  }
+
+  _createSilentAudioTrack() {
+    const ctx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    gain.gain.value = 0; // completely silent
+    oscillator.connect(gain);
+    const dest = ctx.createMediaStreamDestination();
+    gain.connect(dest);
+    oscillator.start();
+    return dest.stream.getAudioTracks()[0];
   }
 
   _getSavedVolume(userId) {

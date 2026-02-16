@@ -2434,6 +2434,9 @@ function setupSocketHandlers(io, db) {
         const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(data.userId);
         if (isAdmin && isAdmin.is_admin) {
           roles.unshift({ id: -1, name: 'Admin', level: 100, color: '#e74c3c' });
+          // Remove the default "User" role for admins — it's redundant
+          const userRoleIdx = roles.findIndex(r => r.name === 'User' && r.level === 1);
+          if (userRoleIdx !== -1) roles.splice(userRoleIdx, 1);
         }
 
         // Check online status
