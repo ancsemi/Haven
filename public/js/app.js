@@ -4541,6 +4541,8 @@ class HavenApp {
     this._closeVoiceUserMenu();
 
     const savedVol = this._getVoiceVolume(userId);
+    const isMuted = savedVol === 0;
+    const isDeafened = this.voice ? this.voice.isUserDeafened(userId) : false;
     const menu = document.createElement('div');
     menu.className = 'voice-user-menu';
     menu.innerHTML = `
@@ -4551,8 +4553,12 @@ class HavenApp {
         <span class="voice-user-vol-value">${savedVol}%</span>
       </div>
       <div class="voice-user-menu-actions">
-        <button class="voice-user-menu-action" data-action="mute-user">🔇 Mute</button>
-        <button class="voice-user-menu-action" data-action="deafen-user">🔈 Deafen</button>
+        <button class="voice-user-menu-action" data-action="mute-user">${isMuted ? '🔊 Unmute' : '🔇 Mute'}</button>
+        <button class="voice-user-menu-action ${isDeafened ? 'active' : ''}" data-action="deafen-user">${isDeafened ? '🔊 Undeafen' : '🔇 Deafen'}</button>
+      </div>
+      <div class="voice-user-menu-hint">
+        <small>Mute = you can't hear them</small><br>
+        <small>Deafen = they can't hear you</small>
       </div>
     `;
     document.body.appendChild(menu);
@@ -4579,11 +4585,12 @@ class HavenApp {
       if (this.voice) this.voice.setVolume(userId, vol / 100);
     });
 
-    // Bind mute/deafen (set volume to 0 / 100)
+    // Bind mute/deafen actions
     menu.querySelectorAll('.voice-user-menu-action').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (btn.dataset.action === 'mute-user') {
+          // Mute: toggle their volume to 0 so YOU can't hear THEM
           const newVol = parseInt(slider.value) === 0 ? 100 : 0;
           slider.value = newVol;
           volLabel.textContent = `${newVol}%`;
@@ -4591,11 +4598,20 @@ class HavenApp {
           if (this.voice) this.voice.setVolume(userId, newVol / 100);
           btn.textContent = newVol === 0 ? '🔊 Unmute' : '🔇 Mute';
         } else if (btn.dataset.action === 'deafen-user') {
-          // Deafen = set volume to 0 for this user
-          slider.value = 0;
-          volLabel.textContent = '0%';
-          this._setVoiceVolume(userId, 0);
-          if (this.voice) this.voice.setVolume(userId, 0);
+          // Deafen: stop sending YOUR audio to THEM (they can't hear you)
+          if (this.voice) {
+            if (this.voice.isUserDeafened(userId)) {
+              this.voice.undeafenUser(userId);
+              btn.textContent = '🔇 Deafen';
+              btn.classList.remove('active');
+              this._showToast(`${this._escapeHtml(username)} can hear you again`, 'info');
+            } else {
+              this.voice.deafenUser(userId);
+              btn.textContent = '🔊 Undeafen';
+              btn.classList.add('active');
+              this._showToast(`${this._escapeHtml(username)} can no longer hear you`, 'info');
+            }
+          }
         }
       });
     });
@@ -4778,7 +4794,7 @@ class HavenApp {
 
   // ── Screen Share ──────────────────────────────────────
 
-  async _toggleScreenShare() {
+  async _toggleScreenShare(audioMode) {
     if (!this.voice.inVoice) return;
 
     if (this.voice.isScreenSharing) {
@@ -4788,7 +4804,12 @@ class HavenApp {
       document.getElementById('screen-share-btn').classList.remove('sharing');
       this._showToast('Stopped screen sharing', 'info');
     } else {
-      const ok = await this.voice.shareScreen();
+      // If no audio mode specified, show the picker modal
+      if (!audioMode) {
+        this._showScreenAudioPicker();
+        return;
+      }
+      const ok = await this.voice.shareScreen(audioMode);
       if (ok) {
         document.getElementById('screen-share-btn').textContent = '🛑';
         document.getElementById('screen-share-btn').title = 'Stop Sharing';
@@ -4806,6 +4827,32 @@ class HavenApp {
         this._showToast('Screen share cancelled or not supported', 'error');
       }
     }
+  }
+
+  _showScreenAudioPicker() {
+    const modal = document.getElementById('screen-audio-modal');
+    modal.style.display = 'flex';
+
+    // Bind option buttons (remove old listeners by cloning)
+    modal.querySelectorAll('.screen-audio-option').forEach(btn => {
+      const clone = btn.cloneNode(true);
+      btn.replaceWith(clone);
+      clone.addEventListener('click', () => {
+        modal.style.display = 'none';
+        this._toggleScreenShare(clone.dataset.mode);
+      });
+    });
+
+    // Cancel button
+    const cancelBtn = document.getElementById('screen-audio-cancel-btn');
+    const cancelClone = cancelBtn.cloneNode(true);
+    cancelBtn.replaceWith(cancelClone);
+    cancelClone.addEventListener('click', () => { modal.style.display = 'none'; });
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    }, { once: true });
   }
 
   _handleScreenStream(userId, stream) {
