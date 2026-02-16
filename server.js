@@ -65,7 +65,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "https://www.youtube.com", "https://w.soundcloud.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles needed for themes
       imgSrc: ["'self'", "data:", "blob:", "https:"],  // https: for link preview OG images + GIPHY
-      connectSrc: ["'self'", "ws:", "wss:"],            // Socket.IO (ws for HTTP, wss for HTTPS)
+      connectSrc: ["'self'", "ws:", "wss:", "https:"],  // Socket.IO + cross-origin health checks
       mediaSrc: ["'self'", "blob:", "data:"],  // WebRTC audio + notification sounds
       fontSrc: ["'self'"],
       workerSrc: ["'self'"],               // service worker for push notifications
@@ -73,7 +73,7 @@ app.use(helmet({
       frameSrc: ["https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com"],  // Listen Together embeds
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      frameAncestors: ["'none'"],               // prevent clickjacking
+      frameAncestors: ["'self'"],               // allow mobile app iframe, block third-party clickjacking
     }
   },
   crossOriginEmbedderPolicy: false,  // needed for WebRTC
@@ -84,7 +84,7 @@ app.use(helmet({
 
 // Additional security headers helmet doesn't cover
 app.use((req, res, next) => {
-  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), payment=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=()');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   next();
 });
@@ -528,6 +528,41 @@ function getGiphyKey() {
   } catch { /* DB not ready yet or no key stored */ }
   return process.env.GIPHY_API_KEY || '';
 }
+
+// ── Server icon upload (admin only, image only, max 2 MB) ──
+app.post('/api/upload-server-icon', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  upload.single('image')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (req.file.size > 2 * 1024 * 1024) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Server icon must be under 2 MB' });
+    }
+    // Validate magic bytes
+    try {
+      const fd = fs.openSync(req.file.path, 'r');
+      const hdr = Buffer.alloc(12);
+      fs.readSync(fd, hdr, 0, 12, 0);
+      fs.closeSync(fd);
+      let validMagic = false;
+      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
+      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
+      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
+      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
+      if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+
+    const iconUrl = `/uploads/${req.file.filename}`;
+    const { getDb } = require('./src/database');
+    getDb().prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_icon', ?)").run(iconUrl);
+    res.json({ url: iconUrl });
+  });
+});
 
 // ── GIF endpoint rate limiting (per IP) ──────────────────
 const gifLimitStore = new Map();

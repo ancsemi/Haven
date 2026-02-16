@@ -109,6 +109,15 @@ router.post('/register', async (req, res) => {
       'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)'
     ).run(username, hash, isAdmin);
 
+    // Auto-assign default "User" role to new users
+    try {
+      const defaultRole = db.prepare("SELECT id FROM roles WHERE name = 'User' AND level = 1 AND scope = 'server'").get();
+      if (defaultRole) {
+        db.prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, NULL)')
+          .run(result.lastInsertRowid, defaultRole.id);
+      }
+    } catch { /* non-critical */ }
+
     const token = jwt.sign(
       { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username },
       JWT_SECRET,

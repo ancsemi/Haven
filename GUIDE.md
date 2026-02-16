@@ -9,6 +9,55 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 - **Windows 10 or 11** (macOS / Linux can run it manually)
 - **Node.js** version 18 or newer → [Download here](https://nodejs.org/)
 - About **50 MB** of disk space
+- **OR** just [Docker](https://docs.docker.com/get-docker/) — no Node.js needed
+
+---
+
+## 🐳 Docker Setup (Alternative)
+
+If you'd rather run Haven in a container (great for NAS boxes, servers, or if you just like Docker):
+
+### Quick Start
+
+```bash
+git clone https://github.com/ancsemi/Haven.git
+cd Haven
+docker compose up -d
+```
+
+That's it. Haven will be running at `https://localhost:3000`.
+
+### What Happens Automatically
+
+- Self-signed SSL certs are generated on first launch (needed for voice chat)
+- Database, config, and uploads are stored in a Docker volume (`haven_data`)
+- The container runs as a non-root user for security
+- Restarts automatically if it crashes
+
+### Customizing
+
+Edit `docker-compose.yml` to change the port, server name, or other settings. The environment variables are commented out with examples — just uncomment what you need.
+
+### Using a Local Folder Instead of a Volume
+
+If you want your data in a specific folder (common on Synology / NAS):
+
+```yaml
+volumes:
+  - /path/to/your/haven-data:/data
+```
+
+Replace the `haven_data:/data` line in `docker-compose.yml`.
+
+### Updating
+
+```bash
+git pull
+docker compose build --no-cache
+docker compose up -d
+```
+
+Your data is safe — it lives in the volume, not the container.
 
 ---
 
@@ -279,6 +328,55 @@ Your theme choice is saved per browser.
 Voice chat is **peer-to-peer** — audio goes directly between you and other users, not through the server.
 
 > Voice requires HTTPS. If you're running locally, use `https://localhost:3000`. For remote connections, use `https://YOUR_IP:3000`.
+
+---
+
+## 🔔 Push Notifications
+
+Push notifications let you receive alerts when someone messages a channel you're in, even when the Haven tab is in the background or closed.
+
+### Requirements
+
+- **HTTPS is required.** Push notifications use Service Workers, which only work over `https://` or `localhost`. If you're accessing Haven via a LAN IP like `http://192.168.1.x:3000`, push will **not** work.
+- A modern browser (Chrome, Edge, Firefox, or Safari 16+)
+- Haven must be running with SSL certificates (the default if OpenSSL is installed)
+
+### How to Enable
+
+1. Open Haven in your browser via `https://` (e.g., `https://localhost:3000` or `https://your-domain:3000`)
+2. Click the **⚙️ Settings** button (bottom of the right sidebar)
+3. Scroll to **Push Notifications** and flip the toggle **on**
+4. Your browser will ask for notification permission — click **Allow**
+5. The status should change to **Enabled**
+
+### Setting Up on Your Devices
+
+**Desktop (Windows / macOS / Linux):**
+- Works in Chrome, Edge, and Firefox out of the box
+- Make sure you access Haven via `https://` (not `http://`)
+- If you see "Service worker failed" or "Requires HTTPS", you're on an insecure connection
+
+**Mobile (Android):**
+- Open Haven in **Chrome** or **Edge** via `https://`
+- Enable push in Settings (same steps as above)
+- Notifications appear even when Chrome is closed
+
+**Mobile (iOS / iPadOS):**
+- Requires **Safari 16.4+** (iOS 16.4 or later)
+- First, **Add to Home Screen**: tap Share → "Add to Home Screen"
+- Open Haven from the home screen icon (it runs as a web app)
+- Enable push in Settings — Safari will ask for permission
+
+### Troubleshooting Push
+
+| Problem | Solution |
+|---------|----------|
+| "Service worker failed" | You're not on HTTPS. Use `https://localhost:3000` or set up SSL certs (see Troubleshooting below) |
+| "Requires HTTPS" | Access Haven via `https://` instead of `http://` |
+| "Permission denied" | You blocked notifications. Reset in browser settings: Settings → Site Settings → Notifications → find Haven → Allow |
+| Toggle is grayed out | Your browser doesn't support push, or you're in incognito/private mode |
+| Notifications not appearing | Check your OS notification settings — Haven notifications may be muted at the system level |
+| Only works on localhost | For LAN/remote access, you need valid SSL. Haven auto-generates self-signed certs if OpenSSL is installed |
 
 ---
 

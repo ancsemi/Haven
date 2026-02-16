@@ -11,6 +11,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.7.0] — 2026-02-16
+
+### Added
+- **Role inheritance / cascading** — server-scoped roles now automatically apply in every channel and sub-channel. Channel-scoped roles cascade to all sub-channels beneath them. Sub-channel roles remain limited to that sub-channel only.
+- **Voice dot role color** — the online dot next to users in a voice channel now matches their highest role color instead of always being green.
+
+### Fixed
+- **Transfer Admin modal** — completely redesigned with a proper warning box, clearer layout, and inline error styling.
+- **Noise-suppression slider invisible track** — the slider track is now thicker (6 px) with a visible border, and the thumb enlarged to 14 px so it's easy to grab.
+- **User hover tooltip translucency** — tooltip popup now uses an opaque background (`--bg-secondary`) with a solid box-shadow instead of blending into the page.
+
+---
+
+## [1.6.0] — 2026-02-15
+
+### Added
+- **19-permission role system** — fine-grained permissions for server and channel roles (send messages, manage channels, kick/ban, pin, upload files, etc.).
+- **Channel Roles panel** — per-channel role management with create / edit / delete / assign UI.
+- **Default "User" role** — every new server automatically seeds a level-1 User role so members always have baseline permissions.
+- **Server icon upload** — admins can upload a custom server icon displayed in the header.
+- **Admin transfer** — server owners can transfer full admin rights to another user (password-verified).
+- **Promotion permission** — a dedicated `promote_members` permission controlling who can assign roles.
+- **Level-based thresholds** — users can only assign/edit roles whose level is strictly below their own.
+- **Auto-assign roles** — roles marked auto-assign are automatically granted to users when they join a channel.
+- **Voice controls in right sidebar** — mute / deafen / noise-suppression / leave moved into a persistent sidebar panel at the bottom.
+- **Per-user volume control** — right-click a voice user for an individual volume slider.
+- **Header voice indicator** — a compact voice badge in the header shows your current voice channel and lets you leave.
+- **CRT scan-line theme effect** — optional retro CRT overlay toggled from the theme menu.
+
+### Fixed
+- **Idle status** — idle detection now works correctly across all tabs.
+- **Role dropdown clipping** — dropdowns in the Channel Roles panel no longer clip behind other elements.
+- **Mobile sidebar** — improved touch handling and layout on small screens.
+- **Settings z-index** — settings modal no longer appears behind other overlays.
+- **Voice banner position** — the "you are in voice" banner no longer overlaps content.
+- **Admin self-nerf prevention** — admins cannot demote or remove their own admin role.
+- **Noise-suppression slider** — value now persists correctly across reconnects.
+
+---
+
 ## [1.5.0] — 2026-02-14
 
 ### Added

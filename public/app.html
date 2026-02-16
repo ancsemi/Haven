@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=webhooks1">
+  <link rel="stylesheet" href="/css/style.css?v=1.6.0">
   <script src="/js/theme-init.js"></script>
 </head>
 <body>
@@ -39,6 +39,7 @@
             <span class="logo-sm">⬡</span>
             <span class="brand-text">HAVEN</span>
           </div>
+          <button id="mobile-sidebar-close" class="mobile-panel-close" title="Close" aria-label="Close sidebar">&times;</button>
           <div class="user-bar">
             <span class="led on" id="connection-led" title="Server connection"></span>
             <div class="user-names">
@@ -69,9 +70,15 @@
             </div>
           </div>
 
-          <div class="sidebar-section channel-section" data-mod-id="channels">
-            <h5 class="section-label">Channels</h5>
+        <div class="sidebar-split" id="sidebar-split">
+          <div class="sidebar-section channel-section" id="channels-pane" data-mod-id="channels">
+            <h5 class="section-label channels-toggle" id="channels-toggle" style="cursor:pointer;user-select:none"><span class="channels-toggle-arrow" id="channels-toggle-arrow">▾</span> Channels</h5>
             <div class="channel-list" id="channel-list"></div>
+          </div>
+          <div class="sidebar-split-handle" id="sidebar-split-handle" title="Drag to resize"></div>
+          <div class="sidebar-section dm-section-pane" id="dm-pane">
+            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span> Direct Messages <span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span></h5>
+            <div class="dm-list-scroll" id="dm-list"></div>
           </div>
         </div>
 
@@ -172,6 +179,7 @@
               </label>
             </div>
           </div>
+
           <!-- Bottom bar -->
           <div class="sidebar-bottom-bar">
             <button id="theme-popup-toggle" class="sidebar-bottom-btn" title="Themes">🎨</button>
@@ -180,7 +188,7 @@
             <button id="mobile-settings-btn" class="sidebar-bottom-btn mobile-settings-btn" title="Settings">⚙️</button>
             <div id="voice-bar" class="voice-bar" style="display:none"></div>
             <span style="flex:1"></span>
-            <a href="https://ko-fi.com/haven_app" target="_blank" rel="noopener noreferrer" class="sidebar-bottom-btn donate-btn" title="Support Haven">❤️</a>
+            <a href="https://ko-fi.com/ancsemi" target="_blank" rel="noopener noreferrer" class="sidebar-bottom-btn donate-btn" title="Support Haven">❤️</a>
           </div>
         </div>
       </aside>
@@ -197,20 +205,18 @@
           </button>
           <div class="channel-info">
             <h3 id="channel-header-name">Select a channel</h3>
-            <span class="channel-code-tag" id="channel-code-display" title="Channel code"></span>
-            <button id="copy-code-btn" class="icon-btn small" title="Copy code"
-                    style="display:none">📋</button>
-            <button id="channel-code-settings-btn" class="icon-btn small" title="Channel code settings"
-                    style="display:none">⚙️</button>
           </div>
-          <!-- Left-side utility buttons (next to channel name) -->
-          <div class="header-left-actions">
-            <button id="search-toggle-btn" class="icon-btn small" title="Search messages (Ctrl+F)" style="display:none">🔍</button>
-            <button id="pinned-toggle-btn" class="icon-btn small" title="Pinned messages" style="display:none">📌</button>
-            <div class="search-container" id="search-container" style="display:none">
-              <input type="text" id="search-input" class="search-input" placeholder="Search messages..." maxlength="100">
-              <button id="search-close-btn" class="icon-btn small" title="Close search">&times;</button>
-            </div>
+          <div class="header-actions-box" id="header-actions-box" style="display:none">
+            <span class="channel-code-tag" id="channel-code-display" title="Channel code"></span>
+            <button id="copy-code-btn" class="icon-btn small" title="Copy code">📋</button>
+            <button id="channel-code-settings-btn" class="icon-btn small" title="Channel code settings">⚙️</button>
+            <span class="header-actions-divider"></span>
+            <button id="search-toggle-btn" class="icon-btn small" title="Search messages (Ctrl+F)">🔍</button>
+            <button id="pinned-toggle-btn" class="icon-btn small" title="Pinned messages">📌</button>
+          </div>
+          <div class="search-container" id="search-container" style="display:none">
+            <input type="text" id="search-input" class="search-input" placeholder="Search messages..." maxlength="100">
+            <button id="search-close-btn" class="icon-btn small" title="Close search">&times;</button>
           </div>
           <!-- Update available banner -->
           <a id="update-banner" class="update-banner" href="#" style="display:none" target="_blank" rel="noopener">
@@ -233,24 +239,10 @@
             <button id="voice-join-btn" class="btn-voice" style="display:none">
               🎤 Join Voice
             </button>
-            <div class="voice-dropdown" style="position:relative">
-              <button id="voice-dropdown-toggle" class="btn-voice voice-active-btn" style="display:none" title="Voice Controls">
-                🎤 <span class="voice-label-text">Voice </span>▾
-              </button>
-              <div id="voice-dropdown-panel" class="voice-dropdown-panel" style="display:none">
-                <button id="voice-mute-btn" class="btn-voice">🔇 Mute</button>
-                <button id="voice-deafen-btn" class="btn-voice">🔇 Deafen</button>
-                <button id="screen-share-btn" class="btn-voice" title="Share Screen">🖥️ Share</button>
-                <button id="music-share-btn" class="btn-voice" title="Listen Together">🎵 Music</button>
-                <div class="voice-ns-wrap">
-                  <label class="ns-label" title="Noise suppression sensitivity">🤫</label>
-                  <input type="range" id="voice-ns-slider" class="ns-slider" min="0" max="100" value="10" title="Noise gate: 0 = off, 100 = aggressive">
-                </div>
-              </div>
+            <div id="voice-active-indicator" class="voice-active-indicator" style="display:none">
+              <span class="voice-indicator-icon">🎤</span>
+              <span class="voice-indicator-text">Voice Active</span>
             </div>
-            <button id="voice-leave-btn" class="btn-voice btn-danger" style="display:none">
-              ✕
-            </button>
           </div>
         </header>
 
@@ -354,19 +346,43 @@
       <!-- ─── Right Sidebar ───────────────────────────── -->
       <aside class="right-sidebar" id="right-sidebar">
         <div class="right-sidebar-resize-handle" id="right-sidebar-resize-handle"></div>
-        <div class="panel">
-          <h5 class="panel-title">🔊 Voice</h5>
-          <button id="voice-join-mobile" class="btn-voice mobile-voice-join" style="display:none">🎤 Join Voice</button>
-          <div id="voice-users" class="user-list">
-            <p class="muted-text">No one in voice</p>
+        <button id="mobile-right-close" class="mobile-panel-close mobile-panel-close-right" title="Close" aria-label="Close panel">&times;</button>
+        <!-- Voice users section (top) -->
+        <div class="right-sidebar-voice" id="right-sidebar-voice">
+          <div class="panel">
+            <h5 class="panel-title">🔊 Voice</h5>
+            <button id="voice-join-mobile" class="btn-voice mobile-voice-join" style="display:none">🎤 Join Voice</button>
+            <div id="voice-users" class="user-list">
+              <p class="muted-text">No one in voice</p>
+            </div>
           </div>
         </div>
-        <div class="panel">
-          <h5 class="panel-title">👥 Online</h5>
-          <div id="online-users" class="user-list">
-            <p class="muted-text">Select a channel</p>
+        <!-- Scrollable users section -->
+        <div class="right-sidebar-users" id="right-sidebar-users">
+          <div class="panel">
+            <h5 class="panel-title">👥 Online</h5>
+            <div id="online-users" class="user-list">
+              <p class="muted-text">Select a channel</p>
+            </div>
           </div>
         </div>
+        <!-- Voice settings sub-panel (slides up above controls) -->
+        <div id="voice-settings-panel" class="voice-settings-panel" style="display:none">
+          <div class="voice-settings-row">
+            <label class="voice-settings-label">🤫 Noise Suppression</label>
+            <input type="range" id="voice-ns-slider" class="ns-slider" min="0" max="100" value="10" title="Noise gate: 0 = off, 100 = aggressive">
+          </div>
+        </div>
+        <!-- Voice controls bar (pinned above settings) -->
+        <div id="voice-panel" class="voice-panel" style="display:none">
+          <button id="voice-mute-btn" class="voice-panel-btn" title="Mute">🔇</button>
+          <button id="voice-deafen-btn" class="voice-panel-btn" title="Deafen">🔈</button>
+          <button id="screen-share-btn" class="voice-panel-btn" title="Share Screen&#10;🔊 Audio: captures selected window's audio (Chrome 141+)&#10;⚠️ Older browsers may share all system audio">🖥️</button>
+          <button id="music-share-btn" class="voice-panel-btn" title="Listen Together">🎵</button>
+          <button id="voice-settings-toggle" class="voice-panel-btn" title="Voice Settings">⚙️</button>
+          <button id="voice-leave-sidebar-btn" class="voice-panel-btn voice-panel-leave" title="Leave Voice">✕</button>
+        </div>
+        <!-- Settings button pinned at bottom -->
         <div class="panel sidebar-settings-panel">
           <button class="btn-settings-popout" id="open-settings-btn" title="Settings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -500,11 +516,22 @@
     <div class="modal">
       <h3>Edit Profile</h3>
 
-      <!-- Avatar Preview (edit in Settings) -->
+      <!-- Avatar Customizer -->
       <div class="avatar-settings" style="margin-bottom: 16px;">
-        <div class="avatar-preview-row">
-          <div class="avatar-preview-circle" id="rename-avatar-preview"></div>
-          <small class="settings-hint">Use ⚙️ Settings to customize your avatar</small>
+        <h5 class="settings-section-subtitle">Avatar</h5>
+        <div class="avatar-upload-row" style="margin-bottom: 10px;">
+          <div class="avatar-upload-preview" id="avatar-upload-preview"></div>
+          <button type="button" class="btn-sm" id="avatar-upload-btn">Upload</button>
+          <button type="button" class="btn-sm" id="avatar-remove-btn">Clear</button>
+          <input type="file" id="avatar-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+        </div>
+        <h5 class="settings-section-subtitle">Shape</h5>
+        <div class="avatar-shape-picker" id="avatar-shape-picker">
+          <button type="button" class="avatar-shape-btn active" data-shape="circle" title="Circle"><div class="shape-preview shape-circle"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="rounded" title="Rounded"><div class="shape-preview shape-rounded"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="squircle" title="Squircle"><div class="shape-preview shape-squircle"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="hex" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
+          <button type="button" class="avatar-shape-btn" data-shape="diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
         </div>
       </div>
 
@@ -514,7 +541,15 @@
         <label>Display Name</label>
         <input type="text" id="rename-input" placeholder="New display name..." maxlength="20">
       </div>
+
+      <!-- Bio -->
+      <div class="form-group" style="margin-top:8px">
+        <label>Bio <span class="muted-text">(max 190 chars)</span></label>
+        <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" placeholder="Tell people about yourself…" rows="2"></textarea>
+      </div>
+
       <div class="modal-actions">
+        <span id="avatar-save-status" class="settings-hint" style="flex:1"></span>
         <button class="btn-sm" id="cancel-rename-btn">Cancel</button>
         <button class="btn-sm btn-accent" id="save-rename-btn">Save</button>
       </div>
@@ -547,37 +582,6 @@
       <div class="settings-header">
         <h3>⚙️ Settings</h3>
         <button class="settings-close-btn" id="close-settings-btn">&times;</button>
-      </div>
-
-      <!-- Avatar / PFP Customizer Section -->
-      <div class="settings-section">
-        <h5 class="settings-section-title">🖼️ Customize Avatar</h5>
-        <div class="avatar-settings">
-          <!-- Shape Picker -->
-          <h5 class="settings-section-subtitle">Avatar Shape</h5>
-          <div class="avatar-shape-picker" id="avatar-shape-picker">
-            <button type="button" class="avatar-shape-btn active" data-shape="circle" title="Circle"><div class="shape-preview shape-circle"></div></button>
-            <button type="button" class="avatar-shape-btn" data-shape="rounded" title="Rounded"><div class="shape-preview shape-rounded"></div></button>
-            <button type="button" class="avatar-shape-btn" data-shape="squircle" title="Squircle"><div class="shape-preview shape-squircle"></div></button>
-            <button type="button" class="avatar-shape-btn" data-shape="hex" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
-            <button type="button" class="avatar-shape-btn" data-shape="diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
-          </div>
-
-          <!-- Image Upload -->
-          <h5 class="settings-section-subtitle" style="margin-top:10px">Avatar Image</h5>
-          <div class="avatar-upload-row">
-            <div class="avatar-upload-preview" id="avatar-upload-preview"></div>
-            <button type="button" class="btn-sm" id="avatar-upload-btn">Upload</button>
-            <button type="button" class="btn-sm" id="avatar-remove-btn">Clear</button>
-            <input type="file" id="avatar-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
-          </div>
-
-          <!-- Save / Status -->
-          <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
-            <button type="button" class="btn-sm btn-accent" id="avatar-save-btn">💾 Save Avatar Settings</button>
-            <span id="avatar-save-status" class="settings-hint"></span>
-          </div>
-        </div>
       </div>
 
       <!-- Layout Density Section -->
@@ -647,7 +651,6 @@
             <span>User Joined</span>
             <select id="notif-join-sound">
               <option value="chime">Chime</option>
-              <option value="aim_door_open">AIM Door Open</option>
               <option value="bell">Bell</option>
               <option value="ping">Ping</option>
               <option value="blip">Blip</option>
@@ -659,7 +662,6 @@
             <span>User Left</span>
             <select id="notif-leave-sound">
               <option value="drop">Drop</option>
-              <option value="aim_door_close">AIM Door Close</option>
               <option value="chime">Chime</option>
               <option value="ping">Ping</option>
               <option value="blip">Blip</option>
@@ -703,7 +705,30 @@
       <!-- Admin Section (hidden for non-admins) -->
       <div class="settings-section admin-settings-section" id="admin-mod-panel" style="display:none">
         <h5 class="settings-section-title">🛡️ Admin</h5>
+
+        <!-- Server Branding -->
         <div class="admin-settings">
+          <h5 class="settings-section-subtitle">🏠 Server Branding</h5>
+          <label class="select-row">
+            <span>Server Name</span>
+            <input type="text" id="server-name-input" maxlength="32" class="settings-text-input" style="max-width:160px" placeholder="HAVEN">
+          </label>
+          <div class="server-icon-upload-area">
+            <div class="server-icon-preview" id="server-icon-preview">
+              <span class="server-icon-text">⬡</span>
+            </div>
+            <div class="server-icon-upload-controls">
+              <small class="settings-hint">Server icon (square, max 2 MB)</small>
+              <input type="file" id="server-icon-file" accept="image/*" style="font-size:11px;max-width:160px">
+              <div style="display:flex;gap:4px;margin-top:4px">
+                <button class="btn-sm btn-accent" id="server-icon-upload-btn">Upload</button>
+                <button class="btn-sm" id="server-icon-remove-btn">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <label class="select-row">
             <span>Show Members</span>
             <select id="member-visibility-select">
@@ -763,6 +788,12 @@
             </div>
           </div>
         </div>
+        <!-- Permission Thresholds (Admin only) -->
+        <div class="admin-settings" id="perm-thresholds-section" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🔐 Permission Thresholds</h5>
+          <small class="settings-hint">Auto-grant permissions when a user reaches a certain role level. Set to 0 or leave empty to disable.</small>
+          <div id="perm-thresholds-list" style="margin-top:8px;"></div>
+        </div>
         <!-- Role Management (Admin only) -->
         <div class="admin-settings" id="role-mgmt-section" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">👑 Role Management</h5>
@@ -795,6 +826,10 @@
           <button class="btn-sm btn-full" id="mod-mode-settings-toggle" style="margin-top:6px;">🔧 Toggle Mod Mode</button>
           <button class="btn-sm btn-full" id="mod-mode-reset" style="margin-top:6px;">↺ Reset Layout</button>
         </div>
+        <div class="admin-save-bar">
+          <button class="btn-accent btn-admin-save" id="admin-save-btn">💾 Save Settings</button>
+          <small class="settings-hint" style="text-align:center;margin-top:4px">Changes only apply when you click Save. Close (✕) to cancel.</small>
+        </div>
       </div>
     </div>
   </div>
@@ -820,18 +855,21 @@
 
   <!-- Assign Role Modal -->
   <div class="modal-overlay" id="assign-role-modal" style="display:none">
-    <div class="modal">
+    <div class="modal" style="max-width:440px">
       <h3>👑 Assign Role</h3>
       <p id="assign-role-user-label" class="muted-text"></p>
-      <select id="assign-role-select" class="settings-select" style="width:100%;margin:10px 0;padding:8px">
+
+      <label class="assign-role-field-label">Role</label>
+      <select id="assign-role-select" class="settings-select assign-role-select">
         <option value="">-- Select Role --</option>
       </select>
-      <label class="select-row" id="assign-role-channel-row" style="margin-top:8px;">
-        <span>Scope</span>
-        <select id="assign-role-scope" class="settings-select" style="padding:6px">
-          <option value="server">Server-wide</option>
-        </select>
-      </label>
+
+      <label class="assign-role-field-label" style="margin-top:10px">Scope</label>
+      <p class="assign-role-hint">Server-wide applies to all channels. Channel-specific only applies within that channel.</p>
+      <select id="assign-role-scope" class="settings-select assign-role-select">
+        <option value="server">🌐 Server-wide</option>
+      </select>
+
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-assign-role-btn">Cancel</button>
         <button class="btn-sm btn-accent" id="confirm-assign-role-btn">Assign</button>
@@ -878,15 +916,101 @@
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item mod-only" data-action="rename-channel">✏️ Rename Channel</button>
     <button class="channel-ctx-item mod-only" data-action="create-sub-channel">📁 Create Sub-channel</button>
-    <hr class="channel-ctx-sep mod-only">
+    <hr class="channel-ctx-sep admin-only">
+    <button class="channel-ctx-item admin-only" data-action="organize" style="display:none">📋 Organize</button>
     <button class="channel-ctx-item admin-only" data-action="toggle-streams">🖥️ Toggle Streams</button>
     <button class="channel-ctx-item admin-only" data-action="toggle-music">🎵 Toggle Music</button>
+    <button class="channel-ctx-item admin-only" data-action="slow-mode">🐢 Slow Mode</button>
+    <button class="channel-ctx-item admin-only" data-action="channel-roles">👑 Roles</button>
     <button class="channel-ctx-item admin-only" data-action="webhooks">🤖 Webhooks</button>
     <hr class="channel-ctx-sep admin-only">
     <button class="channel-ctx-item admin-only danger" data-action="delete">🗑️ Delete Channel</button>
   </div>
 
+  <!-- Organize Sub-channels Modal -->
+  <div class="modal-overlay" id="organize-modal" style="display:none">
+    <div class="modal" style="max-width:500px">
+      <h3>📋 Organize Sub-channels</h3>
+      <p class="modal-desc" id="organize-modal-parent-name"></p>
+
+      <div class="organize-toolbar">
+        <label class="organize-toolbar-label">Sort:</label>
+        <select id="organize-global-sort" class="organize-select">
+          <option value="manual">Manual</option>
+          <option value="alpha">Alphabetical</option>
+          <option value="created">Newest First</option>
+          <option value="oldest">Oldest First</option>
+        </select>
+      </div>
+
+      <div id="organize-channel-list" class="organize-list"></div>
+
+      <div class="organize-controls">
+        <button class="btn-sm" id="organize-move-up" title="Move selected channel up">⬆ Up</button>
+        <button class="btn-sm" id="organize-move-down" title="Move selected channel down">⬇ Down</button>
+        <div class="organize-spacer"></div>
+        <div class="organize-tag-group">
+          <input type="text" id="organize-tag-input" class="organize-tag-input" maxlength="30" placeholder="Tag name…">
+          <button class="btn-sm organize-tag-btn" id="organize-set-tag" title="Apply tag">🏷️ Set</button>
+          <button class="btn-sm organize-tag-btn danger" id="organize-remove-tag" title="Remove tag">✕</button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent" id="organize-done-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Webhook Management Modal -->
+
+  <!-- Channel Roles Modal -->
+  <div class="modal-overlay" id="channel-roles-modal" style="display:none">
+    <div class="modal modal-wide">
+      <h3>👑 Channel Roles</h3>
+      <p class="modal-desc" id="channel-roles-channel-name"></p>
+
+      <div class="channel-roles-layout">
+        <!-- Left: Members + Assignment -->
+        <div class="channel-roles-left">
+          <h4 class="channel-roles-section-title">Members</h4>
+          <div class="channel-roles-member-list" id="channel-roles-member-list"></div>
+
+          <div class="channel-roles-actions" id="channel-roles-actions" style="display:none">
+            <h4 class="channel-roles-selected-name" id="channel-roles-selected-name"></h4>
+            <div class="channel-roles-current" id="channel-roles-current-roles"></div>
+            <div class="channel-roles-assign-area">
+              <div class="channel-roles-assign-row">
+                <select id="channel-roles-role-select" class="organize-select">
+                  <option value="">-- Select Role --</option>
+                </select>
+                <select id="channel-roles-scope-select" class="organize-select" style="max-width:140px">
+                  <option value="server">🌐 Server-wide</option>
+                  <option value="channel">📌 This Channel</option>
+                </select>
+                <button class="btn-sm btn-accent" id="channel-roles-assign-btn">Assign</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Role Configuration -->
+        <div class="channel-roles-right">
+          <h4 class="channel-roles-section-title">Role Configuration</h4>
+          <div class="channel-roles-role-list" id="channel-roles-role-list"></div>
+          <button class="btn-sm btn-accent btn-full" id="channel-roles-create-btn" style="margin-top:6px">+ New Role</button>
+          <div class="channel-roles-role-detail" id="channel-roles-role-detail">
+            <p class="muted-text" style="padding:12px;text-align:center;font-size:0.82rem">Select a role to configure</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent" id="channel-roles-done-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="webhook-modal" style="display:none">
     <div class="modal" style="max-width:520px">
       <h3>🤖 Webhooks</h3>
@@ -941,11 +1065,10 @@
   <div id="fx-layers"></div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/theme.js?v=scramble2"></script>
-  <script src="/js/notifications.js"></script>
-  <script src="/js/servers.js"></script>
-  <script src="/js/voice.js"></script>
-  <script src="/js/modmode.js"></script>
-  <script src="/js/app.js?v=webhooks1"></script>
+  <script src="/js/theme.js?v=1.7.0-amni"></script>
+  <script src="/js/servers.js?v=1.7.0-amni"></script>
+  <script src="/js/voice.js?v=1.7.0-amni"></script>
+  <script src="/js/modmode.js?v=1.7.0-amni"></script>
+  <script src="/js/app.js?v=1.7.0-amni"></script>
 </body>
 </html>

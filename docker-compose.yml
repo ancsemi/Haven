@@ -1,11 +1,32 @@
+# ── Haven Docker Compose ─────────────────────────────────
+# Quick start:  docker compose up -d
+# Stop:         docker compose down
+# View logs:    docker compose logs -f haven
+# Update:       docker compose build --no-cache && docker compose up -d
+# Shell:        docker compose exec haven sh
+# ─────────────────────────────────────────────────────────
+
 services:
   haven:
     build: .
+    image: haven:latest
     container_name: haven
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:${PORT:-3000}"    # Main HTTPS port
+      - "${REDIRECT_PORT:-3001}:${REDIRECT_PORT:-3001}"  # HTTP → HTTPS redirect
     volumes:
       - haven_data:/data
+      # ── Or use a local folder instead (good for NAS / Synology): ──
+      # - ./haven-data:/data
+    environment:
+      - PORT=${PORT:-3000}
+      - HOST=0.0.0.0
+      # - SERVER_NAME=My Haven           # Name shown in the UI
+      # - ADMIN_USERNAME=admin            # First account to register becomes admin
+      # - GIPHY_API_KEY=                  # Optional: enable GIF search
+      # - VAPID_EMAIL=mailto:you@example  # Optional: email for push notifications
+    # Uncomment to load settings from a .env file:
+    # env_file: .env
     restart: unless-stopped
 
 volumes:
