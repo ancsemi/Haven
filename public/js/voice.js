@@ -17,6 +17,7 @@ class VoiceManager {
     this.noiseSensitivity = 10;     // Noise gate sensitivity 0 (off) to 100 (aggressive)
     this.audioCtx = null;           // Web Audio context for volume boost
     this.gainNodes = new Map();     // userId → GainNode
+    this.localUserId = null;        // set by app.js so stopScreenShare can reference own tile
     this.onScreenStream = null;     // callback(userId, stream|null) — set by app.js
     this.onVoiceJoin = null;        // callback(userId, username)
     this.onVoiceLeave = null;       // callback(userId, username)
@@ -386,8 +387,8 @@ class VoiceManager {
     this._captureController = null;
 
     this.socket.emit('screen-share-stopped', { code: this.currentChannel });
-    // Notify local UI
-    if (this.onScreenStream) this.onScreenStream(null, null);
+    // Notify local UI — pass localUserId so tile is found by its real ID
+    if (this.onScreenStream) this.onScreenStream(this.localUserId, null);
   }
 
   async _renegotiate(userId, connection) {

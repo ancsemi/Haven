@@ -65,7 +65,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "https://www.youtube.com", "https://w.soundcloud.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles needed for themes
       imgSrc: ["'self'", "data:", "blob:", "https:"],  // https: for link preview OG images + GIPHY
-      connectSrc: ["'self'", "ws:", "wss:"],            // Socket.IO (ws for HTTP, wss for HTTPS)
+      connectSrc: ["'self'", "ws:", "wss:", "https:"],  // Socket.IO + cross-origin health checks
       mediaSrc: ["'self'", "blob:", "data:"],  // WebRTC audio + notification sounds
       fontSrc: ["'self'"],
       workerSrc: ["'self'"],               // service worker for push notifications
@@ -73,7 +73,7 @@ app.use(helmet({
       frameSrc: ["https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com"],  // Listen Together embeds
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      frameAncestors: ["'none'"],               // prevent clickjacking
+      frameAncestors: ["'self'"],               // allow mobile app iframe, block third-party clickjacking
     }
   },
   crossOriginEmbedderPolicy: false,  // needed for WebRTC
@@ -84,7 +84,7 @@ app.use(helmet({
 
 // Additional security headers helmet doesn't cover
 app.use((req, res, next) => {
-  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), payment=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=()');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   next();
 });

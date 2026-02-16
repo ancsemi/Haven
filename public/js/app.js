@@ -106,6 +106,7 @@ class HavenApp {
   _init() {
     this.socket = io({ auth: { token: this.token } });
     this.voice = new VoiceManager(this.socket);
+    if (this.user && this.user.id) this.voice.localUserId = this.user.id;
     
     // CRITICAL FIX: Run avatar setup first and use delegation to ensure listeners work
     this._setupAvatarUpload();
@@ -172,6 +173,7 @@ class HavenApp {
       this.user.roles = data.roles || [];
       this.user.effectiveLevel = data.effectiveLevel || 0;
       this.user.permissions = data.permissions || [];
+      if (this.voice && data.id) this.voice.localUserId = data.id;
       if (data.status) {
         this.userStatus = data.status;
         this.userStatusText = data.statusText || '';
@@ -548,6 +550,7 @@ class HavenApp {
     this.socket.on('renamed', (data) => {
       this.token = data.token;
       this.user = data.user;
+      if (this.voice && data.user.id) this.voice.localUserId = data.user.id;
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));
       document.getElementById('current-user').textContent = data.user.displayName || data.user.username;
@@ -2796,7 +2799,12 @@ class HavenApp {
     } catch (err) {
       console.error('SW registration failed:', err);
       if (toggle) toggle.disabled = true;
-      const hint = location.protocol !== 'https:' ? ' (HTTPS required)' : '';
+      let hint = '';
+      if (err.name === 'SecurityError' || (err.message && err.message.includes('SSL'))) {
+        hint = ' — valid SSL certificate required (self-signed certs are not supported by browsers for push notifications)';
+      } else if (location.protocol !== 'https:') {
+        hint = ' (HTTPS required)';
+      }
       if (statusEl) statusEl.textContent = 'Service worker failed' + hint;
       return;
     }
@@ -5100,11 +5108,18 @@ class HavenApp {
   _handleScreenAudio(userId) {
     const tileId = `screen-tile-${userId || 'self'}`;
     const tile = document.getElementById(tileId);
-    if (tile && !tile.querySelector('.stream-audio-badge')) {
-      const badge = document.createElement('div');
-      badge.className = 'stream-audio-badge';
-      badge.innerHTML = '🔊 Audio';
-      tile.appendChild(badge);
+    if (tile) {
+      // Remove opposite badge first (mutually exclusive)
+      tile.querySelector('.stream-no-audio-badge')?.remove();
+      if (!tile.querySelector('.stream-audio-badge')) {
+        const badge = document.createElement('div');
+        badge.className = 'stream-audio-badge';
+        badge.innerHTML = '🔊 Audio';
+        tile.appendChild(badge);
+      }
+      // Restore audio controls visibility since audio is available
+      const controls = document.getElementById(`stream-controls-${userId || 'self'}`);
+      if (controls) controls.style.display = '';
     }
     // Flash controls visible briefly
     const controls = document.getElementById(`stream-controls-${userId || 'self'}`);
@@ -5133,6 +5148,8 @@ class HavenApp {
   }
 
   _applyNoAudioBadge(tile, userId) {
+    // Remove opposite badge first (mutually exclusive)
+    tile.querySelector('.stream-audio-badge')?.remove();
     if (tile.querySelector('.stream-no-audio-badge')) return;
     // Add the no-audio badge
     const badge = document.createElement('div');
