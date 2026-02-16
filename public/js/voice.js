@@ -327,7 +327,8 @@ class VoiceManager {
         audio: true,
         surfaceSwitching: 'exclude', // prevent re-picker on alt-tab / focus changes
         selfBrowserSurface: 'include',
-        monitorTypeSurfaces: 'include'
+        monitorTypeSurfaces: 'include',
+        windowAudio: 'window'         // capture ONLY the selected window's audio (Chrome 141+)
       };
 
       // Use CaptureController if available to manage the capture session

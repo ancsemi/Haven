@@ -5027,9 +5027,26 @@ class HavenApp {
       ind.className = 'screen-share-indicator';
       ind.addEventListener('click', () => {
         const container = document.getElementById('screen-share-container');
+        const grid = document.getElementById('screen-share-grid');
+        // Restore all hidden tiles and their audio
+        if (grid) {
+          grid.querySelectorAll('.screen-share-tile[data-hidden="true"]').forEach(t => {
+            t.style.display = '';
+            delete t.dataset.hidden;
+            if (t.dataset.muted === 'true') {
+              delete t.dataset.muted;
+              const uid = t.id.replace('screen-tile-', '');
+              const volSlider = t.querySelector('.stream-vol-slider');
+              const vol = volSlider ? parseInt(volSlider.value) / 100 : 1;
+              this.voice.setStreamVolume(uid, vol);
+            }
+          });
+        }
         container.style.display = 'flex';
         this._screenShareMinimized = false;
         ind.remove();
+        document.getElementById('hidden-streams-bar')?.remove();
+        this._updateScreenShareVisibility();
       });
       document.querySelector('.channel-header')?.appendChild(ind);
     }
@@ -5136,9 +5153,10 @@ class HavenApp {
 
     // If there are still active streams running, show the indicator so user can reopen
     if (tiles.length > 0) {
-      // Mark them hidden so the restore bar works
+      // Mark them hidden so restore works
       tiles.forEach(t => { t.style.display = 'none'; t.dataset.hidden = 'true'; });
-      this._updateHiddenStreamsBar();
+      // Remove any existing hidden-streams-bar to avoid duplicates
+      document.getElementById('hidden-streams-bar')?.remove();
       this._showScreenShareIndicator(tiles.length);
     } else {
       this._screenShareMinimized = false;
@@ -6860,6 +6878,7 @@ class HavenApp {
         clearTimeout(nameTimeout);
         nameTimeout = setTimeout(() => {
           this.socket.emit('update-server-setting', { key: 'server_name', value: nameInput.value.trim() || 'HAVEN' });
+          this._showToast('Server name saved', 'success');
         }, 600);
       });
     }
