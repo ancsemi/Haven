@@ -277,10 +277,8 @@ Haven **automatically generates self-signed SSL certificates** on first launch �
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Send message |
 | `Shift+Enter` | New line |
 | `Ctrl+F` | Search messages |
-| `Escape` | Close search / modals |
 | `@` | @mention autocomplete |
 | `/` | Slash command autocomplete |
 | `↑` `↓` | Navigate autocomplete |
@@ -347,9 +345,10 @@ Planned features — roughly in priority order:
 | **Role system** | ✅ Done | Role-based access with granular per-channel permissions |
 | **Avatar system** | ✅ Done | Profile picture uploads with selectable avatar shapes (circle, square, hexagon, diamond) |
 | **Effect system** | ✅ Done | 15+ stackable visual effects with configurable intensity/frequency |
-| **Webhook / Bot support** | 🚧 Next | Incoming webhooks and a lightweight bot API for external integrations |
+| **Webhook / Bot support** | ✅ Done | Incoming webhooks and a lightweight bot API for external integrations |
 | **Thread replies** | 📋 Planned | Threaded conversations that branch off a message |
 | **End-to-end encryption** | ✅ Done | ECDH P-256 + AES-256-GCM encryption for DMs — private keys stay in the browser |
+| **Android App** | 🚧 In Progress! | https://github.com/ancsemi/Haven-App |
 
 > Want something else? Open an issue — PRs are always welcome.
 
