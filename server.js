@@ -429,6 +429,54 @@ app.post('/api/upload-file', uploadLimiter, (req, res) => {
   });
 });
 
+// ── Flash ROM status & download ──────────────────────────
+const ROMS_DIR = path.join(__dirname, 'public', 'games', 'roms');
+const FLASH_ROM_MANIFEST = [
+  { file: 'flight-759879f9.swf',    url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/flight-759879f9.swf',    size: 8570000 },
+  { file: 'learn-to-fly-3.swf',     url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/learn-to-fly-3.swf',     size: 17340000 },
+  { file: 'Bubble Tanks 3.swf',     url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/Bubble%20Tanks%203.swf',  size: 3870000 },
+  { file: 'tanks.swf',              url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/tanks.swf',               size: 32000 },
+  { file: 'SuperSmash.swf',         url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/SuperSmash.swf',          size: 8830000 },
+];
+
+app.get('/api/flash-rom-status', (req, res) => {
+  const status = FLASH_ROM_MANIFEST.map(rom => ({
+    file: rom.file,
+    installed: fs.existsSync(path.join(ROMS_DIR, rom.file))
+  }));
+  const allInstalled = status.every(r => r.installed);
+  res.json({ allInstalled, roms: status });
+});
+
+app.post('/api/install-flash-roms', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Only admins can trigger ROM downloads
+  const { getDb } = require('./src/database');
+  const adminRow = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+  if (!adminRow || !adminRow.is_admin) return res.status(403).json({ error: 'Only admins can install flash games' });
+
+  if (!fs.existsSync(ROMS_DIR)) fs.mkdirSync(ROMS_DIR, { recursive: true });
+
+  const results = [];
+  for (const rom of FLASH_ROM_MANIFEST) {
+    const dest = path.join(ROMS_DIR, rom.file);
+    if (fs.existsSync(dest)) { results.push({ file: rom.file, status: 'already-installed' }); continue; }
+    try {
+      const resp = await fetch(rom.url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const buffer = Buffer.from(await resp.arrayBuffer());
+      fs.writeFileSync(dest, buffer);
+      results.push({ file: rom.file, status: 'installed' });
+    } catch (err) {
+      results.push({ file: rom.file, status: 'error', error: err.message });
+    }
+  }
+  res.json({ results });
+});
+
 // ── Avatar upload (authenticated, image only, max 2 MB) ──
 app.post('/api/upload-avatar', uploadLimiter, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];

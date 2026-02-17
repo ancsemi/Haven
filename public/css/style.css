@@ -3386,16 +3386,16 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 .message-compact:hover { background: rgba(255,255,255,0.02); }
 
 .message-compact .compact-time {
-  display: none;
   font-size: 10px;
   color: var(--text-muted);
   min-width: 44px;
   text-align: right;
   margin-right: 8px;
   padding-top: 2px;
+  visibility: hidden;
 }
 
-.message-compact:hover .compact-time { display: block; }
+.message-compact:hover .compact-time { visibility: visible; }
 
 .system-message {
   padding: 4px 8px;
@@ -5491,6 +5491,25 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   color: var(--text-muted);
   line-height: 1.3;
 }
+.activity-card-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.flash-install-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.flash-install-banner .btn-sm { pointer-events: auto; flex-shrink: 0; }
 
 /* ── Iframe Game Overlay ──────────────────────────────── */
 .game-iframe-overlay {
@@ -7758,7 +7777,16 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   line-height: 1;
 }
 .voice-panel-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent); }
-.voice-panel-btn.muted { background: var(--warning); color: #1a1a2e; border-color: var(--warning); }
+.voice-panel-btn.muted { background: var(--warning); color: #1a1a2e; border-color: var(--warning); position: relative; }
+.voice-panel-btn.muted::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 18%;
+  width: 64%; height: 2px;
+  background: #c00;
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
 .voice-panel-btn.sharing { background: var(--success); color: #fff; border-color: var(--success); }
 .voice-panel-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .voice-panel-divider {

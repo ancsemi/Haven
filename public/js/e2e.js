@@ -316,6 +316,32 @@ class HavenE2E {
 
   /* ── Helpers ───────────────────────────────────────── */
 
+  /**
+   * Generate a human-readable safety number from two public keys.
+   * Both users will derive the same code (keys are sorted canonically).
+   * Format: 12 groups of 5 digits (60 digits total), like Signal.
+   */
+  async getVerificationCode(myPublicKeyJwk, theirPublicKeyJwk) {
+    // Sort keys canonically by their 'x' coordinate so both sides get the same hash
+    const keys = [myPublicKeyJwk, theirPublicKeyJwk].sort((a, b) =>
+      a.x < b.x ? -1 : a.x > b.x ? 1 : 0
+    );
+    // Concatenate the raw key material
+    const combined = new TextEncoder().encode(
+      JSON.stringify(keys[0]) + JSON.stringify(keys[1])
+    );
+    // SHA-256 → take first 30 bytes → convert to decimal groups
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', combined));
+    let code = '';
+    for (let i = 0; i < 30; i += 5) {
+      // Each group: 5 bytes → 5-digit number (mod 100000, zero-padded)
+      const num = ((hash[i] << 24) | (hash[i+1] << 16) | (hash[i+2] << 8) | hash[i+3]) >>> 0;
+      const group = String(num % 100000).padStart(5, '0');
+      code += (code ? ' ' : '') + group;
+    }
+    return code;
+  }
+
   _bufToBase64(buf) {
     let binary = '';
     const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);

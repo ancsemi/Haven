@@ -11,6 +11,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.8.1] — 2026-02-16
+
+### Fixed
+- **Max upload size not applying client-side** — the drag-and-drop / file upload was hardcoded to reject files over 25 MB regardless of the admin setting. Now reads the server-configurable limit.
+- **Message timestamp shift** — hovering over a compact (grouped) message no longer pushes the text rightward. Timestamp now uses `visibility` instead of `display` so it occupies space at all times.
+- **Dual-role display** — users with Channel Mod + User roles no longer show both badges; the lower "User" badge is stripped when a higher role exists.
+- **Mobile messages not updating** — when the app returns to foreground (tab becomes visible), messages, channel list, and member list are now re-fetched automatically. Socket reconnects if disconnected.
+- **Mobile menu buttons not appearing** — foreground resume now triggers channel/data refresh which re-initializes the UI state.
+
+### Changed
+- **Mute/Deafen icons** — mic mute button now shows a microphone icon (🎙️) with a red strikethrough when muted. Deafen button shows a speaker icon (🔊/🔇). Previously both used speaker icons which was confusing.
+- **Flash games are now optional** — SWF ROM files (~37 MB) are no longer shipped with Haven. The Activities panel shows a "Download Flash Games" button that fetches them on demand (admin only). Haven itself stays under 5 MB.
+- **Carousel interval** — website hero image carousel slowed from 2s to 4s and uses fixed aspect ratio to prevent page jumping.
+
+### Added
+- **E2E verification codes** — DM channels now show a 🔐 button in the header that displays a 60-digit safety number. Both users see the same code and can compare out-of-band to verify no one is intercepting their encrypted messages (like Signal).
+- **E2E per-account key sync** — private keys are now wrapped with the user's password (PBKDF2, 600k iterations) and stored encrypted on the server. Keys sync across devices automatically on login.
+- **Flash ROM download system** — server endpoints `/api/flash-rom-status` and `/api/install-flash-roms` allow checking and downloading Flash game ROMs on demand.
+- **Win95 theme: beveled buttons** — all voice, sidebar, modal, and toolbar buttons now have proper 3D outset/inset borders in the Win95 theme.
+- **Win95 scrollbar fix** — eliminated double arrow boxes on scrollbars by hiding Chrome's extra scrollbar-button pseudo-elements.
+- **Ruffle Flash CSP fix** — added `wasm-unsafe-eval` and `unpkg.com` worker-src to Content Security Policy headers so Ruffle WASM can load.
+- **Website updates** — new screenshots, E2E encryption in feature cards and comparison table, expanded games card, updated file sharing limit (configurable up to 1.5 GB).
+
+---
+
 ## [1.8.0] — 2026-02-16
 
 ### Added

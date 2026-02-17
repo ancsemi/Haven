@@ -274,6 +274,19 @@ class HavenApp {
     });
     document.addEventListener('visibilitychange', () => {
       this.socket?.emit('visibility-change', { visible: !document.hidden });
+      // Mobile fix: when returning to foreground, ensure socket is connected and refresh data
+      if (!document.hidden) {
+        if (this.socket && !this.socket.connected) {
+          this.socket.connect();
+        }
+        // Re-fetch current channel messages + member list to catch anything missed
+        if (this.currentChannel && this.socket?.connected) {
+          this.socket.emit('get-messages', { code: this.currentChannel });
+          this.socket.emit('get-channel-members', { code: this.currentChannel });
+        }
+        // Re-fetch channels in case list changed while backgrounded
+        this.socket?.emit('get-channels');
+      }
     });
 
     this.socket.on('disconnect', () => {
@@ -1298,6 +1311,9 @@ class HavenApp {
     document.getElementById('pinned-close').addEventListener('click', () => {
       document.getElementById('pinned-panel').style.display = 'none';
     });
+
+    // E2E verification code button
+    document.getElementById('e2e-verify-btn')?.addEventListener('click', () => this._showE2EVerification());
 
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -3054,25 +3070,83 @@ class HavenApp {
   }
 
   // ── Activities / Games system methods ────────────────────
-  _openActivitiesModal() {
+  async _openActivitiesModal() {
     const modal = document.getElementById('activities-modal');
     const grid = document.getElementById('activities-grid');
     if (!modal || !grid) return;
 
     grid.innerHTML = '';
+
+    // Check flash ROM installation status
+    let flashStatus = {};
+    try {
+      const res = await fetch('/api/flash-rom-status');
+      if (res.ok) {
+        const data = await res.json();
+        for (const rom of data.roms) flashStatus[rom.file] = rom.installed;
+        this._flashAllInstalled = data.allInstalled;
+      }
+    } catch {}
+
+    // If any flash games are not installed, show a download banner at top
+    const hasFlashGames = this._gamesRegistry.some(g => g.type === 'flash');
+    if (hasFlashGames && !this._flashAllInstalled) {
+      const banner = document.createElement('div');
+      banner.className = 'flash-install-banner';
+      banner.innerHTML = `
+        <span>🎮 Flash games not installed (~37 MB download)</span>
+        <button class="btn-sm btn-accent" id="install-flash-btn">Download Flash Games</button>
+      `;
+      grid.appendChild(banner);
+      banner.querySelector('#install-flash-btn').addEventListener('click', async (e) => {
+        const btn = e.target;
+        btn.disabled = true;
+        btn.textContent = 'Downloading…';
+        try {
+          const res = await fetch('/api/install-flash-roms', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + this.token }
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'Download failed');
+          }
+          const data = await res.json();
+          const installed = data.results.filter(r => r.status === 'installed').length;
+          const already = data.results.filter(r => r.status === 'already-installed').length;
+          const errors = data.results.filter(r => r.status === 'error');
+          this._showToast(`Flash games: ${installed} installed, ${already} already had, ${errors.length} failed`, installed > 0 ? 'success' : 'error');
+          this._flashAllInstalled = errors.length === 0;
+          // Refresh modal
+          this._openActivitiesModal();
+        } catch (err) {
+          this._showToast(err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Download Flash Games';
+        }
+      });
+    }
+
     for (const game of this._gamesRegistry) {
+      // For flash games, check if ROM is installed
+      const isFlash = game.type === 'flash';
+      const romFile = isFlash ? game.path.match(/swf=\/games\/roms\/(.+?)&/)?.[1] : null;
+      const romInstalled = !isFlash || (romFile && flashStatus[decodeURIComponent(romFile)] !== false);
+
       const card = document.createElement('div');
-      card.className = 'activity-card';
+      card.className = 'activity-card' + (!romInstalled ? ' activity-card-disabled' : '');
       card.dataset.gameId = game.id;
       card.innerHTML = `
         <div class="activity-card-icon">${this._escapeHtml(game.icon)}</div>
         <div class="activity-card-name">${this._escapeHtml(game.name)}</div>
-        <div class="activity-card-desc">${this._escapeHtml(game.description || '')}</div>
+        <div class="activity-card-desc">${this._escapeHtml(game.description || '')}${!romInstalled ? '<br><em style=\"color:var(--text-muted)\">Not installed</em>' : ''}</div>
       `;
-      card.addEventListener('click', () => {
-        this._closeActivitiesModal();
-        this._launchGame(game);
-      });
+      if (romInstalled) {
+        card.addEventListener('click', () => {
+          this._closeActivitiesModal();
+          this._launchGame(game);
+        });
+      }
       grid.appendChild(card);
     }
     modal.style.display = 'flex';
@@ -3463,6 +3537,10 @@ class HavenApp {
 
     // E2E: fetch DM partner's public key when entering a DM
     if (isDm && channel) this._fetchDMPartnerKey(channel);
+
+    // Show verify-encryption button only in DM channels
+    const verifyBtn = document.getElementById('e2e-verify-btn');
+    if (verifyBtn) verifyBtn.style.display = isDm ? '' : 'none';
   }
 
   _updateTopicBar(topic) {
@@ -5174,7 +5252,7 @@ class HavenApp {
   _toggleMute() {
     const muted = this.voice.toggleMute();
     const btn = document.getElementById('voice-mute-btn');
-    btn.textContent = muted ? '🔊' : '🔇';
+    btn.textContent = '🎙️';
     btn.title = muted ? 'Unmute' : 'Mute';
     btn.classList.toggle('muted', muted);
 
@@ -5193,7 +5271,7 @@ class HavenApp {
   _toggleDeafen() {
     const deafened = this.voice.toggleDeafen();
     const btn = document.getElementById('voice-deafen-btn');
-    btn.textContent = deafened ? '🔈' : '🔈';
+    btn.textContent = deafened ? '�' : '🔊';
     btn.title = deafened ? 'Undeafen' : 'Deafen';
     btn.classList.toggle('muted', deafened);
 
@@ -5227,10 +5305,10 @@ class HavenApp {
     if (mobileJoin) mobileJoin.style.display = inVoice ? 'none' : '';
 
     if (!inVoice) {
-      document.getElementById('voice-mute-btn').textContent = '🔇';
+      document.getElementById('voice-mute-btn').textContent = '🎙️';
       document.getElementById('voice-mute-btn').title = 'Mute';
       document.getElementById('voice-mute-btn').classList.remove('muted');
-      document.getElementById('voice-deafen-btn').textContent = '🔈';
+      document.getElementById('voice-deafen-btn').textContent = '🔊';
       document.getElementById('voice-deafen-btn').title = 'Deafen';
       document.getElementById('voice-deafen-btn').classList.remove('muted');
       document.getElementById('screen-share-btn').textContent = '🖥️';
@@ -8168,8 +8246,9 @@ class HavenApp {
   /** Upload any file via /api/upload-file — used by drag & drop, paste, and 📎 button */
   _uploadGeneralFile(file) {
     if (!this.currentChannel) return this._showToast('Select a channel first', 'error');
-    if (file.size > 25 * 1024 * 1024) {
-      this._showToast('File too large (max 25 MB)', 'error');
+    const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+    if (file.size > maxMb * 1024 * 1024) {
+      this._showToast(`File too large (max ${maxMb} MB)`, 'error');
       return;
     }
 
@@ -8966,6 +9045,52 @@ class HavenApp {
     const partnerId = channel.dm_target.id;
     if (this._dmPublicKeys[partnerId]) return; // already cached
     this.socket.emit('get-public-key', { userId: partnerId });
+  }
+
+  /**
+   * Show E2E verification code modal for the current DM.
+   * Both users see the same code — they can compare out-of-band.
+   */
+  async _showE2EVerification() {
+    const partner = this._getE2EPartner();
+    if (!partner || !this.e2e?.ready) {
+      this._showToast('E2E not available for this conversation', 'error');
+      return;
+    }
+    try {
+      const code = await this.e2e.getVerificationCode(this.e2e.publicKeyJwk, partner.publicKeyJwk);
+      const ch = this.channels.find(c => c.code === this.currentChannel);
+      const partnerName = ch?.dm_target?.username || 'Partner';
+
+      // Create a simple modal overlay
+      let overlay = document.getElementById('e2e-verify-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'e2e-verify-overlay';
+        overlay.className = 'modal-overlay';
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) overlay.style.display = 'none';
+        });
+      }
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:420px;text-align:center">
+          <h3 style="margin-bottom:8px">🔐 Verify Encryption</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+            Compare this safety number with <strong>${this._escapeHtml(partnerName)}</strong> using another channel (in person, phone call, text, etc.). If they match, your conversation is end-to-end encrypted and no one is intercepting.
+          </p>
+          <div class="e2e-safety-number" style="font-family:monospace;font-size:18px;letter-spacing:2px;line-height:2;padding:16px;background:var(--bg-secondary);border-radius:var(--radius-md);border:1px solid var(--border);user-select:all;word-break:break-all">${code}</div>
+          <div style="margin-top:16px;display:flex;gap:8px;justify-content:center">
+            <button class="btn-sm btn-accent" onclick="navigator.clipboard.writeText('${code}');this.textContent='Copied!'">Copy Code</button>
+            <button class="btn-sm" onclick="this.closest('.modal-overlay').style.display='none'">Close</button>
+          </div>
+        </div>
+      `;
+      overlay.style.display = 'flex';
+    } catch (err) {
+      this._showToast('Could not generate verification code', 'error');
+      console.error('[E2E] Verification error:', err);
+    }
   }
 
   /**
