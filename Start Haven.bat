@@ -28,21 +28,14 @@ echo  [!] Node.js is not installed or not in PATH.
 echo.
 echo  You have two options:
 echo.
-echo    1) Copy and paste this command, then press Enter:
-echo.
-echo       winget install OpenJS.NodeJS.LTS
+echo    1) Press Y below to install it automatically (downloads ~30 MB)
 echo.
 echo    2) Or download it manually from https://nodejs.org
-echo.
-echo  After installing, close this window and double-click Start Haven again.
 echo.
 set /p "AUTOINSTALL=  Would you like to install Node.js automatically now? [Y/N]: "
 if /i "%AUTOINSTALL%" NEQ "Y" goto :NODE_SKIP
 
-echo.
-echo  [*] Installing Node.js via winget... This may take a minute.
-echo.
-winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-node.ps1"
 if %ERRORLEVEL% NEQ 0 (
     color 0C
     echo.
@@ -60,7 +53,7 @@ exit /b 0
 
 :NODE_SKIP
 echo.
-echo  [*] No problem. Install Node.js and try again.
+echo  [*] No problem. Install Node.js from https://nodejs.org and try again.
 echo.
 pause
 exit /b 1
