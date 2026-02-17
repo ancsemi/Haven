@@ -1212,6 +1212,7 @@
 [data-theme="win95"] .sidebar-bottom-bar { background: #bfbfbf; border-top: 3px outset #fff; }
 [data-theme="win95"] .sidebar-bottom-btn { color: #000; background: #bfbfbf; border: 3px outset #fff; border-radius: 0; margin: 2px; }
 [data-theme="win95"] .sidebar-bottom-btn:hover { background: #dfdfdf; }
+[data-theme="win95"] .sidebar-bottom-btn:active { border: 3px inset #808080; }
 [data-theme="win95"] .channel-header { background: linear-gradient(90deg, #000080, #1084d0); border-bottom: 3px outset #fff; color: #fff; }
 [data-theme="win95"] .channel-header * { color: #fff; }
 [data-theme="win95"] .channel-code-tag { background: #fff; color: #000; border: 1px inset #808080; border-radius: 0; }
@@ -1219,9 +1220,63 @@
 [data-theme="win95"] .btn-voice:hover { background: #dfdfdf; }
 [data-theme="win95"] .btn-voice.active { background: #bfbfbf; color: #000; border: 3px inset #808080; }
 [data-theme="win95"] .btn-voice.btn-danger { background: #bfbfbf; color: #cc0000; border: 3px outset #fff; font-weight: 700; }
-[data-theme="win95"] .btn-sm { border: 3px outset #fff; border-radius: 0; }
+[data-theme="win95"] .btn-sm { background: #bfbfbf; color: #000; border: 3px outset #fff; border-radius: 0; }
+[data-theme="win95"] .btn-sm:hover { background: #dfdfdf; color: #000; }
 [data-theme="win95"] .btn-sm:active { border: 3px inset #808080; }
 [data-theme="win95"] .btn-sm.btn-accent { background: #bfbfbf; color: #000; border: 3px outset #fff; }
+[data-theme="win95"] .btn-sm.btn-accent:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .btn-sm.btn-danger { background: #bfbfbf; color: #cc0000; border: 3px outset #fff; }
+
+/* Win95 voice panel buttons — beveled 3D boxes */
+[data-theme="win95"] .voice-panel-btn {
+  background: #bfbfbf; color: #000; border: 3px outset #fff;
+  border-radius: 0 !important; width: 32px; height: 32px;
+}
+[data-theme="win95"] .voice-panel-btn:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .voice-panel-btn:active,
+[data-theme="win95"] .voice-panel-btn.active,
+[data-theme="win95"] .voice-panel-btn.muted,
+[data-theme="win95"] .voice-panel-btn.sharing { border: 3px inset #808080; color: #000; background: #bfbfbf; }
+[data-theme="win95"] .voice-panel-leave { background: #bfbfbf; color: #cc0000; border: 3px outset #fff; }
+[data-theme="win95"] .voice-panel-leave:hover { background: #dfdfdf; color: #cc0000; }
+
+/* Win95 icon buttons near username (rename, logout) — beveled */
+[data-theme="win95"] .icon-btn {
+  background: #bfbfbf; color: #000; border: 2px outset #fff;
+  border-radius: 0 !important; padding: 3px 5px;
+}
+[data-theme="win95"] .icon-btn:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .icon-btn:active { border: 2px inset #808080; }
+
+/* Win95 settings button */
+[data-theme="win95"] .btn-settings-popout {
+  background: #bfbfbf; color: #000; border: 3px outset #fff;
+  border-radius: 0 !important;
+}
+[data-theme="win95"] .btn-settings-popout:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .btn-settings-popout:active { border: 3px inset #808080; }
+[data-theme="win95"] .btn-settings-popout svg { color: #000; }
+
+/* Win95 status picker dot — beveled */
+[data-theme="win95"] .status-picker-dot { border: 2px outset #fff; border-radius: 0 !important; }
+
+/* Win95 generic modal buttons — always black text on gray */
+[data-theme="win95"] .modal button,
+[data-theme="win95"] .modal-overlay button {
+  background: #bfbfbf; color: #000; border: 3px outset #fff; border-radius: 0 !important;
+}
+[data-theme="win95"] .modal button:hover,
+[data-theme="win95"] .modal-overlay button:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .modal button:active,
+[data-theme="win95"] .modal-overlay button:active { border: 3px inset #808080; }
+[data-theme="win95"] .modal .btn-danger,
+[data-theme="win95"] .modal-overlay .btn-danger { color: #cc0000; }
+
+/* Win95 message toolbar buttons */
+[data-theme="win95"] .msg-toolbar button {
+  background: #bfbfbf; color: #000; border: 2px outset #fff; border-radius: 0 !important;
+}
+[data-theme="win95"] .msg-toolbar button:hover { background: #dfdfdf; }
 [data-theme="win95"] .modal { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; box-shadow: 2px 2px 0 #000; }
 [data-theme="win95"] .modal h3 { background: linear-gradient(90deg, #000080, #1084d0); color: #fff; margin: -20px -24px 16px -24px; padding: 4px 8px; border-radius: 0; font-weight: 700; font-size: 12px; }
 [data-theme="win95"] .message-row { border-bottom: 1px solid #808080; }
@@ -1310,6 +1365,11 @@
     linear-gradient(to top,    #ffffff 0, #ffffff 2px, transparent 2px),
     #bfbfbf !important;
 }
+/* Hide duplicate scrollbar arrows — keep only one button at each end */
+[data-theme="win95"] ::-webkit-scrollbar-button:vertical:start:increment,
+[data-theme="win95"] ::-webkit-scrollbar-button:vertical:end:decrement,
+[data-theme="win95"] ::-webkit-scrollbar-button:horizontal:start:increment,
+[data-theme="win95"] ::-webkit-scrollbar-button:horizontal:end:decrement { display: none; }
 [data-theme="win95"] ::-webkit-scrollbar-corner { background: #bfbfbf !important; }
 [data-theme="win95"] .server-bar { background: #bfbfbf; border-right: 3px outset #fff; }
 [data-theme="win95"] .server-bar .server-icon { border-radius: 0; }

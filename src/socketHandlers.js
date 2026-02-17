@@ -2609,8 +2609,12 @@ function setupSocketHandlers(io, db) {
         const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(data.userId);
         if (isAdmin && isAdmin.is_admin) {
           roles.unshift({ id: -1, name: 'Admin', level: 100, color: '#e74c3c' });
-          // Remove the default "User" role for admins — it's redundant
-          const userRoleIdx = roles.findIndex(r => r.name === 'User' && r.level === 1);
+        }
+
+        // Strip the default "User" role whenever a higher-level role exists
+        // (e.g. Channel Mod + User → just Channel Mod; Admin + User → just Admin)
+        if (roles.length > 1) {
+          const userRoleIdx = roles.findIndex(r => r.name === 'User' && r.level <= 1);
           if (userRoleIdx !== -1) roles.splice(userRoleIdx, 1);
         }
 
@@ -2881,6 +2885,41 @@ function setupSocketHandlers(io, db) {
       const row = db.prepare('SELECT public_key FROM users WHERE id = ?').get(userId);
       const jwk = row && row.public_key ? JSON.parse(row.public_key) : null;
       socket.emit('public-key-result', { userId, jwk });
+    });
+
+    // ── E2E encrypted private key storage (per-account key sync) ──
+
+    socket.on('store-encrypted-key', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const { encryptedKey, salt } = data;
+      if (typeof encryptedKey !== 'string' || typeof salt !== 'string') {
+        return socket.emit('error-msg', 'Invalid encrypted key data');
+      }
+      if (encryptedKey.length > 4096 || salt.length > 128) {
+        return socket.emit('error-msg', 'Encrypted key data too large');
+      }
+      try {
+        db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ? WHERE id = ?')
+          .run(encryptedKey, salt, socket.user.id);
+        socket.emit('encrypted-key-stored');
+      } catch (err) {
+        console.error('Store encrypted key error:', err);
+        socket.emit('error-msg', 'Failed to store encrypted key');
+      }
+    });
+
+    socket.on('get-encrypted-key', () => {
+      try {
+        const row = db.prepare('SELECT encrypted_private_key, e2e_key_salt FROM users WHERE id = ?')
+          .get(socket.user.id);
+        socket.emit('encrypted-key-result', {
+          encryptedKey: row?.encrypted_private_key || null,
+          salt: row?.e2e_key_salt || null
+        });
+      } catch (err) {
+        console.error('Get encrypted key error:', err);
+        socket.emit('encrypted-key-result', { encryptedKey: null, salt: null });
+      }
     });
 
     // ═══════════════ DIRECT MESSAGES ═══════════════════════

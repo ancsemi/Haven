@@ -3084,20 +3084,27 @@ class HavenApp {
   }
 
   _launchGame(game) {
-    const overlay = document.getElementById('game-iframe-overlay');
-    const iframe = document.getElementById('game-iframe');
-    const titleEl = document.getElementById('game-iframe-title');
-    if (!overlay || !iframe) return;
-
     this._currentGame = game;
-    this._gameIframe = iframe;
-    if (titleEl) titleEl.textContent = `${game.icon} ${game.name}`;
-
-    // Build URL with auth token hash (same pattern as before)
+    // Default: pop out into a new window
     const tok = localStorage.getItem('haven_token') || '';
     const url = game.path + '#token=' + encodeURIComponent(tok);
-    iframe.src = url;
-    overlay.style.display = 'flex';
+    this._gameWindow = window.open(url, '_blank', 'width=800,height=900');
+
+    // If popup was blocked, fall back to inline iframe
+    if (!this._gameWindow || this._gameWindow.closed) {
+      const overlay = document.getElementById('game-iframe-overlay');
+      const iframe = document.getElementById('game-iframe');
+      const titleEl = document.getElementById('game-iframe-title');
+      if (!overlay || !iframe) return;
+
+      this._gameIframe = iframe;
+      if (titleEl) titleEl.textContent = `${game.icon} ${game.name}`;
+      iframe.src = url;
+      overlay.style.display = 'flex';
+    }
+
+    // Close activities modal
+    this._closeActivitiesModal();
 
     // Request leaderboard for this game
     this.socket.emit('get-high-scores', { game: game.id });
@@ -8914,7 +8921,11 @@ class HavenApp {
     if (typeof HavenE2E === 'undefined') return;
     try {
       this.e2e = new HavenE2E();
-      const ok = await this.e2e.init();
+      // Retrieve password from sessionStorage (set during login) for key wrapping
+      const pw = sessionStorage.getItem('haven_e2e_pw');
+      const ok = await this.e2e.init(this.socket, pw || null);
+      // Clear password immediately — no longer needed
+      sessionStorage.removeItem('haven_e2e_pw');
       if (ok) {
         // Publish our public key to the server
         this.socket.emit('publish-public-key', { jwk: this.e2e.publicKeyJwk });
@@ -8929,6 +8940,7 @@ class HavenApp {
     } catch (err) {
       console.warn('[E2E] Init failed:', err);
       this.e2e = null;
+      sessionStorage.removeItem('haven_e2e_pw');
     }
   }
 

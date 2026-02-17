@@ -2,8 +2,11 @@
  * Haven — End-to-End Encryption for DMs
  *
  * Uses ECDH (P-256) for key agreement + AES-256-GCM for message encryption.
- * Private keys never leave the browser (stored in IndexedDB).
- * The server only stores public keys — it cannot decrypt DM content.
+ * Private keys are encrypted with the user's password (PBKDF2 wrapping) and
+ * stored on the server so they sync across devices. The server never sees the
+ * plaintext private key — only the password-encrypted blob.
+ *
+ * Local IndexedDB is used as a fast cache; the server is the source of truth.
  */
 
 class HavenE2E {
@@ -17,15 +20,52 @@ class HavenE2E {
 
   /* ── Lifecycle ──────────────────────────────────────── */
 
-  async init() {
+  /**
+   * Initialize E2E. Tries IndexedDB first (fast), then server (cross-device).
+   * If no key exists anywhere, generates a new pair.
+   * @param {Object} socket   - Socket.IO instance
+   * @param {string} password - User's login password (for wrapping/unwrapping)
+   */
+  async init(socket, password) {
     try {
       await this._openDB();
+
+      // 1. Fast path: try local IndexedDB
       this._keyPair = await this._loadKeyPair();
+
+      if (!this._keyPair && socket && password) {
+        // 2. Cross-device: check server for password-encrypted key
+        const serverData = await this._fetchEncryptedKey(socket);
+        if (serverData.encryptedKey && serverData.salt) {
+          try {
+            const privateJwk = await this._unwrapPrivateKey(password, serverData.encryptedKey, serverData.salt);
+            this._keyPair = await this._importKeyPair(privateJwk);
+            await this._storeKeyPair(this._keyPair);
+            console.log('[E2E] Restored key pair from server (cross-device sync)');
+          } catch (err) {
+            console.warn('[E2E] Failed to decrypt server key (password may have changed):', err.message);
+          }
+        }
+      }
+
       if (!this._keyPair) {
+        // 3. Generate brand-new key pair
         this._keyPair = await this._generateKeyPair();
         await this._storeKeyPair(this._keyPair);
+        console.log('[E2E] Generated new key pair');
       }
+
       this._publicKeyJwk = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
+
+      // Upload encrypted private key to server for cross-device sync
+      if (socket && password) {
+        try {
+          await this._uploadEncryptedKey(socket, password);
+        } catch (err) {
+          console.warn('[E2E] Failed to upload encrypted key:', err.message);
+        }
+      }
+
       this._ready = true;
       console.log('[E2E] Ready — public key loaded');
     } catch (err) {
@@ -40,10 +80,6 @@ class HavenE2E {
 
   /* ── Encrypt / Decrypt ─────────────────────────────── */
 
-  /**
-   * Encrypt a plaintext message for a DM target.
-   * Returns a JSON string: { ct, iv, v } (ciphertext + IV, base64-encoded)
-   */
   async encrypt(plaintext, targetUserId, targetPublicKeyJwk) {
     const sharedKey = await this._deriveSharedKey(targetUserId, targetPublicKeyJwk);
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -60,10 +96,6 @@ class HavenE2E {
     });
   }
 
-  /**
-   * Decrypt a ciphertext (JSON string) from a DM partner.
-   * Returns the plaintext string, or null if decryption fails.
-   */
   async decrypt(ciphertextJson, partnerUserId, partnerPublicKeyJwk) {
     try {
       const { v, iv, ct } = JSON.parse(ciphertextJson);
@@ -80,9 +112,6 @@ class HavenE2E {
     }
   }
 
-  /**
-   * Check if a string looks like an E2E encrypted message.
-   */
   static isEncrypted(content) {
     if (!content || content.length < 20) return false;
     try {
@@ -93,7 +122,7 @@ class HavenE2E {
     }
   }
 
-  /* ── Key Derivation ───────────────────────────────── */
+  /* ── Key Derivation (DM shared secret) ────────────── */
 
   async _deriveSharedKey(targetUserId, targetPublicKeyJwk) {
     const cacheKey = `${targetUserId}:${targetPublicKeyJwk.x}`;
@@ -113,13 +142,8 @@ class HavenE2E {
       256
     );
 
-    // HKDF to derive a proper AES key from the shared secret
     const rawKey = await crypto.subtle.importKey(
-      'raw',
-      sharedSecret,
-      'HKDF',
-      false,
-      ['deriveKey']
+      'raw', sharedSecret, 'HKDF', false, ['deriveKey']
     );
 
     const aesKey = await crypto.subtle.deriveKey(
@@ -139,12 +163,111 @@ class HavenE2E {
     return aesKey;
   }
 
-  /* ── Key Pair Management (IndexedDB) ──────────────── */
+  /* ── Password-Based Key Wrapping (PBKDF2 + AES-GCM) ── */
+
+  async _deriveWrappingKey(password, saltBase64) {
+    const salt = this._base64ToBuf(saltBase64);
+    const passKey = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(password),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 600000 },
+      passKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  async _wrapPrivateKey(password) {
+    const privateJwk = await crypto.subtle.exportKey('jwk', this._keyPair.privateKey);
+    const salt = crypto.getRandomValues(new Uint8Array(32));
+    const saltB64 = this._bufToBase64(salt);
+    const wrappingKey = await this._deriveWrappingKey(password, saltB64);
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(privateJwk));
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      wrappingKey,
+      plaintext
+    );
+
+    const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ciphertext), iv.length);
+
+    return { encryptedKey: this._bufToBase64(combined), salt: saltB64 };
+  }
+
+  async _unwrapPrivateKey(password, encryptedKeyB64, saltB64) {
+    const wrappingKey = await this._deriveWrappingKey(password, saltB64);
+    const combined = this._base64ToBuf(encryptedKeyB64);
+
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+
+    const plainBytes = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      wrappingKey,
+      ciphertext
+    );
+    return JSON.parse(new TextDecoder().decode(plainBytes));
+  }
+
+  async _importKeyPair(privateJwk) {
+    const privateKey = await crypto.subtle.importKey(
+      'jwk',
+      privateJwk,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      ['deriveKey', 'deriveBits']
+    );
+    const pubJwk = { ...privateJwk };
+    delete pubJwk.d;
+    pubJwk.key_ops = [];
+    const publicKey = await crypto.subtle.importKey(
+      'jwk',
+      pubJwk,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      []
+    );
+    return { publicKey, privateKey };
+  }
+
+  /* ── Server Communication ─────────────────────────── */
+
+  _fetchEncryptedKey(socket) {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve({ encryptedKey: null, salt: null }), 5000);
+      socket.once('encrypted-key-result', (data) => {
+        clearTimeout(timeout);
+        resolve(data || { encryptedKey: null, salt: null });
+      });
+      socket.emit('get-encrypted-key');
+    });
+  }
+
+  async _uploadEncryptedKey(socket, password) {
+    const { encryptedKey, salt } = await this._wrapPrivateKey(password);
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Upload timeout')), 5000);
+      socket.once('encrypted-key-stored', () => { clearTimeout(timeout); resolve(); });
+      socket.emit('store-encrypted-key', { encryptedKey, salt });
+    });
+  }
+
+  /* ── Key Pair Management (IndexedDB cache) ────────── */
 
   async _generateKeyPair() {
     return crypto.subtle.generateKey(
       { name: 'ECDH', namedCurve: 'P-256' },
-      false,   // private key NOT extractable
+      true,    // extractable — needed for password-wrapping & server sync
       ['deriveKey', 'deriveBits']
     );
   }

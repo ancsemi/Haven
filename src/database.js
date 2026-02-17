@@ -458,6 +458,18 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN public_key TEXT DEFAULT NULL");
   }
 
+  // ── Migration: E2E encrypted private key (per-account sync) ──
+  try {
+    db.prepare("SELECT encrypted_private_key FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN encrypted_private_key TEXT DEFAULT NULL");
+  }
+  try {
+    db.prepare("SELECT e2e_key_salt FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN e2e_key_salt TEXT DEFAULT NULL");
+  }
+
   return db;
 }
 

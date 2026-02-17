@@ -182,13 +182,14 @@
       position: relative; z-index: 2; max-width: 1000px; margin: 0 auto;
       border-radius: var(--radius-lg); overflow: hidden;
       box-shadow: 0 20px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border), 0 0 60px var(--accent-glow);
+      aspect-ratio: 1920 / 948; /* fixed ratio prevents layout shift during carousel */
     }
     .hero-screenshot img {
-      width: 100%; height: auto; display: block;
+      width: 100%; height: 100%; object-fit: cover; display: block;
       position: absolute; top: 0; left: 0;
       opacity: 0; transition: opacity 1s ease-in-out;
     }
-    .hero-screenshot img.active { opacity: 1; position: relative; }
+    .hero-screenshot img.active { opacity: 1; }
 
     /* ============================================
        PLATFORM SHOWCASE (Desktop + Mobile)
@@ -720,7 +721,7 @@
       <div class="section-header fade-in">
         <span class="overline">Dead Simple</span>
         <h2>Up and running in 3 steps</h2>
-        <p>No terminal commands, no config files, no Docker. Just double-click.</p>
+        <p>No terminal commands, no config files. Just double-click. (Docker supported too!)</p>
       </div>
 
       <div class="steps stagger">
@@ -767,7 +768,7 @@
           <div class="s-num">💻</div>
           <div>
             <h4>What do I need?</h4>
-            <p>Windows, Mac, or Linux. <a href="https://nodejs.org/" target="_blank">Node.js</a> (free, 2-click install). About 50 MB disk space. That's everything.</p>
+            <p>Windows, Mac, or Linux. <a href="https://nodejs.org/" target="_blank">Node.js</a> (free, 2-click install). About 50 MB disk space. That's everything. Or use <strong>Docker</strong> &mdash; <code>docker compose up -d</code> and you're done.</p>
           </div>
         </div>
       </div>
@@ -802,8 +803,8 @@
         </div>
         <div class="sell-card">
           <span class="card-icon">🔒</span>
-          <h3>Truly private</h3>
-          <p>No cloud. No telemetry. No analytics. No data collection. Messages live on YOUR computer and nowhere else. Haven doesn't phone home &mdash; ever.</p>
+          <h3>Truly private &mdash; with E2E encrypted DMs</h3>
+          <p>No cloud. No telemetry. No analytics. No data collection. Messages live on YOUR computer. Direct messages are end-to-end encrypted with AES-256-GCM &mdash; not even the server host can read them. Haven doesn't phone home &mdash; ever.</p>
         </div>
         <div class="sell-card">
           <span class="card-icon">📱</span>
@@ -825,20 +826,20 @@
 
       <div class="screenshot-gallery stagger">
         <div class="screenshot-item">
-          <img src="https://github.com/user-attachments/assets/f41a2be4-d00c-4fcc-a802-ca550e16e43c"
-               alt="Haven desktop — default Haven theme with chat and voice"
+          <img src="https://github.com/user-attachments/assets/a2acb368-0cd2-46ab-818e-b2a0785fe2de"
+               alt="Haven desktop — default Haven theme with voice chat, channels, and DMs"
                loading="lazy">
           <div class="ss-caption">Haven Theme &mdash; Full desktop chat</div>
         </div>
         <div class="screenshot-item">
-          <img src="https://github.com/user-attachments/assets/dc124f44-303f-43b0-807b-489da68a7efa"
-               alt="Haven desktop — Matrix theme showing full customization"
+          <img src="https://github.com/user-attachments/assets/b4d7fd0d-92a1-48f5-a961-574af969cc36"
+               alt="Haven desktop — activities, games, Flash emulation, and themes"
                loading="lazy">
-          <div class="ss-caption">Matrix Theme &mdash; Fully customizable</div>
+          <div class="ss-caption">Activities &mdash; Games, Flash emulation &amp; more</div>
         </div>
         <div class="screenshot-item screenshot-wide">
-          <img src="https://github.com/user-attachments/assets/1f4f8887-2e8a-4985-bb36-a6fbf9a42c49"
-               alt="Haven desktop — screen sharing with voice chat, multi-stream, and RGB theme"
+          <img src="https://github.com/user-attachments/assets/6630ed29-b28d-42cb-85b1-544ffa241576"
+               alt="Haven desktop — screen sharing with voice chat, multi-stream, and Win95 theme"
                loading="lazy">
           <div class="ss-caption">Screen Sharing &mdash; Voice chat with multi-stream</div>
         </div>
@@ -859,7 +860,7 @@
         <div class="feature-card">
           <span class="f-icon">🎵</span>
           <h3>Music &amp; Video Streaming</h3>
-          <p>Stream music and video directly to your voice channel. Share a YouTube link, drop an audio file, or screen-share a movie &mdash; everyone hears and sees it together in real time.</p>
+          <p>Spotify, YouTube, and SoundCloud Listen Together with synced playback and seek bar. Share audio files or screen-share a movie &mdash; everyone hears and sees it together in real time.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">💬</span>
@@ -877,9 +878,9 @@
           <p>Multi-stream support. Tiled grid layout. Resizable viewer. Share screens simultaneously.</p>
         </div>
         <div class="feature-card">
-          <span class="f-icon">✉️</span>
-          <h3>Direct Messages</h3>
-          <p>Private 1-on-1 conversations. Click any user's name to open a DM.</p>
+          <span class="f-icon">🔐</span>
+          <h3>Encrypted Direct Messages</h3>
+          <p>End-to-end encrypted DMs using ECDH + AES-256-GCM. Keys sync across devices via password wrapping. Not even the server host can read them.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">🎨</span>
@@ -888,13 +889,13 @@
         </div>
         <div class="feature-card">
           <span class="f-icon">🎞️</span>
-          <h3>GIF Search</h3>
-          <p>Search and send GIFs inline, powered by GIPHY. One-click setup for the admin.</p>
+          <h3>GIF Search &amp; /gif Command</h3>
+          <p>Search and send GIFs inline, powered by GIPHY. Use the <code>/gif</code> slash command for quick access. One-click admin setup.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">📁</span>
           <h3>File Sharing</h3>
-          <p>Share PDFs, docs, audio, video, archives up to 25 MB. Inline audio/video players.</p>
+          <p>Share PDFs, docs, audio, video, archives up to 1.5 GB (admin-configurable). Inline audio/video players.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">🔗</span>
@@ -933,8 +934,8 @@
         </div>
         <div class="feature-card">
           <span class="f-icon">🎮</span>
-          <h3>Built-in Game</h3>
-          <p>Shippy Container minigame with a server-wide leaderboard. High-score announcements.</p>
+          <h3>Games &amp; Activities</h3>
+          <p>Shippy Container, Flight, Learn to Fly 3, Bubble Tanks 3, Tanks, Super Smash Flash 2, and .io games. Server-wide leaderboards. Flash games via Ruffle emulator.</p>
         </div>
       </div>
     </div>
@@ -973,6 +974,13 @@
               <td><span class="cross">&#10007;</span></td>
               <td><span class="cross">&#10007;</span></td>
               <td><span class="cross">&#10007;</span></td>
+            </tr>
+            <tr>
+              <td>End-to-end encrypted DMs</td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="cross">&#10007;</span></td>
+              <td><span class="cross">&#10007;</span></td>
+              <td><span class="check">&#10003;</span></td>
             </tr>
             <tr>
               <td>Voice chat</td>
@@ -1220,7 +1228,7 @@
         imgs[current].classList.remove('active');
         current = (current + 1) % imgs.length;
         imgs[current].classList.add('active');
-      }, 2000);
+      }, 4000);
     })();
   </script>
 
