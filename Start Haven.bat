@@ -1,5 +1,4 @@
 @echo off
-setlocal EnableDelayedExpansion
 title Haven Server
 color 0A
 echo.
@@ -21,50 +20,52 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING
 
 :: Check Node.js is installed
 where node >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    color 0E
-    echo.
-    echo  [!] Node.js is not installed or not in PATH.
-    echo.
-    echo  You have two options:
-    echo.
-    echo    1) Copy and paste this command, then press Enter:
-    echo.
-    echo       winget install OpenJS.NodeJS.LTS
-    echo.
-    echo    2) Or download it manually from https://nodejs.org
-    echo.
-    echo  After installing, close this window and double-click Start Haven again.
-    echo.
-    set /p "AUTOINSTALL=  Would you like to install Node.js automatically now? (Y/N): "
-    if /i "!AUTOINSTALL!"=="Y" (
-        echo.
-        echo  [*] Installing Node.js via winget... This may take a minute.
-        echo.
-        winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
-        if !ERRORLEVEL! NEQ 0 (
-            color 0C
-            echo.
-            echo  [ERROR] Automatic install failed. Please install manually from https://nodejs.org
-            echo.
-            pause
-            exit /b 1
-        )
-        echo.
-        echo  [OK] Node.js installed! Close this window and double-click Start Haven again.
-        echo      ^(Node.js needs a fresh terminal to be recognized.^)
-        echo.
-        pause
-        exit /b 0
-    ) else (
-        echo.
-        echo  [*] No problem. Install Node.js and try again.
-        echo.
-        pause
-        exit /b 1
-    )
-)
+if %ERRORLEVEL% EQU 0 goto :NODE_OK
 
+color 0E
+echo.
+echo  [!] Node.js is not installed or not in PATH.
+echo.
+echo  You have two options:
+echo.
+echo    1) Copy and paste this command, then press Enter:
+echo.
+echo       winget install OpenJS.NodeJS.LTS
+echo.
+echo    2) Or download it manually from https://nodejs.org
+echo.
+echo  After installing, close this window and double-click Start Haven again.
+echo.
+set /p "AUTOINSTALL=  Would you like to install Node.js automatically now? [Y/N]: "
+if /i "%AUTOINSTALL%" NEQ "Y" goto :NODE_SKIP
+
+echo.
+echo  [*] Installing Node.js via winget... This may take a minute.
+echo.
+winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+if %ERRORLEVEL% NEQ 0 (
+    color 0C
+    echo.
+    echo  [ERROR] Automatic install failed. Please install manually from https://nodejs.org
+    echo.
+    pause
+    exit /b 1
+)
+echo.
+echo  [OK] Node.js installed! Close this window and double-click Start Haven again.
+echo      Node.js needs a fresh terminal to be recognized.
+echo.
+pause
+exit /b 0
+
+:NODE_SKIP
+echo.
+echo  [*] No problem. Install Node.js and try again.
+echo.
+pause
+exit /b 1
+
+:NODE_OK
 echo  [OK] Node.js found: & node -v
 
 :: Check if node_modules exists
