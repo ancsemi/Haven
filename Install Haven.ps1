@@ -1,4 +1,4 @@
-# ═══════════════════════════════════════════════════════════
+﻿# ═══════════════════════════════════════════════════════════
 # Haven — Graphical Installer (PowerShell WPF)
 # Usage: powershell -ExecutionPolicy Bypass -File "Install Haven.ps1"
 # ═══════════════════════════════════════════════════════════
@@ -506,7 +506,9 @@ $ui['btnNext3'].Add_Click({
     Set-Step 'step5' 'active' 'Configuring server...'
     try {
         $configScript = @"
-const db = require('./src/database');
+const { initDatabase, getDb } = require('./src/database');
+initDatabase();
+const db = getDb();
 db.prepare("INSERT OR REPLACE INTO server_settings(key,value) VALUES('server_name',?)").run('$($serverName -replace "'","''")');
 db.prepare("INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_enabled',?)").run('$tunnelEnabled');
 db.prepare("INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_provider',?)").run('$tunnelProvider');
@@ -518,7 +520,7 @@ const bcrypt = require('bcryptjs');
 const hash = bcrypt.hashSync('$($adminPass -replace "'","''")', 12);
 const existing = db.prepare("SELECT id FROM users WHERE username = ?").get('$adminUser');
 if (!existing) {
-  db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')").run('$adminUser', hash);
+  db.prepare("INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)").run('$adminUser', hash);
   console.log('Admin account created');
 } else {
   console.log('User already exists');
