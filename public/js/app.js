@@ -4954,9 +4954,11 @@ class HavenApp {
       if (msg._e2e) el.dataset.e2e = '1';
       el.innerHTML = `
         <span class="compact-time">${new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
-        <div class="message-content">${e2eTag}${pinnedTag}${this._formatContent(msg.content)}${editedHtml}</div>
+        <div class="message-body">
+          <div class="message-content">${e2eTag}${pinnedTag}${this._formatContent(msg.content)}${editedHtml}</div>
+          ${reactionsHtml}
+        </div>
         ${toolbarHtml}
-        ${reactionsHtml}
       `;
       return el;
     }
@@ -5024,7 +5026,7 @@ class HavenApp {
     const contentHtml = contentEl ? contentEl.innerHTML : '';
     const toolbarEl = compactEl.querySelector('.msg-toolbar');
     const toolbarHtml = toolbarEl ? toolbarEl.outerHTML : '';
-    const reactionsEl = compactEl.querySelector('.reactions');
+    const reactionsEl = compactEl.querySelector('.reactions-row');
     const reactionsHtml = reactionsEl ? reactionsEl.outerHTML : '';
     const pinnedTag = isPinned ? '<span class="pinned-tag" title="Pinned message">📌</span>' : '';
     const e2eTag = compactEl.dataset.e2e === '1' ? '<span class="e2e-tag" title="End-to-end encrypted">🔒</span>' : '';
@@ -8030,6 +8032,7 @@ class HavenApp {
   _showReactionPicker(msgEl, msgId) {
     // Remove any existing reaction picker
     document.querySelectorAll('.reaction-picker').forEach(el => el.remove());
+    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
 
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
@@ -8045,16 +8048,99 @@ class HavenApp {
       picker.appendChild(btn);
     });
 
+    // "..." button opens the full emoji picker for reactions
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'reaction-pick-btn reaction-more-btn';
+    moreBtn.textContent = '⋯';
+    moreBtn.title = 'All emojis';
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._showFullReactionPicker(msgEl, msgId, picker);
+    });
+    picker.appendChild(moreBtn);
+
     msgEl.appendChild(picker);
 
     // Close on click outside
     const close = (e) => {
-      if (!picker.contains(e.target)) {
+      if (!picker.contains(e.target) && !e.target.closest('.reaction-full-picker')) {
         picker.remove();
+        document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
         document.removeEventListener('click', close);
       }
     };
     setTimeout(() => document.addEventListener('click', close), 0);
+  }
+
+  _showFullReactionPicker(msgEl, msgId, quickPicker) {
+    // Remove any existing full picker
+    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
+
+    const panel = document.createElement('div');
+    panel.className = 'reaction-full-picker';
+
+    // Search bar
+    const searchRow = document.createElement('div');
+    searchRow.className = 'reaction-full-search';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search emojis...';
+    searchInput.className = 'reaction-full-search-input';
+    searchRow.appendChild(searchInput);
+    panel.appendChild(searchRow);
+
+    // Scrollable emoji grid
+    const grid = document.createElement('div');
+    grid.className = 'reaction-full-grid';
+
+    const renderAll = (filter) => {
+      grid.innerHTML = '';
+      const lowerFilter = filter ? filter.toLowerCase() : '';
+      for (const [category, emojis] of Object.entries(this.emojiCategories)) {
+        const matching = lowerFilter
+          ? emojis.filter(e => {
+              const names = this.emojiNames[e] || '';
+              return e.includes(lowerFilter) || names.toLowerCase().includes(lowerFilter) || category.toLowerCase().includes(lowerFilter);
+            })
+          : emojis;
+        if (matching.length === 0) continue;
+
+        const label = document.createElement('div');
+        label.className = 'reaction-full-category';
+        label.textContent = category;
+        grid.appendChild(label);
+
+        const row = document.createElement('div');
+        row.className = 'reaction-full-row';
+        matching.forEach(emoji => {
+          const btn = document.createElement('button');
+          btn.className = 'reaction-full-btn';
+          btn.textContent = emoji;
+          btn.title = this.emojiNames[emoji] || '';
+          btn.addEventListener('click', () => {
+            this.socket.emit('add-reaction', { messageId: msgId, emoji });
+            panel.remove();
+            quickPicker.remove();
+          });
+          row.appendChild(btn);
+        });
+        grid.appendChild(row);
+      }
+    };
+
+    renderAll('');
+    panel.appendChild(grid);
+
+    // Debounced search
+    let searchTimer;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => renderAll(searchInput.value.trim()), 150);
+    });
+
+    // Position the panel near the quick picker
+    msgEl.appendChild(panel);
+    searchInput.focus();
   }
 
   // ═══════════════════════════════════════════════════════
