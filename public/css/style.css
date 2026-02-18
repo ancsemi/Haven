@@ -9392,6 +9392,19 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 .mod-snap-zone.right { right: 0; top: 0; width: 80px; height: 100vh; }
 .mod-snap-zone.top { left: 0; top: 0; width: 100vw; height: 56px; }
 .mod-snap-zone.bottom { left: 0; bottom: 0; width: 100vw; height: 56px; }
+.mod-snap-zone.center {
+  left: 50%; top: 50%; width: 160px; height: 80px;
+  transform: translate(-50%, -50%);
+  border-radius: 12px;
+}
+.mod-snap-zone.right-sidebar {
+  right: 0; top: 30%; width: 80px; height: 40vh;
+  border-radius: 8px 0 0 8px;
+}
+.mod-snap-zone.left-sidebar {
+  left: 0; top: 30%; width: 80px; height: 40vh;
+  border-radius: 0 8px 8px 0;
+}
 
 #app[data-status-pos="top"] #status-bar {
   order: -1;
@@ -9421,6 +9434,65 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 #app-body .sidebar[data-panel-pos="left"] { order: 1; }
 #app-body .main { order: 2; }
 #app-body .right-sidebar { order: 3; }
+
+/* Right sidebar — snapped left */
+#app-body .right-sidebar[data-panel-pos="left"] {
+  order: 1;
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+#app-body .right-sidebar[data-panel-pos="left"] .right-sidebar-resize-handle {
+  left: auto; right: -3px;
+  cursor: col-resize;
+}
+#app-body .right-sidebar[data-panel-pos="right"] { order: 3; }
+
+/* Floating panel (center) — any panel */
+.mod-float {
+  position: fixed !important;
+  z-index: 500;
+  border-radius: 10px;
+  border: 1px solid var(--border-light) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
+  resize: both;
+  overflow: auto;
+}
+.right-sidebar.mod-float {
+  top: 80px; right: 24px;
+  width: 280px; height: 420px;
+  max-width: 50vw; max-height: 70vh;
+}
+
+/* Voice panel — floating */
+#voice-panel.mod-float {
+  position: fixed !important;
+  bottom: 80px; right: 24px;
+  width: 220px;
+  z-index: 600;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  background: var(--bg-secondary);
+}
+
+/* Voice panel — docked to bottom of screen */
+#voice-panel.mod-voice-bottom {
+  position: fixed !important;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 400px; max-width: 90vw;
+  z-index: 600;
+  border-radius: 12px 12px 0 0;
+  border: 1px solid var(--border-light);
+  border-bottom: none;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+  background: var(--bg-secondary);
+}
+
+/* Voice panel — moved to left sidebar */
+#voice-panel.mod-voice-left {
+  border-top: 1px solid var(--border);
+}
 
 .mod-toast {
   position: fixed;

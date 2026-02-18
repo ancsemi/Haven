@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // Haven — Mod Mode (layout customisation)
-// Lets users drag sidebar sections and snap panels to edges
+// Lets users drag sidebar sections and snap any panel to
+// any edge: left, right, top, bottom, or center (float)
 // ═══════════════════════════════════════════════════════════
 
 class ModMode {
@@ -10,11 +11,19 @@ class ModMode {
     this.sections = [];
     this.dragSrc = null;
     this.savedLayout = null;
-    this.panelLayout = { 'server-bar': 'left', 'sidebar': 'left', 'status-bar': 'bottom' };
+    this.panelLayout = {
+      'server-bar':    'left',
+      'sidebar':       'left',
+      'right-sidebar': 'right',
+      'status-bar':    'bottom',
+      'voice-panel':   'right-sidebar'
+    };
     this.panelDefs = {
-      'server-bar': { selector: '#server-bar', positions: ['left', 'right'] },
-      'sidebar':    { selector: '.sidebar',    positions: ['left', 'right'] },
-      'status-bar': { selector: '#status-bar', positions: ['bottom', 'top'] }
+      'server-bar':    { selector: '#server-bar',     positions: ['left', 'right'] },
+      'sidebar':       { selector: '.sidebar',        positions: ['left', 'right'] },
+      'right-sidebar': { selector: '.right-sidebar',  positions: ['left', 'right', 'center'] },
+      'status-bar':    { selector: '#status-bar',     positions: ['bottom', 'top'] },
+      'voice-panel':   { selector: '#voice-panel',    positions: ['right-sidebar', 'left-sidebar', 'bottom', 'center'] }
     };
     this.panelHandles = new Map();
     this.snapZones = [];
@@ -81,7 +90,7 @@ class ModMode {
       s.addEventListener('dragend',   this._boundDragEnd);
     });
     this._enablePanelMode();
-    this._showToast('Mod Mode ON — drag sections or panel handles');
+    this._showToast('Mod Mode ON \u2014 drag sections or panel handles to rearrange');
   }
 
   _disable() {
@@ -100,7 +109,7 @@ class ModMode {
     this._disablePanelMode();
     this._saveLayout();
     this._savePanelLayout();
-    this._showToast('Mod Mode OFF — layout saved');
+    this._showToast('Mod Mode OFF \u2014 layout saved');
   }
 
   // ── Section drag events ──
@@ -163,7 +172,8 @@ class ModMode {
         handle = document.createElement('button');
         handle.type = 'button';
         handle.className = 'mod-panel-handle';
-        handle.textContent = '↕';
+        handle.textContent = '\u2725';
+        handle.title = `Drag to reposition ${key.replace(/-/g, ' ')}`;
         panel.appendChild(handle);
       }
       handle.setAttribute('draggable', 'true');
@@ -206,12 +216,17 @@ class ModMode {
   _showSnapZones(key) {
     this._clearSnapZones();
     const positions = this.panelDefs[key]?.positions || [];
+    const labels = {
+      left: '\u2190 Left', right: 'Right \u2192', top: '\u2191 Top',
+      bottom: '\u2193 Bottom', center: '\u2b24 Float',
+      'right-sidebar': 'In right panel', 'left-sidebar': 'In left panel'
+    };
     positions.forEach(pos => {
       const zone = document.createElement('div');
       zone.className = `mod-snap-zone ${pos}`;
       zone.dataset.panelKey = key;
       zone.dataset.pos = pos;
-      zone.textContent = `${key.replace('-', ' ')}: ${pos}`;
+      zone.textContent = labels[pos] || pos;
       zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('active'); });
       zone.addEventListener('dragleave', () => zone.classList.remove('active'));
       zone.addEventListener('drop', (e) => {
@@ -234,7 +249,8 @@ class ModMode {
     this.panelLayout[key] = pos;
     this.applyPanelLayout();
     this._savePanelLayout();
-    this._showToast(`Moved ${key.replace('-', ' ')} to ${pos}`);
+    const label = pos.replace(/-/g, ' ');
+    this._showToast(`Moved ${key.replace(/-/g, ' ')} \u2192 ${label}`);
   }
 
   // ── Persistence ──
@@ -263,17 +279,63 @@ class ModMode {
   applyPanelLayout() {
     const serverBar = document.getElementById('server-bar');
     const sidebar = document.querySelector('.sidebar');
+    const rightSidebar = document.querySelector('.right-sidebar');
     const app = document.getElementById('app');
+    const appBody = document.getElementById('app-body');
+    const voicePanel = document.getElementById('voice-panel');
+
+    // Server bar & sidebar positions
     if (serverBar) serverBar.dataset.panelPos = this.panelLayout['server-bar'];
     if (sidebar)   sidebar.dataset.panelPos = this.panelLayout.sidebar;
-    if (app)       app.dataset.statusPos = this.panelLayout['status-bar'];
+
+    // Status bar position
+    if (app) app.dataset.statusPos = this.panelLayout['status-bar'];
+
+    // Right sidebar position
+    if (rightSidebar) {
+      const rsPos = this.panelLayout['right-sidebar'];
+      rightSidebar.dataset.panelPos = rsPos;
+      // Remove float class first
+      rightSidebar.classList.remove('mod-float');
+      if (rsPos === 'center') {
+        rightSidebar.classList.add('mod-float');
+      }
+    }
+
+    // Voice panel position
+    if (voicePanel) {
+      const vpPos = this.panelLayout['voice-panel'];
+      voicePanel.dataset.modPos = vpPos;
+      voicePanel.classList.remove('mod-float', 'mod-voice-bottom', 'mod-voice-left');
+
+      if (vpPos === 'center') {
+        voicePanel.classList.add('mod-float');
+      } else if (vpPos === 'bottom') {
+        voicePanel.classList.add('mod-voice-bottom');
+      } else if (vpPos === 'left-sidebar') {
+        voicePanel.classList.add('mod-voice-left');
+        // Move voice panel DOM into left sidebar
+        const sidebarBottom = document.querySelector('.sidebar-bottom');
+        if (sidebarBottom && voicePanel.parentElement !== sidebarBottom) {
+          sidebarBottom.insertBefore(voicePanel, sidebarBottom.firstChild);
+        }
+      } else {
+        // Default: right-sidebar — ensure it's in the right sidebar
+        if (rightSidebar && voicePanel.closest('.right-sidebar') !== rightSidebar) {
+          rightSidebar.appendChild(voicePanel);
+        }
+      }
+    }
   }
 
   resetLayout() {
     localStorage.removeItem('haven-layout');
     localStorage.removeItem('haven-panel-layout');
     this.savedLayout = null;
-    this.panelLayout = { 'server-bar': 'left', 'sidebar': 'left', 'status-bar': 'bottom' };
+    this.panelLayout = {
+      'server-bar': 'left', 'sidebar': 'left', 'right-sidebar': 'right',
+      'status-bar': 'bottom', 'voice-panel': 'right-sidebar'
+    };
     const defaultOrder = ['join', 'create', 'channels'];
     const existing = new Map();
     this.sections.forEach(s => existing.set(s.dataset.modId, s));
@@ -282,6 +344,15 @@ class ModMode {
       if (el) this.container.appendChild(el);
     });
     this._cacheSections();
+
+    // Move voice panel back to right sidebar
+    const voicePanel = document.getElementById('voice-panel');
+    const rightSidebar = document.querySelector('.right-sidebar');
+    if (voicePanel && rightSidebar) {
+      rightSidebar.appendChild(voicePanel);
+      voicePanel.classList.remove('mod-float', 'mod-voice-bottom', 'mod-voice-left');
+    }
+
     this.applyPanelLayout();
     this._showToast('Layout reset to default');
   }
