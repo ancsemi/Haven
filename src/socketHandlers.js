@@ -3109,6 +3109,17 @@ function setupSocketHandlers(io, db) {
       // Store only the public components
       const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
       try {
+        // Prevent accidental key overwrites: reject if a DIFFERENT key already exists
+        // unless the client explicitly sets force=true (key reset / recovery)
+        const current = db.prepare('SELECT public_key FROM users WHERE id = ?').get(socket.user.id);
+        if (current && current.public_key && !data.force) {
+          const existing = JSON.parse(current.public_key);
+          if (existing.x !== publicJwk.x || existing.y !== publicJwk.y) {
+            console.warn(`[E2E] User ${socket.user.id} (${socket.user.username}) tried to overwrite public key — blocked`);
+            socket.emit('public-key-conflict', { existing });
+            return;
+          }
+        }
         db.prepare('UPDATE users SET public_key = ? WHERE id = ?')
           .run(JSON.stringify(publicJwk), socket.user.id);
         socket.emit('public-key-published');
@@ -3151,15 +3162,16 @@ function setupSocketHandlers(io, db) {
 
     socket.on('get-encrypted-key', () => {
       try {
-        const row = db.prepare('SELECT encrypted_private_key, e2e_key_salt FROM users WHERE id = ?')
+        const row = db.prepare('SELECT encrypted_private_key, e2e_key_salt, public_key FROM users WHERE id = ?')
           .get(socket.user.id);
         socket.emit('encrypted-key-result', {
           encryptedKey: row?.encrypted_private_key || null,
-          salt: row?.e2e_key_salt || null
+          salt: row?.e2e_key_salt || null,
+          hasPublicKey: !!(row && row.public_key)
         });
       } catch (err) {
         console.error('Get encrypted key error:', err);
-        socket.emit('encrypted-key-result', { encryptedKey: null, salt: null });
+        socket.emit('encrypted-key-result', { encryptedKey: null, salt: null, hasPublicKey: false });
       }
     });
 

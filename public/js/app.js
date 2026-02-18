@@ -10057,7 +10057,12 @@ class HavenApp {
   /** Set up E2E listeners and publish key after successful init */
   _e2eSetupListeners() {
     // Publish our public key to the server
-    this.socket.emit('publish-public-key', { jwk: this.e2e.publicKeyJwk });
+    const publishData = { jwk: this.e2e.publicKeyJwk };
+    if (this._e2eForcePublish) {
+      publishData.force = true;
+      this._e2eForcePublish = false;
+    }
+    this.socket.emit('publish-public-key', publishData);
     // Listen for public key responses (only attach once)
     if (!this._e2eListenersAttached) {
       this._e2eListenersAttached = true;
@@ -10079,22 +10084,34 @@ class HavenApp {
           this._retryDecryptForUser(data.userId);
         }
       });
+      // Handle public key conflict — our IndexedDB key doesn't match server's
+      // Force-publish since we actually have the private key (server's is stale)
+      this.socket.on('public-key-conflict', () => {
+        console.warn('[E2E] Public key conflict — force-publishing our key');
+        this.socket.emit('publish-public-key', { jwk: this.e2e.publicKeyJwk, force: true });
+      });
     }
     console.log('[E2E] Initialized, public key published');
   }
 
   /** Show a banner prompting the user to re-enter their password to unlock E2E */
   _showE2EPasswordRecovery() {
-    // Create a non-blocking banner at the top of the chat area
     const existing = document.getElementById('e2e-recovery-banner');
     if (existing) existing.remove();
+
+    const isLost = this.e2e && this.e2e.keyBackupLost;
+    const message = isLost
+      ? '🔒 Encryption backup was lost. Enter your password to generate new keys (old encrypted messages will be unreadable).'
+      : '🔒 Enter your password to unlock end-to-end encryption';
+    const buttonText = isLost ? 'Reset Keys' : 'Unlock';
+
     const banner = document.createElement('div');
     banner.id = 'e2e-recovery-banner';
     banner.innerHTML = `
       <div class="e2e-recovery-inner">
-        <span>🔒 Enter your password to unlock end-to-end encryption</span>
+        <span>${message}</span>
         <input type="password" id="e2e-recovery-pw" placeholder="Password" autocomplete="current-password">
-        <button class="btn-sm btn-accent" id="e2e-recovery-btn">Unlock</button>
+        <button class="btn-sm btn-accent" id="e2e-recovery-btn">${buttonText}</button>
         <button class="btn-sm" id="e2e-recovery-dismiss">✕</button>
       </div>
     `;
@@ -10106,19 +10123,24 @@ class HavenApp {
       const pw = banner.querySelector('#e2e-recovery-pw').value;
       if (!pw) return;
       const btn = banner.querySelector('#e2e-recovery-btn');
-      btn.textContent = 'Unlocking…';
+      btn.textContent = isLost ? 'Resetting…' : 'Unlocking…';
       btn.disabled = true;
       const ok = await this.e2e.recoverWithPassword(this.socket, pw);
       if (ok) {
         banner.remove();
+        // If keys were reset, force-publish the new public key
+        if (this.e2e._forcePublish) {
+          this._e2eForcePublish = true;
+          this.e2e._forcePublish = false;
+        }
         this._e2eSetupListeners();
-        this._showToast('Encryption keys recovered ✓', 'success');
+        this._showToast(isLost ? 'Encryption keys reset ✓' : 'Encryption keys recovered ✓', 'success');
         // Re-fetch current DM messages to decrypt them
         if (this.currentChannel) {
           this.socket.emit('get-messages', { code: this.currentChannel });
         }
       } else {
-        btn.textContent = 'Unlock';
+        btn.textContent = buttonText;
         btn.disabled = false;
         this._showToast('Wrong password — try again', 'error');
       }
