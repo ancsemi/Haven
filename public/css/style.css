@@ -4109,6 +4109,137 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 
 .server-icon.remote:hover .server-remove { display: flex; }
 
+/* Manage Servers gear button */
+.server-icon.manage-servers {
+  background: transparent;
+  border: 2px dashed var(--border-light);
+  margin-top: 2px;
+}
+.server-icon.manage-servers:hover {
+  border-color: var(--accent);
+  background: transparent;
+  border-radius: 12px;
+}
+.server-icon.manage-servers .server-icon-text {
+  font-size: 18px;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+.server-icon.manage-servers:hover .server-icon-text {
+  color: var(--accent);
+}
+
+/* Manage Servers modal list */
+.manage-servers-list {
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+.manage-servers-list:empty::before {
+  content: 'No servers added yet. Click "+ Add Server" below.';
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 0;
+  font-size: 13px;
+}
+.manage-server-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.manage-server-row:hover {
+  background: var(--bg-hover);
+}
+.manage-server-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+}
+.manage-server-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.manage-server-info {
+  flex: 1;
+  min-width: 0;
+}
+.manage-server-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.manage-server-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+.manage-server-status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 9px;
+  flex-shrink: 0;
+}
+.manage-server-status.online {
+  background: rgba(67, 181, 129, 0.15);
+  color: var(--success);
+}
+.manage-server-status.offline {
+  background: rgba(240, 71, 71, 0.12);
+  color: var(--text-muted);
+}
+.manage-server-status.unknown {
+  background: rgba(250, 166, 26, 0.12);
+  color: var(--warning);
+}
+.manage-server-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.manage-server-actions button {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+.manage-server-actions button:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+.manage-server-actions button.danger-action:hover {
+  background: #3a1515;
+  color: var(--danger);
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    MODAL
@@ -4813,6 +4944,31 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   transform: scale(1.2);
 }
 
+/* Custom emoji (inline in messages + pickers) */
+.custom-emoji {
+  width: 1.4em;
+  height: 1.4em;
+  vertical-align: middle;
+  object-fit: contain;
+  display: inline;
+  margin: 0 1px;
+}
+.reaction-custom-emoji {
+  width: 1em;
+  height: 1em;
+}
+.emoji-item .custom-emoji {
+  width: 24px;
+  height: 24px;
+}
+.reaction-full-btn .custom-emoji {
+  width: 22px;
+  height: 22px;
+}
+.custom-emoji-preview {
+  border-radius: 4px;
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    GIF PICKER
@@ -5078,6 +5234,42 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 1px;
+}
+
+.reaction-pick-sep {
+  color: var(--text-muted);
+  font-size: 16px;
+  opacity: 0.4;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  padding: 0 1px;
+}
+
+.reaction-gear-btn {
+  font-size: 14px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.reaction-gear-btn:hover {
+  opacity: 1;
+}
+
+.quick-emoji-slots {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.quick-emoji-slot {
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.quick-emoji-slot.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
 }
 
 /* ── Full Reaction Emoji Picker (opened via "...") ── */
@@ -5947,13 +6139,6 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
    SETTINGS POPOUT MODAL
    ═══════════════════════════════════════════════════════════ */
 
-.modal-settings {
-  max-width: 460px;
-  max-height: 85vh;
-  overflow-y: auto;
-  padding: 0;
-}
-
 .settings-header {
   display: flex;
   align-items: center;
@@ -5991,6 +6176,72 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 .settings-close-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+/* ── Settings Layout (Nav + Body) ─────────────────────── */
+.settings-layout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.settings-nav {
+  width: 150px;
+  min-width: 150px;
+  padding: 8px 0 8px 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-nav-group {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 10px 10px 4px;
+  user-select: none;
+}
+
+.settings-nav-item {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-nav-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.settings-nav-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  min-width: 0;
+}
+
+.modal-settings {
+  max-width: 640px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 
 /* ── Activities / Games Launcher ──────────────────────── */
@@ -6735,8 +6986,10 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   .modal { padding: 20px; width: 95%; max-height: 85vh; overflow-y: auto; }
   .modal h3 { font-size: 18px; }
 
-  /* Settings modal — scrollable on phone */
-  .modal-settings { max-height: 80vh; overflow-y: auto; }
+  /* Settings modal — scrollable on phone, hide nav */
+  .modal-settings { max-height: 80vh; }
+  .settings-nav { display: none; }
+  .settings-body { overflow-y: auto; }
 
   /* Toasts — full width */
   #toast-container { left: 50%; right: auto; top: calc(8px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }
@@ -9151,6 +9404,12 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   width: 28px;
   height: 28px;
   font-size: 11px;
+}
+[data-density="compact"] .message-compact {
+  padding-left: 44px;
+}
+[data-density="compact"] .message-compact .compact-time {
+  font-size: 9px;
 }
 [data-density="compact"] .msg-body {
   font-size: 13px;

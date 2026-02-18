@@ -11,6 +11,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [1.9.1] — 2026-02-18
+
+### Added
+- **Custom server emojis** — admins can upload PNG/GIF/WebP images as custom emojis (`:emoji_name:` syntax). Works in messages, reactions, and the emoji picker.
+- **Emoji quickbar customization** — click the ⚙️ gear icon on the reaction picker to swap any of the 8 quick-react slots with any emoji (including custom ones). Saved per-user in localStorage.
+- **DM deletion** — right-click (or click "...") on any DM conversation to delete it. Removes from your sidebar only.
+- **Reply banner click-to-scroll** — clicking the reply preview above a message now smooth-scrolls to the original message and highlights it briefly.
+- **Settings navigation sidebar** — the settings modal now has a left-side index with clickable categories (Layout, Sounds, Push, Password, and all admin subsections). Hidden on mobile.
+- **Popout modals for sounds & emojis** — Custom Sounds and Custom Emojis management moved out of the inline settings panel into their own dedicated modals (like Bots/Roles). Keeps the settings menu lean.
+- **JWT identity cross-check** — tokens are now validated against the actual database user, preventing token reuse across accounts (security hardening).
+
+### Fixed
+- **Docker entrypoint CRLF crash** — added `.gitattributes` to force LF line endings on shell scripts, plus a `sed` fallback in the Dockerfile.
+- **Quick emoji editor immediately closing** — click events inside the editor propagated to the document-level close handler. Added `stopPropagation()` to all interactive elements.
+- **Gear icon placement** — moved the ⚙️ customization button to the right of the "⋯" more-emojis button so frequent "..." clicks aren't blocked.
+
+---
+
 ## [1.9.0] — 2026-02-17
 
 ### Added

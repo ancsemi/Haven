@@ -1,0 +1,5 @@
+# Force Unix line endings for shell scripts so Docker builds
+# work regardless of the user's core.autocrlf setting.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile text eol=lf

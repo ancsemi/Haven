@@ -694,6 +694,68 @@ app.delete('/api/sounds/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete sound' }); }
 });
 
+// ── Custom emoji upload (admin only, image, max 256 KB) ──
+const emojiUpload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 256 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(png|gif|webp|jpeg)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error('Only images allowed (png, gif, webp, jpg)'));
+  }
+});
+
+app.post('/api/upload-emoji', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  emojiUpload.single('emoji')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+    if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
+    if (name.length > 30) name = name.slice(0, 30);
+
+    const { getDb } = require('./src/database');
+    try {
+      getDb().prepare(
+        'INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)'
+      ).run(name, req.file.filename, user.id);
+      res.json({ name, url: `/uploads/${req.file.filename}` });
+    } catch { res.status(500).json({ error: 'Failed to save emoji' }); }
+  });
+});
+
+app.get('/api/emojis', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const { getDb } = require('./src/database');
+  try {
+    const emojis = getDb().prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all();
+    res.json({ emojis: emojis.map(e => ({ name: e.name, url: `/uploads/${e.filename}` })) });
+  } catch { res.json({ emojis: [] }); }
+});
+
+app.delete('/api/emojis/:name', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  const name = req.params.name;
+  const { getDb } = require('./src/database');
+  try {
+    const row = getDb().prepare('SELECT filename FROM custom_emojis WHERE name = ?').get(name);
+    if (row) {
+      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
+      getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
+    }
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Failed to delete emoji' }); }
+});
+
 // ── GIF search proxy (GIPHY API — keeps key server-side) ──
 function getGiphyKey() {
   // Check database first (set via admin panel), fall back to .env

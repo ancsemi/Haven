@@ -29,6 +29,9 @@
         <button class="server-icon add-server" id="add-server-btn" title="Add Server">
           <span class="server-icon-text">+</span>
         </button>
+        <button class="server-icon manage-servers" id="manage-servers-btn" title="Manage Servers">
+          <span class="server-icon-text">⚙</span>
+        </button>
       </nav>
 
       <!-- ─── Left Sidebar ────────────────────────────── -->
@@ -711,8 +714,31 @@
         <button class="settings-close-btn" id="close-settings-btn">&times;</button>
       </div>
 
+      <div class="settings-layout">
+        <nav class="settings-nav" id="settings-nav">
+          <div class="settings-nav-group">User</div>
+          <div class="settings-nav-item active" data-target="section-density">📐 Layout</div>
+          <div class="settings-nav-item" data-target="section-sounds">🔔 Sounds</div>
+          <div class="settings-nav-item" data-target="section-push">📲 Push</div>
+          <div class="settings-nav-item" data-target="section-password">🔒 Password</div>
+          <div class="settings-nav-group settings-nav-admin" style="display:none">Admin</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 Branding</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-members" style="display:none">👥 Members</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🛡️ Whitelist</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-invite" style="display:none">🌐 Invite Code</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-cleanup" style="display:none">🗑️ Cleanup</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-uploads" style="display:none">📁 Uploads</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-sounds-admin" style="display:none">🔊 Sounds</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-emojis" style="display:none">😎 Emojis</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-roles" style="display:none">👑 Roles</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 Tunnel</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🤖 Bots</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-modmode" style="display:none">🔧 Mod Mode</div>
+        </nav>
+        <div class="settings-body">
+
       <!-- Layout Density Section -->
-      <div class="settings-section">
+      <div class="settings-section" id="section-density">
         <h5 class="settings-section-title">📐 Layout Density</h5>
         <div class="density-picker" id="density-picker">
           <button type="button" class="density-btn" data-density="compact" title="Compact — tighter spacing, smaller avatars">
@@ -731,7 +757,7 @@
       </div>
 
       <!-- Sounds Section -->
-      <div class="settings-section">
+      <div class="settings-section" id="section-sounds">
         <h5 class="settings-section-title">🔔 Sounds</h5>
         <div class="notif-settings">
           <label class="toggle-row">
@@ -799,7 +825,7 @@
       </div>
 
       <!-- Push Notifications Section -->
-      <div class="settings-section">
+      <div class="settings-section" id="section-push">
         <h5 class="settings-section-title">📲 Push Notifications</h5>
         <div class="notif-settings">
           <label class="toggle-row">
@@ -812,7 +838,7 @@
       </div>
 
       <!-- Password Change Section -->
-      <div class="settings-section">
+      <div class="settings-section" id="section-password">
         <h5 class="settings-section-title">🔒 Password</h5>
         <div class="password-change-form">
           <div class="form-group compact">
@@ -834,7 +860,7 @@
         <h5 class="settings-section-title">🛡️ Admin</h5>
 
         <!-- Server Branding -->
-        <div class="admin-settings">
+        <div class="admin-settings" id="section-branding">
           <h5 class="settings-section-subtitle">🏠 Server Branding</h5>
           <label class="select-row">
             <span>Server Name</span>
@@ -855,7 +881,7 @@
           </div>
         </div>
 
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div class="admin-settings" id="section-members" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <label class="select-row">
             <span>Show Members</span>
             <select id="member-visibility-select">
@@ -866,8 +892,8 @@
           </label>
           <button class="btn-sm btn-full" id="view-bans-btn">📋 View Bans</button>
         </div>
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">� Whitelist</h5>
+        <div class="admin-settings" id="section-whitelist" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🛡️ Whitelist</h5>
           <label class="toggle-row">
             <span>Enabled</span>
             <input type="checkbox" id="whitelist-enabled">
@@ -883,7 +909,7 @@
             </div>
           </div>
         </div>
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div class="admin-settings" id="section-invite" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🌐 Server Invite Code</h5>
           <small class="settings-hint">A single code that adds people to every channel &amp; sub-channel on the server</small>
           <div style="margin-top:8px;">
@@ -897,7 +923,7 @@
             </div>
           </div>
         </div>
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div class="admin-settings" id="section-cleanup" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🗑️ Auto-Cleanup</h5>
           <label class="toggle-row">
             <span>Enabled</span>
@@ -915,30 +941,30 @@
           <small class="settings-hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
           <button class="btn-sm btn-full" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 Run Cleanup Now</button>
         </div>
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">� File Uploads</h5>
+        <div class="admin-settings" id="section-uploads" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">📁 File Uploads</h5>
           <label class="select-row">
             <span>Max Upload Size (MB)</span>
             <input type="number" id="max-upload-mb" min="1" max="2048" value="25" class="settings-number-input">
           </label>
           <small class="settings-hint">Maximum file size users can upload (1–2048 MB / 2 GB, default 25)</small>
         </div>
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">�🔊 Custom Sounds</h5>
-          <small class="settings-hint">Upload audio files for custom notification sounds (max 1 MB each)</small>
+        <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🔊 Custom Sounds</h5>
+          <small class="settings-hint">Upload audio files for custom notification sounds</small>
           <div style="margin-top:8px;">
-            <div class="whitelist-add-row">
-              <input type="text" id="sound-name-input" placeholder="Sound name..." maxlength="30" class="settings-text-input">
-              <input type="file" id="sound-file-input" accept="audio/*" style="max-width:120px;font-size:11px">
-              <button class="btn-sm btn-accent" id="sound-upload-btn">Upload</button>
-            </div>
-            <div id="custom-sounds-list" style="margin-top:8px;">
-              <p class="muted-text">No custom sounds uploaded</p>
-            </div>
+            <button class="btn-sm btn-full btn-accent" id="open-sound-manager-btn">⚙️ Manage Sounds</button>
+          </div>
+        </div>
+        <div class="admin-settings" id="section-emojis" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">😎 Custom Emojis</h5>
+          <small class="settings-hint">Upload images for custom server emojis</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-emoji-manager-btn">⚙️ Manage Emojis</button>
           </div>
         </div>
         <!-- Role Management (Admin only) -->
-        <div class="admin-settings" id="role-mgmt-section" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div class="admin-settings" id="section-roles" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">👑 Role Management</h5>
           <small class="settings-hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
           <div style="margin-top:8px;">
@@ -949,7 +975,7 @@
           </div>
         </div>
         <!-- Tunnel settings (Admin only) -->
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div class="admin-settings" id="section-tunnel" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🧭 Tunnel</h5>
           <label class="toggle-row">
             <span>Enabled</span>
@@ -965,7 +991,7 @@
           <div id="tunnel-status-display" class="muted-text" style="margin-top:4px;font-size:11px;">Inactive</div>
         </div>
         <!-- Webhooks / Bots (Admin only) -->
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div class="admin-settings" id="section-bots" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🤖 Webhooks / Bots</h5>
           <small class="settings-hint">Create and manage webhook bots that can post messages to channels.</small>
           <div style="margin-top:8px;">
@@ -976,7 +1002,7 @@
           </div>
         </div>
         <!-- Mod Mode (Admin only) -->
-        <div class="admin-settings" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div class="admin-settings" id="section-modmode" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔧 Mod Mode</h5>
           <small class="settings-hint">Rearrange sidebar sections and snap server/sidebar/status panels</small>
           <button class="btn-sm btn-full" id="mod-mode-settings-toggle" style="margin-top:6px;">🔧 Toggle Mod Mode</button>
@@ -988,6 +1014,8 @@
           <small class="settings-hint" style="text-align:center;margin-top:4px">Changes only apply when you click Save. Close (✕) to cancel.</small>
         </div>
       </div>
+        </div><!-- /settings-body -->
+      </div><!-- /settings-layout -->
     </div>
   </div>
 
@@ -1052,6 +1080,44 @@
     </div>
   </div>
 
+  <!-- Sound Management Modal -->
+  <div class="modal-overlay" id="sound-modal" style="display:none">
+    <div class="modal" style="max-width:520px">
+      <h3>🔊 Sound Management</h3>
+      <small class="settings-hint" style="display:block;margin-bottom:12px">Upload audio files for custom notification sounds (max 1 MB each)</small>
+      <div class="whitelist-add-row">
+        <input type="text" id="sound-name-input" placeholder="Sound name..." maxlength="30" class="settings-text-input">
+        <input type="file" id="sound-file-input" accept="audio/*" style="max-width:120px;font-size:11px">
+        <button class="btn-sm btn-accent" id="sound-upload-btn">Upload</button>
+      </div>
+      <div id="custom-sounds-list" style="margin-top:12px;">
+        <p class="muted-text">No custom sounds uploaded</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="close-sound-modal-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Emoji Management Modal -->
+  <div class="modal-overlay" id="emoji-modal" style="display:none">
+    <div class="modal" style="max-width:520px">
+      <h3>😎 Emoji Management</h3>
+      <small class="settings-hint" style="display:block;margin-bottom:12px">Upload images for custom server emojis (max 256 KB, png/gif/webp). Name must be lowercase, no spaces.</small>
+      <div class="whitelist-add-row">
+        <input type="text" id="emoji-name-input" placeholder="emoji_name" maxlength="30" class="settings-text-input">
+        <input type="file" id="emoji-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:11px">
+        <button class="btn-sm btn-accent" id="emoji-upload-btn">Upload</button>
+      </div>
+      <div id="custom-emojis-list" style="margin-top:12px;">
+        <p class="muted-text">No custom emojis uploaded</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="close-emoji-modal-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="bans-modal" style="display:none">
     <div class="modal modal-wide">
       <h3>Banned Users</h3>
@@ -1086,9 +1152,24 @@
     </div>
   </div>
 
+  <!-- Manage Servers Modal -->
+  <div class="modal-overlay" id="manage-servers-modal" style="display:none">
+    <div class="modal" style="max-width:480px">
+      <h3>⚙ Manage Servers</h3>
+      <p class="modal-desc">Edit or remove your linked servers</p>
+      <div id="manage-servers-list" class="manage-servers-list"></div>
+      <div class="modal-actions" style="justify-content:space-between">
+        <button class="btn-sm btn-accent" id="manage-servers-add-btn">+ Add Server</button>
+        <button class="btn-sm" id="manage-servers-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Channel context menu (appears on "..." hover button) -->
   <div id="channel-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="mute">🔔 Mute Channel</button>
+    <button class="channel-ctx-item" data-action="join-voice">🎙️ Join Voice</button>
+    <button class="channel-ctx-item" data-action="leave-voice" style="display:none">📴 Disconnect Voice</button>
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item mod-only" data-action="rename-channel">✏️ Rename Channel</button>
     <button class="channel-ctx-item mod-only" data-action="create-sub-channel">📁 Create Sub-channel</button>
@@ -1101,6 +1182,13 @@
     <button class="channel-ctx-item admin-only" data-action="webhooks">🤖 Webhooks</button>
     <hr class="channel-ctx-sep admin-only">
     <button class="channel-ctx-item admin-only danger" data-action="delete">🗑️ Delete Channel</button>
+  </div>
+
+  <!-- DM context menu -->
+  <div id="dm-ctx-menu" class="channel-ctx-menu" style="display:none">
+    <button class="channel-ctx-item" data-action="dm-mute">🔔 Mute DM</button>
+    <hr class="channel-ctx-sep">
+    <button class="channel-ctx-item danger" data-action="dm-delete">🗑️ Delete DM</button>
   </div>
 
   <!-- Organize Sub-channels Modal -->

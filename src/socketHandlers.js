@@ -352,6 +352,13 @@ function setupSocketHandlers(io, db) {
     // Refresh display_name, avatar AND is_admin from DB (JWT may be stale)
     try {
       const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape FROM users WHERE id = ?').get(user.id);
+
+      // Identity cross-check: reject if the DB user_id now belongs to a different account
+      // (happens when the database is reset/recreated and IDs get reassigned)
+      if (!uRow || uRow.username !== user.username) {
+        return next(new Error('Session expired'));
+      }
+
       socket.user.displayName = (uRow && uRow.display_name) ? uRow.display_name : user.username;
       socket.user.avatar = (uRow && uRow.avatar) ? uRow.avatar : null;
       socket.user.avatar_shape = (uRow && uRow.avatar_shape) ? uRow.avatar_shape : 'circle';
@@ -1637,11 +1644,20 @@ function setupSocketHandlers(io, db) {
 
     socket.on('add-reaction', (data) => {
       if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 8)) return;
+      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
 
-      // Verify the emoji is a real emoji (allow compound emojis, skin tones, ZWJ sequences)
+      // Verify the emoji is a real emoji or a custom server emoji (:name:)
       const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
-      if (!allowed.test(data.emoji) || data.emoji.length > 16) return;
+      const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;
+      if (!allowed.test(data.emoji) && !customEmojiPattern.test(data.emoji)) return;
+      if (data.emoji.length > 32) return;
+
+      // If custom emoji, verify it exists
+      if (customEmojiPattern.test(data.emoji)) {
+        const emojiName = data.emoji.slice(1, -1).toLowerCase();
+        const exists = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(emojiName);
+        if (!exists) return;
+      }
 
       const code = socket.currentChannel;
       if (!code) return;
@@ -1674,7 +1690,7 @@ function setupSocketHandlers(io, db) {
 
     socket.on('remove-reaction', (data) => {
       if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 8)) return;
+      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
 
       const code = socket.currentChannel;
       if (!code) return;
@@ -3266,6 +3282,37 @@ function setupSocketHandlers(io, db) {
         console.error('Start DM error:', err);
         socket.emit('error-msg', 'Failed to create DM');
       }
+    });
+
+    // ═══════════════ DELETE DM ══════════════════════════════
+
+    socket.on('delete-dm', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+
+      const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 1').get(code);
+      if (!channel) return socket.emit('error-msg', 'DM not found');
+
+      // Allow if user is a member of this DM or is admin
+      const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+      if (!isMember && !socket.user.isAdmin) {
+        return socket.emit('error-msg', 'Not authorized');
+      }
+
+      const deleteAll = db.transaction((chId) => {
+        db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
+        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM read_positions WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
+      });
+      deleteAll(channel.id);
+
+      io.to(`channel:${code}`).emit('channel-deleted', { code });
+      channelUsers.delete(code);
+      console.log(`🗑️  DM ${code} deleted by ${socket.user.username}`);
     });
 
     // ═══════════════ READ POSITIONS ════════════════════════

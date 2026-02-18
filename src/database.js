@@ -229,6 +229,17 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: custom_emojis table (admin-uploaded server emojis) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS custom_emojis (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      filename TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // ── Migration: channel topic column ─────────────────────
   try {
     db.prepare("SELECT topic FROM channels LIMIT 0").get();

@@ -103,6 +103,8 @@ class HavenApp {
     this._isServerMod = () => this.user.isAdmin || (this.user.effectiveLevel || 0) >= 50;
     this._hasPerm = (p) => this.user.isAdmin || (this.user.permissions || []).includes('*') || (this.user.permissions || []).includes(p);
 
+    this.customEmojis = []; // [{name, url}] — loaded from server
+
     this._init();
   }
 
@@ -132,6 +134,7 @@ class HavenApp {
     this._setupIdleDetection();
     // this._setupAvatarUpload(); // Moved to top of _init
     this._setupSoundManagement();
+    this._setupEmojiManagement();
     this._setupWebhookManagement();
     this._initRoleManagement();
     this._initServerBranding();
@@ -307,7 +310,7 @@ class HavenApp {
     });
 
     this.socket.on('connect_error', (err) => {
-      if (err.message === 'Invalid token' || err.message === 'Authentication required') {
+      if (err.message === 'Invalid token' || err.message === 'Authentication required' || err.message === 'Session expired') {
         localStorage.removeItem('haven_token');
         localStorage.removeItem('haven_user');
         window.location.href = '/';
@@ -969,6 +972,7 @@ class HavenApp {
     // Delete channel
     // ── Channel context menu ("..." on hover) ──────────
     this._initChannelContextMenu();
+    this._initDmContextMenu();
     // Delete channel with TWO confirmations (from ctx menu)
     document.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
       const code = this._ctxMenuChannel;
@@ -988,6 +992,20 @@ class HavenApp {
       if (idx >= 0) { muted.splice(idx, 1); this._showToast('Channel unmuted', 'success'); }
       else { muted.push(code); this._showToast('Channel muted', 'success'); }
       localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
+    });
+    // Join voice from context menu
+    document.querySelector('[data-action="join-voice"]')?.addEventListener('click', () => {
+      const code = this._ctxMenuChannel;
+      if (!code) return;
+      this._closeChannelCtxMenu();
+      // Switch to the channel first, then join voice
+      this.switchChannel(code);
+      setTimeout(() => this._joinVoice(), 300);
+    });
+    // Disconnect from voice via context menu
+    document.querySelector('[data-action="leave-voice"]')?.addEventListener('click', () => {
+      this._closeChannelCtxMenu();
+      this._leaveVoice();
     });
     // Toggle streams permission
     document.querySelector('[data-action="toggle-streams"]')?.addEventListener('click', () => {
@@ -1563,6 +1581,20 @@ class HavenApp {
       }
     });
 
+    // Reply banner click — scroll to the original message
+    document.getElementById('messages').addEventListener('click', (e) => {
+      const banner = e.target.closest('.reply-banner');
+      if (!banner) return;
+      const replyMsgId = banner.dataset.replyMsgId;
+      if (!replyMsgId) return;
+      const targetMsg = document.querySelector(`[data-msg-id="${replyMsgId}"]`);
+      if (targetMsg) {
+        targetMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetMsg.classList.add('highlight-flash');
+        setTimeout(() => targetMsg.classList.remove('highlight-flash'), 2000);
+      }
+    });
+
     // Emoji picker toggle
     document.getElementById('emoji-btn').addEventListener('click', () => {
       this._toggleEmojiPicker();
@@ -1724,10 +1756,12 @@ class HavenApp {
     document.getElementById('open-settings-btn').addEventListener('click', () => {
       this._snapshotAdminSettings();
       document.getElementById('settings-modal').style.display = 'flex';
+      this._syncSettingsNav();
     });
     document.getElementById('mobile-settings-btn')?.addEventListener('click', () => {
       this._snapshotAdminSettings();
       document.getElementById('settings-modal').style.display = 'flex';
+      this._syncSettingsNav();
       document.getElementById('app-body')?.classList.remove('mobile-sidebar-open');
       document.getElementById('mobile-overlay')?.classList.remove('active');
     });
@@ -1739,6 +1773,20 @@ class HavenApp {
     });
     document.getElementById('admin-save-btn')?.addEventListener('click', () => {
       this._saveAdminSettings();
+    });
+
+    // ── Settings nav click-to-scroll ─────────────────────
+    document.querySelectorAll('.settings-nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const targetId = item.dataset.target;
+        const target = document.getElementById(targetId);
+        if (!target) return;
+        // Scroll into view within the settings body
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Update active state
+        document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
+        item.classList.add('active');
+      });
     });
 
     // ── Password change ──────────────────────────────────
@@ -1928,6 +1976,21 @@ class HavenApp {
       if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
     });
 
+    // ── Manage Servers gear button & modal ──────────────
+    document.getElementById('manage-servers-btn')?.addEventListener('click', () => {
+      this._openManageServersModal();
+    });
+    document.getElementById('manage-servers-close-btn')?.addEventListener('click', () => {
+      document.getElementById('manage-servers-modal').style.display = 'none';
+    });
+    document.getElementById('manage-servers-modal')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+    });
+    document.getElementById('manage-servers-add-btn')?.addEventListener('click', () => {
+      document.getElementById('manage-servers-modal').style.display = 'none';
+      document.getElementById('add-server-btn').click();
+    });
+
     // ── Channel Code Settings Modal ─────────────────────
     document.getElementById('channel-code-settings-btn')?.addEventListener('click', () => {
       if (!this.currentChannel || !this.user.isAdmin) return;
@@ -2050,6 +2113,63 @@ class HavenApp {
     document.getElementById('save-server-btn').textContent = 'Save';
     document.getElementById('add-server-modal').style.display = 'flex';
     document.getElementById('add-server-name-input').focus();
+  }
+
+  _openManageServersModal() {
+    this._renderManageServersList();
+    document.getElementById('manage-servers-modal').style.display = 'flex';
+  }
+
+  _renderManageServersList() {
+    const container = document.getElementById('manage-servers-list');
+    const servers = this.serverManager.getAll();
+    container.innerHTML = '';
+    if (servers.length === 0) return;  // CSS :empty handles empty state
+
+    servers.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'manage-server-row';
+
+      const online = s.status.online;
+      const statusClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
+      const statusText = online === true ? 'Online' : online === false ? 'Offline' : 'Checking...';
+      const initial = s.name.charAt(0).toUpperCase();
+      const iconUrl = s.icon || (s.status.icon || null);
+      const iconContent = iconUrl
+        ? `<img src="${this._escapeHtml(iconUrl)}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${initial}'">`
+        : initial;
+
+      row.innerHTML = `
+        <div class="manage-server-icon">${iconContent}</div>
+        <div class="manage-server-info">
+          <div class="manage-server-name">${this._escapeHtml(s.name)}</div>
+          <div class="manage-server-url">${this._escapeHtml(s.url)}</div>
+        </div>
+        <span class="manage-server-status ${statusClass}">${statusText}</span>
+        <div class="manage-server-actions">
+          <button class="manage-server-visit" title="Open in new tab">🔗</button>
+          <button class="manage-server-edit" title="Edit server">✏️</button>
+          <button class="manage-server-delete danger-action" title="Remove server">🗑️</button>
+        </div>
+      `;
+
+      row.querySelector('.manage-server-visit').addEventListener('click', () => {
+        window.open(s.url, '_blank', 'noopener');
+      });
+      row.querySelector('.manage-server-edit').addEventListener('click', () => {
+        document.getElementById('manage-servers-modal').style.display = 'none';
+        this._editServer(s.url);
+      });
+      row.querySelector('.manage-server-delete').addEventListener('click', () => {
+        if (!confirm(`Remove "${s.name}" from your server list?`)) return;
+        this.serverManager.remove(s.url);
+        this._renderServerBar();
+        this._renderManageServersList();
+        this._showToast(`Removed "${s.name}"`, 'success');
+      });
+
+      container.appendChild(row);
+    });
   }
 
   _renderServerBar() {
@@ -2803,6 +2923,21 @@ class HavenApp {
   // ═══════════════════════════════════════════════════════
 
   _setupSoundManagement() {
+    // Open sound management modal
+    const openBtn = document.getElementById('open-sound-manager-btn');
+    if (openBtn) {
+      openBtn.addEventListener('click', () => {
+        document.getElementById('sound-modal').style.display = 'flex';
+      });
+    }
+    // Close sound modal
+    document.getElementById('close-sound-modal-btn')?.addEventListener('click', () => {
+      document.getElementById('sound-modal').style.display = 'none';
+    });
+    document.getElementById('sound-modal')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+    });
+
     const uploadBtn = document.getElementById('sound-upload-btn');
     const fileInput = document.getElementById('sound-file-input');
     const nameInput = document.getElementById('sound-name-input');
@@ -2934,6 +3069,116 @@ class HavenApp {
           if (res.ok) {
             this._showToast(`Sound "${name}" deleted`, 'success');
             this._loadCustomSounds();
+          } else {
+            this._showToast('Delete failed', 'error');
+          }
+        } catch {
+          this._showToast('Delete failed', 'error');
+        }
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // CUSTOM EMOJI MANAGEMENT
+  // ═══════════════════════════════════════════════════════
+
+  _setupEmojiManagement() {
+    // Open emoji management modal
+    const openEmojiBtn = document.getElementById('open-emoji-manager-btn');
+    if (openEmojiBtn) {
+      openEmojiBtn.addEventListener('click', () => {
+        document.getElementById('emoji-modal').style.display = 'flex';
+      });
+    }
+    // Close emoji modal
+    document.getElementById('close-emoji-modal-btn')?.addEventListener('click', () => {
+      document.getElementById('emoji-modal').style.display = 'none';
+    });
+    document.getElementById('emoji-modal')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+    });
+
+    const uploadBtn = document.getElementById('emoji-upload-btn');
+    const fileInput = document.getElementById('emoji-file-input');
+    const nameInput = document.getElementById('emoji-name-input');
+    if (!uploadBtn || !fileInput) return;
+
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      const name = nameInput ? nameInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() : '';
+      if (!file) return this._showToast('Select an image file', 'error');
+      if (!name) return this._showToast('Enter an emoji name (lowercase, no spaces)', 'error');
+      if (file.size > 256 * 1024) return this._showToast('Emoji file too large (max 256 KB)', 'error');
+
+      const formData = new FormData();
+      formData.append('emoji', file);
+      formData.append('name', name);
+
+      try {
+        this._showToast('Uploading emoji...', 'info');
+        const res = await fetch('/api/upload-emoji', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.token}` },
+          body: formData
+        });
+        if (!res.ok) {
+          let errMsg = `Upload failed (${res.status})`;
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          return this._showToast(errMsg, 'error');
+        }
+        this._showToast(`Emoji :${name}: uploaded!`, 'success');
+        fileInput.value = '';
+        nameInput.value = '';
+        this._loadCustomEmojis();
+      } catch {
+        this._showToast('Upload failed', 'error');
+      }
+    });
+
+    this._loadCustomEmojis();
+  }
+
+  async _loadCustomEmojis() {
+    try {
+      const res = await fetch('/api/emojis', {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      this.customEmojis = data.emojis || []; // [{name, url}]
+      this._renderEmojiList(this.customEmojis);
+    } catch { /* ignore */ }
+  }
+
+  _renderEmojiList(emojis) {
+    const list = document.getElementById('custom-emojis-list');
+    if (!list) return;
+
+    if (emojis.length === 0) {
+      list.innerHTML = '<p class="muted-text">No custom emojis uploaded</p>';
+      return;
+    }
+
+    list.innerHTML = emojis.map(e => `
+      <div class="custom-sound-item">
+        <img src="${this._escapeHtml(e.url)}" alt=":${this._escapeHtml(e.name)}:" class="custom-emoji-preview" style="width:24px;height:24px;vertical-align:middle;margin-right:6px;">
+        <span class="custom-sound-name">:${this._escapeHtml(e.name)}:</span>
+        <button class="btn-xs emoji-delete-btn" data-name="${this._escapeHtml(e.name)}" title="Delete">🗑️</button>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.emoji-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.name;
+        try {
+          const res = await fetch(`/api/emojis/${encodeURIComponent(name)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${this.token}` }
+          });
+          if (res.ok) {
+            this._showToast(`Emoji :${name}: deleted`, 'success');
+            this._loadCustomEmojis();
           } else {
             this._showToast('Delete failed', 'error');
           }
@@ -4042,6 +4287,13 @@ class HavenApp {
     const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
     const muteBtn = menu.querySelector('[data-action="mute"]');
     if (muteBtn) muteBtn.textContent = muted.includes(code) ? '🔕 Unmute Channel' : '🔔 Mute Channel';
+    // Show/hide voice options based on current voice state
+    const joinVoiceBtn = menu.querySelector('[data-action="join-voice"]');
+    const leaveVoiceBtn = menu.querySelector('[data-action="leave-voice"]');
+    const inVoice = this.voice && this.voice.inVoice;
+    const inThisChannel = inVoice && this.voice.currentChannel === code;
+    if (joinVoiceBtn) joinVoiceBtn.style.display = inThisChannel ? 'none' : '';
+    if (leaveVoiceBtn) leaveVoiceBtn.style.display = inVoice ? '' : 'none';
     // Position near the button
     const rect = btnEl.getBoundingClientRect();
     menu.style.display = 'block';
@@ -4058,6 +4310,74 @@ class HavenApp {
   _closeChannelCtxMenu() {
     if (this._ctxMenuEl) this._ctxMenuEl.style.display = 'none';
     this._ctxMenuChannel = null;
+  }
+
+  /* ── DM context menu helpers ──────────────────────────── */
+  _initDmContextMenu() {
+    this._dmCtxMenuEl = document.getElementById('dm-ctx-menu');
+    this._dmCtxMenuCode = null;
+
+    // Mute DM
+    document.querySelector('[data-action="dm-mute"]')?.addEventListener('click', () => {
+      const code = this._dmCtxMenuCode;
+      if (!code) return;
+      this._closeDmCtxMenu();
+      const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+      const idx = muted.indexOf(code);
+      if (idx >= 0) { muted.splice(idx, 1); this._showToast('DM unmuted', 'success'); }
+      else { muted.push(code); this._showToast('DM muted', 'success'); }
+      localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
+    });
+
+    // Delete DM
+    document.querySelector('[data-action="dm-delete"]')?.addEventListener('click', () => {
+      const code = this._dmCtxMenuCode;
+      if (!code) return;
+      this._closeDmCtxMenu();
+      if (!confirm('⚠️ Delete this DM?\nAll messages will be permanently deleted for both users.')) return;
+      this.socket.emit('delete-dm', { code });
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (this._dmCtxMenuEl && !this._dmCtxMenuEl.contains(e.target) && !e.target.closest('.dm-more-btn')) {
+        this._closeDmCtxMenu();
+      }
+    });
+  }
+
+  _openDmCtxMenu(code, anchorEl, mouseEvent) {
+    this._dmCtxMenuCode = code;
+    const menu = this._dmCtxMenuEl;
+    if (!menu) return;
+
+    // Update mute label
+    const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+    const muteBtn = menu.querySelector('[data-action="dm-mute"]');
+    if (muteBtn) muteBtn.textContent = muted.includes(code) ? '🔕 Unmute DM' : '🔔 Mute DM';
+
+    // Position
+    if (mouseEvent) {
+      menu.style.top = mouseEvent.clientY + 'px';
+      menu.style.left = mouseEvent.clientX + 'px';
+    } else {
+      const rect = anchorEl.getBoundingClientRect();
+      menu.style.top = rect.bottom + 4 + 'px';
+      menu.style.left = rect.left + 'px';
+    }
+    menu.style.display = 'block';
+
+    // Keep inside viewport
+    requestAnimationFrame(() => {
+      const mr = menu.getBoundingClientRect();
+      if (mr.right > window.innerWidth) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
+      if (mr.bottom > window.innerHeight) menu.style.top = (mr.top - mr.height - 4) + 'px';
+    });
+  }
+
+  _closeDmCtxMenu() {
+    if (this._dmCtxMenuEl) this._dmCtxMenuEl.style.display = 'none';
+    this._dmCtxMenuCode = null;
   }
 
   /* ── Organize sub-channels modal ─────────────────────── */
@@ -4522,7 +4842,7 @@ class HavenApp {
         });
       }
 
-      const count = this.unreadCounts[ch.code] || ch.unreadCount || 0;
+      const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
       if (count > 0) {
         const badge = document.createElement('span');
         badge.className = 'channel-badge';
@@ -4531,6 +4851,12 @@ class HavenApp {
       }
 
       el.addEventListener('click', () => this.switchChannel(ch.code));
+      // Right-click to open context menu
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const btn = el.querySelector('.channel-more-btn');
+        if (btn) this._openChannelCtxMenu(ch.code, btn);
+      });
       return el;
     };
 
@@ -4649,7 +4975,7 @@ class HavenApp {
       if (dmCollapsed) dmList.style.display = 'none';
 
       // Update unread badge
-      const totalUnread = dmChannels.reduce((sum, ch) => sum + (this.unreadCounts[ch.code] || ch.unreadCount || 0), 0);
+      const totalUnread = dmChannels.reduce((sum, ch) => sum + ((ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0)), 0);
       const badge = document.getElementById('dm-unread-badge');
       if (badge) {
         if (totalUnread > 0) {
@@ -4703,13 +5029,29 @@ class HavenApp {
           <span class="channel-hash">@</span>
           <span class="channel-name">${this._escapeHtml(dmName)}</span>
         `;
-        const count = this.unreadCounts[ch.code] || ch.unreadCount || 0;
+        const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
         if (count > 0) {
           const bdg = document.createElement('span');
           bdg.className = 'channel-badge';
           bdg.textContent = count > 99 ? '99+' : count;
           el.appendChild(bdg);
         }
+        // "..." more button for DM context menu
+        const moreBtn = document.createElement('button');
+        moreBtn.className = 'channel-more-btn dm-more-btn';
+        moreBtn.textContent = '⋯';
+        moreBtn.title = 'More options';
+        moreBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._openDmCtxMenu(ch.code, moreBtn);
+        });
+        el.appendChild(moreBtn);
+        // Right-click context menu
+        el.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this._openDmCtxMenu(ch.code, el, e);
+        });
         el.addEventListener('click', () => this.switchChannel(ch.code));
         return el;
       };
@@ -7645,6 +7987,15 @@ class HavenApp {
     // Render spoilers (||text||) — CSP-safe, uses delegated click handler
     html = html.replace(/\|\|(.+?)\|\|/g, '<span class="spoiler">$1</span>');
 
+    // Render custom emojis :name:
+    if (this.customEmojis && this.customEmojis.length > 0) {
+      html = html.replace(/:([a-zA-Z0-9_-]+):/g, (match, name) => {
+        const emoji = this.customEmojis.find(e => e.name === name.toLowerCase());
+        if (emoji) return `<img src="${emoji.url}" alt=":${name}:" title=":${name}:" class="custom-emoji">`;
+        return match;
+      });
+    }
+
     // Render /me action text (italic)
     if (html.startsWith('_') && html.endsWith('_') && html.length > 2) {
       html = `<em class="action-text">${html.slice(1, -1)}</em>`;
@@ -7753,11 +8104,18 @@ class HavenApp {
     searchRow.appendChild(searchInput);
     picker.appendChild(searchRow);
 
+    // Build combined categories (standard + custom)
+    const allCategories = { ...this.emojiCategories };
+    const hasCustom = this.customEmojis && this.customEmojis.length > 0;
+    if (hasCustom) {
+      allCategories['Custom'] = this.customEmojis.map(e => `:${e.name}:`);
+    }
+
     // Category tabs
     const tabRow = document.createElement('div');
     tabRow.className = 'emoji-tab-row';
-    const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️' };
-    for (const cat of Object.keys(this.emojiCategories)) {
+    const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Custom':'⭐' };
+    for (const cat of Object.keys(allCategories)) {
       const tab = document.createElement('button');
       tab.className = 'emoji-tab' + (cat === this._emojiActiveCategory ? ' active' : '');
       tab.textContent = catIcons[cat] || cat.charAt(0);
@@ -7793,9 +8151,15 @@ class HavenApp {
         for (const [cat, list] of Object.entries(self.emojiCategories)) {
           if (cat.toLowerCase().includes(q)) list.forEach(e => matched.add(e));
         }
+        // Search custom emojis by name
+        if (self.customEmojis) {
+          self.customEmojis.forEach(e => {
+            if (e.name.toLowerCase().includes(q)) matched.add(`:${e.name}:`);
+          });
+        }
         emojis = matched.size > 0 ? [...matched] : [];
       } else {
-        emojis = self.emojiCategories[self._emojiActiveCategory] || self.emojis;
+        emojis = allCategories[self._emojiActiveCategory] || self.emojis;
       }
       if (filter && emojis.length === 0) {
         grid.innerHTML = '<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">No emoji found</p>';
@@ -7804,7 +8168,18 @@ class HavenApp {
       emojis.forEach(emoji => {
         const btn = document.createElement('button');
         btn.className = 'emoji-item';
-        btn.textContent = emoji;
+        // Check if it's a custom emoji (:name:)
+        const customMatch = typeof emoji === 'string' && emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+        if (customMatch) {
+          const ce = self.customEmojis.find(e => e.name === customMatch[1]);
+          if (ce) {
+            btn.innerHTML = `<img src="${ce.url}" alt=":${ce.name}:" title=":${ce.name}:" class="custom-emoji">`;
+          } else {
+            btn.textContent = emoji;
+          }
+        } else {
+          btn.textContent = emoji;
+        }
         btn.addEventListener('click', () => {
           const input = document.getElementById('message-input');
           const start = input.selectionStart;
@@ -8081,7 +8456,14 @@ class HavenApp {
     const badges = Object.values(grouped).map(g => {
       const isOwn = g.users.some(u => u.id === this.user.id);
       const names = g.users.map(u => u.username).join(', ');
-      return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${g.emoji}" title="${names}">${g.emoji} ${g.users.length}</button>`;
+      // Check if it's a custom emoji
+      const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+      let emojiDisplay = g.emoji;
+      if (customMatch && this.customEmojis) {
+        const ce = this.customEmojis.find(e => e.name === customMatch[1]);
+        if (ce) emojiDisplay = `<img src="${ce.url}" alt=":${ce.name}:" class="custom-emoji reaction-custom-emoji">`;
+      }
+      return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" title="${names}">${emojiDisplay} ${g.users.length}</button>`;
     }).join('');
 
     return `<div class="reactions-row">${badges}</div>`;
@@ -8110,18 +8492,163 @@ class HavenApp {
     if (wasAtBottom) this._scrollToBottom();
   }
 
+  _getQuickEmojis() {
+    const saved = localStorage.getItem('haven_quick_emojis');
+    if (saved) {
+      try { const arr = JSON.parse(saved); if (Array.isArray(arr) && arr.length === 8) return arr; } catch {}
+    }
+    return ['👍','👎','😂','❤️','🔥','💯','😮','😢'];
+  }
+
+  _saveQuickEmojis(emojis) {
+    localStorage.setItem('haven_quick_emojis', JSON.stringify(emojis));
+  }
+
+  _showQuickEmojiEditor(picker, msgEl, msgId) {
+    // Remove any existing editor
+    document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
+
+    const editor = document.createElement('div');
+    editor.className = 'quick-emoji-editor reaction-full-picker';
+
+    const title = document.createElement('div');
+    title.className = 'reaction-full-category';
+    title.textContent = 'Customize Quick Reactions';
+    editor.appendChild(title);
+
+    const hint = document.createElement('p');
+    hint.className = 'muted-text';
+    hint.style.cssText = 'font-size:11px;padding:0 8px 6px;margin:0';
+    hint.textContent = 'Click a slot, then pick an emoji to replace it.';
+    editor.appendChild(hint);
+
+    // Current slots
+    const current = this._getQuickEmojis();
+    const slotsRow = document.createElement('div');
+    slotsRow.className = 'quick-emoji-slots';
+    let activeSlot = null;
+
+    const renderSlots = () => {
+      slotsRow.innerHTML = '';
+      current.forEach((emoji, i) => {
+        const slot = document.createElement('button');
+        slot.className = 'reaction-pick-btn quick-emoji-slot' + (activeSlot === i ? ' active' : '');
+        // Check for custom emoji
+        const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+        if (customMatch && this.customEmojis) {
+          const ce = this.customEmojis.find(e => e.name === customMatch[1]);
+          if (ce) slot.innerHTML = `<img src="${ce.url}" alt="${emoji}" class="custom-emoji" style="width:20px;height:20px">`;
+          else slot.textContent = emoji;
+        } else {
+          slot.textContent = emoji;
+        }
+        slot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          activeSlot = i;
+          renderSlots();
+        });
+        slotsRow.appendChild(slot);
+      });
+    };
+    renderSlots();
+    editor.appendChild(slotsRow);
+
+    // Emoji grid for selection
+    const grid = document.createElement('div');
+    grid.className = 'reaction-full-grid';
+    grid.style.maxHeight = '180px';
+
+    const renderOptions = () => {
+      grid.innerHTML = '';
+      // Standard emojis
+      for (const [category, emojis] of Object.entries(this.emojiCategories)) {
+        const label = document.createElement('div');
+        label.className = 'reaction-full-category';
+        label.textContent = category;
+        grid.appendChild(label);
+
+        const row = document.createElement('div');
+        row.className = 'reaction-full-row';
+        emojis.forEach(emoji => {
+          const btn = document.createElement('button');
+          btn.className = 'reaction-full-btn';
+          btn.textContent = emoji;
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (activeSlot !== null) {
+              current[activeSlot] = emoji;
+              this._saveQuickEmojis(current);
+              renderSlots();
+            }
+          });
+          row.appendChild(btn);
+        });
+        grid.appendChild(row);
+      }
+      // Custom emojis
+      if (this.customEmojis && this.customEmojis.length > 0) {
+        const label = document.createElement('div');
+        label.className = 'reaction-full-category';
+        label.textContent = 'Custom';
+        grid.appendChild(label);
+
+        const row = document.createElement('div');
+        row.className = 'reaction-full-row';
+        this.customEmojis.forEach(ce => {
+          const btn = document.createElement('button');
+          btn.className = 'reaction-full-btn';
+          btn.innerHTML = `<img src="${ce.url}" alt=":${ce.name}:" class="custom-emoji" style="width:22px;height:22px">`;
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (activeSlot !== null) {
+              current[activeSlot] = `:${ce.name}:`;
+              this._saveQuickEmojis(current);
+              renderSlots();
+            }
+          });
+          row.appendChild(btn);
+        });
+        grid.appendChild(row);
+      }
+    };
+    renderOptions();
+    editor.appendChild(grid);
+
+    // Done button
+    const doneBtn = document.createElement('button');
+    doneBtn.className = 'btn-sm btn-accent';
+    doneBtn.style.cssText = 'margin:8px;width:calc(100% - 16px)';
+    doneBtn.textContent = 'Done';
+    doneBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      editor.remove();
+    });
+    editor.appendChild(doneBtn);
+
+    msgEl.appendChild(editor);
+  }
+
   _showReactionPicker(msgEl, msgId) {
     // Remove any existing reaction picker
     document.querySelectorAll('.reaction-picker').forEach(el => el.remove());
     document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
+    document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
 
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
-    const quickEmojis = ['👍','👎','😂','❤️','🔥','💯','😮','😢'];
+    const quickEmojis = this._getQuickEmojis();
     quickEmojis.forEach(emoji => {
       const btn = document.createElement('button');
       btn.className = 'reaction-pick-btn';
-      btn.textContent = emoji;
+      // Check for custom emoji
+      const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+      if (customMatch && this.customEmojis) {
+        const ce = this.customEmojis.find(e => e.name === customMatch[1]);
+        if (ce) btn.innerHTML = `<img src="${ce.url}" alt="${emoji}" class="custom-emoji" style="width:20px;height:20px">`;
+        else btn.textContent = emoji;
+      } else {
+        btn.textContent = emoji;
+      }
       btn.addEventListener('click', () => {
         this.socket.emit('add-reaction', { messageId: msgId, emoji });
         picker.remove();
@@ -8140,11 +8667,27 @@ class HavenApp {
     });
     picker.appendChild(moreBtn);
 
+    // Separator + gear icon for customization
+    const sep = document.createElement('span');
+    sep.className = 'reaction-pick-sep';
+    sep.textContent = '|';
+    picker.appendChild(sep);
+
+    const gearBtn = document.createElement('button');
+    gearBtn.className = 'reaction-pick-btn reaction-gear-btn';
+    gearBtn.textContent = '⚙️';
+    gearBtn.title = 'Customize quick reactions';
+    gearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._showQuickEmojiEditor(picker, msgEl, msgId);
+    });
+    picker.appendChild(gearBtn);
+
     msgEl.appendChild(picker);
 
     // Close on click outside
     const close = (e) => {
-      if (!picker.contains(e.target) && !e.target.closest('.reaction-full-picker')) {
+      if (!picker.contains(e.target) && !e.target.closest('.reaction-full-picker') && !e.target.closest('.quick-emoji-editor')) {
         picker.remove();
         document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
         document.removeEventListener('click', close);
@@ -8206,6 +8749,34 @@ class HavenApp {
           row.appendChild(btn);
         });
         grid.appendChild(row);
+      }
+
+      // Custom emojis section
+      if (this.customEmojis && this.customEmojis.length > 0) {
+        const customMatching = lowerFilter
+          ? this.customEmojis.filter(e => e.name.toLowerCase().includes(lowerFilter) || 'custom'.includes(lowerFilter))
+          : this.customEmojis;
+        if (customMatching.length > 0) {
+          const label = document.createElement('div');
+          label.className = 'reaction-full-category';
+          label.textContent = 'Custom';
+          grid.appendChild(label);
+
+          const row = document.createElement('div');
+          row.className = 'reaction-full-row';
+          customMatching.forEach(ce => {
+            const btn = document.createElement('button');
+            btn.className = 'reaction-full-btn';
+            btn.innerHTML = `<img src="${ce.url}" alt=":${ce.name}:" title=":${ce.name}:" class="custom-emoji">`;
+            btn.addEventListener('click', () => {
+              this.socket.emit('add-reaction', { messageId: msgId, emoji: `:${ce.name}:` });
+              panel.remove();
+              quickPicker.remove();
+            });
+            row.appendChild(btn);
+          });
+          grid.appendChild(row);
+        }
       }
     };
 
@@ -8785,6 +9356,13 @@ class HavenApp {
         : '🤖';
       return `<div class="role-preview-item">${avatarHtml} <span style="font-weight:600">${this._escapeHtml(wh.name)}</span> <span style="opacity:0.5;font-size:11px">#${this._escapeHtml(wh.channel_name)}</span> ${statusDot}</div>`;
     }).join('');
+  }
+
+  _syncSettingsNav() {
+    const isAdmin = document.getElementById('admin-mod-panel')?.style.display !== 'none';
+    document.querySelectorAll('.settings-nav-admin').forEach(el => {
+      el.style.display = isAdmin ? '' : 'none';
+    });
   }
 
   _snapshotAdminSettings() {
