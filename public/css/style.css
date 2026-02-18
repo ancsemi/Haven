@@ -1283,6 +1283,15 @@
 [data-theme="win95"] .message-row:hover { background: #dfdfdf; }
 [data-theme="win95"] .message-author { color: #000080; font-weight: 700; }
 [data-theme="win95"] .message-input-container { background: #fff; border: 3px inset #808080; border-radius: 0; }
+[data-theme="win95"] .input-actions-box { background: #bfbfbf; border: 2px outset #fff; border-radius: 0; }
+[data-theme="win95"] .input-actions-divider { background: #808080; }
+[data-theme="win95"] .input-actions-box .btn-upload,
+[data-theme="win95"] .input-actions-box .btn-emoji,
+[data-theme="win95"] .input-actions-box .btn-gif { color: #000; border-radius: 0; }
+[data-theme="win95"] .input-actions-box .btn-upload:hover,
+[data-theme="win95"] .input-actions-box .btn-emoji:hover,
+[data-theme="win95"] .input-actions-box .btn-gif:hover { background: #dfdfdf; }
+[data-theme="win95"] .input-actions-box .btn-gif { border-color: #808080; }
 [data-theme="win95"] input[type="text"], [data-theme="win95"] textarea { background: #fff; border: 3px inset #808080 !important; border-radius: 0 !important; }
 [data-theme="win95"] .right-sidebar { background: #bfbfbf; border-left: 3px outset #fff; }
 [data-theme="win95"] .user-item-avatar { border-radius: 0; }
@@ -4413,9 +4422,33 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
    UPLOAD BUTTON + DRAG-DROP
    ═══════════════════════════════════════════════════════════ */
 
+/* ── Input actions box (upload | emoji | gif) ── */
+.input-actions-box {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 8px;
+  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+  flex-shrink: 0;
+}
+.input-actions-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border, rgba(255,255,255,0.12));
+  flex-shrink: 0;
+  margin: 0 1px;
+}
+
+/* Clippy icon hidden by default, shown only on Win95 */
+.upload-icon-clippy { display: none; }
+[data-theme="win95"] .upload-icon-default { display: none; }
+[data-theme="win95"] .upload-icon-clippy { display: inline; font-size: 18px; }
+
 .btn-upload {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   background: transparent;
   color: var(--text-muted);
   border-radius: var(--radius);
@@ -4604,8 +4637,8 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
    ═══════════════════════════════════════════════════════════ */
 
 .btn-emoji {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   background: transparent;
   color: var(--text-muted);
   border-radius: var(--radius);
@@ -4711,8 +4744,8 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
    ═══════════════════════════════════════════════════════════ */
 
 .btn-gif {
-  width: 38px;
-  height: 26px;
+  width: 34px;
+  height: 24px;
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--text-muted);
@@ -5416,8 +5449,17 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   opacity: 0.4;
   cursor: default;
   user-select: none;
-  margin-left: auto;
   flex-shrink: 0;
+}
+/* In the header row, push the lock to the far right */
+.message-header .e2e-tag {
+  margin-left: auto;
+}
+/* Inside compact message-content, keep it inline before the text */
+.message-content .e2e-tag {
+  margin-left: 0;
+  margin-right: 4px;
+  vertical-align: baseline;
 }
 .message-header-spacer {
   flex: 1 1 0;
@@ -6366,18 +6408,29 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   }
 
   /* Media buttons row — sits above the textarea row */
-  .message-input-area .btn-upload,
-  .message-input-area .btn-emoji,
-  .message-input-area .btn-gif,
-  .message-input-area #file-upload-btn {
+  .input-actions-box {
     order: -1;
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
+    border-radius: 16px;
+    padding: 2px 4px;
+    gap: 1px;
+  }
+  .input-actions-box .btn-upload,
+  .input-actions-box .btn-emoji,
+  .input-actions-box .btn-gif {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
     font-size: 14px;
     border-radius: 50%;
     flex-shrink: 0;
+  }
+  .input-actions-box .btn-gif {
+    width: auto;
+    padding: 0 6px;
+    border-radius: var(--radius-sm);
+    height: 22px;
+    min-height: 22px;
   }
 
   /* Textarea takes full remaining width on its row */
@@ -7980,21 +8033,6 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 /* ═══════════════════════════════════════════════════════════
    File Attachments
    ═══════════════════════════════════════════════════════════ */
-
-#file-upload-btn {
-  font-size: 16px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  opacity: 0.6;
-  transition: opacity 0.15s;
-}
-
-#file-upload-btn:hover {
-  opacity: 1;
-}
 
 .file-attachment {
   background: var(--bg-tertiary);

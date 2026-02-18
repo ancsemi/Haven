@@ -2033,7 +2033,13 @@ class HavenApp {
     });
 
     fileInput.addEventListener('change', () => {
-      if (fileInput.files[0]) this._queueImage(fileInput.files[0]);
+      if (!fileInput.files[0]) return;
+      const file = fileInput.files[0];
+      if (file.type.startsWith('image/')) {
+        this._queueImage(file);
+      } else {
+        this._uploadGeneralFile(file);
+      }
       fileInput.value = '';
     });
 
@@ -4948,8 +4954,7 @@ class HavenApp {
       if (msg._e2e) el.dataset.e2e = '1';
       el.innerHTML = `
         <span class="compact-time">${new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
-        ${e2eTag}
-        <div class="message-content">${pinnedTag}${this._formatContent(msg.content)}${editedHtml}</div>
+        <div class="message-content">${e2eTag}${pinnedTag}${this._formatContent(msg.content)}${editedHtml}</div>
         ${toolbarHtml}
         ${reactionsHtml}
       `;
@@ -9164,26 +9169,9 @@ class HavenApp {
   // ═══════════════════════════════════════════════════════
 
   _setupFileUpload() {
-    // Expand the existing file input to accept all file types
-    // Add a separate file upload button next to the image upload
-    const inputArea = document.querySelector('.message-input-area');
-    const uploadBtn = document.getElementById('upload-btn');
-
-    const fileBtn = document.createElement('button');
-    fileBtn.id = 'file-upload-btn';
-    fileBtn.className = 'btn-upload';
-    fileBtn.title = 'Upload File';
-    fileBtn.innerHTML = '📎';
-    inputArea.insertBefore(fileBtn, uploadBtn.nextSibling);
-
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.id = 'general-file-input';
-    fileInput.style.display = 'none';
-    inputArea.appendChild(fileInput);
-
-    fileBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => this._handleFileUpload(fileInput));
+    // Merged into upload-btn — no separate file button needed.
+    // The unified upload button opens a file picker that accepts all types;
+    // images are queued (with preview), other files upload immediately.
   }
 
   _handleFileUpload(input) {

@@ -319,16 +319,21 @@
           </div>
           <div id="image-queue-bar" class="image-queue-bar" style="display:none"></div>
           <div class="message-input-area">
-            <button id="upload-btn" class="btn-upload" title="Upload Image">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <path d="M21 15l-5-5L5 21"/>
-              </svg>
-            </button>
-            <button id="emoji-btn" class="btn-emoji" title="Emoji">😀</button>
+            <div class="input-actions-box">
+              <button id="upload-btn" class="btn-upload" title="Upload File">
+                <svg class="upload-icon-default" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 21"/>
+                </svg>
+                <span class="upload-icon-clippy">📎</span>
+              </button>
+              <span class="input-actions-divider"></span>
+              <button id="emoji-btn" class="btn-emoji" title="Emoji">😀</button>
+              <span class="input-actions-divider"></span>
+              <button id="gif-btn" class="btn-gif" title="Search GIFs">GIF</button>
+            </div>
             <div id="emoji-picker" class="emoji-picker" style="display:none"></div>
-            <button id="gif-btn" class="btn-gif" title="Search GIFs">GIF</button>
             <div id="gif-picker" class="gif-picker" style="display:none">
               <div class="gif-picker-header">
                 <input type="text" id="gif-search-input" placeholder="Search GIPHY..." maxlength="100" autocomplete="off">
@@ -346,7 +351,7 @@
               </svg>
             </button>
           </div>
-          <input type="file" id="file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+          <input type="file" id="file-input" style="display:none">
         </div>
       </main>
 
