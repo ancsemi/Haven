@@ -1,4 +1,4 @@
-name: Attach release tarball
+name: Release artifacts
 
 on:
   release:
@@ -24,3 +24,105 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.event.release.tag_name }}" haven.tar.gz --clobber
+
+  appimage:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+            node_arch: x64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            node_arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y fuse libfuse2 rsync
+
+      - name: Download Node.js ${{ matrix.node_arch }}
+        run: |
+          NODE_VER="22.13.1"
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VER}/node-v${NODE_VER}-linux-${{ matrix.node_arch }}.tar.xz" -o node.tar.xz
+          tar -xJf node.tar.xz
+          mv "node-v${NODE_VER}-linux-${{ matrix.node_arch }}" node_dist
+
+      - name: Build AppDir
+        run: |
+          mkdir -p Haven.AppDir/usr/bin
+
+          # Bundle Node.js binary
+          cp node_dist/bin/node Haven.AppDir/usr/bin/node
+
+          # Bundle Haven source (no git, no CI config, no node_modules)
+          rsync -a \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.github' \
+            --exclude='Haven.AppDir' \
+            . Haven.AppDir/app/
+
+          # AppRun — copies Haven to $HOME/Haven on first run (AppImage is read-only)
+          cat > Haven.AppDir/AppRun << 'APPRUN'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "$0")")"
+          INSTALL_DIR="${HAVEN_INSTALL_DIR:-$HOME/Haven}"
+
+          if [ ! -f "$INSTALL_DIR/package.json" ]; then
+            echo ""
+            echo "  Setting up Haven in $INSTALL_DIR..."
+            mkdir -p "$INSTALL_DIR"
+            cp -r "$HERE/app/." "$INSTALL_DIR/"
+            chmod +x "$INSTALL_DIR/install.sh" 2>/dev/null || true
+            chmod +x "$INSTALL_DIR/start.sh" 2>/dev/null || true
+            echo "  Done. Launching installer..."
+            echo ""
+          fi
+
+          exec "$HERE/usr/bin/node" "$INSTALL_DIR/installer/server.js" "$@"
+          APPRUN
+          chmod +x Haven.AppDir/AppRun
+
+          # Desktop entry
+          cat > Haven.AppDir/haven.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=Haven Installer
+          Comment=Set up your Haven private chat server
+          Exec=AppRun
+          Icon=haven
+          Terminal=true
+          Categories=Network;Chat;
+          DESKTOP
+
+          # Icon — use favicon from public/ if it exists, otherwise a solid green square
+          if [ -f "public/favicon.ico" ]; then
+            convert public/favicon.ico -resize 64x64 Haven.AppDir/haven.png 2>/dev/null || \
+            cp public/favicon.ico Haven.AppDir/haven.png
+          else
+            convert -size 64x64 xc:#2d6a4f Haven.AppDir/haven.png 2>/dev/null || \
+            printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00@\x00\x00\x00@\x08\x02\x00\x00\x00%\x0b\xe6\x89\x00\x00\x00\x0cIDATx\x9cc\xfc\xff\xff?\x00\x05\xfe\x02\xfe\xdc\xccY\xe7\x00\x00\x00\x00IEND\xaeB`\x82' > Haven.AppDir/haven.png
+          fi
+
+      - name: Download appimagetool
+        run: |
+          curl -fsSL \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage" \
+            -o appimagetool
+          chmod +x appimagetool
+
+      - name: Build AppImage
+        run: |
+          ARCH=${{ matrix.arch }} ./appimagetool Haven.AppDir \
+            "Haven-${{ github.event.release.tag_name }}-${{ matrix.arch }}.AppImage"
+
+      - name: Upload AppImage to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "Haven-${{ github.event.release.tag_name }}-${{ matrix.arch }}.AppImage" \
+            --clobber

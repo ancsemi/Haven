@@ -3,23 +3,106 @@
 // Exposes the Haven server over a public URL for remote access
 // ═══════════════════════════════════════════════════════════
 
-const { spawn, spawnSync } = require('child_process');
+const { spawn, spawnSync, execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
+const http = require('http');
 
 let active = null;
 let status = { active: false, url: null, provider: null, error: null };
 let starting = false;
+
+// ── Cloudflared auto-download ────────────────────────────
+const BIN_DIR = path.join(__dirname, '..', 'bin');
+const IS_WIN = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
+const CF_BINARY = IS_WIN ? 'cloudflared.exe' : 'cloudflared';
+const CF_LOCAL_PATH = path.join(BIN_DIR, CF_BINARY);
+
+function getCloudflaredDownloadUrl() {
+  const arch = process.arch === 'x64' ? 'amd64' : process.arch === 'arm64' ? 'arm64' : 'amd64';
+  if (IS_WIN) return `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-${arch}.exe`;
+  if (IS_MAC) return `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-${arch}.tgz`;
+  return `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${arch}`;
+}
+
+function cloudflaredPath() {
+  // 1. System-wide install
+  try {
+    const result = spawnSync(IS_WIN ? 'where' : 'which', ['cloudflared'], { stdio: 'pipe', windowsHide: true });
+    if (result && result.status === 0) {
+      const systemPath = result.stdout.toString().trim().split(/\r?\n/)[0];
+      if (systemPath) return systemPath;
+    }
+  } catch {}
+  // 2. Local bin/ copy
+  if (fs.existsSync(CF_LOCAL_PATH)) return CF_LOCAL_PATH;
+  return null;
+}
+
+/** Download a URL following redirects, returning a Buffer */
+function downloadBuffer(url) {
+  return new Promise((resolve, reject) => {
+    const get = url.startsWith('https') ? https.get : http.get;
+    get(url, { headers: { 'User-Agent': 'Haven-Server' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return downloadBuffer(res.headers.location).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+/** Auto-download cloudflared binary if not already present */
+async function ensureCloudflared() {
+  const existing = cloudflaredPath();
+  if (existing) return existing;
+
+  console.log('☁️  Cloudflared not found — downloading automatically...');
+  if (!fs.existsSync(BIN_DIR)) fs.mkdirSync(BIN_DIR, { recursive: true });
+
+  const url = getCloudflaredDownloadUrl();
+  const data = await downloadBuffer(url);
+
+  if (IS_MAC && url.endsWith('.tgz')) {
+    // Extract tgz on macOS
+    const tgzPath = path.join(BIN_DIR, 'cloudflared.tgz');
+    fs.writeFileSync(tgzPath, data);
+    execFileSync('tar', ['-xzf', tgzPath, '-C', BIN_DIR], { windowsHide: true });
+    try { fs.unlinkSync(tgzPath); } catch {}
+  } else {
+    fs.writeFileSync(CF_LOCAL_PATH, data);
+  }
+
+  // Make executable on Unix
+  if (!IS_WIN) {
+    try { fs.chmodSync(CF_LOCAL_PATH, 0o755); } catch {}
+  }
+
+  // Verify it runs
+  try {
+    const check = spawnSync(CF_LOCAL_PATH, ['--version'], { stdio: 'pipe', windowsHide: true, timeout: 10000 });
+    if (check.status !== 0) throw new Error('Binary test failed');
+  } catch (err) {
+    try { fs.unlinkSync(CF_LOCAL_PATH); } catch {}
+    throw new Error(`Downloaded cloudflared but it failed to run: ${err.message}`);
+  }
+
+  console.log('✅ Cloudflared installed to bin/cloudflared');
+  return CF_LOCAL_PATH;
+}
 
 function providerAvailable(provider) {
   if (provider === 'localtunnel') {
     try { require.resolve('localtunnel'); return true; } catch { return false; }
   }
   if (provider === 'cloudflared') {
-    try {
-      const result = spawnSync('cloudflared', ['--version'], { stdio: 'ignore', windowsHide: true });
-      return result && result.status === 0;
-    } catch {
-      return false;
-    }
+    return !!cloudflaredPath();
   }
   return false;
 }
@@ -56,13 +139,8 @@ async function startTunnel(port, provider = 'localtunnel', ssl = false) {
   status = { ...status, error: null, provider };
   await stopTunnel();
   try {
-    if (!providerAvailable(provider)) {
-      throw new Error(provider === 'localtunnel'
-        ? 'localtunnel package not installed (run: npm install localtunnel)'
-        : 'cloudflared binary not found in PATH');
-    }
-
     if (provider === 'localtunnel') {
+      if (!providerAvailable('localtunnel')) throw new Error('localtunnel package not installed — run: npm install localtunnel');
       const localtunnel = require('localtunnel');
       const opts = { port };
       if (ssl) { opts.local_https = true; opts.allow_invalid_cert = true; }
@@ -81,11 +159,13 @@ async function startTunnel(port, provider = 'localtunnel', ssl = false) {
       return getTunnelStatus();
     }
 
+    // Auto-download cloudflared if not available
+    const cfPath = await ensureCloudflared();
     // Cloudflared quick-tunnel — use HTTPS origin + skip cert verify for self-signed
     const origin = ssl ? `https://127.0.0.1:${port}` : `http://127.0.0.1:${port}`;
     const args = ['tunnel', '--url', origin, '--no-autoupdate'];
     if (ssl) args.push('--no-tls-verify');
-    const proc = spawn('cloudflared', args, {
+    const proc = spawn(cfPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     });
@@ -163,4 +243,4 @@ function registerProcessCleanup() {
   process.on('exit', cleanup);
 }
 
-module.exports = { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup };
+module.exports = { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup, ensureCloudflared, providerAvailable };

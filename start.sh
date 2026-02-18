@@ -91,6 +91,64 @@ if command -v lsof &> /dev/null && lsof -ti:3000 &> /dev/null; then
 fi
 
 echo "  [*] Data directory: $HAVEN_DATA"
+
+# ── First-run tunnel setup ─────────────────────────────────
+if [ ! -f "$HAVEN_DATA/.tunnel_configured" ]; then
+    echo ""
+    echo -e "${GREEN}${BOLD}  ========================================${NC}"
+    echo -e "${GREEN}${BOLD}   How should friends connect to you?${NC}"
+    echo -e "${GREEN}${BOLD}  ========================================${NC}"
+    echo ""
+    echo "    1) Cloudflare Tunnel  (recommended, free, auto-downloads)"
+    echo "    2) LocalTunnel        (free, npm-based)"
+    echo "    3) Port-Forward       (manual router config, see instructions)"
+    echo "    4) Local Only         (same WiFi / network only)"
+    echo ""
+    read -rp "  Choose [1-4]: " TUNNEL_CHOICE
+
+    case "$TUNNEL_CHOICE" in
+        1)
+            echo "  [*] Setting up Cloudflare tunnel..."
+            node -e "const db=require('./src/database');db.prepare(\"INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_enabled','true')\").run();db.prepare(\"INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_provider','cloudflared')\").run();"
+            echo -e "${GREEN}  [✓] Cloudflare tunnel will start with the server.${NC}"
+            ;;
+        2)
+            echo "  [*] Setting up LocalTunnel..."
+            npm install localtunnel --save 2>/dev/null
+            node -e "const db=require('./src/database');db.prepare(\"INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_enabled','true')\").run();db.prepare(\"INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_provider','localtunnel')\").run();"
+            echo -e "${GREEN}  [✓] LocalTunnel will start with the server.${NC}"
+            ;;
+        3)
+            echo ""
+            echo -e "${BOLD}  ========================================${NC}"
+            echo -e "${BOLD}    Port-Forwarding Instructions${NC}"
+            echo -e "${BOLD}  ========================================${NC}"
+            echo ""
+            echo "    1. Open your router admin page"
+            echo "       (usually http://192.168.1.1 or http://192.168.0.1)"
+            echo "    2. Find 'Port Forwarding' or 'NAT' settings"
+            echo "    3. Add a new rule:"
+            echo "       - External port: 3000"
+            echo "       - Internal port: 3000"
+            echo "       - Internal IP:   YOUR PC's local IP"
+            echo "       - Protocol:      TCP"
+            echo "    4. Save and apply"
+            echo "    5. Share your public IP with friends:"
+            echo "       https://YOUR_PUBLIC_IP:3000"
+            echo ""
+            echo "    Tip: Search 'port forwarding [your router brand]'"
+            echo ""
+            node -e "const db=require('./src/database');db.prepare(\"INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_enabled','false')\").run();"
+            ;;
+        *)
+            echo -e "${GREEN}  [✓] Local-only mode. Connect via your local network.${NC}"
+            node -e "const db=require('./src/database');db.prepare(\"INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_enabled','false')\").run();"
+            ;;
+    esac
+    echo "configured" > "$HAVEN_DATA/.tunnel_configured"
+    echo ""
+fi
+
 echo "  [*] Starting Haven server..."
 echo ""
 

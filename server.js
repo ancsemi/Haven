@@ -1265,10 +1265,25 @@ server.listen(PORT, HOST, () => {
   try {
     const enabled = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_enabled'").get()?.value === 'true';
     const provider = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_provider'").get()?.value || 'localtunnel';
+    const serverName = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get()?.value || process.env.SERVER_NAME || 'Haven';
     if (enabled) {
+      console.log(`🧭 Starting ${provider} tunnel...`);
       startTunnel(PORT, provider, useSSL).then((s) => {
-        if (s.active) console.log(`🧭 Tunnel active (${s.provider}): ${s.url}`);
-        else if (s.error) console.log(`🧭 Tunnel failed: ${s.error}`);
+        if (s.active) {
+          const title = `Join "${serverName}"`;
+          console.log(`\n╔══════════════════════════════════════════╗`);
+          console.log(`║  🌐  ${title.padEnd(36)}║`);
+          console.log(`║  Send this link to your friends:         ║`);
+          console.log(`╠══════════════════════════════════════════╣`);
+          console.log(`║  ${s.url.padEnd(39)}║`);
+          console.log(`╚══════════════════════════════════════════╝`);
+          console.log(`  Provider: ${s.provider}`);
+          console.log(`  Note: This URL changes each time you restart Haven.\n`);
+        } else if (s.error) {
+          console.log(`🧭 Tunnel failed: ${s.error}`);
+          console.log('   Tip: Your server still works on your local network.');
+          console.log('   Tip: Try switching provider in Admin Settings.');
+        }
       });
     }
   } catch { /* tunnel start is non-critical */ }

@@ -721,24 +721,24 @@
       <div class="section-header fade-in">
         <span class="overline">Dead Simple</span>
         <h2>Up and running in 3 steps</h2>
-        <p>No terminal commands, no config files. Just double-click. (Docker supported too!)</p>
+        <p>No terminal commands, no config files. Download one file, double-click, done.</p>
       </div>
 
       <div class="steps stagger">
         <div class="step">
           <div class="step-number">📥</div>
-          <h3>Download &amp; unzip</h3>
-          <p>Download the .zip from GitHub and unzip it anywhere. Desktop is fine.</p>
+          <h3>Download the installer</h3>
+          <p>One file. Save it anywhere and double-click. It downloads everything for you.</p>
         </div>
         <div class="step">
           <div class="step-number">▶️</div>
-          <h3>Double-click to start</h3>
-          <p>Run <strong>Start Haven.bat</strong> (Windows) or <strong>start.sh</strong> (Mac/Linux). It handles everything.</p>
+          <h3>Follow the wizard</h3>
+          <p>A friendly browser-based wizard walks you through naming your server, creating an admin account, and choosing how friends connect.</p>
         </div>
         <div class="step">
           <div class="step-number">🔗</div>
           <h3>Share the link</h3>
-          <p>Send your friends your IP address. They open it in their browser &mdash; that's it. No download for them.</p>
+          <p>Send your friends your server link. They open it in their browser &mdash; that's it. No download for them.</p>
         </div>
       </div>
 
@@ -1078,14 +1078,21 @@
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
+          <a href="Install%20Haven.bat" download class="btn btn-primary download-main">
+            <span class="icon">⬇</span> Download Installer (Windows)
           <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v1.9.0.zip" class="btn btn-primary download-main">
             <span class="icon">⬇</span> Download v1.9.0 (.zip)
           </a>
           <div class="download-alt-links">
+            <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v1.8.2.zip">📦 Download .zip instead</a>
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
             <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">📖 Setup Guide</a>
             <a href="https://github.com/ancsemi/Haven/blob/main/CHANGELOG.md" target="_blank">📋 Full Changelog</a>
           </div>
+          <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 12px;">
+            <strong style="color: var(--text-muted);">Linux / macOS:</strong>
+            <code style="background: var(--bg-input); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">curl -fsSL https://ancsemi.github.io/Haven/install.sh | bash</code>
+          </p>
         </div>
 
         <div class="version-history">
@@ -1172,29 +1179,29 @@
         <div class="setup-step">
           <div class="s-num">1</div>
           <div>
-            <h4>Install Node.js</h4>
-            <p>Download from <a href="https://nodejs.org/" target="_blank">nodejs.org</a> (click the big green LTS button). Restart your PC after installing.</p>
+            <h4>Download the installer</h4>
+            <p>Click the download button above. You get a single file &mdash; <strong>Install Haven.bat</strong>. Save it anywhere.</p>
           </div>
         </div>
         <div class="setup-step">
           <div class="s-num">2</div>
           <div>
-            <h4>Unzip Haven</h4>
-            <p>Extract the zip anywhere. Desktop, Documents, wherever you like. It creates one folder.</p>
+            <h4>Double-click to run</h4>
+            <p>The installer handles everything automatically: downloads Node.js if needed, downloads Haven, and opens a guided setup wizard in your browser.</p>
           </div>
         </div>
         <div class="setup-step">
           <div class="s-num">3</div>
           <div>
-            <h4>Double-click Start Haven.bat</h4>
-            <p>A terminal opens, does its thing, and your browser opens automatically. First boot takes ~30 seconds.</p>
+            <h4>Follow the wizard</h4>
+            <p>Name your server, create an admin account, choose how friends connect. The wizard walks you through each step.</p>
           </div>
         </div>
         <div class="setup-step">
           <div class="s-num">4</div>
           <div>
-            <h4>Create an account &amp; invite friends</h4>
-            <p>Register as admin, create channels, and share your IP + channel code. Friends open the link in their browser.</p>
+            <h4>Share the link</h4>
+            <p>Click "Launch Haven" and share your server link with friends. They open it in their browser &mdash; no download needed on their end.</p>
           </div>
         </div>
       </div>

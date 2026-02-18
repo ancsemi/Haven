@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haven Installer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --subtext: #8b949e;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --green: #3fb950;
+    --green-hover: #56d364;
+    --red: #f85149;
+    --orange: #d29922;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .installer {
+    width: 600px;
+    min-height: 480px;
+    position: relative;
+  }
+
+  /* ── Progress bar ── */
+  .progress-track {
+    height: 3px;
+    background: var(--surface);
+    border-radius: 2px;
+    margin-bottom: 32px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ── Pages ── */
+  .page {
+    display: none;
+    animation: fadeIn 0.35s ease;
+  }
+  .page.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Typography ── */
+  .icon { font-size: 56px; text-align: center; margin-bottom: 8px; line-height: 1.2; }
+  h1 { font-size: 28px; font-weight: 700; text-align: center; margin-bottom: 8px; }
+  h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .subtitle {
+    font-size: 14px;
+    color: var(--subtext);
+    text-align: center;
+    line-height: 1.5;
+    max-width: 440px;
+    margin: 0 auto 8px;
+  }
+  .hint { font-size: 13px; color: var(--subtext); margin-bottom: 16px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-block;
+    padding: 10px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+    font-family: inherit;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-green:hover:not(:disabled) { background: var(--green-hover); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--subtext);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface); }
+
+  .btn-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 24px;
+  }
+  .btn-row-center {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 28px;
+  }
+
+  /* ── Inputs ── */
+  label.field-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--subtext);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus { border-color: var(--accent); }
+  .field-group { margin-bottom: 14px; }
+  .field-error {
+    font-size: 12px;
+    color: var(--red);
+    margin-top: 6px;
+    min-height: 18px;
+  }
+
+  /* ── Preview card ── */
+  .preview-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 20px;
+  }
+  .preview-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--subtext);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .preview-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .preview-icon { font-size: 24px; }
+  .preview-name { font-size: 16px; font-weight: 600; }
+  .preview-url { font-size: 11px; color: var(--subtext); margin-top: 2px; }
+
+  /* ── Network option cards ── */
+  .net-options { display: flex; flex-direction: column; gap: 8px; }
+  .net-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .net-card:hover { border-color: var(--subtext); }
+  .net-card.selected { border-color: var(--accent); }
+  .net-card input[type="radio"] { display: none; }
+  .net-radio {
+    width: 18px; height: 18px;
+    border: 2px solid var(--subtext);
+    border-radius: 50%;
+    margin-top: 2px;
+    flex-shrink: 0;
+    position: relative;
+    transition: border-color 0.15s;
+  }
+  .net-card.selected .net-radio {
+    border-color: var(--accent);
+  }
+  .net-card.selected .net-radio::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+  .net-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .net-info { flex: 1; }
+  .net-title { font-size: 14px; font-weight: 600; }
+  .net-desc { font-size: 12px; color: var(--subtext); margin-top: 2px; }
+  .net-badge {
+    font-size: 10px;
+    background: var(--green);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .pf-instructions {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--subtext);
+    line-height: 1.6;
+  }
+  .pf-instructions.show { display: block; }
+  .pf-instructions strong { color: var(--text); }
+
+  /* ── Install progress ── */
+  .install-steps { margin-top: 20px; }
+  .step-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13px;
+    color: var(--subtext);
+  }
+  .step-row.active { color: var(--text); }
+  .step-row.done { color: var(--green); }
+  .step-row.error { color: var(--red); }
+  .step-icon { width: 20px; text-align: center; flex-shrink: 0; }
+
+  .install-bar-track {
+    height: 6px;
+    background: var(--surface);
+    border-radius: 3px;
+    margin-top: 20px;
+    overflow: hidden;
+  }
+  .install-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  .calming-msg {
+    font-size: 13px;
+    color: var(--subtext);
+    text-align: center;
+    margin-top: 24px;
+    font-style: italic;
+    min-height: 20px;
+    transition: opacity 0.3s;
+  }
+
+  /* ── Success ── */
+  .success-icon {
+    font-size: 56px;
+    text-align: center;
+    color: var(--green);
+    margin-top: 20px;
+    margin-bottom: 8px;
+  }
+  .share-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 20px;
+    text-align: center;
+  }
+  .share-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--subtext);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .share-text {
+    font-size: 15px;
+    color: var(--accent);
+  }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  /* ── Platform info ── */
+  .platform-info {
+    font-size: 11px;
+    color: var(--subtext);
+    text-align: center;
+    margin-top: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div class="installer">
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <!-- ════════ PAGE 0: Welcome ════════ -->
+  <div class="page active" id="page0">
+    <div class="icon">&#9729;</div>
+    <h1>Welcome to Haven</h1>
+    <p class="subtitle">
+      Your own private chat server. No accounts on someone else's platform &mdash;
+      just you and the people you invite.
+    </p>
+    <p class="subtitle" style="margin-top:12px;">
+      This wizard will guide you through setup step by step.<br>
+      No technical knowledge needed &mdash; it takes about 2 minutes.
+    </p>
+    <div class="btn-row-center" style="margin-top:36px;">
+      <button class="btn btn-accent" onclick="showPage(1)">Get Started &rarr;</button>
+    </div>
+    <p class="platform-info" id="platformInfo"></p>
+  </div>
+
+  <!-- ════════ PAGE 1: Server Name ════════ -->
+  <div class="page" id="page1">
+    <h2>Name your server</h2>
+    <p class="hint">This is the name your friends will see when they connect. You can change it later.</p>
+
+    <div class="field-group">
+      <label class="field-label" for="serverName">Server Name</label>
+      <input type="text" id="serverName" maxlength="40" value="Haven"
+             oninput="document.getElementById('previewName').textContent = this.value.trim() || 'Haven'">
+    </div>
+
+    <div class="preview-card">
+      <div class="preview-label">Preview</div>
+      <div class="preview-row">
+        <span class="preview-icon">&#9729;</span>
+        <div>
+          <div class="preview-name" id="previewName">Haven</div>
+          <div class="preview-url">https://your-tunnel-url.trycloudflare.com</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="showPage(0)">&larr; Back</button>
+      <button class="btn btn-accent" onclick="showPage(2)">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- ════════ PAGE 2: Admin Account ════════ -->
+  <div class="page" id="page2">
+    <h2>Create admin account</h2>
+    <p class="hint">This is the administrator account for your server. Keep the password somewhere safe.</p>
+
+    <div class="field-group">
+      <label class="field-label" for="adminUser">Username</label>
+      <input type="text" id="adminUser" maxlength="24" autocomplete="off">
+    </div>
+    <div class="field-group">
+      <label class="field-label" for="adminPass">Password</label>
+      <input type="password" id="adminPass" maxlength="128" autocomplete="new-password">
+    </div>
+    <div class="field-group">
+      <label class="field-label" for="adminPass2">Confirm Password</label>
+      <input type="password" id="adminPass2" maxlength="128" autocomplete="new-password">
+    </div>
+    <div class="field-error" id="accountError"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="showPage(1)">&larr; Back</button>
+      <button class="btn btn-accent" onclick="validateAccount()">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- ════════ PAGE 3: Network Access ════════ -->
+  <div class="page" id="page3">
+    <h2>Network access</h2>
+    <p class="hint">How should friends connect to your server?</p>
+
+    <div class="net-options">
+      <label class="net-card selected" onclick="selectNet(this, 'cloudflare')">
+        <input type="radio" name="tunnel" value="cloudflare" checked>
+        <div class="net-radio"></div>
+        <span class="net-icon">&#9729;</span>
+        <div class="net-info">
+          <div class="net-title">Cloudflare Tunnel <span class="net-badge">Recommended</span></div>
+          <div class="net-desc">Free, no configuration needed. Cloudflared is downloaded automatically.</div>
+        </div>
+      </label>
+      <label class="net-card" onclick="selectNet(this, 'localtunnel')">
+        <input type="radio" name="tunnel" value="localtunnel">
+        <div class="net-radio"></div>
+        <span class="net-icon">&#128279;</span>
+        <div class="net-info">
+          <div class="net-title">LocalTunnel</div>
+          <div class="net-desc">Free npm-based tunnel. Simple but may be slower.</div>
+        </div>
+      </label>
+      <label class="net-card" onclick="selectNet(this, 'portforward')">
+        <input type="radio" name="tunnel" value="portforward">
+        <div class="net-radio"></div>
+        <span class="net-icon">&#128295;</span>
+        <div class="net-info">
+          <div class="net-title">Port-Forward (advanced)</div>
+          <div class="net-desc">Configure your router manually. Static IP recommended.</div>
+        </div>
+      </label>
+      <label class="net-card" onclick="selectNet(this, 'local')">
+        <input type="radio" name="tunnel" value="local">
+        <div class="net-radio"></div>
+        <span class="net-icon">&#128225;</span>
+        <div class="net-info">
+          <div class="net-title">Local Only</div>
+          <div class="net-desc">Same WiFi / network only. No internet access.</div>
+        </div>
+      </label>
+    </div>
+
+    <div class="pf-instructions" id="pfInstructions">
+      <strong>Port-Forwarding Steps:</strong><br>
+      1. Open your router admin (usually http://192.168.1.1)<br>
+      2. Find "Port Forwarding" or "NAT" settings<br>
+      3. Add rule: External 3000 &rarr; Internal 3000, TCP<br>
+      4. Set Internal IP to this PC's local IP<br>
+      5. Share your public IP: https://YOUR_IP:3000
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="showPage(2)">&larr; Back</button>
+      <button class="btn btn-green" onclick="startInstall()">Install &rarr;</button>
+    </div>
+  </div>
+
+  <!-- ════════ PAGE 4: Installing ════════ -->
+  <div class="page" id="page4">
+    <h2>Installing Haven&hellip;</h2>
+    <p class="hint" id="installStatus">Preparing&hellip;</p>
+
+    <div class="install-bar-track">
+      <div class="install-bar-fill" id="installBar"></div>
+    </div>
+
+    <div class="install-steps" id="installSteps">
+      <div class="step-row" data-step="deps">
+        <span class="step-icon">&nbsp;&nbsp;</span>
+        <span>Installing dependencies&hellip;</span>
+      </div>
+      <div class="step-row" data-step="datadir">
+        <span class="step-icon">&nbsp;&nbsp;</span>
+        <span>Creating data directory&hellip;</span>
+      </div>
+      <div class="step-row" data-step="ssl">
+        <span class="step-icon">&nbsp;&nbsp;</span>
+        <span>Generating SSL certificate&hellip;</span>
+      </div>
+      <div class="step-row" data-step="config">
+        <span class="step-icon">&nbsp;&nbsp;</span>
+        <span>Configuring server&hellip;</span>
+      </div>
+      <div class="step-row" data-step="shortcuts">
+        <span class="step-icon">&nbsp;&nbsp;</span>
+        <span>Creating shortcuts&hellip;</span>
+      </div>
+    </div>
+
+    <p class="calming-msg" id="calmingMsg"></p>
+  </div>
+
+  <!-- ════════ PAGE 5: Success ════════ -->
+  <div class="page" id="page5">
+    <div class="success-icon">&#10003;</div>
+    <h1>Haven is ready!</h1>
+    <p class="subtitle" id="successMsg">Your server has been set up successfully.</p>
+
+    <div class="share-card">
+      <div class="share-label">Get Started</div>
+      <div class="share-text" id="shareText">Click "Launch Haven" to start your server!</div>
+    </div>
+
+    <div class="btn-row-center">
+      <button class="btn btn-green" onclick="launchHaven()">Launch Haven</button>
+      <button class="btn btn-ghost" onclick="window.close()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ──
+  let currentPage = 0;
+  let selectedTunnel = 'cloudflare';
+
+  const calmingMessages = [
+    'Setting up your private space\u2026',
+    'Good things take a moment\u2026',
+    'Installing secure dependencies\u2026',
+    'Building your personal server\u2026',
+    'Almost there \u2014 just a few more seconds\u2026',
+    'Your privacy is worth the wait\u2026',
+    'Creating something just for you\u2026'
+  ];
+  let calmIdx = 0;
+  let calmInterval = null;
+
+  // ── Page navigation ──
+  function showPage(n) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page' + n).classList.add('active');
+    currentPage = n;
+    document.getElementById('progressFill').style.width = (n / 5 * 100) + '%';
+  }
+
+  // ── Network selection ──
+  function selectNet(card, value) {
+    document.querySelectorAll('.net-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedTunnel = value;
+    document.getElementById('pfInstructions').classList.toggle('show', value === 'portforward');
+  }
+
+  // ── Account validation ──
+  function validateAccount() {
+    const user = document.getElementById('adminUser').value.trim();
+    const pass = document.getElementById('adminPass').value;
+    const pass2 = document.getElementById('adminPass2').value;
+    const err = document.getElementById('accountError');
+
+    if (user.length < 2) { err.textContent = 'Username must be at least 2 characters.'; return; }
+    if (pass.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
+    if (pass !== pass2) { err.textContent = 'Passwords do not match.'; return; }
+
+    err.textContent = '';
+    showPage(3);
+  }
+
+  // ── Update step UI ──
+  function setStep(stepKey, state, label) {
+    const row = document.querySelector('[data-step="' + stepKey + '"]');
+    if (!row) return;
+    const icon = row.querySelector('.step-icon');
+    const text = row.querySelector('span:last-child');
+
+    row.className = 'step-row ' + state;
+    if (state === 'active') { icon.innerHTML = '<span class="spinner"></span>'; }
+    else if (state === 'done') { icon.textContent = '\u2713'; }
+    else if (state === 'error') { icon.textContent = '\u2717'; }
+    else { icon.innerHTML = '&nbsp;&nbsp;'; }
+
+    if (label) text.textContent = label;
+    if (label) document.getElementById('installStatus').textContent = label;
+  }
+
+  function setProgress(pct) {
+    document.getElementById('installBar').style.width = pct + '%';
+  }
+
+  // ── Start installation via SSE ──
+  function startInstall() {
+    showPage(4);
+
+    // Start calming message rotation
+    calmInterval = setInterval(() => {
+      const el = document.getElementById('calmingMsg');
+      el.style.opacity = 0;
+      setTimeout(() => {
+        el.textContent = calmingMessages[calmIdx % calmingMessages.length];
+        el.style.opacity = 1;
+        calmIdx++;
+      }, 300);
+    }, 3500);
+    document.getElementById('calmingMsg').textContent = calmingMessages[0];
+    calmIdx = 1;
+
+    const config = {
+      serverName: document.getElementById('serverName').value.trim() || 'Haven',
+      adminUser: document.getElementById('adminUser').value.trim(),
+      adminPass: document.getElementById('adminPass').value,
+      tunnel: selectedTunnel
+    };
+
+    fetch('/api/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    }).then(response => {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      function pump() {
+        return reader.read().then(({ done, value }) => {
+          if (done) return;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events from buffer
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // keep incomplete line
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const evt = JSON.parse(line.slice(6));
+                handleEvent(evt);
+              } catch (e) { /* skip parse errors */ }
+            }
+          }
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(err => {
+      document.getElementById('installStatus').textContent = 'Connection lost. Check the console window.';
+    });
+  }
+
+  function handleEvent(evt) {
+    if (evt.step) setStep(evt.step, evt.state, evt.label);
+    if (evt.progress != null) setProgress(evt.progress);
+
+    if (evt.done) {
+      clearInterval(calmInterval);
+      document.getElementById('calmingMsg').textContent = '';
+
+      if (evt.error) {
+        document.getElementById('installStatus').textContent =
+          'Something went wrong. Check the console window for details.';
+      } else {
+        // Build success message
+        const name = document.getElementById('serverName').value.trim() || 'Haven';
+        document.getElementById('successMsg').textContent =
+          'Your server "' + name + '" is ready to go.';
+
+        let shareMsg = 'Double-click "Start Haven" to begin!';
+        if (selectedTunnel === 'cloudflare') {
+          shareMsg = 'A Cloudflare tunnel will start automatically when you launch Haven.';
+        } else if (selectedTunnel === 'localtunnel') {
+          shareMsg = 'A LocalTunnel will start automatically when you launch Haven.';
+        }
+        document.getElementById('shareText').textContent = shareMsg;
+
+        showPage(5);
+      }
+    }
+  }
+
+  // ── Launch Haven ──
+  function launchHaven() {
+    fetch('/api/launch', { method: 'POST' }).catch(() => {});
+    document.querySelector('.installer').innerHTML =
+      '<div style="text-align:center;margin-top:120px;">' +
+      '<div class="icon">&#9729;</div>' +
+      '<h1>Haven is starting&hellip;</h1>' +
+      '<p class="subtitle">Your browser will open shortly. You can close this tab.</p>' +
+      '</div>';
+  }
+
+  // ── Init: fetch platform info ──
+  fetch('/api/check').then(r => r.json()).then(info => {
+    const parts = [];
+    if (info.nodeVersion) parts.push('Node.js ' + info.nodeVersion);
+    if (info.platform) parts.push(info.platform === 'win32' ? 'Windows' :
+      info.platform === 'darwin' ? 'macOS' : 'Linux');
+    document.getElementById('platformInfo').textContent = parts.join(' \u2022 ');
+  }).catch(() => {});
+</script>
+</body>
+</html>
