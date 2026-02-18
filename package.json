@@ -20,6 +20,7 @@
     "jsonwebtoken": "^9.0.2",
     "localtunnel": "^2.0.2",
     "multer": "^2.0.2",
+    "firebase-admin": "^13.0.0",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7"
   }

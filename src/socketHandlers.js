@@ -154,7 +154,8 @@ async function searchYouTube(query, count = 5, offset = 0) {
     return [];
   }
 }
-function setupSocketHandlers(io, db) {
+function setupSocketHandlers(io, db, options = {}) {
+  const { fcmEnabled = false, firebaseAdmin = null } = options;
   const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
   // ── Permission system helpers ───────────────────────────
@@ -429,6 +430,7 @@ function setupSocketHandlers(io, db) {
   // ── Push notification helper ──────────────────────────────
   // Sends push notifications for a new message to channel members
   // who don't have the Haven tab in focus (visibility-based targeting).
+  // Sends both Web Push (VAPID) and FCM (Android) notifications.
   function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent) {
     try {
       // Get user IDs whose tabs are currently in focus
@@ -437,7 +439,14 @@ function setupSocketHandlers(io, db) {
         if (s.user && s.hasFocus !== false) activeUserIds.add(s.user.id);
       }
 
-      // Get push subscriptions for channel members (excluding sender)
+      // Truncate message for notification body
+      const body = messageContent.length > 120
+        ? messageContent.slice(0, 117) + '...'
+        : messageContent;
+
+      const title = `${senderUsername} in #${channelName}`;
+
+      // ── Web Push (browser / PWA) ────────────────────────────
       const subs = db.prepare(`
         SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id
         FROM push_subscriptions ps
@@ -446,38 +455,85 @@ function setupSocketHandlers(io, db) {
           AND ps.user_id != ?
       `).all(channelId, senderUserId);
 
-      if (!subs.length) return;
-
-      // Truncate message for notification body
-      const body = messageContent.length > 120
-        ? messageContent.slice(0, 117) + '...'
-        : messageContent;
-
-      const payload = JSON.stringify({
-        title: `${senderUsername} in #${channelName}`,
-        body,
-        channelCode,
-        tag: `haven-${channelCode}`,
-        url: '/app'
-      });
-
-      for (const sub of subs) {
-        // Skip users whose tab is in focus (they see real-time events)
-        if (activeUserIds.has(sub.user_id)) continue;
-
-        const pushSub = {
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth }
-        };
-
-        webpush.sendNotification(pushSub, payload).catch((err) => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            // Subscription expired or invalid — remove it
-            try {
-              db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
-            } catch { /* non-critical */ }
-          }
+      if (subs.length) {
+        const payload = JSON.stringify({
+          title,
+          body,
+          channelCode,
+          tag: `haven-${channelCode}`,
+          url: '/app'
         });
+
+        for (const sub of subs) {
+          if (activeUserIds.has(sub.user_id)) continue;
+
+          const pushSub = {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth }
+          };
+
+          webpush.sendNotification(pushSub, payload).catch((err) => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              try {
+                db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
+              } catch { /* non-critical */ }
+            }
+          });
+        }
+      }
+
+      // ── FCM Push (Android native app) ───────────────────────
+      if (fcmEnabled && firebaseAdmin) {
+        try {
+          const fcmTokens = db.prepare(`
+            SELECT ft.token, ft.user_id
+            FROM fcm_tokens ft
+            JOIN channel_members cm ON cm.user_id = ft.user_id
+            WHERE cm.channel_id = ?
+              AND ft.user_id != ?
+          `).all(channelId, senderUserId);
+
+          for (const row of fcmTokens) {
+            // Skip users whose tab is in focus
+            if (activeUserIds.has(row.user_id)) continue;
+
+            firebaseAdmin.messaging().send({
+              token: row.token,
+              notification: {
+                title,
+                body
+              },
+              data: {
+                channelCode,
+                channelName,
+                senderUsername,
+                type: 'haven_message'
+              },
+              android: {
+                priority: 'high',
+                notification: {
+                  channelId: 'haven_messages',
+                  priority: 'high',
+                  defaultSound: true,
+                  defaultVibrateTimings: true,
+                  tag: `haven-${channelCode}`
+                }
+              }
+            }).catch((err) => {
+              // Token no longer valid — remove it
+              if (err.code === 'messaging/registration-token-not-registered' ||
+                  err.code === 'messaging/invalid-registration-token') {
+                try {
+                  db.prepare('DELETE FROM fcm_tokens WHERE token = ?').run(row.token);
+                } catch { /* non-critical */ }
+              } else {
+                console.error('FCM send error:', err.code || err.message);
+              }
+            });
+          }
+        } catch (fcmErr) {
+          console.error('FCM notification error:', fcmErr.message);
+        }
       }
     } catch (err) {
       console.error('Push notification error:', err.message);

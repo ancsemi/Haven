@@ -51,6 +51,30 @@ if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
 const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@haven.local';
 webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
 
+// ── Firebase Admin SDK for FCM push notifications ────────
+const admin = require('firebase-admin');
+let fcmEnabled = false;
+const fcmServiceAccountPath = process.env.FCM_SERVICE_ACCOUNT
+  || path.join(DATA_DIR, 'firebase-service-account.json');
+if (fs.existsSync(fcmServiceAccountPath)) {
+  try {
+    const serviceAccount = JSON.parse(fs.readFileSync(fcmServiceAccountPath, 'utf-8'));
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    fcmEnabled = true;
+    console.log('🔔 Firebase Admin SDK initialized — FCM push notifications enabled');
+  } catch (err) {
+    console.warn('⚠️  Failed to initialize Firebase Admin SDK:', err.message);
+    console.warn('   FCM push notifications will be disabled. Place a valid firebase-service-account.json in', DATA_DIR);
+  }
+} else {
+  console.log('ℹ️  No firebase-service-account.json found — FCM push notifications disabled');
+  console.log('   To enable Android push notifications, download a service account key from');
+  console.log('   Firebase Console → Project Settings → Service Accounts → Generate New Private Key');
+  console.log('   and place it at:', fcmServiceAccountPath);
+}
+
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers } = require('./src/socketHandlers');
@@ -1211,7 +1235,7 @@ const io = new Server(server, {
 
 // Initialize
 const db = initDatabase();
-setupSocketHandlers(io, db);
+setupSocketHandlers(io, db, { fcmEnabled, firebaseAdmin: fcmEnabled ? admin : null });
 registerProcessCleanup();
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────
