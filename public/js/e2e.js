@@ -2,9 +2,15 @@
  * Haven — End-to-End Encryption for DMs
  *
  * Uses ECDH (P-256) for key agreement + AES-256-GCM for message encryption.
- * Private keys are encrypted with the user's password (PBKDF2 wrapping) and
+ * Private keys are encrypted with a per-account secret (PBKDF2 wrapping) and
  * stored on the server so they sync across devices. The server never sees the
- * plaintext private key — only the password-encrypted blob.
+ * plaintext private key — only the secret-encrypted blob.
+ *
+ * The e2eSecret is a random 32-byte hex string generated server-side per user.
+ * It's sent to the client on every login & socket connection, stored in
+ * localStorage, and used as the PBKDF2 passphrase for key wrapping.
+ * This ensures keys are portable across devices/browsers without needing
+ * the user's password.
  *
  * Local IndexedDB is used as a fast cache; the server is the source of truth.
  */
@@ -25,10 +31,11 @@ class HavenE2E {
   /**
    * Initialize E2E. Tries IndexedDB first (fast), then server (cross-device).
    * If no key exists anywhere, generates a new pair.
-   * @param {Object} socket   - Socket.IO instance
-   * @param {string} password - User's login password (for wrapping/unwrapping)
+   * @param {Object} socket    - Socket.IO instance
+   * @param {string} e2eSecret - Per-account secret for key wrapping (from server)
+   * @param {string} password  - User's login password (fallback for migrating old keys)
    */
-  async init(socket, password) {
+  async init(socket, e2eSecret, password) {
     try {
       await this._openDB();
       this._needsPassword = false;
@@ -38,41 +45,70 @@ class HavenE2E {
       this._keyPair = await this._loadKeyPair();
 
       if (!this._keyPair && socket) {
-        // 2. Cross-device: check server for password-encrypted key
+        // 2. Cross-device: check server for encrypted key
         const serverData = await this._fetchEncryptedKey(socket);
 
         if (serverData.encryptedKey && serverData.salt) {
-          // Server has an encrypted backup
-          if (password) {
+          // Server has an encrypted backup — try e2eSecret first, then password fallback
+          let unwrapped = false;
+
+          if (e2eSecret) {
+            try {
+              const privateJwk = await this._unwrapPrivateKey(e2eSecret, serverData.encryptedKey, serverData.salt);
+              this._keyPair = await this._importKeyPair(privateJwk);
+              await this._storeKeyPair(this._keyPair);
+              unwrapped = true;
+              console.log('[E2E] Restored key pair from server (cross-device sync)');
+            } catch {
+              // e2eSecret didn't work — key may be wrapped with old password
+              console.warn('[E2E] e2eSecret unwrap failed, trying password migration…');
+            }
+          }
+
+          if (!unwrapped && password) {
             try {
               const privateJwk = await this._unwrapPrivateKey(password, serverData.encryptedKey, serverData.salt);
               this._keyPair = await this._importKeyPair(privateJwk);
               await this._storeKeyPair(this._keyPair);
-              console.log('[E2E] Restored key pair from server (cross-device sync)');
+              unwrapped = true;
+              console.log('[E2E] Restored key pair using password (migration)');
+              // Re-wrap with e2eSecret so future logins don't need the password
+              if (e2eSecret && socket) {
+                try {
+                  await this._uploadEncryptedKey(socket, e2eSecret);
+                  console.log('[E2E] Migrated key wrapping from password to e2eSecret');
+                } catch (err) {
+                  console.warn('[E2E] Migration re-wrap failed:', err.message);
+                }
+              }
             } catch (err) {
-              console.warn('[E2E] Failed to decrypt server key (password may have changed):', err.message);
+              console.warn('[E2E] Password unwrap also failed:', err.message);
+            }
+          }
+
+          if (!unwrapped) {
+            if (!e2eSecret && !password) {
+              console.warn('[E2E] Server has encrypted key but no secret/password — need recovery');
+              this._needsPassword = true;
+            } else {
+              // Both secrets failed — key is unrecoverable, will need reset
+              console.warn('[E2E] Could not unwrap key with any available secret');
               this._needsPassword = true;
             }
-          } else {
-            // No password (auto-login via token) — can't unwrap
-            console.warn('[E2E] Server has encrypted key but no password — need password to recover');
-            this._needsPassword = true;
           }
         } else if (serverData.hasPublicKey) {
           // Server has a public key for us but NO encrypted backup!
           // The backup upload was lost (old race condition bug).
-          if (password) {
-            // Password available (login form) — auto-reset now
+          if (e2eSecret || password) {
             console.warn('[E2E] Server has public key but no backup — auto-resetting keys');
-            const reset = await this.resetKeys(socket, password);
+            const secret = e2eSecret || password;
+            const reset = await this.resetKeys(socket, secret);
             if (!reset) {
-              // Reset failed — fall back to manual recovery
               this._needsPassword = true;
               this._keyBackupLost = true;
             }
           } else {
-            // No password (token auto-login) — need user to enter it
-            console.warn('[E2E] Server has public key but no backup — need password to reset');
+            console.warn('[E2E] Server has public key but no backup — need secret to reset');
             this._needsPassword = true;
             this._keyBackupLost = true;
           }
@@ -91,9 +127,10 @@ class HavenE2E {
         this._publicKeyJwk = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
 
         // Upload encrypted private key to server for cross-device sync
-        if (socket && password) {
+        const wrappingSecret = e2eSecret || password;
+        if (socket && wrappingSecret) {
           try {
-            await this._uploadEncryptedKey(socket, password);
+            await this._uploadEncryptedKey(socket, wrappingSecret);
             console.log('[E2E] Encrypted key backup stored on server');
           } catch (err) {
             console.warn('[E2E] Failed to upload encrypted key:', err.message);
@@ -103,9 +140,8 @@ class HavenE2E {
         this._ready = true;
         console.log('[E2E] Ready — public key loaded');
       } else {
-        // Key recovery needed — E2E not available until password is provided
         this._ready = false;
-        console.warn('[E2E] Not ready — password required to recover/reset encryption keys');
+        console.warn('[E2E] Not ready — secret required to recover/reset encryption keys');
       }
     } catch (err) {
       console.error('[E2E] Init failed:', err);
@@ -120,32 +156,36 @@ class HavenE2E {
   get keyBackupLost() { return this._keyBackupLost || false; }
 
   /**
-   * Retry key recovery with a password (after auto-login without password).
+   * Retry key recovery with a secret or password (after auto-login failed).
    * If the backup was lost (old race condition bug), generates fresh keys instead.
+   * @param {Object} socket    - Socket.IO instance
+   * @param {string} secret    - e2eSecret or password for unwrapping
+   * @param {string} e2eSecret - If provided, re-wraps with this after successful recovery
    */
-  async recoverWithPassword(socket, password) {
-    if (!password) return false;
+  async recoverWithPassword(socket, secret, e2eSecret) {
+    if (!secret) return false;
 
     // If the server backup was lost, we can't recover — reset instead
     if (this._keyBackupLost) {
-      return this.resetKeys(socket, password);
+      return this.resetKeys(socket, e2eSecret || secret);
     }
 
     try {
       const serverData = await this._fetchEncryptedKey(socket);
       if (!serverData.encryptedKey || !serverData.salt) return false;
-      const privateJwk = await this._unwrapPrivateKey(password, serverData.encryptedKey, serverData.salt);
+      const privateJwk = await this._unwrapPrivateKey(secret, serverData.encryptedKey, serverData.salt);
       this._keyPair = await this._importKeyPair(privateJwk);
       await this._storeKeyPair(this._keyPair);
       this._publicKeyJwk = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
-      // Re-upload (refreshes the wrapping in case password changed)
-      try { await this._uploadEncryptedKey(socket, password); } catch {}
+      // Re-wrap with e2eSecret (migrates old password-wrapped keys)
+      const wrappingSecret = e2eSecret || secret;
+      try { await this._uploadEncryptedKey(socket, wrappingSecret); } catch {}
       this._ready = true;
       this._needsPassword = false;
-      console.log('[E2E] Key recovered with password');
+      console.log('[E2E] Key recovered');
       return true;
     } catch (err) {
-      console.warn('[E2E] Password recovery failed:', err.message);
+      console.warn('[E2E] Recovery failed:', err.message);
       return false;
     }
   }
@@ -154,15 +194,17 @@ class HavenE2E {
    * Generate fresh keys, upload backup, and mark as needing force-publish.
    * Used when the encrypted backup was lost and the old key is unrecoverable.
    * Old encrypted messages will become permanently unreadable.
+   * @param {Object} socket - Socket.IO instance
+   * @param {string} secret - e2eSecret or password for wrapping
    */
-  async resetKeys(socket, password) {
-    if (!password) return false;
+  async resetKeys(socket, secret) {
+    if (!secret) return false;
     try {
       this._keyPair = await this._generateKeyPair();
       await this._storeKeyPair(this._keyPair);
       this._publicKeyJwk = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
       // Upload encrypted backup
-      await this._uploadEncryptedKey(socket, password);
+      await this._uploadEncryptedKey(socket, secret);
       this._ready = true;
       this._needsPassword = false;
       this._keyBackupLost = false;
@@ -261,13 +303,13 @@ class HavenE2E {
     return aesKey;
   }
 
-  /* ── Password-Based Key Wrapping (PBKDF2 + AES-GCM) ── */
+  /* ── Secret-Based Key Wrapping (PBKDF2 + AES-GCM) ──── */
 
-  async _deriveWrappingKey(password, saltBase64) {
+  async _deriveWrappingKey(secret, saltBase64) {
     const salt = this._base64ToBuf(saltBase64);
     const passKey = await crypto.subtle.importKey(
       'raw',
-      new TextEncoder().encode(password),
+      new TextEncoder().encode(secret),
       'PBKDF2',
       false,
       ['deriveKey']
@@ -281,11 +323,11 @@ class HavenE2E {
     );
   }
 
-  async _wrapPrivateKey(password) {
+  async _wrapPrivateKey(secret) {
     const privateJwk = await crypto.subtle.exportKey('jwk', this._keyPair.privateKey);
     const salt = crypto.getRandomValues(new Uint8Array(32));
     const saltB64 = this._bufToBase64(salt);
-    const wrappingKey = await this._deriveWrappingKey(password, saltB64);
+    const wrappingKey = await this._deriveWrappingKey(secret, saltB64);
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const plaintext = new TextEncoder().encode(JSON.stringify(privateJwk));
@@ -302,8 +344,8 @@ class HavenE2E {
     return { encryptedKey: this._bufToBase64(combined), salt: saltB64 };
   }
 
-  async _unwrapPrivateKey(password, encryptedKeyB64, saltB64) {
-    const wrappingKey = await this._deriveWrappingKey(password, saltB64);
+  async _unwrapPrivateKey(secret, encryptedKeyB64, saltB64) {
+    const wrappingKey = await this._deriveWrappingKey(secret, saltB64);
     const combined = this._base64ToBuf(encryptedKeyB64);
 
     const iv = combined.slice(0, 12);
@@ -352,16 +394,16 @@ class HavenE2E {
   }
 
   /**
-   * Re-wrap and upload the private key with a new password.
-   * Call this after a password change so the server backup stays decryptable.
+   * Re-wrap and upload the private key with a new secret.
+   * Call this after a password change if the wrapping secret changes.
    */
-  async reWrapKey(socket, newPassword) {
+  async reWrapKey(socket, newSecret) {
     if (!this._ready || !this._keyPair) return;
-    await this._uploadEncryptedKey(socket, newPassword);
+    await this._uploadEncryptedKey(socket, newSecret);
   }
 
-  async _uploadEncryptedKey(socket, password) {
-    const { encryptedKey, salt } = await this._wrapPrivateKey(password);
+  async _uploadEncryptedKey(socket, secret) {
+    const { encryptedKey, salt } = await this._wrapPrivateKey(secret);
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Upload timeout')), 5000);
       socket.once('encrypted-key-stored', () => { clearTimeout(timeout); resolve(); });

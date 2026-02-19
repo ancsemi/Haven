@@ -116,7 +116,8 @@
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));
       localStorage.setItem('haven_eula_accepted', '2.0');
-      sessionStorage.setItem('haven_e2e_pw', password); // for E2E key wrapping — cleared after init
+      // e2eSecret is included in data.user and stored in haven_user automatically
+      sessionStorage.setItem('haven_e2e_pw', password); // password fallback for one-time migration of old keys
       window.location.href = '/app';
     } catch (err) {
       showError('Connection error — is the server running?');
@@ -150,7 +151,7 @@
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));
       localStorage.setItem('haven_eula_accepted', '2.0');
-      sessionStorage.setItem('haven_e2e_pw', password); // for E2E key wrapping — cleared after init
+      // e2eSecret is included in data.user and stored in haven_user automatically
       window.location.href = '/app';
     } catch (err) {
       showError('Connection error — is the server running?');

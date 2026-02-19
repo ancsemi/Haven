@@ -482,6 +482,13 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN e2e_key_salt TEXT DEFAULT NULL");
   }
 
+  // ── Migration: E2E account secret (device-independent key wrapping) ──
+  try {
+    db.prepare("SELECT e2e_secret FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN e2e_secret TEXT DEFAULT NULL");
+  }
+
   // ── Migration: ensure create_channel default threshold ──
   try {
     const row = db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get();

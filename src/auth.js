@@ -105,9 +105,12 @@ router.post('/register', async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
     const isAdmin = username.toLowerCase() === ADMIN_USERNAME ? 1 : 0;
 
+    // Generate a per-account E2E secret for persistent key wrapping
+    const e2eSecret = crypto.randomBytes(32).toString('hex');
+
     const result = db.prepare(
-      'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)'
-    ).run(username, hash, isAdmin);
+      'INSERT INTO users (username, password_hash, is_admin, e2e_secret) VALUES (?, ?, ?, ?)'
+    ).run(username, hash, isAdmin, e2eSecret);
 
     // Auto-assign default "User" role to new users
     try {
@@ -135,7 +138,7 @@ router.post('/register', async (req, res) => {
 
     res.json({
       token,
-      user: { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username }
+      user: { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username, e2eSecret }
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -187,6 +190,14 @@ router.post('/login', async (req, res) => {
     }
 
     const displayName = user.display_name || user.username;
+
+    // Ensure the user has an E2E secret (generate on first login after migration)
+    let e2eSecret = user.e2e_secret;
+    if (!e2eSecret) {
+      e2eSecret = crypto.randomBytes(32).toString('hex');
+      db.prepare('UPDATE users SET e2e_secret = ? WHERE id = ?').run(e2eSecret, user.id);
+    }
+
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName },
       JWT_SECRET,
@@ -204,7 +215,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName }
+      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, e2eSecret }
     });
   } catch (err) {
     console.error('Login error:', err);

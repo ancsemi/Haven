@@ -1889,13 +1889,13 @@ class HavenApp {
         this.token = data.token;
         localStorage.setItem('haven_token', data.token);
 
-        // Re-wrap E2E private key with the new password so the server
-        // backup stays decryptable on future logins / new devices
-        if (this.e2e && this.e2e.ready) {
+        // Re-wrap E2E private key with the account secret to ensure
+        // the server backup stays fresh (also migrates any old password-wrapped keys)
+        if (this.e2e && this.e2e.ready && this.user.e2eSecret) {
           try {
-            await this.e2e.reWrapKey(this.socket, np);
+            await this.e2e.reWrapKey(this.socket, this.user.e2eSecret);
           } catch (err) {
-            console.warn('[E2E] Failed to re-wrap key with new password:', err);
+            console.warn('[E2E] Failed to re-wrap key:', err);
           }
         }
 
@@ -11610,16 +11610,17 @@ class HavenApp {
     if (typeof HavenE2E === 'undefined') return;
     try {
       this.e2e = new HavenE2E();
-      // Retrieve password from sessionStorage (set during login) for key wrapping
+      // e2eSecret is always available: comes from server in session-info → stored in this.user
+      const e2eSecret = this.user.e2eSecret || null;
+      // Password fallback for migrating old password-wrapped keys (only on form login)
       const pw = sessionStorage.getItem('haven_e2e_pw');
-      const ok = await this.e2e.init(this.socket, pw || null);
-      // Clear password immediately — no longer needed
+      const ok = await this.e2e.init(this.socket, e2eSecret, pw || null);
+      // Clear password immediately — only needed for one-time migration
       sessionStorage.removeItem('haven_e2e_pw');
       if (ok) {
         this._e2eSetupListeners();
       } else if (this.e2e.needsPassword) {
-        // Server has encrypted key but no password available (token auto-login).
-        // Show a non-blocking prompt so user can recover their E2E keys.
+        // Only happens if e2eSecret is missing AND no password — edge case
         this._showE2EPasswordRecovery();
       }
     } catch (err) {
@@ -11702,7 +11703,8 @@ class HavenApp {
       const btn = banner.querySelector('#e2e-recovery-btn');
       btn.textContent = isLost ? 'Resetting…' : 'Unlocking…';
       btn.disabled = true;
-      const ok = await this.e2e.recoverWithPassword(this.socket, pw);
+      const e2eSecret = this.user.e2eSecret || null;
+      const ok = await this.e2e.recoverWithPassword(this.socket, pw, e2eSecret);
       if (ok) {
         banner.remove();
         // If keys were reset, force-publish the new public key
