@@ -36,6 +36,10 @@ class HavenApp {
     this._dmPublicKeys = {};       // { userId → jwk } cache for DM partner public keys
     this._e2eListenersAttached = false;
     this._e2eInitDone = false;
+    this._oldestMsgId = null;      // oldest message ID in current view (for pagination)
+    this._noMoreHistory = false;   // true when all history has been loaded
+    this._loadingHistory = false;  // prevent concurrent history requests
+    this._historyBefore = null;    // set when requesting older messages
 
     // Slash command definitions for autocomplete
     this.slashCommands = [
@@ -278,6 +282,11 @@ class HavenApp {
       this.socket.emit('get-server-settings');
       if (this.currentChannel) {
         this.socket.emit('enter-channel', { code: this.currentChannel });
+        // Reset pagination — reconnect replaces message list
+        this._oldestMsgId = null;
+        this._noMoreHistory = false;
+        this._loadingHistory = false;
+        this._historyBefore = null;
         this.socket.emit('get-messages', { code: this.currentChannel });
         this.socket.emit('get-channel-members', { code: this.currentChannel });
         // Request fresh voice list for this channel
@@ -297,6 +306,10 @@ class HavenApp {
         }
         // Re-fetch current channel messages + member list to catch anything missed
         if (this.currentChannel && this.socket?.connected) {
+          this._oldestMsgId = null;
+          this._noMoreHistory = false;
+          this._loadingHistory = false;
+          this._historyBefore = null;
           this.socket.emit('get-messages', { code: this.currentChannel });
           this.socket.emit('get-channel-members', { code: this.currentChannel });
         }
@@ -358,12 +371,47 @@ class HavenApp {
     });
 
     this.socket.on('message-history', async (data) => {
-      if (data.channelCode === this.currentChannel) {
-        // E2E: decrypt DM messages before rendering
-        await this._decryptMessages(data.messages);
+      if (data.channelCode !== this.currentChannel) return;
+      // E2E: decrypt DM messages before rendering
+      await this._decryptMessages(data.messages);
+
+      if (this._historyBefore) {
+        // Pagination request — prepend older messages
+        this._loadingHistory = false;
+        this._historyBefore = null;
+        if (data.messages.length === 0) {
+          this._noMoreHistory = true;
+          return;
+        }
+        if (data.messages.length < 80) this._noMoreHistory = true;
+        this._oldestMsgId = data.messages[0].id;
+        this._prependMessages(data.messages);
+      } else {
+        // Initial load — replace everything
+        if (data.messages.length > 0) {
+          this._oldestMsgId = data.messages[0].id;
+          if (data.messages.length < 80) this._noMoreHistory = true;
+        } else {
+          this._noMoreHistory = true;
+        }
         this._renderMessages(data.messages);
       }
     });
+
+    // ── Infinite scroll: load older messages on scroll-to-top ──
+    const msgContainer = document.getElementById('messages');
+    if (msgContainer) {
+      msgContainer.addEventListener('scroll', () => {
+        if (msgContainer.scrollTop < 200 && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel) {
+          this._loadingHistory = true;
+          this._historyBefore = this._oldestMsgId;
+          this.socket.emit('get-messages', {
+            code: this.currentChannel,
+            before: this._oldestMsgId
+          });
+        }
+      });
+    }
 
     this.socket.on('new-message', async (data) => {
       // E2E: ensure partner key is available before decrypting
@@ -1923,14 +1971,16 @@ class HavenApp {
     });
 
     // ── Tunnel settings (immediate — not part of Save flow) ──
-    const tunnelEnabledEl = document.getElementById('tunnel-enabled');
-    if (tunnelEnabledEl) {
-      tunnelEnabledEl.addEventListener('change', () => {
+    const tunnelToggleBtn = document.getElementById('tunnel-toggle-btn');
+    if (tunnelToggleBtn) {
+      tunnelToggleBtn.addEventListener('click', () => {
+        // Determine desired state from button text
+        const wantStart = tunnelToggleBtn.textContent.trim().startsWith('Start');
         this.socket.emit('update-server-setting', {
           key: 'tunnel_enabled',
-          value: tunnelEnabledEl.checked ? 'true' : 'false'
+          value: wantStart ? 'true' : 'false'
         });
-        this._syncTunnelState();
+        this._syncTunnelState(wantStart);
       });
     }
 
@@ -1941,7 +1991,6 @@ class HavenApp {
           key: 'tunnel_provider',
           value: tunnelProvEl.value
         });
-        this._syncTunnelState();
       });
     }
 
@@ -4047,11 +4096,12 @@ class HavenApp {
   // ── Tunnel Management ─────────────────────────────────
 
   /** Sync tunnel enabled/provider state to server */
-  async _syncTunnelState() {
-    const enabled = document.getElementById('tunnel-enabled')?.checked || false;
+  async _syncTunnelState(enabled) {
     const provider = document.getElementById('tunnel-provider-select')?.value || 'localtunnel';
     const statusEl = document.getElementById('tunnel-status-display');
+    const btn = document.getElementById('tunnel-toggle-btn');
     if (statusEl) statusEl.textContent = enabled ? 'Starting…' : 'Stopping…';
+    if (btn) btn.disabled = true;
     try {
       const res = await fetch('/api/tunnel/sync', {
         method: 'POST',
@@ -4072,10 +4122,13 @@ class HavenApp {
     } catch (err) {
       console.error('Tunnel sync error:', err);
       if (statusEl) statusEl.textContent = 'Error';
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 
-  /** Fetch current tunnel status from server and update UI */
+  /** Fetch current tunnel status from server and update UI.
+   *  If the tunnel is still starting, poll every 2 s until it resolves. */
   async _refreshTunnelStatus() {
     try {
       const res = await fetch('/api/tunnel/status', {
@@ -4084,6 +4137,11 @@ class HavenApp {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       this._updateTunnelStatusUI(data);
+      // If still starting, poll again in 2 s
+      if (data.starting) {
+        clearTimeout(this._tunnelPollTimer);
+        this._tunnelPollTimer = setTimeout(() => this._refreshTunnelStatus(), 2000);
+      }
     } catch (err) {
       const statusEl = document.getElementById('tunnel-status-display');
       if (statusEl) statusEl.textContent = 'Error checking status';
@@ -4094,6 +4152,18 @@ class HavenApp {
   /** Update the tunnel status display from a status object */
   _updateTunnelStatusUI(data) {
     const statusEl = document.getElementById('tunnel-status-display');
+    const btn = document.getElementById('tunnel-toggle-btn');
+    if (btn) {
+      if (data.active) {
+        btn.textContent = 'Stop Tunnel';
+        btn.classList.add('btn-danger');
+        btn.classList.remove('btn-accent');
+      } else {
+        btn.textContent = 'Start Tunnel';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-accent');
+      }
+    }
     if (!statusEl) return;
     if (data.active && data.url) {
       statusEl.textContent = data.url;
@@ -4231,6 +4301,12 @@ class HavenApp {
 
     document.getElementById('status-channel').textContent = isDm && channel.dm_target
       ? `DM: ${channel.dm_target.username}` : channel ? channel.name : code;
+
+    // Reset pagination state for the new channel
+    this._oldestMsgId = null;
+    this._noMoreHistory = false;
+    this._loadingHistory = false;
+    this._historyBefore = null;
 
     this.socket.emit('enter-channel', { code });
     // E2E: fetch DM partner's public key BEFORE requesting messages
@@ -5395,6 +5471,43 @@ class HavenApp {
     if (messages.length > 0) {
       this._markRead(messages[messages.length - 1].id);
     }
+  }
+
+  /** Prepend older messages to the top of the messages container, preserving scroll position */
+  _prependMessages(messages) {
+    const container = document.getElementById('messages');
+    const prevScrollHeight = container.scrollHeight;
+    const prevScrollTop = container.scrollTop;
+    const firstChild = container.firstChild;
+
+    // We need prevMsg chain: older messages are oldest-first, then link to existing first message
+    const fragment = document.createDocumentFragment();
+    messages.forEach((msg, i) => {
+      const prevMsg = i > 0 ? messages[i - 1] : null;
+      fragment.appendChild(this._createMessageEl(msg, prevMsg));
+    });
+
+    // Re-evaluate grouping of the previously-first message against the new last prepended message
+    if (firstChild && firstChild.dataset && messages.length > 0) {
+      const lastPrepended = messages[messages.length - 1];
+      const firstExisting = firstChild;
+      // Check if they should be grouped (same user, close timestamps)
+      if (firstExisting.dataset.userId && parseInt(firstExisting.dataset.userId) === lastPrepended.user_id) {
+        const timeDiff = new Date(firstExisting.dataset.time) - new Date(lastPrepended.created_at);
+        if (timeDiff < 5 * 60 * 1000) {
+          // Already compact — that's fine, keep it
+        }
+      }
+    }
+
+    container.insertBefore(fragment, firstChild);
+
+    // Restore scroll position so the view doesn't jump
+    const newScrollHeight = container.scrollHeight;
+    container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+
+    // Fetch link previews for prepended messages
+    this._fetchLinkPreviews(container);
   }
 
   _appendMessage(message) {
@@ -9431,10 +9544,6 @@ class HavenApp {
       }
 
       // Tunnel settings (live state, not part of Save/Cancel flow)
-      const tunnelToggle = document.getElementById('tunnel-enabled');
-      if (tunnelToggle) {
-        tunnelToggle.checked = this.serverSettings.tunnel_enabled === 'true';
-      }
       const tunnelProvider = document.getElementById('tunnel-provider-select');
       if (tunnelProvider && this.serverSettings.tunnel_provider) {
         tunnelProvider.value = this.serverSettings.tunnel_provider;
@@ -11605,6 +11714,10 @@ class HavenApp {
         this._showToast(isLost ? 'Encryption keys reset ✓' : 'Encryption keys recovered ✓', 'success');
         // Re-fetch current DM messages to decrypt them
         if (this.currentChannel) {
+          this._oldestMsgId = null;
+          this._noMoreHistory = false;
+          this._loadingHistory = false;
+          this._historyBefore = null;
           this.socket.emit('get-messages', { code: this.currentChannel });
         }
       } else {
@@ -11643,6 +11756,10 @@ class HavenApp {
     if (!ch || !ch.is_dm || !ch.dm_target) return;
     if (ch.dm_target.id !== userId) return;
     // Re-fetch messages — key is now cached so _decryptMessages will succeed
+    this._oldestMsgId = null;
+    this._noMoreHistory = false;
+    this._loadingHistory = false;
+    this._historyBefore = null;
     this.socket.emit('get-messages', { code: this.currentChannel });
   }
 

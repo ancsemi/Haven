@@ -1777,15 +1777,5 @@ server.listen(PORT, HOST, () => {
 ║  Admin:   ${(process.env.ADMIN_USERNAME || 'admin').padEnd(29)}║
 ╚══════════════════════════════════════════╝
   `);
-  // Auto-start tunnel if enabled
-  try {
-    const enabled = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_enabled'").get()?.value === 'true';
-    const provider = db.prepare("SELECT value FROM server_settings WHERE key = 'tunnel_provider'").get()?.value || 'localtunnel';
-    if (enabled) {
-      startTunnel(PORT, provider, useSSL).then((s) => {
-        if (s.active) console.log(`🧭 Tunnel active (${s.provider}): ${s.url}`);
-        else if (s.error) console.log(`🧭 Tunnel failed: ${s.error}`);
-      });
-    }
-  } catch { /* tunnel start is non-critical */ }
+  // Tunnel is now started manually via the admin panel button (no auto-start)
 });

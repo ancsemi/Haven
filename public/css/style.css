@@ -2780,10 +2780,12 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 
 .icon-btn {
   background: transparent;
+  border: none;
   color: var(--text-muted);
   font-size: 16px;
   padding: 4px;
   border-radius: var(--radius-sm);
+  cursor: pointer;
   transition: all var(--transition);
   display: flex;
   align-items: center;
@@ -2843,6 +2845,8 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 .btn-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
 .btn-sm.btn-accent { background: var(--accent); color: white; font-size: 16px; padding: 7px 10px; line-height: 1; }
 .btn-sm.btn-accent:hover { background: var(--accent-hover); }
+.btn-sm.btn-danger { background: var(--danger, #e74c3c); color: white; font-size: 16px; padding: 7px 10px; line-height: 1; }
+.btn-sm.btn-danger:hover { filter: brightness(1.15); }
 
 /* ── Channel List ──────────────────────────────────────── */
 
@@ -9887,6 +9891,12 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   transition: color 0.15s;
 }
 .channels-toggle:hover { color: var(--text-secondary); }
+/* Hover on organize buttons inside section headers */
+.channels-toggle #organize-channels-btn:hover,
+.dm-toggle #organize-dms-btn:hover {
+  opacity: 1 !important;
+  background: var(--bg-hover);
+}
 .channels-toggle-arrow {
   display: inline-block;
   transition: transform 0.2s ease;
