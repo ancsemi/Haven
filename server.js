@@ -1112,6 +1112,439 @@ app.post('/api/webhooks/:token', express.json({ limit: '64kb' }), (req, res) => 
   res.status(200).json({ success: true, message_id: result.lastInsertRowid });
 });
 
+// ═══════════════════════════════════════════════════════════
+// DISCORD IMPORT — upload, preview, execute
+// ═══════════════════════════════════════════════════════════
+const os = require('os');
+const { parseDiscordExport } = require('./src/importDiscord');
+
+// Multer instance for import uploads (ZIP/JSON up to 500 MB)
+const importUpload = multer({
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `haven-import-${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
+    }
+  }),
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.json' || ext === '.zip') cb(null, true);
+    else cb(new Error('Only .json and .zip files are accepted'));
+  }
+});
+
+// ── Step 1: Upload & parse → return preview ──────────────
+app.post('/api/import/discord/upload', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  importUpload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    try {
+      const result = parseDiscordExport(req.file.path);
+
+      // Save parsed data to temp so the execute step can read it
+      const importId = crypto.randomBytes(16).toString('hex');
+      const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
+      fs.writeFileSync(tempPath, JSON.stringify(result));
+
+      // Clean up the uploaded raw file
+      try { fs.unlinkSync(req.file.path); } catch {}
+
+      // Return preview (channel list + counts — NOT the full messages)
+      res.json({
+        importId,
+        format: result.format,
+        serverName: result.serverName,
+        channels: result.channels.map(c => ({
+          discordId: c.discordId,
+          name: c.name,
+          topic: c.topic,
+          category: c.category,
+          messageCount: c.messageCount
+        })),
+        totalMessages: result.channels.reduce((sum, c) => sum + c.messageCount, 0)
+      });
+    } catch (parseErr) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+      res.status(400).json({ error: parseErr.message });
+    }
+  });
+});
+
+// ── Discord Direct Connect — pull messages straight from Discord's API ──
+const DISCORD_API = 'https://discord.com/api/v10';
+
+async function discordApiFetch(endpoint, userToken, retries = 2) {
+  const resp = await fetch(`${DISCORD_API}${endpoint}`, {
+    headers: { Authorization: userToken }
+  });
+  if (resp.status === 401) throw new Error('Invalid or expired Discord token');
+  if (resp.status === 403) throw new Error('Access denied — check token permissions');
+  if (resp.status === 429 && retries > 0) {
+    const wait = parseFloat(resp.headers.get('retry-after') || '3');
+    await new Promise(r => setTimeout(r, wait * 1000));
+    return discordApiFetch(endpoint, userToken, retries - 1);
+  }
+  if (!resp.ok) throw new Error(`Discord API error ${resp.status}`);
+  return resp.json();
+}
+
+// Step A: validate token → list servers
+app.post('/api/import/discord/connect', express.json(), async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  const { discordToken } = req.body;
+  if (!discordToken || typeof discordToken !== 'string') {
+    return res.status(400).json({ error: 'Discord token required' });
+  }
+
+  try {
+    const me = await discordApiFetch('/users/@me', discordToken);
+    const guilds = await discordApiFetch('/users/@me/guilds?limit=200', discordToken);
+    res.json({
+      user: { username: me.global_name || me.username },
+      guilds: guilds.map(g => ({ id: g.id, name: g.name, icon: g.icon }))
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Step B: list text channels, announcement channels, forums, and threads for a guild
+app.post('/api/import/discord/guild-channels', express.json(), async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  const { discordToken, guildId } = req.body;
+  if (!discordToken || !guildId) return res.status(400).json({ error: 'Missing params' });
+
+  try {
+    const allChannels = await discordApiFetch(`/guilds/${guildId}/channels`, discordToken);
+
+    // Build category map
+    const categories = {};
+    allChannels.filter(c => c.type === 4).forEach(c => { categories[c.id] = c.name; });
+
+    // Text (0), Announcement (5), Forum (15), Media (16) — all contain readable content
+    const textTypes = new Set([0, 5, 15, 16]);
+    const channelsList = allChannels
+      .filter(c => textTypes.has(c.type))
+      .sort((a, b) => a.position - b.position)
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        topic: c.topic || '',
+        category: (c.parent_id && categories[c.parent_id]) || null,
+        type: c.type === 5 ? 'announcement' : c.type === 15 ? 'forum' : c.type === 16 ? 'media' : 'text',
+        // Forum tags (available on type 15 and 16)
+        tags: Array.isArray(c.available_tags) ? c.available_tags.map(t => ({ id: t.id, name: t.name })) : []
+      }));
+
+    // Fetch threads (active + archived public)
+    const threads = [];
+
+    // Active threads
+    try {
+      const active = await discordApiFetch(`/guilds/${guildId}/threads/active`, discordToken);
+      if (active.threads) threads.push(...active.threads);
+    } catch {}
+
+    // Archived threads per text/forum/announcement channel (up to 100 per channel)
+    for (const ch of channelsList) {
+      try {
+        const archived = await discordApiFetch(`/channels/${ch.id}/threads/archived/public?limit=100`, discordToken);
+        if (archived.threads) threads.push(...archived.threads);
+      } catch {}
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    // De-duplicate threads and map to entries
+    const seen = new Set();
+    const threadEntries = [];
+    for (const t of threads) {
+      if (seen.has(t.id)) continue;
+      seen.add(t.id);
+      // Find parent channel
+      const parent = channelsList.find(c => c.id === t.parent_id);
+      const parentName = parent ? parent.name : null;
+
+      // Resolve applied forum tags
+      let tagNames = [];
+      if (Array.isArray(t.applied_tags) && parent && parent.tags.length) {
+        tagNames = t.applied_tags
+          .map(tid => parent.tags.find(tag => tag.id === tid))
+          .filter(Boolean)
+          .map(tag => tag.name);
+      }
+
+      threadEntries.push({
+        id: t.id,
+        name: t.name,
+        topic: '',
+        category: (parent && parent.category) || null,
+        type: 'thread',
+        parentId: t.parent_id,
+        parentName,
+        tags: tagNames
+      });
+    }
+
+    res.json({ channels: channelsList, threads: threadEntries });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Step C: fetch all messages from selected channels → save temp → return preview
+app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  const { discordToken, guildName, channels: selected } = req.body;
+  if (!discordToken || !Array.isArray(selected) || !selected.length) {
+    return res.status(400).json({ error: 'Missing params' });
+  }
+
+  try {
+    const result = {
+      format: 'Discord Direct',
+      serverName: guildName || 'Discord Import',
+      channels: []
+    };
+
+    for (const ch of selected) {
+      const messages = [];
+      let before = null, batch;
+
+      do {
+        let ep = `/channels/${ch.id}/messages?limit=100`;
+        if (before) ep += `&before=${before}`;
+        batch = await discordApiFetch(ep, discordToken);
+
+        for (const msg of batch) {
+          if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
+          let content = msg.content || '';
+          if (Array.isArray(msg.attachments)) {
+            for (const a of msg.attachments) {
+              content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
+            }
+          }
+          if (Array.isArray(msg.embeds)) {
+            for (const e of msg.embeds) {
+              if (e.title) content += `\n🔗 **${e.title}**`;
+              if (e.description) content += `\n${e.description}`;
+              if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
+            }
+          }
+          content = content.trim();
+          if (!content) continue;
+
+          messages.push({
+            discordId: msg.id,
+            author: msg.author?.global_name || msg.author?.username || 'Unknown',
+            authorId: msg.author?.id || null,
+            authorAvatar: msg.author?.avatar
+              ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64`
+              : null,
+            isBot: msg.author?.bot || false,
+            content,
+            timestamp: msg.timestamp,
+            isPinned: msg.pinned || false,
+            reactions: (msg.reactions || []).map(r => ({
+              emoji: r.emoji?.name || '❓',
+              count: r.count || 1
+            })),
+            replyTo: msg.message_reference?.message_id || null
+          });
+        }
+
+        if (batch.length > 0) before = batch[batch.length - 1].id;
+        await new Promise(r => setTimeout(r, 300)); // respect rate limits
+      } while (batch.length === 100);
+
+      result.channels.push({
+        discordId: ch.id,
+        name: ch.name,
+        topic: ch.topic || '',
+        category: ch.category || null,
+        messageCount: messages.length,
+        messages
+      });
+    }
+
+    const importId = crypto.randomBytes(16).toString('hex');
+    const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
+    fs.writeFileSync(tempPath, JSON.stringify(result));
+
+    res.json({
+      importId,
+      format: result.format,
+      serverName: result.serverName,
+      channels: result.channels.map(c => ({
+        discordId: c.discordId,
+        name: c.name,
+        topic: c.topic,
+        category: c.category,
+        messageCount: c.messageCount
+      })),
+      totalMessages: result.channels.reduce((sum, c) => sum + c.messageCount, 0)
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── Periodic cleanup of orphaned import temp files (1 hour TTL) ──
+setInterval(() => {
+  try {
+    const tmpDir = os.tmpdir();
+    const cutoff = Date.now() - 60 * 60 * 1000; // 1 hour
+    for (const f of fs.readdirSync(tmpDir)) {
+      if (!f.startsWith('haven-import-')) continue;
+      const fp = path.join(tmpDir, f);
+      try {
+        const stat = fs.statSync(fp);
+        if (stat.mtimeMs < cutoff) fs.unlinkSync(fp);
+      } catch {}
+    }
+  } catch {}
+}, 15 * 60 * 1000); // check every 15 min
+
+// ── Step 2: Execute the import ───────────────────────────
+app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+  const { importId, selectedChannels } = req.body;
+  if (!importId || !Array.isArray(selectedChannels) || selectedChannels.length === 0) {
+    return res.status(400).json({ error: 'Missing importId or selectedChannels' });
+  }
+
+  // Validate importId is hex-only (prevent path traversal)
+  if (!/^[a-f0-9]{32}$/.test(importId)) {
+    return res.status(400).json({ error: 'Invalid import ID' });
+  }
+
+  const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
+  if (!fs.existsSync(tempPath)) {
+    return res.status(404).json({ error: 'Import data expired or not found. Please re-upload.' });
+  }
+
+  try {
+    const data = JSON.parse(fs.readFileSync(tempPath, 'utf-8'));
+    const { getDb } = require('./src/database');
+    const db = getDb();
+    const { generateChannelCode } = require('./src/auth');
+
+    const stats = { channelsCreated: 0, messagesImported: 0 };
+
+    const txn = db.transaction(() => {
+      for (const sel of selectedChannels) {
+        // Find channel data by discordId or original name
+        const channelData = data.channels.find(c =>
+          (sel.discordId && c.discordId === sel.discordId) ||
+          c.name === sel.originalName
+        );
+        if (!channelData || !channelData.messages) continue;
+
+        const channelName = [...(sel.name || channelData.name)].slice(0, 50).join('');
+        const code = generateChannelCode();
+
+        // Create the Haven channel
+        const chResult = db.prepare(
+          'INSERT INTO channels (name, code, created_by, topic) VALUES (?, ?, ?, ?)'
+        ).run(channelName, code, user.id, channelData.topic || '');
+        const channelId = chResult.lastInsertRowid;
+
+        // Auto-join the importing admin
+        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, user.id);
+        stats.channelsCreated++;
+
+        // Sort messages chronologically
+        const sorted = channelData.messages.slice().sort(
+          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        );
+
+        // Discord message ID → Haven message ID (for reply threading)
+        const idMap = {};
+
+        const insertMsg = db.prepare(`
+          INSERT INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, is_webhook, imported_from, reply_to)
+          VALUES (?, ?, ?, ?, ?, ?, 0, 'discord', ?)
+        `);
+
+        for (const msg of sorted) {
+          const content = (msg.content || '').trim();
+          if (!content) continue;
+
+          // Resolve reply to an already-imported Haven message
+          let replyTo = null;
+          if (msg.replyTo && idMap[msg.replyTo]) {
+            replyTo = idMap[msg.replyTo];
+          }
+
+          // Normalize timestamp to SQLite-friendly format
+          let ts;
+          try {
+            ts = new Date(msg.timestamp).toISOString().replace('T', ' ').replace('Z', '');
+          } catch {
+            ts = msg.timestamp;
+          }
+
+          const result = insertMsg.run(
+            channelId, user.id, content, ts, msg.author || 'Unknown', msg.authorAvatar || null, replyTo
+          );
+
+          if (msg.discordId) {
+            idMap[msg.discordId] = result.lastInsertRowid;
+          }
+          stats.messagesImported++;
+
+          // Pin if flagged
+          if (msg.isPinned) {
+            try {
+              db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)')
+                .run(result.lastInsertRowid, channelId, user.id);
+            } catch {}
+          }
+
+          // Import reactions
+          if (Array.isArray(msg.reactions)) {
+            for (const r of msg.reactions) {
+              if (!r.emoji) continue;
+              try {
+                db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)')
+                  .run(result.lastInsertRowid, user.id, r.emoji);
+              } catch {}
+            }
+          }
+        }
+      }
+    });
+
+    txn();
+
+    // Clean up temp file
+    try { fs.unlinkSync(tempPath); } catch {}
+
+    res.json({ success: true, ...stats });
+  } catch (err) {
+    console.error('Import execute error:', err);
+    res.status(500).json({ error: 'Import failed: ' + err.message });
+  }
+});
+
 // ── Catch-all: 404 ──────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

@@ -1840,6 +1840,17 @@ class HavenApp {
         // Store the fresh token
         this.token = data.token;
         localStorage.setItem('haven_token', data.token);
+
+        // Re-wrap E2E private key with the new password so the server
+        // backup stays decryptable on future logins / new devices
+        if (this.e2e && this.e2e.ready) {
+          try {
+            await this.e2e.reWrapKey(this.socket, np);
+          } catch (err) {
+            console.warn('[E2E] Failed to re-wrap key with new password:', err);
+          }
+        }
+
         hint.textContent = '✅ Password changed!';
         hint.classList.add('success');
         document.getElementById('current-password').value = '';
@@ -5373,9 +5384,10 @@ class HavenApp {
       container.appendChild(this._createMessageEl(msg, prevMsg));
     });
     this._scrollToBottom(true);
-    // Re-scroll after any images finish loading
+    // Re-scroll after images load ONLY if user is still near the bottom
+    // (prevents snapping back when user is scrolling up through history)
     container.querySelectorAll('img').forEach(img => {
-      if (!img.complete) img.addEventListener('load', () => this._scrollToBottom(true), { once: true });
+      if (!img.complete) img.addEventListener('load', () => this._scrollToBottom(), { once: true });
     });
     // Fetch link previews for all messages
     this._fetchLinkPreviews(container);
@@ -5405,12 +5417,12 @@ class HavenApp {
     this._fetchLinkPreviews(msgEl);
     if (wasAtBottom) {
       this._scrollToBottom(true);
-      // Also scroll after images load (they shift content down)
-      const imgs = container.lastElementChild?.querySelectorAll('img');
-      if (imgs) imgs.forEach(img => {
-        if (!img.complete) img.addEventListener('load', () => this._scrollToBottom(), { once: true });
-      });
     }
+    // Scroll after images load only if user is near the bottom
+    const imgs = container.lastElementChild?.querySelectorAll('img');
+    if (imgs) imgs.forEach(img => {
+      if (!img.complete) img.addEventListener('load', () => this._scrollToBottom(), { once: true });
+    });
   }
 
   _createMessageEl(msg, prevMsg) {
@@ -5471,9 +5483,22 @@ class HavenApp {
     // Use the message sender's avatar_shape (from server), not the local user's preference
     const msgShape = msg.avatar_shape || (onlineUser && onlineUser.avatarShape) || 'circle';
     const shapeClass = 'avatar-' + msgShape;
-    const avatarHtml = msg.avatar
-      ? `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(msg.avatar)}" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
-      : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
+
+    // For imported Discord messages, use the stored Discord avatar or a generic Discord icon
+    let avatarHtml;
+    if (msg.imported_from === 'discord') {
+      const discordAvatar = msg.webhook_avatar;
+      if (discordAvatar) {
+        avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(discordAvatar)}" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
+      } else {
+        // Generic Discord-style avatar (colored circle with initial)
+        avatarHtml = `<div class="message-avatar ${shapeClass} discord-import-avatar" style="background-color:#5865f2">${initial}</div>`;
+      }
+    } else if (msg.avatar) {
+      avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(msg.avatar)}" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
+    } else {
+      avatarHtml = `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
+    }
 
     const msgRoleBadge = onlineUser && onlineUser.role
       ? `<span class="user-role-badge msg-role-badge" style="color:${onlineUser.role.color || 'var(--text-muted)'}">${this._escapeHtml(onlineUser.role.name)}</span>`
@@ -10342,6 +10367,23 @@ class HavenApp {
       channelList.innerHTML     = '';
       currentImportId           = null;
       currentPreview            = null;
+      // Reset connect tab state
+      const cs1 = document.getElementById('import-connect-step-token');
+      const cs2 = document.getElementById('import-connect-step-servers');
+      const cs3 = document.getElementById('import-connect-step-channels');
+      if (cs1) cs1.style.display = '';
+      if (cs2) cs2.style.display = 'none';
+      if (cs3) cs3.style.display = 'none';
+      const cStatus = document.getElementById('import-connect-status');
+      if (cStatus) { cStatus.style.display = 'none'; cStatus.textContent = ''; }
+      const fStatus = document.getElementById('import-fetch-status');
+      if (fStatus) { fStatus.style.display = 'none'; fStatus.textContent = ''; }
+      // Reset to file tab
+      document.querySelectorAll('.import-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'file'));
+      const fileTab = document.getElementById('import-tab-file');
+      const connectTab = document.getElementById('import-tab-connect');
+      if (fileTab) fileTab.style.display = '';
+      if (connectTab) connectTab.style.display = 'none';
     };
 
     // Open import modal
@@ -10389,6 +10431,16 @@ class HavenApp {
       resetModal();
     });
 
+    // Select all / Deselect all toggle
+    const toggleAllLink = document.getElementById('import-toggle-all');
+    toggleAllLink?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const boxes = channelList.querySelectorAll('input[type="checkbox"]');
+      const allChecked = [...boxes].every(cb => cb.checked);
+      boxes.forEach(cb => cb.checked = !allChecked);
+      toggleAllLink.textContent = allChecked ? 'Select All' : 'Deselect All';
+    });
+
     // Execute button
     executeBtn?.addEventListener('click', () => {
       if (!currentImportId || !currentPreview) return;
@@ -10407,7 +10459,109 @@ class HavenApp {
         alert('Select at least one channel to import.');
         return;
       }
+      const totalMsgs = currentPreview.channels
+        .filter(c => selected.some(s => (s.discordId && s.discordId === c.discordId) || s.originalName === c.name))
+        .reduce((sum, c) => sum + c.messageCount, 0);
+      if (!confirm(`Import ${selected.length} channel${selected.length !== 1 ? 's' : ''} with ~${totalMsgs.toLocaleString()} messages?\n\nThis cannot be undone easily.`)) return;
       this._importExecute(currentImportId, selected);
+    });
+
+    // ── Tab switching ────────────────────────────────────
+    document.querySelectorAll('.import-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        const fileTab = document.getElementById('import-tab-file');
+        const connectTab = document.getElementById('import-tab-connect');
+        if (fileTab) fileTab.style.display = target === 'file' ? '' : 'none';
+        if (connectTab) connectTab.style.display = target === 'connect' ? '' : 'none';
+      });
+    });
+
+    // ── Connect to Discord flow ──────────────────────────
+    const connectBtn = document.getElementById('import-connect-btn');
+    const connectStatus = document.getElementById('import-connect-status');
+
+    connectBtn?.addEventListener('click', async () => {
+      const tokenInput = document.getElementById('import-discord-token');
+      const discordToken = tokenInput?.value?.trim();
+      if (!discordToken) { this._showToast('Paste your Discord token first', 'error'); return; }
+
+      connectBtn.disabled = true;
+      connectBtn.textContent = '⏳';
+      connectStatus.style.display = '';
+      connectStatus.textContent = 'Connecting...';
+      connectStatus.style.color = '';
+
+      try {
+        const res = await fetch('/api/import/discord/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.token },
+          body: JSON.stringify({ discordToken })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Connection failed');
+
+        // Show server list
+        document.getElementById('import-connect-step-token').style.display = 'none';
+        const serversStep = document.getElementById('import-connect-step-servers');
+        serversStep.style.display = '';
+        document.getElementById('import-discord-username').textContent = data.user.username;
+
+        const serverList = document.getElementById('import-server-list');
+        serverList.innerHTML = '';
+        data.guilds.forEach(g => {
+          const card = document.createElement('button');
+          card.className = 'import-server-card';
+          const iconUrl = g.icon
+            ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64`
+            : '';
+          card.innerHTML = `
+            ${iconUrl ? `<img src="${iconUrl}" alt="" class="import-server-icon">` : '<span class="import-server-icon-placeholder">🏠</span>'}
+            <span class="import-server-name">${this._escapeHtml(g.name)}</span>
+          `;
+          card.addEventListener('click', () => this._importPickGuild(g));
+          serverList.appendChild(card);
+        });
+      } catch (err) {
+        connectStatus.textContent = '❌ ' + err.message;
+        connectStatus.style.color = '#ed4245';
+      } finally {
+        connectBtn.disabled = false;
+        connectBtn.textContent = 'Connect';
+      }
+    });
+
+    // Disconnect
+    document.getElementById('import-connect-disconnect')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('import-connect-step-servers').style.display = 'none';
+      document.getElementById('import-connect-step-token').style.display = '';
+      document.getElementById('import-discord-token').value = '';
+    });
+
+    // Back to servers from channels
+    document.getElementById('import-connect-back-servers')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('import-connect-step-channels').style.display = 'none';
+      document.getElementById('import-connect-step-servers').style.display = '';
+    });
+
+    // Toggle all channels in connect flow
+    const connectToggleAll = document.getElementById('import-connect-toggle-all');
+    connectToggleAll?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const cList = document.getElementById('import-connect-channel-list');
+      const boxes = cList.querySelectorAll('input[type="checkbox"]');
+      const allChecked = [...boxes].every(cb => cb.checked);
+      boxes.forEach(cb => cb.checked = !allChecked);
+      connectToggleAll.textContent = allChecked ? 'Select All' : 'Deselect All';
+    });
+
+    // Fetch messages button
+    document.getElementById('import-fetch-btn')?.addEventListener('click', () => {
+      this._importConnectFetch();
     });
 
     // Expose state setters for the upload/execute helpers
@@ -10520,6 +10674,206 @@ class HavenApp {
         progressWrap.style.display = 'none';
         progressFill.style.background = '';
       }, 3000);
+    }
+  }
+
+  // ── Discord Direct Connect helpers ────────────────────
+
+  async _importPickGuild(guild) {
+    const serversStep = document.getElementById('import-connect-step-servers');
+    const channelsStep = document.getElementById('import-connect-step-channels');
+    const fetchStatus = document.getElementById('import-fetch-status');
+
+    document.getElementById('import-connect-guild-name').textContent = guild.name;
+    serversStep.style.display = 'none';
+    channelsStep.style.display = '';
+    fetchStatus.style.display = '';
+    fetchStatus.textContent = 'Loading channels...';
+    fetchStatus.style.color = '';
+
+    try {
+      const discordToken = document.getElementById('import-discord-token')?.value?.trim();
+      const res = await fetch('/api/import/discord/guild-channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.token },
+        body: JSON.stringify({ discordToken, guildId: guild.id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load channels');
+
+      const cList = document.getElementById('import-connect-channel-list');
+      cList.innerHTML = '';
+      let lastCategory = null;
+
+      // Type icons for visual distinction
+      const typeIcons = { text: '#', announcement: '📢', forum: '💬', media: '🖼️', thread: '🧵' };
+
+      // Render channels grouped by category
+      data.channels.forEach(ch => {
+        if (ch.category && ch.category !== lastCategory) {
+          const catDiv = document.createElement('div');
+          catDiv.className = 'import-channel-category';
+          catDiv.textContent = ch.category;
+          cList.appendChild(catDiv);
+          lastCategory = ch.category;
+        }
+        const icon = typeIcons[ch.type] || '#';
+        const tagHint = ch.tags && ch.tags.length
+          ? ` <span class="muted-text" style="font-size:10px">(${ch.tags.map(t => t.name).join(', ')})</span>`
+          : '';
+        const row = document.createElement('div');
+        row.className = 'import-channel-row';
+        row.dataset.channelId = ch.id;
+        row.dataset.channelName = ch.name;
+        row.dataset.channelTopic = ch.topic || '';
+        row.dataset.channelCategory = ch.category || '';
+        row.innerHTML = `
+          <label>
+            <input type="checkbox" checked>
+            <span class="import-ch-name">${icon} ${this._escapeHtml(ch.name)}${tagHint}</span>
+          </label>
+          <span class="import-ch-count import-type-badge">${ch.type}</span>
+        `;
+        cList.appendChild(row);
+
+        // Render threads nested under this channel
+        if (data.threads) {
+          const childThreads = data.threads.filter(t => t.parentId === ch.id);
+          childThreads.forEach(t => {
+            const tagStr = t.tags && t.tags.length
+              ? ` <span class="muted-text" style="font-size:10px">[${t.tags.join(', ')}]</span>`
+              : '';
+            const tRow = document.createElement('div');
+            tRow.className = 'import-channel-row import-thread-row';
+            tRow.dataset.channelId = t.id;
+            tRow.dataset.channelName = t.name;
+            tRow.dataset.channelTopic = '';
+            tRow.dataset.channelCategory = ch.category || '';
+            tRow.innerHTML = `
+              <label>
+                <input type="checkbox" checked>
+                <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${tagStr}</span>
+              </label>
+              <span class="import-ch-count import-type-badge">thread</span>
+            `;
+            cList.appendChild(tRow);
+          });
+        }
+      });
+
+      // Render orphan threads (parent not in the list)
+      if (data.threads) {
+        const renderedParents = new Set(data.channels.map(c => c.id));
+        const orphans = data.threads.filter(t => !renderedParents.has(t.parentId));
+        if (orphans.length > 0) {
+          const catDiv = document.createElement('div');
+          catDiv.className = 'import-channel-category';
+          catDiv.textContent = 'Other Threads';
+          cList.appendChild(catDiv);
+          orphans.forEach(t => {
+            const tRow = document.createElement('div');
+            tRow.className = 'import-channel-row import-thread-row';
+            tRow.dataset.channelId = t.id;
+            tRow.dataset.channelName = t.name;
+            tRow.dataset.channelTopic = '';
+            tRow.dataset.channelCategory = t.category || '';
+            tRow.innerHTML = `
+              <label>
+                <input type="checkbox" checked>
+                <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:10px">in #${this._escapeHtml(t.parentName)}</span>` : ''}</span>
+              </label>
+              <span class="import-ch-count import-type-badge">thread</span>
+            `;
+            cList.appendChild(tRow);
+          });
+        }
+      }
+
+      this._connectGuild = guild;
+      fetchStatus.style.display = 'none';
+    } catch (err) {
+      fetchStatus.textContent = '❌ ' + err.message;
+      fetchStatus.style.color = '#ed4245';
+    }
+  }
+
+  async _importConnectFetch() {
+    const cList = document.getElementById('import-connect-channel-list');
+    const fetchBtn = document.getElementById('import-fetch-btn');
+    const fetchStatus = document.getElementById('import-fetch-status');
+    const stepUpload = document.getElementById('import-step-upload');
+    const stepPreview = document.getElementById('import-step-preview');
+    const channelList = document.getElementById('import-channel-list');
+
+    // Build selected channel list
+    const selected = [];
+    cList.querySelectorAll('.import-channel-row').forEach(row => {
+      const cb = row.querySelector('input[type="checkbox"]');
+      if (!cb?.checked) return;
+      selected.push({
+        id: row.dataset.channelId,
+        name: row.dataset.channelName,
+        topic: row.dataset.channelTopic,
+        category: row.dataset.channelCategory
+      });
+    });
+    if (!selected.length) { this._showToast('Select at least one channel', 'error'); return; }
+
+    fetchBtn.disabled = true;
+    fetchBtn.textContent = '⏳ Fetching...';
+    fetchStatus.style.display = '';
+    fetchStatus.textContent = `Fetching ${selected.length} channel${selected.length !== 1 ? 's' : ''}... This may take a while for large servers.`;
+    fetchStatus.style.color = '';
+
+    try {
+      const discordToken = document.getElementById('import-discord-token')?.value?.trim();
+      const res = await fetch('/api/import/discord/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.token },
+        body: JSON.stringify({
+          discordToken,
+          guildName: this._connectGuild?.name || 'Discord Import',
+          channels: selected
+        })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Fetch failed');
+
+      // Transition to the standard preview step (reuses existing execute flow)
+      this._importSetState(result.importId, result);
+      stepUpload.style.display = 'none';
+      stepPreview.style.display = '';
+
+      const badge = document.getElementById('import-format-badge');
+      badge.textContent = result.format;
+      badge.classList.remove('official');
+
+      document.getElementById('import-server-name').textContent = result.serverName;
+      document.getElementById('import-total-msgs').textContent = `${result.totalMessages.toLocaleString()} messages total`;
+
+      channelList.innerHTML = '';
+      result.channels.forEach(ch => {
+        const row = document.createElement('div');
+        row.className = 'import-channel-row';
+        row.dataset.discordId = ch.discordId || '';
+        row.dataset.originalName = ch.name;
+        row.innerHTML = `
+          <label>
+            <input type="checkbox" checked>
+            <span class="import-ch-name">
+              <input type="text" value="${this._escapeHtml(ch.name)}" title="Rename channel">
+            </span>
+          </label>
+          <span class="import-ch-count">${ch.messageCount.toLocaleString()} msgs</span>
+        `;
+        channelList.appendChild(row);
+      });
+    } catch (err) {
+      fetchStatus.textContent = '❌ ' + err.message;
+      fetchStatus.style.color = '#ed4245';
+    } finally {
+      fetchBtn.disabled = false;
+      fetchBtn.textContent = '📥 Fetch Messages';
     }
   }
 

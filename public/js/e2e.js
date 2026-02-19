@@ -351,6 +351,15 @@ class HavenE2E {
     });
   }
 
+  /**
+   * Re-wrap and upload the private key with a new password.
+   * Call this after a password change so the server backup stays decryptable.
+   */
+  async reWrapKey(socket, newPassword) {
+    if (!this._ready || !this._keyPair) return;
+    await this._uploadEncryptedKey(socket, newPassword);
+  }
+
   async _uploadEncryptedKey(socket, password) {
     const { encryptedKey, salt } = await this._wrapPrivateKey(password);
     return new Promise((resolve, reject) => {

@@ -136,7 +136,46 @@ Use private sub-channels for admin-only discussions, sensitive topics, or small 
 
 ---
 
-## 🔑 Join Code Settings (Admin)
+## � Importing from Discord
+
+Haven can import your entire Discord server's message history — directly from the app. No external tools required.
+
+### Method 1: Direct Connect (Recommended)
+
+1. Open **Settings** (⚙️ in the sidebar) → scroll to **Import Discord History**
+2. Click the **🔗 Connect to Discord** tab
+3. Get your Discord token:
+   - Open Discord in your browser (or desktop app with dev tools enabled)
+   - Press **F12** → go to the **Application** tab
+   - In the left sidebar: **Local Storage** → **https://discord.com**
+   - Find the key called **`token`** and copy its value (without quotes)
+4. Paste the token and click **Connect**
+5. Pick a server from the grid, then select which channels and threads to import
+6. Click **Fetch Messages** — Haven downloads everything
+7. In the preview, rename channels if you want, then click **Import**
+
+**What gets imported:** messages, replies, embeds, attachments, reactions, pins, forum tags, and original Discord avatars.
+
+**Channel types supported:** text, announcement, forum, media, plus active and archived threads.
+
+### Method 2: File Upload
+
+If you prefer, export your Discord data with [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter) (JSON format), then:
+
+1. Open **Settings** → **Import Discord History**
+2. Click the **📁 Upload File** tab
+3. Drag/drop or browse for the `.json` or `.zip` file
+4. Preview, rename channels, and import
+
+### Important Notes
+
+- Imported messages appear as the original Discord usernames, but they're all stored under the admin account. They're clearly marked as imported from Discord.
+- The import is **history only** — Discord roles, permissions, bots, and webhooks are not imported.
+- Your Discord token is never stored by Haven. It's used only during the import session and discarded.
+
+---
+
+## �🔑 Join Code Settings (Admin)
 
 Each channel's invite code can be configured by admins. Click the **⚙️ gear icon** next to the channel code in the header.
 

@@ -11,6 +11,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.0.0] — 2026-02-19
+
+### Added
+- **Discord history import — Direct Connect** — import your entire Discord server's message history directly into Haven. No external tools required. Built-in token retrieval instructions (Application tab → Local Storage method). Supports text channels, announcement channels, forum channels, media channels, threads (active + archived), and forum tags. Preserves messages, embeds, attachments, reactions, replies, pins, and Discord avatars.
+- **Discord history import — File upload** — alternatively upload a DiscordChatExporter JSON or ZIP archive to import channel history.
+- **Tabbed import modal** — the import dialog now has two tabs: 📁 Upload File and 🔗 Connect to Discord.
+- **Discord avatar preservation** — imported messages display the original author's Discord avatar (CDN URL) instead of the Haven admin's avatar. New `webhook_avatar` database column.
+- **Full server structure import** — import fetches announcement (type 5), forum (type 15), and media (type 16) channels in addition to text channels. Threads (active + archived public) are nested under their parent channels. Forum tags are resolved and displayed.
+- **Channel type indicators** — import channel picker shows type icons: # text, 📢 announcement, 💬 forum, 🖼️ media, 🧵 thread.
+
+### Fixed
+- **E2E key loss on password change** — changing your password no longer orphans your encrypted DM key backup. The private key is now automatically re-wrapped with the new password and re-uploaded to the server, so login on new devices continues to work.
+- **Scroll-to-bottom loop** — loading Discord CDN images (or any images) in chat no longer forces the viewport back to the bottom when you're scrolled up reading history.
+- **ARM64 Docker support** (#34) — Docker image now builds and runs correctly on ARM64 (Raspberry Pi, Apple Silicon, etc.).
+
+### Changed
+- **Website & docs** updated to v2.0.0 with Discord import feature callout.
+- **README** — added Discord import section with feature description.
+- **GUIDE** — added Discord import instructions.
+
+---
+
 ## [1.9.2] — 2026-02-18
 
 ### Added

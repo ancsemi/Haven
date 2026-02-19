@@ -1,6 +1,6 @@
 {
   "name": "haven",
-  "version": "1.9.2",
+  "version": "2.0.0",
   "description": "Self-hosted private chat — your server, your rules",
   "license": "MIT-NC",
   "main": "server.js",
@@ -12,6 +12,7 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.7.0",
     "dotenv": "^16.4.7",

@@ -178,6 +178,57 @@
     .hero-note { font-size: 0.85rem; color: var(--text-dim); }
     .hero-note strong { color: var(--text-muted); }
 
+    /* ============================================
+       DISCORD IMPORT BANNER
+       ============================================ */
+    .discord-banner {
+      background: linear-gradient(135deg, #5865f2 0%, #7c5cfc 50%, #43b581 100%);
+      padding: 2px;
+      position: relative;
+    }
+    .discord-banner-inner {
+      background: var(--bg-deep);
+      padding: 64px 24px;
+      text-align: center;
+    }
+    .discord-banner h2 {
+      color: #fff;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      margin-bottom: 16px;
+    }
+    .discord-banner h2 .discord-blue { color: #5865f2; }
+    .discord-banner p {
+      color: var(--text-muted);
+      font-size: 1.15rem;
+      max-width: 700px;
+      margin: 0 auto 32px;
+      line-height: 1.7;
+    }
+    .discord-features {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .discord-feat {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(88, 101, 242, 0.12);
+      border: 1px solid rgba(88, 101, 242, 0.3);
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+    @media (max-width: 768px) {
+      .discord-banner-inner { padding: 40px 16px; }
+      .discord-feat { font-size: 0.8rem; padding: 6px 14px; }
+    }
+
     .hero-screenshot {
       position: relative; z-index: 2; max-width: 1000px; margin: 0 auto;
       border-radius: var(--radius-lg); overflow: hidden;
@@ -673,6 +724,31 @@
     </div>
   </section>
 
+  <!-- ===== DISCORD IMPORT BANNER ===== -->
+  <section class="discord-banner fade-in" id="discord-import">
+    <div class="discord-banner-inner">
+      <div class="container">
+        <h2>🚀 NEW &mdash; Import your <span class="discord-blue">Discord</span> history</h2>
+        <p>
+          Leaving Discord? Bring everything with you. Haven&nbsp;v2.0 imports your entire server &mdash;
+          every channel, thread, forum post, reaction, pin, attachment, and avatar &mdash;
+          directly from the app. No external tools. No command line. Just paste your token, pick a server, and go.
+        </p>
+        <div class="discord-features">
+          <span class="discord-feat">💬 Text channels</span>
+          <span class="discord-feat">📢 Announcements</span>
+          <span class="discord-feat">💬 Forums &amp; tags</span>
+          <span class="discord-feat">🧵 Threads</span>
+          <span class="discord-feat">😀 Reactions</span>
+          <span class="discord-feat">📌 Pins</span>
+          <span class="discord-feat">📎 Attachments</span>
+          <span class="discord-feat">🖼️ Avatars</span>
+          <span class="discord-feat">↩️ Replies</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== WORKS EVERYWHERE ===== -->
   <section class="platform-showcase" id="mobile">
     <div class="container">
@@ -857,6 +933,11 @@
       </div>
 
       <div class="features-grid stagger">
+        <div class="feature-card">
+          <span class="f-icon">📥</span>
+          <h3>Discord Import</h3>
+          <p>Import your entire Discord server's history directly from Haven &mdash; channels, threads, forums, reactions, pins, attachments, and avatars. Paste your token, pick a server, done.</p>
+        </div>
         <div class="feature-card">
           <span class="f-icon">🎵</span>
           <h3>Music &amp; Video Streaming</h3>
@@ -1058,6 +1139,14 @@
               <td><span class="cross">App only</span></td>
               <td><span class="cross">App only</span></td>
             </tr>
+            <tr>
+              <td>Import history from Discord</td>
+              <td><span class="check">&#10003;</span></td>
+              <td><span class="cross">&#10007;</span></td>
+              <td>&mdash;</td>
+              <td><span class="cross">&#10007;</span></td>
+              <td><span class="cross">&#10007;</span></td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -1074,12 +1163,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>Haven v1.9.2</h2>
+        <h2>Haven v2.0.0</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v1.9.2.zip" class="btn btn-primary download-main">
-            <span class="icon">⬇</span> Download v1.9.2 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.0.0.zip" class="btn btn-primary download-main">
+            <span class="icon">⬇</span> Download v2.0.0 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1096,7 +1185,11 @@
           <div class="version-list">
             <div class="version-list-inner">
               <div class="version-item">
-                <div><span class="v-name">v1.9.2</span><span class="v-tag latest">Latest</span></div>
+                <div><span class="v-name">v2.0.0</span><span class="v-tag latest">Latest</span></div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.0.0.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v1.9.2</span> &mdash; Image lightbox, emoji autocomplete, GIF avatars</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v1.9.2.zip">Download &rarr;</a>
               </div>
               <div class="version-item">

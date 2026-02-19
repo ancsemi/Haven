@@ -5,7 +5,7 @@
 
 > **Your server. Your rules. No cloud. No accounts with Big Tech. No one reading your messages.**
 
-![Version](https://img.shields.io/badge/version-1.9.2-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT--NC-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
@@ -13,6 +13,22 @@
 Haven is a self-hosted Discord alternative. Run it on your machine. Invite friends with a code. No cloud. No email signup. No tracking. Free forever.
 
 <img width="1917" height="948" alt="Screenshot 2026-02-14 102013" src="https://github.com/user-attachments/assets/0c85ca6c-f811-43db-a26b-9b66c418830e" />
+
+---
+
+## NEW in v2.0.0 — Import Your Discord History
+
+> **Leaving Discord?** Haven can import your entire server's message history — directly from the app. No external tools, no command-line exports, no hassle.
+
+Open **Settings → Import** and connect with your Discord token. Haven pulls every channel, thread, forum post, announcement, reaction, pin, attachment, and avatar — then lets you map them to Haven channels. Your community's history comes with you.
+
+- **Direct Connect** — paste your Discord token, pick a server, select channels & threads, import
+- **File Upload** — or upload a DiscordChatExporter JSON/ZIP if you prefer
+- **Full fidelity** — messages, replies, embeds, attachments, reactions, pins, forum tags, all preserved
+- **Discord avatars** — imported messages show the original author's Discord profile picture
+- **All channel types** — text, announcement, forum, media, plus active & archived threads
+
+Your entire Discord history, now on a server you own. No one can delete it, no one can read it, no one can take it away.
 
 ---
 
@@ -110,6 +126,7 @@ Or manually: `npm install && node server.js`
 | **Moderation** | Admin: kick, mute (timed), ban, delete users, delete channels, auto-cleanup. Role system with granular permissions. |
 | **Security** | Bcrypt passwords, JWT auth, HTTPS/SSL, rate limiting, CSP headers, input validation |
 | **E2E Encryption** | ECDH P-256 + AES-256-GCM encrypted DMs — private keys never leave the browser |
+| **Discord Import** | Import your entire Discord server history — channels, threads, forums, reactions, pins, avatars — directly from Haven's UI or via file upload |
 | **Game** | Shippy Container — Drew's shipment got hung up. Server-wide leaderboard. |
 
 

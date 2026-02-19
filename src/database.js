@@ -494,6 +494,20 @@ function initDatabase() {
     }
   } catch { /* ignore */ }
 
+  // ── Migration: imported_from column on messages (Discord import) ──
+  try {
+    db.prepare("SELECT imported_from FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN imported_from TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: webhook_avatar column on messages (Discord import avatars) ──
+  try {
+    db.prepare("SELECT webhook_avatar FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN webhook_avatar TEXT DEFAULT NULL");
+  }
+
   return db;
 }
 

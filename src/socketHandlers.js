@@ -930,7 +930,7 @@ function setupSocketHandlers(io, db) {
       let messages;
       if (before) {
         messages = db.prepare(`
-          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username,
+          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from,
                  COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ? AND m.id < ?
@@ -938,7 +938,7 @@ function setupSocketHandlers(io, db) {
         `).all(channel.id, before, limit);
       } else {
         messages = db.prepare(`
-          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username,
+          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from,
                  COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ?
@@ -995,6 +995,11 @@ function setupSocketHandlers(io, db) {
           obj.is_webhook = true;
           obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
           obj.avatar_shape = 'square';
+        }
+        // Flag imported messages (Discord, etc.)
+        if (m.imported_from) {
+          obj.imported_from = m.imported_from;
+          obj.username = m.webhook_username || 'Unknown';
         }
         return obj;
       });
