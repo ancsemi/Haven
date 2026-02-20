@@ -10248,9 +10248,9 @@ class HavenApp {
 
     // Standard emojis by name/keyword
     if (this.emojiNames) {
-      for (const [name, char] of this.emojiNames) {
-        if (name.includes(query)) {
-          results.push({ type: 'standard', name, char });
+      for (const [char, keywords] of Object.entries(this.emojiNames)) {
+        if (keywords.toLowerCase().includes(query)) {
+          results.push({ type: 'standard', name: keywords.split(' ')[0], char });
         }
         if (results.length >= 20) break;
       }
