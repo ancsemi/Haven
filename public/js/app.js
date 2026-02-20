@@ -1735,6 +1735,16 @@ class HavenApp {
       }
     });
 
+    // Risky file download warning — intercept clicks on potentially harmful files
+    document.getElementById('messages').addEventListener('click', (e) => {
+      const link = e.target.closest('a.risky-file');
+      if (!link) return;
+      e.preventDefault();
+      const fileName = link.getAttribute('download') || 'this file';
+      const ext = fileName.split('.').pop().toLowerCase();
+      this._showRiskyDownloadWarning(fileName, ext, link.href);
+    });
+
     // Reply banner click — scroll to the original message
     document.getElementById('messages').addEventListener('click', (e) => {
       const banner = e.target.closest('.reply-banner');
@@ -8527,10 +8537,21 @@ class HavenApp {
       const fileUrl = this._escapeHtml(fileMatch[2]);
       const fileSize = this._escapeHtml(fileMatch[3]);
       const ext = fileName.split('.').pop().toLowerCase();
-      const icon = { pdf: '📄', zip: '📦', '7z': '📦', rar: '📦',
-        mp3: '🎵', ogg: '🎵', wav: '🎵', mp4: '🎬', webm: '🎬',
+      const icon = { pdf: '📄', zip: '📦', '7z': '📦', rar: '📦', tar: '📦', gz: '📦',
+        mp3: '🎵', ogg: '🎵', wav: '🎵', flac: '🎵', aac: '🎵', wma: '🎵',
+        mp4: '🎬', webm: '🎬', mkv: '🎬', avi: '🎬', mov: '🎬', flv: '🎬',
         doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', ppt: '📊', pptx: '📊',
-        txt: '📄', csv: '📄', json: '📄', md: '📄' }[ext] || '📎';
+        txt: '📄', csv: '📄', json: '📄', md: '📄', log: '📄',
+        exe: '⚙️', msi: '⚙️', bat: '⚙️', cmd: '⚙️', ps1: '⚙️', sh: '⚙️',
+        dll: '⚙️', iso: '💿', dmg: '💿', img: '💿',
+        apk: '📱', deb: '📦', rpm: '📦',
+        py: '🐍', js: '📜', ts: '📜', html: '🌐', css: '🎨', svg: '🖼️' }[ext] || '📎';
+      const RISKY_EXTS = new Set([
+        'exe','bat','cmd','com','scr','pif','msi','msp','mst',
+        'ps1','vbs','vbe','js','jse','wsf','wsh','hta',
+        'cpl','inf','reg','dll','ocx','sys','drv',
+        'sh','app','dmg','pkg','deb','rpm','appimage',
+      ]);
       // Audio/video get inline players
       if (['mp3', 'ogg', 'wav', 'webm'].includes(ext) && /^audio\//.test('audio/')) {
         return `<div class="file-attachment">
@@ -8545,7 +8566,7 @@ class HavenApp {
         </div>`;
       }
       return `<div class="file-attachment">
-        <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" class="file-download-link" download="${fileName}">
+        <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" class="file-download-link${RISKY_EXTS.has(ext) ? ' risky-file' : ''}" download="${fileName}"${RISKY_EXTS.has(ext) ? ' data-risky="true"' : ''}>
           <span class="file-icon">${icon}</span>
           <span class="file-name">${fileName}</span>
           <span class="file-size">(${fileSize})</span>
@@ -8683,6 +8704,49 @@ class HavenApp {
     toast.textContent = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
+  }
+
+  /** Warn users before downloading potentially harmful file types */
+  _showRiskyDownloadWarning(fileName, ext, url) {
+    // Remove any existing warning overlay
+    document.querySelector('.risky-download-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'risky-download-overlay';
+    overlay.innerHTML = `
+      <div class="risky-download-modal">
+        <div class="risky-download-icon">⚠️</div>
+        <h3>Potentially Harmful File</h3>
+        <p><strong>${this._escapeHtml(fileName)}</strong></p>
+        <p class="risky-download-desc">
+          <strong>.${this._escapeHtml(ext)}</strong> files can be dangerous and may harm your
+          device if they come from an untrusted source. Only download this if
+          you trust the sender.
+        </p>
+        <div class="risky-download-actions">
+          <button class="risky-download-cancel">Cancel</button>
+          <button class="risky-download-confirm">Download Anyway</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Cancel
+    overlay.querySelector('.risky-download-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    // Confirm download
+    overlay.querySelector('.risky-download-confirm').addEventListener('click', () => {
+      overlay.remove();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
   }
 
   // ═══════════════════════════════════════════════════════

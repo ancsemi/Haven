@@ -8891,6 +8891,87 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   margin-top: 4px;
 }
 
+/* Risky file highlight */
+.file-download-link.risky-file .file-name {
+  color: var(--error, #e74c3c);
+}
+
+/* ── Risky download warning modal ── */
+.risky-download-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.15s ease;
+}
+.risky-download-modal {
+  background: var(--bg-secondary, #2b2d31);
+  border: 1px solid var(--border, #3a3c42);
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.risky-download-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+.risky-download-modal h3 {
+  margin: 0 0 12px;
+  color: var(--error, #e74c3c);
+  font-size: 18px;
+}
+.risky-download-modal p {
+  margin: 0 0 8px;
+  color: var(--text-primary, #dbdee1);
+  font-size: 14px;
+  word-break: break-all;
+}
+.risky-download-desc {
+  color: var(--text-muted, #949ba4) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  word-break: normal !important;
+}
+.risky-download-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+.risky-download-cancel {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #3a3c42);
+  background: var(--bg-tertiary, #232428);
+  color: var(--text-primary, #dbdee1);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.risky-download-cancel:hover {
+  background: var(--bg-primary, #1e1f22);
+}
+.risky-download-confirm {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  background: var(--error, #e74c3c);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: filter 0.15s;
+}
+.risky-download-confirm:hover {
+  filter: brightness(1.15);
+}
+
 .user-bar {
   position: relative;
 }

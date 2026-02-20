@@ -139,28 +139,11 @@ const upload = multer({
   }
 });
 
-// General file upload (expanded MIME whitelist)
-const ALLOWED_FILE_TYPES = new Set([
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-  'application/pdf',
-  'text/plain', 'text/csv', 'text/markdown',
-  'application/zip', 'application/x-zip-compressed',
-  'application/x-7z-compressed', 'application/x-rar-compressed',
-  'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm',
-  'video/mp4', 'video/webm',
-  'application/json',
-  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-]);
-
+// General file upload — no MIME restrictions; safety enforced via
+// Content-Disposition: attachment on non-image downloads (see /uploads handler)
 const fileUpload = multer({
   storage: uploadStorage,
   limits: { fileSize: 2 * 1024 * 1024 * 1024 },  // hard cap 2 GB; DB-configurable limit enforced per-request
-  fileFilter: (req, file, cb) => {
-    if (ALLOWED_FILE_TYPES.has(file.mimetype)) cb(null, true);
-    else cb(new Error('File type not allowed'));
-  }
 });
 
 // ── API routes (rate-limited) ────────────────────────────
