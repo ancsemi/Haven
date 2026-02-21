@@ -109,12 +109,12 @@ router.post('/register', async (req, res) => {
       'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)'
     ).run(username, hash, isAdmin);
 
-    // Auto-assign default "User" role to new users
+    // Auto-assign roles flagged as auto_assign to new users
     try {
-      const defaultRole = db.prepare("SELECT id FROM roles WHERE name = 'User' AND level = 1 AND scope = 'server'").get();
-      if (defaultRole) {
-        db.prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, NULL)')
-          .run(result.lastInsertRowid, defaultRole.id);
+      const autoRoles = db.prepare("SELECT id FROM roles WHERE auto_assign = 1 AND scope = 'server'").all();
+      const insertRole = db.prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, NULL)');
+      for (const role of autoRoles) {
+        insertRole.run(result.lastInsertRowid, role.id);
       }
     } catch { /* non-critical */ }
 

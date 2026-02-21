@@ -799,6 +799,13 @@ function setupSocketHandlers(io, db) {
         db.prepare(
           'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)'
         ).run(channel.id, socket.user.id);
+
+        // Auto-assign roles flagged as auto_assign to this user (if they don't already have them)
+        try {
+          const autoRoles = db.prepare('SELECT id FROM roles WHERE auto_assign = 1').all();
+          const insertAutoRole = db.prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, NULL)');
+          for (const ar of autoRoles) { insertAutoRole.run(socket.user.id, ar.id); }
+        } catch { /* non-critical */ }
       }
 
       // Auto-add to all non-private sub-channels of this channel (both new & existing members)
@@ -3603,7 +3610,7 @@ function setupSocketHandlers(io, db) {
     // ═══════════════ ROLE MANAGEMENT ═════════════════════════
 
     socket.on('get-roles', (data, callback) => {
-      const roles = db.prepare('SELECT * FROM roles ORDER BY level DESC').all();
+      const roles = db.prepare('SELECT *, auto_assign FROM roles ORDER BY level DESC').all();
       const permissions = db.prepare('SELECT * FROM role_permissions').all();
       const permMap = {};
       permissions.forEach(p => {
@@ -3696,9 +3703,14 @@ function setupSocketHandlers(io, db) {
       const level = isInt(data.level) && data.level >= 1 && data.level <= 99 ? data.level : 25;
       const scope = data.scope === 'channel' ? 'channel' : 'server';
       const color = isString(data.color, 4, 7) ? data.color : null;
+      const autoAssign = data.autoAssign ? 1 : 0;
 
       try {
-        const result = db.prepare('INSERT INTO roles (name, level, scope, color) VALUES (?, ?, ?, ?)').run(name, level, scope, color);
+        // If marking this role as auto-assign, clear any existing auto-assign roles first
+        if (autoAssign) {
+          db.prepare('UPDATE roles SET auto_assign = 0').run();
+        }
+        const result = db.prepare('INSERT INTO roles (name, level, scope, color, auto_assign) VALUES (?, ?, ?, ?, ?)').run(name, level, scope, color, autoAssign);
 
         // Add permissions
         const perms = Array.isArray(data.permissions) ? data.permissions : [];
@@ -3736,6 +3748,13 @@ function setupSocketHandlers(io, db) {
       if (isString(data.name, 1, 30)) { updates.push('name = ?'); values.push(data.name.trim()); }
       if (isInt(data.level) && data.level >= 1 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
       if (data.color !== undefined) { updates.push('color = ?'); values.push(data.color || null); }
+      if (data.autoAssign !== undefined) {
+        // If enabling auto-assign, clear all other roles' auto_assign first
+        if (data.autoAssign) {
+          db.prepare('UPDATE roles SET auto_assign = 0').run();
+        }
+        updates.push('auto_assign = ?'); values.push(data.autoAssign ? 1 : 0);
+      }
 
       if (updates.length > 0) {
         values.push(roleId);

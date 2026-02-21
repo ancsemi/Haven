@@ -4,9 +4,11 @@ set -e
 DATA="/data"
 CERTS="$DATA/certs"
 
-# Auto-generate self-signed SSL certs if none exist
+# Auto-generate self-signed SSL certs if none exist (skip if FORCE_HTTP=true)
 # (HTTPS is needed for voice chat to work over the network)
-if [ ! -f "$CERTS/cert.pem" ] || [ ! -f "$CERTS/key.pem" ]; then
+if [ "${FORCE_HTTP:-false}" = "true" ]; then
+  echo "⚡ FORCE_HTTP=true — skipping SSL certificate generation"
+elif [ ! -f "$CERTS/cert.pem" ] || [ ! -f "$CERTS/key.pem" ]; then
   echo "🔐 Generating self-signed SSL certificate..."
   mkdir -p "$CERTS"
   openssl req -x509 -newkey rsa:2048 \

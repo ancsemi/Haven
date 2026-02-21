@@ -59,8 +59,10 @@ if [ ! -f "$HAVEN_DATA/.env" ]; then
     fi
 fi
 
-# ── Generate SSL certs in data directory if missing ────────
-if [ ! -f "$HAVEN_DATA/certs/cert.pem" ]; then
+# ── Generate SSL certs in data directory if missing (skip if FORCE_HTTP=true) ──
+if [ "${FORCE_HTTP:-false}" = "true" ]; then
+    echo "  [*] FORCE_HTTP=true — skipping SSL certificate generation"
+elif [ ! -f "$HAVEN_DATA/certs/cert.pem" ]; then
     echo "  [*] Generating self-signed SSL certificate..."
     mkdir -p "$HAVEN_DATA/certs"
 

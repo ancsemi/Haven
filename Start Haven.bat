@@ -103,8 +103,11 @@ if not exist "%HAVEN_DATA%\.env" (
     echo.
 )
 
-:: Generate self-signed SSL certs in data directory if missing
-if not exist "%HAVEN_DATA%\certs\cert.pem" (
+:: Generate self-signed SSL certs in data directory if missing (skip if FORCE_HTTP=true)
+if /I "%FORCE_HTTP%"=="true" (
+    echo  [*] FORCE_HTTP=true -- skipping SSL certificate generation
+    echo.
+) else if not exist "%HAVEN_DATA%\certs\cert.pem" (
     echo  [*] Generating self-signed SSL certificate...
     if not exist "%HAVEN_DATA%\certs" mkdir "%HAVEN_DATA%\certs"
     where openssl >nul 2>&1
@@ -152,7 +155,9 @@ if %ERRORLEVEL% NEQ 0 (
 
 :: Detect protocol based on whether certs exist and server can use them
 set "HAVEN_PROTO=http"
-if exist "%HAVEN_DATA%\certs\cert.pem" (
+if /I "%FORCE_HTTP%"=="true" (
+    set "HAVEN_PROTO=http"
+) else if exist "%HAVEN_DATA%\certs\cert.pem" (
     if exist "%HAVEN_DATA%\certs\key.pem" (
         set "HAVEN_PROTO=https"
     )

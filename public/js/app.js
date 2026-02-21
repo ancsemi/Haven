@@ -11571,7 +11571,7 @@ class HavenApp {
     container.innerHTML = this._allRoles.map(r =>
       `<div class="role-preview-item">
         <span class="role-color-dot" style="background:${r.color || '#aaa'}"></span>
-        <span>${this._escapeHtml(r.name)}</span>
+        <span>${this._escapeHtml(r.name)}${r.auto_assign ? ' <span title="Auto-assigned to new members" style="font-size:10px;opacity:0.6">⚡</span>' : ''}</span>
         <span class="muted-text" style="font-size:11px;margin-left:auto">Lv.${r.level}</span>
       </div>`
     ).join('');
@@ -11633,6 +11633,11 @@ class HavenApp {
         <input type="number" class="settings-number-input" id="role-edit-level" value="${role.level}" min="1" max="99">
         <label class="settings-label" style="margin-top:8px;">Color</label>
         <input type="color" id="role-edit-color" value="${role.color || '#aaaaaa'}" style="width:50px;height:30px;border:none;cursor:pointer">
+        <label class="toggle-row" style="margin-top:12px;">
+          <span>Auto-assign to new members</span>
+          <input type="checkbox" id="role-edit-auto-assign" ${role.auto_assign ? 'checked' : ''}>
+        </label>
+        <small class="muted-text" style="font-size:11px;">New users will automatically receive this role when they register or join a channel.</small>
         <h5 class="settings-section-subtitle" style="margin-top:12px;">Permissions</h5>
         ${allPerms.map(p => `
           <label class="toggle-row">
@@ -11654,6 +11659,7 @@ class HavenApp {
         name: document.getElementById('role-edit-name').value.trim(),
         level: parseInt(document.getElementById('role-edit-level').value, 10),
         color: document.getElementById('role-edit-color').value,
+        autoAssign: document.getElementById('role-edit-auto-assign').checked,
         permissions: perms
       }, (res) => {
         if (res.error) { this._showToast(res.error, 'error'); return; }
@@ -11908,6 +11914,10 @@ class HavenApp {
             <input type="color" id="cr-role-color" value="${role.color || '#aaaaaa'}" style="width:36px;height:28px;border:none;cursor:pointer;background:none">
           </div>
         </div>
+        <label class="cr-perm-toggle" style="margin-top:6px">
+          <input type="checkbox" id="cr-role-auto-assign" ${role.auto_assign ? 'checked' : ''}>
+          <span>Auto-assign to new members</span>
+        </label>
         <label class="cr-role-label" style="margin-top:4px">Permissions</label>
         <div class="cr-role-perms">
           ${allPerms.map(p => `
@@ -11933,6 +11943,7 @@ class HavenApp {
         name: document.getElementById('cr-role-name').value.trim(),
         level: newLevel,
         color: document.getElementById('cr-role-color').value,
+        autoAssign: document.getElementById('cr-role-auto-assign').checked,
         permissions: perms
       }, (res) => {
         if (res.error) { this._showToast(res.error, 'error'); return; }
@@ -12618,4 +12629,4 @@ class HavenApp {
 }
 
 // ── Boot ───────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => new HavenApp());
+document.addEventListener('DOMContentLoaded', () => { window.app = new HavenApp(); });

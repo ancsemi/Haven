@@ -79,7 +79,7 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false,  // needed for WebRTC
   crossOriginOpenerPolicy: false,    // needed for WebRTC
-  hsts: { maxAge: 31536000, includeSubDomains: false }, // force HTTPS for 1 year
+  hsts: (process.env.FORCE_HTTP || '').toLowerCase() === 'true' ? false : { maxAge: 31536000, includeSubDomains: false }, // force HTTPS for 1 year (disabled when FORCE_HTTP=true)
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
 
@@ -1648,7 +1648,12 @@ if (!sslCert && !sslKey) {
   if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
 }
 
-const useSSL = sslCert && sslKey;
+const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+const useSSL = sslCert && sslKey && !forceHttp;
+
+if (forceHttp) {
+  console.log('⚡ FORCE_HTTP=true — running plain HTTP (reverse proxy mode)');
+}
 
 if (useSSL) {
   try {

@@ -330,6 +330,7 @@ function initDatabase() {
       level INTEGER NOT NULL DEFAULT 0,
       scope TEXT NOT NULL DEFAULT 'server',
       color TEXT DEFAULT NULL,
+      auto_assign INTEGER NOT NULL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -381,8 +382,9 @@ function initDatabase() {
     ];
     channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
 
-    // User — level 1 (default role for all new users)
+    // User — level 1 (default role for all new users, auto-assigned)
     const userRole = insertRole.run('User', 1, 'server', '#95a5a6');
+    db.prepare('UPDATE roles SET auto_assign = 1 WHERE id = ?').run(userRole.lastInsertRowid);
     const userPerms = [
       'delete_own_messages', 'edit_own_messages', 'upload_files',
       'use_voice', 'view_history'
@@ -390,14 +392,23 @@ function initDatabase() {
     userPerms.forEach(p => insertPerm.run(userRole.lastInsertRowid, p));
   }
 
-  // ── Migration: auto-assign "User" role to all existing users who lack any role ──
-  const userRole = db.prepare("SELECT id FROM roles WHERE name = 'User' AND level = 1 AND scope = 'server'").get();
-  if (userRole) {
+  // ── Migration: add auto_assign column to roles if missing ──
+  try {
+    db.prepare('SELECT auto_assign FROM roles LIMIT 0').get();
+  } catch {
+    db.exec('ALTER TABLE roles ADD COLUMN auto_assign INTEGER NOT NULL DEFAULT 0');
+    // Mark the existing "User" role as auto-assign for backwards compat
+    db.prepare("UPDATE roles SET auto_assign = 1 WHERE name = 'User' AND level = 1 AND scope = 'server'").run();
+  }
+
+  // ── Migration: auto-assign flagged roles to all existing users who lack any server role ──
+  const autoRoles = db.prepare('SELECT id FROM roles WHERE auto_assign = 1 AND scope = ?').all('server');
+  for (const ar of autoRoles) {
     db.prepare(`
       INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by)
       SELECT u.id, ?, NULL, NULL FROM users u
       WHERE u.id NOT IN (SELECT DISTINCT user_id FROM user_roles WHERE channel_id IS NULL)
-    `).run(userRole.id);
+    `).run(ar.id);
   }
 
   // ── Cleanup: remove duplicate user_roles (NULL channel_id duplicates) ──
