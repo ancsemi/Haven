@@ -5,7 +5,7 @@
 
 > **Your server. Your rules. No cloud. No accounts with Big Tech. No one reading your messages.**
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.2-blue)
 ![License](https://img.shields.io/badge/license-MIT--NC-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
@@ -366,6 +366,7 @@ Planned features — roughly in priority order:
 | **Thread replies** | 📋 Planned | Threaded conversations that branch off a message |
 | **End-to-end encryption** | ✅ Done | ECDH P-256 + AES-256-GCM encryption for DMs — private keys stay in the browser |
 | **Android App** | 🚧 In Progress! | https://github.com/ancsemi/Haven-App |
+| **Desktop App** | 🚧 In Progress | Electron-based desktop client with virtual audio cable for per-app audio streaming |
 
 > Want something else? Open an issue — PRs are always welcome.
 
