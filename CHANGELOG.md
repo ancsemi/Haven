@@ -11,6 +11,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.2.4] — 2026-02-22
+
+### Security
+- **SSRF bypass in link previews** — link preview endpoint now uses `redirect: 'manual'` with manual redirect following (max 5 hops), re-validating each redirect target against private IP / DNS checks to prevent `evil.com` → 302 → `http://169.254.169.254/` style attacks.
+- **JWT admin claim trust** — all 13 REST API admin endpoints now verify `is_admin` from the database instead of trusting the JWT claim, preventing demoted admins from using stale tokens.
+- **Path traversal in avatar/icon uploads** — `set-avatar` and `server_icon` settings now validate paths with a strict regex (`/^\/uploads\/[\w\-.]+$/`) instead of a prefix check, blocking `../` traversal payloads like `/uploads/../../etc/passwd`.
+- **mark-read missing membership check** — the `mark-read` socket event now verifies channel membership before allowing read-position writes, preventing any user from inserting read positions for channels they don't belong to.
+- **transfer-admin race condition** — added a mutex flag and post-`await` DB re-check around the async `bcrypt.compare()` call, preventing concurrent transfer requests from racing past the admin verification.
+- **Server-side content sanitization** — added `sanitizeText()` defense-in-depth filter that strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<style>`, `<meta>`, `<form>`, `<link>` tags, event handler attributes, and `javascript:` URIs. Applied to messages, edits, bios, and channel topics.
+- **Dependency vulnerabilities** — patched all 6 npm audit findings (qs, bn.js, axios) via `npm audit fix` and `overrides` in package.json. Audit now reports **0 vulnerabilities**.
+
+### Fixed
+- **broadcastChannelLists DoS** — added 150 ms debounce to batch rapid channel mutations, preventing O(N × queries) storms when channels are reordered.
+- **reorder-channels unbounded input** — capped the channel reorder array to 500 items to prevent excessive DB writes from a single socket event.
+
+### Changed
+- Documented intentional `rejectUnauthorized: false` usage in port-check (self-connection to own public IP only).
+- Website & docs updated to v2.2.4.
+
+---
+
 ## [2.2.3] — 2026-02-21
 
 ### Fixed

@@ -1,0 +1,77 @@
+{
+  "name": "haven-desktop",
+  "version": "0.1.0",
+  "description": "Haven Desktop — native client with per-app audio streaming via virtual audio cable",
+  "main": "src/main.js",
+  "author": "ancsemi",
+  "license": "MIT-NC",
+  "scripts": {
+    "start": "node -e \"const p=require('electron');require('child_process').execFileSync(p,['.'],{stdio:'inherit'})\"",
+    "dev": "cross-env NODE_ENV=development node -e \"const p=require('electron');require('child_process').execFileSync(p,['.'],{stdio:'inherit'})\"",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0",
+    "sharp": "^0.34.5"
+  },
+  "build": {
+    "appId": "com.haven.desktop",
+    "productName": "Haven",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "preload/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "audio-drivers/",
+        "to": "audio-drivers",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.social-networking"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Network"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "include": "installer/nsis-hooks.nsh"
+    }
+  }
+}

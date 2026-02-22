@@ -58,6 +58,17 @@ const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = req
 
 const app = express();
 
+// ── Helper: verify admin from DB (don't trust JWT claims alone) ─────
+// JWT isAdmin may be stale if admin was demoted since token was issued.
+function verifyAdminFromDb(user) {
+  if (!user) return false;
+  try {
+    const { getDb } = require('./src/database');
+    const row = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    return !!(row && row.is_admin);
+  } catch { return false; }
+}
+
 // ── Security Headers (helmet) ────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
@@ -359,14 +370,14 @@ app.post('/api/upload-webhook-avatar', uploadLimiter, (req, res) => {
 app.get('/api/tunnel/status', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
   res.json(getTunnelStatus());
 });
 
 app.post('/api/tunnel/sync', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
   try {
     // Use values from the request body directly (DB may not have saved yet)
     const enabled = req.body.enabled === true;
@@ -424,7 +435,7 @@ app.get('/api/version', (req, res) => {
 app.get('/api/port-check', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   const port = process.env.PORT || 3000;
   const https = require('https');
@@ -476,6 +487,10 @@ app.get('/api/port-check', async (req, res) => {
       reachable = await new Promise((resolve) => {
         const req = proto.get(`${useSSL ? 'https' : 'http'}://${publicIp}:${port}/api/health`, {
           timeout: 5000,
+          // SECURITY NOTE: rejectUnauthorized:false is intentional here — this
+          // connects to OUR OWN public IP to test reachability. Self-signed certs
+          // used by Haven would fail standard verification. This never connects
+          // to third-party servers.
           rejectUnauthorized: false
         }, (resp) => {
           let data = '';
@@ -665,7 +680,7 @@ app.post('/api/upload-sound', uploadLimiter, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   soundUpload.single('sound')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
@@ -700,7 +715,7 @@ app.delete('/api/sounds/:name', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
   const name = req.params.name;
   const { getDb } = require('./src/database');
   try {
@@ -727,7 +742,7 @@ app.post('/api/upload-emoji', uploadLimiter, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   emojiUpload.single('emoji')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
@@ -762,7 +777,7 @@ app.delete('/api/emojis/:name', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
   const name = req.params.name;
   const { getDb } = require('./src/database');
   try {
@@ -791,7 +806,7 @@ app.post('/api/upload-server-icon', uploadLimiter, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   upload.single('image')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
@@ -915,6 +930,39 @@ function isPrivateIP(ip) {
     ip.startsWith('fe80:');
 }
 
+// Check if a hostname is private/internal (SSRF layer 1)
+function isPrivateHostname(hostname) {
+  const host = hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
+    host === '::1' || host === '[::1]' ||
+    host.startsWith('10.') || host.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host === '169.254.169.254' ||
+    host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.localhost');
+}
+
+// Validate a URL is safe to fetch (not internal/private) — checks hostname + DNS
+async function validateUrlSafe(urlStr) {
+  const parsed = new URL(urlStr);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Only http/https URLs allowed');
+  }
+  if (isPrivateHostname(parsed.hostname)) {
+    throw new Error('Private addresses not allowed');
+  }
+  // SSRF layer 2: DNS resolution check (defeats DNS rebinding)
+  try {
+    const addresses = await dnsResolve(parsed.hostname);
+    if (addresses.some(isPrivateIP)) {
+      throw new Error('Private addresses not allowed');
+    }
+  } catch (err) {
+    if (err.message === 'Private addresses not allowed') throw err;
+    // DNS resolution failed — could be IPv6-only or non-existent; allow fetch to fail naturally
+  }
+  return parsed;
+}
+
 app.get('/api/link-preview', previewLimiter, async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
@@ -923,33 +971,12 @@ app.get('/api/link-preview', previewLimiter, async (req, res) => {
   const url = (req.query.url || '').trim();
   if (!url) return res.status(400).json({ error: 'Missing url param' });
 
-  // Only allow http(s) URLs
+  // Validate the initial URL is safe (protocol, hostname, DNS)
   let parsed;
   try {
-    parsed = new URL(url);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return res.status(400).json({ error: 'Only http/https URLs allowed' });
-    }
-    // Block private/internal hostnames (SSRF protection — layer 1: hostname check)
-    const host = parsed.hostname.toLowerCase();
-    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
-        host === '::1' || host === '[::1]' ||
-        host.startsWith('10.') || host.startsWith('192.168.') ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-        host === '169.254.169.254' ||
-        host.endsWith('.local') || host.endsWith('.internal')) {
-      return res.status(400).json({ error: 'Private addresses not allowed' });
-    }
-  } catch { return res.status(400).json({ error: 'Invalid URL' }); }
-
-  // SSRF protection — layer 2: DNS resolution check (defeats DNS rebinding)
-  try {
-    const addresses = await dnsResolve(parsed.hostname);
-    if (addresses.some(isPrivateIP)) {
-      return res.status(400).json({ error: 'Private addresses not allowed' });
-    }
-  } catch {
-    // DNS resolution failed — could be IPv6-only or non-existent; allow fetch to fail naturally
+    parsed = await validateUrlSafe(url);
+  } catch (err) {
+    return res.status(400).json({ error: err.message || 'Invalid URL' });
   }
 
   // Cache check
@@ -990,21 +1017,41 @@ app.get('/api/link-preview', previewLimiter, async (req, res) => {
       } catch { /* fall through to generic scrape */ }
     }
 
-    // ── Generic OG scrape ────────────────────────────────
+    // ── Generic OG scrape (manual redirect following with SSRF checks) ──
     if (!data) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-
-      const resp = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': PREVIEW_UA,
-          'Accept': 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.9'
-        },
-        redirect: 'follow'
-      });
-      clearTimeout(timeout);
+      let currentUrl = url;
+      let resp;
+      const MAX_REDIRECTS = 5;
+      for (let i = 0; i <= MAX_REDIRECTS; i++) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        resp = await fetch(currentUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': PREVIEW_UA,
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9'
+          },
+          redirect: 'manual'  // handle redirects manually to re-check SSRF
+        });
+        clearTimeout(timeout);
+        // If redirect, validate the new URL before following
+        if ([301, 302, 303, 307, 308].includes(resp.status)) {
+          const location = resp.headers.get('location');
+          if (!location) break;
+          // Resolve relative redirects
+          const nextUrl = new URL(location, currentUrl).href;
+          try {
+            await validateUrlSafe(nextUrl);
+          } catch {
+            // Redirect target is private/internal — abort (SSRF protection)
+            return res.json({ title: null, description: null, image: null, siteName: null });
+          }
+          currentUrl = nextUrl;
+          continue;
+        }
+        break; // not a redirect, use this response
+      }
 
       const contentType = resp.headers.get('content-type') || '';
       if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
@@ -1041,13 +1088,16 @@ app.get('/api/link-preview', previewLimiter, async (req, res) => {
         const resp = await fetch(url, {
           signal: controller.signal,
           headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'text/html' },
-          redirect: 'follow'
+          redirect: 'manual'  // no blind redirect following
         });
         clearTimeout(timeout);
-        const html = (await resp.text()).slice(0, PREVIEW_MAX_SIZE);
-        const imgMatch = html.match(/<meta[^>]*?(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*?content=["']([^"']+)["']/is)
-                      || html.match(/<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["'](?:og:image|twitter:image)["']/is);
-        if (imgMatch) data.image = imgMatch[1].trim();
+        // Only scrape if we got a direct 200 (no redirect chasing for image-only pass)
+        if (resp.status === 200) {
+          const html = (await resp.text()).slice(0, PREVIEW_MAX_SIZE);
+          const imgMatch = html.match(/<meta[^>]*?(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*?content=["']([^"']+)["']/is)
+                        || html.match(/<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["'](?:og:image|twitter:image)["']/is);
+          if (imgMatch) data.image = imgMatch[1].trim();
+        }
       } catch { /* image is optional */ }
     }
 
@@ -1210,7 +1260,7 @@ const importUpload = multer({
 app.post('/api/import/discord/upload', uploadLimiter, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   importUpload.single('file')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
@@ -1270,7 +1320,7 @@ async function discordApiFetch(endpoint, userToken, retries = 2) {
 app.post('/api/import/discord/connect', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   const { discordToken } = req.body;
   if (!discordToken || typeof discordToken !== 'string') {
@@ -1293,7 +1343,7 @@ app.post('/api/import/discord/connect', express.json(), async (req, res) => {
 app.post('/api/import/discord/guild-channels', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   const { discordToken, guildId } = req.body;
   if (!discordToken || !guildId) return res.status(400).json({ error: 'Missing params' });
@@ -1379,7 +1429,7 @@ app.post('/api/import/discord/guild-channels', express.json(), async (req, res) 
 app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   const { discordToken, guildName, channels: selected } = req.body;
   if (!discordToken || !Array.isArray(selected) || !selected.length) {
@@ -1495,7 +1545,7 @@ setInterval(() => {
 app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   const { importId, selectedChannels } = req.body;
   if (!importId || !Array.isArray(selectedChannels) || selectedChannels.length === 0) {

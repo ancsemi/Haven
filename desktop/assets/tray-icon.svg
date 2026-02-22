@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Haven tray icon: hollow hexagon (point-up) with purple H -->
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9478ff"/>
+      <stop offset="100%" stop-color="#6b4fdb"/>
+    </linearGradient>
+  </defs>
+  <polygon
+    points="8,0.8 14.6,4.6 14.6,11.4 8,15.2 1.4,11.4 1.4,4.6"
+    fill="none"
+    stroke="url(#g)"
+    stroke-width="1.2"
+    stroke-linejoin="round"
+  />
+  <text
+    x="8" y="11"
+    text-anchor="middle"
+    font-family="Arial,Helvetica,sans-serif"
+    font-weight="bold"
+    font-size="7"
+    fill="url(#g)"
+  >H</text>
+</svg>

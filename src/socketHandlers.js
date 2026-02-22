@@ -21,6 +21,38 @@ function isInt(v) {
   return Number.isInteger(v);
 }
 
+// ── Server-side HTML sanitization (strip dangerous tags/attrs) ──
+// Belt-and-suspenders: client escapes HTML, but server strips anything that
+// could be rendered as executable HTML in case of client-side bugs.
+function sanitizeText(str) {
+  if (typeof str !== 'string') return '';
+  // Strip actual HTML tags that could execute scripts or load resources
+  // We preserve markdown formatting characters but neutralize HTML
+  return str
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<\/script>/gi, '')
+    .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed\b[^>]*\/?>/gi, '')
+    .replace(/<link\b[^>]*\/?>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<meta\b[^>]*\/?>/gi, '')
+    .replace(/<form\b[^>]*>[\s\S]*?<\/form>/gi, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')  // strip event handlers like onerror="..."
+    .replace(/on\w+\s*=\s*[^\s>]+/gi, '')         // strip unquoted event handlers
+    .replace(/javascript\s*:/gi, 'blocked:');       // neutralize javascript: URIs
+}
+
+// ── Validate /uploads/ path (prevent path traversal) ──
+function isValidUploadPath(value) {
+  if (!value || typeof value !== 'string') return false;
+  // Must start with /uploads/ and contain only safe filename characters (no ../ or special chars)
+  return /^\/uploads\/[\w\-.]+$/.test(value);
+}
+
+// ── Transfer-admin mutex (prevent race condition on async bcrypt) ──
+let transferAdminInProgress = false;
+
 // ── Spotify → YouTube resolution ──────────────────────────
 // Spotify embeds only give 30-second previews to non-premium users
 // and have no external JS API for sync/volume. We resolve the track
@@ -680,12 +712,18 @@ function setupSocketHandlers(io, db) {
     }
 
     // Helper: broadcast enriched channel list to all connected clients
+    // ── Debounced broadcastChannelLists to avoid O(N × queries) DoS ──
+    let _broadcastPending = null;
     function broadcastChannelLists() {
-      for (const [, s] of io.sockets.sockets) {
-        if (s.user) {
-          s.emit('channels-list', getEnrichedChannels(s.user.id, s.user.isAdmin, null));
+      if (_broadcastPending) return; // already queued
+      _broadcastPending = setTimeout(() => {
+        _broadcastPending = null;
+        for (const [, s] of io.sockets.sockets) {
+          if (s.user) {
+            s.emit('channels-list', getEnrichedChannels(s.user.id, s.user.isAdmin, null));
+          }
         }
-      }
+      }, 150); // 150ms debounce — batches rapid channel mutations
     }
 
     // ── Get user's channels ─────────────────────────────────
@@ -1156,13 +1194,17 @@ function setupSocketHandlers(io, db) {
 
       const replyTo = isInt(data.replyTo) ? data.replyTo : null;
 
+      // Server-side sanitization (defense-in-depth — client also escapes)
+      const safeContent = sanitizeText(content.trim());
+      if (!safeContent) return;
+
       const result = db.prepare(
         'INSERT INTO messages (channel_id, user_id, content, reply_to) VALUES (?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, content.trim(), replyTo);
+      ).run(channel.id, socket.user.id, safeContent, replyTo);
 
       const message = {
         id: result.lastInsertRowid,
-        content: content.trim(),
+        content: safeContent,
         created_at: new Date().toISOString(),
         username: socket.user.displayName,
         user_id: socket.user.id,
@@ -1185,7 +1227,7 @@ function setupSocketHandlers(io, db) {
       io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
 
       // Send push notifications to offline channel members
-      sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, content.trim());
+      sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, safeContent);
 
       // Auto-update sender's read position so own messages never count as unread
       try {
@@ -1967,7 +2009,7 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'You don\'t have permission to edit messages');
       }
 
-      const newContent = data.content.trim();
+      const newContent = sanitizeText(data.content.trim());
       if (!newContent) return;
 
       try {
@@ -2593,7 +2635,7 @@ function setupSocketHandlers(io, db) {
         if (value.length > 32) return;
       }
       if (key === 'server_icon') {
-        if (value && !value.startsWith('/uploads/')) return;
+        if (value && !isValidUploadPath(value)) return;
       }
       if (key === 'tunnel_enabled' && !['true', 'false'].includes(value)) return;
       if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
@@ -2815,8 +2857,8 @@ function setupSocketHandlers(io, db) {
     socket.on('set-avatar', (data) => {
       if (!data || typeof data !== 'object') return;
       const url = typeof data.url === 'string' ? data.url.trim() : '';
-      // Only allow /uploads/ paths or empty (clear) — no data: URLs via socket
-      if (url && !url.startsWith('/uploads/')) return;
+      // Only allow safe /uploads/ paths or empty (clear) — no data: URLs or path traversal
+      if (url && !isValidUploadPath(url)) return;
       // DB was already updated by the HTTP endpoint; just sync the in-memory state
       socket.user.avatar = url || null;
       console.log(`[Avatar] ${socket.user.username} broadcast avatar: ${url || '(removed)'}`);
@@ -2941,7 +2983,7 @@ function setupSocketHandlers(io, db) {
 
     socket.on('set-bio', (data) => {
       if (!data || typeof data.bio !== 'string') return;
-      const bio = data.bio.trim().slice(0, 190);
+      const bio = sanitizeText(data.bio.trim().slice(0, 190));
       try {
         db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(bio, socket.user.id);
         socket.emit('bio-updated', { bio });
@@ -3023,7 +3065,7 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'You don\'t have permission to set channel topics');
       }
 
-      const topic = isString(data.topic, 0, 256) ? data.topic.trim() : '';
+      const topic = isString(data.topic, 0, 256) ? sanitizeText(data.topic.trim()) : '';
 
       try {
         db.prepare('UPDATE channels SET topic = ? WHERE id = ?').run(topic, channel.id);
@@ -3380,6 +3422,10 @@ function setupSocketHandlers(io, db) {
 
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
       if (!channel) return;
+
+      // Verify user is actually a member of this channel
+      const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+      if (!member) return;
 
       try {
         db.prepare(`
@@ -3977,20 +4023,31 @@ function setupSocketHandlers(io, db) {
 
       if (!socket.user.isAdmin) return cb({ error: 'Only admins can transfer admin' });
 
-      // Password verification required
-      const password = typeof data.password === 'string' ? data.password : '';
-      if (!password) return cb({ error: 'Password is required for this action' });
-
-      const adminUser = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(socket.user.id);
-      if (!adminUser) return cb({ error: 'Admin user not found' });
+      // Prevent concurrent transfer-admin race condition
+      if (transferAdminInProgress) return cb({ error: 'A transfer is already in progress' });
+      transferAdminInProgress = true;
 
       try {
-        const validPw = await bcrypt.compare(password, adminUser.password_hash);
-        if (!validPw) return cb({ error: 'Incorrect password' });
+      // Password verification required
+      const password = typeof data.password === 'string' ? data.password : '';
+      if (!password) { transferAdminInProgress = false; return cb({ error: 'Password is required for this action' }); }
+
+      const adminUser = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(socket.user.id);
+      if (!adminUser) { transferAdminInProgress = false; return cb({ error: 'Admin user not found' }); }
+
+      let validPw;
+      try {
+        validPw = await bcrypt.compare(password, adminUser.password_hash);
+        if (!validPw) { transferAdminInProgress = false; return cb({ error: 'Incorrect password' }); }
       } catch (err) {
         console.error('Password verification error:', err);
+        transferAdminInProgress = false;
         return cb({ error: 'Password verification failed' });
       }
+
+      // Re-verify admin status from DB AFTER the async bcrypt gap
+      const stillAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(socket.user.id);
+      if (!stillAdmin || !stillAdmin.is_admin) { transferAdminInProgress = false; return cb({ error: 'You are no longer an admin' }); }
 
       const userId = isInt(data.userId) ? data.userId : null;
       if (!userId) return cb({ error: 'Invalid user' });
@@ -4065,6 +4122,9 @@ function setupSocketHandlers(io, db) {
       } catch (err) {
         console.error('Transfer admin error:', err);
         cb({ error: 'Failed to transfer admin' });
+      }
+      } finally {
+        transferAdminInProgress = false;
       }
     });
 
@@ -4298,7 +4358,7 @@ function setupSocketHandlers(io, db) {
       if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can reorder channels');
 
       const order = data.order; // Array of { code, position }
-      if (!Array.isArray(order)) return;
+      if (!Array.isArray(order) || order.length > 500) return; // cap to prevent DoS
 
       try {
         const update = db.prepare('UPDATE channels SET position = ? WHERE code = ?');

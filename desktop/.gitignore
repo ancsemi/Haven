@@ -1,0 +1,17 @@
+# Build output
+dist/
+out/
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Bundled drivers (download separately — too large for git)
+audio-drivers/*.exe
+audio-drivers/*.msi
+
+# Electron builder cache
+.electron-builder-cache/

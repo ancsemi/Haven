@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100">
+  <!-- Haven logo: Hollow hexagon (point-up) with purple H -->
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9478ff"/>
+      <stop offset="100%" stop-color="#6b4fdb"/>
+    </linearGradient>
+  </defs>
+  <!-- Hollow hexagon outline -->
+  <polygon
+    points="50,5 92,29 92,71 50,95 8,71 8,29"
+    fill="none"
+    stroke="url(#g)"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+  <!-- Purple H -->
+  <text
+    x="50" y="63"
+    text-anchor="middle"
+    font-family="Arial,Helvetica,sans-serif"
+    font-weight="bold"
+    font-size="40"
+    fill="url(#g)"
+  >H</text>
+</svg>
