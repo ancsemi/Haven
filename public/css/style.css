@@ -6047,15 +6047,21 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
-  opacity: 0.4;
-  pointer-events: none;
   transition: opacity 0.15s;
 }
-.btn-danger.enabled {
+.btn-danger:hover {
+  filter: brightness(1.15);
+}
+/* E2E reset button: starts disabled until user types RESET */
+#e2e-reset-confirm-btn {
+  opacity: 0.4;
+  pointer-events: none;
+}
+#e2e-reset-confirm-btn.enabled {
   opacity: 1;
   pointer-events: auto;
 }
-.btn-danger.enabled:hover {
+#e2e-reset-confirm-btn.enabled:hover {
   filter: brightness(1.15);
 }
 
