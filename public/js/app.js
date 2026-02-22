@@ -823,6 +823,48 @@ class HavenApp {
       }
     });
 
+    this.socket.on('message-archived', (data) => {
+      if (data.channelCode === this.currentChannel) {
+        const msgEl = document.querySelector(`[data-msg-id="${data.messageId}"]`);
+        if (msgEl) {
+          msgEl.classList.add('archived');
+          msgEl.dataset.archived = '1';
+          const header = msgEl.querySelector('.message-header');
+          if (header && !header.querySelector('.archived-tag')) {
+            header.insertAdjacentHTML('beforeend', '<span class="archived-tag" title="Protected from cleanup">🛡️</span>');
+          }
+          // For compact messages, add tag to content
+          const content = msgEl.querySelector('.message-content');
+          if (msgEl.classList.contains('message-compact') && content && !content.querySelector('.archived-tag')) {
+            content.insertAdjacentHTML('afterbegin', '<span class="archived-tag" title="Protected from cleanup">🛡️</span>');
+          }
+          // Update toolbar: swap archive → unarchive
+          const archBtn = msgEl.querySelector('[data-action="archive"]');
+          if (archBtn) { archBtn.dataset.action = 'unarchive'; archBtn.title = 'Unprotect'; }
+        }
+        this._appendSystemMessage(`🛡️ ${data.archivedBy} protected a message from cleanup`);
+      }
+    });
+
+    this.socket.on('message-unarchived', (data) => {
+      if (data.channelCode === this.currentChannel) {
+        const msgEl = document.querySelector(`[data-msg-id="${data.messageId}"]`);
+        if (msgEl) {
+          msgEl.classList.remove('archived');
+          delete msgEl.dataset.archived;
+          const tag = msgEl.querySelector('.archived-tag');
+          if (tag) tag.remove();
+          // Also remove from compact message content
+          const contentTag = msgEl.querySelector('.message-content .archived-tag');
+          if (contentTag) contentTag.remove();
+          // Update toolbar: swap unarchive → archive
+          const unarchBtn = msgEl.querySelector('[data-action="unarchive"]');
+          if (unarchBtn) { unarchBtn.dataset.action = 'archive'; unarchBtn.title = 'Protect from cleanup'; }
+        }
+        this._appendSystemMessage('🛡️ A message was unprotected');
+      }
+    });
+
     // ── Admin moderation events ────────────────────────
     this.socket.on('kicked', (data) => {
       this._showToast(`You were kicked${data.reason ? ': ' + data.reason : ''}`, 'error');
@@ -1857,6 +1899,10 @@ class HavenApp {
         this.socket.emit('pin-message', { messageId: msgId });
       } else if (action === 'unpin') {
         this.socket.emit('unpin-message', { messageId: msgId });
+      } else if (action === 'archive') {
+        this.socket.emit('archive-message', { messageId: msgId });
+      } else if (action === 'unarchive') {
+        this.socket.emit('unarchive-message', { messageId: msgId });
       }
     });
 
@@ -1955,13 +2001,18 @@ class HavenApp {
       const { action, userId } = this.adminActionTarget;
       const reason = document.getElementById('admin-action-reason').value.trim();
       const duration = parseInt(document.getElementById('admin-action-duration').value) || 10;
+      const scrubMessages = document.getElementById('admin-scrub-checkbox').checked;
+      const scrubScope = document.getElementById('admin-scrub-scope').value;
 
       if (action === 'kick') {
-        this.socket.emit('kick-user', { userId, reason });
+        this.socket.emit('kick-user', { userId, reason, scrubMessages, scrubScope });
       } else if (action === 'ban') {
-        this.socket.emit('ban-user', { userId, reason });
+        this.socket.emit('ban-user', { userId, reason, scrubMessages });
       } else if (action === 'mute') {
         this.socket.emit('mute-user', { userId, reason, duration });
+      } else if (action === 'delete-user') {
+        if (!confirm(`Are you SURE you want to delete ${this.adminActionTarget.username}? This cannot be undone.`)) return;
+        this.socket.emit('delete-user', { userId, scrubMessages });
       }
 
       document.getElementById('admin-action-modal').style.display = 'none';
@@ -2057,6 +2108,64 @@ class HavenApp {
         hint.textContent = 'Network error';
         hint.classList.add('error');
       }
+    });
+
+    // ── Self-delete account ─────────────────────────────
+    document.getElementById('delete-account-btn').addEventListener('click', () => {
+      // Build a confirmation overlay dynamically
+      const existing = document.querySelector('.self-delete-overlay');
+      if (existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay self-delete-overlay';
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:380px">
+          <h3>⚠️ Delete Account</h3>
+          <p class="modal-desc">This will permanently delete your account. This cannot be undone.</p>
+          <div class="form-group compact">
+            <input type="password" id="self-delete-pw" placeholder="Enter your password" maxlength="128" autocomplete="current-password">
+          </div>
+          <label class="toggle-row" style="margin:8px 0">
+            <span>Delete all my messages</span>
+            <input type="checkbox" id="self-delete-scrub">
+          </label>
+          <small class="settings-hint" style="margin-bottom:8px;display:block">If unchecked, your messages will show as "[Deleted User]" instead.</small>
+          <small class="settings-hint self-delete-status" style="display:block;margin-bottom:8px"></small>
+          <div class="modal-actions">
+            <button class="btn-sm self-delete-cancel">Cancel</button>
+            <button class="btn-sm btn-danger-fill self-delete-confirm">Delete My Account</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      overlay.querySelector('.self-delete-cancel').addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+      overlay.querySelector('.self-delete-confirm').addEventListener('click', () => {
+        const pw = document.getElementById('self-delete-pw').value;
+        const scrub = document.getElementById('self-delete-scrub').checked;
+        const status = overlay.querySelector('.self-delete-status');
+
+        if (!pw) { status.textContent = 'Password is required'; return; }
+        if (!confirm('Are you ABSOLUTELY sure? Your account will be gone forever.')) return;
+
+        status.textContent = 'Deleting...';
+        overlay.querySelector('.self-delete-confirm').disabled = true;
+
+        this.socket.emit('self-delete-account', { password: pw, scrubMessages: scrub }, (res) => {
+          if (res && res.error) {
+            status.textContent = res.error;
+            overlay.querySelector('.self-delete-confirm').disabled = false;
+            return;
+          }
+          // Account deleted — clear local storage and redirect to login
+          localStorage.removeItem('haven_token');
+          localStorage.removeItem('haven_e2e_privkey');
+          window.location.reload();
+        });
+      });
     });
 
     // Member visibility select (admin) — saved via admin Save button
@@ -5989,16 +6098,23 @@ class HavenApp {
     const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
     const editedHtml = msg.edited_at ? `<span class="edited-tag" title="Edited at ${new Date(msg.edited_at).toLocaleString()}">(edited)</span>` : '';
     const pinnedTag = msg.pinned ? '<span class="pinned-tag" title="Pinned message">📌</span>' : '';
+    const archivedTag = msg.is_archived ? '<span class="archived-tag" title="Protected from cleanup">🛡️</span>' : '';
     const e2eTag = msg._e2e ? '<span class="e2e-tag" title="End-to-end encrypted">🔒</span>' : '';
 
     // Build toolbar with context-aware buttons
     let toolbarBtns = `<button data-action="react" title="React">😀</button><button data-action="reply" title="Reply">↩️</button>`;
     const canPin = this.user.isAdmin || this._canModerate();
+    const canArchive = this.user.isAdmin || this._hasPerm('archive_messages');
     const canDelete = msg.user_id === this.user.id || this.user.isAdmin || this._canModerate();
     if (canPin) {
       toolbarBtns += msg.pinned
         ? `<button data-action="unpin" title="Unpin">📌</button>`
         : `<button data-action="pin" title="Pin">📌</button>`;
+    }
+    if (canArchive) {
+      toolbarBtns += msg.is_archived
+        ? `<button data-action="unarchive" title="Unprotect">🛡️</button>`
+        : `<button data-action="archive" title="Protect from cleanup">🛡️</button>`;
     }
     if (msg.user_id === this.user.id) {
       toolbarBtns += `<button data-action="edit" title="Edit">✏️</button>`;
@@ -6011,17 +6127,18 @@ class HavenApp {
 
     if (isCompact) {
       const el = document.createElement('div');
-      el.className = 'message-compact' + (msg.pinned ? ' pinned' : '');
+      el.className = 'message-compact' + (msg.pinned ? ' pinned' : '') + (msg.is_archived ? ' archived' : '');
       el.dataset.userId = msg.user_id;
       el.dataset.username = msg.username;
       el.dataset.time = msg.created_at;
       el.dataset.msgId = msg.id;
       if (msg.pinned) el.dataset.pinned = '1';
+      if (msg.is_archived) el.dataset.archived = '1';
       if (msg._e2e) el.dataset.e2e = '1';
       el.innerHTML = `
         <span class="compact-time">${new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
         <div class="message-body">
-          <div class="message-content">${pinnedTag}${this._formatContent(msg.content)}${editedHtml}</div>
+          <div class="message-content">${pinnedTag}${archivedTag}${this._formatContent(msg.content)}${editedHtml}</div>
           ${reactionsHtml}
         </div>
         ${e2eTag}
@@ -6063,11 +6180,12 @@ class HavenApp {
       : msg.is_webhook ? '<span class="bot-badge">BOT</span>' : '';
 
     const el = document.createElement('div');
-    el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '') + (msg.is_webhook ? ' webhook-message' : '') + (msg.imported_from ? ' imported-message' : '');
+    el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '') + (msg.is_archived ? ' archived' : '') + (msg.is_webhook ? ' webhook-message' : '') + (msg.imported_from ? ' imported-message' : '');
     el.dataset.userId = msg.user_id;
     el.dataset.time = msg.created_at;
     el.dataset.msgId = msg.id;
     if (msg.pinned) el.dataset.pinned = '1';
+    if (msg.is_archived) el.dataset.archived = '1';
     if (msg._e2e) el.dataset.e2e = '1';
     el.innerHTML = `
       ${replyHtml}
@@ -6080,6 +6198,7 @@ class HavenApp {
             ${msgRoleBadge}
             <span class="message-time">${this._formatTime(msg.created_at)}</span>
             ${pinnedTag}
+            ${archivedTag}
             <span class="message-header-spacer"></span>
             ${e2eTag}
           </div>
@@ -6389,6 +6508,7 @@ class HavenApp {
     if (canMod) items += `<button class="gear-menu-item" data-action="kick">👢 Kick</button>`;
     if (canMod) items += `<button class="gear-menu-item" data-action="mute">🔇 Mute</button>`;
     if (isAdmin) items += `<button class="gear-menu-item gear-menu-danger" data-action="ban">⛔ Ban</button>`;
+    if (isAdmin) items += `<button class="gear-menu-item gear-menu-danger" data-action="delete-user">🗑️ Delete User</button>`;
     if (isAdmin) items += `<div class="gear-menu-divider"></div><button class="gear-menu-item gear-menu-danger" data-action="transfer-admin">🔑 Transfer Admin</button>`;
 
     const menu = document.createElement('div');
@@ -9742,21 +9862,40 @@ class HavenApp {
     const title = document.getElementById('admin-action-title');
     const desc = document.getElementById('admin-action-desc');
     const durationGroup = document.getElementById('admin-duration-group');
+    const scrubGroup = document.getElementById('admin-scrub-group');
+    const scrubCheckbox = document.getElementById('admin-scrub-checkbox');
+    const scrubScopeRow = document.getElementById('admin-scrub-scope-row');
     const confirmBtn = document.getElementById('confirm-admin-action-btn');
 
-    const labels = { kick: 'Kick', ban: 'Ban', mute: 'Mute' };
-    title.textContent = `${labels[action]} — ${username}`;
+    const labels = { kick: 'Kick', ban: 'Ban', mute: 'Mute', 'delete-user': 'Delete User' };
+    title.textContent = `${labels[action] || action} — ${username}`;
     desc.textContent = action === 'ban'
       ? 'This user will be permanently banned until unbanned.'
       : action === 'mute'
         ? 'This user won\'t be able to send messages for the specified duration.'
-        : 'This user will be removed from the current channel.';
+        : action === 'delete-user'
+          ? 'This will permanently delete this user\'s account and free their username.'
+          : 'This user will be removed from the current channel.';
 
     durationGroup.style.display = action === 'mute' ? 'block' : 'none';
-    confirmBtn.textContent = labels[action];
+
+    // Show scrub option for kick, ban, and delete-user
+    const hasScrub = ['kick', 'ban', 'delete-user'].includes(action);
+    scrubGroup.style.display = hasScrub ? 'block' : 'none';
+    scrubCheckbox.checked = false;
+    // Kick gets scope dropdown (channel vs server), ban/delete are server-wide only
+    scrubScopeRow.style.display = 'none';
+    if (action === 'kick') {
+      scrubCheckbox.onchange = () => { scrubScopeRow.style.display = scrubCheckbox.checked ? 'block' : 'none'; };
+    } else {
+      scrubCheckbox.onchange = null;
+    }
+
+    confirmBtn.textContent = labels[action] || 'Confirm';
 
     document.getElementById('admin-action-reason').value = '';
     document.getElementById('admin-action-duration').value = '10';
+    document.getElementById('admin-scrub-scope').value = 'channel';
     modal.style.display = 'flex';
   }
 
@@ -11725,7 +11864,7 @@ class HavenApp {
 
     const allPerms = [
       'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
-      'pin_message', 'kick_user', 'mute_user', 'ban_user',
+      'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
       'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
       'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
       'promote_user', 'transfer_admin'
@@ -11733,7 +11872,8 @@ class HavenApp {
     const permLabels = {
       edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
       delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
-      pin_message: 'Pin Messages', kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
+      pin_message: 'Pin Messages', archive_messages: 'Protect Messages',
+      kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
       rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
       set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
       upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
@@ -12018,7 +12158,7 @@ class HavenApp {
 
     const allPerms = [
       'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
-      'pin_message', 'kick_user', 'mute_user', 'ban_user',
+      'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
       'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
       'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
       'promote_user', 'transfer_admin'
@@ -12026,7 +12166,8 @@ class HavenApp {
     const permLabels = {
       edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
       delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
-      pin_message: 'Pin Messages', kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
+      pin_message: 'Pin Messages', archive_messages: 'Protect Messages',
+      kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
       rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
       set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
       upload_files: 'Upload Files', use_voice: 'Use Voice Chat',

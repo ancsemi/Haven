@@ -526,6 +526,13 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN webhook_avatar TEXT DEFAULT NULL");
   }
 
+  // ── Migration: archived / protected messages ────────────
+  try {
+    db.prepare("SELECT is_archived FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN is_archived INTEGER DEFAULT 0");
+  }
+
   return db;
 }
 

@@ -981,7 +981,7 @@ function setupSocketHandlers(io, db) {
       let messages;
       if (before) {
         messages = db.prepare(`
-          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from,
+          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
                  COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ? AND m.id < ?
@@ -989,7 +989,7 @@ function setupSocketHandlers(io, db) {
         `).all(channel.id, before, limit);
       } else {
         messages = db.prepare(`
-          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from,
+          SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
                  COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
           FROM messages m LEFT JOIN users u ON m.user_id = u.id
           WHERE m.channel_id = ?
@@ -1041,6 +1041,7 @@ function setupSocketHandlers(io, db) {
         obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
         obj.reactions = reactionMap.get(m.id) || [];
         obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
+        obj.is_archived = !!m.is_archived;
         // Flag webhook messages so the client renders a BOT badge
         if (m.is_webhook) {
           obj.is_webhook = true;
@@ -2168,6 +2169,75 @@ function setupSocketHandlers(io, db) {
       });
     });
 
+    // ═══════════════ ARCHIVE / PROTECT MESSAGE ══════════════
+
+    socket.on('archive-message', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isInt(data.messageId)) return;
+
+      const archCode = socket.currentChannel;
+      const archCh = archCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(archCode) : null;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', archCh ? archCh.id : null)) {
+        return socket.emit('error-msg', 'You don\'t have permission to archive messages');
+      }
+
+      const code = socket.currentChannel;
+      if (!code) return;
+
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      if (!channel) return;
+
+      const msg = db.prepare('SELECT id, is_archived FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+      if (!msg) return socket.emit('error-msg', 'Message not found');
+      if (msg.is_archived) return socket.emit('error-msg', 'Message is already archived');
+
+      try {
+        db.prepare('UPDATE messages SET is_archived = 1 WHERE id = ?').run(data.messageId);
+      } catch (err) {
+        console.error('Archive message error:', err);
+        return socket.emit('error-msg', 'Failed to archive message');
+      }
+
+      io.to(`channel:${code}`).emit('message-archived', {
+        channelCode: code,
+        messageId: data.messageId,
+        archivedBy: socket.user.displayName
+      });
+    });
+
+    socket.on('unarchive-message', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isInt(data.messageId)) return;
+
+      const unarchCode = socket.currentChannel;
+      const unarchCh = unarchCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unarchCode) : null;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', unarchCh ? unarchCh.id : null)) {
+        return socket.emit('error-msg', 'You don\'t have permission to unarchive messages');
+      }
+
+      const code = socket.currentChannel;
+      if (!code) return;
+
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+      if (!channel) return;
+
+      const msg = db.prepare('SELECT id, is_archived FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+      if (!msg) return socket.emit('error-msg', 'Message not found');
+      if (!msg.is_archived) return socket.emit('error-msg', 'Message is not archived');
+
+      try {
+        db.prepare('UPDATE messages SET is_archived = 0 WHERE id = ?').run(data.messageId);
+      } catch (err) {
+        console.error('Unarchive message error:', err);
+        return socket.emit('error-msg', 'Failed to unarchive message');
+      }
+
+      io.to(`channel:${code}`).emit('message-unarchived', {
+        channelCode: code,
+        messageId: data.messageId
+      });
+    });
+
     socket.on('get-pinned-messages', (data) => {
       if (!data || typeof data !== 'object') return;
       const code = typeof data.code === 'string' ? data.code.trim() : '';
@@ -2253,6 +2323,18 @@ function setupSocketHandlers(io, db) {
         }
       });
 
+      // Scrub messages if requested (skip archived messages)
+      if (data.scrubMessages) {
+        const scrubScope = data.scrubScope === 'server' ? 'server' : 'channel';
+        if (scrubScope === 'channel' && kickCh) {
+          db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE channel_id = ? AND is_archived = 0)').run(data.userId, kickCh.id);
+          db.prepare('DELETE FROM messages WHERE user_id = ? AND channel_id = ? AND is_archived = 0').run(data.userId, kickCh.id);
+        } else if (scrubScope === 'server') {
+          db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(data.userId, data.userId);
+          db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(data.userId);
+        }
+      }
+
       socket.emit('error-msg', `Kicked ${targetInfo.username}`);
     });
 
@@ -2294,6 +2376,12 @@ function setupSocketHandlers(io, db) {
       // Re-emit online users for all channels to remove banned user from lists
       for (const [code] of channelUsers) {
         emitOnlineUsers(code);
+      }
+
+      // Scrub messages server-wide if requested (skip archived messages)
+      if (data.scrubMessages) {
+        db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(data.userId, data.userId);
+        db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(data.userId);
       }
 
       socket.emit('error-msg', `Banned ${targetUser.username}`);
@@ -2369,8 +2457,16 @@ function setupSocketHandlers(io, db) {
         db.prepare('DELETE FROM high_scores WHERE user_id = ?').run(uid);
         db.prepare('DELETE FROM eula_acceptances WHERE user_id = ?').run(uid);
         db.prepare('DELETE FROM user_preferences WHERE user_id = ?').run(uid);
-        // Mark their messages as [deleted user] instead of deleting (preserves chat history)
-        db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
+        if (data.scrubMessages) {
+          // Actually delete messages (skip archived/protected ones)
+          db.prepare('DELETE FROM pinned_messages WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(uid);
+          db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(uid);
+          // Any remaining archived messages get nullified so they stay as [Deleted User]
+          db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
+        } else {
+          // Mark their messages as [deleted user] instead of deleting (preserves chat history)
+          db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
+        }
         db.prepare('DELETE FROM users WHERE id = ?').run(uid);
       });
 
@@ -2392,6 +2488,104 @@ function setupSocketHandlers(io, db) {
       socket.emit('ban-list', bans);
 
       console.log(`🗑️  Admin deleted user "${targetUser.username}" (id: ${data.userId})`);
+    });
+
+    // ═══════════════ SELF-DELETE ACCOUNT ═════════════════════
+
+    socket.on('self-delete-account', async (data, callback) => {
+      if (!data || typeof data !== 'object') return;
+      const cb = typeof callback === 'function' ? callback : () => {};
+      const uid = socket.user.id;
+
+      // Admins can't self-delete (must transfer first)
+      if (socket.user.isAdmin) {
+        return cb({ error: 'Admins must transfer admin to another user before deleting their account' });
+      }
+
+      // Password verification
+      const password = typeof data.password === 'string' ? data.password : '';
+      if (!password) return cb({ error: 'Password is required' });
+
+      const userRow = db.prepare('SELECT password_hash, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(uid);
+      if (!userRow) return cb({ error: 'User not found' });
+
+      let validPw;
+      try {
+        validPw = await bcrypt.compare(password, userRow.password_hash);
+        if (!validPw) return cb({ error: 'Incorrect password' });
+      } catch (err) {
+        console.error('Self-delete password verification error:', err);
+        return cb({ error: 'Password verification failed' });
+      }
+
+      const scrubMessages = !!data.scrubMessages;
+
+      // Remove from online/voice tracking
+      for (const [code, users] of channelUsers) {
+        if (users.has(uid)) {
+          users.delete(uid);
+          emitOnlineUsers(code);
+        }
+      }
+      for (const [code, users] of voiceUsers) {
+        if (users.has(uid)) {
+          users.delete(uid);
+          broadcastVoiceUsers(code);
+        }
+      }
+
+      // Purge user data
+      const purge = db.transaction(() => {
+        db.prepare('DELETE FROM reactions WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM mutes WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM bans WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM high_scores WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM eula_acceptances WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM user_preferences WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM fcm_tokens WHERE user_id = ?').run(uid);
+
+        if (scrubMessages) {
+          // Delete all non-archived messages
+          db.prepare('DELETE FROM pinned_messages WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(uid);
+          db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(uid);
+          // Nullify remaining archived messages
+          db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
+
+          // Clean up DM channels that are now empty
+          const dmChannels = db.prepare(`
+            SELECT c.id, c.code FROM channels c
+            JOIN channel_members cm ON c.id = cm.channel_id
+            WHERE c.is_dm = 1 AND cm.user_id = ?
+          `).all(uid);
+          for (const dm of dmChannels) {
+            const remaining = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE channel_id = ?').get(dm.id);
+            if (remaining.cnt === 0) {
+              db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(dm.id);
+              db.prepare('DELETE FROM read_positions WHERE channel_id = ?').run(dm.id);
+              db.prepare('DELETE FROM channels WHERE id = ?').run(dm.id);
+            }
+          }
+        } else {
+          // Preserve messages as [Deleted User]
+          db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
+        }
+
+        db.prepare('DELETE FROM channel_members WHERE user_id = ?').run(uid);
+        db.prepare('DELETE FROM users WHERE id = ?').run(uid);
+      });
+
+      try {
+        purge();
+      } catch (err) {
+        console.error('Self-delete error:', err);
+        return cb({ error: 'Failed to delete account' });
+      }
+
+      console.log(`🗑️  User self-deleted: "${userRow.username}" (id: ${uid}, scrub: ${scrubMessages})`);
+      cb({ success: true });
+      socket.disconnect(true);
     });
 
     // ═══════════════ ADMIN: MUTE USER ═══════════════════════

@@ -103,6 +103,14 @@ if not exist "%HAVEN_DATA%\.env" (
     echo.
 )
 
+:: Detect local IP for SSL certificate SAN (Subject Alternative Name)
+set "LOCAL_IP=127.0.0.1"
+for /f "tokens=2 delims=:" %%A in ('ipconfig ^| findstr /R /C:"IPv4 Address"') do (
+    for /f "tokens=*" %%B in ("%%A") do (
+        if not "%%B"=="" set "LOCAL_IP=%%B"
+    )
+)
+
 :: Generate self-signed SSL certs in data directory if missing (skip if FORCE_HTTP=true)
 if /I "%FORCE_HTTP%"=="true" (
     echo  [*] FORCE_HTTP=true -- skipping SSL certificate generation
@@ -139,7 +147,8 @@ if /I "%FORCE_HTTP%"=="true" (
         echo      To enable HTTPS, install OpenSSL or add it to your PATH.
         echo      Common install location: C:\Program Files\OpenSSL-Win64\bin
     ) else (
-        "%OPENSSL_CMD%" req -x509 -newkey rsa:2048 -keyout "%HAVEN_DATA%\certs\key.pem" -out "%HAVEN_DATA%\certs\cert.pem" -days 3650 -nodes -subj "/CN=Haven" 2>nul
+        :: SAN (Subject Alternative Name) is required by modern browsers for HTTPS
+        "%OPENSSL_CMD%" req -x509 -newkey rsa:2048 -keyout "%HAVEN_DATA%\certs\key.pem" -out "%HAVEN_DATA%\certs\cert.pem" -days 3650 -nodes -subj "/CN=Haven" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:%LOCAL_IP%" 2>nul
         if exist "%HAVEN_DATA%\certs\cert.pem" (
             echo  [OK] SSL certificate generated in %HAVEN_DATA%\certs
         ) else (

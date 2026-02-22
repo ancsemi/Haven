@@ -1788,31 +1788,31 @@ function runAutoCleanup() {
     const maxSizeMb = parseInt(getSetting('cleanup_max_size_mb') || '0');
     let totalDeleted = 0;
 
-    // 1. Delete messages older than N days
+    // 1. Delete messages older than N days (skip archived/protected messages)
     if (maxAgeDays > 0) {
       // Delete reactions for old messages first
       db.prepare(`
         DELETE FROM reactions WHERE message_id IN (
-          SELECT id FROM messages WHERE created_at < datetime('now', ?)
+          SELECT id FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0
         )
       `).run(`-${maxAgeDays} days`);
       const result = db.prepare(
-        "DELETE FROM messages WHERE created_at < datetime('now', ?)"
+        "DELETE FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0"
       ).run(`-${maxAgeDays} days`);
       totalDeleted += result.changes;
     }
 
-    // 2. If total DB size exceeds maxSizeMb, trim oldest messages
+    // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip archived)
     if (maxSizeMb > 0) {
       const dbPath = DB_PATH;
       const stats = require('fs').statSync(dbPath);
       const sizeMb = stats.size / (1024 * 1024);
       if (sizeMb > maxSizeMb) {
-        // Delete oldest 10% of messages to bring size down
-        const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages').get().cnt;
+        // Delete oldest 10% of non-archived messages to bring size down
+        const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE is_archived = 0').get().cnt;
         const deleteCount = Math.max(Math.floor(totalCount * 0.1), 100);
         const oldestIds = db.prepare(
-          'SELECT id FROM messages ORDER BY created_at ASC LIMIT ?'
+          'SELECT id FROM messages WHERE is_archived = 0 ORDER BY created_at ASC LIMIT ?'
         ).all(deleteCount).map(r => r.id);
         if (oldestIds.length > 0) {
           const placeholders = oldestIds.map(() => '?').join(',');

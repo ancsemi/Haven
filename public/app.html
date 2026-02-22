@@ -747,7 +747,7 @@
     </div>
   </div>
 
-  <!-- Admin Action Modal (Kick/Ban/Mute) -->
+  <!-- Admin Action Modal (Kick/Ban/Mute/Delete) -->
   <div class="modal-overlay" id="admin-action-modal" style="display:none">
     <div class="modal">
       <h3 id="admin-action-title">Moderate User</h3>
@@ -759,6 +759,20 @@
       <div class="form-group" id="admin-duration-group" style="display:none">
         <label>Duration (minutes)</label>
         <input type="number" id="admin-action-duration" value="10" min="1" max="43200" step="1">
+      </div>
+      <div class="form-group" id="admin-scrub-group" style="display:none">
+        <label class="toggle-row">
+          <span>Scrub messages</span>
+          <input type="checkbox" id="admin-scrub-checkbox">
+        </label>
+        <div id="admin-scrub-scope-row" style="display:none;margin-top:6px;">
+          <label>Scope</label>
+          <select id="admin-scrub-scope" class="settings-select" style="width:100%;margin-top:4px;">
+            <option value="channel">This channel only</option>
+            <option value="server">Server-wide</option>
+          </select>
+        </div>
+        <small class="settings-hint">Removes the user's messages (archived/protected messages are preserved)</small>
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-admin-action-btn">Cancel</button>
@@ -782,6 +796,7 @@
           <div class="settings-nav-item" data-target="section-sounds">🔔 Sounds</div>
           <div class="settings-nav-item" data-target="section-push">📲 Push</div>
           <div class="settings-nav-item" data-target="section-password">🔒 Password</div>
+          <div class="settings-nav-item" data-target="section-delete-account">⚠️ Account</div>
           <div class="settings-nav-group settings-nav-admin" style="display:none">Admin</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 Branding</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-members" style="display:none">👥 Members</div>
@@ -930,6 +945,13 @@
           <button class="btn-sm btn-full" id="change-password-btn">Change Password</button>
           <small class="settings-hint" id="password-status"></small>
         </div>
+      </div>
+
+      <!-- Delete Account Section -->
+      <div class="settings-section" id="section-delete-account">
+        <h5 class="settings-section-title">⚠️ Delete Account</h5>
+        <p class="settings-hint" style="margin-bottom:8px;">Permanently delete your account. This cannot be undone.</p>
+        <button class="btn-sm btn-danger-fill" id="delete-account-btn">Delete My Account</button>
       </div>
 
       <!-- Admin Section (hidden for non-admins) -->
