@@ -26,6 +26,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Font size inconsistency between messages** — compact (continuation) messages were intentionally assigned a slightly smaller font-size in per-density overrides, making them visually smaller than the first message in a group. The compact-specific overrides are removed so all messages share the same font size.
 - **Compact message timestamp overlaps text on mobile** — the inline timestamp shown on continuation messages was triggering via `:hover` on touch devices, overlapping the message content. It is now hidden with `display: none !important` on touch devices.
 
+### Donors
+- Added **john doe** to the one-time donors list — thank you!
+
 ---
 
 ## [2.5.5] — 2026-03-03
