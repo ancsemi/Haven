@@ -294,6 +294,12 @@
             <span class="desktop-app-text">Get the Desktop App</span>
             <button class="desktop-app-dismiss" id="desktop-app-dismiss" title="Dismiss">&times;</button>
           </a>
+          <!-- Android beta banner -->
+          <button id="android-beta-banner" class="android-beta-banner" style="display:none">
+            <span class="android-beta-icon">📱</span>
+            <span class="android-beta-text">Android Beta</span>
+            <button class="android-beta-dismiss" id="android-beta-dismiss" title="Dismiss">&times;</button>
+          </button>
           <!-- Spacer pushes voice controls to the right -->
           <div style="flex:1"></div>
           <!-- Right-side: dynamic indicators, then voice (always furthest right) -->
@@ -2109,6 +2115,33 @@
   </div>
 
   <!-- Desktop App Promo Popup -->
+  <!-- Android Beta Sign-Up Modal -->
+  <div class="modal-overlay" id="android-beta-modal" style="display:none">
+    <div class="modal android-beta-promo">
+      <div class="android-beta-promo-icon">📱</div>
+      <h3 class="android-beta-promo-title">Haven Android App <span class="android-beta-promo-badge">CLOSED BETA</span></h3>
+      <p class="android-beta-promo-subtitle">A native Android app for Haven, built from the ground up!</p>
+      <ul class="android-beta-promo-features">
+        <li><span class="promo-check">✓</span> Native Android experience</li>
+        <li><span class="promo-check">✓</span> Push notifications</li>
+        <li><span class="promo-check">✓</span> Full chat &amp; voice support</li>
+        <li><span class="promo-check">✓</span> Built from the ground up for Haven</li>
+      </ul>
+      <p class="android-beta-promo-note">Enter your email to request access to the closed beta via Google Play.</p>
+      <div class="android-beta-form">
+        <input type="email" id="android-beta-email" class="android-beta-email-input" placeholder="your@email.com" maxlength="120" autocomplete="email">
+        <button id="android-beta-submit" class="btn btn-accent android-beta-submit">🚀 Sign Up for Beta</button>
+      </div>
+      <p class="android-beta-promo-credit">Built with ❤️ by <strong>Amnibro</strong> — thank you for your incredible work on the Haven Android app!</p>
+      <div class="android-beta-promo-actions">
+        <button id="android-beta-later" class="btn android-beta-promo-later">Maybe later</button>
+      </div>
+      <label class="android-beta-promo-dismiss-label">
+        <input type="checkbox" id="android-beta-dismiss-check"> Don't show this again
+      </label>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="desktop-promo-modal" style="display:none">
     <div class="modal desktop-promo">
       <div class="desktop-promo-icon">🖥️</div>

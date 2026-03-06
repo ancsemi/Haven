@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.6.0] — 2026-03-06
+
+### Added
+- **Haven Android beta sign-up** — a new green "Android Beta" pill button in the top bar (alongside the existing desktop app banner) opens a sign-up popup where users can enter their email to request access to the Haven Android closed beta on Google Play. Clicking "Sign Up for Beta" opens the user's email client with a pre-filled message to the developer. The popup also appears automatically for first-time visitors (after the desktop promo, if applicable), and can be permanently dismissed.
+- **Android beta on the website** — the [Haven website](https://ancsemi.github.io/Haven/) now features a dedicated Android banner section with email sign-up, plus a download card in the download section.
+- **Android beta in the README** — the repo README now includes a full Android beta section with sign-up link and feature highlights.
+
+### Donors
+- Added **Amnibro** to the sponsors list — a huge thank you for building the Haven Android app from the ground up. Incredible work.
+
+---
+
 ## [2.5.8] — 2026-03-06
 
 ### Added

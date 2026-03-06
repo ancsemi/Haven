@@ -3307,6 +3307,197 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   color: #fff;
 }
 
+/* ── Android Beta Banner ── */
+.android-beta-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #3ddc84, #2bb55e);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+  border: none;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  animation: updateFadeIn 0.4s ease;
+  transition: transform 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.android-beta-banner:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 12px rgba(61, 220, 132, 0.4);
+  color: #fff;
+}
+.android-beta-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.android-beta-text {
+  pointer-events: none;
+}
+.android-beta-dismiss {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.android-beta-dismiss:hover {
+  color: #fff;
+}
+
+/* ── Android Beta Promo Popup ── */
+.android-beta-promo {
+  max-width: 460px;
+  text-align: center;
+  padding: 36px 32px 28px;
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  animation: desktopPromoIn 0.35s ease;
+}
+.android-beta-promo-icon {
+  font-size: 48px;
+  width: 80px;
+  height: 80px;
+  line-height: 80px;
+  margin: 0 auto 16px;
+  background: linear-gradient(135deg, #3ddc84, #2bb55e);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.android-beta-promo-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.android-beta-promo-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: linear-gradient(135deg, #3ddc84, #2bb55e);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.android-beta-promo-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+}
+.android-beta-promo-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  text-align: left;
+  display: inline-block;
+}
+.android-beta-promo-features li {
+  font-size: 14px;
+  color: var(--text-primary);
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.android-beta-promo-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+}
+.android-beta-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.android-beta-email-input {
+  width: 100%;
+  max-width: 320px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.android-beta-email-input:focus {
+  border-color: #3ddc84;
+  box-shadow: 0 0 0 2px rgba(61, 220, 132, 0.2);
+}
+.android-beta-submit {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3ddc84, #2bb55e);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+.android-beta-submit:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 16px rgba(61, 220, 132, 0.3);
+}
+.android-beta-promo-credit {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  font-style: italic;
+}
+.android-beta-promo-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.android-beta-promo-later {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.android-beta-promo-later:hover {
+  background: var(--bg-tertiary);
+}
+.android-beta-promo-dismiss-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.android-beta-promo-dismiss-label input[type="checkbox"] {
+  accent-color: #3ddc84;
+  cursor: pointer;
+}
+
 /* ── Desktop App Promo Popup ── */
 .desktop-promo {
   max-width: 440px;

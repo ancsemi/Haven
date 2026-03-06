@@ -267,6 +267,89 @@
       vertical-align: middle;
       letter-spacing: 0.08em;
     }
+    .closed-beta-badge-inline {
+      display: inline-block;
+      background: rgba(61, 220, 132, 0.15);
+      color: #3ddc84;
+      font-size: 0.55em;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(61, 220, 132, 0.4);
+      vertical-align: middle;
+      letter-spacing: 0.08em;
+    }
+    /* Android banner */
+    .android-banner {
+      background: linear-gradient(135deg, #3ddc84 0%, #2bb55e 50%, #82aaff 100%);
+      padding: 2px;
+      position: relative;
+    }
+    .android-banner-inner {
+      background: var(--bg-deep);
+      padding: 64px 24px;
+      text-align: center;
+    }
+    .android-banner h2 {
+      color: #fff;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      margin-bottom: 16px;
+    }
+    .android-banner .android-accent { color: #3ddc84; }
+    .android-banner p {
+      color: var(--text-muted);
+      font-size: 1.15rem;
+      max-width: 700px;
+      margin: 0 auto 32px;
+      line-height: 1.7;
+    }
+    .android-beta-email-form {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .android-beta-email-form input[type="email"] {
+      padding: 12px 18px;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-light);
+      background: var(--bg-card);
+      color: var(--text);
+      width: 100%;
+      max-width: 360px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .android-beta-email-form input[type="email"]:focus {
+      border-color: #3ddc84;
+      box-shadow: 0 0 0 2px rgba(61, 220, 132, 0.2);
+    }
+    .android-beta-email-form .btn-android {
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #3ddc84, #2bb55e);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.15s;
+    }
+    .android-beta-email-form .btn-android:hover {
+      transform: scale(1.03);
+      box-shadow: 0 4px 20px rgba(61, 220, 132, 0.35);
+    }
+    .android-credit {
+      margin-top: 20px;
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    @media (max-width: 768px) {
+      .android-banner-inner { padding: 40px 16px; }
+    }
     @media (max-width: 768px) {
       .desktop-banner-inner { padding: 40px 16px; }
     }
@@ -718,6 +801,7 @@
         <li><a href="#compare">Compare</a></li>
         <li><a href="#download">Download</a></li>
         <li><a href="#desktop">Desktop App</a></li>
+        <li><a href="#android">Android App</a></li>
         <li><a href="#support">Support</a></li>
         <li><a href="https://github.com/ancsemi/Haven" target="_blank" class="nav-cta">GitHub</a></li>
       </ul>
@@ -810,13 +894,13 @@
           <span class="discord-feat">🖥️ Windows &amp; Linux</span>
         </div>
         <div style="margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.0.8/Haven-Setup-1.0.8.exe" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
+          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.1.0/Haven-Setup-1.1.0.exe" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
             <span class="icon">⬇</span> Windows Installer
           </a>
-          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.0.8/Haven-1.0.8.AppImage" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
+          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.1.0/Haven-1.1.0.AppImage" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
             <span class="icon">⬇</span> Linux AppImage
           </a>
-          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.0.8/haven-desktop_1.0.8_amd64.deb" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
+          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.1.0/haven-desktop_1.1.0_amd64.deb" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
             <span class="icon">⬇</span> Linux .deb
           </a>
         </div>
@@ -828,6 +912,46 @@
         <p style="margin-top: 16px; font-size: 0.85rem; color: var(--text-dim);">
           ⚠️ Beta release &mdash; feedback &amp; bug reports are greatly appreciated. <strong>Requires a <a href="https://github.com/ancsemi/Haven" style="color: var(--accent-bright);">Haven server</a></strong> to connect to.
         </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ANDROID APP BANNER ===== -->
+  <section class="android-banner fade-in" id="android">
+    <div class="android-banner-inner">
+      <div class="container">
+        <h2>📱 NEW &mdash; <span class="android-accent">Haven Android</span> <span class="closed-beta-badge-inline">CLOSED BETA</span></h2>
+        <p>
+          A native Android app for Haven, built from the ground up. Full chat and voice support,
+          push notifications, and a true mobile-native experience &mdash; now in closed beta on Google Play.
+        </p>
+        <div class="discord-features">
+          <span class="discord-feat">📱 Native Android</span>
+          <span class="discord-feat">🔔 Push Notifications</span>
+          <span class="discord-feat">💬 Full Chat Support</span>
+          <span class="discord-feat">🎙️ Voice Chat</span>
+          <span class="discord-feat">🚀 Built for Haven</span>
+        </div>
+        <div class="android-beta-email-form">
+          <p style="font-size: 0.95rem; color: var(--text-muted); margin: 0;">Enter your email to request access to the closed beta:</p>
+          <input type="email" id="website-android-beta-email" placeholder="your@email.com" maxlength="120">
+          <button class="btn-android" onclick="(function(){
+            var e=document.getElementById('website-android-beta-email');
+            var v=e.value.trim();
+            if(!v||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){e.style.borderColor='#f04747';e.focus();return;}
+            var s=encodeURIComponent('Haven Android Beta - Opt-in Request');
+            var b=encodeURIComponent('Hi Amnibro,\n\nI\'d like to opt-in to the Haven Android closed beta on Google Play.\n\nMy email: '+v+'\n\nThanks!');
+            window.open('mailto:amnibro7@gmail.com?subject='+s+'&body='+b,'_blank');
+            e.value='';e.style.borderColor='';
+            alert('Your email client should open with a pre-filled message. Just hit Send!');
+          })()">🚀 Sign Up for Beta</button>
+        </div>
+        <p class="android-credit">Built with ❤️ by <strong>Amnibro</strong> &mdash; thank you for your incredible work building the Haven Android app from the ground up.</p>
+        <div style="margin-top: 16px;">
+          <a href="https://github.com/ancsemi/Haven-Android" target="_blank" class="btn btn-secondary" style="padding: 10px 24px; font-size: 0.95rem;">
+            <span class="icon">&#9965;</span> View on GitHub
+          </a>
+        </div>
       </div>
     </div>
   </section>
@@ -1246,12 +1370,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>⬡ Haven Server &mdash; v2.5.8</h2>
+        <h2>⬡ Haven Server &mdash; v2.6.0</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.5.8.zip" class="btn btn-primary download-main">
-            <span class="icon">⬇</span> Download v2.5.8 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.6.0.zip" class="btn btn-primary download-main">
+            <span class="icon">⬇</span> Download v2.6.0 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1268,7 +1392,11 @@
           <div class="version-list">
             <div class="version-list-inner">
               <div class="version-item">
-                <div><span class="v-name">v2.5.8</span><span class="v-tag latest">Latest</span></div>
+                <div><span class="v-name">v2.6.0</span><span class="v-tag latest">Latest</span></div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.6.0.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v2.5.8</span> &mdash; Auto-accept streams setting</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.5.8.zip">Download &rarr;</a>
               </div>
               <div class="version-item">
@@ -1459,12 +1587,12 @@
       <!-- Desktop App Download Card -->
       <div class="download-card fade-in" style="margin-top: 32px; border-color: rgba(250, 166, 26, 0.25);">
         <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent-dim), var(--warning), var(--green)); box-shadow: 0 0 12px rgba(250, 166, 26, 0.3);"></div>
-        <h2>🖥️ Haven Desktop <span class="beta-badge-inline">BETA</span> &mdash; v1.0.8</h2>
+        <h2>🖥️ Haven Desktop <span class="beta-badge-inline">BETA</span> &mdash; v1.1.0</h2>
         <p class="download-version">Latest beta release &middot; Windows &amp; Linux &middot; Standalone installer</p>
 
         <div class="download-btn-group">
           <a href="https://github.com/ancsemi/Haven-Desktop/releases/latest" class="btn btn-primary download-main" style="background: var(--warning); box-shadow: 0 4px 24px rgba(250, 166, 26, 0.25), 0 0 0 1px rgba(250, 166, 26, 0.3);">
-            <span class="icon">⬇</span> Download Desktop v1.0.8
+            <span class="icon">⬇</span> Download Desktop v1.1.0
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven-Desktop" target="_blank">&#9965; View on GitHub</a>
@@ -1476,6 +1604,36 @@
         <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 16px;">
           ⚠️ <strong>Beta software</strong> &mdash; feedback &amp; bug reports are greatly appreciated.<br>
           The desktop app is a client. You still need a <a href="https://github.com/ancsemi/Haven" style="color: var(--accent-bright);">Haven server</a> to connect to.
+        </p>
+      </div>
+
+      <!-- Android App Beta Card -->
+      <div class="download-card fade-in" style="margin-top: 32px; border-color: rgba(61, 220, 132, 0.25);">
+        <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #3ddc84, #2bb55e, #82aaff); box-shadow: 0 0 12px rgba(61, 220, 132, 0.3);"></div>
+        <h2>📱 Haven Android <span class="closed-beta-badge-inline">CLOSED BETA</span></h2>
+        <p class="download-version">Closed beta &middot; Android &middot; Google Play</p>
+
+        <div class="android-beta-email-form">
+          <p style="font-size: 0.95rem; color: var(--text-muted); margin: 0;">Enter your email to sign up for the closed beta:</p>
+          <input type="email" id="download-android-beta-email" placeholder="your@email.com" maxlength="120">
+          <button class="btn-android" onclick="(function(){
+            var e=document.getElementById('download-android-beta-email');
+            var v=e.value.trim();
+            if(!v||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){e.style.borderColor='#f04747';e.focus();return;}
+            var s=encodeURIComponent('Haven Android Beta - Opt-in Request');
+            var b=encodeURIComponent('Hi Amnibro,\n\nI\'d like to opt-in to the Haven Android closed beta on Google Play.\n\nMy email: '+v+'\n\nThanks!');
+            window.open('mailto:amnibro7@gmail.com?subject='+s+'&body='+b,'_blank');
+            e.value='';e.style.borderColor='';
+            alert('Your email client should open with a pre-filled message. Just hit Send!');
+          })()">🚀 Sign Up for Beta</button>
+        </div>
+
+        <div class="download-alt-links" style="margin-top: 16px;">
+          <a href="https://github.com/ancsemi/Haven-Android" target="_blank">&#9965; View on GitHub</a>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 16px; font-style: italic;">
+          Built with ❤️ by <strong>Amnibro</strong> &mdash; thank you for your incredible work building the Haven Android app from the ground up.
         </p>
       </div>
 
@@ -1535,6 +1693,7 @@
       <ul class="footer-links">
         <li><a href="https://github.com/ancsemi/Haven" target="_blank">GitHub (Server)</a></li>
         <li><a href="https://github.com/ancsemi/Haven-Desktop" target="_blank">GitHub (Desktop)</a></li>
+        <li><a href="https://github.com/ancsemi/Haven-Android" target="_blank">GitHub (Android)</a></li>
         <li><a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">Setup Guide</a></li>
         <li><a href="https://github.com/ancsemi/Haven/blob/main/CHANGELOG.md" target="_blank">Changelog</a></li>
         <li><a href="mailto:help.havenapp@gmail.com?subject=Haven%20Bug%20Report">Report a Bug</a></li>

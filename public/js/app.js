@@ -162,6 +162,7 @@ class HavenApp {
     this._setupModalExpand();
     this._checkForUpdates();
     this._initDesktopAppBanner();
+    this._initAndroidBetaBanner();
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback
@@ -16355,6 +16356,114 @@ class HavenApp {
       if (e.target === modal) {
         modal.style.display = 'none';
       }
+    });
+  }
+
+  // ── Android Beta Banner + Sign-Up Popup ─────────────────
+  /** Show the "Android Beta" banner and sign-up popup. Users enter their email
+   *  and a prefilled mailto: link sends the opt-in request to the developer. */
+  _initAndroidBetaBanner() {
+    // ── Top-bar banner ──
+    const bannerDismissed = localStorage.getItem('haven_android_beta_banner_dismissed');
+    if (!bannerDismissed) {
+      const banner = document.getElementById('android-beta-banner');
+      if (banner) {
+        banner.style.display = 'inline-flex';
+        banner.addEventListener('click', (e) => {
+          // Don't open modal if dismiss button was clicked
+          if (e.target.closest('.android-beta-dismiss')) return;
+          const modal = document.getElementById('android-beta-modal');
+          if (modal) modal.style.display = 'flex';
+        });
+        const dismissBtn = document.getElementById('android-beta-dismiss');
+        if (dismissBtn) {
+          dismissBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            banner.style.display = 'none';
+            localStorage.setItem('haven_android_beta_banner_dismissed', '1');
+          });
+        }
+      }
+    }
+
+    // ── Promo popup (centred modal) ──
+    const modal = document.getElementById('android-beta-modal');
+    if (!modal) return;
+
+    // Show popup on first visit (unless dismissed)
+    if (!localStorage.getItem('haven_android_beta_promo_dismissed')) {
+      setTimeout(() => {
+        // Don't show if the desktop promo is already visible
+        const desktopPromo = document.getElementById('desktop-promo-modal');
+        if (desktopPromo && desktopPromo.style.display === 'flex') {
+          // Show after the desktop promo closes
+          const observer = new MutationObserver(() => {
+            if (desktopPromo.style.display === 'none' || desktopPromo.style.display === '') {
+              observer.disconnect();
+              setTimeout(() => { modal.style.display = 'flex'; }, 800);
+            }
+          });
+          observer.observe(desktopPromo, { attributes: true, attributeFilter: ['style'] });
+        } else {
+          modal.style.display = 'flex';
+        }
+      }, 2000);
+    }
+
+    // Email submit handler
+    const submitBtn = document.getElementById('android-beta-submit');
+    const emailInput = document.getElementById('android-beta-email');
+    if (submitBtn && emailInput) {
+      const handleSubmit = () => {
+        const email = emailInput.value.trim();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          emailInput.style.borderColor = '#f04747';
+          emailInput.focus();
+          return;
+        }
+        // Open mailto: link to send the opt-in request
+        const subject = encodeURIComponent('Haven Android Beta - Opt-in Request');
+        const body = encodeURIComponent(
+          `Hi Amnibro,\n\nI'd like to opt-in to the Haven Android closed beta on Google Play.\n\nMy email: ${email}\n\nThanks!`
+        );
+        window.open(`mailto:amnibro7@gmail.com?subject=${subject}&body=${body}`, '_blank');
+
+        // Show success toast
+        if (typeof this._showToast === 'function') {
+          this._showToast('Email client opened! Send the pre-filled message to complete your sign-up.', 'success');
+        }
+
+        // Remember dismissal
+        localStorage.setItem('haven_android_beta_promo_dismissed', '1');
+        modal.style.display = 'none';
+      };
+
+      submitBtn.addEventListener('click', handleSubmit);
+      emailInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleSubmit();
+        emailInput.style.borderColor = '';
+      });
+    }
+
+    // "Maybe later" button
+    const laterBtn = document.getElementById('android-beta-later');
+    if (laterBtn) {
+      laterBtn.addEventListener('click', () => {
+        const check = document.getElementById('android-beta-dismiss-check');
+        if (check && check.checked) {
+          localStorage.setItem('haven_android_beta_promo_dismissed', '1');
+          localStorage.setItem('haven_android_beta_banner_dismissed', '1');
+          const banner = document.getElementById('android-beta-banner');
+          if (banner) banner.style.display = 'none';
+        }
+        modal.style.display = 'none';
+      });
+    }
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
     });
   }
 
