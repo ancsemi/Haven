@@ -46,13 +46,13 @@ Haven is a self-hosted Discord alternative. Run it on your machine. Invite frien
 - **Push Notifications** — real-time notifications via Google Play services
 - **Full Chat & Voice** — all the features you love, in your pocket
 
-> **🚀 Want to join the beta?** Email [amnibro7@gmail.com](mailto:amnibro7@gmail.com?subject=Haven%20Android%20Beta%20-%20Opt-in%20Request&body=Hi%20Amnibro%2C%0A%0AI%27d%20like%20to%20opt-in%20to%20the%20Haven%20Android%20closed%20beta%20on%20Google%20Play.%0A%0AThanks!) with your Google Play email to request access to the closed beta.
+> **🚀 Want to join the beta?** Visit **[amni-scient.com/amni-haven.html](https://amni-scient.com/amni-haven.html)** to request access to the closed beta.
 >
 > **You still need a Haven server.** The Android app is a client — it connects to a Haven server. Download and run [Haven](https://github.com/ancsemi/Haven) first if you haven't already.
 
 *Built with ❤️ by **Amnibro** — huge thanks for his incredible work building the Haven Android app from the ground up.*
 
-📥 **[Sign Up for Android Beta →](mailto:amnibro7@gmail.com?subject=Haven%20Android%20Beta%20-%20Opt-in%20Request&body=Hi%20Amnibro%2C%0A%0AI%27d%20like%20to%20opt-in%20to%20the%20Haven%20Android%20closed%20beta%20on%20Google%20Play.%0A%0AThanks!)**
+📲 **[Request Android Beta Access →](https://amni-scient.com/amni-haven.html)**
 
 ---
 
@@ -408,7 +408,7 @@ Planned features — roughly in priority order:
 | **Multi-factor authentication** | 📋 Planned | U2F/FIDO key and TOTP support, with optional admin MFA requirement |
 | **Session invalidation on password change** | 📋 Planned | All active sessions are forcibly logged out when a user changes their password |
 | **Recovery-key password reset** | 📋 Planned | Generate a 24-word recovery phrase from settings — used to reset your password without losing E2E DM history. Existing users get a one-time prompt to generate theirs. No admin involvement, no email required. |
-| **Android App** | 🟢 Closed Beta! | [Sign up for beta](mailto:amnibro7@gmail.com?subject=Haven%20Android%20Beta) |
+| **Android App** | 🟢 Closed Beta! | [Request Beta Access](https://amni-scient.com/amni-haven.html) |
 | **Desktop App** | ✅ Beta! | https://github.com/ancsemi/Haven-Desktop |
 
 > Want something else? Open an issue — PRs are always welcome.

@@ -29,6 +29,16 @@
     if (el && d.version) el.textContent = 'v' + d.version;
   }).catch(() => {});
 
+  // ── Apply server default theme for first-time visitors ──
+  // Only applies when the user has no personal theme preference stored locally.
+  if (!localStorage.getItem('haven_theme')) {
+    fetch('/api/public-config').then(r => r.json()).then(d => {
+      if (d.default_theme) {
+        document.documentElement.setAttribute('data-theme', d.default_theme);
+      }
+    }).catch(() => {});
+  }
+
   // ── EULA ─────────────────────────────────────────────
   const ageCheckbox  = document.getElementById('age-checkbox');
   const eulaCheckbox = document.getElementById('eula-checkbox');

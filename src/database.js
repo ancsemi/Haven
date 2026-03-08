@@ -4,16 +4,55 @@ const { DB_PATH } = require('./paths');
 
 let db;
 
+// ── Prepared-statement cache ──────────────────────────────
+// Every `db.prepare(sql)` allocates a native sqlite3_stmt.  In
+// socketHandlers.js the same queries are prepared on every socket event,
+// creating hundreds of native objects that only get freed when V8 GC
+// collects the JS wrapper.  Under load, GC can't keep up and Oilpan
+// hits a fatal "large allocation" error.
+//
+// This cache wraps db.prepare() so duplicate SQL strings reuse the same
+// Statement object.  Node.js is single-threaded, so concurrent access is
+// not a concern.  Dynamic SQL (e.g. `IN (?,?,?)`) still works — each
+// unique SQL string just gets its own cache entry.
+const _stmtCache = new Map();
+const MAX_STMT_CACHE = 500;   // safety cap — shouldn't be hit in practice
+
 function initDatabase() {
   db = new Database(DB_PATH);
 
-  // Performance settings
+  // ── Performance settings (memory-conscious) ────────────
+  // These were originally set much higher (64 MB cache, 256 MB mmap) which
+  // combined to reserve ~320 MB of native memory for SQLite alone.  On the
+  // Haven Desktop machine that also runs Electron + a renderer, that left
+  // too little headroom and caused the Oilpan OOM crash.
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.pragma('synchronous = NORMAL');       // safe with WAL, 2-3x faster writes
-  db.pragma('cache_size = -64000');         // 64 MB page cache (default ~2 MB)
+  db.pragma('cache_size = -8000');          // 8 MB page cache (was 64 MB — overkill for a chat app)
   db.pragma('busy_timeout = 5000');         // wait up to 5 s on lock contention
   db.pragma('temp_store = MEMORY');         // keep temp tables in RAM
+  db.pragma('mmap_size = 33554432');        // 32 MB memory-mapped I/O (was 256 MB)
+
+  // Hard-cap SQLite's own heap usage so it can never run away
+  db.pragma('soft_heap_limit = 33554432');  // 32 MB soft limit — SQLite tries to stay under
+  db.pragma('hard_heap_limit = 67108864');  // 64 MB hard ceiling
+
+  // ── Statement cache — intercept db.prepare() ──────────
+  const _origPrepare = db.prepare.bind(db);
+  db.prepare = function cachedPrepare(sql) {
+    let stmt = _stmtCache.get(sql);
+    if (stmt) return stmt;
+    // Safety cap: if cache grows too large (dynamic SQL), clear older entries
+    if (_stmtCache.size >= MAX_STMT_CACHE) {
+      // Remove oldest ~half of entries
+      const keys = [..._stmtCache.keys()];
+      for (let i = 0; i < keys.length / 2; i++) _stmtCache.delete(keys[i]);
+    }
+    stmt = _origPrepare(sql);
+    _stmtCache.set(sql, stmt);
+    return stmt;
+  };
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -106,6 +145,8 @@ function initDatabase() {
       ON bans(user_id);
     CREATE INDEX IF NOT EXISTS idx_mutes_user
       ON mutes(user_id, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_messages_channel_id
+      ON messages(channel_id, id DESC);
   `);
 
   // ── Safe schema migration for existing databases ──────

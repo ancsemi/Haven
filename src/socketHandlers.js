@@ -1404,45 +1404,50 @@ function setupSocketHandlers(io, db) {
       const safeContent = sanitizeText(content.trim());
       if (!safeContent) return;
 
-      const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to) VALUES (?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, safeContent, replyTo);
-
-      const message = {
-        id: result.lastInsertRowid,
-        content: safeContent,
-        created_at: new Date().toISOString(),
-        username: socket.user.displayName,
-        user_id: socket.user.id,
-        avatar: socket.user.avatar || null,
-        avatar_shape: socket.user.avatar_shape || 'circle',
-        reply_to: replyTo,
-        replyContext: null,
-        reactions: [],
-        edited_at: null
-      };
-
-      // Attach reply context if replying
-      if (replyTo) {
-        message.replyContext = db.prepare(`
-          SELECT m.id, m.content, COALESCE(u.display_name, u.username, '[Deleted User]') as username FROM messages m
-          LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?
-        `).get(replyTo) || null;
-      }
-
-      io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
-
-      // Send push notifications to offline channel members
-      sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, safeContent);
-
-      // Auto-update sender's read position so own messages never count as unread
       try {
-        db.prepare(`
-          INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-          VALUES (?, ?, ?)
-          ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-        `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* non-critical */ }
+        const result = db.prepare(
+          'INSERT INTO messages (channel_id, user_id, content, reply_to) VALUES (?, ?, ?, ?)'
+        ).run(channel.id, socket.user.id, safeContent, replyTo);
+
+        const message = {
+          id: result.lastInsertRowid,
+          content: safeContent,
+          created_at: new Date().toISOString(),
+          username: socket.user.displayName,
+          user_id: socket.user.id,
+          avatar: socket.user.avatar || null,
+          avatar_shape: socket.user.avatar_shape || 'circle',
+          reply_to: replyTo,
+          replyContext: null,
+          reactions: [],
+          edited_at: null
+        };
+
+        // Attach reply context if replying
+        if (replyTo) {
+          message.replyContext = db.prepare(`
+            SELECT m.id, m.content, COALESCE(u.display_name, u.username, '[Deleted User]') as username FROM messages m
+            LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?
+          `).get(replyTo) || null;
+        }
+
+        io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
+
+        // Send push notifications to offline channel members
+        sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, safeContent);
+
+        // Auto-update sender's read position so own messages never count as unread
+        try {
+          db.prepare(`
+            INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
+          `).run(socket.user.id, channel.id, result.lastInsertRowid);
+        } catch (e) { /* non-critical */ }
+      } catch (err) {
+        console.error('send-message error:', err.message);
+        socket.emit('error-msg', 'Failed to send message — please try again');
+      }
     });
 
     // ── Typing indicator ────────────────────────────────────
@@ -1985,33 +1990,33 @@ function setupSocketHandlers(io, db) {
     // ═══════════════ REACTIONS ═════════════════════════════════
 
     socket.on('add-reaction', (data) => {
-      if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
-
-      // Verify the emoji is a real emoji or a custom server emoji (:name:)
-      const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
-      const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;
-      if (!allowed.test(data.emoji) && !customEmojiPattern.test(data.emoji)) return;
-      if (data.emoji.length > 32) return;
-
-      // If custom emoji, verify it exists
-      if (customEmojiPattern.test(data.emoji)) {
-        const emojiName = data.emoji.slice(1, -1).toLowerCase();
-        const exists = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(emojiName);
-        if (!exists) return;
-      }
-
-      const code = socket.currentChannel;
-      if (!code) return;
-
-      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
-
-      // Verify message belongs to this channel
-      const msg = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
-      if (!msg) return;
-
       try {
+        if (!data || typeof data !== 'object') return;
+        if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+
+        // Verify the emoji is a real emoji or a custom server emoji (:name:)
+        const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
+        const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;
+        if (!allowed.test(data.emoji) && !customEmojiPattern.test(data.emoji)) return;
+        if (data.emoji.length > 32) return;
+
+        // If custom emoji, verify it exists
+        if (customEmojiPattern.test(data.emoji)) {
+          const emojiName = data.emoji.slice(1, -1).toLowerCase();
+          const exists = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(emojiName);
+          if (!exists) return;
+        }
+
+        const code = socket.currentChannel;
+        if (!code) return;
+
+        const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+        if (!channel) return;
+
+        // Verify message belongs to this channel
+        const msg = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+        if (!msg) return;
+
         db.prepare(
           'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
         ).run(data.messageId, socket.user.id, data.emoji);
@@ -2027,36 +2032,42 @@ function setupSocketHandlers(io, db) {
           messageId: data.messageId,
           reactions
         });
-      } catch { /* duplicate — ignore */ }
+      } catch (err) {
+        console.error('add-reaction error:', err.message);
+      }
     });
 
     socket.on('remove-reaction', (data) => {
-      if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+      try {
+        if (!data || typeof data !== 'object') return;
+        if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
 
-      const code = socket.currentChannel;
-      if (!code) return;
+        const code = socket.currentChannel;
+        if (!code) return;
 
-      // Verify message belongs to this channel
-      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
-      const msgCheck = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
-      if (!msgCheck) return;
+        // Verify message belongs to this channel
+        const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+        if (!channel) return;
+        const msgCheck = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+        if (!msgCheck) return;
 
-      db.prepare(
-        'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
-      ).run(data.messageId, socket.user.id, data.emoji);
+        db.prepare(
+          'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
+        ).run(data.messageId, socket.user.id, data.emoji);
 
-      const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-      `).all(data.messageId);
+        const reactions = db.prepare(`
+          SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
+          JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
+        `).all(data.messageId);
 
-      io.to(`channel:${code}`).emit('reactions-updated', {
-        channelCode: code,
-        messageId: data.messageId,
-        reactions
-      });
+        io.to(`channel:${code}`).emit('reactions-updated', {
+          channelCode: code,
+          messageId: data.messageId,
+          reactions
+        });
+      } catch (err) {
+        console.error('remove-reaction error:', err.message);
+      }
     });
 
     // ═══════════════ CHANNEL MEMBERS (for @mentions) ═════════
@@ -3157,7 +3168,7 @@ function setupSocketHandlers(io, db) {
       const key = typeof data.key === 'string' ? data.key.trim() : '';
       const value = typeof data.value === 'string' ? data.value.trim() : '';
 
-      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key', 'server_name', 'server_icon', 'permission_thresholds', 'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'setup_wizard_complete', 'update_banner_admin_only'];
+      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key', 'server_name', 'server_icon', 'permission_thresholds', 'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'setup_wizard_complete', 'update_banner_admin_only', 'default_theme'];
       if (!allowedKeys.includes(key)) return;
 
       if (key === 'member_visibility' && !['all', 'online', 'none'].includes(value)) return;
@@ -3188,6 +3199,10 @@ function setupSocketHandlers(io, db) {
       if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
       if (key === 'setup_wizard_complete' && !['true', 'false'].includes(value)) return;
       if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
+      if (key === 'default_theme') {
+        const validThemes = ['', 'haven', 'discord', 'matrix', 'fallout', 'ffx', 'ice', 'nord', 'darksouls', 'eldenring', 'bloodborne', 'cyberpunk', 'lotr', 'abyss', 'scripture', 'chapel', 'gospel', 'tron', 'halo', 'dracula', 'win95'];
+        if (!validThemes.includes(value)) return;
+      }
       if (key === 'server_code') {
         // Server code is managed via generate/rotate events, not directly
         return;

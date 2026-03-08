@@ -2995,7 +2995,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: var(--text-muted);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .input-row { display: flex; gap: 6px; }
@@ -3905,6 +3905,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  position: relative; /* for absolutely-positioned children like #msg-more-btn */
 }
 
 .message {
@@ -4279,6 +4280,21 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  transition: width 0.25s ease, min-width 0.25s ease, border-width 0.25s ease, opacity 0.2s ease;
+}
+
+/* Collapsed state */
+.right-sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-left-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Dim the toggle button when sidebar is hidden */
+#sidebar-toggle-btn.sidebar-hidden {
+  opacity: 0.5;
 }
 
 /* Voice section — pinned at top, shrinks if needed */
@@ -4430,7 +4446,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   backdrop-filter: none;
 }
 
-/* Hover-over variant: translucent with glassmorphism */
+/* Hover-over variant: translucent tooltip, non-interactive */
 .profile-popup-hover {
   background: color-mix(in srgb, var(--bg-secondary) 65%, transparent);
   backdrop-filter: blur(20px) saturate(1.3);
@@ -4439,9 +4455,13 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   animation: profile-popup-hover-in 0.15s ease-out;
   transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;  /* can't be interacted with — it's a tooltip */
 }
 .profile-popup-hover .profile-popup-banner {
   opacity: 0.7;
+}
+.profile-popup-hover .profile-popup-close {
+  display: none;  /* no X button on tooltip */
 }
 .profile-popup-hover .profile-popup-body {
   background: transparent;
@@ -5049,6 +5069,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   padding: 28px;
   width: 90%;
   max-width: 400px;
+  max-height: 85vh;
   box-shadow: 0 12px 48px rgba(0,0,0,0.5);
   resize: both;
   overflow: auto;
@@ -6354,8 +6375,11 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   z-index: 10;
 }
 
-/* Only show toolbar on real mouse hover — not on touch-triggered :hover */
-@media (hover: hover) {
+/* Only show toolbar on real mouse hover — not on touch-triggered :hover.
+   Require BOTH hover:hover AND pointer:fine so mobile browsers that
+   falsely report hover:hover (common on Android Chrome/Brave) don't
+   show the toolbar on tap. */
+@media (hover: hover) and (pointer: fine) {
   .message:hover .msg-toolbar,
   .message-compact:hover .msg-toolbar { display: flex; }
 }
@@ -8314,9 +8338,6 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 /* ── Mobile panel close button (hidden on desktop) ─────── */
 .mobile-panel-close {
   display: none;
-  position: absolute;
-  top: 10px;
-  right: 10px;
   z-index: 110;
   width: 32px;
   height: 32px;
@@ -8331,9 +8352,20 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   justify-content: center;
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
 }
 .mobile-panel-close:hover { background: rgba(255,255,255,0.2); }
-.mobile-panel-close-right { left: 10px; right: auto; }
+/* Left sidebar close: absolute positioned */
+.mobile-panel-close:not(.mobile-panel-close-right) {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+/* Right sidebar close: inline in voice header row (no absolute) */
+.mobile-panel-close-right {
+  position: static;
+  margin-left: auto;
+}
 
 /* Mobile-only voice join button (inside right sidebar) */
 .mobile-voice-join {
@@ -8397,6 +8429,8 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    /* Android nav bar / browser toolbar safe area */
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
   }
 
   #app-body.mobile-sidebar-open .sidebar {
@@ -8436,6 +8470,8 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
     transform: translateX(100%);
     transition: transform 0.25s ease;
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    /* Android nav bar / browser toolbar safe area */
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
   }
 
   #app-body.mobile-right-open .right-sidebar {
@@ -8462,6 +8498,9 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   #pinned-toggle-btn,
   #copy-code-btn { display: none !important; }
   .header-actions-divider { display: none; }
+
+  /* Hide entire header actions box on mobile to reclaim header space */
+  .header-actions-box { display: none !important; }
 
   /* Voice join moves to right sidebar on mobile */
   #voice-join-btn { display: none !important; }
@@ -8513,15 +8552,27 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 
   .right-sidebar { width: 85vw; min-width: 85vw; }
 
-  /* Channel header — tight */
+  /* Channel header — tight, prevent overflow */
   .channel-header {
     padding: 6px 8px;
     min-height: 44px;
     gap: 4px;
+    overflow: hidden;
   }
 
-  .channel-info h3 { font-size: 13px; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .channel-code-tag { font-size: 9px; padding: 1px 5px; max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+  .channel-info {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .channel-info h3 { font-size: 13px; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .channel-code-tag { display: none !important; }
+
+  /* Android beta banner — hide on phone, it eats header space */
+  .android-beta-banner { display: none !important; }
+
+  /* Ensure voice controls don't get pushed off-screen */
+  .voice-controls { flex-shrink: 0; }
 
   /* Update banner — compact on phone */
   .update-banner { padding: 3px 8px; font-size: 11px; }
@@ -8531,7 +8582,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   .desktop-app-banner { display: none !important; }
 
   /* Voice buttons — compact on phone */
-  .voice-controls { gap: 4px; flex-wrap: nowrap; flex-shrink: 1; overflow: visible; }
+  .voice-controls { gap: 4px; flex-wrap: nowrap; flex-shrink: 0; overflow: visible; }
   .btn-voice {
     padding: 4px 8px;
     font-size: 12px;
@@ -8572,55 +8623,62 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   .chat-image { max-width: 140px; max-height: 140px; }
   .image-mode-full .chat-image { max-width: 100%; max-height: 250px; }
 
-  /* Input area — touch-friendly, two-row layout */
+  /* Input area — single-row inline layout */
   .message-input-area {
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: flex-end;
   }
 
-  /* Media buttons row — sits above the textarea row */
+  /* Media buttons — compact inline, not a separate row */
   .input-actions-box {
-    order: -1;
     border-radius: 16px;
-    padding: 2px 4px;
+    padding: 2px 2px;
     gap: 1px;
+    flex-shrink: 0;
+    order: 0;
+    border: none;
+    background: none;
   }
+  /* Hide dividers on phone — too cramped */
+  .input-actions-box .input-actions-divider { display: none; }
   .input-actions-box .btn-upload,
   .input-actions-box .btn-emoji,
   .input-actions-box .btn-gif {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    min-height: 30px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
     font-size: 14px;
     border-radius: 50%;
     flex-shrink: 0;
   }
   .input-actions-box .btn-gif {
     width: auto;
-    padding: 0 6px;
+    padding: 0 5px;
     border-radius: var(--radius-sm);
     height: 22px;
     min-height: 22px;
+    font-size: 11px;
   }
 
-  /* Textarea takes full remaining width on its row */
+  /* Textarea fills remaining space inline */
   .message-input-area textarea {
-    padding: 8px 12px;
+    padding: 6px 10px;
     font-size: 16px; /* prevents iOS zoom on focus */
     border-radius: 20px;
-    min-height: 36px;
-    flex: 1 0 calc(100% - 48px); /* large basis forces buttons to wrap to their own row */
+    min-height: 34px;
+    flex: 1 1 0;
     min-width: 0;
     order: 1;
   }
 
   .message-input-area .btn-send {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
     border-radius: 50%;
     flex-shrink: 0;
     order: 2;
@@ -8763,6 +8821,19 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   /* Prevent pull-to-refresh on chat app */
   html, body { overscroll-behavior-y: contain; }
 
+  /* Prevent browser text-selection / callout on long-press of messages;
+     our JS handles long-press → toolbar instead. */
+  .message, .message-compact {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  /* Keep message-content selectable for copy-paste after tap  */
+  .msg-selected .message-content {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
   /* Touch devices — larger tap targets */
   .channel-item { padding: 12px 16px; min-height: 44px; }
   .btn-sm { min-height: 44px; padding: 10px 14px; }
@@ -8816,6 +8887,16 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   }
 }
 
+/* Extra safety: hide hover toolbar on any coarse-pointer device even if
+   the browser claims (hover: hover).  Toolbar is shown via .msg-selected
+   from the JS long-press handler instead. */
+@media (pointer: coarse) {
+  .message:hover .msg-toolbar,
+  .message-compact:hover .msg-toolbar { display: none !important; }
+  .msg-toolbar { display: none !important; }
+  .msg-selected .msg-toolbar { display: flex !important; }
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    LANDSCAPE PHONE
@@ -8823,6 +8904,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
 
 @media (max-height: 500px) and (orientation: landscape) {
   .status-bar { display: none; }
+  [data-desktop-app] .status-bar { display: flex; }
   .channel-header { min-height: 40px; padding: 4px 8px; }
   .messages { padding: 4px 8px; }
   .message-input-area { padding: 4px 8px 6px; }
@@ -13414,4 +13496,315 @@ ul.chat-list { list-style-type: disc; }
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   MOBILE-SPECIFIC OVERHAUL
+   Consolidated fixes for cramped / overflowing mobile UIs
+   ═══════════════════════════════════════════════════════════ */
 
+/* ── Fix: Members modal — use horizontal space, not purely vertical ── */
+@media (max-width: 600px) {
+  /* The modal itself should be near full-width */
+  #all-members-modal .modal {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    padding: 14px 10px;
+    max-height: 88vh !important;
+  }
+  #all-members-modal .modal h3 { font-size: 16px; margin-bottom: 2px; }
+
+  /* Member rows: horizontal card, tighter padding */
+  .aml-member-row {
+    padding: 6px 8px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .aml-avatar-wrap { width: 30px; height: 30px; }
+  .aml-avatar { width: 30px; height: 30px; }
+  .aml-avatar-default { font-size: 12px; }
+  .aml-status-dot { width: 8px; height: 8px; border-width: 1.5px; }
+
+  .aml-member-name { font-size: 12px; gap: 4px; }
+  .aml-login-name { font-size: 10px; }
+  .aml-admin-badge, .aml-banned-badge, .aml-new-badge { font-size: 9px; padding: 0px 4px; }
+
+  /* Meta row: keep horizontal flow, don't let it be super vertical */
+  .aml-member-meta {
+    gap: 4px;
+    font-size: 10px;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .aml-role-badge { font-size: 9px; padding: 0px 5px; }
+  .aml-member-joined, .aml-member-channels { font-size: 9px; }
+
+  /* Actions: always visible on mobile (no hover), compact */
+  .aml-actions {
+    opacity: 1;
+    gap: 2px;
+  }
+  .aml-action-btn {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+  }
+}
+
+/* ── Fix: RAC (Role Assignment) modal — less claustrophobic on mobile ── */
+@media (max-width: 600px) {
+  .role-assign-center-box {
+    width: 97vw !important;
+    max-width: 97vw !important;
+    padding: 12px 8px !important;
+    max-height: 90vh !important;
+  }
+  .role-assign-center-box h3 { font-size: 15px; margin-bottom: 2px; }
+  .role-assign-center-subtitle { font-size: 0.72rem; margin-bottom: 6px; }
+
+  .rac-pane-header { padding: 6px 8px; gap: 4px; }
+  .rac-pane-title { font-size: 0.65rem; }
+  .rac-search { padding: 4px 6px; font-size: 0.78rem; }
+
+  .rac-user-item, .rac-channel-item { padding: 6px 8px; font-size: 0.78rem; }
+
+  /* Perms grid: single column on tiny screens */
+  .rac-perms-grid { grid-template-columns: 1fr; gap: 2px 0; }
+  .rac-perm-item { font-size: 0.74rem; padding: 2px 0; }
+
+  .rac-footer { flex-wrap: wrap; gap: 6px; }
+  .rac-footer .btn-sm { min-height: 36px; font-size: 12px; padding: 6px 10px; }
+
+  /* Config body: more room */
+  .rac-config-body { padding: 8px; }
+  .rac-level-input { width: 55px; font-size: 0.8rem; }
+  .rac-role-select { font-size: 0.78rem; }
+}
+
+/* ── Fix: Reaction picker overflow — keep within viewport ── */
+@media (max-width: 480px) {
+  .reaction-picker {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: 60px !important;
+    width: auto !important;
+    max-width: none !important;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px;
+    border-radius: 12px;
+    z-index: 10001;
+  }
+  .reaction-pick-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  /* Full emoji picker: also fixed to bottom */
+  .reaction-full-picker {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 60px !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: 50vh;
+    z-index: 10002;
+  }
+}
+
+/* ── Fix: Wasted space under CHANNELS when collapsed (desktop AND mobile) ── */
+.sidebar-section.channel-section {
+  transition: padding 0.2s ease;
+}
+
+/* When channel-list is hidden (collapsed), shrink the entire section */
+.sidebar-section.channel-section:has(.channel-list:empty),
+#channels-pane:has(#channel-list[style*="display: none"]),
+#channels-pane:has(#channel-list[style*="display:none"]) {
+  padding-top: 8px;
+  padding-bottom: 0;
+}
+
+/* The section-label margin-bottom adds dead space below the toggle */
+.channels-toggle {
+  margin-bottom: 0 !important;
+}
+
+/* When collapsed, the channel-list is display:none — section label no gap */
+#channels-pane .section-label {
+  margin-bottom: 4px;
+}
+
+#channels-pane[style*="flex: 0 0 auto"] .section-label,
+#channels-pane[style*="flex:0 0 auto"] .section-label {
+  margin-bottom: 0;
+}
+
+/* ── Fix: Mobile servers section — compact circular icon instead of dropdown ── */
+@media (max-width: 768px) {
+  /* Tighten the mobile servers section */
+  .mobile-servers-section {
+    padding: 4px 16px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-servers-section .section-label {
+    margin-bottom: 2px;
+    font-size: 10px;
+  }
+  .mobile-servers-row {
+    padding: 3px 0;
+    max-height: 44px;
+  }
+  .mobile-srv-bubble {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  .mobile-srv-add-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  /* Start servers section collapsed by default on mobile to save space */
+  .mobile-servers-section.start-collapsed .mobile-servers-row {
+    max-height: 0;
+    opacity: 0;
+    padding: 0;
+  }
+
+  /* Sidebar sections: tighter padding on mobile */
+  .sidebar-section { padding: 8px 12px; }
+  .sidebar-section.channel-section { padding: 6px 12px 0; }
+  .sidebar-split .channel-section { padding: 6px 12px 0; }
+  .sidebar-split .dm-section-pane { padding: 0 12px; }
+
+  .section-label { margin-bottom: 4px; font-size: 10px; }
+
+  /* Sidebar header: more compact */
+  .sidebar-header { padding: 10px 12px; }
+  .brand-text { font-size: 14px; letter-spacing: 2px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE ROUND-2 FIXES
+   Right sidebar overlap, close-button position, safe-area,
+   tap-to-reveal "⋯" toolbar fallback
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Right sidebar: push content below close button on mobile ── */
+@media (max-width: 768px) {
+  .right-sidebar {
+    padding-top: 48px; /* room for the absolute close button */
+  }
+
+  /* Settings panel at bottom needs safe area for Android nav bar */
+  .right-sidebar .sidebar-settings-panel,
+  .right-sidebar .voice-panel {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  }
+}
+
+/* ── Modals: safe area padding for Android nav bar ── */
+@media (max-width: 600px) {
+  .modal {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px) !important;
+  }
+  #all-members-modal .modal {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px) !important;
+  }
+}
+
+/* ── Legacy floating "⋯" button (hidden, replaced by per-message .msg-dots-btn) ── */
+#msg-more-btn {
+  display: none !important;
+}
+
+/* ── Per-message "⋯" button (visible on touch devices only) ── */
+.msg-dots-btn {
+  display: none;            /* hidden on desktop by default */
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 12;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card, var(--bg-secondary));
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+  transition: background 0.15s;
+  padding: 0;
+}
+.msg-dots-btn:active {
+  background: var(--bg-tertiary);
+}
+/* Show dots button ONLY on touch/coarse-pointer devices */
+@media (pointer: coarse) {
+  .message .msg-dots-btn,
+  .message-compact .msg-dots-btn {
+    display: flex;
+  }
+  /* Position context: message needs relative */
+  .message, .message-compact {
+    position: relative;
+  }
+  /* Give message rows right padding so text doesn't flow under the ⋯ button */
+  .message .message-row,
+  .message-compact {
+    padding-right: 38px;
+  }
+  /* Hide dots button when toolbar is visible (message is selected) */
+  .msg-selected .msg-dots-btn {
+    display: none !important;
+  }
+}
+
+/* ── Touch-device selected-message toolbar & timestamp overrides ── */
+@media (pointer: coarse) {
+  /* ── Selected message: show toolbar inside the message, top-right ──
+     Using top: 4px instead of a negative offset keeps the toolbar within
+     the .messages scroll container so it is never clipped. */
+  .msg-selected .msg-toolbar {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    left: auto;
+  }
+  .msg-selected {
+    position: relative;
+  }
+  /* Hide the inline compact-time to avoid overlap */
+  .msg-selected.message-compact .compact-time {
+    display: none !important;
+  }
+  /* Show timestamp BELOW selected compact messages ONLY
+     (regular messages already show time in the header) */
+  .msg-selected.message-compact {
+    padding-bottom: 22px !important;
+  }
+  .msg-selected.message-compact::after {
+    content: attr(data-time-short);
+    display: block;
+    position: absolute;
+    bottom: 3px;
+    left: 8px;
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0.8;
+    pointer-events: none;
+  }
+}

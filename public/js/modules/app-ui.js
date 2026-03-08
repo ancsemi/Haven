@@ -1,0 +1,2868 @@
+export default {
+
+// ── UI Event Bindings ─────────────────────────────────
+
+_setupUI() {
+  const msgInput = document.getElementById('message-input');
+
+  // Shorter placeholder on narrow screens to prevent wrapping
+  if (window.innerWidth <= 480) {
+    msgInput.placeholder = 'Message...';
+  }
+
+  msgInput.addEventListener('keydown', (e) => {
+    // If emoji dropdown is visible, hijack arrow keys, enter, tab, escape
+    const emojiDd = document.getElementById('emoji-dropdown');
+    if (emojiDd && emojiDd.style.display !== 'none') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this._navigateEmojiDropdown(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        const active = emojiDd.querySelector('.emoji-ac-item.active');
+        if (active) { e.preventDefault(); active.click(); return; }
+      }
+      if (e.key === 'Escape') { this._hideEmojiDropdown(); return; }
+    }
+
+    // If slash dropdown is visible, hijack arrow keys and enter
+    const slashDd = document.getElementById('slash-dropdown');
+    if (slashDd && slashDd.style.display !== 'none') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this._navigateSlashDropdown(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Tab') {
+        const active = slashDd.querySelector('.slash-item.active');
+        if (active) { e.preventDefault(); active.click(); return; }
+      }
+      if (e.key === 'Escape') { this._hideSlashDropdown(); return; }
+    }
+
+    // If mention dropdown is visible, hijack arrow keys and enter
+    const dropdown = document.getElementById('mention-dropdown');
+    if (dropdown && dropdown.style.display !== 'none') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this._navigateMentionDropdown(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        const active = dropdown.querySelector('.mention-item.active');
+        if (active) {
+          e.preventDefault();
+          active.click();
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        this._hideMentionDropdown();
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      this._sendMessage();
+    }
+  });
+
+  msgInput.addEventListener('input', () => {
+    const maxH = window.innerWidth <= 480 ? 90 : 120;
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, maxH) + 'px';
+
+    const now = Date.now();
+    if (now - this.lastTypingEmit > 2000 && this.currentChannel) {
+      this.socket.emit('typing', { code: this.currentChannel });
+      this.lastTypingEmit = now;
+    }
+
+    // Check for @mention trigger
+    this._checkMentionTrigger();
+    // Check for :emoji autocomplete trigger
+    this._checkEmojiTrigger();
+    // Check for /command trigger
+    this._checkSlashTrigger();
+  });
+
+  document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
+
+  // Join channel
+  const joinBtn = document.getElementById('join-channel-btn');
+  const codeInput = document.getElementById('channel-code-input');
+  joinBtn.addEventListener('click', () => {
+    const code = codeInput.value.trim();
+    if (code) { this.socket.emit('join-channel', { code }); codeInput.value = ''; }
+  });
+  codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+
+  // Create channel (admin)
+  const createBtn = document.getElementById('create-channel-btn');
+  const nameInput = document.getElementById('new-channel-name');
+  if (createBtn) {
+    createBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      const isPrivate = document.getElementById('new-channel-private')?.checked || false;
+      if (name) {
+        this.socket.emit('create-channel', { name, isPrivate });
+        nameInput.value = '';
+        const pvt = document.getElementById('new-channel-private');
+        if (pvt) pvt.checked = false;
+      }
+    });
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') createBtn.click(); });
+  }
+
+  // Copy code
+  document.getElementById('copy-code-btn').addEventListener('click', () => {
+    if (this.currentChannel) {
+      const ch = this.channels.find(c => c.code === this.currentChannel);
+      const codeToCopy = ch && ch.display_code !== '••••••••' ? this.currentChannel : null;
+      if (codeToCopy) {
+        navigator.clipboard.writeText(codeToCopy).then(() => {
+          this._showToast('Channel code copied!', 'success');
+        });
+      }
+    }
+  });
+
+  // Delete channel
+  // ── Channel context menu ("..." on hover) ──────────
+  this._initChannelContextMenu();
+  this._initDmContextMenu();
+  // Delete channel with TWO confirmations (from ctx menu)
+  document.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    if (!confirm('⚠️ Delete this channel?\nAll messages will be permanently lost.')) return;
+    if (!confirm('⚠️ Are you ABSOLUTELY sure?\nThis action cannot be undone!')) return;
+    this.socket.emit('delete-channel', { code });
+  });
+  // Mute channel toggle
+  document.querySelector('[data-action="mute"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+    const idx = muted.indexOf(code);
+    if (idx >= 0) { muted.splice(idx, 1); this._showToast('Channel unmuted', 'success'); }
+    else { muted.push(code); this._showToast('Channel muted', 'success'); }
+    localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
+  });
+  // Join voice from context menu
+  document.querySelector('[data-action="join-voice"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    // Switch to the channel first, then join voice
+    this.switchChannel(code);
+    setTimeout(() => this._joinVoice(), 300);
+  });
+  // Leave channel
+  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    const ch = this.channels.find(c => c.code === code);
+    const name = ch ? ch.name : code;
+    if (!confirm(`Leave channel "${name}"?\nYou'll need the channel code to rejoin.`)) return;
+    this.socket.emit('leave-channel', { code }, (res) => {
+      if (res && res.error) { this._showToast(res.error, 'error'); return; }
+      this._showToast(`Left #${name}`, 'success');
+      // Switch to another channel if we're currently in this one
+      if (this.currentChannel === code) {
+        const remaining = this.channels.filter(c => c.code !== code && !c.is_dm);
+        if (remaining.length) this.switchChannel(remaining[0].code);
+      }
+    });
+  });
+  // Disconnect from voice via context menu
+  document.querySelector('[data-action="leave-voice"]')?.addEventListener('click', () => {
+    this._closeChannelCtxMenu();
+    this._leaveVoice();
+  });
+  // Toggle streams permission
+  document.querySelector('[data-action="toggle-streams"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this.socket.emit('toggle-channel-permission', { code, permission: 'streams' });
+  });
+  // Toggle music permission
+  document.querySelector('[data-action="toggle-music"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this.socket.emit('toggle-channel-permission', { code, permission: 'music' });
+  });
+  // Move channel up/down
+  document.querySelector('[data-action="organize"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this._openOrganizeModal(code);
+  });
+  // Move to parent (reparent)
+  document.querySelector('[data-action="move-to-parent"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this._openReparentModal(code);
+  });
+  // Promote sub-channel to top-level
+  document.querySelector('[data-action="promote-channel"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    const ch = this.channels.find(c => c.code === code);
+    if (!ch || !ch.parent_channel_id) return;
+    if (confirm(`Promote "${ch.name}" to a top-level channel?`)) {
+      this.socket.emit('reparent-channel', { code, newParentCode: null });
+    }
+  });
+  // Reparent modal cancel
+  document.getElementById('reparent-cancel-btn')?.addEventListener('click', () => {
+    document.getElementById('reparent-modal').style.display = 'none';
+  });
+  document.getElementById('reparent-modal')?.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-overlay')) {
+      document.getElementById('reparent-modal').style.display = 'none';
+    }
+  });
+  // Organize modal controls
+  document.getElementById('organize-global-sort')?.addEventListener('change', (e) => {
+    if (!this._organizeParentCode) return;
+    const sortMode = e.target.value; // 'manual', 'alpha', 'created', 'oldest'
+    if (this._organizeServerLevel) {
+      // Server-level sort: store in localStorage (no parent channel to hold it)
+      localStorage.setItem('haven_server_sort_mode', sortMode);
+    } else {
+      // Sub-channel sort: store on the parent channel (server-side)
+      this.socket.emit('set-sort-alphabetical', { code: this._organizeParentCode, enabled: sortMode === 'alpha', mode: sortMode });
+      const parent = this.channels.find(c => c.code === this._organizeParentCode);
+      if (parent) parent.sort_alphabetical = sortMode === 'alpha' ? 1 : sortMode === 'created' ? 2 : sortMode === 'oldest' ? 3 : 0;
+    }
+    this._renderOrganizeList();
+  });
+  document.getElementById('organize-cat-sort')?.addEventListener('change', (e) => {
+    if (!this._organizeParentCode) return;
+    this._organizeCatSort = e.target.value;
+    localStorage.setItem(`haven_cat_sort_${this._organizeParentCode}`, e.target.value);
+    this._renderOrganizeList();
+    if (this._organizeServerLevel) this._renderChannels();
+  });
+  document.getElementById('organize-move-up')?.addEventListener('click', () => {
+    // Category movement
+    if (this._organizeSelectedTag) {
+      this._moveCategoryInOrder(-1);
+      return;
+    }
+    if (!this._organizeSelected) return;
+    const ch = this._organizeList.find(c => c.code === this._organizeSelected);
+    if (!ch) return;
+    const { group, effectiveSort } = this._getOrganizeVisualGroup(ch);
+    if (effectiveSort !== 'manual') return;
+    const groupIdx = group.findIndex(c => c.code === this._organizeSelected);
+    if (groupIdx <= 0) return;
+    // Swap in the sorted group, then reassign group positions cleanly
+    [group[groupIdx], group[groupIdx - 1]] = [group[groupIdx - 1], group[groupIdx]];
+    const positions = group.map(c => c.position ?? 0).sort((a, b) => a - b);
+    for (let i = 1; i < positions.length; i++) { if (positions[i] <= positions[i - 1]) positions[i] = positions[i - 1] + 1; }
+    group.forEach((c, i) => { c.position = positions[i]; });
+    this._renderOrganizeList();
+    this.socket.emit('reorder-channels', { order: this._organizeList.map(c => ({ code: c.code, position: c.position })) });
+  });
+  document.getElementById('organize-move-down')?.addEventListener('click', () => {
+    // Category movement
+    if (this._organizeSelectedTag) {
+      this._moveCategoryInOrder(1);
+      return;
+    }
+    if (!this._organizeSelected) return;
+    const ch = this._organizeList.find(c => c.code === this._organizeSelected);
+    if (!ch) return;
+    const { group, effectiveSort } = this._getOrganizeVisualGroup(ch);
+    if (effectiveSort !== 'manual') return;
+    const groupIdx = group.findIndex(c => c.code === this._organizeSelected);
+    if (groupIdx < 0 || groupIdx >= group.length - 1) return;
+    // Swap in the sorted group, then reassign group positions cleanly
+    [group[groupIdx], group[groupIdx + 1]] = [group[groupIdx + 1], group[groupIdx]];
+    const positions = group.map(c => c.position ?? 0).sort((a, b) => a - b);
+    for (let i = 1; i < positions.length; i++) { if (positions[i] <= positions[i - 1]) positions[i] = positions[i - 1] + 1; }
+    group.forEach((c, i) => { c.position = positions[i]; });
+    this._renderOrganizeList();
+    this.socket.emit('reorder-channels', { order: this._organizeList.map(c => ({ code: c.code, position: c.position })) });
+  });
+  document.getElementById('organize-set-tag')?.addEventListener('click', () => {
+    if (!this._organizeSelected) return;
+    const tag = document.getElementById('organize-tag-input').value.trim();
+    if (!tag) return;
+    this.socket.emit('set-channel-category', { code: this._organizeSelected, category: tag });
+    const ch = this._organizeList.find(c => c.code === this._organizeSelected);
+    if (ch) ch.category = tag;
+    // Also update main channels array
+    const mainCh = this.channels.find(c => c.code === this._organizeSelected);
+    if (mainCh) mainCh.category = tag;
+    this._renderOrganizeList();
+  });
+  document.getElementById('organize-remove-tag')?.addEventListener('click', () => {
+    if (!this._organizeSelected) return;
+    this.socket.emit('set-channel-category', { code: this._organizeSelected, category: '' });
+    const ch = this._organizeList.find(c => c.code === this._organizeSelected);
+    if (ch) ch.category = null;
+    const mainCh = this.channels.find(c => c.code === this._organizeSelected);
+    if (mainCh) mainCh.category = null;
+    document.getElementById('organize-tag-input').value = '';
+    this._renderOrganizeList();
+  });
+  document.getElementById('organize-done-btn')?.addEventListener('click', () => {
+    document.getElementById('organize-modal').style.display = 'none';
+    if (this._organizeServerLevel) this._renderChannels();
+    this._organizeParentCode = null;
+    this._organizeList = null;
+    this._organizeSelected = null;
+    this._organizeSelectedTag = null;
+    this._organizeServerLevel = false;
+  });
+  document.getElementById('organize-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'organize-modal') {
+      document.getElementById('organize-modal').style.display = 'none';
+      if (this._organizeServerLevel) this._renderChannels();
+      this._organizeParentCode = null;
+      this._organizeList = null;
+      this._organizeSelected = null;
+      this._organizeSelectedTag = null;
+      this._organizeServerLevel = false;
+    }
+  });
+  // ── DM Organize Modal ──
+  document.getElementById('organize-dms-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation(); // don't toggle DM collapse
+    this._openDmOrganizeModal();
+  });
+  document.getElementById('dm-organize-sort')?.addEventListener('change', () => {
+    const mode = document.getElementById('dm-organize-sort').value;
+    localStorage.setItem('haven_dm_sort_mode', mode);
+    this._renderDmOrganizeList();
+  });
+  document.getElementById('dm-organize-move-up')?.addEventListener('click', () => {
+    if (!this._dmOrganizeSelected) return;
+    const idx = this._dmOrganizeList.findIndex(c => c.code === this._dmOrganizeSelected);
+    if (idx <= 0) return;
+    [this._dmOrganizeList[idx], this._dmOrganizeList[idx - 1]] = [this._dmOrganizeList[idx - 1], this._dmOrganizeList[idx]];
+    this._saveDmOrder();
+    this._renderDmOrganizeList();
+  });
+  document.getElementById('dm-organize-move-down')?.addEventListener('click', () => {
+    if (!this._dmOrganizeSelected) return;
+    const idx = this._dmOrganizeList.findIndex(c => c.code === this._dmOrganizeSelected);
+    if (idx < 0 || idx >= this._dmOrganizeList.length - 1) return;
+    [this._dmOrganizeList[idx], this._dmOrganizeList[idx + 1]] = [this._dmOrganizeList[idx + 1], this._dmOrganizeList[idx]];
+    this._saveDmOrder();
+    this._renderDmOrganizeList();
+  });
+  document.getElementById('dm-organize-set-tag')?.addEventListener('click', () => {
+    if (!this._dmOrganizeSelected) return;
+    const tag = document.getElementById('dm-organize-tag-input').value.trim();
+    if (!tag) return;
+    const assignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
+    assignments[this._dmOrganizeSelected] = tag;
+    localStorage.setItem('haven_dm_assignments', JSON.stringify(assignments));
+    // Ensure category entry exists
+    const cats = JSON.parse(localStorage.getItem('haven_dm_categories') || '{}');
+    if (!cats[tag]) cats[tag] = { collapsed: false };
+    localStorage.setItem('haven_dm_categories', JSON.stringify(cats));
+    this._renderDmOrganizeList();
+  });
+  document.getElementById('dm-organize-remove-tag')?.addEventListener('click', () => {
+    if (!this._dmOrganizeSelected) return;
+    const assignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
+    delete assignments[this._dmOrganizeSelected];
+    localStorage.setItem('haven_dm_assignments', JSON.stringify(assignments));
+    document.getElementById('dm-organize-tag-input').value = '';
+    this._renderDmOrganizeList();
+  });
+  document.getElementById('dm-organize-done-btn')?.addEventListener('click', () => {
+    document.getElementById('dm-organize-modal').style.display = 'none';
+    this._dmOrganizeList = null;
+    this._dmOrganizeSelected = null;
+    this._renderChannels();
+  });
+  document.getElementById('dm-organize-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'dm-organize-modal') {
+      document.getElementById('dm-organize-modal').style.display = 'none';
+      this._dmOrganizeList = null;
+      this._dmOrganizeSelected = null;
+      this._renderChannels();
+    }
+  });
+  // Slow mode
+  document.querySelector('[data-action="slow-mode"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    const ch = this.channels.find(c => c.code === code);
+    const current = (ch && ch.slow_mode_interval) || 0;
+    const input = prompt('Slow mode interval in seconds (0 = off, max 3600):', current);
+    if (input !== null) {
+      const interval = parseInt(input);
+      if (!isNaN(interval)) {
+        this.socket.emit('set-slow-mode', { code, interval });
+      }
+    }
+  });
+  // Webhooks management
+  document.querySelector('[data-action="webhooks"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this._openWebhookModal(code);
+  });
+  // Channel Roles management
+  document.querySelector('[data-action="channel-roles"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this._openChannelRolesModal(code);
+  });
+  document.getElementById('channel-roles-done-btn')?.addEventListener('click', () => {
+    document.getElementById('channel-roles-modal').style.display = 'none';
+  });
+  document.getElementById('channel-roles-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'channel-roles-modal') {
+      document.getElementById('channel-roles-modal').style.display = 'none';
+    }
+  });
+  document.getElementById('channel-roles-assign-btn')?.addEventListener('click', () => {
+    this._assignChannelRole();
+  });
+  document.getElementById('channel-roles-create-btn')?.addEventListener('click', () => {
+    this._createChannelRole();
+  });
+  document.getElementById('webhook-create-btn')?.addEventListener('click', () => {
+    const name = document.getElementById('webhook-name-input').value.trim();
+    if (!name) return;
+    const code = document.getElementById('webhook-modal')._channelCode;
+    if (!code) return;
+    this.socket.emit('create-webhook', { channelCode: code, name });
+    document.getElementById('webhook-name-input').value = '';
+  });
+  document.getElementById('webhook-copy-url-btn')?.addEventListener('click', () => {
+    const urlEl = document.getElementById('webhook-url-display');
+    navigator.clipboard.writeText(urlEl.value).then(() => {
+      document.getElementById('webhook-copy-url-btn').textContent = '✅ Copied';
+      setTimeout(() => { document.getElementById('webhook-copy-url-btn').textContent = '📋 Copy'; }, 2000);
+    });
+  });
+  document.getElementById('webhook-close-btn')?.addEventListener('click', () => {
+    document.getElementById('webhook-modal').style.display = 'none';
+  });
+  document.getElementById('webhook-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+  // Create sub-channel
+  document.querySelector('[data-action="create-sub-channel"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    const parentCh = this.channels.find(c => c.code === code);
+    if (!parentCh) return;
+    // Show the create-sub-channel modal
+    document.getElementById('create-sub-name').value = '';
+    document.getElementById('create-sub-private').checked = false;
+    document.getElementById('create-sub-parent-name').textContent = `# ${parentCh.name}`;
+    document.getElementById('create-sub-modal').style.display = 'flex';
+    document.getElementById('create-sub-modal')._parentCode = code;
+    document.getElementById('create-sub-name').focus();
+  });
+  // Create sub-channel modal confirm/cancel
+  document.getElementById('create-sub-confirm-btn')?.addEventListener('click', () => {
+    const modal = document.getElementById('create-sub-modal');
+    const name = document.getElementById('create-sub-name').value.trim();
+    const isPrivate = document.getElementById('create-sub-private').checked;
+    if (!name) return;
+    this.socket.emit('create-sub-channel', {
+      parentCode: modal._parentCode,
+      name,
+      isPrivate
+    });
+    modal.style.display = 'none';
+  });
+  document.getElementById('create-sub-cancel-btn')?.addEventListener('click', () => {
+    document.getElementById('create-sub-modal').style.display = 'none';
+  });
+  document.getElementById('create-sub-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+  // Rename channel / sub-channel
+  document.querySelector('[data-action="rename-channel"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    const ch = this.channels.find(c => c.code === code);
+    if (!ch) return;
+    const name = prompt(`Rename #${ch.name}:\nEnter new name:`, ch.name);
+    if (name && name.trim() && name.trim() !== ch.name) {
+      this.socket.emit('rename-channel', { code, name: name.trim() });
+    }
+  });
+  // Close context menu on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.channel-ctx-menu') && !e.target.closest('.channel-more-btn')) {
+      this._closeChannelCtxMenu();
+    }
+  });
+
+  // Voice buttons
+  document.getElementById('voice-join-btn').addEventListener('click', () => this._joinVoice());
+  document.getElementById('voice-join-mobile')?.addEventListener('click', () => {
+    this._joinVoice();
+    this._closeMobilePanels();
+  });
+  document.getElementById('voice-mute-btn').addEventListener('click', () => this._toggleMute());
+  document.getElementById('voice-deafen-btn').addEventListener('click', () => this._toggleDeafen());
+  document.getElementById('voice-leave-sidebar-btn').addEventListener('click', () => this._leaveVoice());
+  document.getElementById('voice-cam-btn').addEventListener('click', () => this._toggleWebcam());
+  document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
+  document.getElementById('voice-soundboard-btn')?.addEventListener('click', () => this._openSoundModal('soundboard'));
+  document.getElementById('voice-listen-together-btn')?.addEventListener('click', () => this._openMusicModal());
+  document.getElementById('screen-share-minimize').addEventListener('click', () => this._hideScreenShare());
+  document.getElementById('screen-share-close').addEventListener('click', () => this._closeScreenShare());
+  document.getElementById('webcam-collapse-btn').addEventListener('click', () => {
+    const wc = document.getElementById('webcam-container');
+    if (wc) {
+      wc.style.display = 'none';
+      // Show a restore indicator in the channel header
+      const grid = document.getElementById('webcam-grid');
+      const count = grid ? grid.children.length : 0;
+      if (count > 0) this._showWebcamIndicator(count);
+    }
+  });
+  document.getElementById('webcam-close-btn').addEventListener('click', () => {
+    this._closeWebcam();
+  });
+
+  // Music controls
+  document.getElementById('music-share-btn')?.addEventListener('click', () => this._openMusicModal());
+  document.getElementById('share-music-btn').addEventListener('click', () => this._shareMusic());
+  document.getElementById('cancel-music-btn').addEventListener('click', () => this._closeMusicModal());
+  document.getElementById('music-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'music-modal') this._closeMusicModal();
+  });
+  document.getElementById('music-stop-btn').addEventListener('click', () => this._stopMusic());
+  document.getElementById('music-close-btn').addEventListener('click', () => {
+    this._minimizeMusicPanel();
+  });
+  document.getElementById('music-popout-btn').addEventListener('click', () => this._popOutMusicPlayer());
+  document.getElementById('music-play-pause-btn').addEventListener('click', () => this._toggleMusicPlayPause());
+  document.getElementById('music-prev-btn').addEventListener('click', () => this._musicTrackControl('prev'));
+  document.getElementById('music-next-btn').addEventListener('click', () => this._musicTrackControl('next'));
+  document.getElementById('music-shuffle-btn').addEventListener('click', () => this._musicTrackControl('shuffle'));
+  document.getElementById('music-mute-btn').addEventListener('click', () => this._toggleMusicMute());
+  document.getElementById('music-volume-slider').addEventListener('input', (e) => {
+    this._setMusicVolume(parseInt(e.target.value));
+  });
+  // Seek slider — user drags to scrub position
+  const seekSlider = document.getElementById('music-seek-slider');
+  seekSlider.addEventListener('input', () => { this._musicSeeking = true; });
+  seekSlider.addEventListener('change', (e) => {
+    this._musicSeeking = false;
+    const pct = parseFloat(e.target.value);
+    this._seekMusic(pct);
+    // Broadcast seek to others in voice
+    if (this.voice && this.voice.inVoice) {
+      this.socket.emit('music-seek', {
+        code: this.voice.currentChannel,
+        position: pct
+      });
+    }
+  });
+  document.getElementById('music-link-input').addEventListener('input', (e) => {
+    this._previewMusicLink(e.target.value.trim());
+  });
+  document.getElementById('music-link-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); this._shareMusic(); }
+  });
+
+  // Voice controls — now pinned at bottom of right sidebar
+  // The header voice-active-indicator opens the RIGHT sidebar on mobile
+  document.getElementById('voice-active-indicator')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // On mobile, open the RIGHT sidebar so the user can access voice controls
+    const appBody = document.getElementById('app-body');
+    if (window.innerWidth <= 900 && appBody) {
+      appBody.classList.add('mobile-right-open');
+    }
+  });
+
+  // Voice settings slide-up toggle
+  document.getElementById('voice-settings-toggle')?.addEventListener('click', () => {
+    const panel = document.getElementById('voice-settings-panel');
+    if (!panel) return;
+    const btn = document.getElementById('voice-settings-toggle');
+    if (panel.style.display === 'none') {
+      panel.style.display = '';
+      if (btn) btn.classList.add('active');
+      // Populate audio device dropdowns each time panel opens
+      this._populateAudioDevices();
+    } else {
+      panel.style.display = 'none';
+      if (btn) btn.classList.remove('active');
+    }
+  });
+
+  // ── Audio device dropdowns (input & output) ──
+  const inputDeviceSelect  = document.getElementById('voice-input-device');
+  const outputDeviceSelect = document.getElementById('voice-output-device');
+  if (inputDeviceSelect) {
+    inputDeviceSelect.addEventListener('change', (e) => {
+      const deviceId = e.target.value;
+      localStorage.setItem('haven_input_device', deviceId);
+      // Hot-swap if in voice
+      if (this.voice && this.voice.inVoice) {
+        this.voice.switchInputDevice(deviceId);
+      }
+    });
+  }
+  if (outputDeviceSelect) {
+    outputDeviceSelect.addEventListener('change', (e) => {
+      const deviceId = e.target.value;
+      localStorage.setItem('haven_output_device', deviceId);
+      // Hot-swap output
+      if (this.voice) {
+        this.voice.switchOutputDevice(deviceId);
+      }
+    });
+  }
+  // Stream size slider
+  const streamSizeSlider = document.getElementById('stream-size-slider');
+  if (streamSizeSlider) {
+    const savedSize = localStorage.getItem('haven_stream_size');
+    if (savedSize) streamSizeSlider.value = savedSize;
+    let _resizeRAF = null;
+    const applySize = () => {
+      if (_resizeRAF) cancelAnimationFrame(_resizeRAF);
+      _resizeRAF = requestAnimationFrame(() => {
+        // Auto-exit fullscreen (focus mode) when user adjusts the size slider
+        const container = document.getElementById('screen-share-container');
+        const grid = document.getElementById('screen-share-grid');
+        if (container.classList.contains('stream-focus-mode')) {
+          grid.querySelectorAll('.screen-share-tile').forEach(t => t.classList.remove('stream-focused'));
+          container.classList.remove('stream-focus-mode');
+        }
+        const vh = parseInt(streamSizeSlider.value, 10);
+        container.style.maxHeight = vh + 'vh';
+        grid.style.maxHeight = (vh - 2) + 'vh';
+        document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
+        localStorage.setItem('haven_stream_size', vh);
+        _resizeRAF = null;
+      });
+    };
+    applySize();
+    streamSizeSlider.addEventListener('input', applySize);
+  }
+
+  // ── Stream layout picker ──
+  const layoutBtn = document.getElementById('stream-layout-btn');
+  const layoutMenu = document.getElementById('stream-layout-menu');
+  if (layoutBtn && layoutMenu) {
+    const savedLayout = localStorage.getItem('haven_stream_layout') || 'auto';
+    this._applyStreamLayout(savedLayout);
+    layoutMenu.querySelector(`[data-layout="${savedLayout}"]`)?.classList.add('active');
+
+    layoutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      layoutMenu.classList.toggle('open');
+    });
+    layoutMenu.querySelectorAll('.stream-layout-opt').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mode = opt.dataset.layout;
+        layoutMenu.querySelectorAll('.stream-layout-opt').forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        this._applyStreamLayout(mode);
+        localStorage.setItem('haven_stream_layout', mode);
+        layoutMenu.classList.remove('open');
+      });
+    });
+    document.addEventListener('click', () => layoutMenu.classList.remove('open'));
+  }
+
+  // ── Webcam size slider ──
+  const webcamSizeSlider = document.getElementById('webcam-size-slider');
+  if (webcamSizeSlider) {
+    const savedWcSize = localStorage.getItem('haven_webcam_size');
+    if (savedWcSize) webcamSizeSlider.value = savedWcSize;
+    let _wcResizeRAF = null;
+    const applyWcSize = () => {
+      if (_wcResizeRAF) cancelAnimationFrame(_wcResizeRAF);
+      _wcResizeRAF = requestAnimationFrame(() => {
+        const container = document.getElementById('webcam-container');
+        const grid = document.getElementById('webcam-grid');
+        // Auto-exit focus mode when resizing
+        if (container.classList.contains('webcam-focus-mode')) {
+          grid.querySelectorAll('.webcam-tile').forEach(t => t.classList.remove('webcam-focused'));
+          container.classList.remove('webcam-focus-mode');
+        }
+        const vh = parseInt(webcamSizeSlider.value, 10);
+        container.style.maxHeight = vh + 'vh';
+        grid.style.maxHeight = (vh - 2) + 'vh';
+        // Scale tile width proportionally with the slider
+        const tileMaxW = Math.max(vh * 1.33, 15); // ~4:3 aspect ratio
+        document.querySelectorAll('.webcam-tile').forEach(t => { t.style.maxWidth = tileMaxW + 'vw'; });
+        document.querySelectorAll('.webcam-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
+        localStorage.setItem('haven_webcam_size', vh);
+        _wcResizeRAF = null;
+      });
+    };
+    applyWcSize();
+    webcamSizeSlider.addEventListener('input', applyWcSize);
+  }
+
+  // ── Webcam layout picker ──
+  const wcLayoutBtn = document.getElementById('webcam-layout-btn');
+  const wcLayoutMenu = document.getElementById('webcam-layout-menu');
+  if (wcLayoutBtn && wcLayoutMenu) {
+    const savedWcLayout = localStorage.getItem('haven_webcam_layout') || 'auto';
+    this._applyWebcamLayout(savedWcLayout);
+    wcLayoutMenu.querySelector(`[data-layout="${savedWcLayout}"]`)?.classList.add('active');
+
+    wcLayoutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      wcLayoutMenu.classList.toggle('open');
+    });
+    wcLayoutMenu.querySelectorAll('.stream-layout-opt').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mode = opt.dataset.layout;
+        wcLayoutMenu.querySelectorAll('.stream-layout-opt').forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        this._applyWebcamLayout(mode);
+        localStorage.setItem('haven_webcam_layout', mode);
+        wcLayoutMenu.classList.remove('open');
+      });
+    });
+    document.addEventListener('click', () => wcLayoutMenu.classList.remove('open'));
+  }
+
+  // ── Webcam collapse button ── (handler already bound above)
+
+  document.getElementById('voice-ns-slider').addEventListener('input', (e) => {
+    if (this.voice && this.voice.inVoice) {
+      this.voice.setNoiseSensitivity(parseInt(e.target.value, 10));
+    }
+    this._updateMicMeterThreshold(parseInt(e.target.value, 10));
+  });
+
+  // ── Mic level meter ──
+  this._micMeterFill = document.getElementById('mic-meter-fill');
+  this._micMeterThreshold = document.getElementById('mic-meter-threshold');
+  this._micMeterRAF = null;
+  this._updateMicMeterThreshold(10); // default
+  this._startMicMeter();
+
+  // ── Screen share quality dropdowns ──
+  const screenResSelect = document.getElementById('screen-res-select');
+  const screenFpsSelect = document.getElementById('screen-fps-select');
+  if (screenResSelect) {
+    // Restore saved value (0 = "source")
+    const savedRes = localStorage.getItem('haven_screen_res') || '1080';
+    screenResSelect.value = savedRes === '0' ? 'source' : savedRes;
+    screenResSelect.addEventListener('change', (e) => {
+      const val = e.target.value === 'source' ? 0 : parseInt(e.target.value, 10);
+      this.voice.setScreenResolution(val);
+    });
+  }
+  if (screenFpsSelect) {
+    const savedFps = localStorage.getItem('haven_screen_fps') || '30';
+    screenFpsSelect.value = savedFps;
+    screenFpsSelect.addEventListener('change', (e) => {
+      this.voice.setScreenFrameRate(parseInt(e.target.value, 10));
+    });
+  }
+
+  // Wire up the voice manager's video callback
+  this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
+  // Wire up webcam video callback
+  this.voice.onWebcamStream = (userId, stream) => this._handleWebcamStream(userId, stream);
+  // Wire up screen share audio callback
+  this.voice.onScreenAudio = (userId) => this._handleScreenAudio(userId);
+  // Wire up no-audio indicator for streams without audio
+  this.voice.onScreenNoAudio = (userId) => this._handleScreenNoAudio(userId);
+
+  // Wire up voice join/leave audio cues
+  this.voice.onVoiceJoin = (userId, username) => {
+    this.notifications.playDirect('voice_join');
+  };
+  this.voice.onVoiceLeave = (userId, username) => {
+    this.notifications.playDirect('voice_leave');
+  };
+  // Wire up screen share start audio cue
+  this.voice.onScreenShareStarted = (userId, username) => {
+    this.notifications.playDirect('stream_start');
+  };
+
+  // Wire up talking indicator
+  this.voice.onTalkingChange = (userId, isTalking) => {
+    const resolvedId = userId === 'self' ? this.user.id : userId;
+    const el = document.querySelector(`.voice-user-item[data-user-id="${resolvedId}"]`);
+    if (el) el.classList.toggle('talking', isTalking);
+  };
+
+  // Search
+  let searchTimeout = null;
+  document.getElementById('search-toggle-btn').addEventListener('click', () => {
+    const sc = document.getElementById('search-container');
+    sc.style.display = sc.style.display === 'none' ? 'flex' : 'none';
+    if (sc.style.display === 'flex') document.getElementById('search-input').focus();
+  });
+  document.getElementById('search-close-btn').addEventListener('click', () => {
+    document.getElementById('search-container').style.display = 'none';
+    document.getElementById('search-results-panel').style.display = 'none';
+    document.getElementById('search-input').value = '';
+  });
+  document.getElementById('search-results-close').addEventListener('click', () => {
+    document.getElementById('search-results-panel').style.display = 'none';
+  });
+  document.getElementById('search-input').addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    const q = e.target.value.trim();
+    if (q.length >= 2 && this.currentChannel) {
+      searchTimeout = setTimeout(() => {
+        this.socket.emit('search-messages', { code: this.currentChannel, query: q });
+      }, 400);
+    } else {
+      document.getElementById('search-results-panel').style.display = 'none';
+    }
+  });
+  document.getElementById('search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.getElementById('search-container').style.display = 'none';
+      document.getElementById('search-results-panel').style.display = 'none';
+    }
+  });
+
+  // Pinned messages panel
+  document.getElementById('pinned-toggle-btn').addEventListener('click', () => {
+    const panel = document.getElementById('pinned-panel');
+    if (panel.style.display === 'block') {
+      panel.style.display = 'none';
+    } else if (this.currentChannel) {
+      this.socket.emit('get-pinned-messages', { code: this.currentChannel });
+    }
+  });
+  document.getElementById('pinned-close').addEventListener('click', () => {
+    document.getElementById('pinned-panel').style.display = 'none';
+  });
+
+  // Right sidebar collapse toggle (persisted to localStorage)
+  const sidebarToggle = document.getElementById('sidebar-toggle-btn');
+  const rightSidebar = document.getElementById('right-sidebar');
+  if (localStorage.getItem('haven-sidebar-collapsed') === '1') {
+    rightSidebar.classList.add('collapsed');
+    sidebarToggle.classList.add('sidebar-hidden');
+  }
+  sidebarToggle.addEventListener('click', () => {
+    const collapsed = rightSidebar.classList.toggle('collapsed');
+    sidebarToggle.classList.toggle('sidebar-hidden', collapsed);
+    localStorage.setItem('haven-sidebar-collapsed', collapsed ? '1' : '0');
+  });
+
+  // E2E lock menu dropdown toggle
+  document.getElementById('e2e-menu-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const dd = document.getElementById('e2e-dropdown');
+    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+  });
+  // Close dropdown on outside click
+  document.addEventListener('click', () => {
+    const dd = document.getElementById('e2e-dropdown');
+    if (dd) dd.style.display = 'none';
+  });
+  document.getElementById('e2e-dropdown')?.addEventListener('click', (e) => e.stopPropagation());
+
+  // E2E verification code button (inside dropdown)
+  document.getElementById('e2e-verify-btn')?.addEventListener('click', () => {
+    document.getElementById('e2e-dropdown').style.display = 'none';
+    this._requireE2E(() => this._showE2EVerification());
+  });
+
+  // E2E reset encryption keys button (inside dropdown)
+  document.getElementById('e2e-reset-btn')?.addEventListener('click', () => {
+    document.getElementById('e2e-dropdown').style.display = 'none';
+    this._requireE2E(() => this._showE2EResetConfirmation());
+  });
+
+  // E2E password prompt modal handlers
+  document.getElementById('e2e-pw-submit-btn')?.addEventListener('click', () => this._submitE2EPassword());
+  document.getElementById('e2e-pw-cancel-btn')?.addEventListener('click', () => this._closeE2EPasswordModal());
+  document.getElementById('e2e-pw-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') this._submitE2EPassword();
+  });
+  document.getElementById('e2e-password-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'e2e-password-modal') this._closeE2EPasswordModal();
+  });
+
+  // Rate limit tracking for E2E password prompt
+  this._e2ePwAttempts = [];
+  this._e2ePwLocked = false;
+  this._e2ePwPendingAction = null;
+
+  // Global keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Ctrl+F = search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f' && this.currentChannel) {
+      e.preventDefault();
+      const sc = document.getElementById('search-container');
+      sc.style.display = 'flex';
+      document.getElementById('search-input').focus();
+    }
+    // Escape = close modals, search, theme popup
+    if (e.key === 'Escape') {
+      document.getElementById('search-container').style.display = 'none';
+      document.getElementById('search-results-panel').style.display = 'none';
+      document.getElementById('theme-popup').style.display = 'none';
+      document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+    }
+  });
+
+  // Theme popup toggle
+  document.getElementById('theme-popup-toggle')?.addEventListener('click', () => {
+    const popup = document.getElementById('theme-popup');
+    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('theme-popup-close')?.addEventListener('click', () => {
+    document.getElementById('theme-popup').style.display = 'none';
+  });
+
+  // Logout
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    if (this.voice && this.voice.inVoice) this.voice.leave();
+    localStorage.removeItem('haven_token');
+    localStorage.removeItem('haven_user');
+    window.location.href = '/';
+  });
+
+  // ── Games / Activities system ─────────────────────────────
+  // Registry of available games — add new games here
+  this._gamesRegistry = [
+    { id: 'flappy', name: 'Shippy Container', icon: '🚢', path: '/games/flappy.html', description: 'Dodge containers, chase high scores!' },
+    { id: 'flight', name: 'Flight', icon: '✈️', path: '/games/flash.html?swf=/games/roms/flight-759879f9.swf&title=Flight', description: 'Throw a paper plane as far as you can!', type: 'flash' },
+    { id: 'learn-to-fly-3', name: 'Learn to Fly 3', icon: '🐧', path: '/games/flash.html?swf=/games/roms/learn-to-fly-3.swf&title=Learn%20to%20Fly%203', description: 'Help a penguin learn to fly!', type: 'flash' },
+    { id: 'bubble-tanks-3', name: 'Bubble Tanks 3', icon: '🫧', path: '/games/flash.html?swf=/games/roms/Bubble%20Tanks%203.swf&title=Bubble%20Tanks%203', description: 'Bubble-based arena shooter', type: 'flash' },
+    { id: 'tanks', name: 'Tanks', icon: '🪖', path: '/games/flash.html?swf=/games/roms/tanks.swf&title=Tanks', description: 'Classic Armor Games tank combat', type: 'flash' },
+    { id: 'super-smash-flash-2', name: 'Super Smash Flash 2', icon: '⚔️', path: '/games/flash.html?swf=/games/roms/SuperSmash.swf&title=Super%20Smash%20Flash%202', description: 'Fan-made Smash Bros platformer fighter', type: 'flash' },
+    { id: 'io-games', name: '.io Games', icon: '🌐', path: '/games/io-games.html', description: 'Browse popular .io multiplayer games', type: 'browser' },
+  ];
+
+  // Generic postMessage bridge for any game (scores + leaderboard)
+  if (!this._gameScoreListenerAdded) {
+    window.addEventListener('message', (e) => {
+      if (e.origin !== window.location.origin) return;
+      // Handle score submissions: { type: '<gameId>-score', score: N } or { type: 'game-score', game: '<id>', score: N }
+      if (e.data && typeof e.data.score === 'number') {
+        let gameId = null;
+        if (e.data.type === 'game-score' && e.data.game) {
+          gameId = e.data.game;
+        } else if (typeof e.data.type === 'string' && e.data.type.endsWith('-score')) {
+          gameId = e.data.type.replace(/-score$/, '');
+        }
+        if (gameId && /^[a-z0-9_-]{1,32}$/.test(gameId)) {
+          this.socket.emit('submit-high-score', { game: gameId, score: e.data.score });
+        }
+      }
+      // Handle leaderboard requests from game iframes/windows
+      if (e.data && e.data.type === 'get-leaderboard') {
+        const gid = e.data.game || 'flappy';
+        const scores = this.highScores?.[gid] || [];
+        const target = e.source || (this._gameIframe?.contentWindow);
+        try { target?.postMessage({ type: 'leaderboard-data', leaderboard: scores }, e.origin); } catch {}
+      }
+    });
+    this._gameScoreListenerAdded = true;
+  }
+
+  // Activities button → open launcher modal
+  document.getElementById('activities-btn')?.addEventListener('click', () => this._openActivitiesModal());
+
+  // Close activities modal
+  document.getElementById('close-activities-btn')?.addEventListener('click', () => this._closeActivitiesModal());
+  document.getElementById('activities-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'activities-modal') this._closeActivitiesModal();
+  });
+
+  // Game iframe controls
+  document.getElementById('game-iframe-close')?.addEventListener('click', () => this._closeGameIframe());
+  document.getElementById('game-iframe-popout')?.addEventListener('click', () => this._popoutGame());
+
+  // Game volume slider — forward volume changes into the game iframe
+  const gameVolSlider = document.getElementById('game-volume-slider');
+  const gameVolPct = document.getElementById('game-volume-pct');
+  if (gameVolSlider) {
+    gameVolSlider.addEventListener('input', () => {
+      const val = parseInt(gameVolSlider.value);
+      if (gameVolPct) gameVolPct.textContent = val + '%';
+      // Post volume message into the game iframe
+      try {
+        const iframe = document.getElementById('game-iframe');
+        if (iframe?.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'set-volume', volume: val / 100 }, window.location.origin);
+        }
+      } catch {}
+    });
+  }
+
+  // Image click — open lightbox overlay (CSP-safe — no inline handlers)
+  document.getElementById('messages').addEventListener('click', (e) => {
+    if (e.target.classList.contains('chat-image')) {
+      this._openLightbox(e.target.src);
+    }
+    // Spoiler reveal toggle
+    if (e.target.closest('.spoiler')) {
+      e.target.closest('.spoiler').classList.toggle('revealed');
+    }
+  });
+
+  // Image right-click — custom context menu for chat thumbnails
+  document.getElementById('messages').addEventListener('contextmenu', (e) => {
+    if (e.target.classList.contains('chat-image')) {
+      e.preventDefault();
+      this._showImageContextMenu(e, e.target.src);
+    }
+  });
+
+  // Risky file download warning — intercept clicks on potentially harmful files
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const link = e.target.closest('a.risky-file');
+    if (!link) return;
+    e.preventDefault();
+    const fileName = link.getAttribute('download') || 'this file';
+    const ext = fileName.split('.').pop().toLowerCase();
+    this._showRiskyDownloadWarning(fileName, ext, link.href);
+  });
+
+  // Reply banner click — scroll to the original message
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const banner = e.target.closest('.reply-banner');
+    if (!banner) return;
+    const replyMsgId = banner.dataset.replyMsgId;
+    if (!replyMsgId) return;
+    const targetMsg = document.querySelector(`[data-msg-id="${replyMsgId}"]`);
+    if (targetMsg) {
+      targetMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetMsg.classList.add('highlight-flash');
+      setTimeout(() => targetMsg.classList.remove('highlight-flash'), 2000);
+    }
+  });
+
+  // Emoji picker toggle
+  document.getElementById('emoji-btn').addEventListener('click', () => {
+    this._toggleEmojiPicker();
+  });
+
+  // Close emoji picker when clicking outside
+  document.addEventListener('click', (e) => {
+    const picker = document.getElementById('emoji-picker');
+    const btn = document.getElementById('emoji-btn');
+    if (picker && picker.style.display !== 'none' &&
+        !picker.contains(e.target) && !btn.contains(e.target)) {
+      picker.style.display = 'none';
+    }
+  });
+
+  // Reply close button
+  document.getElementById('reply-close-btn').addEventListener('click', () => {
+    this._clearReply();
+  });
+
+  // Messages container — delegate reaction and reply button clicks
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+
+    const action = target.dataset.action;
+    const msgEl = target.closest('.message, .message-compact');
+    if (!msgEl) return;
+
+    const msgId = parseInt(msgEl.dataset.msgId);
+    if (!msgId) return;
+
+    if (action === 'react') {
+      this._showReactionPicker(msgEl, msgId);
+    } else if (action === 'reply') {
+      this._setReply(msgEl, msgId);
+    } else if (action === 'edit') {
+      this._startEditMessage(msgEl, msgId);
+    } else if (action === 'delete') {
+      if (confirm('Delete this message?')) {
+        this.socket.emit('delete-message', { messageId: msgId });
+      }
+    } else if (action === 'pin') {
+      this.socket.emit('pin-message', { messageId: msgId });
+    } else if (action === 'unpin') {
+      this.socket.emit('unpin-message', { messageId: msgId });
+    } else if (action === 'archive') {
+      this.socket.emit('archive-message', { messageId: msgId });
+    } else if (action === 'unarchive') {
+      this.socket.emit('unarchive-message', { messageId: msgId });
+    }
+  });
+
+  // Reaction badge click (toggle own reaction)
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const badge = e.target.closest('.reaction-badge');
+    if (!badge) return;
+    const msgEl = badge.closest('.message, .message-compact');
+    if (!msgEl) return;
+    const msgId = parseInt(msgEl.dataset.msgId);
+    const emoji = badge.dataset.emoji;
+    const hasOwn = badge.classList.contains('own');
+    if (hasOwn) {
+      this.socket.emit('remove-reaction', { messageId: msgId, emoji });
+    } else {
+      this.socket.emit('add-reaction', { messageId: msgId, emoji });
+    }
+  });
+
+  // Rename username
+  document.getElementById('rename-btn').addEventListener('click', () => {
+    document.getElementById('rename-modal').style.display = 'flex';
+    const input = document.getElementById('rename-input');
+    input.value = this.user.displayName || this.user.username;
+    input.focus();
+    input.select();
+    // Populate bio
+    const bioInput = document.getElementById('edit-profile-bio');
+    if (bioInput) bioInput.value = this.user.bio || '';
+    this._updateAvatarPreview();
+    // Sync shape picker buttons
+    const picker = document.getElementById('avatar-shape-picker');
+    if (picker) {
+      const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
+      picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.shape === currentShape);
+      });
+      this._pendingAvatarShape = currentShape;
+    }
+  });
+
+  // ── Profile popup: click on message author name or avatar ──
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const author = e.target.closest('.message-author');
+    const avatar = e.target.closest('.message-avatar, .message-avatar-img');
+    if (!author && !avatar) return;
+    // Don't trigger if clicking toolbar buttons
+    if (e.target.closest('.msg-toolbar')) return;
+    const msgEl = e.target.closest('.message, .message-compact');
+    if (!msgEl) return;
+    const userId = parseInt(msgEl.dataset.userId);
+    if (!isNaN(userId)) {
+      clearTimeout(this._hoverProfileTimer);
+      clearTimeout(this._hoverCloseTimer);
+      clearTimeout(this._hoverAutoCloseTimer);
+      clearTimeout(this._hoverFadeTimeout);
+      // If a hover popup is already open, promote it to permanent (no re-fetch)
+      const existingPopup = document.getElementById('profile-popup');
+      if (existingPopup && this._isHoverPopup) {
+        this._promoteHoverPopup(existingPopup);
+        return;
+      }
+      this._isHoverPopup = false;
+      this._hoverTarget = null;
+      this._profilePopupAnchor = e.target;
+      this.socket.emit('get-user-profile', { userId });
+    }
+  });
+
+  // ── Profile popup: click on user item in sidebar ──
+  document.getElementById('online-users').addEventListener('click', (e) => {
+    // Don't trigger for action buttons (DM, kick, etc.)
+    if (e.target.closest('.user-action-btn') || e.target.closest('.user-admin-actions')) return;
+    const userItem = e.target.closest('.user-item');
+    if (!userItem) return;
+    const userId = parseInt(userItem.dataset.userId);
+    if (!isNaN(userId)) {
+      clearTimeout(this._hoverProfileTimer);
+      clearTimeout(this._hoverCloseTimer);
+      clearTimeout(this._hoverAutoCloseTimer);
+      clearTimeout(this._hoverFadeTimeout);
+      // If a hover popup is already open, promote it to permanent (no re-fetch)
+      const existingPopup = document.getElementById('profile-popup');
+      if (existingPopup && this._isHoverPopup) {
+        this._promoteHoverPopup(existingPopup);
+        return;
+      }
+      this._isHoverPopup = false;
+      this._hoverTarget = null;
+      this._profilePopupAnchor = userItem;
+      this.socket.emit('get-user-profile', { userId });
+    }
+  });
+
+  // ── Right-click user → Invite to channel ──
+  document.getElementById('online-users').addEventListener('contextmenu', (e) => {
+    const userItem = e.target.closest('.user-item');
+    if (!userItem) return;
+    const userId = parseInt(userItem.dataset.userId);
+    if (isNaN(userId) || userId === this.user.id) return;
+    e.preventDefault();
+    this._showUserContextMenu(e, userId);
+  });
+
+  // ── Profile popup: hover-over on usernames/avatars (translucent preview) ──
+  const setupHoverProfile = (container, getInfo) => {
+    container.addEventListener('mouseover', (e) => {
+      const trigger = getInfo(e);
+      if (!trigger) {
+        // Mouse moved to a non-trigger element — cancel any pending hover
+        clearTimeout(this._hoverProfileTimer);
+        this._hoverTarget = null;
+        // Close hover popup INSTANTLY
+        if (this._isHoverPopup) {
+          clearTimeout(this._hoverCloseTimer);
+          clearTimeout(this._hoverAutoCloseTimer);
+          clearTimeout(this._hoverFadeTimeout);
+          this._closeProfilePopup();
+        }
+        return;
+      }
+      if (trigger.el === this._hoverTarget) return;
+      // Switching to a different trigger — close old hover popup instantly
+      if (this._isHoverPopup) {
+        clearTimeout(this._hoverFadeTimeout);
+        this._closeProfilePopup();
+      }
+      clearTimeout(this._hoverProfileTimer);
+      clearTimeout(this._hoverCloseTimer);
+      clearTimeout(this._hoverAutoCloseTimer);
+      this._hoverTarget = trigger.el;
+
+      // Don't show hover popup if a click-based popup is already open
+      if (document.getElementById('profile-popup') && !this._isHoverPopup) return;
+
+      this._hoverProfileTimer = setTimeout(() => {
+        // Verify the mouse is still over this trigger element
+        if (this._hoverTarget !== trigger.el) return;
+        if (!isNaN(trigger.userId)) {
+          this._profilePopupAnchor = trigger.el;
+          this._isHoverPopup = true;
+          this.socket.emit('get-user-profile', { userId: trigger.userId });
+        }
+      }, 350);
+    });
+
+    container.addEventListener('mouseleave', () => {
+      clearTimeout(this._hoverProfileTimer);
+      clearTimeout(this._hoverAutoCloseTimer);
+      clearTimeout(this._hoverFadeTimeout);
+      this._hoverTarget = null;
+      // Close hover popup INSTANTLY on leaving the container
+      if (this._isHoverPopup) {
+        this._closeProfilePopup();
+      }
+    });
+  };
+
+  setupHoverProfile(document.getElementById('messages'), (e) => {
+    const author = e.target.closest('.message-author');
+    const avatar = e.target.closest('.message-avatar, .message-avatar-img');
+    if (!author && !avatar) return null;
+    if (e.target.closest('.msg-toolbar')) return null;
+    const msgEl = (author || avatar).closest('.message, .message-compact');
+    if (!msgEl) return null;
+    return { el: author || avatar, userId: parseInt(msgEl.dataset.userId) };
+  });
+
+  setupHoverProfile(document.getElementById('online-users'), (e) => {
+    if (e.target.closest('.user-action-btn') || e.target.closest('.user-admin-actions')) return null;
+    const userItem = e.target.closest('.user-item');
+    if (!userItem) return null;
+    return { el: userItem, userId: parseInt(userItem.dataset.userId) };
+  });
+
+  document.getElementById('cancel-rename-btn').addEventListener('click', () => {
+    document.getElementById('rename-modal').style.display = 'none';
+  });
+
+  document.getElementById('save-rename-btn').addEventListener('click', () => this._saveRename());
+
+  document.getElementById('rename-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') this._saveRename();
+  });
+
+  document.getElementById('rename-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+
+  // ── Admin moderation bindings ───────────────────────
+  document.getElementById('cancel-admin-action-btn').addEventListener('click', () => {
+    document.getElementById('admin-action-modal').style.display = 'none';
+  });
+
+  document.getElementById('admin-action-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+
+  document.getElementById('confirm-admin-action-btn').addEventListener('click', () => {
+    if (!this.adminActionTarget) return;
+    const { action, userId } = this.adminActionTarget;
+    const reason = document.getElementById('admin-action-reason').value.trim();
+    const duration = parseInt(document.getElementById('admin-action-duration').value) || 10;
+    const scrubMessages = document.getElementById('admin-scrub-checkbox').checked;
+    const scrubScope = document.getElementById('admin-scrub-scope').value;
+
+    if (action === 'kick') {
+      this.socket.emit('kick-user', { userId, reason, scrubMessages, scrubScope });
+    } else if (action === 'ban') {
+      this.socket.emit('ban-user', { userId, reason, scrubMessages });
+    } else if (action === 'mute') {
+      this.socket.emit('mute-user', { userId, reason, duration });
+    } else if (action === 'delete-user') {
+      if (!confirm(`Are you SURE you want to delete ${this.adminActionTarget.username}? This cannot be undone.`)) return;
+      this.socket.emit('delete-user', { userId, scrubMessages });
+    }
+
+    document.getElementById('admin-action-modal').style.display = 'none';
+    this.adminActionTarget = null;
+  });
+
+  // ── Settings popout modal ────────────────────────────
+  const openSettingsModal = () => {
+    this._snapshotAdminSettings();
+    document.getElementById('settings-modal').style.display = 'flex';
+    this._syncSettingsNav();
+    // Show desktop-only sections when running inside Haven Desktop
+    if (window.havenDesktop?.isDesktopApp) {
+      document.getElementById('desktop-shortcuts-nav')?.style.removeProperty('display');
+      document.getElementById('desktop-app-nav')?.style.removeProperty('display');
+    }
+    // Eagerly fetch data that requires async calls so sections don't
+    // sit on "Loading..." indefinitely if the user never clicks the nav item.
+    loadTotpStatus();
+    if (this.user?.isAdmin) this._loadRoles();
+  };
+  document.getElementById('open-settings-btn').addEventListener('click', openSettingsModal);
+  document.getElementById('mobile-settings-btn')?.addEventListener('click', () => {
+    openSettingsModal();
+    document.getElementById('app-body')?.classList.remove('mobile-sidebar-open');
+    document.getElementById('mobile-overlay')?.classList.remove('active');
+  });
+  document.getElementById('close-settings-btn').addEventListener('click', () => {
+    this._cancelAdminSettings();
+  });
+  document.getElementById('settings-modal').addEventListener('click', (e) => {
+    if (e.target !== e.currentTarget) return;
+    // Don't close while TOTP setup flow is active — user could lose progress
+    const setupArea  = document.getElementById('totp-setup-area');
+    const backupArea = document.getElementById('totp-backup-area');
+    if ((setupArea  && setupArea.style.display  !== 'none') ||
+        (backupArea && backupArea.style.display !== 'none')) return;
+    this._cancelAdminSettings();
+  });
+  document.getElementById('admin-save-btn')?.addEventListener('click', () => {
+    this._saveAdminSettings();
+  });
+
+  // ── Settings nav click-to-scroll ─────────────────────
+  document.querySelectorAll('.settings-nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const targetId = item.dataset.target;
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      // Scroll into view within the settings body
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Update active state
+      document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+    });
+  });
+
+  // ── Password change ──────────────────────────────────
+  document.getElementById('change-password-btn').addEventListener('click', async () => {
+    const cur  = document.getElementById('current-password').value;
+    const np   = document.getElementById('new-password').value;
+    const conf = document.getElementById('confirm-password').value;
+    const hint = document.getElementById('password-status');
+    hint.textContent = '';
+    hint.className = 'settings-hint';
+
+    if (!cur || !np) return hint.textContent = 'Fill in all fields';
+    if (np.length < 8) return hint.textContent = 'New password must be 8+ characters';
+    if (np !== conf)   return hint.textContent = 'Passwords do not match';
+
+    // Flag to prevent force-logout from kicking us out
+    this._justChangedPassword = true;
+
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.token}`
+        },
+        body: JSON.stringify({ currentPassword: cur, newPassword: np })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        hint.textContent = data.error || 'Failed';
+        hint.classList.add('error');
+        return;
+      }
+      // Store the fresh token
+      this.token = data.token;
+      localStorage.setItem('haven_token', data.token);
+      // Update socket auth so auto-reconnect uses the new token
+      this.socket.auth.token = data.token;
+
+      // Re-wrap E2E private key with a key derived from the NEW password
+      // so the server backup can be unlocked with the new credentials
+      if (this.e2e && this.e2e.ready && typeof HavenE2E !== 'undefined') {
+        try {
+          const newWrap = await HavenE2E.deriveWrappingKey(np);
+          await this.e2e.reWrapKey(this.socket, newWrap);
+        } catch (err) {
+          console.warn('[E2E] Failed to re-wrap key:', err);
+        }
+      }
+
+      hint.textContent = '✅ Password changed!';
+      hint.classList.add('success');
+      document.getElementById('current-password').value = '';
+      document.getElementById('new-password').value = '';
+      document.getElementById('confirm-password').value = '';
+      // Clear the flag after a delay so socket reconnects go through
+      setTimeout(() => { this._justChangedPassword = false; }, 5000);
+    } catch {
+      this._justChangedPassword = false;
+      hint.textContent = 'Network error';
+      hint.classList.add('error');
+    }
+  });
+
+  // ── Two-Factor Authentication settings ─────────────
+  const totpStatusText     = document.getElementById('totp-status-text');
+  const totpEnableArea     = document.getElementById('totp-enable-area');
+  const totpSetupArea      = document.getElementById('totp-setup-area');
+  const totpBackupArea     = document.getElementById('totp-backup-area');
+  const totpManageArea     = document.getElementById('totp-manage-area');
+  const totpSetupStatus    = document.getElementById('totp-setup-status');
+  const totpManageStatus   = document.getElementById('totp-manage-status');
+
+  const loadTotpStatus = async () => {
+    if (!totpStatusText) return;
+    try {
+      const res = await fetch('/api/auth/totp/status', {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) { totpStatusText.textContent = data.error || 'Error'; return; }
+
+      // Hide all sub-areas first
+      totpEnableArea.style.display = 'none';
+      totpSetupArea.style.display = 'none';
+      totpBackupArea.style.display = 'none';
+      totpManageArea.style.display = 'none';
+
+      if (data.enabled) {
+        totpStatusText.textContent = '';
+        totpManageArea.style.display = 'block';
+        const remaining = document.getElementById('totp-backup-remaining');
+        if (remaining) remaining.textContent = `${data.backupCodesRemaining} backup code${data.backupCodesRemaining === 1 ? '' : 's'} remaining`;
+        // Clear password input
+        const pwInput = document.getElementById('totp-disable-password');
+        if (pwInput) pwInput.value = '';
+        if (totpManageStatus) { totpManageStatus.textContent = ''; totpManageStatus.className = 'settings-hint'; }
+      } else {
+        totpStatusText.textContent = '';
+        totpEnableArea.style.display = 'block';
+      }
+    } catch {
+      totpStatusText.textContent = 'Connection error';
+    }
+  };
+
+  // Load status when the 2FA section becomes visible
+  const settingsNav = document.getElementById('settings-nav');
+  if (settingsNav) {
+    settingsNav.addEventListener('click', (e) => {
+      const item = e.target.closest('.settings-nav-item');
+      if (item && item.dataset.target === 'section-2fa') loadTotpStatus();
+      if (item && item.dataset.target === 'section-desktop-shortcuts') this._setupDesktopShortcuts();
+      if (item && item.dataset.target === 'section-desktop-app') this._setupDesktopAppPrefs();
+    });
+  }
+
+  // Enable button → start setup
+  document.getElementById('totp-enable-btn')?.addEventListener('click', async () => {
+    totpEnableArea.style.display = 'none';
+    totpSetupArea.style.display = 'block';
+    if (totpSetupStatus) { totpSetupStatus.textContent = ''; totpSetupStatus.className = 'settings-hint'; }
+    document.getElementById('totp-verify-code').value = '';
+
+    try {
+      const res = await fetch('/api/auth/totp/setup', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (!res.ok) { totpSetupStatus.textContent = data.error || 'Setup failed'; return; }
+
+      document.getElementById('totp-qr-img').src = data.qrDataUrl;
+      document.getElementById('totp-secret-text').textContent = data.base32Secret;
+    } catch {
+      totpSetupStatus.textContent = 'Connection error';
+    }
+  });
+
+  // Copy secret button
+  document.getElementById('totp-copy-secret')?.addEventListener('click', () => {
+    const secret = document.getElementById('totp-secret-text')?.textContent;
+    if (!secret) return;
+    const copyBtn = document.getElementById('totp-copy-secret');
+    const markCopied = () => {
+      copyBtn.textContent = '✅';
+      setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 1500);
+    };
+    navigator.clipboard.writeText(secret).then(markCopied).catch(() => {
+      // Fallback for Electron / contexts where Clipboard API is restricted
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = secret;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        markCopied();
+      } catch { /* could not copy */ }
+    });
+  });
+
+  // Cancel setup
+  document.getElementById('totp-cancel-setup-btn')?.addEventListener('click', () => {
+    totpSetupArea.style.display = 'none';
+    totpEnableArea.style.display = 'block';
+  });
+
+  // Verify & Activate
+  document.getElementById('totp-verify-setup-btn')?.addEventListener('click', async () => {
+    const code = document.getElementById('totp-verify-code')?.value.trim();
+    if (!code || code.length !== 6) {
+      if (totpSetupStatus) totpSetupStatus.textContent = 'Enter the 6-digit code from your authenticator';
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/totp/verify-setup', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (totpSetupStatus) { totpSetupStatus.textContent = data.error || 'Verification failed'; totpSetupStatus.classList.add('error'); }
+        return;
+      }
+      // Store fresh token — server bumped password_version to invalidate other sessions
+      if (data.token) {
+        this._justEnabledTotp = true;
+        this.token = data.token;
+        localStorage.setItem('haven_token', data.token);
+        if (this.socket) this.socket.auth.token = data.token;
+      }
+      // Show backup codes
+      totpSetupArea.style.display = 'none';
+      totpBackupArea.style.display = 'block';
+      const codesEl = document.getElementById('totp-backup-codes');
+      if (codesEl) codesEl.innerHTML = data.backupCodes.map(c => `<div>${c}</div>`).join('');
+    } catch {
+      if (totpSetupStatus) totpSetupStatus.textContent = 'Connection error';
+    }
+  });
+
+  // Copy backup codes to clipboard
+  document.getElementById('totp-copy-backup-btn')?.addEventListener('click', () => {
+    const codesEl = document.getElementById('totp-backup-codes');
+    if (!codesEl) return;
+    const codes = Array.from(codesEl.querySelectorAll('div')).map(d => d.textContent).join('\n');
+    const btn = document.getElementById('totp-copy-backup-btn');
+    const markCopied = () => {
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy Backup Codes'; }, 2000);
+    };
+    navigator.clipboard.writeText(codes).then(markCopied).catch(() => {
+      // Fallback for Electron / contexts where Clipboard API is restricted
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = codes;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        markCopied();
+      } catch { /* could not copy */ }
+    });
+  });
+
+  // Done viewing backup codes
+  document.getElementById('totp-backup-done-btn')?.addEventListener('click', () => {
+    loadTotpStatus();
+  });
+
+  // Disable 2FA
+  document.getElementById('totp-disable-btn')?.addEventListener('click', async () => {
+    const pw = document.getElementById('totp-disable-password')?.value;
+    if (!pw) { if (totpManageStatus) totpManageStatus.textContent = 'Enter your password'; return; }
+    try {
+      const res = await fetch('/api/auth/totp/disable', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (totpManageStatus) { totpManageStatus.textContent = data.error || 'Failed'; totpManageStatus.classList.add('error'); }
+        return;
+      }
+      this._showToast('Two-factor authentication disabled', 'info');
+      loadTotpStatus();
+    } catch {
+      if (totpManageStatus) totpManageStatus.textContent = 'Connection error';
+    }
+  });
+
+  // Regenerate backup codes
+  document.getElementById('totp-regen-backup-btn')?.addEventListener('click', async () => {
+    const pw = document.getElementById('totp-disable-password')?.value;
+    if (!pw) { if (totpManageStatus) totpManageStatus.textContent = 'Enter your password'; return; }
+    try {
+      const res = await fetch('/api/auth/totp/regenerate-backup', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (totpManageStatus) { totpManageStatus.textContent = data.error || 'Failed'; totpManageStatus.classList.add('error'); }
+        return;
+      }
+      // Show the new backup codes
+      totpManageArea.style.display = 'none';
+      totpBackupArea.style.display = 'block';
+      const codesEl = document.getElementById('totp-backup-codes');
+      if (codesEl) codesEl.innerHTML = data.backupCodes.map(c => `<div>${c}</div>`).join('');
+    } catch {
+      if (totpManageStatus) totpManageStatus.textContent = 'Connection error';
+    }
+  });
+
+  // ── Plugin refresh button ─────────────────────────────
+  document.getElementById('plugin-refresh-btn')?.addEventListener('click', () => {
+    if (window.HavenPluginLoader) {
+      window.HavenPluginLoader.refresh();
+      this._showToast('Refreshing plugins & themes…', 'info');
+    }
+  });
+
+  // ── Self-delete account ─────────────────────────────
+  document.getElementById('delete-account-btn').addEventListener('click', () => {
+    // Build a confirmation overlay dynamically
+    const existing = document.querySelector('.self-delete-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay self-delete-overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:380px">
+        <h3>⚠️ Delete Account</h3>
+        <p class="modal-desc">This will permanently delete your account. This cannot be undone.</p>
+        <div class="form-group compact">
+          <input type="password" id="self-delete-pw" placeholder="Enter your password" maxlength="128" autocomplete="current-password">
+        </div>
+        <label class="toggle-row" style="margin:8px 0">
+          <span>Delete all my messages</span>
+          <input type="checkbox" id="self-delete-scrub">
+        </label>
+        <small class="settings-hint" style="margin-bottom:8px;display:block">If unchecked, your messages will show as "[Deleted User]" instead.</small>
+        <small class="settings-hint self-delete-status" style="display:block;margin-bottom:8px"></small>
+        <div class="modal-actions">
+          <button class="btn-sm self-delete-cancel">Cancel</button>
+          <button class="btn-sm btn-danger-fill self-delete-confirm">Delete My Account</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('.self-delete-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    overlay.querySelector('.self-delete-confirm').addEventListener('click', () => {
+      const pw = document.getElementById('self-delete-pw').value;
+      const scrub = document.getElementById('self-delete-scrub').checked;
+      const status = overlay.querySelector('.self-delete-status');
+
+      if (!pw) { status.textContent = 'Password is required'; return; }
+      if (!confirm('Are you ABSOLUTELY sure? Your account will be gone forever.')) return;
+
+      status.textContent = 'Deleting...';
+      overlay.querySelector('.self-delete-confirm').disabled = true;
+
+      this.socket.emit('self-delete-account', { password: pw, scrubMessages: scrub }, (res) => {
+        if (res && res.error) {
+          status.textContent = res.error;
+          overlay.querySelector('.self-delete-confirm').disabled = false;
+          return;
+        }
+        // Account deleted — clear local storage and redirect to login
+        localStorage.removeItem('haven_token');
+        localStorage.removeItem('haven_e2e_privkey');
+        window.location.reload();
+      });
+    });
+  });
+
+  // Member visibility select (admin) — saved via admin Save button
+
+  // View bans button
+  document.getElementById('view-bans-btn').addEventListener('click', () => {
+    this.socket.emit('get-bans');
+    document.getElementById('bans-modal').style.display = 'flex';
+  });
+
+  document.getElementById('close-bans-btn').addEventListener('click', () => {
+    document.getElementById('bans-modal').style.display = 'none';
+  });
+
+  document.getElementById('bans-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+
+  // View all members buttons (sidebar + admin settings)
+  document.getElementById('sidebar-members-btn').addEventListener('click', () => {
+    this._openAllMembersModal();
+  });
+  document.getElementById('view-all-members-btn').addEventListener('click', () => {
+    this._openAllMembersModal();
+  });
+  document.getElementById('close-all-members-btn').addEventListener('click', () => {
+    document.getElementById('all-members-modal').style.display = 'none';
+  });
+  document.getElementById('all-members-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+  document.getElementById('all-members-search').addEventListener('input', () => this._filterAllMembers());
+  document.getElementById('all-members-filter').addEventListener('change', () => this._filterAllMembers());
+
+  // ── Cleanup controls (admin) — saved via admin Save button ──
+  const cleanupAge = document.getElementById('cleanup-max-age');
+  if (cleanupAge) {
+    cleanupAge.addEventListener('change', () => {
+      const val = Math.max(0, Math.min(3650, parseInt(cleanupAge.value) || 0));
+      cleanupAge.value = val;
+    });
+  }
+  const cleanupSize = document.getElementById('cleanup-max-size');
+  if (cleanupSize) {
+    cleanupSize.addEventListener('change', () => {
+      const val = Math.max(0, Math.min(100000, parseInt(cleanupSize.value) || 0));
+      cleanupSize.value = val;
+    });
+  }
+
+  const runCleanupBtn = document.getElementById('run-cleanup-now-btn');
+  if (runCleanupBtn) {
+    runCleanupBtn.addEventListener('click', () => {
+      this.socket.emit('run-cleanup-now');
+      this._showToast('Cleanup triggered — check server console for results', 'success');
+    });
+  }
+
+  // ── Whitelist controls (admin) ───────────────────────
+  // Whitelist toggle — saved via admin Save button
+
+  document.getElementById('whitelist-add-btn').addEventListener('click', () => {
+    const input = document.getElementById('whitelist-username-input');
+    const username = input.value.trim();
+    if (!username) return;
+    this.socket.emit('whitelist-add', { username });
+    input.value = '';
+  });
+
+  document.getElementById('whitelist-username-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('whitelist-add-btn').click();
+  });
+
+  // Listen for whitelist list updates
+  this.socket.on('whitelist-list', (list) => {
+    this._renderWhitelist(list);
+  });
+
+  // ── Tunnel settings (immediate — not part of Save flow) ──
+  const tunnelToggleBtn = document.getElementById('tunnel-toggle-btn');
+  if (tunnelToggleBtn) {
+    tunnelToggleBtn.addEventListener('click', () => {
+      // Determine desired state from button text
+      const wantStart = tunnelToggleBtn.textContent.trim().startsWith('Start');
+      this.socket.emit('update-server-setting', {
+        key: 'tunnel_enabled',
+        value: wantStart ? 'true' : 'false'
+      });
+      this._syncTunnelState(wantStart);
+    });
+  }
+
+  const tunnelProvEl = document.getElementById('tunnel-provider-select');
+  if (tunnelProvEl) {
+    tunnelProvEl.addEventListener('change', () => {
+      this.socket.emit('update-server-setting', {
+        key: 'tunnel_provider',
+        value: tunnelProvEl.value
+      });
+    });
+  }
+
+  // ── Server invite code (immediate — not part of Save flow) ──
+  document.getElementById('generate-server-code-btn')?.addEventListener('click', () => {
+    this.socket.emit('generate-server-code');
+  });
+  document.getElementById('clear-server-code-btn')?.addEventListener('click', () => {
+    if (!confirm('Clear the server invite code? Anyone with the old code won\'t be able to use it.')) return;
+    this.socket.emit('clear-server-code');
+  });
+  document.getElementById('copy-server-code-btn')?.addEventListener('click', () => {
+    const code = document.getElementById('server-code-value')?.textContent;
+    if (code && code !== '—') {
+      navigator.clipboard.writeText(code).then(() => this._showToast('Server code copied!', 'success'));
+    }
+  });
+},
+
+// ═══════════════════════════════════════════════════════
+// SERVER BAR — multi-server with live status
+// ═══════════════════════════════════════════════════════
+
+_setupServerBar() {
+  this.serverManager.startPolling(30000);
+  this._renderServerBar();
+  if (this._serverBarInterval) clearInterval(this._serverBarInterval);
+  this._serverBarInterval = setInterval(() => this._renderServerBar(), 30000);
+
+  document.getElementById('home-server').addEventListener('click', () => {
+    // Already home — pulse the icon for fun
+    const el = document.getElementById('home-server');
+    el.classList.add('bounce');
+    setTimeout(() => el.classList.remove('bounce'), 400);
+  });
+
+  document.getElementById('add-server-btn').addEventListener('click', () => {
+    this._editingServerUrl = null;
+    document.getElementById('add-server-modal-title').textContent = 'Add a Server';
+    document.getElementById('add-server-modal').style.display = 'flex';
+    document.getElementById('add-server-name-input').value = '';
+    document.getElementById('server-url-input').value = '';
+    document.getElementById('server-url-input').disabled = false;
+    document.getElementById('add-server-icon-input').value = '';
+    document.getElementById('save-server-btn').textContent = 'Add Server';
+    document.getElementById('add-server-name-input').focus();
+  });
+
+  document.getElementById('cancel-server-btn').addEventListener('click', () => {
+    document.getElementById('add-server-modal').style.display = 'none';
+    document.getElementById('server-url-input').disabled = false;
+    this._editingServerUrl = null;
+  });
+
+  document.getElementById('save-server-btn').addEventListener('click', () => this._addServer());
+
+  // Enter key in modal inputs
+  document.getElementById('server-url-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') this._addServer();
+  });
+
+  // Close modal on overlay click
+  document.getElementById('add-server-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+
+  // ── Manage Servers gear button & modal ──────────────
+  document.getElementById('manage-servers-btn')?.addEventListener('click', () => {
+    this._openManageServersModal();
+  });
+  document.getElementById('manage-servers-close-btn')?.addEventListener('click', () => {
+    document.getElementById('manage-servers-modal').style.display = 'none';
+  });
+  document.getElementById('manage-servers-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+  document.getElementById('manage-servers-add-btn')?.addEventListener('click', () => {
+    document.getElementById('manage-servers-modal').style.display = 'none';
+    document.getElementById('add-server-btn').click();
+  });
+
+  // ── Channel Code Settings Modal ─────────────────────
+  document.getElementById('channel-code-settings-btn')?.addEventListener('click', () => {
+    if (!this.currentChannel || (!this.user.isAdmin && !this._hasPerm('create_channel'))) return;
+    const channel = this.channels.find(c => c.code === this.currentChannel);
+    if (!channel || channel.is_dm) return;
+
+    document.getElementById('code-settings-channel-name').textContent = `# ${channel.name}`;
+    document.getElementById('code-visibility-select').value = channel.code_visibility || 'public';
+    document.getElementById('code-mode-select').value = channel.code_mode || 'static';
+    document.getElementById('code-rotation-type-select').value = channel.code_rotation_type || 'time';
+    document.getElementById('code-rotation-interval').value = channel.code_rotation_interval || 60;
+
+    this._toggleCodeRotationFields();
+    document.getElementById('code-settings-modal').style.display = 'flex';
+  });
+
+  document.getElementById('code-mode-select')?.addEventListener('change', () => this._toggleCodeRotationFields());
+  document.getElementById('code-rotation-type-select')?.addEventListener('change', () => {
+    const type = document.getElementById('code-rotation-type-select').value;
+    const label = document.getElementById('rotation-interval-label');
+    if (label) label.textContent = type === 'time' ? 'Rotation Interval (minutes)' : 'Rotate After X Joins';
+  });
+
+  document.getElementById('code-settings-cancel-btn')?.addEventListener('click', () => {
+    document.getElementById('code-settings-modal').style.display = 'none';
+  });
+
+  document.getElementById('code-settings-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+
+  document.getElementById('code-settings-save-btn')?.addEventListener('click', () => {
+    const channel = this.channels.find(c => c.code === this.currentChannel);
+    if (!channel) return;
+
+    this.socket.emit('update-channel-code-settings', {
+      channelId: channel.id,
+      code_visibility: document.getElementById('code-visibility-select').value,
+      code_mode: document.getElementById('code-mode-select').value,
+      code_rotation_type: document.getElementById('code-rotation-type-select').value,
+      code_rotation_interval: parseInt(document.getElementById('code-rotation-interval').value) || 60
+    });
+
+    document.getElementById('code-settings-modal').style.display = 'none';
+  });
+
+  document.getElementById('code-rotate-now-btn')?.addEventListener('click', () => {
+    const channel = this.channels.find(c => c.code === this.currentChannel);
+    if (!channel) return;
+
+    if (!confirm('Rotate the channel code now? Current code will become invalid.')) return;
+    this.socket.emit('rotate-channel-code', { channelId: channel.id });
+    document.getElementById('code-settings-modal').style.display = 'none';
+  });
+},
+
+_toggleCodeRotationFields() {
+  const isDynamic = document.getElementById('code-mode-select').value === 'dynamic';
+  document.getElementById('rotation-type-group').style.display = isDynamic ? '' : 'none';
+  document.getElementById('rotation-interval-group').style.display = isDynamic ? '' : 'none';
+  // Update interval label based on rotation type
+  const type = document.getElementById('code-rotation-type-select').value;
+  const label = document.getElementById('rotation-interval-label');
+  if (label) label.textContent = type === 'time' ? 'Rotation Interval (minutes)' : 'Rotate After X Joins';
+},
+
+_addServer() {
+  const name = document.getElementById('add-server-name-input').value.trim();
+  const url = document.getElementById('server-url-input').value.trim();
+  const iconInput = document.getElementById('add-server-icon-input').value.trim();
+  const autoPull = document.getElementById('server-auto-icon').checked;
+  if (!name || !url) return this._showToast('Name and address are both required', 'error');
+
+  const editUrl = this._editingServerUrl;
+  if (editUrl) {
+    // Editing existing server
+    this.serverManager.update(editUrl, { name, icon: iconInput || null });
+    this._editingServerUrl = null;
+    document.getElementById('add-server-modal').style.display = 'none';
+    this._renderServerBar();
+    this._showToast(`Updated "${name}"`, 'success');
+    // Auto-pull icon if checked
+    if (autoPull) this._autoPullServerIcon(editUrl);
+  } else {
+    // Adding new server
+    const icon = iconInput || null;
+    if (this.serverManager.add(name, url, icon)) {
+      document.getElementById('add-server-modal').style.display = 'none';
+      this._renderServerBar();
+      this._showToast(`Added "${name}"`, 'success');
+      // Auto-pull icon after health check completes
+      if (autoPull) {
+        const cleanUrl = url.replace(/\/+$/, '');
+        const finalUrl = /^https?:\/\//.test(cleanUrl) ? cleanUrl : 'https://' + cleanUrl;
+        setTimeout(() => this._autoPullServerIcon(finalUrl), 2000);
+      }
+    } else {
+      this._showToast('Server already in your list', 'error');
+    }
+  }
+},
+
+_autoPullServerIcon(url) {
+  const status = this.serverManager.statusCache.get(url);
+  if (status && status.icon) {
+    this.serverManager.update(url, { icon: status.icon });
+    this._renderServerBar();
+  }
+},
+
+_editServer(url) {
+  const server = this.serverManager.servers.find(s => s.url === url);
+  if (!server) return;
+  this._editingServerUrl = url;
+  document.getElementById('add-server-modal-title').textContent = 'Edit Server';
+  document.getElementById('add-server-name-input').value = server.name;
+  document.getElementById('server-url-input').value = server.url;
+  document.getElementById('server-url-input').disabled = true;
+  document.getElementById('add-server-icon-input').value = server.icon || '';
+  document.getElementById('save-server-btn').textContent = 'Save';
+  document.getElementById('add-server-modal').style.display = 'flex';
+  document.getElementById('add-server-name-input').focus();
+},
+
+_openManageServersModal() {
+  this._renderManageServersList();
+  document.getElementById('manage-servers-modal').style.display = 'flex';
+},
+
+_renderManageServersList() {
+  const container = document.getElementById('manage-servers-list');
+  const servers = this.serverManager.getAll();
+  container.innerHTML = '';
+  if (servers.length === 0) return;  // CSS :empty handles empty state
+
+  servers.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'manage-server-row';
+
+    const online = s.status.online;
+    const statusClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
+    const statusText = online === true ? 'Online' : online === false ? 'Offline' : 'Checking...';
+    const initial = s.name.charAt(0).toUpperCase();
+    const iconUrl = s.icon || (s.status.icon || null);
+    const iconContent = iconUrl
+      ? `<img src="${this._escapeHtml(iconUrl)}" alt="" class="manage-srv-icon-img">`
+      : initial;
+
+    row.innerHTML = `
+      <div class="manage-server-icon">${iconContent}</div>
+      <div class="manage-server-info">
+        <div class="manage-server-name">${this._escapeHtml(s.name)}</div>
+        <div class="manage-server-url">${this._escapeHtml(s.url)}</div>
+      </div>
+      <span class="manage-server-status ${statusClass}">${statusText}</span>
+      <div class="manage-server-actions">
+        <button class="manage-server-visit" title="Open in new tab">🔗</button>
+        <button class="manage-server-edit" title="Edit server">✏️</button>
+        <button class="manage-server-delete danger-action" title="Remove server">🗑️</button>
+      </div>
+    `;
+
+    row.querySelector('.manage-server-visit').addEventListener('click', () => {
+      if (window.havenDesktop?.switchServer) {
+        window.havenDesktop.switchServer(s.url);
+      } else {
+        window.open(s.url, '_blank', 'noopener');
+      }
+    });
+    row.querySelector('.manage-server-edit').addEventListener('click', () => {
+      document.getElementById('manage-servers-modal').style.display = 'none';
+      this._editServer(s.url);
+    });
+    row.querySelector('.manage-server-delete').addEventListener('click', () => {
+      if (!confirm(`Remove "${s.name}" from your server list?`)) return;
+      this.serverManager.remove(s.url);
+      this._renderServerBar();
+      this._renderManageServersList();
+      this._showToast(`Removed "${s.name}"`, 'success');
+    });
+
+    // CSP-safe icon error handling: hide broken img, show initial letter
+    const iconImg = row.querySelector('.manage-srv-icon-img');
+    if (iconImg) {
+      iconImg.addEventListener('error', () => {
+        iconImg.style.display = 'none';
+        iconImg.parentElement.textContent = initial;
+      });
+    }
+
+    container.appendChild(row);
+  });
+},
+
+_renderServerBar() {
+  const list = document.getElementById('server-list');
+  const servers = this.serverManager.getAll();
+
+  list.innerHTML = servers.map(s => {
+    const initial = s.name.charAt(0).toUpperCase();
+    const online = s.status.online;
+    const statusClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
+    const statusText = online === true ? '● Online' : online === false ? '○ Offline' : '◌ Checking...';
+    // Use custom icon, auto-pulled icon from health check, or letter initial
+    const iconUrl = s.icon || (s.status.icon || null);
+    const iconContent = iconUrl
+      ? `<img src="${this._escapeHtml(iconUrl)}" class="server-icon-img" alt=""><span class="server-icon-text" style="display:none">${this._escapeHtml(initial)}</span>`
+      : `<span class="server-icon-text">${this._escapeHtml(initial)}</span>`;
+    return `
+      <div class="server-icon remote" data-url="${this._escapeHtml(s.url)}"
+           title="${this._escapeHtml(s.name)} — ${statusText}">
+        ${iconContent}
+        <span class="server-status-dot ${statusClass}"></span>
+        <button class="server-remove" title="Remove">&times;</button>
+      </div>
+    `;
+  }).join('');
+
+  // CSP-safe: handle broken server icons, fall back to letter initial
+  list.querySelectorAll('.server-icon-img').forEach(img => {
+    img.addEventListener('error', () => {
+      img.style.display = 'none';
+      const fallback = img.nextElementSibling;
+      if (fallback) fallback.style.display = '';
+    });
+  });
+
+  list.querySelectorAll('.server-icon.remote').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('server-remove')) {
+        e.stopPropagation();
+        this.serverManager.remove(el.dataset.url);
+        this._renderServerBar();
+        this._showToast('Server removed', 'success');
+        return;
+      }
+      if (window.havenDesktop?.switchServer) {
+        window.havenDesktop.switchServer(el.dataset.url);
+      } else {
+        window.open(el.dataset.url, '_blank', 'noopener');
+      }
+    });
+    // Right-click to edit
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this._editServer(el.dataset.url);
+    });
+  });
+
+  // Also update mobile sidebar server bubbles
+  this._renderMobileSidebarServers();
+},
+
+// ═══════════════════════════════════════════════════════
+// IMAGE UPLOAD — button, paste, drag & drop
+// ═══════════════════════════════════════════════════════
+
+_setupImageUpload() {
+  const fileInput = document.getElementById('file-input');
+  const uploadBtn = document.getElementById('upload-btn');
+  const messageArea = document.getElementById('message-area');
+
+  uploadBtn.addEventListener('click', () => {
+    if (!this.currentChannel) return this._showToast('Select a channel first', 'error');
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (!fileInput.files[0]) return;
+    const file = fileInput.files[0];
+    if (file.type.startsWith('image/')) {
+      this._queueImage(file);
+    } else {
+      this._uploadGeneralFile(file);
+    }
+    fileInput.value = '';
+  });
+
+  // Paste from clipboard — images get queued, other files go to general upload
+  document.getElementById('message-input').addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        this._queueImage(item.getAsFile());
+        return;
+      }
+      if (item.kind === 'file') {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) this._uploadGeneralFile(file);
+        return;
+      }
+    }
+  });
+
+  // Drag & drop — QUEUE instead of uploading immediately
+  messageArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    messageArea.classList.add('drag-over');
+  });
+
+  messageArea.addEventListener('dragleave', () => {
+    messageArea.classList.remove('drag-over');
+  });
+
+  messageArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    messageArea.classList.remove('drag-over');
+    const file = e.dataTransfer?.files[0];
+    if (!file) return;
+    if (file.type.startsWith('image/')) {
+      this._queueImage(file);
+    } else {
+      this._uploadGeneralFile(file);
+    }
+  });
+},
+
+// ═══════════════════════════════════════════════════════
+// MOBILE — hamburger, overlay, swipe gestures
+// ═══════════════════════════════════════════════════════
+
+_setupMobile() {
+  const menuBtn = document.getElementById('mobile-menu-btn');
+  const usersBtn = document.getElementById('mobile-users-btn');
+  const overlay = document.getElementById('mobile-overlay');
+  const appBody = document.getElementById('app-body');
+
+  // Hamburger — toggle left sidebar
+  menuBtn.addEventListener('click', () => {
+    const isOpen = appBody.classList.toggle('mobile-sidebar-open');
+    appBody.classList.remove('mobile-right-open');
+    if (isOpen) overlay.classList.add('active');
+    else overlay.classList.remove('active');
+  });
+
+  // Users button — toggle right sidebar
+  usersBtn.addEventListener('click', () => {
+    const isOpen = appBody.classList.toggle('mobile-right-open');
+    appBody.classList.remove('mobile-sidebar-open');
+    if (isOpen) overlay.classList.add('active');
+    else overlay.classList.remove('active');
+  });
+
+  // Overlay click — close everything
+  overlay.addEventListener('click', () => this._closeMobilePanels());
+
+  // Close buttons inside panels
+  document.getElementById('mobile-sidebar-close')?.addEventListener('click', () => this._closeMobilePanels());
+  document.getElementById('mobile-right-close')?.addEventListener('click', () => this._closeMobilePanels());
+
+  // Close sidebar when switching channels on mobile
+  const origSwitch = this.switchChannel.bind(this);
+  this.switchChannel = (code) => {
+    origSwitch(code);
+    this._closeMobilePanels();
+  };
+
+  // Swipe gesture support (touch)
+  let touchStartX = 0;
+  let touchStartY = 0;
+  const SWIPE_THRESHOLD = 60;
+
+  document.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    // Only process horizontal swipes (not scrolling)
+    if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dy) > Math.abs(dx)) return;
+
+    if (dx > 0 && touchStartX < 40) {
+      // Swipe right from left edge → open left sidebar
+      appBody.classList.add('mobile-sidebar-open');
+      appBody.classList.remove('mobile-right-open');
+      overlay.classList.add('active');
+    } else if (dx < 0 && touchStartX > window.innerWidth - 40) {
+      // Swipe left from right edge → open right sidebar
+      appBody.classList.add('mobile-right-open');
+      appBody.classList.remove('mobile-sidebar-open');
+      overlay.classList.add('active');
+    } else if (dx < 0 && appBody.classList.contains('mobile-sidebar-open')) {
+      this._closeMobilePanels();
+    } else if (dx > 0 && appBody.classList.contains('mobile-right-open')) {
+      this._closeMobilePanels();
+    }
+  }, { passive: true });
+
+  // ── Mobile server dropdown ──
+  const mobileServerBtn = document.getElementById('mobile-server-btn');
+  const mobileServerMenu = document.getElementById('mobile-server-menu');
+  if (mobileServerBtn && mobileServerMenu) {
+    mobileServerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._renderMobileServerList();
+      mobileServerMenu.classList.toggle('open');
+    });
+    document.addEventListener('click', () => mobileServerMenu.classList.remove('open'));
+    mobileServerMenu.addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('mobile-server-add-btn')?.addEventListener('click', () => {
+      mobileServerMenu.classList.remove('open');
+      this._editingServerUrl = null;
+      document.getElementById('add-server-modal-title').textContent = 'Add a Server';
+      document.getElementById('add-server-modal').style.display = 'flex';
+      document.getElementById('add-server-name-input').value = '';
+      document.getElementById('server-url-input').value = '';
+      document.getElementById('server-url-input').disabled = false;
+      document.getElementById('add-server-icon-input').value = '';
+      document.getElementById('save-server-btn').textContent = 'Add Server';
+      document.getElementById('add-server-name-input').focus();
+    });
+  }
+
+  // ── Mobile message actions: ⋯ button, long-press, double-tap ──
+  // Detect touch capability broadly: matchMedia OR ontouchstart presence.
+  const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches
+                     || window.matchMedia('(pointer: coarse)').matches
+                     || 'ontouchstart' in window
+                     || navigator.maxTouchPoints > 0;
+  if (isTouchDevice) {
+    const messagesEl = document.getElementById('messages');
+    // Hide the old floating singleton "⋯" button — each message now has its own
+    const oldMoreBtn = document.getElementById('msg-more-btn');
+    if (oldMoreBtn) oldMoreBtn.style.display = 'none';
+
+    const _deselectAll = () => {
+      messagesEl.querySelectorAll('.msg-selected').forEach(el => el.classList.remove('msg-selected'));
+    };
+
+    const _selectMsg = (msgEl) => {
+      if (!msgEl) return;
+      _deselectAll();
+      msgEl.classList.add('msg-selected');
+      if (navigator.vibrate) navigator.vibrate(15);
+    };
+
+    // Suppress the browser's native context menu on long-press so it
+    // doesn't compete with our custom toolbar.
+    messagesEl.addEventListener('contextmenu', (e) => {
+      if (e.target.classList.contains('chat-image')) return;
+      const msgEl = e.target.closest('.message, .message-compact');
+      if (msgEl) e.preventDefault();
+    });
+
+    // ── 1) Inline ⋯ button: always visible on each message ──
+    // Tapping it toggles msg-selected which reveals the full toolbar.
+    messagesEl.addEventListener('click', (e) => {
+      const dotsBtn = e.target.closest('.msg-dots-btn');
+      if (dotsBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        const msgEl = dotsBtn.closest('.message, .message-compact');
+        if (!msgEl) return;
+        const wasSelected = msgEl.classList.contains('msg-selected');
+        _deselectAll();
+        if (!wasSelected) _selectMsg(msgEl);
+        return;
+      }
+      // Let toolbar button taps through
+      if (e.target.closest('.msg-toolbar')) return;
+      // Let interactive elements through
+      if (e.target.closest('a') || e.target.closest('.reaction-badge') ||
+          e.target.closest('.spoiler') || e.target.closest('.reply-banner')) return;
+      // Don't interfere with author/avatar clicks (profile popup)
+      if (e.target.closest('.message-author') || e.target.closest('.message-avatar') ||
+          e.target.closest('.message-avatar-img')) return;
+      // Let images through (lightbox etc)
+      if (e.target.closest('img')) return;
+    });
+
+    // ── 2) Long-press (500 ms) on message body → select ──
+    let _lpTimer = null;
+    let _lpTarget = null;
+    let _lpStartX = 0;
+    let _lpStartY = 0;
+    messagesEl.addEventListener('touchstart', (e) => {
+      // Ignore if touching toolbar or dots button
+      if (e.target.closest('.msg-toolbar') || e.target.closest('.msg-dots-btn') ||
+          e.target.closest('a') || e.target.closest('img')) return;
+      const msgEl = e.target.closest('.message, .message-compact');
+      if (!msgEl) return;
+      const touch = e.touches[0];
+      _lpStartX = touch.clientX;
+      _lpStartY = touch.clientY;
+      _lpTarget = msgEl;
+      _lpTimer = setTimeout(() => {
+        if (_lpTarget === msgEl) {
+          _selectMsg(msgEl);
+        }
+        _lpTimer = null;
+        _lpTarget = null;
+      }, 500);
+    }, { passive: true });
+    messagesEl.addEventListener('touchmove', (e) => {
+      if (!_lpTimer) return;
+      const touch = e.touches[0];
+      if (Math.abs(touch.clientX - _lpStartX) > 10 || Math.abs(touch.clientY - _lpStartY) > 10) {
+        clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null;
+      }
+    }, { passive: true });
+    messagesEl.addEventListener('touchend', () => {
+      clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null;
+    }, { passive: true });
+
+    // ── 3) Double-tap on message body → select ──
+    let _lastTapTime = 0;
+    let _lastTapMsgEl = null;
+    messagesEl.addEventListener('touchend', (e) => {
+      if (e.target.closest('.msg-toolbar') || e.target.closest('.msg-dots-btn') ||
+          e.target.closest('a') || e.target.closest('img') ||
+          e.target.closest('.message-author') || e.target.closest('.message-avatar')) return;
+      const msgEl = e.target.closest('.message, .message-compact');
+      if (!msgEl) return;
+      const now = Date.now();
+      if (_lastTapMsgEl === msgEl && (now - _lastTapTime) < 350) {
+        _selectMsg(msgEl);
+        _lastTapTime = 0;
+        _lastTapMsgEl = null;
+      } else {
+        _lastTapTime = now;
+        _lastTapMsgEl = msgEl;
+      }
+    }, { passive: true });
+
+    // Dismiss on touch outside messages
+    document.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.msg-toolbar') || e.target.closest('.msg-dots-btn')) return;
+      if (!e.target.closest('#messages')) {
+        _deselectAll();
+      }
+    }, { passive: true });
+
+    // Deselect when focusing input area
+    document.getElementById('message-input').addEventListener('focus', () => {
+      _deselectAll();
+    });
+
+    // Deselect on significant scroll (debounced, threshold-based)
+    let _scrollStart = null;
+    messagesEl.addEventListener('scroll', () => {
+      if (_scrollStart === null) _scrollStart = messagesEl.scrollTop;
+      if (Math.abs(messagesEl.scrollTop - _scrollStart) > 30) {
+        _deselectAll();
+        _scrollStart = null;
+      }
+    }, { passive: true });
+    messagesEl.addEventListener('touchstart', () => {
+      _scrollStart = messagesEl.scrollTop;
+    }, { passive: true });
+  }
+},
+
+_closeMobilePanels() {
+  const appBody = document.getElementById('app-body');
+  const overlay = document.getElementById('mobile-overlay');
+  appBody.classList.remove('mobile-sidebar-open', 'mobile-right-open');
+  overlay.classList.remove('active');
+},
+
+_renderMobileServerList() {
+  const list = document.getElementById('mobile-server-list');
+  if (!list || !this.serverManager) return;
+  const servers = this.serverManager.getAll();
+  if (servers.length === 0) {
+    list.innerHTML = '<div style="padding:8px 10px;color:var(--text-muted);font-size:12px;">No servers added yet</div>';
+    return;
+  }
+  list.innerHTML = servers.map(s => {
+    const initial = s.name.charAt(0).toUpperCase();
+    const online = s.status.online;
+    const dotClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
+    const iconUrl = s.icon || (s.status.icon || null);
+    const iconHtml = iconUrl
+      ? `<img src="${this._escapeHtml(iconUrl)}" class="msrv-icon" alt="">`
+      + `<span class="msrv-initial" style="display:none">${initial}</span>`
+      : `<span class="msrv-initial">${initial}</span>`;
+    return `<a class="mobile-server-item" href="${this._escapeHtml(s.url)}" target="_blank" rel="noopener">
+      <span class="msrv-dot ${dotClass}"></span>
+      ${iconHtml}
+      <span>${this._escapeHtml(s.name)}</span>
+    </a>`;
+  }).join('');
+  list.querySelectorAll('.msrv-icon').forEach(img => {
+    img.addEventListener('error', () => {
+      img.style.display = 'none';
+      if (img.nextElementSibling) img.nextElementSibling.style.display = '';
+    });
+  });
+},
+
+// ═══════════════════════════════════════════════════════
+// MOBILE SIDEBAR SERVER BUBBLES
+// ═══════════════════════════════════════════════════════
+
+_renderMobileSidebarServers() {
+  const scroll = document.getElementById('mobile-servers-scroll');
+  if (!scroll || !this.serverManager) return;
+  const servers = this.serverManager.getAll();
+  if (servers.length === 0) {
+    scroll.innerHTML = '<span class="mobile-servers-empty">No servers added yet</span>';
+    return;
+  }
+  scroll.innerHTML = servers.map(s => {
+    const initial = s.name.charAt(0).toUpperCase();
+    const online = s.status.online;
+    const dotClass = online === true ? 'online' : online === false ? 'offline' : 'unknown';
+    const iconUrl = s.icon || (s.status.icon || null);
+    const iconHtml = iconUrl
+      ? `<img src="${this._escapeHtml(iconUrl)}" alt="${this._escapeHtml(initial)}" class="mobile-srv-icon-img">`
+      : `<span>${this._escapeHtml(initial)}</span>`;
+    return `<a class="mobile-srv-bubble" href="${this._escapeHtml(s.url)}" target="_blank" rel="noopener" title="${this._escapeHtml(s.name)}">
+      ${iconHtml}
+      <span class="msrv-status ${dotClass}"></span>
+    </a>`;
+  }).join('');
+
+  // CSP-safe: handle broken server icons, fall back to letter initial
+  scroll.querySelectorAll('.mobile-srv-icon-img').forEach(img => {
+    img.addEventListener('error', () => {
+      const initial = img.alt || '?';
+      const span = document.createElement('span');
+      span.textContent = initial;
+      img.replaceWith(span);
+    });
+  });
+},
+
+_setupMobileSidebarServers() {
+  // Toggle collapse
+  const toggle = document.getElementById('mobile-servers-toggle');
+  const arrow = document.getElementById('mobile-servers-arrow');
+  const row = document.getElementById('mobile-servers-row');
+  if (toggle && row) {
+    const collapsed = localStorage.getItem('haven_mobile_servers_collapsed') === '1';
+    if (collapsed) {
+      arrow?.classList.add('collapsed');
+      row.classList.add('collapsed');
+    }
+    toggle.addEventListener('click', () => {
+      const isCollapsed = row.classList.toggle('collapsed');
+      arrow?.classList.toggle('collapsed', isCollapsed);
+      localStorage.setItem('haven_mobile_servers_collapsed', isCollapsed ? '1' : '0');
+    });
+  }
+  // Add-server button
+  document.getElementById('mobile-srv-add-btn')?.addEventListener('click', () => {
+    this._editingServerUrl = null;
+    document.getElementById('add-server-modal-title').textContent = 'Add a Server';
+    document.getElementById('add-server-modal').style.display = 'flex';
+    document.getElementById('add-server-name-input').value = '';
+    document.getElementById('server-url-input').value = '';
+    document.getElementById('server-url-input').disabled = false;
+    document.getElementById('add-server-icon-input').value = '';
+    document.getElementById('save-server-btn').textContent = 'Add Server';
+    document.getElementById('add-server-name-input').focus();
+  });
+  // Initial render
+  this._renderMobileSidebarServers();
+},
+
+// ═══════════════════════════════════════════════════════
+// COLLAPSIBLE SIDEBAR SECTIONS (Join / Create)
+// ═══════════════════════════════════════════════════════
+
+_setupCollapsibleSections() {
+  const sections = [
+    { toggle: 'join-section-toggle', arrow: 'join-section-arrow', body: 'join-section-body', key: 'haven_join_collapsed' },
+    { toggle: 'create-section-toggle', arrow: 'create-section-arrow', body: 'create-section-body', key: 'haven_create_collapsed' },
+  ];
+  sections.forEach(({ toggle, arrow, body, key }) => {
+    const toggleEl = document.getElementById(toggle);
+    const arrowEl = document.getElementById(arrow);
+    const bodyEl = document.getElementById(body);
+    if (!toggleEl || !bodyEl) return;
+
+    // Restore saved state (default = expanded)
+    const saved = localStorage.getItem(key);
+    if (saved === '1') {
+      arrowEl?.classList.add('collapsed');
+      bodyEl.classList.add('collapsed');
+    }
+
+    toggleEl.addEventListener('click', () => {
+      const isCollapsed = bodyEl.classList.toggle('collapsed');
+      arrowEl?.classList.toggle('collapsed', isCollapsed);
+      localStorage.setItem(key, isCollapsed ? '1' : '0');
+    });
+  });
+},
+
+/* ── iOS PWA Keyboard Layout Fix ────────────────────── */
+// iOS standalone PWA doesn't reliably shrink the viewport when the
+// virtual keyboard opens.  We use the visualViewport API to detect
+// the keyboard height and apply a CSS custom property so the layout
+// can compensate.
+
+_setupIOSKeyboard() {
+  if (!window.visualViewport) return;
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+    navigator.standalone === true;
+
+  // Only needed for iOS standalone PWA (browsers handle it natively)
+  if (!isIOS && !isStandalone) return;
+
+  const app = document.getElementById('app');
+  const messages = document.getElementById('messages');
+
+  const onViewportResize = () => {
+    const kbHeight = window.innerHeight - window.visualViewport.height;
+    // Only apply when keyboard is actually open (threshold avoids toolbar jitter)
+    if (kbHeight > 50) {
+      app.style.height = window.visualViewport.height + 'px';
+      document.body.classList.add('ios-keyboard-open');
+      // Scroll messages to bottom so user sees latest while typing
+      if (messages) requestAnimationFrame(() => messages.scrollTop = messages.scrollHeight);
+    } else {
+      app.style.height = '';
+      document.body.classList.remove('ios-keyboard-open');
+    }
+  };
+
+  window.visualViewport.addEventListener('resize', onViewportResize);
+  window.visualViewport.addEventListener('scroll', onViewportResize);
+},
+
+/* ── Mobile App Bridge (Capacitor shell ↔ Haven) ───── */
+
+_setupMobileBridge() {
+  // Only activate when running inside the mobile app's iframe
+  this._isMobileApp = (window !== window.top);
+  if (!this._isMobileApp) return;
+
+  // Add a body class so CSS can adapt for mobile-app context
+  document.body.classList.add('haven-mobile-app');
+
+  // Listen for messages from the Capacitor shell
+  window.addEventListener('message', (e) => {
+    const data = e.data;
+    if (!data || typeof data.type !== 'string') return;
+
+    switch (data.type) {
+      case 'haven:back':
+        this._handleMobileBack();
+        break;
+
+      case 'haven:fcm-token':
+        // Receive FCM token from native layer → send to server
+        if (data.token && this.socket?.connected) {
+          this.socket.emit('register-fcm-token', { token: data.token });
+        }
+        this._fcmToken = data.token;
+        break;
+
+      case 'haven:mobile-init':
+        // Shell confirms we're in mobile app
+        this._mobilePlatform = data.platform || 'unknown';
+        break;
+
+      case 'haven:push-received':
+        // In-app push notification received while app is open
+        if (data.notification) {
+          const n = data.notification;
+          const title = n.title || 'Haven';
+          const body = n.body || '';
+          this._showToast(`${title}: ${body}`, 'info');
+        }
+        break;
+
+      case 'haven:push-action':
+        // User tapped a push notification → switch to that channel
+        if (data.data?.channelCode) {
+          this.switchChannel(data.data.channelCode);
+        }
+        break;
+
+      case 'haven:resume':
+        // App returned to foreground — reconnect socket if needed
+        if (this.socket && !this.socket.connected) {
+          this.socket.connect();
+        }
+        break;
+
+      case 'haven:keyboard':
+        // Keyboard visibility changed
+        if (data.visible) {
+          document.body.classList.add('native-keyboard-open');
+        } else {
+          document.body.classList.remove('native-keyboard-open');
+        }
+        break;
+    }
+  });
+
+  // Notify the shell that Haven is loaded and ready
+  this._postToShell({ type: 'haven:ready' });
+
+  // If user logs out, tell the shell
+  const origLogout = this._logout?.bind(this);
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      this._postToShell({ type: 'haven:disconnect' });
+    }, { capture: true });
+  }
+
+  // Send theme color to shell so status bar can match
+  this._reportThemeColor();
+
+  // Watch for theme changes and re-report
+  const themeObs = new MutationObserver(() => {
+    setTimeout(() => this._reportThemeColor(), 100);
+  });
+  themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+},
+
+_postToShell(msg) {
+  if (!this._isMobileApp) return;
+  try { window.parent.postMessage(msg, '*'); } catch (_) {}
+},
+
+_handleMobileBack() {
+  // Priority order: close the most "on-top" UI element first
+
+  // 1. Any open modal overlays
+  const openModals = document.querySelectorAll('.modal-overlay');
+  for (const m of openModals) {
+    if (m.style.display && m.style.display !== 'none') {
+      m.style.display = 'none';
+      return;
+    }
+  }
+
+  // 2. Search container / results
+  const search = document.getElementById('search-container');
+  if (search && search.style.display !== 'none' && search.style.display !== '') {
+    search.style.display = 'none';
+    document.getElementById('search-results-panel').style.display = 'none';
+    return;
+  }
+
+  // 3. Theme popup
+  const themePopup = document.getElementById('theme-popup');
+  if (themePopup && themePopup.style.display !== 'none' && themePopup.style.display !== '') {
+    themePopup.style.display = 'none';
+    return;
+  }
+
+  // 4. Voice settings panel
+  const voicePanel = document.getElementById('voice-settings-panel');
+  if (voicePanel && voicePanel.classList.contains('open')) {
+    voicePanel.classList.remove('open');
+    return;
+  }
+
+  // 5. Mobile sidebars (left or right)
+  const appBody = document.getElementById('app-body');
+  if (appBody.classList.contains('mobile-sidebar-open') || appBody.classList.contains('mobile-right-open')) {
+    this._closeMobilePanels();
+    return;
+  }
+
+  // 6. GIF picker
+  const gifPanel = document.getElementById('gif-panel');
+  if (gifPanel && gifPanel.style.display !== 'none' && gifPanel.style.display !== '') {
+    gifPanel.style.display = 'none';
+    return;
+  }
+
+  // 7. Emoji picker
+  const emojiPicker = document.querySelector('emoji-picker');
+  if (emojiPicker && emojiPicker.style.display !== 'none' && emojiPicker.style.display !== '') {
+    emojiPicker.style.display = 'none';
+    return;
+  }
+
+  // Nothing to close — tell shell
+  this._postToShell({ type: 'haven:back-exhausted' });
+},
+
+_reportThemeColor() {
+  if (!this._isMobileApp) return;
+  // Read the computed background of the top bar or body
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.sidebar');
+  if (topBar) {
+    const bg = getComputedStyle(topBar).backgroundColor;
+    // Convert rgb(r,g,b) → hex
+    const match = bg.match(/(\d+)/g);
+    if (match && match.length >= 3) {
+      const hex = '#' + match.slice(0, 3).map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
+      this._postToShell({ type: 'haven:theme-color', color: hex });
+    }
+  }
+},
+
+_saveRename() {
+  const input = document.getElementById('rename-input');
+  const newName = input.value.trim().replace(/\s+/g, ' ');
+  if (!newName || newName.length < 2) {
+    return this._showToast('Display name must be at least 2 characters', 'error');
+  }
+  if (!/^[a-zA-Z0-9_ ]+$/.test(newName)) {
+    return this._showToast('Letters, numbers, underscores, and spaces only', 'error');
+  }
+  this.socket.emit('rename-user', { username: newName });
+  // Save bio
+  const bioInput = document.getElementById('edit-profile-bio');
+  if (bioInput) {
+    this.socket.emit('set-bio', { bio: bioInput.value });
+  }
+  // Also commit any pending avatar changes
+  this._commitAvatarSettings();
+  document.getElementById('rename-modal').style.display = 'none';
+},
+
+async _uploadImage(file) {
+  if (!this.currentChannel) return;
+  // Capture the target channel NOW (before any await) so a mid-upload channel
+  // switch doesn't send the image to the wrong channel.
+  const targetChannel = this.currentChannel;
+  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  if (file.size > _maxMb * 1024 * 1024) {
+    return this._showToast(`Image too large (max ${_maxMb} MB)`, 'error');
+  }
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    this._showToast('Uploading image...', 'info');
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.token}` },
+      body: formData
+    });
+    if (!res.ok) {
+      let errMsg = `Upload failed (${res.status})`;
+      try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+      return this._showToast(errMsg, 'error');
+    }
+    const data = await res.json();
+
+    // Send the image URL as a message to the channel that was active at upload time
+    this.socket.emit('send-message', {
+      code: targetChannel,
+      content: data.url,
+      isImage: true
+    });
+    this.notifications.play('sent');
+  } catch {
+    this._showToast('Upload failed — check your connection', 'error');
+  }
+},
+
+};

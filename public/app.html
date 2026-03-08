@@ -271,6 +271,7 @@
             <span class="header-actions-divider"></span>
             <button id="search-toggle-btn" class="icon-btn small" title="Search messages (Ctrl+F)">🔍</button>
             <button id="pinned-toggle-btn" class="icon-btn small" title="Pinned messages">📌</button>
+            <button id="sidebar-toggle-btn" class="icon-btn small" title="Toggle members panel">👥</button>
             <div class="e2e-menu-wrapper" style="display:none" id="e2e-menu-wrapper">
               <button id="e2e-menu-btn" class="icon-btn small" title="Encryption options">🔐</button>
               <div class="e2e-dropdown" id="e2e-dropdown" style="display:none">
@@ -294,12 +295,15 @@
             <span class="desktop-app-text">Get the Desktop App</span>
             <button class="desktop-app-dismiss" id="desktop-app-dismiss" title="Dismiss">&times;</button>
           </a>
-          <!-- Android beta banner -->
-          <button id="android-beta-banner" class="android-beta-banner" style="display:none">
+          <!-- Android beta banner (must be <div>, not <button>; nesting
+               <button> inside <button> is invalid HTML and causes the
+               dismiss ×  to be hoisted out of its parent by the parser,
+               creating a phantom X in the channel header on mobile) -->
+          <div id="android-beta-banner" class="android-beta-banner" role="button" tabindex="0" style="display:none">
             <span class="android-beta-icon">📱</span>
             <span class="android-beta-text">Android Beta</span>
             <button class="android-beta-dismiss" id="android-beta-dismiss" title="Dismiss">&times;</button>
-          </button>
+          </div>
           <!-- Spacer pushes voice controls to the right -->
           <div style="flex:1"></div>
           <!-- Right-side: dynamic indicators, then voice (always furthest right) -->
@@ -420,7 +424,10 @@
             </div>
             <div id="pinned-list" class="pinned-list"></div>
           </div>
-          <div class="messages" id="messages"></div>
+          <div class="messages" id="messages">
+            <!-- Floating "⋯" button for touch-device message actions fallback -->
+            <button id="msg-more-btn" aria-label="Message actions">⋯</button>
+          </div>
           <div class="typing-indicator" id="typing-indicator"></div>
           <div id="reply-bar" class="reply-bar" style="display:none">
             <span class="reply-bar-text" id="reply-preview-text"></span>
@@ -468,12 +475,13 @@
       <!-- ─── Right Sidebar ───────────────────────────── -->
       <aside class="right-sidebar" id="right-sidebar">
         <div class="right-sidebar-resize-handle" id="right-sidebar-resize-handle"></div>
-        <button id="mobile-right-close" class="mobile-panel-close mobile-panel-close-right" title="Close" aria-label="Close panel">&times;</button>
         <!-- Voice users section (top) -->
         <div class="right-sidebar-voice" id="right-sidebar-voice">
           <div class="panel">
             <div class="voice-panel-header">
               <h5 class="panel-title" style="margin-bottom:0">🔊 Voice</h5>
+              <!-- Close button moved inline with VOICE title to save vertical space on mobile -->
+              <button id="mobile-right-close" class="mobile-panel-close mobile-panel-close-right" title="Close" aria-label="Close panel">&times;</button>
               <div class="voice-header-actions">
                 <button id="voice-mute-btn" class="voice-header-btn" title="Mute" style="display:none">🎙️</button>
                 <button id="voice-deafen-btn" class="voice-header-btn" title="Deafen" style="display:none">🔊</button>
@@ -1257,6 +1265,33 @@
               </div>
             </div>
           </div>
+          <label class="select-row" style="margin-top:8px">
+            <span>Default Theme</span>
+            <select id="default-theme-select" style="max-width:160px">
+              <option value="">None (user's choice)</option>
+              <option value="haven">Haven</option>
+              <option value="discord">Discord</option>
+              <option value="matrix">Matrix</option>
+              <option value="fallout">Fallout</option>
+              <option value="ffx">Final Fantasy</option>
+              <option value="ice">Ice</option>
+              <option value="nord">Nord</option>
+              <option value="darksouls">Dark Souls</option>
+              <option value="eldenring">Elden Ring</option>
+              <option value="bloodborne">Bloodborne</option>
+              <option value="cyberpunk">Cyberpunk</option>
+              <option value="lotr">Lord of the Rings</option>
+              <option value="abyss">Abyss</option>
+              <option value="scripture">Scripture</option>
+              <option value="chapel">Chapel</option>
+              <option value="gospel">Gospel</option>
+              <option value="tron">Tron</option>
+              <option value="halo">Halo</option>
+              <option value="dracula">Dracula</option>
+              <option value="win95">Windows 95</option>
+            </select>
+          </label>
+          <small class="settings-hint" style="margin-top:2px;display:block">New users see this theme on first visit. They can still pick their own.</small>
         </div>
 
         <div class="admin-settings" id="section-members" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
@@ -2203,7 +2238,7 @@
   <script src="/js/voice.js?v=2.6.0"></script>
   <script src="/js/modmode.js?v=2.6.0"></script>
   <script src="/js/e2e.js?v=2.6.0"></script>
-  <script src="/js/app.js?v=2.6.0"></script>
+  <script type="module" src="/js/app.js?v=2.7.0"></script>
   <script src="/js/plugin-loader.js?v=2.6.0"></script>
 </body>
 </html>

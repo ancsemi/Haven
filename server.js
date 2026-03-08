@@ -141,7 +141,10 @@ app.use('/uploads/deleted-attachments', (req, res) => res.status(404).end());
 // ── Serve uploads from external data directory ──────────
 app.use('/uploads', express.static(UPLOADS_DIR, {
   dotfiles: 'deny',
-  maxAge: '1h',
+  maxAge: '7d',       // 7 days — avatars & images rarely change; filenames include timestamps for uniqueness
+  immutable: true,    // tells browser the file at this URL will never change (cache-busting via new filename)
+  etag: true,
+  lastModified: true,
   setHeaders: (res, filePath) => {
     // Force download for non-image files (prevents HTML/SVG execution in browser)
     const ext = path.extname(filePath).toLowerCase();
@@ -563,6 +566,19 @@ app.get('/api/health', (req, res) => {
 app.get('/api/version', (req, res) => {
   const pkg = require('./package.json');
   res.json({ version: pkg.version });
+});
+
+// ── Public config (unauthenticated — safe, read-only aesthetics) ──
+// Returns the admin-configured default theme so the login page can match
+// the server's look for first-time visitors who have no localStorage preference.
+app.get('/api/public-config', (req, res) => {
+  try {
+    const { getDb } = require('./src/database');
+    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get();
+    res.json({ default_theme: row?.value || '' });
+  } catch {
+    res.json({ default_theme: '' });
+  }
 });
 
 // ── Port reachability check (Admin only) ─────────────────
@@ -2132,11 +2148,9 @@ const io = new Server(server, {
     origin: false,         // same-origin only — no cross-site connections
   },
   maxHttpBufferSize: 64 * 1024,  // 64KB max per message (was 1MB)
-  pingTimeout: 20000,
+  pingTimeout: 30000,
   pingInterval: 25000,
   connectTimeout: 10000,
-  // Limit simultaneous connections per IP
-  connectionStateRecovery: { maxDisconnectionDuration: 2 * 60 * 1000 },
 });
 
 // Initialize
@@ -2281,6 +2295,39 @@ global.runAutoCleanup = runAutoCleanup;
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const protocol = useSSL ? 'https' : 'http';
+
+// ── Global crash prevention ──────────────────────────────
+// Prevent the entire server from dying due to an uncaught exception
+// in a socket handler or background task.  Log the error so it
+// can be debugged, but keep the process alive.
+process.on('uncaughtException', (err) => {
+  console.error('⚠️  Uncaught exception (server kept alive):', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️  Unhandled promise rejection (server kept alive):', reason);
+});
+
+// ── Memory watchdog ──────────────────────────────────────
+// Periodically log memory usage and nudge GC when heap is getting large.
+// This helps prevent the Oilpan "large allocation" OOM in Haven Desktop
+// where the server runs alongside Electron.
+const MEM_WARN_MB = 350;  // warn threshold
+setInterval(() => {
+  const mem = process.memoryUsage();
+  const heapMB  = Math.round(mem.heapUsed / 1048576);
+  const rssMB   = Math.round(mem.rss / 1048576);
+  const extMB   = Math.round((mem.external || 0) / 1048576);
+
+  // Log if above warning threshold
+  if (rssMB > MEM_WARN_MB) {
+    console.warn(`⚠️  Memory high — RSS: ${rssMB} MB, Heap: ${heapMB} MB, External: ${extMB} MB`);
+    // Nudge GC if --expose-gc was passed
+    if (global.gc) {
+      global.gc();
+      console.warn('   GC nudged');
+    }
+  }
+}, 30000);  // every 30 seconds
 
 // ── Anti-Slowloris: server-level timeouts ────────────────
 server.headersTimeout = 15000;     // 15s to send all headers
