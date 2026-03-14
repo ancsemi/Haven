@@ -3656,13 +3656,16 @@ html.rgb-cycling *::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 14px;
+  height: 14px;
   font-size: 0.65rem;
   opacity: 0.75;
+  overflow: hidden;
 }
 .ch-disabled-badge::after {
   content: '';
   position: absolute;
-  inset: 0 1px;
+  inset: 0;
   background: linear-gradient(
     to top right,
     transparent calc(50% - 1px),
