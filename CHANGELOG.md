@@ -11,6 +11,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.7.5] — 2026-03-14
+
+### Added
+- **Keyboard navigation shortcuts** — Alt+Up/Down to navigate channels, Alt+Shift+Up/Down to jump between unread channels, Ctrl+K for quick channel switcher.
+- **Dynamic channel sort** — channels can be sorted dynamically in the sidebar.
+- **Server notification dots (Desktop)** — server bar icons in Haven Desktop now show notification dots for cross-server unreads.
+
+### Fixed
+- **Scroll jumping when browsing history** — major overhaul of the infinite-scroll system. Removed `content-visibility: auto` from messages (root cause of unstable `scrollHeight`). Image load handlers were unconditionally yanking the viewport to the bottom even when the user had scrolled up; they now respect the coupling state. Backward pagination (loading older messages) uses element-based anchor pinning with async correction for images and embeds. Forward pagination (loading newer messages) now compensates `scrollTop` when trimming older messages from the top. Trim is centered around the viewport so the scrollbar lands mid-track with room to scroll either direction.
+- **False re-coupling at artificial scroll bottom** — after trimming newer messages during history browsing, reaching the DOM "bottom" would falsely re-couple to the latest messages. Coupling now only engages when the DOM contains the actual latest messages.
+- **Sub-channel creation permissions** — users with the `create_channel` permission could not create sub-channels (which required `manage_sub_channels`). Either permission now works.
+- **E2E key reset blocked** — resetting encryption keys was blocked when encryption couldn't initialize. Now handled gracefully.
+
+---
+
 ## [2.7.4] — 2026-03-11
 
 ### Added

@@ -286,6 +286,9 @@ _appendMessages(messages) {
   const container = document.getElementById('messages');
   const wasAtBottom = this._coupledToBottom;
 
+  // Freeze scroll listeners during DOM manipulation
+  this._suppressCoupleCheck = true;
+
   const fragment = document.createDocumentFragment();
   messages.forEach((msg, i) => {
     let prevMsg = null;
@@ -302,11 +305,18 @@ _appendMessages(messages) {
   });
   container.appendChild(fragment);
 
-  // Trim oldest messages from the top
+  // Trim oldest messages from the top with scroll compensation.
+  // Without this, removing elements above the viewport shifts the
+  // scroll position and causes a visible jump.
   const MAX_DOM_MESSAGES = 100;
-  const trimmed = container.children.length > MAX_DOM_MESSAGES;
-  while (container.children.length > MAX_DOM_MESSAGES) {
-    container.removeChild(container.firstElementChild);
+  let trimmed = false;
+  if (container.children.length > MAX_DOM_MESSAGES) {
+    trimmed = true;
+    const hBefore = container.scrollHeight;
+    while (container.children.length > MAX_DOM_MESSAGES) {
+      container.removeChild(container.firstElementChild);
+    }
+    container.scrollTop -= (hBefore - container.scrollHeight);
   }
 
   // Update _oldestMsgId to match what's still in the DOM
@@ -328,6 +338,9 @@ _appendMessages(messages) {
   }
 
   if (wasAtBottom) this._scrollToBottom(true);
+
+  // Unfreeze on next frame
+  requestAnimationFrame(() => { this._suppressCoupleCheck = false; });
 },
 
 _appendMessage(message, forceScroll = false) {
