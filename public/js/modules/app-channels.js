@@ -192,6 +192,15 @@ _openChannelCtxMenu(code, btnEl) {
   menu.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = canManageChannels ? '' : 'none';
   });
+  // Delete Channel requires explicit delete_channel permission (not just create_channel)
+  const deleteBtn = menu.querySelector('[data-action="delete"]');
+  if (deleteBtn) {
+    deleteBtn.style.display = (isAdmin || this._hasPerm('delete_channel')) ? '' : 'none';
+    const deleteSep = deleteBtn.previousElementSibling;
+    if (deleteSep && deleteSep.classList.contains('channel-ctx-sep')) {
+      deleteSep.style.display = deleteBtn.style.display;
+    }
+  }
   menu.querySelectorAll('.mod-only').forEach(el => {
     el.style.display = isMod ? '' : 'none';
   });

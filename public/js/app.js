@@ -213,8 +213,10 @@ class HavenApp {
     if (this.user.isAdmin || this._hasPerm('create_channel')) {
       document.getElementById('admin-controls').style.display = 'block';
     }
-    if (this.user.isAdmin) {
+    if (this.user.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('manage_server')) {
       document.getElementById('admin-mod-panel').style.display = 'block';
+    }
+    if (this.user.isAdmin) {
       const organizeBtn = document.getElementById('organize-channels-btn');
       if (organizeBtn) organizeBtn.style.display = '';
     }
