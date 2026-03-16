@@ -56,9 +56,30 @@ async switchChannel(code) {
   // Show/hide topic bar
   this._updateTopicBar(channel?.topic || '');
 
-  // Show/hide message input for voice-only channels
+  // Show/hide message input — keep upload button visible for media-only channels
   const msgInputArea = document.getElementById('message-input-area');
-  if (msgInputArea) msgInputArea.style.display = channel && channel.text_enabled === 0 ? 'none' : '';
+  const _textOff = channel && channel.text_enabled === 0;
+  const _mediaOff = channel && channel.media_enabled === 0;
+  if (msgInputArea) msgInputArea.style.display = (_textOff && _mediaOff) ? 'none' : '';
+  // Text-only elements
+  const _msgInput = document.getElementById('message-input');
+  const _sendBtn = document.getElementById('send-btn');
+  const _emojiBtn = document.getElementById('emoji-btn');
+  const _gifBtn = document.getElementById('gif-btn');
+  const _pollBtn = document.getElementById('poll-btn');
+  if (_msgInput) _msgInput.style.display = _textOff ? 'none' : '';
+  if (_sendBtn) _sendBtn.style.display = _textOff ? 'none' : '';
+  if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
+  if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
+  if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
+  // Upload button tied to media toggle
+  const _uploadBtn = document.getElementById('upload-btn');
+  if (_uploadBtn) _uploadBtn.style.display = _mediaOff ? 'none' : '';
+  // Dividers: first one only if both upload and text buttons visible, rest if text is on
+  const _dividers = document.querySelectorAll('.input-actions-box .input-actions-divider');
+  if (_dividers[0]) _dividers[0].style.display = (!_textOff && !_mediaOff) ? '' : 'none';
+  if (_dividers[1]) _dividers[1].style.display = _textOff ? 'none' : '';
+  if (_dividers[2]) _dividers[2].style.display = _textOff ? 'none' : '';
 
   const messagesEl = document.getElementById('messages');
   messagesEl.innerHTML = '';

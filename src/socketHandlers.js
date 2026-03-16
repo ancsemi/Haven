@@ -1405,9 +1405,12 @@ function setupSocketHandlers(io, db) {
       ).get(channel.id, socket.user.id);
       if (!member) return socket.emit('error-msg', 'Not a member of this channel');
 
-      // Block text messages when text is disabled
+      // Block text messages when text is disabled (allow media uploads if media is enabled)
       if (channel.text_enabled === 0) {
-        return socket.emit('error-msg', 'Text messages are disabled in this channel');
+        const isMedia = /^\/uploads\b/i.test(content.trim()) || /^\[file:[^\]]+\]\(/i.test(content.trim());
+        if (!isMedia || channel.media_enabled === 0) {
+          return socket.emit('error-msg', 'Text messages are disabled in this channel');
+        }
       }
 
       // Block media uploads if media is disabled in this channel
