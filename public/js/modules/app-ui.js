@@ -325,6 +325,31 @@ _setupUI() {
       };
       input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { commitLimit(); input.blur(); } });
       input.addEventListener('blur', commitLimit);
+    } else if (fn === 'self-destruct') {
+      if (row.querySelector('.cfn-input')) return;
+      const badge = row.querySelector('.cfn-badge');
+      if (!badge) return;
+      const input = document.createElement('input');
+      input.type = 'number'; input.min = '0'; input.max = '720';
+      input.value = ''; input.placeholder = '1–720h (0=off)'; input.className = 'cfn-input';
+      input.onclick = e2 => e2.stopPropagation();
+      badge.replaceWith(input);
+      input.focus(); input.select();
+      const commitExpiry = () => {
+        const hours = parseInt(input.value);
+        if (isNaN(hours) || hours < 0) return;
+        if (hours === 0) {
+          optimistic({ expires_at: null });
+          this.socket.emit('set-channel-expiry', { code, hours: 0 });
+        } else {
+          const clamped = Math.max(1, Math.min(720, hours));
+          const expiresAt = new Date(Date.now() + clamped * 3600000).toISOString();
+          optimistic({ expires_at: expiresAt });
+          this.socket.emit('set-channel-expiry', { code, hours: clamped });
+        }
+      };
+      input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { commitExpiry(); input.blur(); } });
+      input.addEventListener('blur', commitExpiry);
     }
   });
   // Move channel up/down
@@ -587,6 +612,8 @@ _setupUI() {
     // Show the create-sub-channel modal
     document.getElementById('create-sub-name').value = '';
     document.getElementById('create-sub-private').checked = false;
+    document.getElementById('create-sub-temporary').checked = false;
+    document.getElementById('sub-temp-duration-row').style.display = 'none';
     document.getElementById('create-sub-parent-name').textContent = `# ${parentCh.name}`;
     document.getElementById('create-sub-modal').style.display = 'flex';
     document.getElementById('create-sub-modal')._parentCode = code;
@@ -597,11 +624,15 @@ _setupUI() {
     const modal = document.getElementById('create-sub-modal');
     const name = document.getElementById('create-sub-name').value.trim();
     const isPrivate = document.getElementById('create-sub-private').checked;
+    const temporary = document.getElementById('create-sub-temporary').checked;
+    const duration = parseInt(document.getElementById('create-sub-duration').value) || 24;
     if (!name) return;
     this.socket.emit('create-sub-channel', {
       parentCode: modal._parentCode,
       name,
-      isPrivate
+      isPrivate,
+      temporary,
+      duration
     });
     modal.style.display = 'none';
   });
@@ -611,6 +642,14 @@ _setupUI() {
   document.getElementById('create-sub-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
+  // Toggle sub-channel temporary duration row
+  const subTempCheckbox = document.getElementById('create-sub-temporary');
+  if (subTempCheckbox) {
+    subTempCheckbox.addEventListener('change', () => {
+      const durRow = document.getElementById('sub-temp-duration-row');
+      if (durRow) durRow.style.display = subTempCheckbox.checked ? '' : 'none';
+    });
+  }
   // Rename channel / sub-channel
   document.querySelector('[data-action="rename-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
@@ -3176,6 +3215,54 @@ _saveRename() {
   document.getElementById('rename-modal').style.display = 'none';
 },
 
+// ── Upload with progress bar ───────────────────────────
+_uploadWithProgress(url, formData) {
+  return new Promise((resolve, reject) => {
+    const bar = document.getElementById('upload-progress-bar');
+    const fill = document.getElementById('upload-progress-fill');
+    const text = document.getElementById('upload-progress-text');
+    if (bar) { bar.style.display = 'flex'; }
+    if (fill) { fill.style.width = '0%'; }
+    if (text) { text.textContent = 'Uploading...'; }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Authorization', `Bearer ${this.token}`);
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        if (fill) fill.style.width = pct + '%';
+        if (text) text.textContent = `${pct}%`;
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (bar) bar.style.display = 'none';
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { reject(new Error('Invalid JSON response')); }
+      } else {
+        let errMsg = `Upload failed (${xhr.status})`;
+        try { const d = JSON.parse(xhr.responseText); errMsg = d.error || errMsg; } catch {}
+        reject(new Error(errMsg));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      if (bar) bar.style.display = 'none';
+      reject(new Error('Upload failed — check your connection'));
+    });
+
+    xhr.addEventListener('abort', () => {
+      if (bar) bar.style.display = 'none';
+      reject(new Error('Upload cancelled'));
+    });
+
+    xhr.send(formData);
+  });
+},
+
 async _uploadImage(file) {
   if (!this.currentChannel) return;
   // Capture the target channel NOW (before any await) so a mid-upload channel
@@ -3198,23 +3285,12 @@ async _uploadImage(file) {
   if (partner) {
     // E2E path: encrypt file → upload as opaque blob → send encrypted text marker
     try {
-      this._showToast('Encrypting & uploading image...', 'info');
       const arrayBuffer = await file.arrayBuffer();
       const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
       const blob = new Blob([encrypted], { type: 'application/octet-stream' });
       const formData = new FormData();
       formData.append('file', blob, 'e2e-image.enc');
-      const res = await fetch('/api/upload-file', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${this.token}` },
-        body: formData
-      });
-      if (!res.ok) {
-        let errMsg = `Upload failed (${res.status})`;
-        try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
-        return this._showToast(errMsg, 'error');
-      }
-      const data = await res.json();
+      const data = await this._uploadWithProgress('/api/upload-file', formData);
       const mime = file.type || 'image/png';
       const marker = `e2e-img:${mime}:${data.url}`;
       const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
@@ -3235,18 +3311,7 @@ async _uploadImage(file) {
   formData.append('image', file);
 
   try {
-    this._showToast('Uploading image...', 'info');
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.token}` },
-      body: formData
-    });
-    if (!res.ok) {
-      let errMsg = `Upload failed (${res.status})`;
-      try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
-      return this._showToast(errMsg, 'error');
-    }
-    const data = await res.json();
+    const data = await this._uploadWithProgress('/api/upload', formData);
 
     // Send the image URL as a message to the channel that was active at upload time
     this.socket.emit('send-message', {
@@ -3255,8 +3320,8 @@ async _uploadImage(file) {
       isImage: true
     });
     this.notifications.play('sent');
-  } catch {
-    this._showToast('Upload failed — check your connection', 'error');
+  } catch (err) {
+    this._showToast(err.message || 'Upload failed', 'error');
   }
 },
 

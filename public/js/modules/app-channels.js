@@ -321,6 +321,14 @@ _updateChannelFunctionsPanel(ch) {
   // Announcement channel
   const isAnnouncement = ch.notification_type === 'announcement';
   this._setCfnBadge('announcement', isAnnouncement, isAnnouncement ? 'ON' : 'OFF');
+  // Self Destruct timer
+  const hasExpiry = !!ch.expires_at;
+  if (hasExpiry) {
+    const hoursLeft = Math.max(1, Math.round((new Date(ch.expires_at) - Date.now()) / 3600000));
+    this._setCfnBadge('self-destruct', true, `${hoursLeft}h`);
+  } else {
+    this._setCfnBadge('self-destruct', false, 'OFF');
+  }
 },
 
 _closeChannelCtxMenu() {
@@ -1754,7 +1762,7 @@ _fireNativeNotification(message, channelCode) {
 
   // Desktop app: always use native Electron notifications
   if (window.havenDesktop?.notify) {
-    window.havenDesktop.notify(title, body, { silent: true });
+    window.havenDesktop.notify(title, body, { silent: true, channelCode });
     return;
   }
 

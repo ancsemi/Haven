@@ -416,7 +416,7 @@ function initDatabase() {
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
       'set_channel_topic', 'manage_sub_channels', 'rename_channel',
       'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
-      'upload_files', 'use_voice', 'view_history',
+      'upload_files', 'use_voice', 'view_history', 'view_all_members',
       'delete_own_messages', 'edit_own_messages'
     ];
     serverModPerms.forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));

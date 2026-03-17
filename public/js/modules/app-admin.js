@@ -1409,17 +1409,7 @@ _uploadGeneralFile(file) {
   const formData = new FormData();
   formData.append('file', file);
 
-  this._showToast(`Uploading ${file.name}…`, 'info');
-
-  fetch('/api/upload-file', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${this.token}` },
-    body: formData
-  })
-  .then(r => {
-    if (!r.ok) return r.text().then(t => { throw new Error(t || `HTTP ${r.status}`); });
-    return r.json();
-  })
+  this._uploadWithProgress('/api/upload-file', formData)
   .then(data => {
     if (data.error) {
       this._showToast(data.error, 'error');
@@ -1442,7 +1432,7 @@ _uploadGeneralFile(file) {
     this.notifications.play('sent');
     this._clearReply();
   })
-  .catch(() => this._showToast('Upload failed', 'error'));
+  .catch(err => this._showToast(err.message || 'Upload failed', 'error'));
 },
 
 _formatFileSize(bytes) {
@@ -2269,7 +2259,7 @@ _renderRoleDetail() {
     'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
     'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
     'create_channel', 'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
-    'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin'
+    'view_all_members', 'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin'
   ];
   const permLabels = {
     edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
@@ -2282,6 +2272,7 @@ _renderRoleDetail() {
     upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
     manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
     view_history: 'View Message History',
+    view_all_members: 'View All Server Members',
     manage_emojis: 'Manage Custom Emojis',
     manage_soundboard: 'Manage Soundboard',
     promote_user: 'Promote Users', transfer_admin: 'Transfer Admin'
@@ -2683,7 +2674,7 @@ _renderChannelRolesRoleDetail() {
     'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
     'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
     'create_channel', 'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
-    'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin'
+    'view_all_members', 'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin'
   ];
   const permLabels = {
     edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
@@ -2696,6 +2687,7 @@ _renderChannelRolesRoleDetail() {
     upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
     manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
     view_history: 'View Message History',
+    view_all_members: 'View All Server Members',
     manage_emojis: 'Manage Custom Emojis',
     manage_soundboard: 'Manage Soundboard',
     promote_user: 'Promote Users', transfer_admin: 'Transfer Admin'
@@ -3080,7 +3072,7 @@ _renderRacConfig() {
     'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
     'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
     'create_channel', 'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
-    'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin'
+    'view_all_members', 'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin'
   ];
   // Perms that only admin can grant
   const adminOnlyPerms = ['transfer_admin'];
@@ -3096,6 +3088,7 @@ _renderRacConfig() {
     upload_files: 'Upload Files',
     use_voice: 'Use Voice', manage_webhooks: 'Manage Webhooks',
     mention_everyone: 'Mention Everyone', view_history: 'View History',
+    view_all_members: 'View All Members',
     manage_emojis: 'Manage Custom Emojis',
     manage_soundboard: 'Manage Soundboard',
     promote_user: 'Promote Users', transfer_admin: 'Transfer Admin'

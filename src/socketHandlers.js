@@ -2579,6 +2579,14 @@ function setupSocketHandlers(io, db) {
       const newContent = sanitizeText(data.content.trim());
       if (!newContent) return;
 
+      // Prevent turning a text message into an image/file by editing in an upload path
+      if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(newContent)) {
+        const origMsg = db.prepare('SELECT original_name FROM messages WHERE id = ?').get(data.messageId);
+        if (!origMsg || !origMsg.original_name) {
+          return socket.emit('error-msg', 'Cannot change a text message into an image');
+        }
+      }
+
       try {
         db.prepare(
           'UPDATE messages SET content = ?, edited_at = datetime(\'now\') WHERE id = ?'
@@ -4687,30 +4695,76 @@ function setupSocketHandlers(io, db) {
         return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
       });
 
-      // Send per-socket: invisible users appear offline to others, but normal to themselves
+      // Build "all server users" list for recipients with view_all_members perm.
+      // Only built on demand (lazy) to avoid the cost when nobody needs it.
+      let _allServerUsers = null;
+      function getAllServerUsers() {
+        if (_allServerUsers) return _allServerUsers;
+        const globalOnlineIds = new Set();
+        for (const [, s2] of io.of('/').sockets) {
+          if (s2.user) globalOnlineIds.add(s2.user.id);
+        }
+        const allRows = db.prepare(
+          `SELECT u.id, COALESCE(u.display_name, u.username) as username
+           FROM users u LEFT JOIN bans b ON u.id = b.user_id
+           WHERE b.id IS NULL
+           ORDER BY COALESCE(u.display_name, u.username)`
+        ).all();
+        _allServerUsers = allRows.map(m => ({
+          id: m.id, username: m.username, online: globalOnlineIds.has(m.id),
+          highScore: scores[m.id] || 0,
+          status: statusMap[m.id]?.status || 'online',
+          statusText: statusMap[m.id]?.statusText || '',
+          avatar: statusMap[m.id]?.avatar || null,
+          avatarShape: statusMap[m.id]?.avatarShape || 'circle',
+          role: getUserHighestRole(m.id, channel ? channel.id : null)
+        }));
+        _allServerUsers.sort((a, b) => {
+          if (a.online !== b.online) return a.online ? -1 : 1;
+          return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
+        });
+        return _allServerUsers;
+      }
+
+      // Check if per-socket emission is needed
       const hasInvisible = users.some(u => u.status === 'invisible');
-      if (!hasInvisible) {
-        // Fast path: no invisible users, broadcast to everyone
+      let hasViewAll = false;
+      for (const [, s] of io.of('/').sockets) {
+        if (s.user && s.rooms && s.rooms.has(`channel:${code}`)) {
+          if (s.user.isAdmin || userHasPermission(s.user.id, 'view_all_members')) {
+            hasViewAll = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasInvisible && !hasViewAll) {
+        // Fast path: no invisible users and no view_all_members, broadcast to everyone
         io.to(`channel:${code}`).emit('online-users', {
           channelCode: code,
           users,
           visibilityMode: mode
         });
       } else {
-        // Slow path: customize the list per recipient
+        // Per-socket path: customizes list for invisible users and view_all_members
         for (const [, s] of io.of('/').sockets) {
           if (!s.user || !s.rooms || !s.rooms.has(`channel:${code}`)) continue;
           const viewerId = s.user.id;
-          const customUsers = users.map(u => {
+          const viewerHasViewAll = s.user.isAdmin || userHasPermission(viewerId, 'view_all_members');
+          let baseList = viewerHasViewAll ? getAllServerUsers() : users;
+
+          const customUsers = baseList.map(u => {
             if (u.status === 'invisible' && u.id !== viewerId) {
               return { ...u, online: false, status: 'offline' };
             }
             return u;
           });
-          customUsers.sort((a, b) => {
-            if (a.online !== b.online) return a.online ? -1 : 1;
-            return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
-          });
+          if (hasInvisible) {
+            customUsers.sort((a, b) => {
+              if (a.online !== b.online) return a.online ? -1 : 1;
+              return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
+            });
+          }
           s.emit('online-users', {
             channelCode: code,
             users: customUsers,
@@ -4728,11 +4782,13 @@ function setupSocketHandlers(io, db) {
       // All authenticated users can view the member list
       const isAdmin = socket.user.isAdmin;
       const canMod = isAdmin || userHasPermission(socket.user.id, 'kick_user') || userHasPermission(socket.user.id, 'ban_user');
+      const canSeeAll = canMod || userHasPermission(socket.user.id, 'view_all_members');
 
       try {
-        // Admins/mods see all users; regular users only see people they share a channel with
+        // Users with view_all_members, admins, or mods see all users;
+        // regular users only see people they share a channel with
         let users;
-        if (canMod) {
+        if (canSeeAll) {
           users = db.prepare(`
             SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
                    u.is_admin, u.created_at, u.avatar, u.avatar_shape, u.status, u.status_text
@@ -5676,14 +5732,23 @@ function setupSocketHandlers(io, db) {
       const code = generateChannelCode();
       const isPrivate = data.isPrivate ? 1 : 0;
 
+      // Optional temporary sub-channel: duration in hours (1–720 = 30 days max)
+      let expiresAt = null;
+      if (data.temporary && data.duration) {
+        const hours = Math.max(1, Math.min(720, parseInt(data.duration, 10)));
+        if (!isNaN(hours)) {
+          expiresAt = new Date(Date.now() + hours * 3600000).toISOString();
+        }
+      }
+
       // Get max position for ordering
       const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(parentChannel.id);
       const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
 
       try {
         const result = db.prepare(
-          'INSERT INTO channels (name, code, created_by, parent_channel_id, position, is_private) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(name, code, socket.user.id, parentChannel.id, position, isPrivate);
+          'INSERT INTO channels (name, code, created_by, parent_channel_id, position, is_private, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(name, code, socket.user.id, parentChannel.id, position, isPrivate, expiresAt);
 
         // Auto-join all members of the parent channel (even for private — creator controls who's in)
         const parentMembers = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(parentChannel.id);
@@ -5888,6 +5953,40 @@ function setupSocketHandlers(io, db) {
       } catch (err) {
         console.error('Set voice user limit error:', err);
         socket.emit('error-msg', 'Failed to set voice user limit');
+      }
+    });
+
+    // ── Set channel self-destruct timer ─────────────────────────────
+    socket.on('set-channel-expiry', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_channel')) {
+        return socket.emit('error-msg', 'You don\'t have permission to set self-destruct timers');
+      }
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+      if (!channel) return socket.emit('error-msg', 'Channel not found');
+
+      let expiresAt = null;
+      if (data.hours && data.hours > 0) {
+        const hours = Math.max(1, Math.min(720, parseInt(data.hours, 10)));
+        if (isNaN(hours)) return socket.emit('error-msg', 'Invalid duration');
+        expiresAt = new Date(Date.now() + hours * 3600000).toISOString();
+      }
+
+      try {
+        db.prepare('UPDATE channels SET expires_at = ? WHERE id = ?').run(expiresAt, channel.id);
+        broadcastChannelLists();
+        if (expiresAt) {
+          const hours = Math.round((new Date(expiresAt) - Date.now()) / 3600000);
+          socket.emit('toast', { message: `⏱️ Channel will self-destruct in ${hours}h`, type: 'success' });
+        } else {
+          socket.emit('toast', { message: '⏱️ Self-destruct timer removed', type: 'success' });
+        }
+      } catch (err) {
+        console.error('Set channel expiry error:', err);
+        socket.emit('error-msg', 'Failed to set self-destruct timer');
       }
     });
 

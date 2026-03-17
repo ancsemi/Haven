@@ -443,6 +443,10 @@
             <button class="reply-bar-close" id="reply-close-btn" title="Cancel reply">&times;</button>
           </div>
           <div id="image-queue-bar" class="image-queue-bar" style="display:none"></div>
+          <div id="upload-progress-bar" class="upload-progress-bar" style="display:none">
+            <div class="upload-progress-track"><div class="upload-progress-fill" id="upload-progress-fill"></div></div>
+            <span class="upload-progress-text" id="upload-progress-text">Uploading...</span>
+          </div>
           <div id="message-input-area" class="message-input-area">
             <div class="input-actions-box">
               <button id="upload-btn" class="btn-upload" title="Upload File">
@@ -1971,6 +1975,10 @@
         <span class="cfn-badge cfn-off">∞</span>
       </div>
       <div class="cfn-divider"></div>
+      <div class="cfn-row" data-fn="self-destruct" title="Set a self-destruct timer — channel auto-deletes after the specified hours (0 = off)">
+        <span class="cfn-label">⏱️ Self Destruct</span>
+        <span class="cfn-badge cfn-off">OFF</span>
+      </div>
       <div class="cfn-row" data-fn="announcement" title="Announcement channel — messages use a distinct notification sound and gold highlight">
         <span class="cfn-label">📢 Announcement</span>
         <span class="cfn-badge cfn-off">OFF</span>
@@ -2214,6 +2222,16 @@
         <input type="checkbox" id="create-sub-private" style="width:16px;height:16px">
         <span style="font-size:0.9rem">🔒 Private <span style="opacity:0.5;font-size:0.8rem">(invite-only, hidden from non-members)</span></span>
       </label>
+      <label class="checkbox-row" style="margin:2px 0 8px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem">
+        <input type="checkbox" id="create-sub-temporary" style="width:16px;height:16px">
+        <span>⏱️ Temporary <span style="opacity:0.5;font-size:0.8rem">(auto-delete)</span></span>
+      </label>
+      <div id="sub-temp-duration-row" style="display:none;margin:0 0 8px;padding-left:24px">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="create-sub-duration" min="1" max="720" value="24" style="width:60px;font-size:0.8rem" placeholder="Hours">
+          <span style="font-size:0.75rem;opacity:0.6">hours</span>
+        </div>
+      </div>
       <p class="muted-text" style="font-size:0.75rem;margin:0 0 8px;opacity:0.6">ℹ️ Admins always have access to all channels, including private ones.</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
         <button class="btn-sm" id="create-sub-cancel-btn">Cancel</button>

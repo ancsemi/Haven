@@ -6679,6 +6679,35 @@ html.rgb-cycling *::after {
   flex-wrap: nowrap;
 }
 
+/* ── Upload progress bar ────────────────────────────── */
+.upload-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+}
+.upload-progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.upload-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.15s ease;
+}
+.upload-progress-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .image-queue-thumb {
   position: relative;
   width: 64px;
@@ -8280,7 +8309,7 @@ html.rgb-cycling *::after {
 .collapsible-section-body {
   overflow: hidden;
   transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
-  max-height: 100px;
+  max-height: 300px;
   opacity: 1;
 }
 

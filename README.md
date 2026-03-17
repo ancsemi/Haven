@@ -74,22 +74,41 @@ Your entire Discord history, now on a server you own. No one can delete it, no o
 
 ## Quick Start — Docker (Recommended)
 
-**Option A — Pre-built image** (fastest):
+**Option A — Pre-built image** (fastest, easiest updates):
 ```bash
 docker pull ghcr.io/ancsemi/haven:latest
 docker run -d -p 3000:3000 -v haven_data:/data ghcr.io/ancsemi/haven:latest
 ```
 
-**Option B — Build from source**:
+Or with Docker Compose (recommended):
 ```bash
 git clone https://github.com/ancsemi/Haven.git
 cd Haven
+docker compose up -d
+```
+The shipped `docker-compose.yml` uses the pre-built image by default.
+
+**Option B — Build from source** (only if you need to modify the code):
+```bash
+git clone https://github.com/ancsemi/Haven.git
+cd Haven
+```
+Uncomment `build: .` in `docker-compose.yml`, then:
+```bash
 docker compose up -d
 ```
 
 Open `https://localhost:3000` → Register with username `admin` → Create a channel → Share the code with friends. Done.
 
 > Certificate warning is normal — click **Advanced → Proceed**. Haven uses a self-signed cert for encryption.
+
+**Updating** — if using the pre-built image (default):
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+**Check your version**: visit `https://localhost:3000/api/version` in your browser.
 
 **Option C — One-click cloud deploy** (Zeabur):
 

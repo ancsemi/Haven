@@ -795,27 +795,14 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       });
       tile.appendChild(minBtn);
 
-      // Close button — removes tile entirely and mutes its audio
+      // Close button — hides tile and mutes its audio (can be restored from hidden bar)
       const closeBtn = document.createElement('button');
       closeBtn.className = 'stream-close-btn';
       closeBtn.title = 'Close (stop audio)';
       closeBtn.textContent = '✕';
       closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Mute and clean up audio
-        if (userId) this.voice.setStreamVolume(userId, 0);
-        const audioEl = document.getElementById(`voice-audio-screen-${userId}`);
-        if (audioEl) { audioEl.volume = 0; try { audioEl.pause(); } catch {} }
-        // Notify server we stopped watching
-        if (this.voice && this.voice.inVoice && userId && userId !== this.user.id) {
-          this.socket.emit('stream-unwatch', { code: this.voice.currentChannel, sharerId: userId });
-        }
-        // Remove tile from DOM
-        const vid = tile.querySelector('video');
-        if (vid) vid.srcObject = null;
-        tile.remove();
-        this._updateHiddenStreamsBar();
-        this._updateScreenShareVisibility();
+        this._hideStreamTile(tile, userId, who, true);
       });
       tile.appendChild(closeBtn);
 
@@ -1117,6 +1104,9 @@ _showStreamTile(tileId, userId) {
   if (tile) {
     tile.style.display = '';
     delete tile.dataset.hidden;
+    // Re-play video (browsers may pause while display:none)
+    const vid = tile.querySelector('video');
+    if (vid && vid.srcObject) vid.play().catch(() => {});
     // Restore audio if it was muted by close
     if (tile.dataset.muted === 'true') {
       delete tile.dataset.muted;
@@ -1171,6 +1161,9 @@ _updateHiddenStreamsBar() {
       t.style.display = '';
       delete t.dataset.hidden;
       const uid = t.id.replace('screen-tile-', '');
+      // Re-play video (browsers may pause while display:none)
+      const vid = t.querySelector('video');
+      if (vid && vid.srcObject) vid.play().catch(() => {});
       // Restore audio if it was muted by close
       if (t.dataset.muted === 'true') {
         delete t.dataset.muted;

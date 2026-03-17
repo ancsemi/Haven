@@ -2,14 +2,14 @@
 # Quick start:  docker compose up -d
 # Stop:         docker compose down
 # View logs:    docker compose logs -f haven
-# Update:       docker compose build --no-cache && docker compose up -d
+# Update:       docker compose pull && docker compose up -d --force-recreate
 # Shell:        docker compose exec haven sh
 # ─────────────────────────────────────────────────────────
 
 services:
   haven:
-    build: .
-    image: haven:latest
+    image: ghcr.io/ancsemi/haven:latest
+    # build: .                    # Uncomment to build from source instead of using the pre-built image
     container_name: haven
     ports:
       - "${PORT:-3000}:${PORT:-3000}"    # Main HTTPS port

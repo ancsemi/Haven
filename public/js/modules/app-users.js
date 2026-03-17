@@ -594,6 +594,18 @@ _renderVoiceUsers(users) {
       this._showVoiceUserMenu(btn || item, userId, username);
     });
   });
+
+  // Bind LIVE badges — clicking restores a hidden stream tile
+  el.querySelectorAll('.voice-stream-badge.live').forEach(badge => {
+    badge.style.cursor = 'pointer';
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const userId = parseInt(badge.closest('.voice-user-item')?.dataset.userId);
+      if (isNaN(userId)) return;
+      const tile = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
+      if (tile) this._showStreamTile(`screen-tile-${userId}`, userId);
+    });
+  });
 },
 
 _showVoiceUserMenu(anchorEl, userId, username) {
@@ -604,6 +616,10 @@ _showVoiceUserMenu(anchorEl, userId, username) {
   const isDeafened = this.voice ? this.voice.isUserDeafened(userId) : false;
   // Show voice kick for admins and mods with kick_user permission
   const canKick = this._hasPerm('kick_user');
+  // Check if user is streaming and has a hidden tile we can restore
+  const streams = this._streamInfo || [];
+  const isStreaming = streams.some(s => s.sharerId === userId);
+  const hiddenTile = isStreaming ? document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`) : null;
   const menu = document.createElement('div');
   menu.className = 'voice-user-menu';
   menu.innerHTML = `
@@ -614,6 +630,7 @@ _showVoiceUserMenu(anchorEl, userId, username) {
       <span class="voice-user-vol-value">${savedVol}%</span>
     </div>
     <div class="voice-user-menu-actions">
+      ${hiddenTile ? `<button class="voice-user-menu-action" data-action="watch-stream">🖥 Watch Stream</button>` : ''}
       <button class="voice-user-menu-action" data-action="mute-user">${isMuted ? '🔊 Unmute' : '🔇 Mute'}</button>
       <button class="voice-user-menu-action ${isDeafened ? 'active' : ''}" data-action="deafen-user">${isDeafened ? '🔊 Undeafen' : '🔇 Deafen'}</button>
       ${canKick ? `<button class="voice-user-menu-action danger" data-action="voice-kick" title="Remove from voice channel">🚪 Voice Kick</button>` : ''}
@@ -651,7 +668,11 @@ _showVoiceUserMenu(anchorEl, userId, username) {
   menu.querySelectorAll('.voice-user-menu-action').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (btn.dataset.action === 'mute-user') {
+      if (btn.dataset.action === 'watch-stream') {
+        // Restore the hidden stream tile
+        this._showStreamTile(`screen-tile-${userId}`, userId);
+        this._closeVoiceUserMenu();
+      } else if (btn.dataset.action === 'mute-user') {
         // Mute: toggle their volume to 0 so YOU can't hear THEM
         const newVol = parseInt(slider.value) === 0 ? 100 : 0;
         slider.value = newVol;

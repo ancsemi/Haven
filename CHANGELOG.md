@@ -11,6 +11,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.7.8] — 2026-03-16
+
+### Added
+- **File upload progress bar** — a progress bar now appears above the message input during file and image uploads showing the real-time upload percentage.
+- **View All Members permission** — new `view_all_members` permission that lets roles see all server members in the sidebar and member list, regardless of shared channels. Granted to Server Mod by default. Configurable per-role in admin settings.
+
+### Fixed
+- **Desktop notification click not navigating** — clicking a native OS notification in the Haven Desktop app now opens the app and switches to the correct channel or DM.
+- **Stream close button now allows reopening** — the ✕ button on stream tiles now hides and mutes the stream instead of permanently removing it. Hidden streams can be restored via the "🖥 N streams hidden" bar, the ⋯ menu on the streamer's name, or by clicking their 🔴 LIVE badge.
+- **Docker update instructions** — `docker-compose.yml` now defaults to the pre-built image (`ghcr.io/ancsemi/haven:latest`), fixing the issue where `docker compose up -d` would rebuild from source rather than use the pulled image. Update instructions updated throughout.
+
+---
+
 ## [2.7.7] — 2026-03-16
 
 ### Added

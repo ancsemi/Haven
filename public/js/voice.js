@@ -304,10 +304,25 @@ class VoiceManager {
       };
       if (savedInputId) audioConstraints.deviceId = { exact: savedInputId };
 
-      this.rawStream = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints,
-        video: false
-      });
+      try {
+        this.rawStream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+          video: false
+        });
+      } catch (deviceErr) {
+        if (savedInputId) {
+          // Saved device may be stale — retry with default mic
+          console.warn('Saved mic device failed, falling back to default:', deviceErr.message);
+          localStorage.removeItem('haven_input_device');
+          delete audioConstraints.deviceId;
+          this.rawStream = await navigator.mediaDevices.getUserMedia({
+            audio: audioConstraints,
+            video: false
+          });
+        } else {
+          throw deviceErr;
+        }
+      }
 
       // Opt out of Windows audio ducking (Desktop app only).
       // Must be called after getUserMedia so our audio session exists.

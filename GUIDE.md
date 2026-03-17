@@ -58,6 +58,13 @@ Replace the `haven_data:/data` line in `docker-compose.yml`.
 
 ### Updating
 
+**Option A — Pre-built image** (default, recommended):
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+**Option B — Built from source** (only if you uncommented `build: .`):
 ```bash
 git pull
 docker compose build --no-cache
@@ -65,6 +72,18 @@ docker compose up -d
 ```
 
 Your data is safe — it lives in the volume, not the container.
+
+### Checking Your Version
+
+Open this URL in your browser (replace with your domain/IP if needed):
+```
+https://localhost:3000/api/version
+```
+
+Or from inside the container:
+```bash
+docker compose exec haven cat /app/package.json | grep '"version"'
+```
 
 ### Linux Prerequisites
 
