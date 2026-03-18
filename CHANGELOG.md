@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.7.9] — 2026-03-17
+
+### Added
+- **Custom login title** — admins can now set a custom title displayed on the login screen below the Haven logo. Configurable under Settings > Admin > Branding > Login Title (up to 40 characters).
+- **Reset roles to default** — new "Reset to Default" button in the Roles settings panel. Wipes all current roles and re-creates the factory defaults (Server Mod, Channel Mod, User) with their original permissions and auto-assignments.
+
+### Fixed
+- **Desktop: push notification settings hidden** — the web push notification section in Settings is now hidden when running inside Haven Desktop, since the desktop app already provides native OS notifications. The section was non-functional in that context and showed a confusing "Registration failed" error.
+
+---
+
 ## [2.7.8] — 2026-03-16
 
 ### Added
