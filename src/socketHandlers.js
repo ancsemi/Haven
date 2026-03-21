@@ -700,7 +700,7 @@ function setupSocketHandlers(io, db) {
     // Send current voice counts so sidebar indicators are correct on connect
     for (const [code, room] of voiceUsers) {
       if (room.size > 0) {
-        const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username }));
+        const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }));
         socket.emit('voice-count-update', { code, count: room.size, users });
       }
     }
@@ -2470,7 +2470,7 @@ function setupSocketHandlers(io, db) {
     socket.on('get-voice-counts', () => {
       for (const [code, room] of voiceUsers) {
         if (room.size > 0) {
-          const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username }));
+          const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }));
           socket.emit('voice-count-update', { code, count: room.size, users });
         }
       }
