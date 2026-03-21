@@ -1617,7 +1617,9 @@ function setupSocketHandlers(io, db) {
       voiceUsers.get(code).set(socket.user.id, {
         id: socket.user.id,
         username: socket.user.displayName,
-        socketId: socket.id
+        socketId: socket.id,
+        isMuted: false,
+        isDeafened: false
       });
 
       // Tell new user about existing peers (they'll create offers)
@@ -2383,10 +2385,30 @@ function setupSocketHandlers(io, db) {
       const users = room
         ? Array.from(room.values()).map(u => {
             const role = getUserHighestRole(u.id, channelId);
-            return { id: u.id, username: u.username, roleColor: role ? role.color : null };
+            return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
           })
         : [];
       socket.emit('voice-users-update', { channelCode: code, users });
+    });
+
+    socket.on('voice-mute-state', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const room = voiceUsers.get(code);
+      if (!room || !room.has(socket.user.id)) return;
+      room.get(socket.user.id).isMuted = !!data.muted;
+      broadcastVoiceUsers(code);
+    });
+
+    socket.on('voice-deafen-state', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const room = voiceUsers.get(code);
+      if (!room || !room.has(socket.user.id)) return;
+      room.get(socket.user.id).isDeafened = !!data.deafened;
+      broadcastVoiceUsers(code);
     });
 
     // Voice re-join after socket reconnect — server lost state during disconnect
@@ -2419,7 +2441,9 @@ function setupSocketHandlers(io, db) {
       voiceUsers.get(code).set(socket.user.id, {
         id: socket.user.id,
         username: socket.user.displayName,
-        socketId: socket.id
+        socketId: socket.id,
+        isMuted: false,
+        isDeafened: false
       });
 
       // Tell existing peers about the re-joined user so they can re-establish WebRTC
@@ -4653,7 +4677,7 @@ function setupSocketHandlers(io, db) {
       const users = room
         ? Array.from(room.values()).map(u => {
             const role = getUserHighestRole(u.id, channelId);
-            return { id: u.id, username: u.username, roleColor: role ? role.color : null };
+            return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
           })
         : [];
       // Emit to voice participants (may have switched text channels) AND text viewers
@@ -4665,7 +4689,7 @@ function setupSocketHandlers(io, db) {
       io.emit('voice-count-update', {
         code,
         count: users.length,
-        users: users.map(u => ({ id: u.id, username: u.username }))
+        users: users.map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }))
       });
     }
 

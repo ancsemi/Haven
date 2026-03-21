@@ -548,11 +548,14 @@ _renderVoiceUsers(users) {
       streamBadge += `<span class="voice-stream-badge watching" title="Watching ${watchNames}">👁</span>`;
     }
 
+    const muteIcon = `<span class="voice-status-icon${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : 'Unmuted'}">🎙️</span>`;
+    const deafenIcon = `<span class="voice-status-icon${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : 'Listening'}">🔊</span>`;
     return `
       <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
         ${streamBadge}
+        <span class="voice-status-icons">${muteIcon}${deafenIcon}</span>
         ${isSelf ? '<span class="you-tag">you</span>' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="User options">⋯</button>`}
       </div>
     `;

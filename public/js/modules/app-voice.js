@@ -61,6 +61,9 @@ _toggleMute() {
   this.notifications.playDirect(muted ? 'mute_on' : 'mute_off');
 
   this._updateVoiceBar();
+  if (this.voice.currentChannel) {
+    this.socket.emit('voice-mute-state', { code: this.voice.currentChannel, muted });
+  }
 },
 
 _toggleDeafen() {
@@ -74,6 +77,9 @@ _toggleDeafen() {
   this.notifications.playDirect(deafened ? 'deafen_on' : 'deafen_off');
 
   this._updateVoiceBar();
+  if (this.voice.currentChannel) {
+    this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened });
+  }
 },
 
 _updateVoiceButtons(inVoice) {

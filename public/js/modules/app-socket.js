@@ -110,6 +110,8 @@ _setupSocketListeners() {
     // Re-join voice if we were in voice before reconnect
     if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
       this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+      if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: this.voice.currentChannel, muted: true });
+      if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
     } else {
       // Check localStorage for saved voice channel (persists across page refreshes / server restarts)
       try {
