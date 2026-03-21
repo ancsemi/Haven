@@ -247,8 +247,10 @@
             <button class="sidebar-bottom-btn" id="activities-btn" title="Activities">🎮</button>
             <button class="sidebar-bottom-btn" id="sidebar-members-btn" title="All Members">👥</button>
             <button id="mobile-settings-btn" class="sidebar-bottom-btn mobile-settings-btn" title="Settings">⚙️</button>
-            <span style="flex:1"></span>
             <button id="donors-btn" class="sidebar-bottom-btn donate-btn">❤️</button>
+            <span style="flex:1"></span>
+            <button id="voice-mute-btn" class="sidebar-bottom-btn voice-header-btn" title="Mute">🎙️</button>
+            <button id="voice-deafen-btn" class="sidebar-bottom-btn voice-header-btn" title="Deafen">🔊</button>
           </div>
         </div>
       </aside>
@@ -493,17 +495,12 @@
       <!-- ─── Right Sidebar ───────────────────────────── -->
       <aside class="right-sidebar" id="right-sidebar">
         <div class="right-sidebar-resize-handle" id="right-sidebar-resize-handle"></div>
-        <!-- Voice users section (top) -->
+        <!-- Voice users section (mobile: shows mute/deafen controls + join button) -->
         <div class="right-sidebar-voice" id="right-sidebar-voice">
           <div class="panel">
             <div class="voice-panel-header">
               <h5 class="panel-title" style="margin-bottom:0">🔊 Voice</h5>
-              <!-- Close button moved inline with VOICE title to save vertical space on mobile -->
               <button id="mobile-right-close" class="mobile-panel-close mobile-panel-close-right" title="Close" aria-label="Close panel">&times;</button>
-              <div class="voice-header-actions">
-                <button id="voice-mute-btn" class="voice-header-btn" title="Mute" style="display:none">🎙️</button>
-                <button id="voice-deafen-btn" class="voice-header-btn" title="Deafen" style="display:none">🔊</button>
-              </div>
             </div>
             <button id="voice-join-mobile" class="btn-voice mobile-voice-join" style="display:none">🎤 Join Voice</button>
             <div id="voice-users" class="user-list">

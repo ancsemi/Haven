@@ -127,7 +127,7 @@ _toggleDeafen() {
     }
     this.voice.toggleDeafen();
     const btn = document.getElementById('voice-deafen-btn');
-    btn.textContent = '�';
+    btn.textContent = '🔇';
     btn.title = 'Undeafen';
     btn.classList.add('muted');
     this.notifications.playDirect('deafen_on');
@@ -147,12 +147,6 @@ _updateVoiceButtons(inVoice) {
   // Show/hide the sidebar voice controls panel (pinned at bottom)
   const voicePanel = document.getElementById('voice-panel');
   if (voicePanel) voicePanel.style.display = inVoice ? 'flex' : 'none';
-
-  // Show/hide mute/deafen header buttons
-  const voiceHeaderMute = document.getElementById('voice-mute-btn');
-  if (voiceHeaderMute) voiceHeaderMute.style.display = inVoice ? '' : 'none';
-  const voiceHeaderDeafen = document.getElementById('voice-deafen-btn');
-  if (voiceHeaderDeafen) voiceHeaderDeafen.style.display = inVoice ? '' : 'none';
 
   // Mobile voice join in right sidebar
   const mobileJoin = document.getElementById('voice-join-mobile');

@@ -546,13 +546,8 @@ _setupSocketListeners() {
   });
 
   this.socket.on('voice-users-update', (data) => {
-    // Always render voice panel when viewing the matching text channel
-    if (data.channelCode === this.currentChannel) {
-      this._renderVoiceUsers(data.users);
-    }
-    // Also update if we're in voice for this channel (we may be viewing a different text channel)
+    // Keep voice bar up to date
     if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode) {
-      // Keep voice bar up to date
       this._updateVoiceBar();
     }
   });
