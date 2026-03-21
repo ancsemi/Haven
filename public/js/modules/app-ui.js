@@ -1045,8 +1045,9 @@ _setupUI() {
   // Wire up talking indicator
   this.voice.onTalkingChange = (userId, isTalking) => {
     const resolvedId = userId === 'self' ? this.user.id : userId;
-    const el = document.querySelector(`.voice-user-item[data-user-id="${resolvedId}"]`);
-    if (el) el.classList.toggle('talking', isTalking);
+    document.querySelectorAll(`.channel-voice-user[data-user-id="${resolvedId}"]`).forEach(el => {
+      el.classList.toggle('talking', isTalking);
+    });
   };
 
   // Search

@@ -1841,7 +1841,7 @@ _updateChannelVoiceIndicators() {
         el.after(userList);
       }
       userList.innerHTML = users.map(u =>
-        `<div class="channel-voice-user" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-icon">🎤</span>${this._escapeHtml(u.username)}</div>`
+        `<div class="channel-voice-user" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}</div>`
       ).join('');
       // Right-click on a left-sidebar voice user → same voice options menu
       userList.querySelectorAll('.channel-voice-user').forEach(item => {
