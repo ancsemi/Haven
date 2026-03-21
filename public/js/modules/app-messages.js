@@ -8,6 +8,10 @@ async _sendMessage() {
   const hasImages = this._imageQueue && this._imageQueue.length > 0;
   if (!content && !hasImages) return;
   if (!this.currentChannel) return;
+  if (!this.socket.connected) {
+    this._showToast("Not connected — message not sent", 'error');
+    return;
+  }
 
   // Client-side slash commands (not sent to server)
   if (content.startsWith('/')) {

@@ -1602,8 +1602,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
 
   // Insert the message into the DB
   const result = db.prepare(
-    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username) VALUES (?, ?, ?, 1, ?)'
-  ).run(webhook.channel_id, null, content, username);
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, 1, ?, ?)'
+  ).run(webhook.channel_id, null, content, username, avatarUrl || null);
 
   const message = {
     id: result.lastInsertRowid,

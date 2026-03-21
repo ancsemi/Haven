@@ -60,13 +60,7 @@ _toggleMute() {
   // Audible cue
   this.notifications.playDirect(muted ? 'mute_on' : 'mute_off');
 
-  if (muted) {
-    this._setLed('status-voice-led', 'warn');
-    document.getElementById('status-voice-text').textContent = t('voice.status_muted');
-  } else if (!this.voice.isDeafened) {
-    this._setLed('status-voice-led', 'on');
-    document.getElementById('status-voice-text').textContent = t('voice.status_active');
-  }
+  this._updateVoiceBar();
 },
 
 _toggleDeafen() {
@@ -79,16 +73,7 @@ _toggleDeafen() {
   // Audible cue
   this.notifications.playDirect(deafened ? 'deafen_on' : 'deafen_off');
 
-  if (deafened) {
-    this._setLed('status-voice-led', 'danger');
-    document.getElementById('status-voice-text').textContent = t('voice.status_deafened');
-  } else if (this.voice.isMuted) {
-    this._setLed('status-voice-led', 'warn');
-    document.getElementById('status-voice-text').textContent = t('voice.status_muted');
-  } else {
-    this._setLed('status-voice-led', 'on');
-    document.getElementById('status-voice-text').textContent = t('voice.status_active');
-  }
+  this._updateVoiceBar();
 },
 
 _updateVoiceButtons(inVoice) {
@@ -154,22 +139,49 @@ _updateVoiceButtons(inVoice) {
 },
 
 _updateVoiceStatus(inVoice) {
+  const led = document.getElementById('status-voice-led');
+  const text = document.getElementById('status-voice-text');
+  if (!led || !text) return;
   if (inVoice) {
     this._setLed('status-voice-led', 'on');
-    document.getElementById('status-voice-text').textContent = t('voice.status_active');
+    text.textContent = t('voice.status_active');
   } else {
     this._setLed('status-voice-led', 'off');
-    document.getElementById('status-voice-text').textContent = t('voice.status_off');
+    text.textContent = t('voice.status_off');
   }
+},
+
+_getVoiceChannelLabel() {
+  if (!this.voice || !this.voice.currentChannel) return '';
+  const ch = this.channels.find(c => c.code === this.voice.currentChannel);
+  if (!ch) return this.voice.currentChannel;
+  if (ch.is_dm && ch.dm_target) return `@ ${this._getNickname(ch.dm_target.id, ch.dm_target.username)}`;
+  return `# ${ch.name}`;
 },
 
 _updateVoiceBar() {
   const bar = document.getElementById('voice-bar');
   if (!bar) return;
   if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
-    const ch = this.channels.find(c => c.code === this.voice.currentChannel);
-    const name = ch ? (ch.is_dm && ch.dm_target ? `@ ${ch.dm_target.username}` : `# ${ch.name}`) : this.voice.currentChannel;
-    bar.innerHTML = `<span class="voice-bar-icon">🔊</span><span class="voice-bar-channel">${this._escapeHtml(name)}</span><button class="voice-bar-leave" id="voice-bar-leave-btn" title="${t('voice.disconnect')}">✕</button>`;
+    const badges = [];
+    if (this.voice.isMuted) badges.push(`<span class="voice-bar-badge">${t('voice.status_muted')}</span>`);
+    if (this.voice.isDeafened) badges.push(`<span class="voice-bar-badge">${t('voice.status_deafened')}</span>`);
+    const channelName = this._getVoiceChannelLabel();
+    bar.innerHTML = `
+      <div class="voice-bar-top">
+        <div class="voice-bar-status">
+          <span class="voice-bar-icon" aria-hidden="true">🔊</span>
+          <div class="voice-bar-status-copy">
+            <span class="voice-bar-status-text">${t('voice.bar_connected')}</span>
+            <span class="voice-bar-channel">${this._escapeHtml(channelName)}</span>
+          </div>
+        </div>
+        <div class="voice-bar-actions">
+          <button class="voice-bar-leave" id="voice-bar-leave-btn" title="${t('voice.disconnect')}">${t('voice.disconnect')}</button>
+          ${badges.length ? `<div class="voice-bar-badges">${badges.join('')}</div>` : ''}
+        </div>
+      </div>
+    `;
     bar.style.display = 'flex';
     document.getElementById('voice-bar-leave-btn').addEventListener('click', () => this._leaveVoice());
   } else {

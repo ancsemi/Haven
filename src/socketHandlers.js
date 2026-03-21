@@ -1296,6 +1296,21 @@ function setupSocketHandlers(io, db) {
         });
       }
 
+      // Batch-lookup current webhook avatars for webhook messages missing a stored avatar
+      const webhookAvatarMap = new Map();
+      const webhookNamesNeedingAvatar = [...new Set(
+        messages.filter(m => m.is_webhook && !m.webhook_avatar && m.webhook_username)
+          .map(m => m.webhook_username)
+      )];
+      if (webhookNamesNeedingAvatar.length > 0) {
+        const ph = webhookNamesNeedingAvatar.map(() => '?').join(',');
+        db.prepare(
+          `SELECT name, avatar_url FROM webhooks WHERE channel_id = ? AND name IN (${ph}) AND avatar_url IS NOT NULL`
+        ).all(channel.id, ...webhookNamesNeedingAvatar).forEach(w => {
+          webhookAvatarMap.set(w.name, w.avatar_url);
+        });
+      }
+
       const enriched = messages.map(m => {
         const obj = { ...m };
         // Normalize SQLite UTC timestamps to proper ISO 8601 with Z suffix
@@ -1324,6 +1339,8 @@ function setupSocketHandlers(io, db) {
           obj.is_webhook = true;
           obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
           obj.avatar_shape = 'square';
+          // Use stored avatar, or fall back to the webhook's current avatar
+          obj.avatar = m.webhook_avatar || webhookAvatarMap.get(m.webhook_username) || null;
         }
         // Flag imported messages (Discord, etc.)
         if (m.imported_from) {
@@ -1398,7 +1415,7 @@ function setupSocketHandlers(io, db) {
       }
 
       const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
+      if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
 
       const member = db.prepare(
         'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'

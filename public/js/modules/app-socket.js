@@ -242,6 +242,14 @@ _setupSocketListeners() {
   });
 
   this.socket.on('channels-list', (channels) => {
+    // Detect if currentChannel's code was rotated while disconnected (stale code).
+    // Capture the channel's ID from the old list before overwriting it.
+    let rotatedChannelId = null;
+    if (this.currentChannel && !channels.find(c => c.code === this.currentChannel)) {
+      const oldEntry = this.channels.find(c => c.code === this.currentChannel);
+      if (oldEntry) rotatedChannelId = oldEntry.id;
+    }
+
     this.channels = channels;
     // Seed client-side unreadCounts from server-reported values so the
     // desktop badge, tab title, and DM section badge stay in sync.
@@ -259,6 +267,28 @@ _setupSocketListeners() {
     // Request fresh voice counts so sidebar indicators are always correct
     // (covers cases where initial push arrived before DOM was ready)
     this.socket.emit('get-voice-counts');
+
+    // If the channel code rotated while we were disconnected, re-enter with the
+    // new code so messages, reactions, and presence start working again.
+    if (rotatedChannelId !== null) {
+      const updated = channels.find(c => c.id === rotatedChannelId);
+      if (updated) {
+        this.currentChannel = updated.code;
+        const codeDisplay = document.getElementById('channel-code-display');
+        if (codeDisplay) codeDisplay.textContent = updated.display_code || updated.code;
+        this.socket.emit('enter-channel', { code: this.currentChannel });
+        this._oldestMsgId = null;
+        this._noMoreHistory = false;
+        this._loadingHistory = false;
+        this._historyBefore = null;
+        this._newestMsgId = null;
+        this._noMoreFuture = true;
+        this._loadingFuture = false;
+        this._historyAfter = null;
+        this.socket.emit('get-messages', { code: this.currentChannel });
+        this.socket.emit('get-channel-members', { code: this.currentChannel });
+      }
+    }
   });
 
   // Channel renamed — update header if we're in that channel

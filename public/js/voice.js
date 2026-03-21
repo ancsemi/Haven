@@ -299,6 +299,9 @@ class VoiceManager {
 
   async join(channelCode) {
     try {
+      const preservedMuteState = this.isMuted;
+      const preservedDeafenState = this.isDeafened;
+
       // Leave existing voice channel if connected elsewhere
       if (this.inVoice) this.leave();
 
@@ -379,7 +382,10 @@ class VoiceManager {
 
       this.currentChannel = channelCode;
       this.inVoice = true;
-      this.isMuted = false;
+      this.isMuted = preservedMuteState;
+      this.isDeafened = preservedDeafenState;
+
+      this._applyMuteStateToLocalTracks();
       
       // Persist voice channel for auto-rejoin after page refresh or server restart
       try { localStorage.setItem('haven_voice_channel', channelCode); } catch {}
@@ -565,6 +571,11 @@ class VoiceManager {
 
   toggleMute() {
     this.isMuted = !this.isMuted;
+    this._applyMuteStateToLocalTracks();
+    return this.isMuted;
+  }
+
+  _applyMuteStateToLocalTracks() {
     if (this.rawStream) {
       this.rawStream.getAudioTracks().forEach(track => {
         track.enabled = !this.isMuted;
@@ -575,7 +586,6 @@ class VoiceManager {
         track.enabled = !this.isMuted;
       });
     }
-    return this.isMuted;
   }
 
   toggleDeafen() {
@@ -598,6 +608,10 @@ class VoiceManager {
       }
     });
     return this.isDeafened;
+  }
+
+  _getAppliedIncomingVolume(volume) {
+    return this.isDeafened ? 0 : volume;
   }
 
   // ── Screen Sharing ──────────────────────────────────────
@@ -1367,13 +1381,19 @@ class VoiceManager {
       if (this.audioCtx.state === 'suspended') this.audioCtx.resume().catch(() => {});
       const source = this.audioCtx.createMediaStreamSource(stream);
       const gainNode = this.audioCtx.createGain();
-      gainNode.gain.value = this._getSavedStreamVolume(userId);
+      gainNode.gain.value = this._getAppliedIncomingVolume(this._getSavedStreamVolume(userId));
       source.connect(gainNode);
       gainNode.connect(this.audioCtx.destination);
       this.screenGainNodes.set(userId, gainNode);
       audioEl.volume = 0;
     } catch {
-      audioEl.volume = Math.min(1, this._getSavedStreamVolume(userId));
+      const savedVolume = Math.min(1, this._getSavedStreamVolume(userId));
+      if (this.isDeafened) {
+        audioEl.dataset.prevVolume = String(savedVolume);
+        audioEl.volume = 0;
+      } else {
+        audioEl.volume = savedVolume;
+      }
     }
     if (this.onScreenAudio) this.onScreenAudio(userId);
   }
@@ -1700,7 +1720,7 @@ class VoiceManager {
 
       // Gain branch (source → gain → destination)
       const gainNode = this.audioCtx.createGain();
-      gainNode.gain.value = this._getSavedVolume(userId);
+      gainNode.gain.value = this._getAppliedIncomingVolume(this._getSavedVolume(userId));
       source.connect(gainNode);
       gainNode.connect(this.audioCtx.destination);
       this.gainNodes.set(userId, gainNode);
@@ -1709,7 +1729,13 @@ class VoiceManager {
       audioEl.volume = 0;
     } catch {
       // Fallback: use element volume directly (no boost beyond 100%)
-      audioEl.volume = Math.min(1, this._getSavedVolume(userId));
+      const savedVolume = Math.min(1, this._getSavedVolume(userId));
+      if (this.isDeafened) {
+        audioEl.dataset.prevVolume = String(savedVolume);
+        audioEl.volume = 0;
+      } else {
+        audioEl.volume = savedVolume;
+      }
     }
   }
 }
