@@ -225,7 +225,10 @@ _renderForumBrowser() {
         </div>
         <div class="forum-card-footer">
           <span class="forum-card-status">${post.isMember ? 'Joined' : 'Not joined'}</span>
-          <button class="forum-card-open" data-code="${this._escapeHtml(post.code)}">${post.isMember ? 'Open' : 'Join & Open'}</button>
+          <div class="forum-card-actions">
+            ${post.canDelete ? `<button class="forum-card-delete" data-code="${this._escapeHtml(post.code)}" data-name="${this._escapeHtml(post.name)}">Delete</button>` : ''}
+            <button class="forum-card-open" data-code="${this._escapeHtml(post.code)}">${post.isMember ? 'Open' : 'Join & Open'}</button>
+          </div>
         </div>
       </article>
     `).join('');
@@ -248,6 +251,15 @@ _renderForumBrowser() {
       this._openForumPost(code);
     });
   });
+  document.querySelectorAll('.forum-card-delete').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const code = e.currentTarget.dataset.code;
+      const name = e.currentTarget.dataset.name || 'this forum post';
+      if (!code) return;
+      this._deleteForumPost(code, name);
+    });
+  });
 },
 
 _openForumPost(code) {
@@ -267,6 +279,24 @@ _openForumPost(code) {
       this._renderChannels();
     }
     if (res.channel?.code) this.switchChannel(res.channel.code);
+  });
+},
+
+_deleteForumPost(code, name = 'this forum post') {
+  if (!confirm(`Delete forum post "${name}"?\nAll messages in the post will be permanently lost.`)) return;
+  if (!confirm('⚠️ Are you ABSOLUTELY sure?\nThis action cannot be undone!')) return;
+  this.socket.emit('delete-forum-post', { code }, (res) => {
+    if (!res) return;
+    if (res.error) {
+      this._showToast(res.error, 'error');
+      return;
+    }
+    this.channels = this.channels.filter(c => c.code !== code);
+    this._renderChannels();
+    if (res.parentCode && this._forumView?.parentCode === res.parentCode) {
+      this.socket.emit('get-forum-overview', { code: res.parentCode });
+    }
+    this._showToast('Forum post deleted', 'success');
   });
 },
 
