@@ -28,14 +28,36 @@ if (applyPendingRestoreIfPresent()) {
   console.log(`Restored pending data import into ${DATA_DIR}`);
 }
 
+function tryReadEnvFile() {
+  try {
+    return fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, 'utf-8') : '';
+  } catch {
+    return '';
+  }
+}
+
+function tryWriteEnvFile(content, reason) {
+  try {
+    fs.writeFileSync(ENV_PATH, content);
+    return true;
+  } catch (err) {
+    console.warn(`⚠️ Could not write ${ENV_PATH} while ${reason}: ${err.code || err.message}`);
+    return false;
+  }
+}
+
 if (!fs.existsSync(ENV_PATH)) {
   const example = path.join(__dirname, '.env.example');
   if (fs.existsSync(example)) {
-    fs.copyFileSync(example, ENV_PATH);
-    console.log(`📄 Created .env in ${DATA_DIR} from template`);
+    try {
+      fs.copyFileSync(example, ENV_PATH);
+      console.log(`📄 Created .env in ${DATA_DIR} from template`);
+    } catch (err) {
+      console.warn(`⚠️ Could not create ${ENV_PATH} from template: ${err.code || err.message}`);
+    }
   } else {
     // Write a minimal .env so dotenv doesn't fail
-    fs.writeFileSync(ENV_PATH, 'JWT_SECRET=change-me-to-something-random-and-long\n');
+    tryWriteEnvFile('JWT_SECRET=change-me-to-something-random-and-long\n', 'creating default .env');
   }
 }
 
@@ -53,37 +75,43 @@ console.log(`📂 Data directory: ${DATA_DIR}`);
 // ── Auto-generate JWT secret (MUST happen before loading auth module) ──
 if (process.env.JWT_SECRET === 'change-me-to-something-random-and-long' || !process.env.JWT_SECRET) {
   const generated = crypto.randomBytes(48).toString('base64');
-  let envContent = fs.readFileSync(ENV_PATH, 'utf-8');
-  envContent = envContent.replace(/JWT_SECRET=.*/, `JWT_SECRET=${generated}`);
-  fs.writeFileSync(ENV_PATH, envContent);
+  let envContent = tryReadEnvFile();
+  if (/^JWT_SECRET=.*$/m.test(envContent)) {
+    envContent = envContent.replace(/^JWT_SECRET=.*$/m, `JWT_SECRET=${generated}`);
+  } else {
+    if (envContent && !envContent.endsWith('\n')) envContent += '\n';
+    envContent += `JWT_SECRET=${generated}\n`;
+  }
+  tryWriteEnvFile(envContent, 'saving JWT secret');
   process.env.JWT_SECRET = generated;
-  console.log('🔑 Auto-generated strong JWT_SECRET (saved to .env)');
+  console.log('🔑 Auto-generated strong JWT_SECRET');
 }
 
 if (!process.env.HAVEN_SETTINGS_SECRET) {
   const generated = crypto.randomBytes(48).toString('base64');
-  let envContent = fs.readFileSync(ENV_PATH, 'utf-8');
+  let envContent = tryReadEnvFile();
   if (/^HAVEN_SETTINGS_SECRET=.*$/m.test(envContent)) {
     envContent = envContent.replace(/^HAVEN_SETTINGS_SECRET=.*$/m, `HAVEN_SETTINGS_SECRET=${generated}`);
   } else {
-    if (!envContent.endsWith('\n')) envContent += '\n';
+    if (envContent && !envContent.endsWith('\n')) envContent += '\n';
     envContent += `HAVEN_SETTINGS_SECRET=${generated}\n`;
   }
-  fs.writeFileSync(ENV_PATH, envContent);
+  tryWriteEnvFile(envContent, 'saving settings secret');
   process.env.HAVEN_SETTINGS_SECRET = generated;
-  console.log('🔐 Auto-generated HAVEN_SETTINGS_SECRET (saved to .env)');
+  console.log('🔐 Auto-generated HAVEN_SETTINGS_SECRET');
 }
 
 // ── Auto-generate VAPID keys for push notifications ──────
 const webpush = require('web-push');
 if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
   const vapidKeys = webpush.generateVAPIDKeys();
-  let envContent = fs.readFileSync(ENV_PATH, 'utf-8');
+  let envContent = tryReadEnvFile();
+  if (envContent && !envContent.endsWith('\n')) envContent += '\n';
   envContent += `\nVAPID_PUBLIC_KEY=${vapidKeys.publicKey}\nVAPID_PRIVATE_KEY=${vapidKeys.privateKey}\n`;
-  fs.writeFileSync(ENV_PATH, envContent);
+  tryWriteEnvFile(envContent, 'saving VAPID keys');
   process.env.VAPID_PUBLIC_KEY = vapidKeys.publicKey;
   process.env.VAPID_PRIVATE_KEY = vapidKeys.privateKey;
-  console.log('🔔 Auto-generated VAPID keys for push notifications (saved to .env)');
+  console.log('🔔 Auto-generated VAPID keys for push notifications');
 }
 // Configure web-push with contact email (admin can override via VAPID_EMAIL in .env)
 const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@haven.local';
