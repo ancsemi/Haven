@@ -5993,6 +5993,10 @@ function setupSocketHandlers(io, db) {
       const isParentMember = socket.user.isAdmin
         || !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(parent.id, socket.user.id);
       if (!isParentMember) return socket.emit('error-msg', 'Join this forum channel first');
+      const canCreate = socket.user.isAdmin
+        || userHasPermission(socket.user.id, 'create_forum_posts', parent.id)
+        || userHasPermission(socket.user.id, 'manage_sub_channels', parent.id)
+        || userHasPermission(socket.user.id, 'create_channel', parent.id);
 
       const posts = db.prepare(`
         SELECT c.id, c.code, c.name, c.category, c.is_private, c.created_at,
@@ -6036,6 +6040,7 @@ function setupSocketHandlers(io, db) {
         code: parent.code,
         name: parent.name,
         topic: parent.topic || '',
+        canCreate,
         posts
       });
     });
