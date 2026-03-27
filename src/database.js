@@ -210,6 +210,14 @@ function initDatabase() {
   insertSetting.run('max_proxy_avatar_kb', '256');
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
+  insertSetting.run('storage_provider', 'local');
+  insertSetting.run('storage_s3_endpoint', '');
+  insertSetting.run('storage_s3_region', 'auto');
+  insertSetting.run('storage_s3_bucket', '');
+  insertSetting.run('storage_s3_access_key', '');
+  insertSetting.run('storage_s3_secret_key', '');
+  insertSetting.run('storage_s3_prefix', 'haven');
+  insertSetting.run('storage_s3_force_path_style', 'true');
 
   // ── Migration: pinned_messages table ──────────────────
   db.exec(`
