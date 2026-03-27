@@ -207,6 +207,7 @@ function initDatabase() {
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64–1024)
+  insertSetting.run('max_proxy_avatar_kb', '256');
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
 
@@ -733,6 +734,40 @@ function initDatabase() {
     db.prepare("SELECT voice_bitrate FROM channels LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE channels ADD COLUMN voice_bitrate INTEGER DEFAULT 0");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS proxies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      bio TEXT DEFAULT '',
+      avatar_url TEXT DEFAULT NULL,
+      trigger_prefix TEXT NOT NULL,
+      trigger_suffix TEXT DEFAULT '',
+      group_name TEXT DEFAULT '',
+      is_public INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_proxies_user ON proxies(user_id);
+    CREATE INDEX IF NOT EXISTS idx_proxies_user_trigger ON proxies(user_id, trigger_prefix);
+  `);
+
+  try {
+    db.prepare("SELECT proxy_id FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN proxy_id INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL");
+  }
+  try {
+    db.prepare("SELECT proxy_name FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN proxy_name TEXT DEFAULT NULL");
+  }
+  try {
+    db.prepare("SELECT proxy_avatar FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN proxy_avatar TEXT DEFAULT NULL");
   }
 
   return db;
