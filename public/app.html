@@ -1605,6 +1605,58 @@
         <div class="admin-settings" id="section-uploads" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">📁 Uploads &amp; Limits</h5>
           <label class="select-row">
+            <span>Active Upload Volume</span>
+            <select id="storage-provider-select">
+              <option value="local">Local /data/uploads</option>
+              <option value="s3">S3 / MEGA S4</option>
+            </select>
+          </label>
+          <small class="settings-hint">Switches where new uploads, avatars, sounds, emojis, and server images are stored.</small>
+          <div id="storage-s3-settings" style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.02);">
+            <label class="select-row">
+              <span>Endpoint</span>
+              <input type="text" id="storage-s3-endpoint" placeholder="https://gateway.storjshare.io or MEGA S4 endpoint">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Bucket</span>
+              <input type="text" id="storage-s3-bucket" placeholder="haven-storage">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Region</span>
+              <input type="text" id="storage-s3-region" placeholder="auto">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Access Key</span>
+              <input type="text" id="storage-s3-access-key" placeholder="Access key ID">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Secret Key</span>
+              <input type="password" id="storage-s3-secret-key" placeholder="Secret access key">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Prefix</span>
+              <input type="text" id="storage-s3-prefix" placeholder="haven">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Path Style</span>
+              <input type="checkbox" id="storage-s3-force-path-style" checked>
+            </label>
+            <small class="settings-hint">Enable path-style for S3-compatible providers that do not support bucket subdomains.</small>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-sm" id="storage-test-btn">Test S3 Connection</button>
+              <button class="btn-sm" id="storage-migrate-btn">Move Local Uploads to S3</button>
+            </div>
+          </div>
+          <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.02);">
+            <small class="settings-hint">Back up the active Haven data volume or import a backup zip to stage a restore.</small>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-sm" id="data-backup-btn">Download Data Zip</button>
+              <button class="btn-sm" id="data-import-btn">Import Data Zip</button>
+              <input type="file" id="data-import-file" accept=".zip" style="display:none">
+            </div>
+            <small class="settings-hint" id="storage-status-note" style="display:block;margin-top:8px"></small>
+          </div>
+          <label class="select-row">
             <span>Max Upload Size (MB)</span>
             <input type="number" id="max-upload-mb" min="1" max="2048" value="25" class="settings-number-input">
           </label>
