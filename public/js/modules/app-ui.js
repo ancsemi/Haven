@@ -1696,6 +1696,36 @@ _setupUI() {
   });
 
   // ── Admin moderation bindings ───────────────────────
+  document.getElementById('proxy-add-btn')?.addEventListener('click', () => {
+    if (typeof this._openProxyEditor === 'function') this._openProxyEditor();
+  });
+  document.getElementById('proxy-cancel-btn')?.addEventListener('click', () => {
+    if (typeof this._resetProxyEditor === 'function') this._resetProxyEditor();
+  });
+  document.getElementById('proxy-save-btn')?.addEventListener('click', () => {
+    if (typeof this._saveProxyDraft === 'function') this._saveProxyDraft();
+  });
+  document.getElementById('proxy-avatar-upload-btn')?.addEventListener('click', () => {
+    document.getElementById('proxy-avatar-file-input')?.click();
+  });
+  document.getElementById('proxy-avatar-clear-btn')?.addEventListener('click', () => {
+    this._proxySettings.draftAvatarUrl = '';
+    const preview = document.getElementById('proxy-avatar-preview');
+    if (preview) preview.innerHTML = '<div class="avatar-upload-fallback">?</div>';
+  });
+  document.getElementById('proxy-avatar-file-input')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || typeof this._uploadProxyAvatar !== 'function') return;
+    try {
+      await this._uploadProxyAvatar(file);
+      this._showToast('Proxy avatar uploaded', 'success');
+    } catch (err) {
+      this._showToast(err.message || 'Failed to upload proxy avatar', 'error');
+    } finally {
+      e.target.value = '';
+    }
+  });
+
   document.getElementById('cancel-admin-action-btn').addEventListener('click', () => {
     document.getElementById('admin-action-modal').style.display = 'none';
   });
@@ -1742,6 +1772,7 @@ _setupUI() {
     // Eagerly fetch data that requires async calls so sections don't
     // sit on "Loading..." indefinitely if the user never clicks the nav item.
     loadTotpStatus();
+    if (typeof this._loadProxySettings === 'function') this._loadProxySettings();
     if (this.user?.isAdmin) this._loadRoles();
   };
   document.getElementById('open-settings-btn').addEventListener('click', openSettingsModal);
