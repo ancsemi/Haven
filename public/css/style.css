@@ -4010,6 +4010,13 @@ html.rgb-cycling *::after {
   color: var(--accent);
 }
 
+.forum-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.forum-card-delete,
 .forum-card-open {
   border: 0;
   border-radius: 999px;
@@ -4017,6 +4024,11 @@ html.rgb-cycling *::after {
   color: var(--text-primary);
   padding: 6px 12px;
   cursor: pointer;
+}
+
+.forum-card-delete {
+  background: rgba(220, 80, 80, 0.14);
+  color: #ffd1d1;
 }
 
 .forum-empty-state {
