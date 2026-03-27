@@ -1027,6 +1027,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🤖 Bots</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-import" style="display:none">📦 Import</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-modmode" style="display:none">🔧 Mod Mode</div>
+          <div class="settings-nav-item" data-target="section-proxies">Proxies</div>
         </nav>
         <div class="settings-body">
 
@@ -1280,6 +1281,63 @@
           <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
             <button class="btn-sm btn-full btn-accent" id="open-sound-manager-user-btn">🎵 Sound Manager</button>
             <small class="settings-hint" style="display:block;margin-top:4px">Browse sounds, assign to events, set hotkeys</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section" id="section-proxies">
+        <h5 class="settings-section-title">Proxies</h5>
+        <p class="settings-desc">Create trigger-based proxy profiles. Messages still remain attached to your real account for moderation.</p>
+        <div class="proxy-settings-toolbar">
+          <button class="btn-sm btn-accent" id="proxy-add-btn">+ New Proxy</button>
+          <span class="settings-hint" id="proxy-settings-status"></span>
+        </div>
+        <div id="proxy-settings-list" class="proxy-settings-list">
+          <p class="muted-text">Loading proxies...</p>
+        </div>
+        <div id="proxy-editor" class="proxy-editor" style="display:none">
+          <h6 class="settings-section-subtitle" id="proxy-editor-title">Create Proxy</h6>
+          <div class="proxy-avatar-row">
+            <div id="proxy-avatar-preview" class="avatar-upload-preview"></div>
+            <button type="button" class="btn-sm" id="proxy-avatar-upload-btn">Upload</button>
+            <button type="button" class="btn-sm" id="proxy-avatar-clear-btn">Clear</button>
+            <input type="file" id="proxy-avatar-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+          </div>
+          <small class="muted-text" id="proxy-avatar-limit-hint" style="display:block;margin-bottom:8px;opacity:0.7">Proxy avatars use the server-defined size limit.</small>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="proxy-name-input" maxlength="40" placeholder="Proxy name">
+          </div>
+          <div class="proxy-trigger-grid">
+            <div class="form-group">
+              <label>Trigger Prefix</label>
+              <input type="text" id="proxy-prefix-input" maxlength="40" placeholder="e.g. stoat:">
+            </div>
+            <div class="form-group">
+              <label>Trigger Suffix</label>
+              <input type="text" id="proxy-suffix-input" maxlength="40" placeholder="Optional">
+            </div>
+          </div>
+          <div class="proxy-trigger-preview" id="proxy-trigger-preview">Example: <code>stoat: hello</code></div>
+          <div class="proxy-trigger-grid">
+            <div class="form-group">
+              <label>Group</label>
+              <input type="text" id="proxy-group-input" maxlength="30" placeholder="Optional group">
+            </div>
+            <div class="form-group proxy-visibility-group">
+              <label class="toggle-row">
+                <span>Visible in Proxy Library</span>
+                <input type="checkbox" id="proxy-public-input" checked>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Bio <span class="muted-text">(optional)</span></label>
+            <textarea id="proxy-bio-input" class="edit-profile-textarea" maxlength="190" rows="2" placeholder="Short description for this proxy"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-sm" id="proxy-cancel-btn">Cancel</button>
+            <button class="btn-sm btn-accent" id="proxy-save-btn">Save Proxy</button>
           </div>
         </div>
       </div>
@@ -1566,6 +1624,11 @@
             <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
           </label>
           <small class="settings-hint">Maximum answer choices per poll (2–25, default 10)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span>Max Proxy Avatar Size (KB)</span>
+            <input type="number" id="max-proxy-avatar-kb" min="32" max="2048" value="256" class="settings-number-input">
+          </label>
+          <small class="settings-hint">Maximum proxy avatar upload size (32-2048 KB, default 256)</small>
         </div>
         <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔊 Custom Sounds</h5>
