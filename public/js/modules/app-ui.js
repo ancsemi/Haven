@@ -105,12 +105,15 @@ _setupUI() {
   if (createBtn) {
     createBtn.addEventListener('click', () => {
       const name = nameInput.value.trim();
+      const channelType = document.getElementById('new-channel-type')?.value || 'standard';
       const isPrivate = document.getElementById('new-channel-private')?.checked || false;
       const temporary = document.getElementById('new-channel-temporary')?.checked || false;
       const duration = parseInt(document.getElementById('new-channel-duration')?.value, 10) || 24;
       if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration });
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, channelType });
         nameInput.value = '';
+        const typeSelect = document.getElementById('new-channel-type');
+        if (typeSelect) typeSelect.value = 'standard';
         const pvt = document.getElementById('new-channel-private');
         if (pvt) pvt.checked = false;
         const tmp = document.getElementById('new-channel-temporary');
@@ -667,6 +670,16 @@ _setupUI() {
     this._closeChannelCtxMenu();
     const parentCh = this.channels.find(c => c.code === code);
     if (!parentCh) return;
+    if (parentCh.channel_type === 'forum') {
+      this._forumView.parentCode = parentCh.code;
+      document.getElementById('forum-post-modal-desc').textContent = `Start a new post inside # ${parentCh.name}.`;
+      document.getElementById('forum-post-title').value = '';
+      document.getElementById('forum-post-tag').value = '';
+      document.getElementById('forum-post-body').value = '';
+      document.getElementById('forum-post-modal').style.display = 'flex';
+      setTimeout(() => document.getElementById('forum-post-title')?.focus(), 20);
+      return;
+    }
     // Show the create-sub-channel modal
     document.getElementById('create-sub-name').value = '';
     document.getElementById('create-sub-private').checked = false;
@@ -1121,6 +1134,57 @@ _setupUI() {
   });
   document.getElementById('pinned-close').addEventListener('click', () => {
     document.getElementById('pinned-panel').style.display = 'none';
+  });
+  document.getElementById('forum-original-post-btn')?.addEventListener('click', () => {
+    if (this.currentChannel) this.socket.emit('get-pinned-messages', { code: this.currentChannel });
+  });
+  document.getElementById('forum-refresh-btn')?.addEventListener('click', () => {
+    if (this._forumView?.parentCode) this.socket.emit('get-forum-overview', { code: this._forumView.parentCode });
+  });
+  document.getElementById('forum-search-input')?.addEventListener('input', (e) => {
+    this._forumView.search = e.target.value || '';
+    this._renderForumBrowser();
+  });
+  document.getElementById('forum-create-post-btn')?.addEventListener('click', () => {
+    const modal = document.getElementById('forum-post-modal');
+    const parent = this.channels.find(c => c.code === this._forumView?.parentCode);
+    document.getElementById('forum-post-modal-desc').textContent = parent
+      ? `Start a new post inside # ${parent.name}.`
+      : 'Start a new post inside this forum.';
+    document.getElementById('forum-post-title').value = '';
+    document.getElementById('forum-post-tag').value = '';
+    document.getElementById('forum-post-body').value = '';
+    if (modal) modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('forum-post-title')?.focus(), 20);
+  });
+  document.getElementById('forum-post-cancel-btn')?.addEventListener('click', () => {
+    document.getElementById('forum-post-modal').style.display = 'none';
+  });
+  document.getElementById('forum-post-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'forum-post-modal') {
+      document.getElementById('forum-post-modal').style.display = 'none';
+    }
+  });
+  document.getElementById('forum-post-submit-btn')?.addEventListener('click', () => {
+    const parentCode = this._forumView?.parentCode;
+    const title = document.getElementById('forum-post-title')?.value.trim() || '';
+    const tag = document.getElementById('forum-post-tag')?.value.trim() || '';
+    const body = document.getElementById('forum-post-body')?.value.trim() || '';
+    if (!parentCode || !title || !body) {
+      this._showToast('Title and original post are required', 'error');
+      return;
+    }
+    this.socket.emit('create-forum-post', { parentCode, title, tag, body }, (res) => {
+      if (!res) return;
+      if (res.error) return this._showToast(res.error, 'error');
+      document.getElementById('forum-post-modal').style.display = 'none';
+      if (res.channel && !this.channels.find(c => c.code === res.channel.code)) {
+        this.channels.push(res.channel);
+        this._renderChannels();
+      }
+      if (parentCode) this.socket.emit('get-forum-overview', { code: parentCode });
+      if (res.channel?.code) this.switchChannel(res.channel.code);
+    });
   });
 
   // Right sidebar collapse toggle (persisted to localStorage)
