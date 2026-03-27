@@ -60,6 +60,20 @@ if (process.env.JWT_SECRET === 'change-me-to-something-random-and-long' || !proc
   console.log('🔑 Auto-generated strong JWT_SECRET (saved to .env)');
 }
 
+if (!process.env.HAVEN_SETTINGS_SECRET) {
+  const generated = crypto.randomBytes(48).toString('base64');
+  let envContent = fs.readFileSync(ENV_PATH, 'utf-8');
+  if (/^HAVEN_SETTINGS_SECRET=.*$/m.test(envContent)) {
+    envContent = envContent.replace(/^HAVEN_SETTINGS_SECRET=.*$/m, `HAVEN_SETTINGS_SECRET=${generated}`);
+  } else {
+    if (!envContent.endsWith('\n')) envContent += '\n';
+    envContent += `HAVEN_SETTINGS_SECRET=${generated}\n`;
+  }
+  fs.writeFileSync(ENV_PATH, envContent);
+  process.env.HAVEN_SETTINGS_SECRET = generated;
+  console.log('🔐 Auto-generated HAVEN_SETTINGS_SECRET (saved to .env)');
+}
+
 // ── Auto-generate VAPID keys for push notifications ──────
 const webpush = require('web-push');
 if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
@@ -608,13 +622,14 @@ app.post('/api/admin/storage/test', express.json(), async (req, res) => {
   if (!getAdminFromRequest(req)) return res.status(403).json({ error: 'Admin only' });
   try {
     const body = req.body || {};
+    const base = getStorageConfig();
     await testS3Connection({
-      endpoint: String(body.endpoint || '').trim(),
+      endpoint: String(body.endpoint || base.s3.endpoint || '').trim(),
       region: String(body.region || 'auto').trim() || 'auto',
-      bucket: String(body.bucket || '').trim(),
-      accessKeyId: String(body.accessKeyId || '').trim(),
-      secretAccessKey: String(body.secretAccessKey || '').trim(),
-      prefix: String(body.prefix || 'haven').trim(),
+      bucket: String(body.bucket || base.s3.bucket || '').trim(),
+      accessKeyId: String(body.accessKeyId || base.s3.accessKeyId || '').trim(),
+      secretAccessKey: String(body.secretAccessKey || base.s3.secretAccessKey || '').trim(),
+      prefix: String(body.prefix || base.s3.prefix || 'haven').trim(),
       forcePathStyle: body.forcePathStyle !== false
     });
     res.json({ ok: true });
