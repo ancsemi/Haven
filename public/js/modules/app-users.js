@@ -1038,7 +1038,7 @@ _openProxyLibrary(userId, displayName) {
                   <div class="proxy-library-trigger"><code>${this._escapeHtml(proxy.triggerPrefix)}message${this._escapeHtml(proxy.triggerSuffix || '')}</code></div>
                 </div>
               </div>
-              ${proxy.bio ? `<p class="proxy-library-bio">${this._escapeHtml(proxy.bio)}</p>` : ''}
+              ${proxy.bio ? `<div class="proxy-library-bio">${this._formatContent(proxy.bio)}</div>` : ''}
               ${res.canViewPrivate ? `<div class="proxy-library-privacy">${proxy.isPublic ? 'Public' : 'Private'}</div>` : ''}
             </article>
           `).join('')}
