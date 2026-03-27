@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const webpush = require('web-push');
 const { sendFcm, isFcmEnabled } = require('./fcm');
 const { DATA_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./paths');
+const { moveUploadToDeleted, STORAGE_KEYS } = require('./storage');
 const HAVEN_VERSION = require('../package.json').version;
 
 // ── Normalize SQLite timestamps to UTC ISO 8601 ────────
@@ -2815,11 +2816,7 @@ function setupSocketHandlers(io, db) {
       const uploadRe = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
       let m;
       while ((m = uploadRe.exec(msg.content || '')) !== null) {
-        const src = path.join(UPLOADS_DIR, m[1]);
-        const dst = path.join(DELETED_ATTACHMENTS_DIR, m[1]);
-        if (fs.existsSync(src)) {
-          try { fs.renameSync(src, dst); } catch { /* file locked or already moved */ }
-        }
+        moveUploadToDeleted(m[1]).catch(() => {});
       }
 
       io.to(`channel:${code}`).emit('message-deleted', {
@@ -3551,7 +3548,7 @@ function setupSocketHandlers(io, db) {
     socket.on('get-server-settings', () => {
       const rows = db.prepare('SELECT key, value FROM server_settings').all();
       const settings = {};
-      const sensitiveKeys = ['giphy_api_key', 'server_code'];
+      const sensitiveKeys = ['giphy_api_key', 'server_code', 'storage_s3_access_key', 'storage_s3_secret_key'];
       rows.forEach(r => {
         if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
         settings[r.key] = r.value;
@@ -3696,7 +3693,7 @@ function setupSocketHandlers(io, db) {
       const key = typeof data.key === 'string' ? data.key.trim() : '';
       const value = typeof data.value === 'string' ? data.value.trim() : '';
 
-      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key', 'server_name', 'server_title', 'server_icon', 'permission_thresholds', 'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_poll_options', 'max_sound_kb', 'max_emoji_kb', 'max_proxy_avatar_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'default_theme', 'channel_sort_mode'];
+      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key', 'server_name', 'server_title', 'server_icon', 'permission_thresholds', 'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_poll_options', 'max_sound_kb', 'max_emoji_kb', 'max_proxy_avatar_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'default_theme', 'channel_sort_mode', ...STORAGE_KEYS];
       if (!allowedKeys.includes(key)) return;
 
       if (key === 'member_visibility' && !['all', 'online', 'none'].includes(value)) return;
@@ -3751,6 +3748,14 @@ function setupSocketHandlers(io, db) {
         const validThemes = ['', 'haven', 'discord', 'matrix', 'fallout', 'ffx', 'ice', 'nord', 'darksouls', 'eldenring', 'bloodborne', 'cyberpunk', 'lotr', 'abyss', 'scripture', 'chapel', 'gospel', 'tron', 'halo', 'dracula', 'win95'];
         if (!validThemes.includes(value)) return;
       }
+      if (key === 'storage_provider' && !['local', 's3'].includes(value)) return;
+      if (key === 'storage_s3_force_path_style' && !['true', 'false'].includes(value)) return;
+      if (key === 'storage_s3_region' && value.length > 64) return;
+      if (key === 'storage_s3_bucket' && value.length > 255) return;
+      if (key === 'storage_s3_endpoint' && value.length > 512) return;
+      if (key === 'storage_s3_access_key' && value.length > 256) return;
+      if (key === 'storage_s3_secret_key' && value.length > 256) return;
+      if (key === 'storage_s3_prefix' && value.length > 255) return;
       if (key === 'server_code') {
         // Server code is managed via generate/rotate events, not directly
         return;
