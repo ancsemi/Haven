@@ -98,6 +98,12 @@
                        placeholder="Channel name..." maxlength="50">
                 <button id="create-channel-btn" class="btn-sm btn-accent">+</button>
               </div>
+              <div class="input-row" style="margin-top:6px">
+                <select id="new-channel-type" class="organize-select" style="width:100%">
+                  <option value="standard">Standard Channel</option>
+                  <option value="forum">Forum Channel</option>
+                </select>
+              </div>
               <label class="checkbox-row" style="margin:6px 0 2px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
                 <input type="checkbox" id="new-channel-private" style="width:14px;height:14px">
                 <span>🔒 Private <span style="opacity:0.5;font-size:0.75rem">(invite-only)</span></span>
@@ -283,6 +289,7 @@
             <span class="header-actions-divider"></span>
             <button id="search-toggle-btn" class="icon-btn small" title="Search messages (Ctrl+F)">🔍</button>
             <button id="pinned-toggle-btn" class="icon-btn small" title="Pinned messages">📌</button>
+            <button id="forum-original-post-btn" class="icon-btn small" title="Original post" style="display:none">🧵</button>
             <button id="move-select-btn" class="icon-btn small" title="Select messages to move" style="display:none">☰</button>
             <div class="e2e-menu-wrapper" style="display:none" id="e2e-menu-wrapper">
               <button id="e2e-menu-btn" class="icon-btn small" title="Encryption options">🔐</button>
@@ -346,6 +353,39 @@
             <h2>Welcome to Haven</h2>
             <p>Join a channel with a code from your friends,<br>
                or create one if you're the admin.</p>
+          </div>
+        </div>
+
+        <div id="forum-browser" class="forum-browser" style="display:none">
+          <div class="forum-browser-hero">
+            <div class="forum-browser-copy">
+              <h2 id="forum-browser-title">Forum</h2>
+              <p id="forum-browser-description">Browse organized posts without filling the sidebar with every thread.</p>
+            </div>
+            <div class="forum-browser-actions">
+              <button id="forum-refresh-btn" class="btn-sm">Refresh</button>
+              <button id="forum-create-post-btn" class="btn-sm btn-accent" style="display:none">+ New Post</button>
+            </div>
+          </div>
+          <div class="forum-browser-toolbar">
+            <input type="text" id="forum-search-input" class="search-input forum-search-input" placeholder="Search forum posts..." maxlength="80">
+            <div id="forum-tag-filters" class="forum-tag-filters"></div>
+          </div>
+          <div class="forum-browser-columns">
+            <section class="forum-browser-section">
+              <div class="forum-browser-section-header">
+                <h3>Forums You Are In</h3>
+                <span id="forum-joined-count" class="forum-browser-count">0</span>
+              </div>
+              <div id="forum-joined-list" class="forum-card-grid"></div>
+            </section>
+            <section class="forum-browser-section">
+              <div class="forum-browser-section-header">
+                <h3>Forums You Are Not In</h3>
+                <span id="forum-available-count" class="forum-browser-count">0</span>
+              </div>
+              <div id="forum-available-list" class="forum-card-grid"></div>
+            </section>
           </div>
         </div>
 
@@ -673,6 +713,29 @@
       <div class="move-msg-channel-list" id="move-msg-channel-list"></div>
       <div class="modal-actions">
         <button class="btn-sm" id="move-msg-modal-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="forum-post-modal" style="display:none">
+    <div class="modal" style="max-width:520px">
+      <h3>Create Forum Post</h3>
+      <p class="modal-desc" id="forum-post-modal-desc">Start a new post inside this forum.</p>
+      <div class="form-group">
+        <label for="forum-post-title">Title</label>
+        <input type="text" id="forum-post-title" class="input" maxlength="50" placeholder="Post title">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label for="forum-post-tag">Tag</label>
+        <input type="text" id="forum-post-tag" class="input" maxlength="30" placeholder="Optional tag">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label for="forum-post-body">Original Post</label>
+        <textarea id="forum-post-body" class="search-input" maxlength="2000" placeholder="What should people see when they open this post?" style="min-height:140px;resize:vertical"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="forum-post-cancel-btn">Cancel</button>
+        <button class="btn-sm btn-accent" id="forum-post-submit-btn">Create Post</button>
       </div>
     </div>
   </div>
