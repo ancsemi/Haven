@@ -98,6 +98,12 @@
                        placeholder="Channel name..." maxlength="50">
                 <button id="create-channel-btn" class="btn-sm btn-accent">+</button>
               </div>
+              <div class="input-row" style="margin-top:6px">
+                <select id="new-channel-type" class="organize-select" style="width:100%">
+                  <option value="standard">Standard Channel</option>
+                  <option value="forum">Forum Channel</option>
+                </select>
+              </div>
               <label class="checkbox-row" style="margin:6px 0 2px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
                 <input type="checkbox" id="new-channel-private" style="width:14px;height:14px">
                 <span>🔒 Private <span style="opacity:0.5;font-size:0.75rem">(invite-only)</span></span>
@@ -283,6 +289,7 @@
             <span class="header-actions-divider"></span>
             <button id="search-toggle-btn" class="icon-btn small" title="Search messages (Ctrl+F)">🔍</button>
             <button id="pinned-toggle-btn" class="icon-btn small" title="Pinned messages">📌</button>
+            <button id="forum-original-post-btn" class="icon-btn small" title="Original post" style="display:none">🧵</button>
             <button id="move-select-btn" class="icon-btn small" title="Select messages to move" style="display:none">☰</button>
             <div class="e2e-menu-wrapper" style="display:none" id="e2e-menu-wrapper">
               <button id="e2e-menu-btn" class="icon-btn small" title="Encryption options">🔐</button>
@@ -346,6 +353,39 @@
             <h2>Welcome to Haven</h2>
             <p>Join a channel with a code from your friends,<br>
                or create one if you're the admin.</p>
+          </div>
+        </div>
+
+        <div id="forum-browser" class="forum-browser" style="display:none">
+          <div class="forum-browser-hero">
+            <div class="forum-browser-copy">
+              <h2 id="forum-browser-title">Forum</h2>
+              <p id="forum-browser-description">Browse organized posts without filling the sidebar with every thread.</p>
+            </div>
+            <div class="forum-browser-actions">
+              <button id="forum-refresh-btn" class="btn-sm">Refresh</button>
+              <button id="forum-create-post-btn" class="btn-sm btn-accent" style="display:none">+ New Post</button>
+            </div>
+          </div>
+          <div class="forum-browser-toolbar">
+            <input type="text" id="forum-search-input" class="search-input forum-search-input" placeholder="Search forum posts..." maxlength="80">
+            <div id="forum-tag-filters" class="forum-tag-filters"></div>
+          </div>
+          <div class="forum-browser-columns">
+            <section class="forum-browser-section">
+              <div class="forum-browser-section-header">
+                <h3>Forums You Are In</h3>
+                <span id="forum-joined-count" class="forum-browser-count">0</span>
+              </div>
+              <div id="forum-joined-list" class="forum-card-grid"></div>
+            </section>
+            <section class="forum-browser-section">
+              <div class="forum-browser-section-header">
+                <h3>Forums You Are Not In</h3>
+                <span id="forum-available-count" class="forum-browser-count">0</span>
+              </div>
+              <div id="forum-available-list" class="forum-card-grid"></div>
+            </section>
           </div>
         </div>
 
@@ -680,6 +720,29 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="forum-post-modal" style="display:none">
+    <div class="modal" style="max-width:520px">
+      <h3>Create Forum Post</h3>
+      <p class="modal-desc" id="forum-post-modal-desc">Start a new post inside this forum.</p>
+      <div class="form-group">
+        <label for="forum-post-title">Title</label>
+        <input type="text" id="forum-post-title" class="input" maxlength="50" placeholder="Post title">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label for="forum-post-tag">Tag</label>
+        <input type="text" id="forum-post-tag" class="input" maxlength="30" placeholder="Optional tag">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label for="forum-post-body">Original Post</label>
+        <textarea id="forum-post-body" class="search-input" maxlength="2000" placeholder="What should people see when they open this post?" style="min-height:140px;resize:vertical"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="forum-post-cancel-btn">Cancel</button>
+        <button class="btn-sm btn-accent" id="forum-post-submit-btn">Create Post</button>
+      </div>
+    </div>
+  </div>
+
   <!-- First-Time Setup Wizard (Admin only) -->
   <div class="modal-overlay" id="setup-wizard-modal" style="display:none">
     <div class="modal modal-wizard">
@@ -946,6 +1009,7 @@
           <div class="settings-nav-item active" data-target="section-density">📐 Layout</div>
           <div class="settings-nav-item" data-target="section-sounds">🔔 Sounds</div>
           <div class="settings-nav-item" data-target="section-push">📲 Push</div>
+          <div class="settings-nav-item" data-target="section-proxies">🎭 Proxies</div>
           <div class="settings-nav-item" data-target="section-password">🔒 Password</div>
           <div class="settings-nav-item" data-target="section-2fa">🔐 Two-Factor</div>
           <div class="settings-nav-item" data-target="section-recovery">🔑 Recovery</div>
@@ -960,6 +1024,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-invite" style="display:none">🌐 Invite Code</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-cleanup" style="display:none">🗑️ Cleanup</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-uploads" style="display:none">📁 Limits</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-storage" style="display:none">☁️ Storage</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-sounds-admin" style="display:none">🔊 Sounds</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-emojis" style="display:none">😎 Emojis</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-roles" style="display:none">👑 Roles</div>
@@ -1220,6 +1285,63 @@
           <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
             <button class="btn-sm btn-full btn-accent" id="open-sound-manager-user-btn">🎵 Sound Manager</button>
             <small class="settings-hint" style="display:block;margin-top:4px">Browse sounds, assign to events, set hotkeys</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section" id="section-proxies">
+        <h5 class="settings-section-title">Proxies</h5>
+        <p class="settings-desc">Create trigger-based proxy profiles. Messages still remain attached to your real account for moderation.</p>
+        <div class="proxy-settings-toolbar">
+          <button class="btn-sm btn-accent" id="proxy-add-btn">+ New Proxy</button>
+          <span class="settings-hint" id="proxy-settings-status"></span>
+        </div>
+        <div id="proxy-settings-list" class="proxy-settings-list">
+          <p class="muted-text">Loading proxies...</p>
+        </div>
+        <div id="proxy-editor" class="proxy-editor" style="display:none">
+          <h6 class="settings-section-subtitle" id="proxy-editor-title">Create Proxy</h6>
+          <div class="proxy-avatar-row">
+            <div id="proxy-avatar-preview" class="avatar-upload-preview"></div>
+            <button type="button" class="btn-sm" id="proxy-avatar-upload-btn">Upload</button>
+            <button type="button" class="btn-sm" id="proxy-avatar-clear-btn">Clear</button>
+            <input type="file" id="proxy-avatar-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+          </div>
+          <small class="muted-text" id="proxy-avatar-limit-hint" style="display:block;margin-bottom:8px;opacity:0.7">Proxy avatars use the server-defined size limit.</small>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="proxy-name-input" maxlength="40" placeholder="Proxy name">
+          </div>
+          <div class="proxy-trigger-grid">
+            <div class="form-group">
+              <label>Trigger Prefix</label>
+              <input type="text" id="proxy-prefix-input" maxlength="40" placeholder="e.g. stoat:">
+            </div>
+            <div class="form-group">
+              <label>Trigger Suffix</label>
+              <input type="text" id="proxy-suffix-input" maxlength="40" placeholder="Optional">
+            </div>
+          </div>
+          <div class="proxy-trigger-preview" id="proxy-trigger-preview">Example: <code>stoat: hello</code></div>
+          <div class="proxy-trigger-grid">
+            <div class="form-group">
+              <label>Group</label>
+              <input type="text" id="proxy-group-input" maxlength="30" placeholder="Optional group">
+            </div>
+            <div class="form-group proxy-visibility-group">
+              <label class="toggle-row">
+                <span>Visible in Proxy Library</span>
+                <input type="checkbox" id="proxy-public-input" checked>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Bio <span class="muted-text">(optional)</span></label>
+            <textarea id="proxy-bio-input" class="edit-profile-textarea" maxlength="190" rows="2" placeholder="Short description for this proxy"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-sm" id="proxy-cancel-btn">Cancel</button>
+            <button class="btn-sm btn-accent" id="proxy-save-btn">Save Proxy</button>
           </div>
         </div>
       </div>
@@ -1506,6 +1628,66 @@
             <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
           </label>
           <small class="settings-hint">Maximum answer choices per poll (2–25, default 10)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span>Max Proxy Avatar Size (KB)</span>
+            <input type="number" id="max-proxy-avatar-kb" min="32" max="2048" value="256" class="settings-number-input">
+          </label>
+          <small class="settings-hint">Maximum proxy avatar upload size (32-2048 KB, default 256)</small>
+        </div>
+        <div class="admin-settings" id="section-storage" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">☁️ Storage</h5>
+          <label class="select-row">
+            <span>Active Upload Volume</span>
+            <select id="storage-provider-select">
+              <option value="local">Local /data/uploads</option>
+              <option value="s3">S3 / MEGA S4</option>
+            </select>
+          </label>
+          <small class="settings-hint">Switches where new uploads, avatars, sounds, emojis, and server images are stored.</small>
+          <div id="storage-s3-settings" style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.02);">
+            <label class="select-row">
+              <span>Endpoint</span>
+              <input type="text" id="storage-s3-endpoint" placeholder="https://gateway.storjshare.io or MEGA S4 endpoint">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Bucket</span>
+              <input type="text" id="storage-s3-bucket" placeholder="haven-storage">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Region</span>
+              <input type="text" id="storage-s3-region" placeholder="auto">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Access Key</span>
+              <input type="text" id="storage-s3-access-key" placeholder="Access key ID">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Secret Key</span>
+              <input type="password" id="storage-s3-secret-key" placeholder="Secret access key">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Prefix</span>
+              <input type="text" id="storage-s3-prefix" placeholder="haven">
+            </label>
+            <label class="select-row" style="margin-top:8px">
+              <span>Path Style</span>
+              <input type="checkbox" id="storage-s3-force-path-style" checked>
+            </label>
+            <small class="settings-hint">Enable path-style for S3-compatible providers that do not support bucket subdomains.</small>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-sm" id="storage-test-btn">Test S3 Connection</button>
+              <button class="btn-sm" id="storage-migrate-btn">Move Local Uploads to S3</button>
+            </div>
+          </div>
+          <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.02);">
+            <small class="settings-hint">Back up the active Haven data volume or import a backup zip to stage a restore.</small>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-sm" id="data-backup-btn">Download Data Zip</button>
+              <button class="btn-sm" id="data-import-btn">Import Data Zip</button>
+              <input type="file" id="data-import-file" accept=".zip" style="display:none">
+            </div>
+            <small class="settings-hint" id="storage-status-note" style="display:block;margin-top:8px"></small>
+          </div>
         </div>
         <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔊 Custom Sounds</h5>

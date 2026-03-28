@@ -272,6 +272,11 @@ _showProfilePopup(profile) {
     ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ Edit Profile</button>`
     : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 Message</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}">${nickBtnLabel}</button>`;
 
+  const proxyLibraryBtn = (profile.proxyCount > 0 || profile.canViewPrivateProxies)
+    ? `<button class="profile-popup-action-btn profile-proxies-btn" data-proxy-uid="${profile.id}">Proxy Library${profile.proxyCount > 0 ? ` (${profile.proxyCount})` : ''}</button>`
+    : '';
+  const finalActionsHtml = actionsHtml + proxyLibraryBtn;
+
   const popup = document.createElement('div');
   popup.id = 'profile-popup';
   popup.className = 'profile-popup';
@@ -294,7 +299,7 @@ _showProfilePopup(profile) {
       <div class="profile-popup-divider"></div>
       ${rolesHtml ? `<div class="profile-popup-section-label">Roles</div><div class="profile-popup-roles">${rolesHtml}</div>` : ''}
       ${joinDate ? `<div class="profile-popup-section-label">Member Since</div><div class="profile-popup-join-date">${joinDate}</div>` : ''}
-      <div class="profile-popup-actions">${actionsHtml}</div>
+        <div class="profile-popup-actions">${finalActionsHtml}</div>
     </div>
   `;
 
@@ -359,6 +364,14 @@ _showProfilePopup(profile) {
       const uname = nickBtnEl.dataset.nickUname;
       this._closeProfilePopup();
       this._showNicknameDialog(uid, uname);
+    });
+  }
+
+  const proxyBtnEl = popup.querySelector('.profile-proxies-btn');
+  if (proxyBtnEl) {
+    proxyBtnEl.addEventListener('click', () => {
+      this._closeProfilePopup();
+      this._openProxyLibrary(profile.id, profile.displayName || profile.username);
     });
   }
 
@@ -824,6 +837,7 @@ _refreshNicknameDisplays() {
   if (this._lastVoiceUsers) this._renderVoiceUsers(this._lastVoiceUsers);
   // Update visible message author names in place
   document.querySelectorAll('.message, .message-compact').forEach(el => {
+    if (el.dataset.proxyName) return;
     const uid = parseInt(el.dataset.userId);
     const realName = el.dataset.username;
     if (uid && realName) {
@@ -837,6 +851,215 @@ _refreshNicknameDisplays() {
   });
   // Close profile popup since data changed
   this._closeProfilePopup();
+},
+
+_loadProxySettings() {
+  const listEl = document.getElementById('proxy-settings-list');
+  if (listEl && !this._proxySettings.loaded) {
+    listEl.innerHTML = '<p class="muted-text">Loading proxies...</p>';
+  }
+  this.socket.emit('get-my-proxies', (res) => {
+    if (!res) return;
+    if (res.error) {
+      this._showToast(res.error, 'error');
+      return;
+    }
+    this._proxySettings.list = Array.isArray(res.proxies) ? res.proxies : [];
+    this._proxySettings.loaded = true;
+    this._renderProxySettings();
+  });
+},
+
+_renderProxySettings() {
+  const listEl = document.getElementById('proxy-settings-list');
+  if (!listEl) return;
+  const proxies = Array.isArray(this._proxySettings.list) ? this._proxySettings.list : [];
+  if (!proxies.length) {
+    listEl.innerHTML = '<p class="muted-text">No proxies yet. Create one to start proxying with triggers like <code>stoat: hello</code>.</p>';
+  } else {
+    listEl.innerHTML = proxies.map(proxy => `
+      <div class="proxy-settings-item" data-proxy-id="${proxy.id}">
+        <div class="proxy-settings-summary">
+          <div class="proxy-settings-avatar">
+            ${proxy.avatarUrl ? `<img src="${this._escapeHtml(proxy.avatarUrl)}" alt="${this._escapeHtml(proxy.name)}">` : `<div class="proxy-settings-avatar-fallback">${this._escapeHtml((proxy.name || '?').charAt(0).toUpperCase())}</div>`}
+          </div>
+          <div class="proxy-settings-copy">
+            <div class="proxy-settings-name-row">
+              <strong>${this._escapeHtml(proxy.name)}</strong>
+              <span class="proxy-visibility-badge">${proxy.isPublic ? 'Public' : 'Private'}</span>
+            </div>
+            <div class="proxy-settings-trigger"><code>${this._escapeHtml(proxy.triggerPrefix)}message${this._escapeHtml(proxy.triggerSuffix || '')}</code></div>
+            <div class="proxy-settings-meta">${this._escapeHtml(proxy.groupName || 'Ungrouped')}${proxy.bio ? ` • ${this._escapeHtml(proxy.bio)}` : ''}</div>
+          </div>
+        </div>
+        <div class="proxy-settings-actions">
+          <button class="btn-sm proxy-edit-btn" data-proxy-id="${proxy.id}">Edit</button>
+          <button class="btn-sm proxy-delete-btn" data-proxy-id="${proxy.id}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  listEl.querySelectorAll('.proxy-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const proxy = this._proxySettings.list.find(p => p.id === parseInt(btn.dataset.proxyId, 10));
+      if (proxy) this._openProxyEditor(proxy);
+    });
+  });
+  listEl.querySelectorAll('.proxy-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const proxyId = parseInt(btn.dataset.proxyId, 10);
+      const proxy = this._proxySettings.list.find(p => p.id === proxyId);
+      if (!proxy) return;
+      if (!confirm(`Delete proxy "${proxy.name}"?`)) return;
+      this.socket.emit('delete-proxy', { id: proxyId }, (res) => {
+        if (!res) return;
+        if (res.error) return this._showToast(res.error, 'error');
+        this._proxySettings.list = res.proxies || [];
+        this._renderProxySettings();
+        this._resetProxyEditor();
+        this._showToast('Proxy deleted', 'success');
+      });
+    });
+  });
+},
+
+_openProxyEditor(proxy = null) {
+  const editor = document.getElementById('proxy-editor');
+  if (!editor) return;
+  this._proxySettings.editingId = proxy?.id || null;
+  this._proxySettings.draftAvatarUrl = proxy?.avatarUrl || '';
+  document.getElementById('proxy-editor-title').textContent = proxy ? `Edit Proxy: ${proxy.name}` : 'Create Proxy';
+  document.getElementById('proxy-name-input').value = proxy?.name || '';
+  document.getElementById('proxy-prefix-input').value = proxy?.triggerPrefix || '';
+  document.getElementById('proxy-suffix-input').value = proxy?.triggerSuffix || '';
+  document.getElementById('proxy-group-input').value = proxy?.groupName || '';
+  document.getElementById('proxy-bio-input').value = proxy?.bio || '';
+  document.getElementById('proxy-public-input').checked = proxy ? !!proxy.isPublic : true;
+  const preview = document.getElementById('proxy-avatar-preview');
+  if (preview) {
+    preview.innerHTML = this._proxySettings.draftAvatarUrl
+      ? `<img src="${this._escapeHtml(this._proxySettings.draftAvatarUrl)}" alt="Proxy avatar">`
+      : '<div class="avatar-upload-fallback">?</div>';
+  }
+  const hint = document.getElementById('proxy-avatar-limit-hint');
+  if (hint) {
+    const maxKb = this.serverSettings?.max_proxy_avatar_kb || '256';
+    hint.textContent = `Proxy avatars must stay under ${maxKb} KB.`;
+  }
+  const updatePreview = () => {
+    const prefix = document.getElementById('proxy-prefix-input')?.value || '';
+    const suffix = document.getElementById('proxy-suffix-input')?.value || '';
+    const previewEl = document.getElementById('proxy-trigger-preview');
+    if (previewEl) previewEl.innerHTML = `Example: <code>${this._escapeHtml(prefix || 'proxy: ')}hello${this._escapeHtml(suffix || '')}</code>`;
+  };
+  updatePreview();
+  const prefixInput = document.getElementById('proxy-prefix-input');
+  const suffixInput = document.getElementById('proxy-suffix-input');
+  if (prefixInput) prefixInput.oninput = updatePreview;
+  if (suffixInput) suffixInput.oninput = updatePreview;
+  editor.style.display = 'block';
+},
+
+_resetProxyEditor() {
+  this._proxySettings.editingId = null;
+  this._proxySettings.draftAvatarUrl = '';
+  const editor = document.getElementById('proxy-editor');
+  if (editor) editor.style.display = 'none';
+},
+
+_saveProxyDraft() {
+  const payload = {
+    id: this._proxySettings.editingId,
+    name: document.getElementById('proxy-name-input')?.value || '',
+    triggerPrefix: document.getElementById('proxy-prefix-input')?.value || '',
+    triggerSuffix: document.getElementById('proxy-suffix-input')?.value || '',
+    groupName: document.getElementById('proxy-group-input')?.value || '',
+    bio: document.getElementById('proxy-bio-input')?.value || '',
+    isPublic: !!document.getElementById('proxy-public-input')?.checked,
+    avatarUrl: this._proxySettings.draftAvatarUrl || ''
+  };
+  this.socket.emit('save-proxy', payload, (res) => {
+    if (!res) return;
+    if (res.error) return this._showToast(res.error, 'error');
+    this._proxySettings.list = res.proxies || [];
+    this._renderProxySettings();
+    this._resetProxyEditor();
+    this._showToast('Proxy saved', 'success');
+  });
+},
+
+async _uploadProxyAvatar(file) {
+  const formData = new FormData();
+  formData.append('proxyAvatar', file);
+  const resp = await fetch('/api/upload-proxy-avatar', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${this.token}` },
+    body: formData
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || 'Failed to upload proxy avatar');
+  this._proxySettings.draftAvatarUrl = data.url || '';
+  const preview = document.getElementById('proxy-avatar-preview');
+  if (preview) {
+    preview.innerHTML = data.url
+      ? `<img src="${this._escapeHtml(data.url)}" alt="Proxy avatar">`
+      : '<div class="avatar-upload-fallback">?</div>';
+  }
+},
+
+_openProxyLibrary(userId, displayName) {
+  this.socket.emit('get-user-proxies', { userId }, (res) => {
+    if (!res) return;
+    if (res.error) return this._showToast(res.error, 'error');
+
+    const existing = document.getElementById('proxy-library-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'proxy-library-modal';
+
+    const grouped = {};
+    (res.proxies || []).forEach(proxy => {
+      const group = proxy.groupName || 'Ungrouped';
+      if (!grouped[group]) grouped[group] = [];
+      grouped[group].push(proxy);
+    });
+    const groupsHtml = Object.entries(grouped).map(([group, proxies]) => `
+      <div class="proxy-library-group">
+        <div class="proxy-library-group-title">${this._escapeHtml(group)}</div>
+        <div class="proxy-library-grid">
+          ${proxies.map(proxy => `
+            <article class="proxy-library-card">
+              <div class="proxy-library-card-header">
+                ${proxy.avatarUrl ? `<img class="proxy-library-avatar" src="${this._escapeHtml(proxy.avatarUrl)}" alt="${this._escapeHtml(proxy.name)}">` : `<div class="proxy-library-avatar proxy-library-avatar-fallback">${this._escapeHtml((proxy.name || '?').charAt(0).toUpperCase())}</div>`}
+                <div>
+                  <div class="proxy-library-name">${this._escapeHtml(proxy.name)}</div>
+                  <div class="proxy-library-trigger"><code>${this._escapeHtml(proxy.triggerPrefix)}message${this._escapeHtml(proxy.triggerSuffix || '')}</code></div>
+                </div>
+              </div>
+              ${proxy.bio ? `<div class="proxy-library-bio">${this._formatContent(proxy.bio)}</div>` : ''}
+              ${res.canViewPrivate ? `<div class="proxy-library-privacy">${proxy.isPublic ? 'Public' : 'Private'}</div>` : ''}
+            </article>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+
+    modal.innerHTML = `
+      <div class="modal" style="max-width:720px">
+        <h3 style="margin-top:0">${this._escapeHtml(displayName)}'s Proxy Library</h3>
+        <p class="modal-desc">${res.proxies?.length ? "Browse this user's configured proxies." : 'No visible proxies.'}</p>
+        <div class="proxy-library-wrap">${groupsHtml || '<p class="muted-text">Nothing to show here.</p>'}</div>
+        <div class="modal-actions">
+          <button class="btn-sm" id="proxy-library-close-btn">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelector('#proxy-library-close-btn')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  });
 },
 
 _showTyping(username) {

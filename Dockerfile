@@ -7,7 +7,7 @@
 # Run:     docker compose up -d
 # ─────────────────────────────────────────────────────────
 
-FROM node:20-alpine
+FROM node:22-alpine
 
 # OpenSSL  → auto-generate self-signed HTTPS certs
 # tini     → proper PID 1 signal handling (clean shutdown)
