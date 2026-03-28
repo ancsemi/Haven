@@ -425,10 +425,19 @@ _setupUI() {
   // Organize modal controls
   document.getElementById('organize-global-sort')?.addEventListener('change', (e) => {
     if (!this._organizeParentCode) return;
-    const sortMode = e.target.value; // 'manual', 'alpha', 'created', 'oldest'
+    const sortMode = e.target.value; // 'server_default', 'manual', 'alpha', 'created', 'oldest', 'dynamic'
     if (this._organizeServerLevel) {
-      // Server-level sort: store in localStorage (no parent channel to hold it)
-      localStorage.setItem('haven_server_sort_mode', sortMode);
+      if (sortMode === 'server_default') {
+        // Use server default — remove any personal override
+        localStorage.removeItem('haven_server_sort_mode');
+      } else if (this.user?.isAdmin || this._hasPerm('manage_server')) {
+        // Admin: update the server-wide default sort mode
+        this.socket.emit('update-server-setting', { key: 'channel_sort_mode', value: sortMode });
+        localStorage.removeItem('haven_server_sort_mode');
+      } else {
+        // Non-admin: save as personal override only
+        localStorage.setItem('haven_server_sort_mode', sortMode);
+      }
     } else {
       // Sub-channel sort: store on the parent channel (server-side)
       this.socket.emit('set-sort-alphabetical', { code: this._organizeParentCode, enabled: sortMode === 'alpha', mode: sortMode });
@@ -436,6 +445,7 @@ _setupUI() {
       if (parent) parent.sort_alphabetical = sortMode === 'alpha' ? 1 : sortMode === 'created' ? 2 : sortMode === 'oldest' ? 3 : sortMode === 'dynamic' ? 4 : 0;
     }
     this._renderOrganizeList();
+    if (this._organizeServerLevel) this._renderChannels();
   });
   document.getElementById('organize-cat-sort')?.addEventListener('change', (e) => {
     if (!this._organizeParentCode) return;
@@ -725,6 +735,8 @@ _setupUI() {
   });
   document.getElementById('voice-mute-btn').addEventListener('click', () => this._toggleMute());
   document.getElementById('voice-deafen-btn').addEventListener('click', () => this._toggleDeafen());
+  document.getElementById('voice-mute-btn-header')?.addEventListener('click', () => this._toggleMute());
+  document.getElementById('voice-deafen-btn-header')?.addEventListener('click', () => this._toggleDeafen());
   document.getElementById('voice-leave-sidebar-btn').addEventListener('click', () => this._leaveVoice());
   document.getElementById('voice-cam-btn').addEventListener('click', () => this._toggleWebcam());
   document.getElementById('screen-share-btn').addEventListener('click', () => this._toggleScreenShare());
@@ -749,6 +761,7 @@ _setupUI() {
   // Music controls
   document.getElementById('music-share-btn')?.addEventListener('click', () => this._openMusicModal());
   document.getElementById('share-music-btn').addEventListener('click', () => this._shareMusic());
+  document.getElementById('share-music-playlist-btn')?.addEventListener('click', () => this._shareMusicPlaylist());
   document.getElementById('cancel-music-btn').addEventListener('click', () => this._closeMusicModal());
   document.getElementById('music-modal').addEventListener('click', (e) => {
     if (e.target.id === 'music-modal') this._closeMusicModal();
@@ -757,11 +770,15 @@ _setupUI() {
   document.getElementById('music-close-btn').addEventListener('click', () => {
     this._minimizeMusicPanel();
   });
+  document.getElementById('music-queue-btn')?.addEventListener('click', () => this._openMusicQueueModal());
+  document.getElementById('close-music-queue-btn')?.addEventListener('click', () => this._closeMusicQueueModal());
+  document.getElementById('shuffle-music-queue-btn')?.addEventListener('click', () => this._shuffleMusicQueue());
+  document.getElementById('music-queue-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'music-queue-modal') this._closeMusicQueueModal();
+  });
   document.getElementById('music-popout-btn').addEventListener('click', () => this._popOutMusicPlayer());
   document.getElementById('music-play-pause-btn').addEventListener('click', () => this._toggleMusicPlayPause());
-  document.getElementById('music-prev-btn').addEventListener('click', () => this._musicTrackControl('prev'));
   document.getElementById('music-next-btn').addEventListener('click', () => this._musicTrackControl('next'));
-  document.getElementById('music-shuffle-btn').addEventListener('click', () => this._musicTrackControl('shuffle'));
   document.getElementById('music-mute-btn').addEventListener('click', () => this._toggleMusicMute());
   document.getElementById('music-volume-slider').addEventListener('input', (e) => {
     this._setMusicVolume(parseInt(e.target.value));
@@ -772,14 +789,13 @@ _setupUI() {
   seekSlider.addEventListener('change', (e) => {
     this._musicSeeking = false;
     const pct = parseFloat(e.target.value);
+    this._suppressMusicBroadcasts();
     this._seekMusic(pct);
-    // Broadcast seek to others in voice
-    if (this.voice && this.voice.inVoice) {
-      this.socket.emit('music-seek', {
-        code: this.voice.currentChannel,
-        position: pct
-      });
-    }
+    this._withMusicDuration((durationSeconds) => {
+      const positionSeconds = durationSeconds > 0 ? (durationSeconds * pct) / 100 : 0;
+      this._emitMusicSeek(positionSeconds, durationSeconds);
+    });
+    this._setMusicActivityHint('You seeked.');
   });
   document.getElementById('music-link-input').addEventListener('input', (e) => {
     this._previewMusicLink(e.target.value.trim());
@@ -815,9 +831,10 @@ _setupUI() {
     }
   });
 
-  // ── Audio device dropdowns (input & output) ──
+  // ── Audio device dropdowns (input & output & camera) ──
   const inputDeviceSelect  = document.getElementById('voice-input-device');
   const outputDeviceSelect = document.getElementById('voice-output-device');
+  const camDeviceSelect    = document.getElementById('voice-cam-device');
   if (inputDeviceSelect) {
     inputDeviceSelect.addEventListener('change', (e) => {
       const deviceId = e.target.value;
@@ -835,6 +852,16 @@ _setupUI() {
       // Hot-swap output
       if (this.voice) {
         this.voice.switchOutputDevice(deviceId);
+      }
+    });
+  }
+  if (camDeviceSelect) {
+    camDeviceSelect.addEventListener('change', (e) => {
+      const deviceId = e.target.value;
+      localStorage.setItem('haven_cam_device', deviceId);
+      // Hot-swap camera if webcam is active
+      if (this.voice && this.voice.isWebcamActive) {
+        this.voice.switchCamera(deviceId);
       }
     });
   }
@@ -1041,12 +1068,17 @@ _setupUI() {
   this.voice.onScreenShareStarted = (userId, username) => {
     this.notifications.playDirect('stream_start');
   };
+  // Re-render voice user list when webcam status changes
+  this.voice.onWebcamStatusChange = () => {
+    if (this._lastVoiceUsers) this._renderVoiceUsers(this._lastVoiceUsers);
+  };
 
   // Wire up talking indicator
   this.voice.onTalkingChange = (userId, isTalking) => {
     const resolvedId = userId === 'self' ? this.user.id : userId;
-    const el = document.querySelector(`.voice-user-item[data-user-id="${resolvedId}"]`);
-    if (el) el.classList.toggle('talking', isTalking);
+    document.querySelectorAll(`.channel-voice-user[data-user-id="${resolvedId}"], .voice-user-item[data-user-id="${resolvedId}"]`).forEach(el => {
+      el.classList.toggle('talking', isTalking);
+    });
   };
 
   // Search
@@ -1338,6 +1370,19 @@ _setupUI() {
   document.getElementById('reply-close-btn').addEventListener('click', () => {
     this._clearReply();
   });
+
+  // Messages container — move-selection mode intercept
+  document.getElementById('messages').addEventListener('click', (e) => {
+    if (!this._moveSelectionActive) return;
+    // Don't intercept toolbar button clicks
+    if (e.target.closest('.msg-toolbar, .msg-dots-btn')) return;
+    const msgEl = e.target.closest('.message, .message-compact');
+    if (msgEl) {
+      e.preventDefault();
+      e.stopPropagation();
+      this._toggleMoveSelect(msgEl);
+    }
+  }, true); // capture phase so it fires before the toolbar action handler
 
   // Messages container — delegate reaction and reply button clicks
   document.getElementById('messages').addEventListener('click', (e) => {

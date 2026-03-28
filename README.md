@@ -1,26 +1,23 @@
-
-
-
-# ⬡ HAVEN — Private Chat That Lives On Your Machine
+# ⬡ AMNI-HAVEN — Private Chat That Lives On Your Machine
 
 > **Your server. Your rules. No cloud. No accounts with Big Tech. No one reading your messages.**
 
-![Version](https://img.shields.io/badge/version-2.3.0-blue)
+![Version](https://img.shields.io/badge/version-2.8.2-blue)
 ![License](https://img.shields.io/badge/license-MIT--NC-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 
-Haven is a self-hosted Discord alternative. Run it on your machine. Invite friends with a code. No cloud. No email signup. No tracking. Free forever.
+Amni-Haven is a self-hosted Discord alternative. Run it on your machine. Invite friends with a code. No cloud. No email signup. No tracking. Free forever.
 
 <img width="1917" height="948" alt="Screenshot 2026-02-14 102013" src="https://github.com/user-attachments/assets/0c85ca6c-f811-43db-a26b-9b66c418830e" />
 
 ---
 
-## 🖥️ NEW — Haven Desktop (Beta)
+## 🖥️ NEW — Amni-Haven Desktop (Beta)
 
-> **Want a native desktop experience?** Haven Desktop is a standalone app that connects to any Haven server — with features that go beyond the browser.
+> **Want a native desktop experience?** Amni-Haven Desktop is a standalone app that connects to any Amni-Haven server — with features that go beyond the browser.
 
-**[Haven Desktop](https://github.com/ancsemi/Haven-Desktop)** is now available as a public beta. Download the installer and connect to your server in seconds.
+**[Amni-Haven Desktop](https://github.com/ancsemi/Haven-Desktop)** is now available as a public beta. Download the installer and connect to your server in seconds.
 
 - **Per-Application Audio** — share audio from a single app during screen share, just like Discord. Powered by native WASAPI (Windows) and PulseAudio (Linux) hooks.
 - **Audio Device Switching** — change your mic and speaker mid-call without leaving voice chat
@@ -30,27 +27,27 @@ Haven is a self-hosted Discord alternative. Run it on your machine. Invite frien
 
 > **⚠️ This is a beta release.** Bugs are expected. Your feedback is what makes it better — please [open an issue](https://github.com/ancsemi/Haven-Desktop/issues) if something breaks or feels off.
 >
-> **You still need a Haven server.** The desktop app is a client — it connects to a Haven server. Download and run [Haven](https://github.com/ancsemi/Haven) first if you haven't already.
+> **You still need an Amni-Haven server.** The desktop app is a client — it connects to an Amni-Haven server. Download and run [Amni-Haven](https://github.com/ancsemi/Haven) first if you haven't already.
 
-📥 **[Download Haven Desktop →](https://github.com/ancsemi/Haven-Desktop/releases/latest)**
+📥 **[Download Amni-Haven Desktop →](https://github.com/ancsemi/Haven-Desktop/releases/latest)**
 
 ---
 
-## 📱 NEW — Haven Android (Closed Beta)
+## 📱 NEW — Amni-Haven Android (Closed Beta)
 
-> **Want Haven on your phone?** Haven Android is a native Android app built from the ground up, now in closed beta on Google Play.
+> **Want Amni-Haven on your phone?** Amni-Haven Android is a native Android app built from the ground up, now in closed beta on Google Play.
 
-**Haven Android** features full chat and voice support, push notifications, and a true mobile-native experience.
+**Amni-Haven Android** features full chat and voice support, push notifications, and a true mobile-native experience.
 
-- **Native Android** — built from scratch specifically for Haven, not a web wrapper
+- **Native Android** — built from scratch specifically for Amni-Haven, not a web wrapper
 - **Push Notifications** — real-time notifications via Google Play services
 - **Full Chat & Voice** — all the features you love, in your pocket
 
 > **🚀 Want to join the beta?** Visit **[amni-scient.com/amni-haven.html](https://amni-scient.com/amni-haven.html)** to request access to the closed beta.
 >
-> **You still need a Haven server.** The Android app is a client — it connects to a Haven server. Download and run [Haven](https://github.com/ancsemi/Haven) first if you haven't already.
+> **You still need an Amni-Haven server.** The Android app is a client — it connects to an Amni-Haven server. Download and run [Amni-Haven](https://github.com/ancsemi/Haven) first if you haven't already.
 
-*Built with ❤️ by **Amnibro** — huge thanks for his incredible work building the Haven Android app from the ground up.*
+*Built with ❤️ by **Amnibro** — huge thanks for his incredible work building the Amni-Haven Android app from the ground up.*
 
 📲 **[Request Android Beta Access →](https://amni-scient.com/amni-haven.html)**
 
@@ -58,9 +55,9 @@ Haven is a self-hosted Discord alternative. Run it on your machine. Invite frien
 
 ## NEW in v2.0.0 — Import Your Discord History
 
-> **Leaving Discord?** Haven can import your entire server's message history — directly from the app. No external tools, no command-line exports, no hassle.
+> **Leaving Discord?** Amni-Haven can import your entire server's message history — directly from the app. No external tools, no command-line exports, no hassle.
 
-Open **Settings → Import** and connect with your Discord token. Haven pulls every channel, thread, forum post, announcement, reaction, pin, attachment, and avatar — then lets you map them to Haven channels. Your community's history comes with you.
+Open **Settings → Import** and connect with your Discord token. Amni-Haven pulls every channel, thread, forum post, announcement, reaction, pin, attachment, and avatar — then lets you map them to Amni-Haven channels. Your community's history comes with you.
 
 - **Direct Connect** — paste your Discord token, pick a server, select channels & threads, import
 - **File Upload** — or upload a DiscordChatExporter JSON/ZIP if you prefer
@@ -100,7 +97,7 @@ docker compose up -d
 
 Open `https://localhost:3000` → Register with username `admin` → Create a channel → Share the code with friends. Done.
 
-> Certificate warning is normal — click **Advanced → Proceed**. Haven uses a self-signed cert for encryption.
+> Certificate warning is normal — click **Advanced → Proceed**. Amni-Haven uses a self-signed cert for encryption.
 
 **Updating** — if using the pre-built image (default):
 ```bash
@@ -147,13 +144,12 @@ Or manually: `npm install && node server.js`
 
 ---
 
-
 <img width="1918" height="945" alt="Screenshot 2026-02-13 174344" src="https://github.com/user-attachments/assets/a1925091-46de-4fa6-bb8d-788985c974be" />
 
 
 ## Why Not Discord?
 
-| | Discord | Haven |
+| | Discord | Amni-Haven |
 |---|---------|-------|
 | **Hosting** | Their cloud | Your machine |
 | **Account** | Email + phone required | No email, no verification |
@@ -184,12 +180,12 @@ Or manually: `npm install && node server.js`
 | **Slash Commands** | `/shrug`, `/tableflip`, `/roll 2d20`, `/flip`, `/me`, `/spoiler`, `/tts`, and more — type `/` to see them all |
 | **Search** | Search messages in any channel with Ctrl+F |
 | **Themes** | 20+ themes with stackable visual effects: CRT, Matrix Rain, Cyberpunk Text Scramble, Snowfall, Campfire Embers, and more — configurable intensity/frequency sliders |
-| **Multi-Server** | Add friends' Haven servers to your sidebar with live online/offline status |
+| **Multi-Server** | Add friends' Amni-Haven servers to your sidebar with live online/offline status |
 | **Notifications** | 5 notification sounds, per-channel volume controls |
 | **Moderation** | Admin: kick, mute (timed), ban, delete users, delete channels, auto-cleanup. Role system with granular permissions. |
 | **Security** | Bcrypt passwords, JWT auth, HTTPS/SSL, rate limiting, CSP headers, input validation |
 | **E2E Encryption** | ECDH P-256 + AES-256-GCM encrypted DMs — private keys never leave the browser |
-| **Discord Import** | Import your entire Discord server history — channels, threads, forums, reactions, pins, avatars — directly from Haven's UI or via file upload |
+| **Discord Import** | Import your entire Discord server history — channels, threads, forums, reactions, pins, avatars — directly from Amni-Haven's UI or via file upload |
 | **Game** | Shippy Container — Drew's shipment got hung up. Server-wide leaderboard. |
 
 
@@ -219,7 +215,7 @@ Go to [whatismyip.com](https://whatismyip.com). That's the address your friends 
 
 Open PowerShell as Administrator and run:
 ```powershell
-New-NetFirewallRule -DisplayName "Haven Chat" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "Amni-Haven Chat" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
 ```
 
 ### Step 4 — Share With Friends
@@ -235,7 +231,7 @@ Tell them to click **Advanced** → **Proceed** on the certificate warning. It's
 
 ## Configuration
 
-Haven creates a `.env` config file automatically on first launch — you don't need to create or rename anything. It lives in your **data directory**:
+Amni-Haven creates a `.env` config file automatically on first launch — you don't need to create or rename anything. It lives in your **data directory**:
 
 | OS | Data Directory |
 |----|---------------|
@@ -281,7 +277,7 @@ Type `/` in the message box to see the full list. Here are some highlights:
 
 25 themes, switchable from the sidebar:
 
-**Haven** · **Discord** · **Matrix** · **Tron** · **HALO** · **Lord of the Rings** · **Cyberpunk** · **Nord** · **Dracula** · **Bloodborne** · **Ice** · **Abyss**
+**Amni-Haven** · **Discord** · **Matrix** · **Tron** · **HALO** · **Lord of the Rings** · **Cyberpunk** · **Nord** · **Dracula** · **Bloodborne** · **Ice** · **Abyss**
 
 Your theme choice persists across sessions.
 
@@ -338,15 +334,15 @@ Access admin controls in the **Settings** panel (⚙️ gear icon in the sidebar
 
 ### HTTPS / SSL Details
 
-Haven **automatically generates self-signed SSL certificates** on first launch — but only if **OpenSSL** is installed on your system.
+Amni-Haven **automatically generates self-signed SSL certificates** on first launch — but only if **OpenSSL** is installed on your system.
 
 **How to tell which mode you're in:** Look at the startup banner in the terminal window. If the URL shows `http://` — you're on HTTP. If it shows `https://` — you're on HTTPS.
 
-**If Haven falls back to HTTP** (no OpenSSL, or cert generation failed):
+**If Amni-Haven falls back to HTTP** (no OpenSSL, or cert generation failed):
 - Everything works fine for local use — just use `http://localhost:3000`
 - Voice chat will only work on localhost, not for remote friends
 - To enable HTTPS:
-  1. Install OpenSSL: [slproweb.com/products/Win32OpenSSL.html](https://slproweb.com/products/Win32OpenSSL.html) (the "Light" version)
+  1. Install OpenSSL: [slproweb.com/products/Win32OpenSSL.html](https://www.slproweb.com/products/Win32OpenSSL.html) (the "Light" version)
   2. During install, choose "Copy OpenSSL DLLs to the Windows system directory"
   3. Restart your PC
   4. Delete `%APPDATA%\Haven\certs` and re-launch `Start Haven.bat`
@@ -387,7 +383,7 @@ Copy the entire folder somewhere safe to back up everything. The Haven code dire
 
 ## GIF Search — GIPHY API Setup
 
-Haven has a built-in GIF picker powered by **GIPHY**. To enable it you need a free API key.
+Amni-Haven has a built-in GIF picker powered by **GIPHY**. To enable it you need a free API key.
 
 ### 1. Create a GIPHY Developer Account
 
@@ -398,12 +394,12 @@ Haven has a built-in GIF picker powered by **GIPHY**. To enable it you need a fr
 
 1. Click **Create an App**
 2. Choose **API** (not SDK)
-3. Give it any name (e.g. "Haven Chat") and a short description
+3. Give it any name (e.g. "Amni-Haven Chat") and a short description
 4. Copy the **API Key** shown on the next page
 
-### 3. Add the Key in Haven
+### 3. Add the Key in Amni-Haven
 
-1. Log into Haven as your **admin** account
+1. Log into Amni-Haven as your **admin** account
 2. Click the **GIF button** (🎞️) in the message input area
 3. You'll see a setup prompt — paste your API key and save
 4. The key is stored server-side in the database — only admins can see or change it
@@ -447,5 +443,5 @@ Original project: [github.com/ancsemi/Haven](https://github.com/ancsemi/Haven)
 ---
 
 <p align="center">
-  <b>⬡ Haven</b> — Because your conversations are yours.
+  <b>⬡ Amni-Haven</b> — Because your conversations are yours.
 </p>

@@ -53,6 +53,15 @@ async switchChannel(code) {
   document.getElementById('search-toggle-btn').style.display = '';
   document.getElementById('pinned-toggle-btn').style.display = '';
 
+  // Show "Select messages" button for admins/mods on non-DM channels
+  const moveSelectBtn = document.getElementById('move-select-btn');
+  if (moveSelectBtn) {
+    const canMove = !isDm && (this.user.isAdmin || this._canModerate());
+    moveSelectBtn.style.display = canMove ? 'inline-flex' : 'none';
+  }
+  // Exit selection mode when switching channels
+  if (this._moveSelectionActive) this._exitMoveSelectionMode();
+
   // Show/hide topic bar
   this._updateTopicBar(channel?.topic || '');
 
@@ -642,10 +651,10 @@ _openOrganizeModal(parentCode, serverLevel) {
 
     document.getElementById('organize-modal-title').textContent = `📋 ${t('channels.organize_channels')}`;
     document.getElementById('organize-modal-parent-name').textContent = t('channels.organize_desc');
-    // Server-level sort is stored in localStorage (no single parent channel to hold it)
+    // Server-level sort: check for personal override, else use server default
     const sortSel = document.getElementById('organize-global-sort');
-    const savedSort = localStorage.getItem('haven_server_sort_mode') || 'manual';
-    sortSel.value = savedSort;
+    const localOverride = localStorage.getItem('haven_server_sort_mode');
+    sortSel.value = localOverride || 'server_default';
     const catSortSel = document.getElementById('organize-cat-sort');
     if (catSortSel) catSortSel.value = this._organizeCatSort;
     document.getElementById('organize-tag-input').value = '';
@@ -693,7 +702,9 @@ _openOrganizeModal(parentCode, serverLevel) {
 
 _renderOrganizeList() {
   const listEl = document.getElementById('organize-channel-list');
-  const globalSort = document.getElementById('organize-global-sort').value;
+  let globalSort = document.getElementById('organize-global-sort').value;
+  // Resolve "server_default" to the actual server sort mode
+  if (globalSort === 'server_default') globalSort = this.serverSettings?.channel_sort_mode || 'manual';
 
   let displayList = [...(this._organizeList || [])];
 
@@ -888,7 +899,8 @@ _renderOrganizeList() {
  * the effective sort mode, plus the sort mode string.
  */
 _getOrganizeVisualGroup(ch) {
-  const globalSort = document.getElementById('organize-global-sort').value;
+  let globalSort = document.getElementById('organize-global-sort').value;
+  if (globalSort === 'server_default') globalSort = this.serverSettings?.channel_sort_mode || 'manual';
   const tagKey = ch.category || '__untagged__';
   const effectiveSort = this._organizeTagSorts[tagKey] || globalSort;
 
@@ -1224,7 +1236,8 @@ _renderChannels() {
   });
 
   // Sort parent channels — respect server-level sort mode & per-tag overrides
-  const serverSortMode = localStorage.getItem('haven_server_sort_mode') || 'manual';
+  const localSortOverride = localStorage.getItem('haven_server_sort_mode');
+  const serverSortMode = localSortOverride || this.serverSettings?.channel_sort_mode || 'manual';
   const serverTagOverrides = JSON.parse(localStorage.getItem('haven_tag_sorts___server__') || '{}');
   const parentHasTags = parentChannels.some(c => c.category);
 
@@ -1683,60 +1696,59 @@ _renderChannels() {
 
 _updateBadge(code) {
   const el = document.querySelector(`.channel-item[data-code="${code}"]`);
-  if (!el) return;
+  if (el) {
+    let badge = el.querySelector('.channel-badge');
+    const count = this.unreadCounts[code] || 0;
 
-  let badge = el.querySelector('.channel-badge');
-  const count = this.unreadCounts[code] || 0;
+    if (count > 0) {
+      const ch = this.channels.find(c => c.code === code);
+      const isAnn = ch && ch.notification_type === 'announcement';
+      if (!badge) { badge = document.createElement('span'); badge.className = 'channel-badge' + (isAnn ? ' announcement-badge' : ''); el.appendChild(badge); }
+      badge.textContent = count > 99 ? '99+' : count;
+    } else if (badge) {
+      badge.remove();
+    }
 
-  if (count > 0) {
-    const ch = this.channels.find(c => c.code === code);
-    const isAnn = ch && ch.notification_type === 'announcement';
-    if (!badge) { badge = document.createElement('span'); badge.className = 'channel-badge' + (isAnn ? ' announcement-badge' : ''); el.appendChild(badge); }
-    badge.textContent = count > 99 ? '99+' : count;
-  } else if (badge) {
-    badge.remove();
-  }
-
-  // If this is a sub-channel whose parent is currently collapsed, bubble an unread
-  // indicator up to the parent so the user knows to expand it.
-  if (el.dataset.parentId) {
-    const parentChannel = this.channels.find(c => c.id === parseInt(el.dataset.parentId));
-    if (parentChannel) {
-      const parentEl = document.querySelector(`.channel-item[data-code="${parentChannel.code}"]`);
-      if (parentEl) {
-        // Check if sub-channels are collapsed (arrow has 'collapsed' class)
-        const arrow = parentEl.querySelector('.channel-collapse-arrow');
-        if (arrow && arrow.classList.contains('collapsed')) {
-          // Count total unreads across all sub-channels of this parent
-          const siblingCodes = this.channels
-            .filter(c => c.parent_channel_id === parentChannel.id)
-            .map(c => c.code);
-          const siblingTotal = siblingCodes.reduce((sum, sc) => sum + (this.unreadCounts[sc] || 0), 0);
-          let parentBubble = parentEl.querySelector('.channel-badge-bubble');
-          if (siblingTotal > 0) {
-            if (!parentBubble) {
-              parentBubble = document.createElement('span');
-              parentBubble.className = 'channel-badge channel-badge-bubble';
-              parentEl.appendChild(parentBubble);
+    // If this is a sub-channel whose parent is currently collapsed, bubble an unread
+    // indicator up to the parent so the user knows to expand it.
+    if (el.dataset.parentId) {
+      const parentChannel = this.channels.find(c => c.id === parseInt(el.dataset.parentId));
+      if (parentChannel) {
+        const parentEl = document.querySelector(`.channel-item[data-code="${parentChannel.code}"]`);
+        if (parentEl) {
+          // Check if sub-channels are collapsed (arrow has 'collapsed' class)
+          const arrow = parentEl.querySelector('.channel-collapse-arrow');
+          if (arrow && arrow.classList.contains('collapsed')) {
+            // Count total unreads across all sub-channels of this parent
+            const siblingCodes = this.channels
+              .filter(c => c.parent_channel_id === parentChannel.id)
+              .map(c => c.code);
+            const siblingTotal = siblingCodes.reduce((sum, sc) => sum + (this.unreadCounts[sc] || 0), 0);
+            let parentBubble = parentEl.querySelector('.channel-badge-bubble');
+            if (siblingTotal > 0) {
+              if (!parentBubble) {
+                parentBubble = document.createElement('span');
+                parentBubble.className = 'channel-badge channel-badge-bubble';
+                parentEl.appendChild(parentBubble);
+              }
+              parentBubble.textContent = siblingTotal > 99 ? '99+' : siblingTotal;
+            } else if (parentBubble) {
+              parentBubble.remove();
             }
-            parentBubble.textContent = siblingTotal > 99 ? '99+' : siblingTotal;
-          } else if (parentBubble) {
-            parentBubble.remove();
+          } else {
+            // Sub-channels are expanded — remove any bubble from parent
+            const parentBubble = parentEl.querySelector('.channel-badge-bubble');
+            if (parentBubble) parentBubble.remove();
           }
-        } else {
-          // Sub-channels are expanded — remove any bubble from parent
-          const parentBubble = parentEl.querySelector('.channel-badge-bubble');
-          if (parentBubble) parentBubble.remove();
         }
       }
     }
   }
 
-  // Update the DM section header total badge
+  // Always update DM section badge, tab title, and desktop badge
+  // even if the individual channel item isn't in the DOM
   this._updateDmSectionBadge();
-  // Update browser tab title with total unread count
   this._updateTabTitle();
-  // Notify desktop shell to set/clear taskbar badge
   this._updateDesktopBadge();
 },
 
@@ -1841,7 +1853,7 @@ _updateChannelVoiceIndicators() {
         el.after(userList);
       }
       userList.innerHTML = users.map(u =>
-        `<div class="channel-voice-user" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-icon">🎤</span>${this._escapeHtml(u.username)}</div>`
+        `<div class="channel-voice-user" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}</div>`
       ).join('');
       // Right-click on a left-sidebar voice user → same voice options menu
       userList.querySelectorAll('.channel-voice-user').forEach(item => {

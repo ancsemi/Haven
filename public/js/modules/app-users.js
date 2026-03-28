@@ -537,22 +537,31 @@ _renderVoiceUsers(users) {
     const isStreaming = streams.some(s => s.sharerId === u.id);
     const watchingStreams = streams.filter(s => s.viewers.some(v => v.id === u.id));
     const isWatching = watchingStreams.length > 0;
+    // Webcam indicator
+    const hasWebcam = this.voice && this.voice.webcamUsers && this.voice.webcamUsers.has(u.id);
+
     let streamBadge = '';
     if (isStreaming) {
       const myStream = streams.find(s => s.sharerId === u.id);
       const viewerCount = myStream ? myStream.viewers.length : 0;
       streamBadge = `<span class="voice-stream-badge live" title="${viewerCount ? t(viewerCount === 1 ? 'users.streaming_viewers_one' : 'users.streaming_viewers_other', { count: viewerCount }) : t('users.streaming_no_viewers')}">🔴 ${t('users.streaming_live')}${viewerCount ? ' · ' + viewerCount : ''}</span>`;
     }
+    if (hasWebcam) {
+      streamBadge += `<span class="voice-stream-badge webcam" title="Camera on">📹</span>`;
+    }
     if (isWatching) {
       const watchNames = watchingStreams.map(s => s.sharerName).join(', ');
       streamBadge += `<span class="voice-stream-badge watching" title="${t('users.watching_stream_title', { names: watchNames })}">👁</span>`;
     }
 
+    const muteIcon = `<span class="voice-status-icon${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : 'Unmuted'}">🎙️</span>`;
+    const deafenIcon = `<span class="voice-status-icon${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : 'Listening'}">🔊</span>`;
     return `
       <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
         ${streamBadge}
+        <span class="voice-status-icons">${muteIcon}${deafenIcon}</span> 
         ${isSelf ? `<span class="you-tag">${t('users.you_tag')}</span>` : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
       </div>
     `;

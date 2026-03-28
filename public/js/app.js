@@ -68,6 +68,7 @@ class HavenApp {
       { cmd: 'me',         args: '<action>', desc: 'Italic action message' },
       { cmd: 'spoiler',    args: '<text>',   desc: 'Hidden spoiler text' },
       { cmd: 'tts',        args: '<text>',   desc: 'Text-to-speech message' },
+      { cmd: 'tts:stop',   args: '',         desc: 'Stop all TTS playback' },
       { cmd: 'bbs',        args: '',         desc: 'Announce you\'ll be back soon' },
       { cmd: 'brb',        args: '',         desc: 'Announce you\'ll be right back' },
       { cmd: 'afk',        args: '',         desc: 'Away from keyboard' },
@@ -94,7 +95,7 @@ class HavenApp {
       'Activities':['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🎮','🕹️','🎲','🧩','🎯','🎳','🎭','🎨','🎼','🎵','🎸','🥁','🎹','🏆','🥇','🏅','🎪','🎬','🎤','🎧','🎺','🪘','🎻','🪗'],
       'Travel':   ['🚗','🚕','🚀','✈️','🚁','🛸','🚢','🏠','🏢','🏰','🗼','🗽','⛩️','🌋','🏔️','🌊','🌅','🌄','🌉','🎡','🎢','🗺️','🧭','🏖️','🏕️','🌍','🌎','🌏','🛳️','⛵','🚂','🚇','🏎️','🏍️','🛵','🛶'],
       'Objects':  ['⌚','📱','💻','⌨️','🖥️','💾','📷','🔭','🔬','💡','🔦','📚','📝','✏️','📎','📌','🔑','🔒','🔓','🛡️','⚔️','🔧','💰','💎','📦','🎁','✉️','🔔','🪙','💸','🏷️','🔨','🪛','🧲','🧪','🧫','💊','🩺','🩹','🧬'],
-      'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','✨','⭐','🌟','💫','🔥','💯','✅','❌','‼️','⁉️','❓','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲','♾️','🏳️‍🌈','🏴‍☠️','⚡','☀️','🌙','🌈','☁️','❄️','💨','🌪️']
+      'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','✨','⭐','🌟','💫','🔥','💯','✅','❌','❗','❓','❕','❔','‼️','⁉️','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲','♾️','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔺','🔻','💠','🔘','🏳️‍🌈','🏴‍☠️','⚡','☀️','🌙','🌈','☁️','❄️','💨','🌪️','☮️','✝️','☪️','🕉️','☯️','✡️','🔯','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','⛎','🆔','⚛️','🈶','🈚','🈸','🈺','🈷️','🆚','🉐','🈹','🈲','🉑','🈴','🈳','㊗️','㊙️','🈵','🔅','🔆','🔱','📛','♻️','🔰','⭕','✳️','❇️','🔟','🔠','🔡','🔢','🔣','🔤','🆎','🆑','🆒','🆓','ℹ️','🆕','🆖','🅾️','🆗','🅿️','🆘','🆙','🆚','🈁','🈂️','💱','💲','#️⃣','*️⃣','0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟','©️','®️','™️']
     };
 
     // Flat list for quick access (used by search)
@@ -108,7 +109,7 @@ class HavenApp {
       '🍎':'apple red','🍐':'pear','🍊':'orange tangerine','🍋':'lemon','🍌':'banana','🍉':'watermelon','🍇':'grapes','🍓':'strawberry','🍒':'cherry','🍑':'peach','🍍':'pineapple','🍕':'pizza','🍔':'burger hamburger','🍟':'fries french','🌭':'hotdog','🍿':'popcorn','🧁':'cupcake','🍩':'donut','🍪':'cookie','🍰':'cake','🎂':'birthday cake','🧀':'cheese','🥚':'egg','🥓':'bacon','🌮':'taco','🍜':'noodles ramen','🍝':'spaghetti pasta','🍣':'sushi','☕':'coffee','🍺':'beer','🍷':'wine','🍾':'champagne',
       '⚽':'soccer football','🏀':'basketball','🏈':'football american','🎮':'gaming controller video game','🕹️':'joystick arcade','🎲':'dice','🧩':'puzzle jigsaw','🎯':'bullseye target dart','🎨':'art palette paint','🎵':'music note','🎸':'guitar','🏆':'trophy winner','🎧':'headphones music','🎤':'microphone karaoke sing',
       '🚗':'car automobile','🚀':'rocket space launch','✈️':'airplane plane travel','🏠':'house home','🏰':'castle','🌊':'wave ocean water','🌅':'sunrise','🌍':'globe earth world','🌈':'rainbow',
-      '❤️':'red heart love','🧡':'orange heart','💛':'yellow heart','💚':'green heart','💙':'blue heart','💜':'purple heart','🖤':'black heart','🤍':'white heart','💔':'broken heart','✨':'sparkles stars','⭐':'star','🔥':'fire hot lit','💯':'hundred perfect','✅':'check mark yes','❌':'cross mark no wrong','💤':'sleep zzz','⚠️':'warning caution','⚡':'lightning bolt zap','☀️':'sun sunny','🌙':'moon crescent night','❄️':'snowflake cold winter','🌪️':'tornado',
+      '❤️':'red heart love','🧡':'orange heart','💛':'yellow heart','💚':'green heart','💙':'blue heart','💜':'purple heart','🖤':'black heart','🤍':'white heart','💔':'broken heart','✨':'sparkles stars','⭐':'star','🔥':'fire hot lit','💯':'hundred perfect','✅':'check mark yes','❌':'cross mark no wrong','❗':'exclamation mark bang','❓':'question mark','❕':'white exclamation','❔':'white question','‼️':'double exclamation bangbang','⁉️':'exclamation question interrobang','💤':'sleep zzz','⚠️':'warning caution','⚡':'lightning bolt zap','☀️':'sun sunny','🌙':'moon crescent night','❄️':'snowflake cold winter','🌪️':'tornado','🔴':'red circle','🔵':'blue circle','🟢':'green circle','🟡':'yellow circle','🟠':'orange circle','🟣':'purple circle','⚫':'black circle','⚪':'white circle','©️':'copyright','®️':'registered','™️':'trademark','#️⃣':'hash number sign','*️⃣':'asterisk star keycap',
       '🙈':'see no evil monkey','🙉':'hear no evil monkey','🙊':'speak no evil monkey',
       '👀':'eyes looking','👅':'tongue','👄':'mouth lips','💋':'kiss lips','🧠':'brain smart','🦷':'tooth','🦴':'bone','💀':'skull dead','☠️':'skull crossbones','👽':'alien','🤖':'robot','🎃':'jack o lantern pumpkin halloween',
       '📱':'phone mobile','💻':'laptop computer','📷':'camera photo','📚':'books reading','📝':'memo note write','🔑':'key','🔒':'lock locked','💎':'gem diamond jewel','🎁':'gift present','🔔':'bell notification','💰':'money bag rich','🔨':'hammer tool'
@@ -173,6 +174,7 @@ class HavenApp {
     this.modMode?.init();
     this._setupDensityPicker();
     this._setupFontSizePicker();
+    this._setupEmojiSizePicker();
     this._setupImageModePicker();
     this._setupLightbox();
     this._setupOnlineOverlay();
@@ -180,6 +182,7 @@ class HavenApp {
     this._checkForUpdates();
     this._initDesktopAppBanner();
     this._initAndroidBetaBanner();
+    this._initMoveMessages();
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback

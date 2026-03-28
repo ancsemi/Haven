@@ -990,6 +990,39 @@ app.post('/api/upload-emoji', uploadLimiter, (req, res) => {
   });
 });
 
+// ── Bulk emoji upload (multiple files, auto-named from filenames) ──
+app.post('/api/upload-emojis', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
+
+  createEmojiUpload().array('emojis', 50)(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+
+    const { getDb } = require('./src/database');
+    const db = getDb();
+    const results = [];
+    const errors = [];
+    const insert = db.prepare('INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)');
+
+    for (const file of req.files) {
+      let name = path.basename(file.originalname, path.extname(file.originalname))
+        .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+      if (!name) name = path.basename(file.filename, path.extname(file.filename));
+      if (name.length > 30) name = name.slice(0, 30);
+      try {
+        insert.run(name, file.filename, user.id);
+        results.push({ name, url: `/uploads/${file.filename}` });
+      } catch (e) {
+        errors.push({ name, error: e.message });
+      }
+    }
+    res.json({ uploaded: results, errors });
+  });
+});
+
 app.get('/api/emojis', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
@@ -2241,12 +2274,12 @@ function runAutoCleanup() {
         db.prepare("SELECT avatar FROM users WHERE avatar IS NOT NULL AND avatar != ''").all()
           .forEach(r => protectedFiles.add(path.basename(r.avatar)));
         try {
-          db.prepare("SELECT url FROM custom_emojis").all()
-            .forEach(r => protectedFiles.add(path.basename(r.url)));
+          db.prepare("SELECT filename FROM custom_emojis").all()
+            .forEach(r => protectedFiles.add(path.basename(r.filename)));
         } catch { /* table may not exist */ }
         try {
-          db.prepare("SELECT url FROM custom_sounds").all()
-            .forEach(r => protectedFiles.add(path.basename(r.url)));
+          db.prepare("SELECT filename FROM custom_sounds").all()
+            .forEach(r => protectedFiles.add(path.basename(r.filename)));
         } catch { /* table may not exist */ }
         // Webhook/bot avatars
         try {
@@ -2363,3 +2396,11 @@ server.listen(PORT, HOST, () => {
   `);
   // Tunnel is now started manually via the admin panel button (no auto-start)
 });
+
+function gracefulShutdown(signal) {
+  console.log(`\n${signal} received — shutting down`);
+  io.close();
+  server.close(() => process.exit(0));
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

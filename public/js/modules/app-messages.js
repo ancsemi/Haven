@@ -15,6 +15,16 @@ async _sendMessage() {
 
   // Client-side slash commands (not sent to server)
   if (content.startsWith('/')) {
+    // /tts:stop — cancel all speech synthesis immediately
+    if (content.trim().toLowerCase() === '/tts:stop') {
+      this.notifications?.stopTTS();
+      this._showToast('TTS stopped', 'info');
+      input.value = '';
+      input.style.height = 'auto';
+      this._hideMentionDropdown();
+      this._hideSlashDropdown();
+      return;
+    }
     const parts = content.match(/^\/(\w+)(?:\s+(.*))?$/);
     if (parts) {
       const cmd = parts[1].toLowerCase();
@@ -88,6 +98,32 @@ async _sendMessage() {
     const ch = this.channels.find(c => c.code === this.currentChannel);
     const isDm = ch && ch.is_dm && ch.dm_target;
     let partner = this._getE2EPartner();
+
+    // Pre-process content-transforming slash commands client-side so they
+    // survive E2E encryption (server can't parse encrypted slash commands)
+    if (isDm) {
+      const slashMatch = content.trim().match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/);
+      if (slashMatch) {
+        const cmd = slashMatch[1].toLowerCase();
+        const arg = (slashMatch[2] || '').trim();
+        const displayName = this.user.displayName || this.user.username;
+        const clientSlash = {
+          spoiler:   () => arg ? `||${arg}||` : null,
+          shrug:     () => `${arg ? arg + ' ' : ''}¯\\_(ツ)_/¯`,
+          tableflip: () => `${arg ? arg + ' ' : ''}(╯°□°)╯︵ ┻━┻`,
+          unflip:    () => `${arg ? arg + ' ' : ''}┬─┬ ノ( ゜-゜ノ)`,
+          lenny:     () => `${arg ? arg + ' ' : ''}( ͡° ͜ʖ ͡°)`,
+          me:        () => arg ? `_${displayName} ${arg}_` : null,
+        };
+        if (clientSlash[cmd]) {
+          const transformed = clientSlash[cmd]();
+          if (transformed !== null) {
+            payload.content = transformed;
+            content = transformed;
+          }
+        }
+      }
+    }
 
     // If DM but partner key not yet cached, request it via promise
     if (isDm && !partner && this.e2e && this.e2e.ready) {
@@ -811,6 +847,135 @@ _extractYouTubeVideoId(url) {
     }
   } catch {}
   return null;
+},
+
+// ── Move Messages (multi-select) ──────────────────────
+
+_moveSelectionActive: false,
+_moveSelectedIds: new Set(),
+
+_enterMoveSelectionMode() {
+  if (this._moveSelectionActive) return;
+  this._moveSelectionActive = true;
+  this._moveSelectedIds.clear();
+  document.body.classList.add('move-selection-mode');
+  const toolbar = document.getElementById('move-msg-toolbar');
+  if (toolbar) toolbar.style.display = 'flex';
+  this._updateMoveCount();
+},
+
+_exitMoveSelectionMode() {
+  this._moveSelectionActive = false;
+  this._moveSelectedIds.clear();
+  document.body.classList.remove('move-selection-mode');
+  const toolbar = document.getElementById('move-msg-toolbar');
+  if (toolbar) toolbar.style.display = 'none';
+  document.querySelectorAll('.move-selected').forEach(el => el.classList.remove('move-selected'));
+},
+
+_toggleMoveSelect(msgEl) {
+  if (!this._moveSelectionActive) return;
+  const id = parseInt(msgEl.dataset.msgId);
+  if (!id) return;
+  if (this._moveSelectedIds.has(id)) {
+    this._moveSelectedIds.delete(id);
+    msgEl.classList.remove('move-selected');
+  } else {
+    if (this._moveSelectedIds.size >= 200) {
+      this._showToast('Maximum 200 messages can be moved at once', 'error');
+      return;
+    }
+    this._moveSelectedIds.add(id);
+    msgEl.classList.add('move-selected');
+  }
+  this._updateMoveCount();
+},
+
+_updateMoveCount() {
+  const countEl = document.getElementById('move-msg-count');
+  const moveBtn = document.getElementById('move-msg-move-btn');
+  const n = this._moveSelectedIds.size;
+  if (countEl) countEl.textContent = `${n} selected`;
+  if (moveBtn) moveBtn.disabled = n === 0;
+},
+
+_showMoveChannelPicker() {
+  if (this._moveSelectedIds.size === 0) return;
+  const list = document.getElementById('move-msg-channel-list');
+  const modal = document.getElementById('move-msg-modal');
+  const desc = document.getElementById('move-msg-desc');
+  if (!list || !modal) return;
+
+  desc.textContent = `Move ${this._moveSelectedIds.size} message${this._moveSelectedIds.size === 1 ? '' : 's'} to:`;
+  list.innerHTML = '';
+
+  const channels = (this.channels || []).filter(ch =>
+    !ch.is_dm && ch.code !== this.currentChannel
+  );
+
+  if (channels.length === 0) {
+    list.innerHTML = '<div class="move-msg-empty">No other channels available</div>';
+  } else {
+    for (const ch of channels) {
+      const item = document.createElement('button');
+      item.className = 'move-msg-channel-item';
+      item.textContent = `# ${ch.name}`;
+      item.addEventListener('click', () => {
+        this._executeMoveMessages(ch.code, ch.name);
+        modal.style.display = 'none';
+      });
+      list.appendChild(item);
+    }
+  }
+
+  modal.style.display = 'flex';
+},
+
+_executeMoveMessages(toCode, toName) {
+  const ids = [...this._moveSelectedIds];
+  const fromCode = this.currentChannel;
+
+  this.socket.emit('move-messages', {
+    messageIds: ids,
+    fromChannel: fromCode,
+    toChannel: toCode
+  }, (resp) => {
+    if (resp && resp.error) {
+      this._showToast(resp.error, 'error');
+    } else if (resp && resp.success) {
+      this._showToast(`Moved ${resp.moved} message${resp.moved === 1 ? '' : 's'} to #${toName}`, 'success');
+    }
+    this._exitMoveSelectionMode();
+  });
+},
+
+_initMoveMessages() {
+  // Header "Select messages" toggle button
+  const selectBtn = document.getElementById('move-select-btn');
+  if (selectBtn) selectBtn.addEventListener('click', () => {
+    if (this._moveSelectionActive) this._exitMoveSelectionMode();
+    else this._enterMoveSelectionMode();
+  });
+
+  // "Move to..." button in toolbar
+  const moveBtn = document.getElementById('move-msg-move-btn');
+  if (moveBtn) moveBtn.addEventListener('click', () => this._showMoveChannelPicker());
+
+  // Cancel button in toolbar
+  const cancelBtn = document.getElementById('move-msg-cancel-btn');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => this._exitMoveSelectionMode());
+
+  // Cancel button in modal
+  const modalCancel = document.getElementById('move-msg-modal-cancel');
+  if (modalCancel) modalCancel.addEventListener('click', () => {
+    document.getElementById('move-msg-modal').style.display = 'none';
+  });
+
+  // Close modal on overlay click
+  const modal = document.getElementById('move-msg-modal');
+  if (modal) modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  });
 },
 
 };

@@ -110,6 +110,8 @@ _setupSocketListeners() {
     // Re-join voice if we were in voice before reconnect
     if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
       this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+      if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: this.voice.currentChannel, muted: true });
+      if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
     } else {
       // Check localStorage for saved voice channel (persists across page refreshes / server restarts)
       try {
@@ -520,7 +522,8 @@ _setupSocketListeners() {
         ? this.channels.find(c => c.id === msgChannel.parent_channel_id)
         : null;
       if ((parent && parent.sort_alphabetical === 4) ||
-          (!msgChannel.parent_channel_id && localStorage.getItem('haven_server_sort_mode') === 'dynamic')) {
+          (!msgChannel.parent_channel_id && (localStorage.getItem('haven_server_sort_mode') === 'dynamic' ||
+            (!localStorage.getItem('haven_server_sort_mode') && this.serverSettings?.channel_sort_mode === 'dynamic')))) {
         this._renderChannels();
       }
     }
@@ -544,13 +547,12 @@ _setupSocketListeners() {
   });
 
   this.socket.on('voice-users-update', (data) => {
-    // Always render voice panel when viewing the matching text channel
-    if (data.channelCode === this.currentChannel) {
+    // Render voice panel unless the user opted to hide it
+    if (data.channelCode === this.currentChannel && localStorage.getItem('haven_hide_voice_panel') !== 'true') {
       this._renderVoiceUsers(data.users);
     }
-    // Also update if we're in voice for this channel (we may be viewing a different text channel)
+    // Keep voice bar up to date
     if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode) {
-      // Keep voice bar up to date
       this._updateVoiceBar();
     }
   });
@@ -630,10 +632,13 @@ _setupSocketListeners() {
     this._handleMusicControl(data);
   });
   this.socket.on('music-seek', (data) => {
-    if (data && typeof data.position === 'number') this._seekMusic(data.position);
+    this._handleMusicSeek(data);
   });
   this.socket.on('music-search-results', (data) => {
     this._showMusicSearchResults(data);
+  });
+  this.socket.on('music-queue-update', (data) => {
+    this._updateMusicQueueState(data);
   });
 
   // ── Voice kicked ────────────────────────────────
@@ -865,6 +870,30 @@ _setupSocketListeners() {
         }
         msgEl.remove();
       }
+    }
+  });
+
+  // ── Messages moved (source channel) ──────────────
+  this.socket.on('messages-moved', (data) => {
+    if (data.channelCode === this.currentChannel) {
+      for (const id of data.messageIds) {
+        const msgEl = document.querySelector(`[data-msg-id="${id}"]`);
+        if (msgEl) {
+          const next = msgEl.nextElementSibling;
+          if (next && next.classList.contains('message-compact')) {
+            try { this._promoteCompactToFull(next); } catch {}
+          }
+          msgEl.remove();
+        }
+      }
+    }
+  });
+
+  // ── Messages received (destination channel) ──────
+  this.socket.on('messages-received', (data) => {
+    if (data.channelCode === this.currentChannel) {
+      // Reload the channel to show the moved messages in correct order
+      this.socket.emit('join-channel', { code: this.currentChannel }, () => {});
     }
   });
 

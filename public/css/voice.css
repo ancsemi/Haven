@@ -57,7 +57,25 @@
   cursor: default;
 }
 .channel-voice-user:hover { color: var(--text-secondary); background: var(--bg-hover); }
-.channel-voice-user .cvu-icon { font-size: 10px; color: var(--success); flex-shrink: 0; }
+.channel-voice-user .cvu-mic,
+.channel-voice-user .cvu-deafen { font-size: 10px; flex-shrink: 0; position: relative; display: inline-block; opacity: 0.35; }
+.channel-voice-user .cvu-mic { color: var(--success); }
+.channel-voice-user .cvu-mic.is-muted,
+.channel-voice-user .cvu-deafen.is-deafened { opacity: 1; }
+
+/* Shared muted/deafened red strikethrough */
+.cvu-mic.is-muted::after,
+.cvu-deafen.is-deafened::after,
+.voice-status-icon.is-muted::after,
+.voice-status-icon.is-deafened::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 5%;
+  width: 90%; height: 1.5px;
+  background: #c00;
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
 
 /* When voice indicator is present, don't double-auto-margin */
 .channel-voice-indicator ~ .channel-more-btn {
@@ -237,6 +255,26 @@
    ═══════════════════════════════════════════════════════════ */
 
 .voice-user-item { display: flex; align-items: center; flex-wrap: wrap; }
+.voice-status-icons { display: flex; gap: 2px; margin-left: auto; align-items: center; flex-shrink: 0; }
+.voice-status-icon { font-size: 12px; position: relative; display: inline-block; opacity: 0.25; line-height: 1; }
+.voice-status-icon.is-muted,
+.voice-status-icon.is-deafened { opacity: 1; }
+
+@keyframes voice-pulse {
+  from { filter: drop-shadow(0 0 2px var(--accent)); }
+  to   { filter: drop-shadow(0 0 5px var(--accent)); }
+}
+
+.channel-voice-user.talking {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+
+.channel-voice-user.talking .cvu-mic {
+  animation: voice-pulse 0.8s ease-in-out infinite alternate;
+}
 
 .voice-user-item.talking {
   background: color-mix(in srgb, var(--voice-dot-color, var(--accent)) 12%, transparent);
@@ -251,11 +289,6 @@
 .voice-user-item.talking .user-item-name {
   color: var(--accent);
   font-weight: 600;
-}
-
-@keyframes voice-pulse {
-  from { box-shadow: 0 0 4px 1px var(--accent); }
-  to   { box-shadow: 0 0 10px 4px var(--accent); }
 }
 
 .you-tag {
@@ -294,6 +327,11 @@
 .voice-stream-badge.watching {
   background: rgba(255,255,255,0.08);
   color: var(--text-muted, #888);
+  font-size: 11px;
+}
+.voice-stream-badge.webcam {
+  background: rgba(80,180,255,0.15);
+  color: #5ab4ff;
   font-size: 11px;
 }
 @keyframes live-pulse {

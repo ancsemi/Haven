@@ -112,12 +112,23 @@ class NotificationManager {
   speak(text) {
     if (!this.enabled) return;
     try {
-      const utter = new SpeechSynthesisUtterance(text);
+      // Cancel any ongoing speech first to prevent overlap/queuing
+      speechSynthesis.cancel();
+      // Cap TTS length to prevent long messages from speaking forever
+      const maxLen = 500;
+      let cleaned = text.length > maxLen ? text.slice(0, maxLen) + '... message truncated' : text;
+      // Strip @mentions so TTS doesn't read "at username"
+      cleaned = cleaned.replace(/@(\w+)/g, '$1');
+      const utter = new SpeechSynthesisUtterance(cleaned);
       utter.volume = Math.max(0, Math.min(1, this.volume));
       utter.rate = 1;
       utter.pitch = 1;
       speechSynthesis.speak(utter);
     } catch { /* speech synthesis not available */ }
+  }
+
+  stopTTS() {
+    try { speechSynthesis.cancel(); } catch { /* not available */ }
   }
 
   // ── Public API ──────────────────────────────────────────

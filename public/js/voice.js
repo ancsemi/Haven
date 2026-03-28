@@ -33,6 +33,7 @@ class VoiceManager {
     this.talkingState = new Map();  // userId → boolean
     this.analysers = new Map();     // userId → { analyser, dataArray, interval }
     this.onScreenShareStarted = null; // callback(userId, username) — someone started streaming
+    this.onWebcamStatusChange = null; // callback() — webcam started/stopped, re-render user list
     this.deafenedUsers = new Set();   // userIds we've muted our audio towards
     this._localTalkInterval = null;
     this._noiseGateInterval = null;
@@ -230,12 +231,14 @@ class VoiceManager {
     // Someone started their webcam
     this.socket.on('webcam-started', (data) => {
       this.webcamUsers.add(data.userId);
+      if (this.onWebcamStatusChange) this.onWebcamStatusChange();
     });
 
     // Someone stopped their webcam
     this.socket.on('webcam-stopped', (data) => {
       this.webcamUsers.delete(data.userId);
       if (this.onWebcamStream) this.onWebcamStream(data.userId, null);
+      if (this.onWebcamStatusChange) this.onWebcamStatusChange();
     });
 
     // Late joiner: server tells us about active screen sharers
@@ -249,6 +252,7 @@ class VoiceManager {
     this.socket.on('active-webcam-users', (data) => {
       if (data && data.users) {
         data.users.forEach(u => this.webcamUsers.add(u.id));
+        if (this.onWebcamStatusChange) this.onWebcamStatusChange();
       }
     });
 

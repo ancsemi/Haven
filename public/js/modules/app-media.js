@@ -983,6 +983,49 @@ _setupEmojiManagement() {
     }
   });
 
+  // Bulk emoji upload — select multiple files, auto-named from filenames
+  const bulkInput = document.getElementById('emoji-bulk-input');
+  if (bulkInput) {
+    bulkInput.addEventListener('change', async () => {
+      const files = Array.from(bulkInput.files);
+      if (!files.length) return;
+      const maxEmojiKb = parseInt(this.serverSettings?.max_emoji_kb) || 256;
+      const formData = new FormData();
+      let skipped = 0;
+      for (const file of files) {
+        if (file.size > maxEmojiKb * 1024) { skipped++; continue; }
+        formData.append('emojis', file, file.name);
+      }
+      if ([...formData.entries()].length === 0) {
+        bulkInput.value = '';
+        return this._showToast(`All files exceeded the ${maxEmojiKb} KB limit`, 'error');
+      }
+      try {
+        this._showToast(`Uploading ${files.length - skipped} emoji${files.length - skipped > 1 ? 's' : ''}...`, 'info');
+        const res = await fetch('/api/upload-emojis', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.token}` },
+          body: formData
+        });
+        if (!res.ok) {
+          let errMsg = `Upload failed (${res.status})`;
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          return this._showToast(errMsg, 'error');
+        }
+        const data = await res.json();
+        const count = data.uploaded?.length || 0;
+        const errCount = (data.errors?.length || 0) + skipped;
+        let msg = `${count} emoji${count !== 1 ? 's' : ''} uploaded`;
+        if (errCount) msg += ` (${errCount} skipped)`;
+        this._showToast(msg, count ? 'success' : 'error');
+        this._loadCustomEmojis();
+      } catch {
+        this._showToast('Bulk upload failed', 'error');
+      }
+      bulkInput.value = '';
+    });
+  }
+
   this._setupEmojiCropperEvents();
   this._loadCustomEmojis();
 },
@@ -1465,6 +1508,29 @@ _setupFontSizePicker() {
     document.documentElement.dataset.fontsize = size;
     localStorage.setItem('haven-fontsize', size);
     picker.querySelectorAll('[data-fontsize]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+},
+
+// ── Emoji Reaction Size Picker ──
+
+_setupEmojiSizePicker() {
+  const picker = document.getElementById('emoji-size-picker');
+  if (!picker) return;
+
+  const saved = localStorage.getItem('haven-emojisize') || 'normal';
+  document.documentElement.dataset.emojisize = saved;
+  picker.querySelectorAll('[data-emojisize]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.emojisize === saved);
+  });
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-emojisize]');
+    if (!btn) return;
+    const size = btn.dataset.emojisize;
+    document.documentElement.dataset.emojisize = size;
+    localStorage.setItem('haven-emojisize', size);
+    picker.querySelectorAll('[data-emojisize]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });
 },

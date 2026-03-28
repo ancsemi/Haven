@@ -81,7 +81,11 @@ async function resolveSpotifyToYouTube(spotifyUrl) {
     for (const q of queries) {
       const results = await searchYouTube(q, 1);
       if (results.length > 0) {
-        return `https://www.youtube.com/watch?v=${results[0].videoId}`;
+        return {
+          url: `https://www.youtube.com/watch?v=${results[0].videoId}`,
+          title,
+          duration: results[0].duration || ''
+        };
       }
     }
     return null;
@@ -190,6 +194,159 @@ async function searchYouTube(query, count = 5, offset = 0) {
     return [];
   }
 }
+function getYouTubeClientContext() {
+  return {
+    client: { clientName: 'WEB', clientVersion: '2.20241120.01.00', hl: 'en', gl: 'US' } //Matching client version already present, but this is quite old.
+  };
+}
+
+function parseYouTubePlaylistPage(data) {
+  const listRenderer = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]
+    ?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]
+    ?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer;
+  const items = Array.isArray(listRenderer?.contents) ? listRenderer.contents : [];
+  const continuation = listRenderer?.continuations?.[0]?.nextContinuationData?.continuation || null;
+  return { items, continuation };
+}
+
+function getContinuationItemsFromAppendAction(data) {
+  const appendAction = data?.onResponseReceivedActions?.find(action => action?.appendContinuationItemsAction)
+    ?.appendContinuationItemsAction;
+  if (Array.isArray(appendAction?.continuationItems)) return appendAction.continuationItems;
+
+  const appendEndpoint = data?.onResponseReceivedEndpoints?.find(endpoint => endpoint?.appendContinuationItemsAction)
+    ?.appendContinuationItemsAction;
+  if (Array.isArray(appendEndpoint?.continuationItems)) return appendEndpoint.continuationItems;
+
+  return [];
+}
+
+function getContinuationTokenFromItems(items) {
+  if (!Array.isArray(items)) return null;
+  const continuationItem = items.find(item => item?.continuationItemRenderer);
+  return continuationItem?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token || null;
+}
+
+function getContinuationItemsFromPlaylistContents(data) {
+  return data?.continuationContents?.playlistVideoListContinuation?.contents || [];
+}
+
+function getContinuationTokenFromPlaylistContents(data) {
+  return data?.continuationContents?.playlistVideoListContinuation?.continuations?.[0]
+    ?.nextContinuationData?.continuation || null;
+}
+
+function parseYouTubePlaylistContinuation(data) {
+  // InnerTube playlist continuations are not stable. Depending on client/experiment bucket, YouTube may return appended rows under response "actions", "endpoints",
+  //or direct "continuationContents", so we check for all of them.
+  const appendItems = getContinuationItemsFromAppendAction(data);
+  if (appendItems.length > 0) {
+    return {
+      items: appendItems,
+      continuation: getContinuationTokenFromItems(appendItems)
+    };
+  }
+
+  const playlistItems = getContinuationItemsFromPlaylistContents(data);
+  return {
+    items: playlistItems,
+    continuation: getContinuationTokenFromPlaylistContents(data)
+  };
+}
+
+function appendYouTubePlaylistTracks(tracks, items, maxTracks) {
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    const v = item?.playlistVideoRenderer;
+    if (!v?.videoId) continue;
+    tracks.push({ videoId: v.videoId, title: v.title?.runs?.[0]?.text || '' });
+    if (tracks.length >= maxTracks) break;
+  }
+}
+
+// Pull a max of 200 tracks from a playlist provided by a user. Potentially should
+// have maxTracks be a server configurable setting instead of hardcoded.
+async function fetchYouTubePlaylist(playlistId, maxTracks = 200) {
+  try {
+    const resp = await fetch('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': YT_UA },
+      body: JSON.stringify({
+        browseId: 'VL' + playlistId,
+        context: getYouTubeClientContext()
+      })
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const tracks = [];
+    const firstPage = parseYouTubePlaylistPage(data);
+    appendYouTubePlaylistTracks(tracks, firstPage.items, maxTracks);
+    let continuation = firstPage.continuation;
+
+    while (continuation && tracks.length < maxTracks) {
+      const pageResp = await fetch('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': YT_UA },
+        body: JSON.stringify({
+          continuation,
+          context: getYouTubeClientContext()
+        })
+      });
+      if (!pageResp.ok) break;
+      const pageData = await pageResp.json();
+      const nextPage = parseYouTubePlaylistContinuation(pageData);
+      appendYouTubePlaylistTracks(tracks, nextPage.items, maxTracks);
+      if (!nextPage.continuation || nextPage.continuation === continuation) break;
+      continuation = nextPage.continuation;
+    }
+    return tracks;
+  } catch { return []; }
+}
+
+function extractYouTubeVideoId(url) {
+  if (typeof url !== 'string') return null;
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/);
+  return match ? match[1] : null;
+}
+//Grab metadata for queue and up next system
+async function resolveMusicMetadata(url) {
+  if (!url || typeof url !== 'string') return { title: '', duration: '' };
+  try {
+    const ytId = extractYouTubeVideoId(url);
+    if (ytId) {
+      const res = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${ytId}`)}&format=json`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        return { title: data.title || '', duration: '' };
+      }
+    }
+    if (url.includes('soundcloud.com/') || url.includes('spotify.com/')) {
+      const res = await fetch(
+        `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        return { title: data.title || '', duration: '' };
+      }
+    }
+  } catch {}
+  return { title: '', duration: '' };
+}
+
+// All recognized role permissions. Any permission sent by a client that is not here is silently rejected.
+const VALID_ROLE_PERMS = [
+  'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
+  'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
+  'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
+  'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'view_all_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue',
+  'promote_user', 'transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'
+];
+
 function setupSocketHandlers(io, db) {
   const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -434,12 +591,14 @@ function setupSocketHandlers(io, db) {
       socket.user.avatar = (uRow && uRow.avatar) ? uRow.avatar : null;
       socket.user.avatar_shape = (uRow && uRow.avatar_shape) ? uRow.avatar_shape : 'circle';
       if (uRow) {
-        // Sync admin status from .env (handles ADMIN_USERNAME changes)
-        const shouldBeAdmin = uRow.username.toLowerCase() === ADMIN_USERNAME ? 1 : 0;
-        if (uRow.is_admin !== shouldBeAdmin) {
-          db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(shouldBeAdmin, user.id);
+        // Bootstrap admin from ADMIN_USERNAME env only when NO admin exists
+        // (first run or recovery). Prevents overriding explicit admin transfers.
+        const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+        if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
+          db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+          uRow.is_admin = 1;
         }
-        socket.user.isAdmin = !!shouldBeAdmin;
+        socket.user.isAdmin = !!uRow.is_admin;
       }
     } catch {
       socket.user.displayName = user.displayName || user.username;
@@ -483,8 +642,10 @@ function setupSocketHandlers(io, db) {
   // Online tracking:  code → Map<userId, { id, username, socketId }>
   const channelUsers = new Map();
   const voiceUsers = new Map();
-  // Active music per voice room:  code → { url, userId, username } | null
+  // Active music per voice room:  code → { url, userId, username, playbackState } | null
   const activeMusic = new Map();
+  // Playback queue per voice room: code → [{ id, url, title, userId, username, resolvedFrom }]
+  const musicQueues = new Map();
   // Active screen sharers per voice room:  code → Set<userId>
   const activeScreenSharers = new Map();
   // Active webcam users per voice room:  code → Set<userId>
@@ -498,6 +659,165 @@ function setupSocketHandlers(io, db) {
     const cutoff = Date.now() - 3600000; // 1 hour
     for (const [k, v] of slowModeTracker) { if (v < cutoff) slowModeTracker.delete(k); }
   }, 5 * 60 * 1000);
+
+  function clampMusicPosition(positionSeconds, durationSeconds = null) {
+    const pos = Number(positionSeconds);
+    if (!Number.isFinite(pos)) return 0;
+    if (Number.isFinite(durationSeconds) && durationSeconds >= 0) {
+      return Math.max(0, Math.min(pos, durationSeconds));
+    }
+    return Math.max(0, pos);
+  }
+
+  function getActiveMusicSyncState(music) {
+    if (!music) return null;
+    const playback = music.playbackState || {};
+    const baseUpdatedAt = Number(playback.updatedAt) || Date.now();
+    const durationSeconds = Number.isFinite(playback.durationSeconds) ? playback.durationSeconds : null;
+    let positionSeconds = clampMusicPosition(playback.positionSeconds || 0, durationSeconds);
+    if (playback.isPlaying) {
+      positionSeconds = clampMusicPosition(
+        positionSeconds + Math.max(0, Date.now() - baseUpdatedAt) / 1000,
+        durationSeconds
+      );
+    }
+    return {
+      isPlaying: !!playback.isPlaying,
+      positionSeconds,
+      durationSeconds,
+      updatedAt: Date.now()
+    };
+  }
+
+  function updateActiveMusicPlaybackState(code, next = {}) {
+    const music = activeMusic.get(code);
+    if (!music) return null;
+    const current = getActiveMusicSyncState(music) || {
+      isPlaying: false,
+      positionSeconds: 0,
+      durationSeconds: null
+    };
+    const durationSeconds = Number.isFinite(next.durationSeconds)
+      ? Math.max(0, Number(next.durationSeconds))
+      : current.durationSeconds;
+    const positionSeconds = Number.isFinite(next.positionSeconds)
+      ? clampMusicPosition(next.positionSeconds, durationSeconds)
+      : current.positionSeconds;
+    music.playbackState = {
+      isPlaying: typeof next.isPlaying === 'boolean' ? next.isPlaying : current.isPlaying,
+      positionSeconds,
+      durationSeconds,
+      updatedAt: Date.now()
+    };
+    return getActiveMusicSyncState(music);
+  }
+
+  function trimMusicText(value, max = 200) {
+    return typeof value === 'string' ? value.trim().slice(0, max) : '';
+  }
+
+  function stripYouTubePlaylistParam(url) {
+    if (typeof url !== 'string' || !url) return '';
+    if (!/(youtube\.com|youtu\.be)/i.test(url)) return url;
+    try {
+      const parsed = new URL(url);
+      parsed.searchParams.delete('list');
+      return parsed.toString();
+    } catch {
+      return url.replace(/([?&])list=[^&]+&?/i, '$1').replace(/[?&]$/g, '');
+    }
+  }
+
+  function sanitizeQueueEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    return {
+      id: trimMusicText(entry.id, 64),
+      url: trimMusicText(entry.url, 500),
+      title: trimMusicText(entry.title, 200) || 'Untitled track',
+      userId: Number(entry.userId) || 0,
+      username: trimMusicText(entry.username, 80) || 'Unknown',
+      resolvedFrom: trimMusicText(entry.resolvedFrom, 32) || null
+    };
+  }
+
+  function getMusicQueuePayload(code) {
+    const queue = (musicQueues.get(code) || []).map(sanitizeQueueEntry).filter(Boolean);
+    return {
+      channelCode: code,
+      queue,
+      upNext: queue[0] || null
+    };
+  }
+
+  function broadcastMusicQueue(code) {
+    io.to(`voice:${code}`).emit('music-queue-update', getMusicQueuePayload(code));
+  }
+
+  function setActiveMusic(code, entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const playbackState = entry.playbackState && typeof entry.playbackState === 'object'
+      ? {
+          isPlaying: !!entry.playbackState.isPlaying,
+          positionSeconds: clampMusicPosition(entry.playbackState.positionSeconds || 0, Number(entry.playbackState.durationSeconds) || null),
+          durationSeconds: Number.isFinite(entry.playbackState.durationSeconds) ? Math.max(0, Number(entry.playbackState.durationSeconds)) : null,
+          updatedAt: Number(entry.playbackState.updatedAt) || Date.now()
+        }
+      : {
+          isPlaying: true,
+          positionSeconds: 0,
+          durationSeconds: null,
+          updatedAt: Date.now()
+        };
+    const music = { ...entry, playbackState };
+    activeMusic.set(code, music);
+    return music;
+  }
+
+  function emitMusicSharedToRoom(code, music) {
+    const voiceRoom = voiceUsers.get(code);
+    if (!voiceRoom || !music) return;
+    for (const [, user] of voiceRoom) {
+      io.to(user.socketId).emit('music-shared', {
+        userId: music.userId,
+        username: music.username,
+        url: music.url,
+        title: music.title,
+        trackId: music.id,
+        channelCode: code,
+        resolvedFrom: music.resolvedFrom,
+        syncState: getActiveMusicSyncState(music)
+      });
+    }
+  }
+
+  function startQueuedMusic(code, entry) {
+    const music = setActiveMusic(code, entry);
+    if (!music) return;
+    emitMusicSharedToRoom(code, music);
+    broadcastMusicQueue(code);
+  }
+
+  function popNextQueuedMusic(code) {
+    const queue = musicQueues.get(code) || [];
+    const next = queue.shift() || null;
+    if (queue.length > 0) musicQueues.set(code, queue);
+    else musicQueues.delete(code);
+    return next;
+  }
+//Check if music finished gracefully or ended prematurely
+  function isNaturalMusicFinish(current, reportedPositionSeconds, reportedDurationSeconds) {
+    const syncState = getActiveMusicSyncState(current);
+    if (!syncState) return false;
+    const durationSeconds = Number.isFinite(reportedDurationSeconds) && reportedDurationSeconds > 0
+      ? Number(reportedDurationSeconds)
+      : (Number.isFinite(syncState.durationSeconds) ? syncState.durationSeconds : null);
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return false;
+    const positionSeconds = Number.isFinite(reportedPositionSeconds)
+      ? clampMusicPosition(reportedPositionSeconds, durationSeconds)
+      : clampMusicPosition(syncState.positionSeconds, durationSeconds);
+    const remainingSeconds = Math.max(0, durationSeconds - positionSeconds);
+    return remainingSeconds <= Math.min(2, durationSeconds * 0.02);
+  }
 
   // ── Temporary channel cleanup (check every 60s) ──────────
   setInterval(() => {
@@ -515,6 +835,8 @@ function setupSocketHandlers(io, db) {
         io.to(`channel:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
         channelUsers.delete(ch.code);
         voiceUsers.delete(ch.code);
+        activeMusic.delete(ch.code);
+        musicQueues.delete(ch.code);
         console.log(`[Temporary] Channel "${ch.code}" expired and was deleted`);
       }
     } catch (err) {
@@ -700,7 +1022,7 @@ function setupSocketHandlers(io, db) {
     // Send current voice counts so sidebar indicators are correct on connect
     for (const [code, room] of voiceUsers) {
       if (room.size > 0) {
-        const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username }));
+        const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }));
         socket.emit('voice-count-update', { code, count: room.size, users });
       }
     }
@@ -880,7 +1202,12 @@ function setupSocketHandlers(io, db) {
           console.log(`[Voice] Pruned stale voice entry for user ${userId} (socket ${entry.socketId} gone)`);
         }
       }
-      if (room.size === 0) voiceUsers.delete(code);
+      //Clear the queue if everyone leaves
+      if (room.size === 0) {
+        voiceUsers.delete(code);
+        activeMusic.delete(code);
+        musicQueues.delete(code);
+      }
     }
 
     // ── Get user's channels ─────────────────────────────────
@@ -908,7 +1235,7 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'Channel name too long (max 50)');
       }
       // Only allow safe characters in channel names
-      if (!/^[\w\s\-!?.,']+$/i.test(name)) {
+      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/iu.test(name)) {
         return socket.emit('error-msg', 'Channel name contains invalid characters');
       }
 
@@ -1617,7 +1944,9 @@ function setupSocketHandlers(io, db) {
       voiceUsers.get(code).set(socket.user.id, {
         id: socket.user.id,
         username: socket.user.displayName,
-        socketId: socket.id
+        socketId: socket.id,
+        isMuted: false,
+        isDeafened: false
       });
 
       // Tell new user about existing peers (they'll create offers)
@@ -1646,10 +1975,14 @@ function setupSocketHandlers(io, db) {
           userId: music.userId,
           username: music.username,
           url: music.url,
+          title: music.title,
+          trackId: music.id,
           channelCode: code,
-          resolvedFrom: music.resolvedFrom
+          resolvedFrom: music.resolvedFrom,
+          syncState: getActiveMusicSyncState(music)
         });
       }
+      socket.emit('music-queue-update', getMusicQueuePayload(code));
 
       // Send active screen share info to late joiner — tell screen sharers to renegotiate
       const sharers = activeScreenSharers.get(code);
@@ -1996,38 +2329,105 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'Music sharing is disabled in this channel');
       }
 
-      let playUrl = data.url;
+      let playUrl = stripYouTubePlaylistParam(data.url);
       let resolvedFrom = null;
+      let title = trimMusicText(data.title, 200);
 
       // Convert Spotify URLs → YouTube for universal full playback + sync
       // Spotify embeds are 30-second preview only (non-premium) with no external API
       const isSpotify = /open\.spotify\.com\/(track|album|playlist|episode|show)\/[a-zA-Z0-9]+/.test(data.url);
       if (isSpotify) {
-        const ytUrl = await resolveSpotifyToYouTube(data.url);
-        if (ytUrl) {
-          playUrl = ytUrl;
+        const resolved = await resolveSpotifyToYouTube(data.url);
+        if (resolved?.url) {
+          playUrl = resolved.url;
           resolvedFrom = 'spotify';
+          if (!title) title = trimMusicText(resolved.title, 200);
         } else {
           // Resolution failed — notify the sharer instead of passing a broken embed
           return socket.emit('error-msg', 'Could not resolve Spotify link to YouTube. Try sharing a YouTube link directly.');
         }
       }
 
-      // Store active music for late joiners
-      activeMusic.set(data.code, {
+      if (!title) {
+        const resolvedMeta = await resolveMusicMetadata(playUrl);
+         title = trimMusicText(resolvedMeta.title, 200);
+      }
+
+      const entry = sanitizeQueueEntry({
+        id: crypto.randomBytes(12).toString('hex'),
         url: playUrl,
+        title: title || 'Shared track',
         userId: socket.user.id,
         username: socket.user.displayName,
         resolvedFrom
       });
-      for (const [uid, user] of voiceRoom) {
-        io.to(user.socketId).emit('music-shared', {
+      if (!entry) return;
+
+      if (!activeMusic.get(data.code)) {
+        startQueuedMusic(data.code, entry);
+        return;
+      }
+
+      const queue = musicQueues.get(data.code) || [];
+      queue.push(entry);
+      musicQueues.set(data.code, queue);
+      broadcastMusicQueue(data.code);
+      io.to(`voice:${data.code}`).emit('toast', {
+        message: `${entry.username} queued ${entry.title}`,
+        type: 'info'
+      });
+    });
+
+    socket.on('music-share-playlist', async (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8)) return;
+      if (!isString(data.playlistId, 1, 200)) return;
+      if (!/^[a-zA-Z0-9_-]+$/.test(data.playlistId)) return socket.emit('error-msg', 'Invalid playlist ID');
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+
+      const musicChannel = db.prepare('SELECT music_enabled FROM channels WHERE code = ?').get(data.code);
+      if (musicChannel && musicChannel.music_enabled === 0 && !socket.user.isAdmin) {
+        return socket.emit('error-msg', 'Music sharing is disabled in this channel');
+      }
+
+      socket.emit('toast', { message: 'Fetching playlist…', type: 'info' });
+
+      const tracks = await fetchYouTubePlaylist(data.playlistId);
+      if (!tracks.length) {
+        return socket.emit('error-msg', 'Could not fetch playlist or it is empty');
+      }
+
+      let addedCount = 0;
+      for (const track of tracks) {
+        const url = `https://www.youtube.com/watch?v=${track.videoId}`;
+        const entry = sanitizeQueueEntry({
+          id: crypto.randomBytes(12).toString('hex'),
+          url,
+          title: trimMusicText(track.title, 200) || 'Untitled track',
           userId: socket.user.id,
           username: socket.user.displayName,
-          url: playUrl,
-          channelCode: data.code,
-          resolvedFrom
+          resolvedFrom: null
         });
+        if (!entry) continue;
+        if (!activeMusic.get(data.code) && addedCount === 0) {
+          startQueuedMusic(data.code, entry);
+        } else {
+          const queue = musicQueues.get(data.code) || [];
+          queue.push(entry);
+          musicQueues.set(data.code, queue);
+        }
+        addedCount++;
+      }
+
+      if (addedCount > 0) {
+        broadcastMusicQueue(data.code);
+        io.to(`voice:${data.code}`).emit('toast', {
+          message: `${socket.user.displayName} added ${addedCount} track${addedCount !== 1 ? 's' : ''} from a playlist`,
+          type: 'info'
+        });
+      } else {
+        socket.emit('error-msg', 'No playable tracks found in playlist');
       }
     });
 
@@ -2036,8 +2436,17 @@ function setupSocketHandlers(io, db) {
       if (!isString(data.code, 8, 8)) return;
       const voiceRoom = voiceUsers.get(data.code);
       if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      const current = activeMusic.get(data.code);
+      if (!current) return;
+      if (socket.user.id !== current.userId && !socket.user.isAdmin) {
+        const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(data.code);
+        if (!channel || !userHasPermission(socket.user.id, 'manage_music_queue', channel.id)) {
+          return socket.emit('error-msg', 'Only the requestor or a moderator can stop playback');
+        }
+      }
       // Clear active music
       activeMusic.delete(data.code);
+      musicQueues.delete(data.code);
       for (const [uid, user] of voiceRoom) {
         io.to(user.socketId).emit('music-stopped', {
           userId: socket.user.id,
@@ -2045,6 +2454,7 @@ function setupSocketHandlers(io, db) {
           channelCode: data.code
         });
       }
+      broadcastMusicQueue(data.code);
     });
 
     // Music playback control sync (play/pause/next/prev/shuffle)
@@ -2056,13 +2466,30 @@ function setupSocketHandlers(io, db) {
       if (!allowed.includes(action)) return;
       const voiceRoom = voiceUsers.get(data.code);
       if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      const current = activeMusic.get(data.code);
+      if (!current) return;
+      if (socket.user.id !== current.userId && !socket.user.isAdmin) {
+        const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(data.code);
+        if (!channel || !userHasPermission(socket.user.id, 'manage_music_queue', channel.id)) {
+          const label = (action === 'play' || action === 'pause') ? 'pause/resume playback' : 'skip tracks';
+          return socket.emit('error-msg', `Only the requestor or a moderator can ${label}`);
+        }
+      }
+      const rawPosition = Number(data.positionSeconds);
+      const rawDuration = Number(data.durationSeconds);
+      const syncState = updateActiveMusicPlaybackState(data.code, {
+        isPlaying: action === 'play' ? true : action === 'pause' ? false : undefined,
+        positionSeconds: Number.isFinite(rawPosition) ? rawPosition : undefined,
+        durationSeconds: Number.isFinite(rawDuration) && rawDuration >= 0 ? rawDuration : undefined
+      });
       for (const [uid, user] of voiceRoom) {
         if (uid === socket.user.id) continue; // don't echo back to sender
         io.to(user.socketId).emit('music-control', {
           action,
           userId: socket.user.id,
           username: socket.user.displayName,
-          channelCode: data.code
+          channelCode: data.code,
+          syncState
         });
       }
     });
@@ -2071,19 +2498,139 @@ function setupSocketHandlers(io, db) {
     socket.on('music-seek', (data) => {
       if (!data || typeof data !== 'object') return;
       if (!isString(data.code, 8, 8)) return;
-      const position = parseFloat(data.position);
-      if (isNaN(position) || position < 0 || position > 100) return;
       const voiceRoom = voiceUsers.get(data.code);
       if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      const current = activeMusic.get(data.code);
+      if (!current) return;
+      if (socket.user.id !== current.userId && !socket.user.isAdmin) {
+        const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(data.code);
+        if (!channel || !userHasPermission(socket.user.id, 'manage_music_queue', channel.id)) {
+          return socket.emit('error-msg', 'Only the requestor or a moderator can seek');
+        }
+      }
+      const rawDuration = Number(data.durationSeconds);
+      const durationSeconds = Number.isFinite(rawDuration) && rawDuration >= 0 ? rawDuration : undefined;
+      let positionSeconds = Number(data.positionSeconds);
+      if (!Number.isFinite(positionSeconds)) {
+        const positionPct = Number(data.position);
+        if (!Number.isFinite(positionPct) || positionPct < 0 || positionPct > 100 || !Number.isFinite(durationSeconds)) return;
+        positionSeconds = (durationSeconds * positionPct) / 100;
+      }
+      const syncState = updateActiveMusicPlaybackState(data.code, {
+        positionSeconds,
+        durationSeconds
+      });
       for (const [uid, user] of voiceRoom) {
         if (uid === socket.user.id) continue;
         io.to(user.socketId).emit('music-seek', {
-          position,
+          position: syncState && Number.isFinite(syncState.durationSeconds) && syncState.durationSeconds > 0
+            ? (syncState.positionSeconds / syncState.durationSeconds) * 100
+            : undefined,
+          positionSeconds: syncState ? syncState.positionSeconds : positionSeconds,
+          durationSeconds: syncState ? syncState.durationSeconds : (durationSeconds ?? null),
           userId: socket.user.id,
           username: socket.user.displayName,
+          channelCode: data.code,
+          syncState
+        });
+      }
+    });
+
+    socket.on('music-finished', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8)) return;
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      const current = activeMusic.get(data.code);
+      if (!current) return;
+      const trackId = trimMusicText(data.trackId, 64);
+      if (!trackId || !current.id || trackId !== current.id) return;
+      const isPrivileged = socket.user.id === current.userId || socket.user.isAdmin || (() => {
+        const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(data.code);
+        return !!channel && userHasPermission(socket.user.id, 'manage_music_queue', channel.id);
+      })();
+      if (data.isSkip) {
+        if (!isPrivileged) {
+          return socket.emit('error-msg', 'Only the requestor or a moderator can skip tracks');
+        }
+      } else if (!isPrivileged && !isNaturalMusicFinish(current, Number(data.positionSeconds), Number(data.durationSeconds))) {
+        return;
+      }
+      const next = popNextQueuedMusic(data.code);
+      if (next) {
+        startQueuedMusic(data.code, next);
+        return;
+      }
+      activeMusic.delete(data.code);
+      for (const [, user] of voiceRoom) {
+        io.to(user.socketId).emit('music-stopped', {
+          userId: current.userId,
+          username: current.username,
           channelCode: data.code
         });
       }
+      broadcastMusicQueue(data.code);
+    });
+
+    socket.on('music-queue-remove', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8) || !isString(data.entryId, 1, 64)) return;
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(data.code);
+      if (!channel) return;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_music_queue', channel.id)) {
+        return socket.emit('error-msg', 'You do not have permission to manage the music queue');
+      }
+      const queue = musicQueues.get(data.code) || [];
+      const nextQueue = queue.filter(item => item.id !== data.entryId);
+      if (nextQueue.length > 0) musicQueues.set(data.code, nextQueue);
+      else musicQueues.delete(data.code);
+      broadcastMusicQueue(data.code);
+    });
+
+    socket.on('music-queue-reorder', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8) || !Array.isArray(data.entryIds)) return;
+      if (data.entryIds.length > 200) return;
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(data.code);
+      if (!channel) return;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_music_queue', channel.id)) {
+        return socket.emit('error-msg', 'You do not have permission to manage the music queue');
+      }
+      const queue = musicQueues.get(data.code) || [];
+      if (queue.length < 2) return;
+      const byId = new Map(queue.map(item => [item.id, item]));
+      const reordered = [];
+      for (const entryId of data.entryIds.map(id => trimMusicText(id, 64))) {
+        const item = byId.get(entryId);
+        if (item) reordered.push(item);
+      }
+      if (reordered.length !== queue.length) return;
+      musicQueues.set(data.code, reordered);
+      broadcastMusicQueue(data.code);
+    });
+
+    socket.on('music-queue-shuffle', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!isString(data.code, 8, 8)) return;
+      const voiceRoom = voiceUsers.get(data.code);
+      if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(data.code);
+      if (!channel) return;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_music_queue', channel.id)) {
+        return socket.emit('error-msg', 'You do not have permission to manage the music queue');
+      }
+      const queue = musicQueues.get(data.code) || [];
+      if (queue.length < 2) return;
+      for (let i = queue.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [queue[i], queue[j]] = [queue[j], queue[i]];
+      }
+      musicQueues.set(data.code, queue);
+      broadcastMusicQueue(data.code);
     });
 
     // Music search — user types /play <query> to search by name
@@ -2383,10 +2930,30 @@ function setupSocketHandlers(io, db) {
       const users = room
         ? Array.from(room.values()).map(u => {
             const role = getUserHighestRole(u.id, channelId);
-            return { id: u.id, username: u.username, roleColor: role ? role.color : null };
+            return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
           })
         : [];
       socket.emit('voice-users-update', { channelCode: code, users });
+    });
+
+    socket.on('voice-mute-state', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const room = voiceUsers.get(code);
+      if (!room || !room.has(socket.user.id)) return;
+      room.get(socket.user.id).isMuted = !!data.muted;
+      broadcastVoiceUsers(code);
+    });
+
+    socket.on('voice-deafen-state', (data) => {
+      if (!data || typeof data !== 'object') return;
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const room = voiceUsers.get(code);
+      if (!room || !room.has(socket.user.id)) return;
+      room.get(socket.user.id).isDeafened = !!data.deafened;
+      broadcastVoiceUsers(code);
     });
 
     // Voice re-join after socket reconnect — server lost state during disconnect
@@ -2419,7 +2986,9 @@ function setupSocketHandlers(io, db) {
       voiceUsers.get(code).set(socket.user.id, {
         id: socket.user.id,
         username: socket.user.displayName,
-        socketId: socket.id
+        socketId: socket.id,
+        isMuted: false,
+        isDeafened: false
       });
 
       // Tell existing peers about the re-joined user so they can re-establish WebRTC
@@ -2440,13 +3009,28 @@ function setupSocketHandlers(io, db) {
 
       broadcastVoiceUsers(code);
       broadcastStreamInfo(code); // Ensure re-joined user gets current stream info
+
+      const music = activeMusic.get(code);
+      if (music) {
+        socket.emit('music-shared', {
+          userId: music.userId,
+          username: music.username,
+          url: music.url,
+          title: music.title,
+          trackId: music.id,
+          channelCode: code,
+          resolvedFrom: music.resolvedFrom,
+          syncState: getActiveMusicSyncState(music)
+        });
+      }
+      socket.emit('music-queue-update', getMusicQueuePayload(code));
     });
 
     // Let clients explicitly request voice counts (fallback for missed push events)
     socket.on('get-voice-counts', () => {
       for (const [code, room] of voiceUsers) {
         if (room.size > 0) {
-          const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username }));
+          const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }));
           socket.emit('voice-count-update', { code, count: room.size, users });
         }
       }
@@ -2568,6 +3152,8 @@ function setupSocketHandlers(io, db) {
 
       channelUsers.delete(code);
       voiceUsers.delete(code);
+      activeMusic.delete(code);
+      musicQueues.delete(code);
     });
 
     // ═══════════════ EDIT MESSAGE ═══════════════════════════
@@ -2636,7 +3222,7 @@ function setupSocketHandlers(io, db) {
       if (!channel) return;
 
       const msg = db.prepare(
-        'SELECT id, user_id FROM messages WHERE id = ? AND channel_id = ?'
+        'SELECT id, user_id, content FROM messages WHERE id = ? AND channel_id = ?'
       ).get(data.messageId, channel.id);
       if (!msg) return;
 
@@ -2693,6 +3279,67 @@ function setupSocketHandlers(io, db) {
         channelCode: code,
         messageId: data.messageId
       });
+    });
+
+    // ═══════════════ MOVE MESSAGES ══════════════════════════
+
+    socket.on('move-messages', (data, callback) => {
+      if (!data || typeof data !== 'object') return;
+      const cb = typeof callback === 'function' ? callback : () => {};
+
+      const messageIds = Array.isArray(data.messageIds) ? data.messageIds.filter(id => isInt(id)) : [];
+      if (messageIds.length === 0 || messageIds.length > 200) return cb({ error: 'Select between 1 and 200 messages' });
+
+      const fromCode = typeof data.fromChannel === 'string' ? data.fromChannel.trim() : '';
+      const toCode   = typeof data.toChannel   === 'string' ? data.toChannel.trim()   : '';
+      if (!fromCode || !toCode || fromCode === toCode) return cb({ error: 'Invalid channels' });
+      if (!/^[a-f0-9]{8}$/i.test(fromCode) || !/^[a-f0-9]{8}$/i.test(toCode)) return cb({ error: 'Invalid channel codes' });
+
+      const fromCh = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(fromCode);
+      const toCh   = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(toCode);
+      if (!fromCh || !toCh) return cb({ error: 'Channel not found' });
+      if (fromCh.is_dm || toCh.is_dm) return cb({ error: 'Cannot move messages to or from DMs' });
+
+      // Permission: admin or delete_message on the source channel
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_message', fromCh.id)) {
+        return cb({ error: 'You need message management permissions to move messages' });
+      }
+
+      // Verify all messages belong to the source channel
+      const placeholders = messageIds.map(() => '?').join(',');
+      const count = db.prepare(
+        `SELECT COUNT(*) as cnt FROM messages WHERE id IN (${placeholders}) AND channel_id = ?`
+      ).get(...messageIds, fromCh.id);
+      if (!count || count.cnt !== messageIds.length) return cb({ error: 'Some messages were not found in the source channel' });
+
+      // Move messages in a transaction
+      try {
+        db.prepare(
+          `UPDATE messages SET channel_id = ? WHERE id IN (${placeholders}) AND channel_id = ?`
+        ).run(toCh.id, ...messageIds, fromCh.id);
+
+        // Also move any pinned_messages references
+        db.prepare(
+          `UPDATE pinned_messages SET channel_id = ? WHERE message_id IN (${placeholders}) AND channel_id = ?`
+        ).run(toCh.id, ...messageIds, fromCh.id);
+      } catch (err) {
+        console.error('Move messages error:', err);
+        return cb({ error: 'Failed to move messages' });
+      }
+
+      // Notify both channels
+      io.to(`channel:${fromCode}`).emit('messages-moved', {
+        channelCode: fromCode,
+        messageIds,
+        toChannel: toCode
+      });
+      io.to(`channel:${toCode}`).emit('messages-received', {
+        channelCode: toCode,
+        fromChannel: fromCode,
+        messageIds
+      });
+
+      cb({ success: true, moved: messageIds.length });
     });
 
     // ═══════════════ PIN / UNPIN MESSAGE ════════════════════
@@ -3502,7 +4149,7 @@ function setupSocketHandlers(io, db) {
       const key = typeof data.key === 'string' ? data.key.trim() : '';
       const value = typeof data.value === 'string' ? data.value.trim() : '';
 
-      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key', 'server_name', 'server_title', 'server_icon', 'permission_thresholds', 'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_poll_options', 'max_sound_kb', 'max_emoji_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'default_theme'];
+      const allowedKeys = ['member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'giphy_api_key', 'server_name', 'server_title', 'server_icon', 'permission_thresholds', 'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_poll_options', 'max_sound_kb', 'max_emoji_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'default_theme', 'channel_sort_mode'];
       if (!allowedKeys.includes(key)) return;
 
       if (key === 'member_visibility' && !['all', 'online', 'none'].includes(value)) return;
@@ -3548,6 +4195,7 @@ function setupSocketHandlers(io, db) {
       if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
       if (key === 'setup_wizard_complete' && !['true', 'false'].includes(value)) return;
       if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
+      if (key === 'channel_sort_mode' && !['manual', 'alpha', 'created', 'oldest', 'dynamic'].includes(value)) return;
       if (key === 'default_theme') {
         const validThemes = ['', 'haven', 'discord', 'matrix', 'fallout', 'ffx', 'ice', 'nord', 'darksouls', 'eldenring', 'bloodborne', 'cyberpunk', 'lotr', 'abyss', 'scripture', 'chapel', 'gospel', 'tron', 'halo', 'dracula', 'win95'];
         if (!validThemes.includes(value)) return;
@@ -3561,14 +4209,7 @@ function setupSocketHandlers(io, db) {
         try {
           const obj = JSON.parse(value);
           if (typeof obj !== 'object' || Array.isArray(obj)) return;
-          const validPerms = [
-            'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
-            'pin_message', 'kick_user', 'mute_user', 'ban_user',
-            'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
-            'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
-            'promote_user', 'transfer_admin', 'archive_messages', 'create_channel', 'manage_emojis', 'manage_soundboard',
-            'manage_roles', 'manage_server', 'delete_channel'
-          ];
+          const validPerms = VALID_ROLE_PERMS;
           for (const [k, v] of Object.entries(obj)) {
             if (!validPerms.includes(k)) return;
             if (!Number.isInteger(v) || v < 1 || v > 100) return;
@@ -4642,6 +5283,10 @@ function setupSocketHandlers(io, db) {
 
       broadcastVoiceUsers(code);
       broadcastStreamInfo(code);
+      if (voiceRoom.size === 0) {
+        activeMusic.delete(code);
+        musicQueues.delete(code);
+      }
     }
 
     function broadcastVoiceUsers(code) {
@@ -4653,7 +5298,7 @@ function setupSocketHandlers(io, db) {
       const users = room
         ? Array.from(room.values()).map(u => {
             const role = getUserHighestRole(u.id, channelId);
-            return { id: u.id, username: u.username, roleColor: role ? role.color : null };
+            return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
           })
         : [];
       // Emit to voice participants (may have switched text channels) AND text viewers
@@ -4665,7 +5310,7 @@ function setupSocketHandlers(io, db) {
       io.emit('voice-count-update', {
         code,
         count: users.length,
-        users: users.map(u => ({ id: u.id, username: u.username }))
+        users: users.map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }))
       });
     }
 
@@ -4774,10 +5419,13 @@ function setupSocketHandlers(io, db) {
 
           const customUsers = users.map(u => {
             if (u.status === 'invisible' && u.id !== viewerId) {
+              // In 'online' mode, omit invisible users entirely so their
+              // presence isn't revealed by an "offline" entry in an online-only list
+              if (mode === 'online') return null;
               return { ...u, online: false, status: 'offline' };
             }
             return u;
-          });
+          }).filter(Boolean);
           customUsers.sort((a, b) => {
             if (a.online !== b.online) return a.online ? -1 : 1;
             return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
@@ -5019,14 +5667,7 @@ function setupSocketHandlers(io, db) {
 
         // Add permissions
         const perms = Array.isArray(data.permissions) ? data.permissions : [];
-        const validPerms = [
-          'kick_user', 'mute_user', 'ban_user', 'delete_message', 'delete_own_messages',
-          'delete_lower_messages', 'edit_own_messages', 'pin_message', 'set_channel_topic',
-          'manage_sub_channels', 'rename_channel', 'rename_sub_channel',
-          'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
-          'promote_user', 'transfer_admin', 'archive_messages', 'create_channel', 'manage_emojis', 'manage_soundboard',
-          'manage_roles', 'manage_server', 'delete_channel'
-        ];
+        const validPerms = VALID_ROLE_PERMS;
         // Escalation guard: non-admins cannot grant permissions they don't have
         const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
         const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
@@ -5083,14 +5724,7 @@ function setupSocketHandlers(io, db) {
 
         // Update permissions
         if (Array.isArray(data.permissions)) {
-          const validPerms = [
-            'kick_user', 'mute_user', 'ban_user', 'delete_message', 'delete_own_messages',
-            'delete_lower_messages', 'edit_own_messages', 'pin_message', 'set_channel_topic',
-            'manage_sub_channels', 'rename_channel', 'rename_sub_channel',
-            'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
-            'promote_user', 'transfer_admin', 'archive_messages', 'create_channel', 'manage_emojis', 'manage_soundboard',
-            'manage_roles', 'manage_server', 'delete_channel'
-          ];
+          const validPerms = VALID_ROLE_PERMS;
           // Escalation guard: non-admins cannot grant permissions they don't have
           const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
           db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
@@ -5153,11 +5787,11 @@ function setupSocketHandlers(io, db) {
         const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
 
         const serverMod = insertRole.run('Server Mod', 50, 'server', '#3498db');
-        ['kick_user','mute_user','delete_message','pin_message','set_channel_topic','manage_sub_channels','rename_channel','rename_sub_channel','delete_lower_messages','manage_webhooks','upload_files','use_voice','view_history','view_all_members','delete_own_messages','edit_own_messages']
+        ['kick_user','mute_user','delete_message','pin_message','set_channel_topic','manage_sub_channels','rename_channel','rename_sub_channel','delete_lower_messages','manage_webhooks','upload_files','use_voice','view_history','view_all_members','manage_music_queue','delete_own_messages','edit_own_messages']
           .forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
 
         const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
-        ['kick_user','mute_user','delete_message','pin_message','manage_sub_channels','rename_sub_channel','delete_lower_messages','upload_files','use_voice','view_history','delete_own_messages','edit_own_messages']
+        ['kick_user','mute_user','delete_message','pin_message','manage_sub_channels','rename_sub_channel','delete_lower_messages','upload_files','use_voice','view_history','manage_music_queue','delete_own_messages','edit_own_messages']
           .forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
 
         const userRole = insertRole.run('User', 1, 'server', '#95a5a6');
@@ -5679,13 +6313,7 @@ function setupSocketHandlers(io, db) {
             const r = db.prepare("INSERT INTO roles (name, level, scope, color) VALUES ('Former Admin', 99, 'server', '#e74c3c')").run();
             formerAdminRole = { id: r.lastInsertRowid };
             // Give all permissions
-            const allPerms = [
-              'kick_user', 'mute_user', 'ban_user', 'delete_message', 'delete_own_messages',
-              'delete_lower_messages', 'edit_own_messages', 'pin_message', 'set_channel_topic',
-              'manage_sub_channels', 'rename_channel', 'rename_sub_channel',
-              'upload_files', 'use_voice', 'manage_webhooks', 'mention_everyone', 'view_history',
-              'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin'
-            ];
+            const allPerms = [...VALID_ROLE_PERMS];
             const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
             allPerms.forEach(p => insertPerm.run(formerAdminRole.id, p));
           }
@@ -5752,7 +6380,7 @@ function setupSocketHandlers(io, db) {
       if (!name || name.length === 0 || name.length > 50) {
         return socket.emit('error-msg', 'Channel name must be 1-50 characters');
       }
-      if (!/^[\w\s\-!?.,']+$/i.test(name)) {
+      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/iu.test(name)) {
         return socket.emit('error-msg', 'Channel name contains invalid characters');
       }
 
@@ -5797,7 +6425,7 @@ function setupSocketHandlers(io, db) {
       if (!name || name.length === 0 || name.length > 50) {
         return socket.emit('error-msg', 'Sub-channel name must be 1-50 characters');
       }
-      if (!/^[\w\s\-!?.,']+$/i.test(name)) {
+      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/iu.test(name)) {
         return socket.emit('error-msg', 'Sub-channel name contains invalid characters');
       }
 
@@ -6412,7 +7040,14 @@ function setupSocketHandlers(io, db) {
         afk:       () => ({ content: `💤 ${username} is away from keyboard` }),
         me:        () => arg ? ({ content: `_${username} ${arg}_` }) : null,
         spoiler:   () => arg ? ({ content: `||${arg}||` }) : null,
-        tts:       () => arg ? ({ content: arg, tts: true }) : null,
+        tts:       () => {
+          if (!arg) return null;
+          // Check use_tts permission
+          if (!userHasPermission(socket.user.id, 'use_tts')) return { content: '_You do not have permission to use TTS._' };
+          // Cap TTS content length to prevent abuse
+          const ttsContent = arg.length > 500 ? arg.slice(0, 500) + '…' : arg;
+          return { content: ttsContent, tts: true };
+        },
         flip:      () => ({ content: `🪙 ${username} flipped a coin: **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**!` }),
         roll:      () => {
           const m = (arg || '1d6').match(/^(\d{1,2})?d(\d{1,4})$/i);

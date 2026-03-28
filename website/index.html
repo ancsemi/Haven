@@ -920,10 +920,10 @@
   <section class="android-banner fade-in" id="android">
     <div class="android-banner-inner">
       <div class="container">
-        <h2>📱 NEW &mdash; <span class="android-accent">Haven Android</span> <span class="closed-beta-badge-inline">CLOSED BETA</span></h2>
+        <h2>📱 <span class="android-accent">Amni-Haven!</span> &mdash; Now on Google Play</h2>
         <p>
           A native Android app for Haven, built from the ground up. Full chat and voice support,
-          push notifications, and a true mobile-native experience &mdash; now in closed beta on Google Play.
+          push notifications, and a true mobile-native experience &mdash; available now on Google Play.
         </p>
         <div class="discord-features">
           <span class="discord-feat">📱 Native Android</span>
@@ -932,19 +932,10 @@
           <span class="discord-feat">🎙️ Voice Chat</span>
           <span class="discord-feat">🚀 Built for Haven</span>
         </div>
-        <div class="android-beta-email-form">
-          <p style="font-size: 0.95rem; color: var(--text-muted); margin: 0;">Enter your email to request access to the closed beta:</p>
-          <input type="email" id="website-android-beta-email" placeholder="your@email.com" maxlength="120">
-          <button class="btn-android" onclick="(function(){
-            var e=document.getElementById('website-android-beta-email');
-            var v=e.value.trim();
-            if(!v||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){e.style.borderColor='#f04747';e.focus();return;}
-            var s=encodeURIComponent('Haven Android Beta - Opt-in Request');
-            var b=encodeURIComponent('Hi Amnibro,\n\nI\'d like to opt-in to the Haven Android closed beta on Google Play.\n\nMy email: '+v+'\n\nThanks!');
-            window.open('mailto:amnibro7@gmail.com?subject='+s+'&body='+b,'_blank');
-            e.value='';e.style.borderColor='';
-            alert('Your email client should open with a pre-filled message. Just hit Send!');
-          })()">🚀 Sign Up for Beta</button>
+        <div style="margin-top:20px;text-align:center">
+          <a href="https://play.google.com/store/apps/details?id=com.havenapp.mobile" target="_blank" rel="noopener" style="display:inline-block">
+            <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" style="height:60px">
+          </a>
         </div>
         <p class="android-credit">Built with ❤️ by <strong>Amnibro</strong> &mdash; thank you for your incredible work building the Haven Android app from the ground up.</p>
       </div>
@@ -1365,12 +1356,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>⬡ Haven Server &mdash; v2.8.0</h2>
+        <h2>⬡ Haven Server &mdash; v2.8.3</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.8.0.zip" class="btn btn-primary download-main">
-            <span class="icon">⬇</span> Download v2.8.0 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.8.3.zip" class="btn btn-primary download-main">
+            <span class="icon">⬇</span> Download v2.8.3 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1387,7 +1378,19 @@
           <div class="version-list">
             <div class="version-list-inner">
               <div class="version-item">
-                <div><span class="v-name">v2.8.0</span><span class="v-tag latest">Latest</span></div>
+                <div><span class="v-name">v2.8.3</span><span class="v-tag latest">Latest</span></div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.8.3.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v2.8.2</span> &mdash; Camera device selector, TTS abuse fixes, E2E spoiler fix</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.8.2.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v2.8.1</span> &mdash; Camera selector, TTS fixes, channel sort sync, spoiler in E2E DMs</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.8.1.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v2.8.0</span> &mdash; Expanded permissions, deleted users list, configurable voice bitrate</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v2.8.0.zip">Download &rarr;</a>
               </div>
               <div class="version-item">

@@ -216,11 +216,12 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Sync admin status from .env (handles ADMIN_USERNAME changes between restarts)
-    const shouldBeAdmin = user.username.toLowerCase() === ADMIN_USERNAME ? 1 : 0;
-    if (user.is_admin !== shouldBeAdmin) {
-      db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(shouldBeAdmin, user.id);
-      user.is_admin = shouldBeAdmin;
+    // Bootstrap admin from ADMIN_USERNAME env only when NO admin exists
+    // (first run or recovery). Prevents overriding explicit admin transfers.
+    const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+    if (!anyAdmin && user.username.toLowerCase() === ADMIN_USERNAME && !user.is_admin) {
+      db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+      user.is_admin = 1;
     }
 
     const displayName = user.display_name || user.username;

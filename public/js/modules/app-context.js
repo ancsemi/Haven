@@ -277,6 +277,35 @@ _setupNotifications() {
       localStorage.setItem('haven_auto_accept_streams', String(autoAcceptToggle.checked));
     });
   }
+
+  // Hide voice panel (opt-in)
+  const hideVoicePanelToggle = document.getElementById('hide-voice-panel');
+  if (hideVoicePanelToggle) {
+    hideVoicePanelToggle.checked = localStorage.getItem('haven_hide_voice_panel') === 'true';
+    hideVoicePanelToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_hide_voice_panel', String(hideVoicePanelToggle.checked));
+      const voicePanel = document.getElementById('right-sidebar-voice');
+      if (voicePanel) voicePanel.style.display = hideVoicePanelToggle.checked ? 'none' : '';
+    });
+    // Apply on load
+    if (hideVoicePanelToggle.checked) {
+      const voicePanel = document.getElementById('right-sidebar-voice');
+      if (voicePanel) voicePanel.style.display = 'none';
+    }
+  }
+
+  // Sidebar voice controls (opt-in)
+  const sidebarVoiceToggle = document.getElementById('sidebar-voice-controls');
+  if (sidebarVoiceToggle) {
+    sidebarVoiceToggle.checked = localStorage.getItem('haven_sidebar_voice_controls') === 'true';
+    sidebarVoiceToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_sidebar_voice_controls', String(sidebarVoiceToggle.checked));
+      // Re-apply button visibility for current voice state
+      if (this.voice && this.voice.inVoice) {
+        this._updateVoiceButtons(true);
+      }
+    });
+  }
 },
 
 // ── Push Notifications (Web Push API) ──────────────────
@@ -556,8 +585,14 @@ _popoutGame() {
   if (!this._currentGame) return;
   const tok = localStorage.getItem('haven_token') || '';
   const url = this._currentGame.path + '#token=' + encodeURIComponent(tok);
-  this._gameWindow = window.open(url, '_blank', 'width=740,height=860');
-  this._closeGameIframe();
+  const win = window.open(url, '_blank', 'width=740,height=860');
+  // Only close the inline iframe if the popup actually opened
+  if (win && !win.closed) {
+    this._gameWindow = win;
+    this._closeGameIframe();
+  } else {
+    this._showToast?.('Popup blocked — check your browser settings', 'error');
+  }
 },
 
 _showPushError(reason) {
@@ -749,6 +784,7 @@ async _syncTunnelState(enabled) {
 /** Fetch current tunnel status from server and update UI.
  *  If the tunnel is still starting, poll every 2 s until it resolves. */
 async _refreshTunnelStatus() {
+  if (!this.user?.isAdmin) return;
   try {
     const res = await fetch('/api/tunnel/status', {
       headers: { 'Authorization': `Bearer ${this.token}` }

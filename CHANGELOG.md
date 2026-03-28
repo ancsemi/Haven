@@ -11,6 +11,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.8.3] — 2026-03-27
+
+### Added
+- **Bulk emoji upload** (#202) — new "Bulk Upload" button in the Emoji Management modal lets admins select multiple image files at once. Names are auto-generated from filenames (lowercase, stripped of special characters). Skips files that exceed the server's max emoji size.
+- **TTS permission** (#192) — new `use_tts` role permission (default ON for all users via the User role). Admins can revoke it per-role to prevent specific users from using `/tts`. Existing servers get the permission auto-granted on startup.
+- **`/tts:stop` command** (#192) — instantly cancels any in-progress text-to-speech playback. Client-side only, no message sent.
+
+### Fixed
+- **Shippy Container popout** — the "Pop Out" button on the game iframe now checks if the popup window actually opened before closing the inline game. If the browser blocks the popup, the game stays in the iframe and a toast explains the issue instead of silently closing the game.
+
+---
+
+## [2.8.2] — 2026-03-24
+
+### Added
+- **Camera device selector** (#189) — users can now select their preferred camera from Settings → Voice & Video.
+
+### Fixed
+- **TTS looping** — `/tts` messages are now capped at 500 characters (server + client), and any in-progress speech is cancelled before a new one starts, preventing the infinite loop from very long messages.
+- **TTS `@` mentions** — `@username` in TTS messages is now read as just the name instead of "at username".
+- **`/spoiler` in E2E-encrypted DMs** — slash commands like `/spoiler` now work correctly in end-to-end encrypted DMs (they were previously sent as raw command text).
+- **Channel sort mode sync** — channel sort order is now stored server-side and synced to all clients; admin changes broadcast to everyone in real time. Non-admins can still override locally.
+- **Status bar in Desktop windowed mode** (#190) — the bottom status bar now displays correctly when the Desktop app is not maximized.
+
+---
+
+## [2.8.1] — 2026-03-21
+
+### Added
+- **Mute/deafen state sync** — mute and deafen status now broadcasts to all clients in real time, so users in one channel can see the mic/deafen state of anyone in a different channel.
+- **Deafen implies mute** — deafening now auto-mutes your microphone. Undeafening restores your previous mute state (so manually muting first is remembered).
+- **Graceful shutdown** — the server now handles SIGTERM and SIGINT cleanly, closing Socket.IO and HTTP connections before exiting. Fixes forced-kill behavior in Docker and process managers.
+- **Opt-in: Hide Voice Panel** — new toggle in Settings → Sounds. Hides the right-sidebar voice users panel on desktop; voice users are still visible in the inline channel indicators.
+- **Opt-in: Sidebar Voice Controls** — new toggle in Settings → Sounds. Moves the mute/deafen buttons from the voice panel header to the bottom sidebar bar.
+
+### Fixed
+- **Mute/deafen state lost on reconnect** — mute and deafen state is now re-broadcast to the server after a socket reconnect or tab refocus.
+
+---
+
 ## [2.8.0] — 2026-03-18
 
 ### Added

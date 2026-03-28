@@ -247,8 +247,10 @@
             <button class="sidebar-bottom-btn" id="activities-btn" data-i18n-title="modals.activities.title" title="Activities">🎮</button>
             <button class="sidebar-bottom-btn" id="sidebar-members-btn" data-i18n-title="modals.all_members.title" title="All Members">👥</button>
             <button id="mobile-settings-btn" class="sidebar-bottom-btn mobile-settings-btn" data-i18n-title="settings.title" title="Settings">⚙️</button>
-            <span style="flex:1"></span>
             <button id="donors-btn" class="sidebar-bottom-btn donate-btn">❤️</button>
+            <span style="flex:1"></span>
+            <button id="voice-mute-btn" class="sidebar-bottom-btn voice-header-btn" title="Mute" style="display:none">🎙️</button>
+            <button id="voice-deafen-btn" class="sidebar-bottom-btn voice-header-btn" title="Deafen" style="display:none">🔊</button>
           </div>
         </div>
       </aside>
@@ -281,6 +283,7 @@
             <span class="header-actions-divider"></span>
             <button id="search-toggle-btn" class="icon-btn small" data-i18n-title="header.search_messages" title="Search messages (Ctrl+F)">🔍</button>
             <button id="pinned-toggle-btn" class="icon-btn small" data-i18n-title="header.pinned_messages" title="Pinned messages">📌</button>
+            <button id="move-select-btn" class="icon-btn small" title="Select messages to move" style="display:none">☰</button>
             <div class="e2e-menu-wrapper" style="display:none" id="e2e-menu-wrapper">
               <button id="e2e-menu-btn" class="icon-btn small" data-i18n-title="header.encryption_options" title="Encryption options">🔐</button>
               <div class="e2e-dropdown" id="e2e-dropdown" style="display:none">
@@ -399,13 +402,16 @@
             <div class="music-panel-header">
               <div class="music-panel-header-left">
                 <button id="music-popout-btn" class="icon-btn small" data-i18n-title="media.music_popout" title="Pop out player">⧉</button>
-                <span id="music-panel-label">🎵 <span data-i18n="media.listening_together">Listening Together</span></span>
+                <div class="music-panel-copy">
+                  <span id="music-panel-label">🎵 <span data-i18n="media.listening_together">Listening Together</span>
+                  <span id="music-up-next" class="music-up-next">Up next: Nothing queued</span>
+                </div>
               </div>
+              <span id="music-activity-hint" class="music-activity-hint"></span>
               <div class="music-panel-controls">
-                <button id="music-prev-btn" class="icon-btn small" data-i18n-title="media.music_prev" title="Previous track" style="display:none">⏮</button>
+                <button id="music-queue-btn" class="icon-btn small" title="Queue">☰</button>
                 <button id="music-play-pause-btn" class="icon-btn small" data-i18n-title="media.music_play_pause" title="Play/Pause">⏸</button>
                 <button id="music-next-btn" class="icon-btn small" data-i18n-title="media.music_next" title="Next track" style="display:none">⏭</button>
-                <button id="music-shuffle-btn" class="icon-btn small" data-i18n-title="media.music_shuffle" title="Shuffle" style="display:none">🔀</button>
                 <span id="music-time-current" class="music-time">0:00</span>
                 <input type="range" id="music-seek-slider" class="music-seek-slider" min="0" max="100" value="0" step="0.1" data-i18n-title="media.music_seek" title="Seek">
                 <span id="music-time-duration" class="music-time">0:00</span>
@@ -491,16 +497,15 @@
       <!-- ─── Right Sidebar ───────────────────────────── -->
       <aside class="right-sidebar" id="right-sidebar">
         <div class="right-sidebar-resize-handle" id="right-sidebar-resize-handle"></div>
-        <!-- Voice users section (top) -->
+        <!-- Voice users section -->
         <div class="right-sidebar-voice" id="right-sidebar-voice">
           <div class="panel">
             <div class="voice-panel-header">
               <h5 class="panel-title" style="margin-bottom:0">🔊 <span data-i18n="right_sidebar.voice_title">Voice</span></h5>
-              <!-- Close button moved inline with VOICE title to save vertical space on mobile -->
               <button id="mobile-right-close" class="mobile-panel-close mobile-panel-close-right" data-i18n-title="modals.common.close" data-i18n-aria-label="right_sidebar.close_panel" title="Close" aria-label="Close panel">&times;</button>
               <div class="voice-header-actions">
-                <button id="voice-mute-btn" class="voice-header-btn" data-i18n-title="voice.mute" title="Mute" style="display:none">🎙️</button>
-                <button id="voice-deafen-btn" class="voice-header-btn" data-i18n-title="voice.deafen" title="Deafen" style="display:none">🔊</button>
+                <button id="voice-mute-btn-header" class="voice-header-btn" data-i18n-title="voice.mute" title="Mute" style="display:none">🎙️</button>
+                <button id="voice-deafen-btn-header" class="voice-header-btn" data-i18n-title="voice.deafen" title="Deafen" style="display:none">🔊</button>
               </div>
             </div>
             <button id="voice-join-mobile" class="btn-voice mobile-voice-join" style="display:none">🎤 <span data-i18n="voice.join">Join Voice</span></button>
@@ -531,6 +536,12 @@
             <label class="voice-settings-label" data-i18n="voice_settings.output">Output</label>
             <select id="voice-output-device" class="voice-settings-select">
               <option value="" data-i18n="voice_settings.default_speaker">Default Speaker</option>
+            </select>
+          </div>
+          <div class="voice-settings-row">
+            <label class="voice-settings-label">Camera</label>
+            <select id="voice-cam-device" class="voice-settings-select">
+              <option value="">Default Camera</option>
             </select>
           </div>
           <div class="voice-settings-divider"></div>
@@ -647,6 +658,25 @@
 
   <!-- Toast notifications -->
   <div id="toast-container"></div>
+
+  <!-- Move Messages Toolbar (floating above messages) -->
+  <div id="move-msg-toolbar" class="move-msg-toolbar" style="display:none">
+    <span id="move-msg-count">0 selected</span>
+    <button class="btn-sm btn-accent" id="move-msg-move-btn">Move to...</button>
+    <button class="btn-sm" id="move-msg-cancel-btn">Cancel</button>
+  </div>
+
+  <!-- Move Messages Channel Picker Modal -->
+  <div class="modal-overlay" id="move-msg-modal" style="display:none">
+    <div class="modal">
+      <h3>Move Messages</h3>
+      <p class="modal-desc" id="move-msg-desc">Select a destination channel</p>
+      <div class="move-msg-channel-list" id="move-msg-channel-list"></div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="move-msg-modal-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <!-- First-Time Setup Wizard (Admin only) -->
   <div class="modal-overlay" id="setup-wizard-modal" style="display:none">
@@ -1070,6 +1100,29 @@
         </div>
       </div>
 
+      <!-- Emoji Reaction Size -->
+      <div class="settings-section" id="section-emoji-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">😀 Reaction Size</h5>
+        <div class="font-size-picker" id="emoji-size-picker">
+          <button type="button" class="density-btn" data-emojisize="small" title="Small reactions">
+            <span class="density-icon" style="font-size:11px">😀</span>
+            <span class="density-label">Small</span>
+          </button>
+          <button type="button" class="density-btn active" data-emojisize="normal" title="Normal reactions (default)">
+            <span class="density-icon" style="font-size:14px">😀</span>
+            <span class="density-label">Normal</span>
+          </button>
+          <button type="button" class="density-btn" data-emojisize="large" title="Large reactions">
+            <span class="density-icon" style="font-size:18px">😀</span>
+            <span class="density-label">Large</span>
+          </button>
+          <button type="button" class="density-btn" data-emojisize="x-large" title="Extra large reactions">
+            <span class="density-icon" style="font-size:22px">😀</span>
+            <span class="density-label">XL</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Image Display Mode -->
       <div class="settings-section" id="section-density" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🖼️ <span data-i18n="settings.image_display.title">Image Display</span></h5>
@@ -1098,6 +1151,16 @@
             <input type="checkbox" id="auto-accept-streams" checked>
           </label>
           <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.auto_accept_streams_hint">Automatically open screen shares when someone starts streaming. Turn off to join manually.</small>
+          <label class="toggle-row">
+            <span>Hide Voice Panel</span>
+            <input type="checkbox" id="hide-voice-panel">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px">Hide the voice users panel on desktop. Voice users are still shown in channel indicators.</small>
+          <label class="toggle-row">
+            <span>Sidebar Voice Controls</span>
+            <input type="checkbox" id="sidebar-voice-controls">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px">Show mute/deafen buttons in the sidebar instead of the voice panel header.</small>
           <label class="volume-row">
             <span data-i18n="settings.sounds_section.volume">Volume</span>
             <input type="range" id="notif-volume" min="0" max="100" value="50" class="slider-sm">
@@ -1851,6 +1914,12 @@
         <input type="file" id="emoji-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:11px">
         <button class="btn-sm btn-accent" id="emoji-upload-btn" data-i18n="modals.emoji_mgmt.upload_btn">Upload</button>
       </div>
+      <div style="margin-top:6px;text-align:center">
+        <label class="btn-sm" style="cursor:pointer;display:inline-block" title="Select multiple images — names auto-generated from filenames">
+          📦 Bulk Upload
+          <input type="file" id="emoji-bulk-input" accept="image/png,image/gif,image/webp,image/jpeg" multiple style="display:none">
+        </label>
+      </div>
       <div id="emoji-crop-preview-row" style="display:none;align-items:center;gap:10px;margin-top:8px;padding:8px;background:var(--bg-tertiary);border-radius:var(--radius-sm)">
         <img id="emoji-crop-thumb" src="" alt="" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--border)">
         <span class="settings-hint" style="flex:1" data-i18n="modals.emoji_mgmt.crop_applied">Crop applied — ready to upload</span>
@@ -1947,7 +2016,37 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-music-btn" data-i18n="modals.common.cancel">Cancel</button>
-        <button class="btn-sm btn-accent" id="share-music-btn" data-i18n="modals.listen_together.share_btn">Share with Channel</button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+          <button class="btn-sm btn-accent" id="share-music-btn" data-i18n="modals.listen_together.share_btn">Share with Channel</button>
+          <button class="btn-sm btn-accent" id="share-music-playlist-btn" style="display:none">Share Playlist with Channel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="music-queue-modal" style="display:none">
+    <div class="modal modal-wide music-queue-modal">
+      <h3>📋 Playback Queue</h3>
+      <p class="modal-desc" id="music-queue-summary">No queued tracks</p>
+      <div class="music-queue-table-wrap">
+        <table class="music-queue-table">
+          <thead>
+            <tr>
+              <th class="music-queue-col-handle"></th>
+              <th class="music-queue-col-pos">Pos.</th>
+              <th class="music-queue-col-requested-by">Requested By</th>
+              <th class="music-queue-col-title">Title</th>
+              <th class="music-queue-col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="music-queue-body">
+            <tr><td colspan="5" class="music-queue-empty">Queue is empty</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent" id="shuffle-music-queue-btn" style="display:none">Shuffle Queue</button>
+        <button class="btn-sm" id="close-music-queue-btn">Close</button>
       </div>
     </div>
   </div>
@@ -2053,6 +2152,7 @@
       <div class="organize-toolbar">
         <label class="organize-toolbar-label" data-i18n="modals.organize.sort_label">Sort:</label>
         <select id="organize-global-sort" class="organize-select">
+          <option value="server_default">Server Default</option>          
           <option value="manual" data-i18n="modals.organize.sort_manual">Manual</option>
           <option value="alpha" data-i18n="modals.organize.sort_alpha">Alphabetical</option>
           <option value="created" data-i18n="modals.organize.sort_newest">Newest First</option>
