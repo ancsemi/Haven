@@ -444,6 +444,7 @@ _createMessageEl(msg, prevMsg) {
   const isAnnouncement = curCh && curCh.notification_type === 'announcement';
   const isCompact = prevMsg &&
     prevMsg.user_id === msg.user_id &&
+    (prevMsg.proxy_name || '') === (msg.proxy_name || '') &&
     !msg.reply_to &&
     (new Date(msg.created_at) - new Date(prevMsg.created_at)) < 5 * 60 * 1000;
 
@@ -482,11 +483,13 @@ _createMessageEl(msg, prevMsg) {
     const el = document.createElement('div');
     el.className = 'message-compact' + (msg.pinned ? ' pinned' : '') + (msg.is_archived ? ' archived' : '') + (isAnnouncement ? ' announcement' : '');
     el.dataset.userId = msg.user_id;
-    el.dataset.username = msg.username;
+    el.dataset.username = msg.proxy_name || msg.username;
     el.dataset.time = msg.created_at;
     el.dataset.timeShort = new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     el.dataset.msgId = msg.id;
     el.dataset.rawContent = msg.content;
+    if (msg.proxy_name) el.dataset.proxyName = msg.proxy_name;
+    if (msg.proxy_avatar) el.dataset.proxyAvatar = msg.proxy_avatar;
     if (msg.pinned) el.dataset.pinned = '1';
     if (msg.is_archived) el.dataset.archived = '1';
     if (msg._e2e) el.dataset.e2e = '1';
@@ -505,8 +508,9 @@ _createMessageEl(msg, prevMsg) {
     return el;
   }
 
-  const color = this._getUserColor(msg.username);
-  const initial = msg.username.charAt(0).toUpperCase();
+  const displayName = msg.proxy_name || msg.username;
+  const color = this._getUserColor(displayName);
+  const initial = displayName.charAt(0).toUpperCase();
   // Look up user's role from online users list
   const onlineUser = this.users ? this.users.find(u => u.id === msg.user_id) : null;
   // Use the message sender's avatar_shape (from server), not the local user's preference
@@ -515,7 +519,13 @@ _createMessageEl(msg, prevMsg) {
 
   // For imported Discord messages, use the stored Discord avatar or a generic Discord icon
   let avatarHtml;
-  if (msg.imported_from === 'discord') {
+  if (msg.proxy_name) {
+    if (msg.proxy_avatar) {
+      avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(msg.proxy_avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
+    } else {
+      avatarHtml = `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
+    }
+  } else if (msg.imported_from === 'discord') {
     const discordAvatar = msg.webhook_avatar;
     if (discordAvatar) {
       avatarHtml = `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(discordAvatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`;
@@ -535,15 +545,18 @@ _createMessageEl(msg, prevMsg) {
 
   const botBadge = msg.imported_from === 'discord'
     ? '<span class="discord-badge">DISCORD</span>'
-    : msg.is_webhook ? '<span class="bot-badge">BOT</span>' : '';
+    : msg.is_webhook ? '<span class="bot-badge">BOT</span>' : msg.proxy_name ? '<span class="bot-badge">PROXY</span>' : '';
 
   const el = document.createElement('div');
   el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '') + (msg.is_archived ? ' archived' : '') + (msg.is_webhook ? ' webhook-message' : '') + (msg.imported_from ? ' imported-message' : '') + (isAnnouncement ? ' announcement' : '');
   el.dataset.userId = msg.user_id;
+  el.dataset.username = msg.proxy_name || msg.username;
   el.dataset.time = msg.created_at;
   el.dataset.timeShort = new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   el.dataset.msgId = msg.id;
   el.dataset.rawContent = msg.content;
+  if (msg.proxy_name) el.dataset.proxyName = msg.proxy_name;
+  if (msg.proxy_avatar) el.dataset.proxyAvatar = msg.proxy_avatar;
   if (msg.pinned) el.dataset.pinned = '1';
   if (msg.is_archived) el.dataset.archived = '1';
   if (msg._e2e) el.dataset.e2e = '1';
@@ -554,7 +567,7 @@ _createMessageEl(msg, prevMsg) {
       ${avatarHtml}
       <div class="message-body">
         <div class="message-header">
-          <span class="message-author" style="color:${color}"${this._nicknames[msg.user_id] ? ` title="${this._escapeHtml(msg.username)}"` : ''}>${this._escapeHtml(this._getNickname(msg.user_id, msg.username))}</span>
+          <span class="message-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
           ${botBadge}
           ${msgRoleBadge}
           <span class="message-time">${this._formatTime(msg.created_at)}</span>
@@ -581,6 +594,8 @@ _createMessageEl(msg, prevMsg) {
 _promoteCompactToFull(compactEl) {
   const userId = parseInt(compactEl.dataset.userId);
   const username = compactEl.dataset.username || 'Unknown';
+  const proxyName = compactEl.dataset.proxyName || '';
+  const proxyAvatar = compactEl.dataset.proxyAvatar || '';
   const time = compactEl.dataset.time;
   const msgId = compactEl.dataset.msgId;
   const isPinned = compactEl.dataset.pinned === '1';
@@ -600,7 +615,7 @@ _promoteCompactToFull(compactEl) {
   const onlineUser = this.users ? this.users.find(u => u.id === userId) : null;
   const msgShape = (onlineUser && onlineUser.avatarShape) || 'circle';
   const shapeClass = 'avatar-' + msgShape;
-  const avatar = onlineUser && onlineUser.avatar;
+  const avatar = proxyAvatar || (onlineUser && onlineUser.avatar);
   const avatarHtml = avatar
     ? `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
@@ -608,6 +623,8 @@ _promoteCompactToFull(compactEl) {
   const msgRoleBadge = onlineUser && onlineUser.role
     ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}">${this._escapeHtml(onlineUser.role.name)}</span>`
     : '';
+  const authorLabel = proxyName ? username : this._getNickname(userId, username);
+  const authorTitle = (!proxyName && this._nicknames[userId]) ? this._escapeHtml(username) : '';
 
   // Replace the compact element in-place
   const wasAnnouncement = compactEl.classList.contains('announcement');
@@ -621,7 +638,7 @@ _promoteCompactToFull(compactEl) {
       ${avatarHtml}
       <div class="message-body">
         <div class="message-header">
-          <span class="message-author" style="color:${color}"${this._nicknames[userId] ? ` title="${this._escapeHtml(username)}"` : ''}>${this._escapeHtml(this._getNickname(userId, username))}</span>
+          <span class="message-author" style="color:${color}"${authorTitle ? ` title="${authorTitle}"` : ''}>${this._escapeHtml(authorLabel)}</span>
           ${msgRoleBadge}
           <span class="message-time">${this._formatTime(time)}</span>
           ${pinnedTag}

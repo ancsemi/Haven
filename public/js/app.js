@@ -56,6 +56,19 @@ class HavenApp {
     this._noMoreHistory = false;   // true when all history has been loaded
     this._loadingHistory = false;  // prevent concurrent history requests
     this._historyBefore = null;    // set when requesting older messages
+    this._forumView = {
+      parentCode: null,
+      posts: [],
+      search: '',
+      activeTag: '',
+      canCreate: false
+    };
+    this._proxySettings = {
+      list: [],
+      editingId: null,
+      draftAvatarUrl: '',
+      loaded: false
+    };
     this._nicknames = JSON.parse(localStorage.getItem('haven_nicknames') || '{}'); // client-side nicknames { oderId: name }
 
     // Slash command definitions for autocomplete

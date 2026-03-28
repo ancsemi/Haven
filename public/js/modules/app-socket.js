@@ -3,6 +3,25 @@ export default {
 // ── Socket Event Listeners ────────────────────────────
 
 _setupSocketListeners() {
+  this.socket.on('forum-overview', (data) => {
+    if (!data || data.code !== this._forumView?.parentCode) return;
+    this._forumView.posts = data.posts || [];
+    this._forumView.canCreate = !!data.canCreate;
+    this._renderForumBrowser();
+  });
+
+  this.socket.on('forum-post-created', (data) => {
+    if (data?.parentCode && data.parentCode === this._forumView?.parentCode) {
+      this.socket.emit('get-forum-overview', { code: data.parentCode });
+    }
+  });
+
+  this.socket.on('forum-post-deleted', (data) => {
+    if (data?.parentCode && data.parentCode === this._forumView?.parentCode) {
+      this.socket.emit('get-forum-overview', { code: data.parentCode });
+    }
+  });
+
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };
@@ -677,7 +696,11 @@ _setupSocketListeners() {
     const ch = this.channels.find(c => c.code === data.code);
     if (ch) ch.topic = data.topic;
     if (data.code === this.currentChannel) {
-      this._updateTopicBar(data.topic);
+      if (ch?.channel_type === 'forum') {
+        this._showForumBrowser(ch);
+      } else {
+        this._updateTopicBar(data.topic);
+      }
     }
   });
 

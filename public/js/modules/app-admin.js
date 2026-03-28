@@ -3,7 +3,7 @@ const ALL_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
-  'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'create_channel', 'create_forum_posts', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
   'view_all_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
   'manage_roles', 'manage_server', 'delete_channel'
 ];
@@ -16,6 +16,7 @@ const PERM_LABELS = {
   rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
   set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
   create_channel: 'Create Channels',
+  create_forum_posts: 'Create Forum Posts',
   upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
   use_tts: 'Use Text-to-Speech',
   manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
@@ -328,6 +329,10 @@ _applyServerSettings() {
     if (maxEmojiKb) {
       maxEmojiKb.value = this.serverSettings.max_emoji_kb || '256';
     }
+    const maxProxyAvatarKb = document.getElementById('max-proxy-avatar-kb');
+    if (maxProxyAvatarKb) {
+      maxProxyAvatarKb.value = this.serverSettings.max_proxy_avatar_kb || '256';
+    }
     const maxPollOpts = document.getElementById('max-poll-options');
     if (maxPollOpts) {
       maxPollOpts.value = this.serverSettings.max_poll_options || '10';
@@ -436,6 +441,7 @@ _snapshotAdminSettings() {
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
+    max_proxy_avatar_kb: this.serverSettings.max_proxy_avatar_kb || '256',
     max_poll_options: this.serverSettings.max_poll_options || '10',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     default_theme: this.serverSettings.default_theme || ''
@@ -515,6 +521,12 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const maxProxyAvatarKb = String(Math.max(32, Math.min(2048, parseInt(document.getElementById('max-proxy-avatar-kb')?.value) || 256)));
+  if (maxProxyAvatarKb !== (snap.max_proxy_avatar_kb || '256')) {
+    this.socket.emit('update-server-setting', { key: 'max_proxy_avatar_kb', value: maxProxyAvatarKb });
+    changed = true;
+  }
+
   const maxPollOpts = String(Math.max(2, Math.min(25, parseInt(document.getElementById('max-poll-options')?.value) || 10)));
   if (maxPollOpts !== (snap.max_poll_options || '10')) {
     this.socket.emit('update-server-setting', { key: 'max_poll_options', value: maxPollOpts });
@@ -564,6 +576,8 @@ _cancelAdminSettings() {
     if (msk) msk.value = snap.max_sound_kb || '1024';
     const mek = document.getElementById('max-emoji-kb');
     if (mek) mek.value = snap.max_emoji_kb || '256';
+    const mpak = document.getElementById('max-proxy-avatar-kb');
+    if (mpak) mpak.value = snap.max_proxy_avatar_kb || '256';
     const mpo = document.getElementById('max-poll-options');
     if (mpo) mpo.value = snap.max_poll_options || '10';
     const uba = document.getElementById('update-banner-admin-only');

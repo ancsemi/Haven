@@ -14,6 +14,8 @@ async switchChannel(code) {
   this._coupledToBottom = true;
   const channel = this.channels.find(c => c.code === code);
   const isDm = channel && channel.is_dm;
+  const isForum = channel && channel.channel_type === 'forum';
+  const isForumPost = this._isForumPostChannel(channel);
   const displayName = isDm && channel.dm_target
     ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
     : channel ? `# ${channel.name}` : code;
@@ -50,13 +52,15 @@ async switchChannel(code) {
     const mobileJoin = document.getElementById('voice-join-mobile');
     if (mobileJoin) mobileJoin.style.display = channel && channel.voice_enabled === 0 ? 'none' : '';
   }
-  document.getElementById('search-toggle-btn').style.display = '';
-  document.getElementById('pinned-toggle-btn').style.display = '';
+  document.getElementById('search-toggle-btn').style.display = isForum ? 'none' : '';
+  document.getElementById('pinned-toggle-btn').style.display = isForum ? 'none' : '';
+  const forumOriginalBtn = document.getElementById('forum-original-post-btn');
+  if (forumOriginalBtn) forumOriginalBtn.style.display = isForumPost ? 'inline-flex' : 'none';
 
   // Show "Select messages" button for admins/mods on non-DM channels
   const moveSelectBtn = document.getElementById('move-select-btn');
   if (moveSelectBtn) {
-    const canMove = !isDm && (this.user.isAdmin || this._canModerate());
+    const canMove = !isDm && !isForum && (this.user.isAdmin || this._canModerate());
     moveSelectBtn.style.display = canMove ? 'inline-flex' : 'none';
   }
   // Exit selection mode when switching channels
@@ -92,8 +96,10 @@ async switchChannel(code) {
 
   const messagesEl = document.getElementById('messages');
   messagesEl.innerHTML = '';
-  document.getElementById('message-area').style.display = 'flex';
+  document.getElementById('message-area').style.display = isForum ? 'none' : 'flex';
   document.getElementById('no-channel-msg').style.display = 'none';
+  const forumBrowser = document.getElementById('forum-browser');
+  if (forumBrowser) forumBrowser.style.display = isForum ? 'block' : 'none';
 
   document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
   const activeEl = document.querySelector(`.channel-item[data-code="${code}"]`);
@@ -116,16 +122,20 @@ async switchChannel(code) {
   this._historyAfter = null;
 
   this.socket.emit('enter-channel', { code });
-  // E2E: fetch DM partner's public key BEFORE requesting messages
-  if (isDm && channel) await this._fetchDMPartnerKey(channel);
-  this.socket.emit('get-messages', { code });
-  this.socket.emit('get-channel-members', { code });
-  this.socket.emit('request-voice-users', { code });
+  if (isForum) {
+    this._showForumBrowser(channel);
+  } else {
+    // E2E: fetch DM partner's public key BEFORE requesting messages
+    if (isDm && channel) await this._fetchDMPartnerKey(channel);
+    this.socket.emit('get-messages', { code });
+    this.socket.emit('get-channel-members', { code });
+    this.socket.emit('request-voice-users', { code });
+  }
   this._clearReply();
 
   // Auto-focus the message input for quick typing
   const msgInput = document.getElementById('message-input');
-  if (msgInput) setTimeout(() => msgInput.focus(), 50);
+  if (msgInput && !isForum) setTimeout(() => msgInput.focus(), 50);
 
   // Show E2E encryption menu only in DM channels
   const e2eWrapper = document.getElementById('e2e-menu-wrapper');
@@ -133,6 +143,161 @@ async switchChannel(code) {
   // Close dropdown when switching channels
   const e2eDropdown = document.getElementById('e2e-dropdown');
   if (e2eDropdown) e2eDropdown.style.display = 'none';
+},
+
+_isForumPostChannel(channel) {
+  if (!channel || !channel.parent_channel_id) return false;
+  const parent = this.channels.find(c => c.id === channel.parent_channel_id);
+  return !!(parent && parent.channel_type === 'forum');
+},
+
+_showForumBrowser(channel) {
+  this._forumView.parentCode = channel.code;
+  this._forumView.canCreate = false;
+  document.getElementById('forum-browser-title').textContent = `# ${channel.name}`;
+  const descEl = document.getElementById('forum-browser-description');
+  if (descEl) {
+    const canEdit = this.user.isAdmin || this._hasPerm('set_channel_topic');
+    descEl.textContent = channel.topic || (canEdit ? 'Set a topic...' : '');
+    descEl.classList.toggle('forum-topic-editable', !!canEdit);
+    descEl.onclick = canEdit ? () => this._editTopic() : null;
+    descEl.title = canEdit ? 'Click to edit topic' : (channel.topic || '');
+  }
+  const createBtn = document.getElementById('forum-create-post-btn');
+  if (createBtn) {
+    const canPost = this._forumView?.parentCode === channel.code
+      ? !!this._forumView?.canCreate
+      : false;
+    createBtn.style.display = canPost ? 'inline-flex' : 'none';
+  }
+  this.socket.emit('get-forum-overview', { code: channel.code });
+},
+
+_renderForumBrowser() {
+  const parentCode = this._forumView.parentCode;
+  if (!parentCode) return;
+  const currentParent = this.channels.find(c => c.code === parentCode);
+  if (!currentParent || currentParent.channel_type !== 'forum') return;
+  const createBtn = document.getElementById('forum-create-post-btn');
+  if (createBtn) createBtn.style.display = this._forumView?.canCreate ? 'inline-flex' : 'none';
+
+  const posts = Array.isArray(this._forumView.posts) ? this._forumView.posts : [];
+  const search = (this._forumView.search || '').trim().toLowerCase();
+  const activeTag = this._forumView.activeTag || '';
+  const filtered = posts.filter(post => {
+    const matchesTag = !activeTag || (post.tag || '') === activeTag;
+    const haystack = `${post.name || ''} ${post.preview || ''} ${post.author || ''}`.toLowerCase();
+    const matchesSearch = !search || haystack.includes(search);
+    return matchesTag && matchesSearch;
+  });
+
+  const joined = filtered.filter(post => post.isMember);
+  const available = filtered.filter(post => !post.isMember);
+  const tags = [...new Set(posts.map(post => post.tag).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const tagWrap = document.getElementById('forum-tag-filters');
+  if (tagWrap) {
+    const allTags = [''].concat(tags);
+    tagWrap.innerHTML = allTags.map(tag => `
+      <button class="forum-tag-filter${(tag || '') === activeTag ? ' active' : ''}" data-tag="${this._escapeHtml(tag || '')}">
+        ${this._escapeHtml(tag || 'All tags')}
+      </button>
+    `).join('');
+    tagWrap.querySelectorAll('.forum-tag-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._forumView.activeTag = btn.dataset.tag || '';
+        this._renderForumBrowser();
+      });
+    });
+  }
+
+  const renderCards = (items, emptyText) => {
+    if (!items.length) return `<div class="forum-empty-state">${this._escapeHtml(emptyText)}</div>`;
+    return items.map(post => `
+      <article class="forum-card" data-code="${this._escapeHtml(post.code)}">
+        <div class="forum-card-header">
+          <h4 class="forum-card-title">${this._escapeHtml(post.name)}</h4>
+          ${(post.tag || '') ? `<span class="forum-card-tag">${this._escapeHtml(post.tag)}</span>` : ''}
+        </div>
+        <div class="forum-card-preview">${this._escapeHtml(post.preview || 'No original post yet.')}</div>
+        <div class="forum-card-meta">
+          <span>${this._escapeHtml(post.author || 'Unknown')}</span>
+          <span>${post.messageCount || 0} message${post.messageCount === 1 ? '' : 's'}</span>
+        </div>
+        <div class="forum-card-footer">
+          <span class="forum-card-status">${post.isMember ? 'Joined' : 'Not joined'}</span>
+          <div class="forum-card-actions">
+            ${post.canDelete ? `<button class="forum-card-delete" data-code="${this._escapeHtml(post.code)}" data-name="${this._escapeHtml(post.name)}">Delete</button>` : ''}
+            <button class="forum-card-open" data-code="${this._escapeHtml(post.code)}">${post.isMember ? 'Open' : 'Join & Open'}</button>
+          </div>
+        </div>
+      </article>
+    `).join('');
+  };
+
+  const joinedList = document.getElementById('forum-joined-list');
+  const availableList = document.getElementById('forum-available-list');
+  const joinedCount = document.getElementById('forum-joined-count');
+  const availableCount = document.getElementById('forum-available-count');
+  if (joinedList) joinedList.innerHTML = renderCards(joined, 'You have not joined any posts yet.');
+  if (availableList) availableList.innerHTML = renderCards(available, 'Nothing else is available right now.');
+  if (joinedCount) joinedCount.textContent = String(joined.length);
+  if (availableCount) availableCount.textContent = String(available.length);
+
+  document.querySelectorAll('.forum-card, .forum-card-open').forEach(el => {
+    el.addEventListener('click', (e) => {
+      const code = el.dataset.code || e.currentTarget.dataset.code;
+      if (!code) return;
+      e.stopPropagation();
+      this._openForumPost(code);
+    });
+  });
+  document.querySelectorAll('.forum-card-delete').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const code = e.currentTarget.dataset.code;
+      const name = e.currentTarget.dataset.name || 'this forum post';
+      if (!code) return;
+      this._deleteForumPost(code, name);
+    });
+  });
+},
+
+_openForumPost(code) {
+  const known = this.channels.find(c => c.code === code);
+  if (known) {
+    this.switchChannel(code);
+    return;
+  }
+  this.socket.emit('join-forum-post', { code }, (res) => {
+    if (!res) return;
+    if (res.error) {
+      this._showToast(res.error, 'error');
+      return;
+    }
+    if (res.channel && !this.channels.find(c => c.code === res.channel.code)) {
+      this.channels.push(res.channel);
+      this._renderChannels();
+    }
+    if (res.channel?.code) this.switchChannel(res.channel.code);
+  });
+},
+
+_deleteForumPost(code, name = 'this forum post') {
+  if (!confirm(`Delete forum post "${name}"?\nAll messages in the post will be permanently lost.`)) return;
+  if (!confirm('⚠️ Are you ABSOLUTELY sure?\nThis action cannot be undone!')) return;
+  this.socket.emit('delete-forum-post', { code }, (res) => {
+    if (!res) return;
+    if (res.error) {
+      this._showToast(res.error, 'error');
+      return;
+    }
+    this.channels = this.channels.filter(c => c.code !== code);
+    this._renderChannels();
+    if (res.parentCode && this._forumView?.parentCode === res.parentCode) {
+      this.socket.emit('get-forum-overview', { code: res.parentCode });
+    }
+    this._showToast('Forum post deleted', 'success');
+  });
 },
 
 _updateTopicBar(topic) {
@@ -176,6 +341,8 @@ async _editTopic() {
 _showWelcome() {
   document.getElementById('message-area').style.display = 'none';
   document.getElementById('no-channel-msg').style.display = 'flex';
+  const forumBrowser = document.getElementById('forum-browser');
+  if (forumBrowser) forumBrowser.style.display = 'none';
   document.getElementById('channel-header-name').textContent = 'Select a channel';
   // Clear scramble cache when going back to welcome
   const welcomeHeader = document.getElementById('channel-header-name');
@@ -191,6 +358,8 @@ _showWelcome() {
   if (mobileJoin) mobileJoin.style.display = 'none';
   const actionsBox = document.getElementById('header-actions-box');
   if (actionsBox) actionsBox.style.display = 'none';
+  const forumOriginalBtn = document.getElementById('forum-original-post-btn');
+  if (forumOriginalBtn) forumOriginalBtn.style.display = 'none';
   document.getElementById('status-channel').textContent = 'None';
   document.getElementById('status-online-count').textContent = '0';
   const topicBar = document.getElementById('channel-topic-bar');
@@ -1293,12 +1462,16 @@ _renderChannels() {
     el.dataset.code = ch.code;
     if (isSub) el.dataset.parentId = ch.parent_channel_id;
 
+    const isForum = ch.channel_type === 'forum';
     const hasSubs = !isSub && (subChannelMap[ch.id] || []).length > 0;
-    const isCollapsed = hasSubs && localStorage.getItem(`haven_subs_collapsed_${ch.code}`) === 'true';
+    const sidebarShowsSubs = hasSubs && !isForum;
+    const isCollapsed = sidebarShowsSubs && localStorage.getItem(`haven_subs_collapsed_${ch.code}`) === 'true';
 
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : '#'));
+    const hashIcon = isSub
+      ? (ch.is_private ? '🔒' : '↳')
+      : (isForum ? '💬' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : '#')));
 
     // Build small status indicators for channel features
     const _badges = [];
@@ -1314,7 +1487,7 @@ _renderChannels() {
 
     const expiryTitle = isTemporary ? ` title="Temporary — expires ${new Date(ch.expires_at).toLocaleString()}"` : '';
     el.innerHTML = `
-      ${hasSubs ? `<span class="channel-collapse-arrow${isCollapsed ? ' collapsed' : ''}" title="Expand/collapse sub-channels">▾</span>` : ''}
+      ${sidebarShowsSubs ? `<span class="channel-collapse-arrow${isCollapsed ? ' collapsed' : ''}" title="Expand/collapse sub-channels">▾</span>` : ''}
       <span class="channel-hash"${expiryTitle}>${hashIcon}</span>
       <span class="channel-name">${this._escapeHtml(ch.name)}</span>
       ${indicators}
@@ -1322,7 +1495,7 @@ _renderChannels() {
     `;
 
     // If parent has sub-channels, clicking the arrow toggles them
-    if (hasSubs) {
+    if (sidebarShowsSubs) {
       const arrow = el.querySelector('.channel-collapse-arrow');
       arrow.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1465,6 +1638,22 @@ _renderChannels() {
     categories.get(cat).forEach(ch => {
       list.appendChild(renderChannelItem(ch, false));
       const subs = subChannelMap[ch.id] || [];
+      if (ch.channel_type === 'forum') {
+        const forumUnread = subs.reduce((sum, s) => {
+          const cnt = (s.code in this.unreadCounts) ? this.unreadCounts[s.code] : (s.unreadCount || 0);
+          return sum + cnt;
+        }, 0);
+        if (forumUnread > 0) {
+          const parentEl = list.querySelector(`.channel-item[data-code="${ch.code}"]`);
+          if (parentEl) {
+            const bubble = document.createElement('span');
+            bubble.className = 'channel-badge channel-badge-bubble';
+            bubble.textContent = forumUnread > 99 ? '99+' : forumUnread;
+            parentEl.appendChild(bubble);
+          }
+        }
+        return;
+      }
       const isCollapsed = localStorage.getItem(`haven_subs_collapsed_${ch.code}`) === 'true';
       const subHasTags = subs.some(s => s.category);
       let lastSubTag = undefined;
@@ -1696,13 +1885,35 @@ _renderChannels() {
 
 _updateBadge(code) {
   const el = document.querySelector(`.channel-item[data-code="${code}"]`);
+  const channel = this.channels.find(c => c.code === code);
+  if (!el && channel?.parent_channel_id) {
+    const parentChannel = this.channels.find(c => c.id === channel.parent_channel_id);
+    if (parentChannel?.channel_type === 'forum') {
+      const parentEl = document.querySelector(`.channel-item[data-code="${parentChannel.code}"]`);
+      if (parentEl) {
+        const siblingTotal = this.channels
+          .filter(c => c.parent_channel_id === parentChannel.id)
+          .reduce((sum, sc) => sum + (this.unreadCounts[sc.code] || 0), 0);
+        let parentBubble = parentEl.querySelector('.channel-badge-bubble');
+        if (siblingTotal > 0) {
+          if (!parentBubble) {
+            parentBubble = document.createElement('span');
+            parentBubble.className = 'channel-badge channel-badge-bubble';
+            parentEl.appendChild(parentBubble);
+          }
+          parentBubble.textContent = siblingTotal > 99 ? '99+' : siblingTotal;
+        } else if (parentBubble) {
+          parentBubble.remove();
+        }
+      }
+    }
+  }
   if (el) {
     let badge = el.querySelector('.channel-badge');
     const count = this.unreadCounts[code] || 0;
 
     if (count > 0) {
-      const ch = this.channels.find(c => c.code === code);
-      const isAnn = ch && ch.notification_type === 'announcement';
+      const isAnn = channel && channel.notification_type === 'announcement';
       if (!badge) { badge = document.createElement('span'); badge.className = 'channel-badge' + (isAnn ? ' announcement-badge' : ''); el.appendChild(badge); }
       badge.textContent = count > 99 ? '99+' : count;
     } else if (badge) {

@@ -207,6 +207,7 @@ function initDatabase() {
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64–1024)
+  insertSetting.run('max_proxy_avatar_kb', '256');
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
 
@@ -418,7 +419,7 @@ function initDatabase() {
     const serverModPerms = [
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
       'set_channel_topic', 'manage_sub_channels', 'rename_channel',
-      'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
+      'rename_sub_channel', 'create_forum_posts', 'delete_lower_messages', 'manage_webhooks',
       'upload_files', 'use_voice', 'view_history', 'view_all_members',
       'manage_music_queue',
       'delete_own_messages', 'edit_own_messages'
@@ -429,7 +430,7 @@ function initDatabase() {
     const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
     const channelModPerms = [
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
-      'manage_sub_channels', 'rename_sub_channel', 'delete_lower_messages',
+      'manage_sub_channels', 'rename_sub_channel', 'create_forum_posts', 'delete_lower_messages',
       'upload_files', 'use_voice', 'view_history', 'manage_music_queue',
       'delete_own_messages', 'edit_own_messages'
     ];
@@ -440,7 +441,7 @@ function initDatabase() {
     db.prepare('UPDATE roles SET auto_assign = 1 WHERE id = ?').run(userRole.lastInsertRowid);
     const userPerms = [
       'delete_own_messages', 'edit_own_messages', 'upload_files',
-      'use_voice', 'view_history', 'use_tts'
+      'use_voice', 'view_history', 'use_tts', 'create_forum_posts'
     ];
     userPerms.forEach(p => insertPerm.run(userRole.lastInsertRowid, p));
   }
@@ -608,6 +609,14 @@ function initDatabase() {
     }
   } catch { /* ignore */ }
 
+  // ── Migration: ensure default User role can create forum posts ──
+  try {
+    const userRole = db.prepare("SELECT id FROM roles WHERE name = 'User' AND level = 1 AND scope = 'server'").get();
+    if (userRole) {
+      db.prepare("INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, 'create_forum_posts', 1)").run(userRole.id);
+    }
+  } catch { /* ignore */ }
+
   // ── Migration: imported_from column on messages (Discord import) ──
   try {
     db.prepare("SELECT imported_from FROM messages LIMIT 0").get();
@@ -726,6 +735,40 @@ function initDatabase() {
     db.prepare("SELECT voice_bitrate FROM channels LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE channels ADD COLUMN voice_bitrate INTEGER DEFAULT 0");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS proxies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      bio TEXT DEFAULT '',
+      avatar_url TEXT DEFAULT NULL,
+      trigger_prefix TEXT NOT NULL,
+      trigger_suffix TEXT DEFAULT '',
+      group_name TEXT DEFAULT '',
+      is_public INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_proxies_user ON proxies(user_id);
+    CREATE INDEX IF NOT EXISTS idx_proxies_user_trigger ON proxies(user_id, trigger_prefix);
+  `);
+
+  try {
+    db.prepare("SELECT proxy_id FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN proxy_id INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL");
+  }
+  try {
+    db.prepare("SELECT proxy_name FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN proxy_name TEXT DEFAULT NULL");
+  }
+  try {
+    db.prepare("SELECT proxy_avatar FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN proxy_avatar TEXT DEFAULT NULL");
   }
 
   // ── Migration: grant use_tts to all auto-assign roles (default ON) ──
