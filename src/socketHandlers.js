@@ -1235,7 +1235,7 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'Channel name too long (max 50)');
       }
       // Only allow safe characters in channel names
-      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}]+$/iu.test(name)) {
+      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/iu.test(name)) {
         return socket.emit('error-msg', 'Channel name contains invalid characters');
       }
 
@@ -5419,10 +5419,13 @@ function setupSocketHandlers(io, db) {
 
           const customUsers = users.map(u => {
             if (u.status === 'invisible' && u.id !== viewerId) {
+              // In 'online' mode, omit invisible users entirely so their
+              // presence isn't revealed by an "offline" entry in an online-only list
+              if (mode === 'online') return null;
               return { ...u, online: false, status: 'offline' };
             }
             return u;
-          });
+          }).filter(Boolean);
           customUsers.sort((a, b) => {
             if (a.online !== b.online) return a.online ? -1 : 1;
             return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
@@ -6377,7 +6380,7 @@ function setupSocketHandlers(io, db) {
       if (!name || name.length === 0 || name.length > 50) {
         return socket.emit('error-msg', 'Channel name must be 1-50 characters');
       }
-      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}]+$/iu.test(name)) {
+      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/iu.test(name)) {
         return socket.emit('error-msg', 'Channel name contains invalid characters');
       }
 
@@ -6422,7 +6425,7 @@ function setupSocketHandlers(io, db) {
       if (!name || name.length === 0 || name.length > 50) {
         return socket.emit('error-msg', 'Sub-channel name must be 1-50 characters');
       }
-      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}]+$/iu.test(name)) {
+      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/iu.test(name)) {
         return socket.emit('error-msg', 'Sub-channel name contains invalid characters');
       }
 
