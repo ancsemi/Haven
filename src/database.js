@@ -420,6 +420,7 @@ function initDatabase() {
       'set_channel_topic', 'manage_sub_channels', 'rename_channel',
       'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
       'upload_files', 'use_voice', 'view_history', 'view_all_members',
+      'manage_music_queue',
       'delete_own_messages', 'edit_own_messages'
     ];
     serverModPerms.forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
@@ -429,7 +430,7 @@ function initDatabase() {
     const channelModPerms = [
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
       'manage_sub_channels', 'rename_sub_channel', 'delete_lower_messages',
-      'upload_files', 'use_voice', 'view_history',
+      'upload_files', 'use_voice', 'view_history', 'manage_music_queue',
       'delete_own_messages', 'edit_own_messages'
     ];
     channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));

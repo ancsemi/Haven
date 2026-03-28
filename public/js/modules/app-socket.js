@@ -632,10 +632,13 @@ _setupSocketListeners() {
     this._handleMusicControl(data);
   });
   this.socket.on('music-seek', (data) => {
-    if (data && typeof data.position === 'number') this._seekMusic(data.position);
+    this._handleMusicSeek(data);
   });
   this.socket.on('music-search-results', (data) => {
     this._showMusicSearchResults(data);
+  });
+  this.socket.on('music-queue-update', (data) => {
+    this._updateMusicQueueState(data);
   });
 
   // ── Voice kicked ────────────────────────────────

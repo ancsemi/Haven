@@ -1590,6 +1590,7 @@ _openMusicModal() {
   document.getElementById('music-link-input').value = '';
   document.getElementById('music-link-preview').innerHTML = '';
   document.getElementById('music-link-preview').classList.remove('active');
+  this._updateMusicModalButtons(null);
   document.getElementById('music-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('music-link-input').focus(), 100);
 },
@@ -1597,10 +1598,59 @@ _openMusicModal() {
 _closeMusicModal() {
   document.getElementById('music-modal').style.display = 'none';
 },
+//Determine playlist ID
+_getYouTubePlaylistInfo(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    const isYouTubeHost = host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com' || host === 'youtu.be';
+    if (!isYouTubeHost) return null;
+    const listId = parsed.searchParams.get('list');
+    if (!listId) return null;
+    if (parsed.pathname === '/playlist') return { isPlaylistOnly: true, playlistId: listId };
+    const videoId = host === 'youtu.be'
+      ? parsed.pathname.replace(/^\/+/, '').split('/')[0]
+      : parsed.searchParams.get('v');
+    if (videoId) return { isPlaylistOnly: false, videoId, playlistId: listId };
+  } catch {}
+  return null;
+},
+
+_updateMusicModalButtons(url) {
+  const shareBtn = document.getElementById('share-music-btn');
+  const playlistBtn = document.getElementById('share-music-playlist-btn');
+  if (!shareBtn || !playlistBtn) return;
+  const info = url ? this._getYouTubePlaylistInfo(url) : null;
+  if (info?.isPlaylistOnly) {
+    shareBtn.style.display = 'none';
+    playlistBtn.style.display = '';
+  } else if (info) {
+    shareBtn.style.display = '';
+    playlistBtn.style.display = '';
+  } else {
+    shareBtn.style.display = '';
+    playlistBtn.style.display = 'none';
+  }
+},
 
 _previewMusicLink(url) {
   const preview = document.getElementById('music-link-preview');
-  if (!url) { preview.innerHTML = ''; preview.classList.remove('active'); return; }
+  if (!url) {
+    preview.innerHTML = '';
+    preview.classList.remove('active');
+    this._updateMusicModalButtons(null);
+    return;
+  }
+  const playlistInfo = this._getYouTubePlaylistInfo(url);
+  if (playlistInfo) { //Conditional display of playlist parsing
+    preview.classList.add('active');
+    preview.innerHTML = playlistInfo.isPlaylistOnly
+      ? '🔴 <strong>YouTube Playlist</strong> - Ready to share'
+      : '🔴 <strong>YouTube</strong> - Video in a playlist';
+    this._updateMusicModalButtons(url);
+    return;
+  }
   const platform = this._getMusicPlatform(url);
   const embedUrl = this._getMusicEmbed(url);
   if (platform && embedUrl) {
@@ -1610,6 +1660,7 @@ _previewMusicLink(url) {
     preview.classList.remove('active');
     preview.innerHTML = '';
   }
+  this._updateMusicModalButtons(url);
 },
 
 _shareMusic() {
@@ -1623,8 +1674,22 @@ _shareMusic() {
   this.socket.emit('music-share', { code: this.voice.currentChannel, url });
   this._closeMusicModal();
 },
+//Playlist queue addition
+_shareMusicPlaylist() {
+  const url = document.getElementById('music-link-input').value.trim();
+  if (!url) { this._showToast('Please paste a music link', 'error'); return; }
+  const info = this._getYouTubePlaylistInfo(url);
+  if (!info?.playlistId) { this._showToast('No playlist found in this link', 'error'); return; }
+  if (!this.voice || !this.voice.inVoice) { this._showToast('Join voice first', 'error'); return; }
+  this.socket.emit('music-share-playlist', { code: this.voice.currentChannel, playlistId: info.playlistId });
+  this._closeMusicModal();
+},
 
-_stopMusic() {
+_stopMusic() { //Check for music management role to halt playback
+  if (!this._canControlMusic()) {
+    this._showToast('Only the requestor or a moderator can stop playback', 'error');
+    return;
+  }
   if (this.voice && this.voice.inVoice) {
     this.socket.emit('music-stop', { code: this.voice.currentChannel });
   }
@@ -1651,15 +1716,15 @@ _showMusicSearchResults(data) {
     </div>
     <div class="music-search-picker-list">
       ${results.map((r, i) => `
-        <div class="music-search-picker-item" data-video-id="${r.videoId}">
+        <div class="music-search-picker-item" data-video-id="${r.videoId}" data-title="${this._escapeHtml(r.title || `Result ${offset + i + 1}`)}">
           <div class="music-search-picker-thumb">
             ${r.thumbnail ? `<img src="${this._escapeHtml(r.thumbnail)}" alt="" loading="lazy">` : '<span>🎵</span>'}
           </div>
           <div class="music-search-picker-info">
             <div class="music-search-picker-title">${this._escapeHtml(r.title || `Result ${offset + i + 1}`)}</div>
-            <div class="music-search-picker-meta">${this._escapeHtml(r.channel)}${r.duration ? ` · ${r.duration}` : ''}</div>
+            <div class="music-search-picker-meta">${this._escapeHtml(r.channel)}</div>
           </div>
-          <button class="music-search-picker-play" data-video-id="${r.videoId}" title="Play this">▶</button>
+          <button class="music-search-picker-play" data-video-id="${r.videoId}" data-title="${this._escapeHtml(r.title || `Result ${offset + i + 1}`)}" title="Play this">▶</button>
         </div>
       `).join('')}
     </div>
@@ -1688,7 +1753,11 @@ _showMusicSearchResults(data) {
     btn.addEventListener('click', () => {
       const videoId = btn.dataset.videoId;
       const url = `https://www.youtube.com/watch?v=${videoId}`;
-      this.socket.emit('music-share', { code: this.voice.currentChannel, url });
+      this.socket.emit('music-share', {
+        code: this.voice.currentChannel,
+        url,
+        title: btn.dataset.title || ''
+      });
       this._closeMusicSearchPicker();
     });
   });
@@ -1699,7 +1768,11 @@ _showMusicSearchResults(data) {
       if (e.target.closest('.music-search-picker-play')) return; // already handled
       const videoId = item.dataset.videoId;
       const url = `https://www.youtube.com/watch?v=${videoId}`;
-      this.socket.emit('music-share', { code: this.voice.currentChannel, url });
+      this.socket.emit('music-share', {
+        code: this.voice.currentChannel,
+        url,
+        title: item.dataset.title || ''
+      });
       this._closeMusicSearchPicker();
     });
   });
@@ -1711,20 +1784,33 @@ _closeMusicSearchPicker() {
 },
 
 _handleMusicShared(data) {
+  //Switch to active voice channel if reconnecting and music is shared so playback will resume
+  if (!this.currentChannel && this.voice && this.voice.currentChannel) {
+    this.switchChannel(this.voice.currentChannel);
+  }
   const embedUrl = this._getMusicEmbed(data.url);
   if (!embedUrl) return;
   const platform = this._getMusicPlatform(data.url);
   const panel = document.getElementById('music-panel');
   const container = document.getElementById('music-embed-container');
   const label = document.getElementById('music-panel-label');
+  if (this.voice && this.voice.inVoice) this._updateVoiceButtons(true);
 
   // Clean up previous player references
   this._musicYTPlayer = null;
   this._musicSCWidget = null;
   this._musicPlatform = platform ? platform.name : null;
-  this._musicPlaying = true;
+  this._musicPlaying = data.syncState?.isPlaying !== false;
   this._musicActive = true;
   this._musicUrl = data.url;
+  this._musicTrackId = data.trackId || null;
+  this._musicRequestorId = data.userId || null;
+  this._setMusicActivityHint('');
+  this._pendingMusicSyncState = data.syncState || null;
+  this._musicSuppressBroadcastUntil = 0;
+  this._musicLastTrackedPosition = null;
+  this._musicLastTrackedAt = 0;
+  this._musicLastSeekBroadcastAt = 0;
   this._removeMusicIndicator();
 
   let iframeH = '152';
@@ -1752,7 +1838,7 @@ _handleMusicShared(data) {
   // Update play/pause button — hide for Spotify (no external API)
   const ppBtn = document.getElementById('music-play-pause-btn');
   if (ppBtn) {
-    ppBtn.textContent = isSpotify ? '' : '⏸';
+    ppBtn.textContent = isSpotify ? '' : (data.syncState?.isPlaying === false ? '▶' : '⏸');
     ppBtn.style.display = isSpotify ? 'none' : '';
   }
 
@@ -1780,15 +1866,11 @@ _handleMusicShared(data) {
     if (muteBtn) { muteBtn.disabled = false; muteBtn.title = 'Mute/Unmute'; }
   }
 
-  // Show next/prev/shuffle for SoundCloud & YouTube playlists only (not single YT videos, not Spotify)
+  // Show next button for SoundCloud (has internal tracks) or when the queue has items
   const isSoundCloud = data.url.includes('soundcloud.com');
-  const showTrackBtns = isSoundCloud || this._musicIsYTPlaylist;
-  const prevBtn = document.getElementById('music-prev-btn');
   const nextBtn = document.getElementById('music-next-btn');
-  const shuffleBtn = document.getElementById('music-shuffle-btn');
-  if (prevBtn) prevBtn.style.display = showTrackBtns ? '' : 'none';
-  if (nextBtn) nextBtn.style.display = showTrackBtns ? '' : 'none';
-  if (shuffleBtn) shuffleBtn.style.display = showTrackBtns ? '' : 'none';
+  const hasQueue = (this._musicQueue?.length || 0) > 0;
+  if (nextBtn) nextBtn.style.display = (isSoundCloud || hasQueue) && !isSpotify ? '' : 'none';
 
 
   // Initialize platform-specific APIs for volume & sync control
@@ -1802,8 +1884,380 @@ _handleMusicShared(data) {
   }
 
   const who = data.userId === this.user?.id ? 'You shared' : `${data.username} shared`;
+  this._applyMusicControlPermissions();
+
   const platformLabel = data.resolvedFrom === 'spotify' ? 'Spotify (via YouTube)' : (platform ? platform.name : 'music');
   this._showToast(`${who} ${platformLabel}`, 'info');
+},
+//Check for perms to adjust music stuff, like queue and removals
+_canControlMusic() {
+  return this.user?.isAdmin ||
+    this._musicRequestorId === this.user?.id ||
+    this._hasPerm('manage_music_queue');
+},
+//Music control permission validation
+_applyMusicControlPermissions() {
+  const allowed = this._canControlMusic();
+  const restricted = 'Only the requestor or a moderator can do this';
+  const ppBtn = document.getElementById('music-play-pause-btn');
+  const seekSlider = document.getElementById('music-seek-slider');
+  const nextBtn = document.getElementById('music-next-btn');
+  const stopBtn = document.getElementById('music-stop-btn');
+  const pipPpBtn = document.getElementById('music-pip-pp');
+  const pipStopBtn = document.getElementById('music-pip-close');
+  if (ppBtn) {
+    ppBtn.disabled = !allowed;
+    ppBtn.title = allowed ? 'Play/Pause' : restricted;
+  }
+  if (seekSlider) {
+    seekSlider.disabled = !allowed;
+    seekSlider.title = allowed ? 'Seek' : restricted;
+  }
+  if (nextBtn) {
+    nextBtn.disabled = !allowed;
+    nextBtn.title = allowed ? 'Next track' : restricted;
+  }
+  if (stopBtn) {
+    stopBtn.disabled = !allowed;
+    stopBtn.title = allowed ? 'Close / stop music' : restricted;
+  }
+  if (pipPpBtn) {
+    pipPpBtn.disabled = !allowed;
+    pipPpBtn.title = allowed ? 'Play/Pause' : restricted;
+  }
+  if (pipStopBtn) {
+    pipStopBtn.disabled = !allowed;
+    pipStopBtn.title = allowed ? 'Close / stop music' : restricted;
+  }
+},
+
+_updateMusicQueueState(payload) {
+  const queue = Array.isArray(payload?.queue) ? payload.queue : [];
+  this._musicQueue = queue;
+  this._musicUpNext = payload?.upNext || queue[0] || null;
+  this._syncMusicQueueUi();
+  this._renderMusicQueueModal();
+  const nextBtn = document.getElementById('music-next-btn');
+  if (nextBtn && nextBtn.style.display !== 'none') {
+    if (!this._musicUrl?.includes('soundcloud.com') && queue.length === 0) {
+      nextBtn.style.display = 'none';
+    }
+  } else if (nextBtn && queue.length > 0 && !this._musicUrl?.includes('spotify.com')) {
+    nextBtn.style.display = '';
+  }
+},
+
+_syncMusicQueueUi() {
+  const text = this._musicUpNext?.title
+    ? `Up next: ${this._truncateMusicQueueTitle(this._musicUpNext.title, 54)}`
+    : 'Up next: Nothing queued';
+  const title = this._musicUpNext?.title || 'Nothing queued';
+  const targets = ['music-up-next', 'music-pip-up-next'];
+  targets.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.title = title;
+  });
+},
+
+_setMusicActivityHint(text) {
+  ['music-activity-hint', 'music-pip-activity-hint'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  });
+},
+//Trim titles to save on modaL small space
+_truncateMusicQueueTitle(title, max = 54) {
+  if (!title || title.length <= max) return title || '';
+  return title.slice(0, Math.max(0, max - 1)).trimEnd() + '…';
+},
+
+_openMusicQueueModal() {
+  this._renderMusicQueueModal();
+  document.getElementById('music-queue-modal').style.display = 'flex';
+},
+
+_closeMusicQueueModal() {
+  document.getElementById('music-queue-modal').style.display = 'none';
+},
+//Table modal for queue management
+_renderMusicQueueModal() {
+  const body = document.getElementById('music-queue-body');
+  const summary = document.getElementById('music-queue-summary');
+  const table = body?.closest('.music-queue-table');
+  const tableWrap = table?.closest('.music-queue-table-wrap');
+  if (!body || !summary || !table || !tableWrap) return;
+  const queue = this._musicQueue || [];
+  const canManage = this.user?.isAdmin || this._hasPerm('manage_music_queue');
+  table.classList.toggle('music-queue-readonly', !canManage);
+  const shuffleBtn = document.getElementById('shuffle-music-queue-btn');
+  if (shuffleBtn) shuffleBtn.style.display = (canManage && queue.length >= 2) ? '' : 'none';
+  summary.textContent = queue.length
+    ? `${queue.length} queued track${queue.length === 1 ? '' : 's'}`
+    : 'No queued tracks';
+  if (!queue.length) {
+    body.innerHTML = '<tr><td colspan="5" class="music-queue-empty">Queue is empty</td></tr>';
+    return;
+  }
+  body.innerHTML = queue.map((item, idx) => `
+    <tr class="music-queue-row" data-entry-id="${this._escapeHtml(item.id)}" draggable="${canManage ? 'true' : 'false'}">
+      <td class="music-queue-col-handle">${canManage ? '<span class="music-queue-drag-handle" title="Drag to reorder">⋮⋮</span>' : ''}</td>
+      <td class="music-queue-col-pos"><span class="music-queue-pos">${idx + 1}</span></td>
+      <td class="music-queue-col-requested-by">
+        <span class="music-queue-requestor" title="${this._escapeHtml(item.username || 'Unknown')}">${this._escapeHtml(this._truncateMusicQueueTitle(item.username || 'Unknown', 24))}</span>
+      </td>
+      <td class="music-queue-title-cell">
+        <div class="music-queue-title" title="${this._escapeHtml(item.title || 'Untitled track')}">${this._escapeHtml(this._truncateMusicQueueTitle(item.title || 'Untitled track', 80))}</div>
+      </td>
+      <td class="music-queue-col-actions">${canManage ? '<button class="music-queue-remove-btn" title="Remove from queue">✕</button>' : ''}</td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('.music-queue-remove-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const row = e.target.closest('.music-queue-row');
+      const entryId = row?.dataset.entryId;
+      if (!entryId || !this.voice?.currentChannel) return;
+      this.socket.emit('music-queue-remove', { code: this.voice.currentChannel, entryId });
+    });
+  });
+
+  if (canManage) {
+    let dragEntryId = null;
+    const scrollDraggedTable = (deltaY) => {
+      if (!dragEntryId || !deltaY) return;
+      tableWrap.scrollTop += deltaY;
+    };
+    tableWrap.onwheel = (e) => {
+      if (!dragEntryId) return;
+      e.preventDefault();
+      scrollDraggedTable(e.deltaY);
+    };
+    tableWrap.ondragover = (e) => {
+      if (!dragEntryId) return;
+      const rect = tableWrap.getBoundingClientRect();
+      const edgeThreshold = 48;
+      if (e.clientY < rect.top + edgeThreshold) scrollDraggedTable(-18);
+      else if (e.clientY > rect.bottom - edgeThreshold) scrollDraggedTable(18);
+    };
+    body.querySelectorAll('.music-queue-row').forEach(row => {
+      // dragstart fires on the <tr> (the draggable element), so e.target is always the
+      // row — never the handle child. Track mousedown on the handle instead.
+      let dragFromHandle = false;
+      row.querySelector('.music-queue-drag-handle')?.addEventListener('mousedown', () => {
+        dragFromHandle = true;
+      });
+      row.addEventListener('mouseup', () => {
+        dragFromHandle = false;
+      });
+      row.addEventListener('dragstart', (e) => {
+        if (!dragFromHandle) { e.preventDefault(); return; }
+        dragFromHandle = false;
+        dragEntryId = row.dataset.entryId;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', () => {
+        dragFromHandle = false;
+        row.classList.remove('dragging');
+        body.querySelectorAll('.music-queue-row').forEach(r => r.classList.remove('drag-over'));
+      });
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!dragEntryId || dragEntryId === row.dataset.entryId) return;
+        body.querySelectorAll('.music-queue-row').forEach(r => r.classList.toggle('drag-over', r === row));
+      });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const targetId = row.dataset.entryId;
+        body.querySelectorAll('.music-queue-row').forEach(r => r.classList.remove('drag-over'));
+        if (!dragEntryId || !targetId || dragEntryId === targetId || !this.voice?.currentChannel) return;
+        const nextIds = [...queue.map(item => item.id)];
+        const from = nextIds.indexOf(dragEntryId);
+        const to = nextIds.indexOf(targetId);
+        if (from === -1 || to === -1) return;
+        const [moved] = nextIds.splice(from, 1);
+        nextIds.splice(to, 0, moved);
+        this.socket.emit('music-queue-reorder', { code: this.voice.currentChannel, entryIds: nextIds });
+      });
+    });
+  } else {
+    tableWrap.onwheel = null;
+    tableWrap.ondragover = null;
+  }
+},
+//Basic queue shuffle, rendered in-modal
+_shuffleMusicQueue() {
+  if (!this.voice?.currentChannel) return;
+  this.socket.emit('music-queue-shuffle', { code: this.voice.currentChannel });
+},
+
+_suppressMusicBroadcasts(ms = 1500) {
+  this._musicSuppressBroadcastUntil = Date.now() + ms;
+},
+
+_shouldSuppressMusicBroadcasts() {
+  return Date.now() < (this._musicSuppressBroadcastUntil || 0);
+},
+
+_setMusicPlayingUi(isPlaying) {
+  this._musicPlaying = !!isPlaying;
+  const label = this._musicPlaying ? '⏸' : '▶';
+  const ppBtn = document.getElementById('music-play-pause-btn');
+  if (ppBtn && ppBtn.style.display !== 'none') ppBtn.textContent = label;
+  const pipPP = document.getElementById('music-pip-pp');
+  if (pipPP) pipPP.textContent = label;
+},
+
+_getEffectiveMusicSyncState(syncState) {
+  if (!syncState) return null;
+  const effective = { ...syncState };
+  if (effective.isPlaying && Number.isFinite(effective.positionSeconds)) {
+    const updatedAt = Number(effective.updatedAt);
+    if (Number.isFinite(updatedAt) && updatedAt > 0) {
+      const elapsed = Math.max(0, Date.now() - updatedAt) / 1000;
+      effective.positionSeconds += elapsed;
+      if (Number.isFinite(effective.durationSeconds)) {
+        effective.positionSeconds = Math.min(effective.positionSeconds, effective.durationSeconds);
+      }
+    }
+  }
+  return effective;
+},
+
+_withMusicTiming(callback) {
+  if (this._musicYTPlayer && this._musicYTPlayer.getCurrentTime && this._musicYTPlayer.getDuration) {
+    const positionSeconds = this._musicYTPlayer.getCurrentTime() || 0;
+    const durationSeconds = this._musicYTPlayer.getDuration() || 0;
+    callback(positionSeconds, durationSeconds);
+    return;
+  }
+  if (this._musicSCWidget) {
+    this._musicSCWidget.getPosition((pos) => {
+      this._musicSCWidget.getDuration((dur) => {
+        callback((pos || 0) / 1000, (dur || 0) / 1000);
+      });
+    });
+    return;
+  }
+  callback(0, 0);
+},
+
+_withMusicDuration(callback) {
+  if (this._musicYTPlayer && this._musicYTPlayer.getDuration) {
+    callback(this._musicYTPlayer.getDuration() || 0);
+    return;
+  }
+  if (this._musicSCWidget) {
+    this._musicSCWidget.getDuration((dur) => {
+      callback((dur || 0) / 1000);
+    });
+    return;
+  }
+  callback(0);
+},
+
+_captureCurrentMusicSyncState(callback) {
+  if (!this._musicActive) {
+    callback(null);
+    return;
+  }
+  this._withMusicTiming((positionSeconds, durationSeconds) => {
+    callback({
+      isPlaying: !!this._musicPlaying,
+      positionSeconds: Number.isFinite(positionSeconds) ? Math.max(0, positionSeconds) : 0,
+      durationSeconds: Number.isFinite(durationSeconds) && durationSeconds >= 0 ? durationSeconds : null,
+      updatedAt: Date.now()
+    });
+  });
+},
+
+_restoreMusicSyncStateAfterMove(syncState) {
+  if (!syncState) return;
+  this._pendingMusicSyncState = syncState;
+  this._suppressMusicBroadcasts(2500);
+  const apply = () => this._applyMusicSyncState(syncState);
+  /* The embed iframe is moved in the DOM during pop-out/pop-in, which can briefly interrupt the YT/SC player API.
+  Cascade three attempts at increasing delays to catch whichever moment the player finishes re-stabilizing. Should probably
+   convert this to a triggered event from the pop-out later by adding a trigger.*/
+  requestAnimationFrame(() => setTimeout(apply, 0));
+  setTimeout(apply, 150);
+  setTimeout(apply, 500);
+},
+
+_emitMusicControl(action) {
+  if (!this.voice || !this.voice.inVoice) return;
+  this._withMusicTiming((positionSeconds, durationSeconds) => {
+    this.socket.emit('music-control', {
+      code: this.voice.currentChannel,
+      action,
+      positionSeconds,
+      durationSeconds
+    });
+  });
+},
+
+_emitMusicFinished(isSkip = false) {
+  if (!this.voice || !this.voice.inVoice || !this._musicTrackId) return;
+  this._withMusicTiming((positionSeconds, durationSeconds) => {
+    this.socket.emit('music-finished', {
+      code: this.voice.currentChannel,
+      trackId: this._musicTrackId,
+      positionSeconds: Number.isFinite(positionSeconds) ? positionSeconds : undefined,
+      durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : undefined,
+      ...(isSkip && { isSkip: true })
+    });
+  });
+},
+
+_emitMusicSeek(positionSeconds, durationSeconds) {
+  if (!this.voice || !this.voice.inVoice) return;
+  const pct = durationSeconds > 0 ? (positionSeconds / durationSeconds) * 100 : undefined;
+  this.socket.emit('music-seek', {
+    code: this.voice.currentChannel,
+    position: pct,
+    positionSeconds,
+    durationSeconds
+  });
+  this._musicLastTrackedPosition = positionSeconds;
+  this._musicLastTrackedAt = Date.now();
+  this._musicLastSeekBroadcastAt = Date.now();
+},
+
+_seekMusicToSeconds(seconds) {
+  try {
+    if (this._musicYTPlayer && this._musicYTPlayer.seekTo) {
+      this._musicYTPlayer.seekTo(Math.max(0, seconds), true);
+    } else if (this._musicSCWidget) {
+      this._musicSCWidget.seekTo(Math.max(0, seconds) * 1000);
+    }
+  } catch { /* player gone? */ }
+},
+
+_applyMusicSyncState(syncState) {
+  if (!syncState) return;
+  const effectiveState = this._getEffectiveMusicSyncState(syncState);
+  if (!this._musicYTPlayer && !this._musicSCWidget) {
+    this._pendingMusicSyncState = effectiveState;
+    return;
+  }
+  this._pendingMusicSyncState = null;
+  this._suppressMusicBroadcasts();
+  if (Number.isFinite(effectiveState.positionSeconds)) {
+    this._seekMusicToSeconds(effectiveState.positionSeconds);
+    this._musicLastTrackedPosition = effectiveState.positionSeconds;
+    this._musicLastTrackedAt = Date.now();
+  }
+  if (typeof effectiveState.isPlaying === 'boolean') {
+    if (effectiveState.isPlaying) this._playMusicEmbed();
+    else this._pauseMusicEmbed();
+    this._setMusicPlayingUi(effectiveState.isPlaying);
+  }
+},
+
+_flushPendingMusicSyncState() {
+  if (this._pendingMusicSyncState) this._applyMusicSyncState(this._pendingMusicSyncState);
 },
 
 _initYouTubePlayer(iframe, volume) {
@@ -1835,28 +2289,20 @@ _createYTPlayer(iframe, volume) {
         onReady: (e) => {
           e.target.setVolume(volume);
           this._startMusicTimeTracking();
+          this._flushPendingMusicSyncState();
         },
         onStateChange: (e) => {
           // Sync Haven's play/pause state when user interacts with YT's native controls
-          const ppBtn = document.getElementById('music-play-pause-btn');
-          const pipPP = document.getElementById('music-pip-pp');
           if (e.data === YT.PlayerState.PLAYING) {
-            this._musicPlaying = true;
-            if (ppBtn) ppBtn.textContent = '⏸';
-            if (pipPP) pipPP.textContent = '⏸';
+            this._setMusicPlayingUi(true);
+            if (!this._shouldSuppressMusicBroadcasts()) this._emitMusicControl('play');
           } else if (e.data === YT.PlayerState.PAUSED) {
-            this._musicPlaying = false;
-            if (ppBtn) ppBtn.textContent = '▶';
-            if (pipPP) pipPP.textContent = '▶';
+            this._setMusicPlayingUi(false);
+            if (!this._shouldSuppressMusicBroadcasts()) this._emitMusicControl('pause');
           } else if (e.data === YT.PlayerState.ENDED) {
-            // Auto-advance: if YouTube playlist, play the next video
-            if (this._musicIsYTPlaylist) {
-              try { e.target.nextVideo(); } catch {}
-            } else {
-              this._musicPlaying = false;
-              if (ppBtn) ppBtn.textContent = '▶';
-              if (pipPP) pipPP.textContent = '▶';
-            }
+            // Signal the server — it will pop the queue and emit music-shared for the next track
+            this._setMusicPlayingUi(false);
+            this._emitMusicFinished();
           }
         }
       }
@@ -1894,6 +2340,7 @@ _createSCWidget(iframe, volume) {
     this._musicSCWidget.bind(SC.Widget.Events.READY, () => {
       this._musicSCWidget.setVolume(volume);
       this._startMusicTimeTracking();
+      this._flushPendingMusicSyncState();
       // Get track count for shuffle support
       this._musicSCWidget.getSounds((sounds) => {
         this._musicSCTrackCount = sounds ? sounds.length : 0;
@@ -1911,12 +2358,19 @@ _createSCWidget(iframe, volume) {
         this._musicSCCurrentIndex = next;
         this._musicSCWidget.skip(next);
       } else {
-        this._musicSCWidget.next();
+        if (this._musicSCTrackCount > 1) this._musicSCWidget.next();
+        else this._emitMusicFinished();
       }
     });
     // Track current index for shuffle
     this._musicSCWidget.bind(SC.Widget.Events.PLAY, () => {
+      this._setMusicPlayingUi(true);
+      if (!this._shouldSuppressMusicBroadcasts()) this._emitMusicControl('play');
       this._musicSCWidget.getCurrentSoundIndex((idx) => { this._musicSCCurrentIndex = idx; });
+    });
+    this._musicSCWidget.bind(SC.Widget.Events.PAUSE, () => {
+      this._setMusicPlayingUi(false);
+      if (!this._shouldSuppressMusicBroadcasts()) this._emitMusicControl('pause');
     });
   } catch { /* iframe may already be destroyed */ }
 },
@@ -1926,60 +2380,72 @@ _handleMusicStopped(data) {
   this._musicYTPlayer = null;
   this._musicSCWidget = null;
   this._musicPlatform = null;
+  this._musicTrackId = null;
+  this._musicRequestorId = null;
   this._musicPlaying = false;
   this._hideMusicPanel();
+  this._updateMusicQueueState({ queue: [], upNext: null });
   const who = data.userId === this.user?.id ? 'You' : (data.username || 'Someone');
   this._showToast(`${who} stopped the music`, 'info');
 },
 
 _handleMusicControl(data) {
   if (data.action === 'pause') {
+    this._suppressMusicBroadcasts();
     this._pauseMusicEmbed();
-    this._musicPlaying = false;
+    this._setMusicPlayingUi(false);
+    this._setMusicActivityHint(`${data.username || 'Someone'} paused playback.`);
   } else if (data.action === 'play') {
+    this._suppressMusicBroadcasts();
     this._playMusicEmbed();
-    this._musicPlaying = true;
+    this._setMusicPlayingUi(true);
+    this._setMusicActivityHint(`${data.username || 'Someone'} resumed playback.`);
   } else if (data.action === 'next') {
+    this._suppressMusicBroadcasts();
     this._musicNextTrack();
   } else if (data.action === 'prev') {
+    this._suppressMusicBroadcasts();
     this._musicPrevTrack();
   } else if (data.action === 'shuffle') {
+    this._suppressMusicBroadcasts();
     this._musicToggleShuffle();
   }
-  const ppBtn = document.getElementById('music-play-pause-btn');
-  if (ppBtn) ppBtn.textContent = this._musicPlaying ? '⏸' : '▶';
+  if (data.syncState) this._applyMusicSyncState(data.syncState);
+},
+
+_handleMusicSeek(data) {
+  if (!data) return;
+  if (data.syncState) this._applyMusicSyncState(data.syncState);
+  else if (typeof data.positionSeconds === 'number') this._applyMusicSyncState({ positionSeconds: data.positionSeconds });
+  else if (typeof data.position === 'number') this._seekMusic(data.position);
+  if (data.username) this._setMusicActivityHint(`${data.username} seeked.`);
 },
 
 _toggleMusicPlayPause() {
+  this._suppressMusicBroadcasts();
   if (this._musicPlaying) {
     this._pauseMusicEmbed();
-    this._musicPlaying = false;
+    this._setMusicPlayingUi(false);
+    this._setMusicActivityHint('You paused playback.');
   } else {
     this._playMusicEmbed();
-    this._musicPlaying = true;
+    this._setMusicPlayingUi(true);
+    this._setMusicActivityHint('You resumed playback.');
   }
-  const ppBtn = document.getElementById('music-play-pause-btn');
-  if (ppBtn) ppBtn.textContent = this._musicPlaying ? '⏸' : '▶';
-  // Broadcast to others in voice
-  if (this.voice && this.voice.inVoice) {
-    this.socket.emit('music-control', {
-      code: this.voice.currentChannel,
-      action: this._musicPlaying ? 'play' : 'pause'
-    });
-  }
+  this._emitMusicControl(this._musicPlaying ? 'play' : 'pause');
 },
 
 _musicTrackControl(action) {
-  // Execute locally
+  if (action === 'next' && !this._musicSCWidget) {
+    this._emitMusicFinished(true);
+    return;
+  }
+  this._suppressMusicBroadcasts();
   if (action === 'next') this._musicNextTrack();
   else if (action === 'prev') this._musicPrevTrack();
   else if (action === 'shuffle') this._musicToggleShuffle();
-  // Broadcast to others in voice
   if (this.voice && this.voice.inVoice) {
-    this.socket.emit('music-control', {
-      code: this.voice.currentChannel,
-      action
-    });
+    this.socket.emit('music-control', { code: this.voice.currentChannel, action });
   }
 },
 
@@ -2006,8 +2472,6 @@ _musicPrevTrack() {
 _musicToggleShuffle() {
   try {
     this._musicSCShuffle = !this._musicSCShuffle;
-    const btn = document.getElementById('music-shuffle-btn');
-    if (btn) btn.classList.toggle('active', this._musicSCShuffle);
     // YouTube has native shuffle support for playlists
     if (this._musicYTPlayer && this._musicYTPlayer.setShuffle) {
       this._musicYTPlayer.setShuffle(this._musicSCShuffle);
@@ -2075,6 +2539,9 @@ _hideMusicPanel() {
   }
   this._removeMusicIndicator();
   this._musicActive = false;
+  this._pendingMusicSyncState = null;
+  this._musicTrackId = null;
+  this._musicRequestorId = null;
 },
 
 _minimizeMusicPanel() {
@@ -2085,20 +2552,21 @@ _minimizeMusicPanel() {
   }
 },
 
-  _popOutMusicPlayer() {
-    const panel = document.getElementById('music-panel');
-    const container = document.getElementById('music-embed-container');
-    if (!container || !container.innerHTML.trim()) {
-      this._showToast('No music playing', 'error');
-      return;
-    }
+_popOutMusicPlayer() {
+  const panel = document.getElementById('music-panel');
+  const container = document.getElementById('music-embed-container');
+  if (!container || !container.innerHTML.trim()) {
+    this._showToast('No music playing', 'error');
+    return;
+  }
 
-    // If already in PiP overlay, pop back in
-    if (this._musicPip) {
-      this._popInMusicPlayer();
-      return;
-    }
-
+  // If already in PiP overlay, pop back in
+  if (this._musicPip) {
+    this._popInMusicPlayer();
+    return;
+  }
+  //PiP changes look larger than reality because of indentation changes from wrapping
+  this._captureCurrentMusicSyncState((syncState) => {
     // Create floating PiP overlay
     const pip = document.createElement('div');
     pip.id = 'music-pip-overlay';
@@ -2113,7 +2581,12 @@ _minimizeMusicPanel() {
     pip.innerHTML = `
       <div class="music-pip-header" id="music-pip-drag">
         <button class="music-pip-btn" id="music-pip-popin" title="Minimize (back to panel)">─</button>
-        <span class="music-pip-label">🎵 ${platform}</span>
+        <div class="music-pip-copy">
+          <span class="music-pip-label">🎵 ${platform}</span>
+          <span class="music-up-next music-pip-up-next" id="music-pip-up-next">Up next: Nothing queued</span>
+        </div>
+        <span class="music-activity-hint" id="music-pip-activity-hint"></span>
+        <button class="music-pip-btn" id="music-pip-queue-btn" title="Queue">☰</button>
         <button class="music-pip-btn" id="music-pip-fullscreen" title="Fullscreen">⤢</button>
         <button class="music-pip-btn" id="music-pip-close" title="Close / stop music">✕</button>
       </div>
@@ -2131,6 +2604,8 @@ _minimizeMusicPanel() {
     pip.style.opacity = savedOpacity / 100;
 
     document.body.appendChild(pip);
+    this._syncMusicQueueUi();
+    this._applyMusicControlPermissions();
 
     // Move the embed wrapper (with live iframe) into the PiP overlay — no reload!
     const embedWrapper = container.querySelector('.music-embed-wrapper');
@@ -2145,6 +2620,7 @@ _minimizeMusicPanel() {
     panel.style.display = 'none';
     this._showMusicIndicator();
     this._musicPip = pip;
+    this._restoreMusicSyncStateAfterMove(syncState);
 
     // Update popout button icon to show "pop-in"
     const popBtn = document.getElementById('music-popout-btn');
@@ -2152,6 +2628,7 @@ _minimizeMusicPanel() {
 
     // ── PiP controls ──
     document.getElementById('music-pip-popin').addEventListener('click', () => this._popInMusicPlayer());
+    document.getElementById('music-pip-queue-btn').addEventListener('click', () => this._openMusicQueueModal());
     document.getElementById('music-pip-close').addEventListener('click', () => this._stopMusic());
     document.getElementById('music-pip-pp').addEventListener('click', () => {
       this._toggleMusicPlayPause();
@@ -2198,36 +2675,41 @@ _minimizeMusicPanel() {
 
     // ── Dragging ──
     this._initPipDrag(pip, document.getElementById('music-pip-drag'));
-  },
+  });
+},
 
 _popInMusicPlayer() {
   const pip = this._musicPip;
   if (!pip) return;
 
-  const container = document.getElementById('music-embed-container');
-  const panel = document.getElementById('music-panel');
+  this._captureCurrentMusicSyncState((syncState) => {
+    const container = document.getElementById('music-embed-container');
+    const panel = document.getElementById('music-panel');
 
-  // Move embed wrapper back to the panel
-  const embedWrapper = pip.querySelector('.music-embed-wrapper');
-  if (embedWrapper && container) {
-    // Re-add the click-blocking overlay
-    const overlay = embedWrapper.querySelector('.music-embed-overlay');
-    if (overlay) overlay.style.display = '';
-    container.appendChild(embedWrapper);
-  }
+    // Move embed wrapper back to the panel
+    const embedWrapper = pip.querySelector('.music-embed-wrapper');
+    if (embedWrapper && container) {
+      // Re-add the click-blocking overlay
+      const overlay = embedWrapper.querySelector('.music-embed-overlay');
+      if (overlay) overlay.style.display = '';
+      container.appendChild(embedWrapper);
+    }
 
-  pip.remove();
-  this._musicPip = null;
+    pip.remove();
+    this._musicPip = null;
 
-  // Restore panel
-  if (this._musicActive && panel) {
-    panel.style.display = 'flex';
-    this._removeMusicIndicator();
-  }
+    // Restore panel
+    if (this._musicActive && panel) {
+      panel.style.display = 'flex';
+      this._removeMusicIndicator();
+    }
 
-  // Restore popout button icon
-  const popBtn = document.getElementById('music-popout-btn');
-  if (popBtn) { popBtn.textContent = '⧉'; popBtn.title = 'Pop out player'; }
+    this._restoreMusicSyncStateAfterMove(syncState);
+
+    // Restore popout button icon
+    const popBtn = document.getElementById('music-popout-btn');
+    if (popBtn) { popBtn.textContent = '⧉'; popBtn.title = 'Pop out player'; }
+  });
 },
 
 _initPipDrag(pip, handle) {
@@ -2327,10 +2809,10 @@ _seekMusic(pct) {
   try {
     if (this._musicYTPlayer && this._musicYTPlayer.getDuration) {
       const dur = this._musicYTPlayer.getDuration();
-      if (dur > 0) this._musicYTPlayer.seekTo(dur * pct / 100, true);
+      if (dur > 0) this._seekMusicToSeconds(dur * pct / 100);
     } else if (this._musicSCWidget) {
       this._musicSCWidget.getDuration((dur) => {
-        if (dur > 0) this._musicSCWidget.seekTo(dur * pct / 100);
+        if (dur > 0) this._seekMusicToSeconds((dur / 1000) * pct / 100);
       });
     }
   } catch { /* player may be gone */ }
@@ -2348,17 +2830,37 @@ _startMusicTimeTracking() {
       if (this._musicYTPlayer && this._musicYTPlayer.getCurrentTime && this._musicYTPlayer.getDuration) {
         const cur = this._musicYTPlayer.getCurrentTime() || 0;
         const dur = this._musicYTPlayer.getDuration() || 0;
+        const now = Date.now();
         if (curEl) curEl.textContent = fmt(cur);
         if (durEl) durEl.textContent = fmt(dur);
         if (seekSlider && !this._musicSeeking && dur > 0) seekSlider.value = (cur / dur * 100).toFixed(1);
+        if (this._musicLastTrackedPosition != null && !this._shouldSuppressMusicBroadcasts()) {
+          const elapsed = this._musicPlaying ? (now - (this._musicLastTrackedAt || now)) / 1000 : 0;
+          const expected = this._musicLastTrackedPosition + Math.max(0, elapsed);
+          if (Math.abs(cur - expected) > 2 && now - (this._musicLastSeekBroadcastAt || 0) > 1200) {
+            this._emitMusicSeek(cur, dur);
+          }
+        }
+        this._musicLastTrackedPosition = cur;
+        this._musicLastTrackedAt = now;
       } else if (this._musicSCWidget) {
         this._musicSCWidget.getPosition((pos) => {
           this._musicSCWidget.getDuration((dur) => {
             const curS = (pos || 0) / 1000;
             const durS = (dur || 0) / 1000;
+            const now = Date.now();
             if (curEl) curEl.textContent = fmt(curS);
             if (durEl) durEl.textContent = fmt(durS);
             if (seekSlider && !this._musicSeeking && durS > 0) seekSlider.value = (curS / durS * 100).toFixed(1);
+            if (this._musicLastTrackedPosition != null && !this._shouldSuppressMusicBroadcasts()) {
+              const elapsed = this._musicPlaying ? (now - (this._musicLastTrackedAt || now)) / 1000 : 0;
+              const expected = this._musicLastTrackedPosition + Math.max(0, elapsed);
+              if (Math.abs(curS - expected) > 2 && now - (this._musicLastSeekBroadcastAt || 0) > 1200) {
+                this._emitMusicSeek(curS, durS);
+              }
+            }
+            this._musicLastTrackedPosition = curS;
+            this._musicLastTrackedAt = now;
           });
         });
       }
@@ -2374,22 +2876,18 @@ _stopMusicTimeTracking() {
   if (seekSlider) seekSlider.value = 0;
   if (curEl) curEl.textContent = '0:00';
   if (durEl) durEl.textContent = '0:00';
+  this._musicLastTrackedPosition = null;
+  this._musicLastTrackedAt = 0;
 },
 
 _getMusicEmbed(url) {
-  this._musicIsYTPlaylist = false;
   if (!url) return null;
   const spotifyMatch = url.match(/open\.spotify\.com\/(track|album|playlist|episode|show)\/([a-zA-Z0-9]+)/);
   if (spotifyMatch) return `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?theme=0&utm_source=generator&autoplay=1`;
-  // Extract YouTube playlist ID if present
-  const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
-  const listParam = listMatch ? `&list=${listMatch[1]}` : '';
-  this._musicIsYTPlaylist = !!listMatch;
   const ytMusicMatch = url.match(/music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
-  if (ytMusicMatch) return `https://www.youtube-nocookie.com/embed/${ytMusicMatch[1]}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}&rel=0${listParam}`;
+  if (ytMusicMatch) return `https://www.youtube-nocookie.com/embed/${ytMusicMatch[1]}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}&rel=0`;
   const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  if (ytMatch) return `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}&rel=0${listParam}`;
-  this._musicIsYTPlaylist = false;
+  if (ytMatch) return `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}&rel=0`;
   if (url.includes('soundcloud.com/')) {
     return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
   }

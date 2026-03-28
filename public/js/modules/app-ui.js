@@ -761,6 +761,7 @@ _setupUI() {
   // Music controls
   document.getElementById('music-share-btn')?.addEventListener('click', () => this._openMusicModal());
   document.getElementById('share-music-btn').addEventListener('click', () => this._shareMusic());
+  document.getElementById('share-music-playlist-btn')?.addEventListener('click', () => this._shareMusicPlaylist());
   document.getElementById('cancel-music-btn').addEventListener('click', () => this._closeMusicModal());
   document.getElementById('music-modal').addEventListener('click', (e) => {
     if (e.target.id === 'music-modal') this._closeMusicModal();
@@ -769,11 +770,15 @@ _setupUI() {
   document.getElementById('music-close-btn').addEventListener('click', () => {
     this._minimizeMusicPanel();
   });
+  document.getElementById('music-queue-btn')?.addEventListener('click', () => this._openMusicQueueModal());
+  document.getElementById('close-music-queue-btn')?.addEventListener('click', () => this._closeMusicQueueModal());
+  document.getElementById('shuffle-music-queue-btn')?.addEventListener('click', () => this._shuffleMusicQueue());
+  document.getElementById('music-queue-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'music-queue-modal') this._closeMusicQueueModal();
+  });
   document.getElementById('music-popout-btn').addEventListener('click', () => this._popOutMusicPlayer());
   document.getElementById('music-play-pause-btn').addEventListener('click', () => this._toggleMusicPlayPause());
-  document.getElementById('music-prev-btn').addEventListener('click', () => this._musicTrackControl('prev'));
   document.getElementById('music-next-btn').addEventListener('click', () => this._musicTrackControl('next'));
-  document.getElementById('music-shuffle-btn').addEventListener('click', () => this._musicTrackControl('shuffle'));
   document.getElementById('music-mute-btn').addEventListener('click', () => this._toggleMusicMute());
   document.getElementById('music-volume-slider').addEventListener('input', (e) => {
     this._setMusicVolume(parseInt(e.target.value));
@@ -784,14 +789,13 @@ _setupUI() {
   seekSlider.addEventListener('change', (e) => {
     this._musicSeeking = false;
     const pct = parseFloat(e.target.value);
+    this._suppressMusicBroadcasts();
     this._seekMusic(pct);
-    // Broadcast seek to others in voice
-    if (this.voice && this.voice.inVoice) {
-      this.socket.emit('music-seek', {
-        code: this.voice.currentChannel,
-        position: pct
-      });
-    }
+    this._withMusicDuration((durationSeconds) => {
+      const positionSeconds = durationSeconds > 0 ? (durationSeconds * pct) / 100 : 0;
+      this._emitMusicSeek(positionSeconds, durationSeconds);
+    });
+    this._setMusicActivityHint('You seeked.');
   });
   document.getElementById('music-link-input').addEventListener('input', (e) => {
     this._previewMusicLink(e.target.value.trim());

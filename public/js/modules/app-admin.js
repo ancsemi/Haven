@@ -1,3 +1,33 @@
+//Shared permission list instead of declaring the same multiple times
+const ALL_PERMS = [
+  'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
+  'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
+  'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
+  'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'view_all_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
+  'manage_roles', 'manage_server', 'delete_channel'
+];
+//Similarly flavored solution to perm labels
+const PERM_LABELS = {
+  edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
+  delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
+  pin_message: 'Pin Messages', archive_messages: 'Protect Messages',
+  kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
+  rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
+  set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
+  create_channel: 'Create Channels',
+  upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
+  use_tts: 'Use Text-to-Speech',
+  manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
+  view_history: 'View Message History',
+  view_all_members: 'View All Server Members',
+  manage_emojis: 'Manage Custom Emojis',
+  manage_soundboard: 'Manage Soundboard',
+  manage_music_queue: 'Manage Music Queue',
+  promote_user: 'Promote Users', transfer_admin: 'Transfer Admin',
+  manage_roles: 'Manage Roles', manage_server: 'Manage Server', delete_channel: 'Delete Channels'
+};
+
 export default {
 
 // ── First-Time Setup Wizard ─────────────────────────────
@@ -2360,32 +2390,8 @@ _renderRoleDetail() {
     return;
   }
 
-  const allPerms = [
-    'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
-    'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
-    'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
-    'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-    'view_all_members', 'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin',
-    'manage_roles', 'manage_server', 'delete_channel'
-  ];
-  const permLabels = {
-    edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
-    delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
-    pin_message: 'Pin Messages', archive_messages: 'Protect Messages',
-    kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
-    rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
-    set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
-    create_channel: 'Create Channels',
-    upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
-    use_tts: 'Use Text-to-Speech',
-    manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
-    view_history: 'View Message History',
-    view_all_members: 'View All Server Members',
-    manage_emojis: 'Manage Custom Emojis',
-    manage_soundboard: 'Manage Soundboard',
-    promote_user: 'Promote Users', transfer_admin: 'Transfer Admin',
-    manage_roles: 'Manage Roles', manage_server: 'Manage Server', delete_channel: 'Delete Channels'
-  };
+  const allPerms = ALL_PERMS;
+  const permLabels = PERM_LABELS;
   const rolePerms = role.permissions || [];
 
   panel.innerHTML = `
@@ -2778,32 +2784,8 @@ _renderChannelRolesRoleDetail() {
     return;
   }
 
-  const allPerms = [
-    'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
-    'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
-    'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
-    'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-    'view_all_members', 'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin',
-    'manage_roles', 'manage_server', 'delete_channel'
-  ];
-  const permLabels = {
-    edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
-    delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower-level Messages',
-    pin_message: 'Pin Messages', archive_messages: 'Protect Messages',
-    kick_user: 'Kick Users', mute_user: 'Mute Users', ban_user: 'Ban Users',
-    rename_channel: 'Rename Channels', rename_sub_channel: 'Rename Sub-channels',
-    set_channel_topic: 'Set Channel Topic', manage_sub_channels: 'Manage Sub-channels',
-    create_channel: 'Create Channels',
-    upload_files: 'Upload Files', use_voice: 'Use Voice Chat',
-    use_tts: 'Use Text-to-Speech',
-    manage_webhooks: 'Manage Webhooks', mention_everyone: 'Mention @everyone',
-    view_history: 'View Message History',
-    view_all_members: 'View All Server Members',
-    manage_emojis: 'Manage Custom Emojis',
-    manage_soundboard: 'Manage Soundboard',
-    promote_user: 'Promote Users', transfer_admin: 'Transfer Admin',
-    manage_roles: 'Manage Roles', manage_server: 'Manage Server', delete_channel: 'Delete Channels'
-  };
+  const allPerms = ALL_PERMS;
+  const permLabels = PERM_LABELS;
   const rolePerms = role.permissions || [];
 
   panel.innerHTML = `
@@ -3179,35 +3161,11 @@ _renderRacConfig() {
   // Determine which permissions the caller can grant
   const callerPerms = this._racData.callerPerms || [];
   const callerIsAdmin = this._racData.callerIsAdmin;
-  const allPerms = [
-    'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
-    'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
-    'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
-    'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-    'view_all_members', 'manage_emojis', 'manage_soundboard', 'promote_user', 'transfer_admin',
-    'manage_roles', 'manage_server', 'delete_channel'
-  ];
+  const allPerms = ALL_PERMS;
   // Perms that only admin can grant
   const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
   // Perms that require the caller to have them to be able to grant
-  const permLabels = {
-    edit_own_messages: 'Edit Own Messages', delete_own_messages: 'Delete Own Messages',
-    delete_message: 'Delete Any Message', delete_lower_messages: 'Delete Lower Messages',
-    pin_message: 'Pin Messages', archive_messages: 'Protect Messages',
-    kick_user: 'Kick Users', mute_user: 'Mute Users',
-    ban_user: 'Ban Users', rename_channel: 'Rename Channels',
-    rename_sub_channel: 'Rename Sub-channels', set_channel_topic: 'Set Topic',
-    manage_sub_channels: 'Manage Sub-channels', create_channel: 'Create Channels',
-    upload_files: 'Upload Files',
-    use_voice: 'Use Voice', use_tts: 'Use Text-to-Speech',
-    manage_webhooks: 'Manage Webhooks',
-    mention_everyone: 'Mention Everyone', view_history: 'View History',
-    view_all_members: 'View All Members',
-    manage_emojis: 'Manage Custom Emojis',
-    manage_soundboard: 'Manage Soundboard',
-    promote_user: 'Promote Users', transfer_admin: 'Transfer Admin',
-    manage_roles: 'Manage Roles', manage_server: 'Manage Server', delete_channel: 'Delete Channels'
-  };
+  const permLabels = PERM_LABELS;
 
   // If a role preset is selected, get its permissions
   const selectedRoleObj = availableRoles.find(r => r.id === Number(selectedRoleId));

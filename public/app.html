@@ -404,13 +404,16 @@
             <div class="music-panel-header">
               <div class="music-panel-header-left">
                 <button id="music-popout-btn" class="icon-btn small" title="Pop out player">⧉</button>
-                <span id="music-panel-label">🎵 Listening Together</span>
+                <div class="music-panel-copy">
+                  <span id="music-panel-label">🎵 Listening Together</span>
+                  <span id="music-up-next" class="music-up-next">Up next: Nothing queued</span>
+                </div>
               </div>
+              <span id="music-activity-hint" class="music-activity-hint"></span>
               <div class="music-panel-controls">
-                <button id="music-prev-btn" class="icon-btn small" title="Previous track" style="display:none">⏮</button>
+                <button id="music-queue-btn" class="icon-btn small" title="Queue">☰</button>
                 <button id="music-play-pause-btn" class="icon-btn small" title="Play/Pause">⏸</button>
                 <button id="music-next-btn" class="icon-btn small" title="Next track" style="display:none">⏭</button>
-                <button id="music-shuffle-btn" class="icon-btn small" title="Shuffle" style="display:none">🔀</button>
                 <span id="music-time-current" class="music-time">0:00</span>
                 <input type="range" id="music-seek-slider" class="music-seek-slider" min="0" max="100" value="0" step="0.1" title="Seek">
                 <span id="music-time-duration" class="music-time">0:00</span>
@@ -2001,7 +2004,37 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-music-btn">Cancel</button>
-        <button class="btn-sm btn-accent" id="share-music-btn">Share with Channel</button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+          <button class="btn-sm btn-accent" id="share-music-btn">Share with Channel</button>
+          <button class="btn-sm btn-accent" id="share-music-playlist-btn" style="display:none">Share Playlist with Channel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="music-queue-modal" style="display:none">
+    <div class="modal modal-wide music-queue-modal">
+      <h3>📋 Playback Queue</h3>
+      <p class="modal-desc" id="music-queue-summary">No queued tracks</p>
+      <div class="music-queue-table-wrap">
+        <table class="music-queue-table">
+          <thead>
+            <tr>
+              <th class="music-queue-col-handle"></th>
+              <th class="music-queue-col-pos">Pos.</th>
+              <th class="music-queue-col-requested-by">Requested By</th>
+              <th class="music-queue-col-title">Title</th>
+              <th class="music-queue-col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="music-queue-body">
+            <tr><td colspan="5" class="music-queue-empty">Queue is empty</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent" id="shuffle-music-queue-btn" style="display:none">Shuffle Queue</button>
+        <button class="btn-sm" id="close-music-queue-btn">Close</button>
       </div>
     </div>
   </div>
