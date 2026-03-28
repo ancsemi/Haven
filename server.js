@@ -1,6 +1,16 @@
 // ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR } = require('./src/paths');
 
+// ── Node.js version guard ─────────────────────────────────
+const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
+if (nodeMajor < 18 || nodeMajor >= 24) {
+  console.error(`\n  Haven requires Node.js 18-22. You have v${process.versions.node}.`);
+  console.error('  better-sqlite3 does not ship prebuilt binaries for Node 24+,');
+  console.error('  so npm install will fail without C++ build tools.');
+  console.error('  Install Node 22 LTS: https://nodejs.org/\n');
+  process.exit(1);
+}
+
 // Bootstrap .env into the data directory if it doesn't exist yet
 const fs = require('fs');
 const path = require('path');

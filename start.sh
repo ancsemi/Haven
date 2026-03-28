@@ -42,6 +42,14 @@ if [ "$NODE_VER" -lt 18 ]; then
     echo -e "${YELLOW}  [!] Node.js 18+ recommended. You have v${NODE_VER}.${NC}"
 fi
 
+if [ "$NODE_VER" -ge 24 ]; then
+    echo -e "${RED}  [!] WARNING: Node.js v${NODE_VER} detected. Haven requires Node 18-22.${NC}"
+    echo "  better-sqlite3 does not ship prebuilt binaries for Node 24+,"
+    echo "  so npm install will fail without C++ build tools."
+    echo "  Install Node 22 LTS: https://nodejs.org/"
+    exit 1
+fi
+
 # ── Install dependencies ───────────────────────────────────
 if [ ! -d "node_modules" ]; then
     echo "  [*] First run — installing dependencies..."
