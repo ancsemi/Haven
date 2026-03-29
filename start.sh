@@ -86,17 +86,30 @@ elif [ ! -f "$HAVEN_DATA/certs/cert.pem" ]; then
     openssl req -x509 -newkey rsa:2048 \
         -keyout "$HAVEN_DATA/certs/key.pem" -out "$HAVEN_DATA/certs/cert.pem" \
         -days 3650 -nodes -subj "/CN=Haven" \
-        -addext "subjectAltName=IP:127.0.0.1,IP:${LOCAL_IP},DNS:localhost" \
-        2>/dev/null
+        -addext "subjectAltName=IP:127.0.0.1,IP:${LOCAL_IP},DNS:localhost"
 
-    echo "  [✓] SSL cert generated (covers ${LOCAL_IP})"
+    if [ -f "$HAVEN_DATA/certs/cert.pem" ]; then
+        echo "  [✓] SSL cert generated (covers ${LOCAL_IP})"
+    else
+        echo -e "${RED}  [!] SSL certificate generation failed. Check OpenSSL output above.${NC}"
+        echo "      Haven will run in HTTP mode."
+    fi
     echo ""
 fi
 
-# ── Kill existing server on port 3000 ──────────────────────
-if command -v lsof &> /dev/null && lsof -ti:3000 &> /dev/null; then
-    echo "  [!] Killing existing process on port 3000..."
-    lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+# ── Read PORT from .env (default 3000) ─────────────────────
+HAVEN_PORT="${PORT:-3000}"
+if [ -f "$HAVEN_DATA/.env" ]; then
+    ENV_PORT=$(grep -E '^PORT=' "$HAVEN_DATA/.env" 2>/dev/null | head -1 | cut -d= -f2)
+    if [ -n "$ENV_PORT" ]; then
+        HAVEN_PORT="$ENV_PORT"
+    fi
+fi
+
+# ── Kill existing server on configured port ────────────────
+if command -v lsof &> /dev/null && lsof -ti:${HAVEN_PORT} &> /dev/null; then
+    echo "  [!] Killing existing process on port ${HAVEN_PORT}..."
+    lsof -ti:${HAVEN_PORT} | xargs kill -9 2>/dev/null || true
     sleep 1
 fi
 
@@ -111,8 +124,8 @@ SERVER_PID=$!
 # Wait for server to be ready
 for i in $(seq 1 15); do
     sleep 1
-    if curl -sk "https://localhost:${PORT:-3000}/api/health" &> /dev/null || \
-       curl -sk "http://localhost:${PORT:-3000}/api/health" &> /dev/null; then
+    if curl -sk "https://localhost:${HAVEN_PORT}/api/health" &> /dev/null || \
+       curl -sk "http://localhost:${HAVEN_PORT}/api/health" &> /dev/null; then
         break
     fi
     if [ $i -eq 15 ]; then
@@ -122,7 +135,7 @@ for i in $(seq 1 15); do
     fi
 done
 
-PORT=${PORT:-3000}
+PORT=${HAVEN_PORT}
 
 echo -e "${GREEN}${BOLD}  ========================================${NC}"
 echo -e "${GREEN}${BOLD}    Haven is LIVE on port ${PORT}${NC}"

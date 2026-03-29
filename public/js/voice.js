@@ -1314,6 +1314,11 @@ class VoiceManager {
     if (this.noiseMode === 'suppress' && this._rnnoiseReady) {
       this.setNoiseSensitivity(0);
       this._enableRNNoise();
+    } else if (this.noiseMode === 'gate') {
+      const saved = parseInt(localStorage.getItem('haven_ns_value') || '10', 10);
+      this.setNoiseSensitivity(saved);
+    } else if (this.noiseMode === 'off') {
+      this.setNoiseSensitivity(0);
     }
 
     // Replace the audio track on every peer connection
