@@ -1332,7 +1332,9 @@
       "sponsors_title": "Patrocinadores",
       "donors_title": "Donantes",
       "note": "Los nuevos donantes se agregarán en cada versión. ¡Si has donado y no ves tu nombre, estará en la próxima actualización!",
-      "kofi_btn": "Apoyar Haven en Ko-fi"
+      "kofi_btn": "Apoyar Haven en Ko-fi",
+      "sort_chronological": "Primeros creyentes",
+      "sort_featured": "Mayor agradecimiento!"
     },
     "listen_together": {
       "title": "Escuchar juntos",
@@ -1551,7 +1553,11 @@
     "off": "DESACTIVADO",
     "voice_limit_placeholder": "2–99 (vacío=∞)",
     "bitrate_placeholder": "32–512 (vacío=auto)",
-    "self_destruct_placeholder": "1–720h (0=desactivado)"
+    "self_destruct_placeholder": "1–720h (0=desactivado)",
+    "afk_sub": "Sub AFK",
+    "afk_sub_hint": "Designar un subcanal como sala de voz AFK — los usuarios inactivos son movidos aquí",
+    "afk_timeout": "Tiempo AFK",
+    "afk_timeout_hint": "Minutos de inactividad de voz antes de mover al sub AFK (0 = desactivado)"
   },
 
   "confirm": {

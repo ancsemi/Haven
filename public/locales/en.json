@@ -1332,7 +1332,9 @@
       "sponsors_title": "Sponsors",
       "donors_title": "Donors",
       "note": "New donors will be added each release. If you've donated and don't see your name, it'll be in the next update!",
-      "kofi_btn": "Support Haven on Ko-fi"
+      "kofi_btn": "Support Haven on Ko-fi",
+      "sort_chronological": "Early Believers",
+      "sort_featured": "Biggest Thanks!"
     },
     "listen_together": {
       "title": "Listen Together",
@@ -1551,7 +1553,11 @@
     "off": "OFF",
     "voice_limit_placeholder": "2–99 (blank=∞)",
     "bitrate_placeholder": "32–512 (blank=auto)",
-    "self_destruct_placeholder": "1–720h (0=off)"
+    "self_destruct_placeholder": "1–720h (0=off)",
+    "afk_sub": "AFK Sub",
+    "afk_sub_hint": "Designate a sub-channel as the AFK voice room — idle users are moved here",
+    "afk_timeout": "AFK Timeout",
+    "afk_timeout_hint": "Minutes of voice inactivity before moving to AFK sub (0 = disabled)"
   },
 
   "confirm": {

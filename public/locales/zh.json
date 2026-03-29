@@ -1332,7 +1332,9 @@
       "sponsors_title": "赞助商",
       "donors_title": "捐赠者",
       "note": "新捐赠者将在每次发布时添加。如果您已捐赠但未看到您的名字，将在下次更新中出现！",
-      "kofi_btn": "在 Ko-fi 上支持 Haven"
+      "kofi_btn": "在 Ko-fi 上支持 Haven",
+      "sort_chronological": "早期支持者",
+      "sort_featured": "最大感谢！"
     },
     "listen_together": {
       "title": "一起听",
@@ -1551,7 +1553,11 @@
     "off": "关闭",
     "voice_limit_placeholder": "2–99（空白=无限）",
     "bitrate_placeholder": "32–512（空白=自动）",
-    "self_destruct_placeholder": "1–720小时（0=关闭）"
+    "self_destruct_placeholder": "1–720小时（0=关闭）",
+    "afk_sub": "AFK 子频道",
+    "afk_sub_hint": "将子频道指定为 AFK 语音室 — 空闲用户将被移至此处",
+    "afk_timeout": "AFK 超时",
+    "afk_timeout_hint": "移至 AFK 子频道前的语音不活跃分钟数（0 = 禁用）"
   },
 
   "confirm": {

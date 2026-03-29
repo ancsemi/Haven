@@ -1332,7 +1332,9 @@
       "sponsors_title": "Sponsoren",
       "donors_title": "Spender",
       "note": "Neue Spender werden mit jedem Release hinzugefügt. Falls du gespendet hast und deinen Namen nicht siehst, er wird im nächsten Update erscheinen!",
-      "kofi_btn": "Haven auf Ko-fi unterstützen"
+      "kofi_btn": "Haven auf Ko-fi unterstützen",
+      "sort_chronological": "Frühe Unterstützer",
+      "sort_featured": "Größter Dank!"
     },
     "listen_together": {
       "title": "Gemeinsam hören",
@@ -1551,7 +1553,11 @@
     "off": "AUS",
     "voice_limit_placeholder": "2–99 (leer=∞)",
     "bitrate_placeholder": "32–512 (leer=auto)",
-    "self_destruct_placeholder": "1–720h (0=aus)"
+    "self_destruct_placeholder": "1–720h (0=aus)",
+    "afk_sub": "AFK-Kanal",
+    "afk_sub_hint": "Unterkanal als AFK-Sprachraum festlegen — inaktive Benutzer werden dorthin verschoben",
+    "afk_timeout": "AFK-Timeout",
+    "afk_timeout_hint": "Minuten Sprachinaktivität vor dem Verschieben in den AFK-Kanal (0 = deaktiviert)"
   },
 
   "confirm": {
