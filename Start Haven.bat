@@ -11,10 +11,18 @@ echo.
 set "HAVEN_DATA=%APPDATA%\Haven"
 if not exist "%HAVEN_DATA%" mkdir "%HAVEN_DATA%"
 
-:: Kill any existing Haven server on port 3000
+:: Read PORT from .env (default 3000)
+set "HAVEN_PORT=3000"
+if exist "%HAVEN_DATA%\.env" (
+    for /f "tokens=1,* delims==" %%A in ('findstr /B /I "PORT=" "%HAVEN_DATA%\.env"') do (
+        set "HAVEN_PORT=%%B"
+    )
+)
+
+:: Kill any existing Haven server on the configured port
 echo  [*] Checking for existing server...
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do (
-    echo  [!] Killing existing process on port 3000 (PID: %%a)
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":%HAVEN_PORT%" ^| findstr "LISTENING"') do (
+    echo  [!] Killing existing process on port %HAVEN_PORT% (PID: %%a)
     taskkill /PID %%a /F >nul 2>&1
 )
 
@@ -148,7 +156,7 @@ if /I "%FORCE_HTTP%"=="true" (
         echo      Common install location: C:\Program Files\OpenSSL-Win64\bin
     ) else (
         :: SAN (Subject Alternative Name) is required by modern browsers for HTTPS
-        "%OPENSSL_CMD%" req -x509 -newkey rsa:2048 -keyout "%HAVEN_DATA%\certs\key.pem" -out "%HAVEN_DATA%\certs\cert.pem" -days 3650 -nodes -subj "/CN=Haven" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:%LOCAL_IP%" 2>nul
+        "%OPENSSL_CMD%" req -x509 -newkey rsa:2048 -keyout "%HAVEN_DATA%\certs\key.pem" -out "%HAVEN_DATA%\certs\cert.pem" -days 3650 -nodes -subj "/CN=Haven" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:%LOCAL_IP%"
         if exist "%HAVEN_DATA%\certs\cert.pem" (
             echo  [OK] SSL certificate generated in %HAVEN_DATA%\certs
         ) else (
@@ -173,7 +181,7 @@ set RETRIES=0
 :WAIT_LOOP
 timeout /t 1 /nobreak >nul
 set /a RETRIES+=1
-netstat -ano | findstr ":3000" | findstr "LISTENING" >nul 2>&1
+netstat -ano | findstr ":%HAVEN_PORT%" | findstr "LISTENING" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     if %RETRIES% GEQ 15 (
         color 0C
@@ -198,24 +206,24 @@ if /I "%FORCE_HTTP%"=="true" (
 echo.
 if "%HAVEN_PROTO%"=="https" (
     echo  ========================================
-    echo    Haven is LIVE on port 3000 ^(HTTPS^)
+    echo    Haven is LIVE on port %HAVEN_PORT% ^(HTTPS^)
     echo  ========================================
     echo.
-    echo  Local:    https://localhost:3000
-    echo  LAN:      https://YOUR_LOCAL_IP:3000
-    echo  Remote:   https://YOUR_PUBLIC_IP:3000
+    echo  Local:    https://localhost:%HAVEN_PORT%
+    echo  LAN:      https://YOUR_LOCAL_IP:%HAVEN_PORT%
+    echo  Remote:   https://YOUR_PUBLIC_IP:%HAVEN_PORT%
     echo.
     echo  First time? Your browser will show a security
     echo  warning ^(self-signed cert^). Click "Advanced"
     echo  then "Proceed" to continue.
 ) else (
     echo  ========================================
-    echo    Haven is LIVE on port 3000 ^(HTTP^)
+    echo    Haven is LIVE on port %HAVEN_PORT% ^(HTTP^)
     echo  ========================================
     echo.
-    echo  Local:    http://localhost:3000
-    echo  LAN:      http://YOUR_LOCAL_IP:3000
-    echo  Remote:   http://YOUR_PUBLIC_IP:3000
+    echo  Local:    http://localhost:%HAVEN_PORT%
+    echo  LAN:      http://YOUR_LOCAL_IP:%HAVEN_PORT%
+    echo  Remote:   http://YOUR_PUBLIC_IP:%HAVEN_PORT%
     echo.
     echo  NOTE: Running without SSL. Voice chat and
     echo  remote connections work best with HTTPS.
@@ -225,7 +233,7 @@ echo.
 
 :: ── Open browser automatically ──────────────────────────────
 echo  [*] Opening browser...
-start %HAVEN_PROTO%://localhost:3000
+start %HAVEN_PROTO%://localhost:%HAVEN_PORT%
 echo.
 echo  ----------------------------------------
 echo   Server is running. Close this window

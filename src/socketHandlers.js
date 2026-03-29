@@ -3098,6 +3098,53 @@ function setupSocketHandlers(io, db) {
         });
       }
       socket.emit('music-queue-update', getMusicQueuePayload(code));
+
+      // Send active screen share info — tell screen sharers to renegotiate
+      // (mirrors the logic in voice-join so reconnected users get screen tracks)
+      const sharers = activeScreenSharers.get(code);
+      if (sharers && sharers.size > 0) {
+        socket.emit('active-screen-sharers', {
+          channelCode: code,
+          sharers: Array.from(sharers).map(uid => {
+            const u = voiceUsers.get(code)?.get(uid);
+            return u ? { id: uid, username: u.username } : null;
+          }).filter(Boolean)
+        });
+        setTimeout(() => {
+          for (const sharerId of sharers) {
+            const sharerInfo = voiceUsers.get(code)?.get(sharerId);
+            if (sharerInfo) {
+              io.to(sharerInfo.socketId).emit('renegotiate-screen', {
+                targetUserId: socket.user.id,
+                channelCode: code
+              });
+            }
+          }
+        }, 2000);
+      }
+
+      // Send active webcam info — tell webcam users to renegotiate
+      const camUsers = activeWebcamUsers.get(code);
+      if (camUsers && camUsers.size > 0) {
+        socket.emit('active-webcam-users', {
+          channelCode: code,
+          users: Array.from(camUsers).map(uid => {
+            const u = voiceUsers.get(code)?.get(uid);
+            return u ? { id: uid, username: u.username } : null;
+          }).filter(Boolean)
+        });
+        setTimeout(() => {
+          for (const camUserId of camUsers) {
+            const camUserInfo = voiceUsers.get(code)?.get(camUserId);
+            if (camUserInfo) {
+              io.to(camUserInfo.socketId).emit('renegotiate-webcam', {
+                targetUserId: socket.user.id,
+                channelCode: code
+              });
+            }
+          }
+        }, 2500);
+      }
     });
 
     // Let clients explicitly request voice counts (fallback for missed push events)

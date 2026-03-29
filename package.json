@@ -1,6 +1,6 @@
 {
   "name": "amni-haven",
-  "version": "2.8.4",
+  "version": "2.8.5",
   "description": "Amni-Haven — self-hosted private chat for your server, your rules",
   "license": "MIT-NC",
   "main": "server.js",

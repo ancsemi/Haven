@@ -494,8 +494,12 @@ $ui['btnNext3'].Add_Click({
         if (!(Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir -Force | Out-Null }
         $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
         if ($opensslPath) {
-            & openssl req -x509 -newkey rsa:2048 -keyout "$certDir\key.pem" -out "$certDir\cert.pem" -days 3650 -nodes -subj "/CN=Haven" 2>$null
-            Set-Step 'step4' 'done' 'SSL certificate generated'
+            $sslOutput = & openssl req -x509 -newkey rsa:2048 -keyout "$certDir\key.pem" -out "$certDir\cert.pem" -days 3650 -nodes -subj "/CN=Haven" 2>&1
+            if (Test-Path "$certDir\cert.pem") {
+                Set-Step 'step4' 'done' 'SSL certificate generated'
+            } else {
+                Set-Step 'step4' 'error' "SSL generation failed: $sslOutput"
+            }
         } else {
             Set-Step 'step4' 'done' 'Skipped (OpenSSL not found, will use HTTP)'
         }

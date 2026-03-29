@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.8.5] — 2026-03-29
+
+### Fixed
+- **Noise gate lost on device switch** (#212) — switching microphones mid-call rebuilt the audio chain but forgot to restore the saved noise gate sensitivity, leaving the gate wide open. AI suppression mode was already re-applied; the gate and off modes now are too.
+- **Screen share broken after reload** (#213) — when any participant reloaded the page, the `voice-rejoin` path did not tell active screen sharers or webcam users to renegotiate with the reconnected peer, so the rejoined user never received screen share video or audio tracks. The rejoin handler now mirrors the full join flow.
+- **Start scripts ignore custom PORT** (#214) — `Start Haven.bat` and `start.sh` hardcoded port 3000 for kill, wait-loop, and display. Both now read `PORT=` from the `.env` file and use it throughout.
+- **SSL cert errors hidden** (#214) — all three setup scripts (`Start Haven.bat`, `start.sh`, `Install Haven.ps1`) suppressed OpenSSL stderr, making it impossible to diagnose certificate generation failures. Errors are now shown.
+
 ## [2.8.4] — 2026-03-28
 
 ### Changed
