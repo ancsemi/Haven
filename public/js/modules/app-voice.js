@@ -10,6 +10,10 @@ async _joinVoice() {
     this._showToast('Voice is disabled in this channel', 'error');
     return;
   }
+  if (!this.user?.isAdmin && !this._hasPerm('use_voice')) {
+    this._showToast('You do not have permission to use voice', 'error');
+    return;
+  }
   // voice.join() auto-leaves old channel if connected
   const success = await this.voice.join(this.currentChannel);
   if (success) {
@@ -178,7 +182,7 @@ _updateVoiceButtons(inVoice) {
     document.getElementById('voice-cam-btn').disabled = false;
     const _ltnBtn = document.getElementById('voice-listen-together-btn');
     if (_ltnBtn) { _ltnBtn.disabled = false; _ltnBtn.title = 'Listen Together'; }
-    document.getElementById('voice-ns-slider').value = 10;
+    document.getElementById('voice-ns-slider').value = localStorage.getItem('haven_ns_value') || 10;
     // Hide voice settings sub-panel
     const vsPanel = document.getElementById('voice-settings-panel');
     if (vsPanel) vsPanel.style.display = 'none';

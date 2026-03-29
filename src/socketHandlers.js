@@ -642,6 +642,8 @@ function setupSocketHandlers(io, db) {
   // Online tracking:  code → Map<userId, { id, username, socketId }>
   const channelUsers = new Map();
   const voiceUsers = new Map();
+  // AFK voice tracking: userId → timestamp of last activity while in voice
+  const voiceLastActivity = new Map();
   // Active music per voice room:  code → { url, userId, username, playbackState } | null
   const activeMusic = new Map();
   // Playback queue per voice room: code → [{ id, url, title, userId, username, resolvedFrom }]
@@ -659,6 +661,58 @@ function setupSocketHandlers(io, db) {
     const cutoff = Date.now() - 3600000; // 1 hour
     for (const [k, v] of slowModeTracker) { if (v < cutoff) slowModeTracker.delete(k); }
   }, 5 * 60 * 1000);
+
+  // ── AFK voice channel auto-move (per-channel) ──────────────
+  // Every 30 seconds, check if any voice users have been idle longer than
+  // their channel's AFK timeout and move them to the designated AFK sub-channel.
+  setInterval(() => {
+    try {
+      // Build a lookup: channelCode → { afk_sub_code, afk_timeout_minutes }
+      // Parent channels define AFK settings; sub-channels inherit from parent.
+      const afkChannels = db.prepare(
+        "SELECT code, afk_sub_code, afk_timeout_minutes FROM channels WHERE afk_sub_code IS NOT NULL AND afk_sub_code != '' AND afk_timeout_minutes > 0"
+      ).all();
+      if (!afkChannels.length) return;
+
+      // Map parent code → settings, and also map each sub-channel code → parent's settings
+      const afkMap = new Map(); // voiceRoomCode → { afkSubCode, timeout }
+      for (const ch of afkChannels) {
+        afkMap.set(ch.code, { afkSubCode: ch.afk_sub_code, timeout: ch.afk_timeout_minutes });
+        // Also map all sub-channels of this parent to the same AFK target
+        const subs = db.prepare("SELECT code FROM channels WHERE parent_channel_id = (SELECT id FROM channels WHERE code = ?)").all(ch.code);
+        for (const sub of subs) {
+          if (sub.code !== ch.afk_sub_code) { // Don't map the AFK sub itself
+            afkMap.set(sub.code, { afkSubCode: ch.afk_sub_code, timeout: ch.afk_timeout_minutes });
+          }
+        }
+      }
+
+      for (const [code, room] of voiceUsers) {
+        const afkConfig = afkMap.get(code);
+        if (!afkConfig) continue; // No AFK settings for this voice room
+
+        const cutoff = Date.now() - (afkConfig.timeout * 60 * 1000);
+
+        for (const [userId, user] of room) {
+          const lastActive = voiceLastActivity.get(userId);
+          if (lastActive && lastActive < cutoff) {
+            const userSocket = io.sockets.sockets.get(user.socketId);
+            if (!userSocket) continue;
+            userSocket.emit('voice-afk-move', { channelCode: afkConfig.afkSubCode });
+            handleVoiceLeave(userSocket, code);
+            voiceLastActivity.set(userId, Date.now());
+          }
+        }
+      }
+    } catch { /* columns may not exist yet */ }
+  }, 30 * 1000);
+
+  // Helper: update voice activity timestamp for a user
+  function touchVoiceActivity(userId) {
+    if (voiceLastActivity.has(userId)) {
+      voiceLastActivity.set(userId, Date.now());
+    }
+  }
 
   function clampMusicPosition(positionSeconds, durationSeconds = null) {
     const pos = Number(positionSeconds);
@@ -1078,7 +1132,8 @@ function setupSocketHandlers(io, db) {
                  c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                  c.parent_channel_id, c.position, c.is_private, c.expires_at,
                  c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
-                 c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate
+                 c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
+                 c.afk_sub_code, c.afk_timeout_minutes
           FROM channels c
           WHERE c.is_dm = 0
           UNION
@@ -1086,7 +1141,8 @@ function setupSocketHandlers(io, db) {
                  c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                  c.parent_channel_id, c.position, c.is_private, c.expires_at,
                  c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
-                 c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate
+                 c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
+                 c.afk_sub_code, c.afk_timeout_minutes
           FROM channels c
           JOIN channel_members cm ON c.id = cm.channel_id
           WHERE cm.user_id = ? AND c.is_dm = 1
@@ -1103,7 +1159,8 @@ function setupSocketHandlers(io, db) {
                  c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
                  c.parent_channel_id, c.position, c.is_private, c.expires_at,
                  c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
-                 c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate
+                 c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
+                 c.afk_sub_code, c.afk_timeout_minutes
           FROM channels c
           JOIN channel_members cm ON c.id = cm.channel_id
           WHERE cm.user_id = ?
@@ -1727,6 +1784,9 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'Message too long (max 2000 characters)');
       }
 
+      // Update AFK voice activity
+      touchVoiceActivity(socket.user.id);
+
       // Flood check for messages specifically
       if (floodCheck('message')) {
         return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
@@ -1918,6 +1978,10 @@ function setupSocketHandlers(io, db) {
       if (vchSettings && vchSettings.voice_enabled === 0) {
         return socket.emit('error-msg', 'Voice is disabled in this channel');
       }
+      // Check use_voice permission (admins bypass)
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'use_voice')) {
+        return socket.emit('error-msg', 'You don\'t have permission to use voice chat');
+      }
       if (vchSettings && vchSettings.voice_user_limit > 0) {
         const currentCount = voiceUsers.has(code) ? voiceUsers.get(code).size : 0;
         if (currentCount >= vchSettings.voice_user_limit) {
@@ -1948,6 +2012,9 @@ function setupSocketHandlers(io, db) {
         isMuted: false,
         isDeafened: false
       });
+
+      // Track AFK activity
+      voiceLastActivity.set(socket.user.id, Date.now());
 
       // Tell new user about existing peers (they'll create offers)
       socket.emit('voice-existing-users', {
@@ -2943,7 +3010,14 @@ function setupSocketHandlers(io, db) {
       const room = voiceUsers.get(code);
       if (!room || !room.has(socket.user.id)) return;
       room.get(socket.user.id).isMuted = !!data.muted;
+      // Unmuting counts as activity for AFK purposes
+      if (!data.muted) touchVoiceActivity(socket.user.id);
       broadcastVoiceUsers(code);
+    });
+
+    // Voice activity ping — client reports user is active (for AFK tracking)
+    socket.on('voice-activity', () => {
+      touchVoiceActivity(socket.user.id);
     });
 
     socket.on('voice-deafen-state', (data) => {
@@ -4228,7 +4302,6 @@ function setupSocketHandlers(io, db) {
           }
         } catch { return; }
       }
-
       try {
         db.prepare(
           'INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)'
@@ -5299,6 +5372,13 @@ function setupSocketHandlers(io, db) {
         activeMusic.delete(code);
         musicQueues.delete(code);
       }
+
+      // Clean up AFK tracking if user is no longer in any voice room
+      let stillInVoice = false;
+      for (const [, room] of voiceUsers) {
+        if (room.has(socket.user.id)) { stillInVoice = true; break; }
+      }
+      if (!stillInVoice) voiceLastActivity.delete(socket.user.id);
     }
 
     function broadcastVoiceUsers(code) {
@@ -6758,6 +6838,41 @@ function setupSocketHandlers(io, db) {
       } catch (err) {
         console.error('Set notification type error:', err);
         socket.emit('error-msg', 'Failed to set notification type');
+      }
+    });
+
+    // ── Per-channel AFK sub-channel setting ──────────────────
+    socket.on('set-channel-afk', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_channel')) {
+        return socket.emit('error-msg', 'You don\'t have permission to change AFK settings');
+      }
+      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const subCode = typeof data.subCode === 'string' ? data.subCode.trim() : '';
+      const timeout = parseInt(data.timeout);
+      if (!Number.isFinite(timeout) || timeout < 0 || timeout > 1440) return;
+      // Validate the parent channel exists and is not a sub-channel itself
+      const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0 AND parent_channel_id IS NULL').get(code);
+      if (!channel) return socket.emit('error-msg', 'Channel not found or is a sub-channel');
+      // If subCode is set, validate it's actually a sub-channel of this parent
+      if (subCode) {
+        if (!/^[a-f0-9]{8}$/i.test(subCode)) return;
+        const sub = db.prepare('SELECT id FROM channels WHERE code = ? AND parent_channel_id = ?').get(subCode, channel.id);
+        if (!sub) return socket.emit('error-msg', 'Sub-channel not found or does not belong to this channel');
+      }
+      try {
+        db.prepare('UPDATE channels SET afk_sub_code = ?, afk_timeout_minutes = ? WHERE id = ?')
+          .run(subCode || null, timeout, channel.id);
+        broadcastChannelLists();
+        if (subCode && timeout > 0) {
+          socket.emit('toast', { message: `💤 AFK sub-channel set (${timeout}min timeout)`, type: 'success' });
+        } else {
+          socket.emit('toast', { message: '💤 AFK sub-channel disabled', type: 'success' });
+        }
+      } catch (err) {
+        console.error('Set channel AFK error:', err);
+        socket.emit('error-msg', 'Failed to set AFK settings');
       }
     });
 

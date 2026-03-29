@@ -3771,6 +3771,11 @@ html.rgb-cycling *::after {
   text-align: right;
   outline: none;
 }
+select.cfn-select.cfn-input {
+  width: auto;
+  max-width: 120px;
+  text-align: left;
+}
 /* Arrow indicator on the Channel Functions button */
 .channel-ctx-item [class="cfn-arrow"] {
   margin-left: auto;
@@ -9306,10 +9311,30 @@ video:fullscreen,
 video:-webkit-full-screen {
   max-height: unset !important;
   max-width: unset !important;
-  width: 100vw !important;
-  height: 100vh !important;
+  width: 100% !important;
+  height: 100% !important;
   object-fit: contain !important;
   background: #000;
+}
+/* When the file-video wrapper is the fullscreen element, center the video */
+.file-video-wrap:fullscreen,
+.file-video-wrap:-webkit-full-screen {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000 !important;
+  max-width: unset !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+.file-video-wrap:fullscreen .file-video,
+.file-video-wrap:-webkit-full-screen .file-video {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  margin: 0 !important;
 }
 
 .screen-share-tile-label {
@@ -10823,6 +10848,22 @@ ul.chat-list { list-style-type: disc; }
 }
 .channel-collapse-arrow.collapsed {
   transform: translateY(-50%) rotate(-90deg);
+}
+
+/* ── Category collapse arrow ──── */
+.cat-collapse-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 10px;
+  color: inherit;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.cat-collapse-arrow.collapsed {
+  transform: rotate(-90deg);
 }
 
 /* ── Role management modal ───────────────────────────── */

@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.8.4] — 2026-03-28
+
+### Changed
+- **AFK voice channel reworked** (#210) — AFK is now a per-channel setting instead of a server-wide admin option. Right-click any parent channel → ⚙️ Channel Functions → 💤 AFK Sub to designate a sub-channel as the AFK room. Each channel can have its own AFK sub and timeout, keeping groups segregated. The old admin-level AFK setting has been removed.
+
+### Fixed
+- **Video embed fullscreen** — fullscreened uploaded videos are now properly centered with visible controls and seek bar. Previously the video could appear off-center with controls clipped off-screen, and exiting fullscreen could break the window layout.
+
+---
+
 ## [2.8.3] — 2026-03-27
 
 ### Added

@@ -209,6 +209,15 @@ class VoiceManager {
       }
     });
 
+    // AFK auto-move: server says we've been idle too long
+    this.socket.on('voice-afk-move', async (data) => {
+      if (!data || !data.channelCode) return;
+      // Leave current voice channel
+      this.leave();
+      // Notify the app layer
+      if (this.onAfkMove) this.onAfkMove(data.channelCode);
+    });
+
     // Someone started screen sharing
     this.socket.on('screen-share-started', (data) => {
       this.screenSharers.add(data.userId);
@@ -267,7 +276,7 @@ class VoiceManager {
       const senders = conn.getSenders();
       const hasVideo = senders.some(s => s.track && s.track.kind === 'video');
       if (!hasVideo) {
-        this.screenStream.getTracks().forEach(track => {
+        this.screenStream.getTracks().filter(t => t.readyState === 'live').forEach(track => {
           conn.addTrack(track, this.screenStream);
         });
         // Cap bitrate for this peer
@@ -382,6 +391,9 @@ class VoiceManager {
         this._enableRNNoise();
       } else if (this.noiseMode === 'off') {
         this.setNoiseSensitivity(0);
+      } else if (this.noiseMode === 'gate') {
+        const saved = parseInt(localStorage.getItem('haven_ns_value') || '10', 10);
+        this.setNoiseSensitivity(saved);
       }
 
       this.currentChannel = channelCode;
@@ -664,6 +676,12 @@ class VoiceManager {
       this.screenStream.getVideoTracks()[0].onended = () => {
         this.stopScreenShare();
       };
+
+      // If screen audio track dies independently, update flag
+      const screenAudioTrack = this.screenStream.getAudioTracks()[0];
+      if (screenAudioTrack) {
+        screenAudioTrack.onended = () => { this.screenHasAudio = false; };
+      }
 
       // Add screen tracks to all existing peer connections and cap bitrate
       const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
@@ -976,7 +994,7 @@ class VoiceManager {
 
     // If we're screen sharing, add those tracks too
     if (this.screenStream && this.isScreenSharing) {
-      this.screenStream.getTracks().forEach(track => {
+      this.screenStream.getTracks().filter(t => t.readyState === 'live').forEach(track => {
         connection.addTrack(track, this.screenStream);
       });
       // Cap bitrate for this new peer
@@ -1378,7 +1396,13 @@ class VoiceManager {
     }
     audioEl.srcObject = stream;
 
-    if (this.screenGainNodes.has(userId)) { audioEl.volume = 0; return; }
+    // If a gain node already exists but the stream changed, tear it down
+    // so we rebuild the AudioContext chain for the new source.
+    const existingGain = this.screenGainNodes.get(userId);
+    if (existingGain) {
+      try { existingGain.disconnect(); } catch {}
+      this.screenGainNodes.delete(userId);
+    }
 
     try {
       if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1436,7 +1460,14 @@ class VoiceManager {
       if (this.noiseSensitivity !== 0) {
         this.setNoiseSensitivity(0);
       }
-      this._enableRNNoise();
+      if (!this._rnnoiseReady) {
+        this._initRNNoise().then(() => {
+          if (this._rnnoiseReady) this._enableRNNoise();
+          else console.warn('[Voice] AI suppression unavailable');
+        });
+      } else {
+        this._enableRNNoise();
+      }
     } else if (mode === 'gate') {
       // Disable RNNoise, enable noise gate with saved sensitivity
       this._disableRNNoise();

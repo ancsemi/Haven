@@ -728,6 +728,18 @@ function initDatabase() {
     db.exec("ALTER TABLE channels ADD COLUMN voice_bitrate INTEGER DEFAULT 0");
   }
 
+  // ── Migration: per-channel AFK sub-channel ────────────
+  try {
+    db.prepare("SELECT afk_sub_code FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN afk_sub_code TEXT DEFAULT NULL");
+  }
+  try {
+    db.prepare("SELECT afk_timeout_minutes FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN afk_timeout_minutes INTEGER DEFAULT 0");
+  }
+
   // ── Migration: grant use_tts to all auto-assign roles (default ON) ──
   try {
     const autoAssignRoles = db.prepare('SELECT id FROM roles WHERE auto_assign = 1').all();

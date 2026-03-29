@@ -386,6 +386,58 @@ _setupUI() {
       };
       input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { commitExpiry(); input.blur(); } });
       input.addEventListener('blur', commitExpiry);
+    } else if (fn === 'afk-sub') {
+      // Show a select dropdown of sub-channels for this parent
+      if (row.querySelector('.cfn-select')) return;
+      const badge = row.querySelector('.cfn-badge');
+      if (!badge) return;
+      const subs = (this.channels || []).filter(c => c.parent_channel_id === ch?.id);
+      const select = document.createElement('select');
+      select.className = 'cfn-select cfn-input';
+      select.onclick = e2 => e2.stopPropagation();
+      const noneOpt = document.createElement('option');
+      noneOpt.value = ''; noneOpt.textContent = 'None (disabled)';
+      select.appendChild(noneOpt);
+      for (const sub of subs) {
+        const opt = document.createElement('option');
+        opt.value = sub.code;
+        opt.textContent = sub.name;
+        if (sub.code === ch?.afk_sub_code) opt.selected = true;
+        select.appendChild(opt);
+      }
+      badge.replaceWith(select);
+      select.focus();
+      const commitAfkSub = () => {
+        const subCode = select.value;
+        const timeout = ch?.afk_timeout_minutes || 5;
+        optimistic({ afk_sub_code: subCode || null });
+        this.socket.emit('set-channel-afk', { code, subCode, timeout });
+      };
+      select.addEventListener('change', () => { commitAfkSub(); select.blur(); });
+      select.addEventListener('blur', () => {
+        // Replace select back with badge
+        this._updateChannelFunctionsPanel(ch);
+      });
+    } else if (fn === 'afk-timeout') {
+      if (row.querySelector('.cfn-input')) return;
+      const badge = row.querySelector('.cfn-badge');
+      if (!badge) return;
+      const current = ch?.afk_timeout_minutes || 0;
+      const input = document.createElement('input');
+      input.type = 'number'; input.min = '0'; input.max = '1440';
+      input.value = current > 0 ? current : ''; input.placeholder = '1–1440 (0=off)'; input.className = 'cfn-input';
+      input.onclick = e2 => e2.stopPropagation();
+      badge.replaceWith(input);
+      input.focus(); input.select();
+      const commitAfkTimeout = () => {
+        const mins = parseInt(input.value);
+        const timeout = (!isNaN(mins) && mins >= 0 && mins <= 1440) ? mins : 0;
+        const subCode = ch?.afk_sub_code || '';
+        optimistic({ afk_timeout_minutes: timeout });
+        this.socket.emit('set-channel-afk', { code, subCode, timeout });
+      };
+      input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { commitAfkTimeout(); input.blur(); } });
+      input.addEventListener('blur', commitAfkTimeout);
     }
   });
   // Move channel up/down
@@ -1072,6 +1124,17 @@ _setupUI() {
   this.voice.onScreenShareStarted = (userId, username) => {
     this.notifications.playDirect('stream_start');
   };
+
+  // Wire up AFK auto-move
+  this.voice.onAfkMove = (channelCode) => {
+    this._showToast('Moved to AFK sub-channel due to inactivity', 'info');
+    this._updateVoiceButtons(false);
+    this._updateVoiceStatus(false);
+    this._updateVoiceBar();
+    // Switch to the AFK channel and rejoin voice there
+    this.switchChannel(channelCode);
+    setTimeout(() => this._joinVoice(), 500);
+  };
   // Re-render voice user list when webcam status changes
   this.voice.onWebcamStatusChange = () => {
     if (this._lastVoiceUsers) this._renderVoiceUsers(this._lastVoiceUsers);
@@ -1084,6 +1147,21 @@ _setupUI() {
       el.classList.toggle('talking', isTalking);
     });
   };
+
+  // ── File video fullscreen: redirect to wrapper for proper controls ──
+  // When a .file-video triggers fullscreen (via native controls), intercept and
+  // fullscreen the .file-video-wrap parent instead so controls stay visible.
+  if (!document.documentElement.hasAttribute('data-desktop-app')) {
+    // Web-only: Desktop app has its own shim in app-preload.js
+    const origRequestFS = Element.prototype.requestFullscreen;
+    Element.prototype.requestFullscreen = function (opts) {
+      if (this.classList?.contains('file-video')) {
+        const wrap = this.closest('.file-video-wrap');
+        if (wrap) return origRequestFS.call(wrap, opts);
+      }
+      return origRequestFS.call(this, opts);
+    };
+  }
 
   // Search
   let searchTimeout = null;

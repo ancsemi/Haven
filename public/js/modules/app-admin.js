@@ -1478,6 +1478,11 @@ _setupIdleDetection() {
       idleEmitPending = true;
       setTimeout(() => { idleEmitPending = false; goOnline(); }, 300);
     }
+    // Notify server of activity for AFK voice tracking (throttled to once per 30s)
+    if (this.voice?.inVoice && (!this._lastVoiceActivityPing || Date.now() - this._lastVoiceActivityPing > 30000)) {
+      this._lastVoiceActivityPing = Date.now();
+      this.socket.emit('voice-activity');
+    }
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(goIdle, document.hidden ? HIDDEN_TIMEOUT : IDLE_TIMEOUT);
   };
@@ -3504,7 +3509,9 @@ _initDonorsModal() {
     dg.innerHTML = '';
     if (!donorData) return;
     const sponsors = sort === 'featured' && donorData.featuredSponsors ? donorData.featuredSponsors : (donorData.sponsors || []);
-    const donors = sort === 'featured' && donorData.featuredDonors ? donorData.featuredDonors : (donorData.donors || []);
+    const allDonors = sort === 'featured' && donorData.featuredDonors ? donorData.featuredDonors : (donorData.donors || []);
+    const sponsorSet = new Set(sponsors.map(n => n.toLowerCase()));
+    const donors = allDonors.filter(n => !sponsorSet.has(n.toLowerCase()));
     sponsors.forEach(n => { const s = document.createElement('span'); s.className = 'donor-chip donor-sponsor'; s.textContent = n; sg.appendChild(s); });
     donors.forEach(n => { const s = document.createElement('span'); s.className = 'donor-chip'; s.textContent = n; dg.appendChild(s); });
   };

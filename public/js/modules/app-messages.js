@@ -785,6 +785,25 @@ _fetchLinkPreviews(containerEl) {
         // Don't add duplicate previews
         if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
 
+        // ── Inline video embed (og:video MP4/WebM) ──
+        if (data.video && (data.videoType || /\.(mp4|webm|ogg)(\?[^#]*)?$/i.test(data.video))) {
+          const videoCard = document.createElement('div');
+          videoCard.className = 'link-preview link-preview--video';
+          videoCard.dataset.url = url;
+          let vInner = '<video controls preload="metadata" playsinline style="max-width:100%;max-height:400px;border-radius:8px;display:block"';
+          if (data.image) vInner += ` poster="${this._escapeHtml(data.image)}"`;
+          vInner += `><source src="${this._escapeHtml(data.video)}" type="${this._escapeHtml(data.videoType || 'video/mp4')}"></video>`;
+          vInner += '<div class="link-preview-text">';
+          if (data.siteName) vInner += `<span class="link-preview-site">${this._escapeHtml(data.siteName)}</span>`;
+          if (data.title) vInner += `<a class="link-preview-title" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow">${this._escapeHtml(data.title)}</a>`;
+          vInner += '</div>';
+          videoCard.innerHTML = vInner;
+          const wasAtBottom = this._coupledToBottom;
+          msgContent.appendChild(videoCard);
+          if (wasAtBottom) this._scrollToBottom(true);
+          return;
+        }
+
         const card = document.createElement('a');
         const hasGallery = Array.isArray(data.images) && data.images.length >= 2;
         card.className = hasGallery ? 'link-preview link-preview--gallery' : 'link-preview';
