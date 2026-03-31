@@ -863,9 +863,32 @@ _setupThemes() {
 _startStatusBar() {
   // In the Electron desktop shell, always show the status bar regardless of
   // CSS responsive breakpoints or DPI-scaled viewport width.
-  if (window.havenDesktop?.isDesktopApp) {
+  const isDesktop = !!(window.havenDesktop?.isDesktopApp ||
+                       navigator.userAgent.includes('Electron'));
+  if (isDesktop) {
+    // Belt-and-suspenders: ensure the CSS attribute is present (preload
+    // sets this on DOMContentLoaded, but reinforce here in case of timing)
+    document.documentElement.setAttribute('data-desktop-app', '1');
     const sb = document.getElementById('status-bar');
-    if (sb) sb.style.display = 'flex';
+    if (sb) {
+      sb.style.setProperty('display', 'flex', 'important');
+      // Safety net: after one frame, verify the bar is actually inside the
+      // visible viewport.  If Electron's BrowserView clips it (100dvh
+      // mismatch), fall back to fixed positioning so the user always sees it.
+      requestAnimationFrame(() => {
+        const rect = sb.getBoundingClientRect();
+        if (rect.height === 0 || rect.bottom > window.innerHeight + 2) {
+          sb.style.setProperty('position', 'fixed', 'important');
+          sb.style.setProperty('bottom', '0', 'important');
+          sb.style.setProperty('left', '0', 'important');
+          sb.style.setProperty('right', '0', 'important');
+          sb.style.setProperty('z-index', '50', 'important');
+          // Prevent content underneath from being hidden behind the bar
+          const appBody = document.getElementById('app-body');
+          if (appBody) appBody.style.paddingBottom = sb.offsetHeight + 'px';
+        }
+      });
+    }
   }
   this._updateClock();
   if (this._clockInterval) clearInterval(this._clockInterval);
