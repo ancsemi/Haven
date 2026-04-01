@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.8.8] — 2026-03-31
+
+### Fixed
+- **Voice AFK moves during active speech** — speaking now resets the idle timer and sends voice-activity pings to the server, so you won't get moved to the AFK channel or show as "away" while actively talking. Pings also fire every 15s instead of 30s for better overlap with the server's AFK check interval.
+- **Desktop app status bar visibility** — restored display fallback logic, `data-desktop-app` reinforcement, and inline `!important` override to ensure the status bar renders correctly in Electron across all DPI scales.
+
+### Added
+- **Video thumbnails** — uploaded videos now auto-generate a poster thumbnail from the first visible frame, so you can see a preview without having to hit play. Thumbnails are generated client-side, cached per URL, and capped at 480p JPEG.
+
+---
+
 ## [2.8.7] — 2026-03-30
 
 ### Changed
