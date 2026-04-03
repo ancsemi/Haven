@@ -1346,7 +1346,8 @@ _renderChannels() {
 
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : '#'));
+    const isTempVoice = !!ch.is_temp_voice;
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : '#')));
 
     // Build small status indicators for channel features
     const _badges = [];
@@ -1646,6 +1647,25 @@ _renderChannels() {
         }
       }
     }
+  }
+
+  // ── "Create Temp Channel" button (visible if user has create_temp_channel perm) ──
+  if (this.user?.isAdmin || this._hasPerm('create_temp_channel')) {
+    const tempBtn = document.createElement('div');
+    tempBtn.className = 'channel-item temp-channel-create-btn';
+    tempBtn.style.cssText = 'opacity:0.5;cursor:pointer;padding:4px 12px;font-size:0.8rem;display:flex;align-items:center;gap:6px';
+    tempBtn.innerHTML = `<span style="font-size:0.9rem">➕</span><span>${t('channels.create_temp_channel')}</span>`;
+    tempBtn.title = t('channels.create_temp_channel_title');
+    tempBtn.addEventListener('click', async () => {
+      const name = await this._showPromptModal(
+        t('channels.create_temp_channel_title'),
+        t('channels.create_temp_channel_hint')
+      );
+      if (name && name.trim()) {
+        this.socket.emit('create-temp-channel', { name: name.trim() });
+      }
+    });
+    list.appendChild(tempBtn);
   }
 
   // ── DM section (separate pane) ──

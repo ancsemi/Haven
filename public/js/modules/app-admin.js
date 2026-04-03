@@ -3,7 +3,7 @@ const ALL_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
-  'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
   'view_all_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
   'manage_roles', 'manage_server', 'delete_channel'
 ];
@@ -23,6 +23,7 @@ const PERM_LABELS = {
   get set_channel_topic() { return t('permissions.set_channel_topic'); },
   get manage_sub_channels() { return t('permissions.manage_sub_channels'); },
   get create_channel() { return t('permissions.create_channel'); },
+  get create_temp_channel() { return t('permissions.create_temp_channel'); },
   get upload_files() { return t('permissions.upload_files'); },
   get use_voice() { return t('permissions.use_voice'); },
   get use_tts() { return t('permissions.use_tts'); },
@@ -1470,15 +1471,6 @@ _setupIdleDetection() {
   let idleEmitPending = false;
 
   const goIdle = () => {
-    // Don't auto-away if user is connected to voice — they're actively
-    // participating even if they're just listening. The AFK voice auto-move
-    // handles truly idle voice users separately on the server.
-    if (this.voice?.inVoice) {
-      // Reschedule the check instead of going idle
-      clearTimeout(this.idleTimer);
-      this.idleTimer = setTimeout(goIdle, IDLE_TIMEOUT);
-      return;
-    }
     if (this.userStatus === 'online' && !this._manualStatusOverride) {
       this.userStatus = 'away';  // optimistic local update (server confirms via status-updated)
       this._updateStatusPickerUI();

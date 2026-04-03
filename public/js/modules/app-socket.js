@@ -592,6 +592,21 @@ _setupSocketListeners() {
     }
   });
 
+  // ── Temporary voice channel events (#163) ──────────────
+  this.socket.on('temp-channel-created', (channel) => {
+    if (!this.channels.find(c => c.code === channel.code)) {
+      this.channels.push(channel);
+      this._renderChannels();
+    }
+  });
+
+  this.socket.on('temp-channel-join-voice', (data) => {
+    if (!data || !data.code) return;
+    // Switch to the new temp channel and auto-join voice
+    this.switchChannel(data.code);
+    setTimeout(() => this._joinVoice(), 500);
+  });
+
   this.socket.on('error-msg', (msg) => {
     this._showToast(msg, 'error');
   });

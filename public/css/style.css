@@ -3086,6 +3086,8 @@ html.rgb-cycling *::after {
 .channel-item:hover { background: var(--bg-hover); }
 .channel-item.active { background: var(--bg-active); }
 
+.temp-channel-create-btn:hover { opacity: 0.8 !important; }
+
 .channel-item.active::before {
   content: '';
   position: absolute;

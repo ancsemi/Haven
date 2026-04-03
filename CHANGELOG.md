@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.9.0] — 2026-04-02
+
+### Added
+- **Temporary voice channels** — users with the new "Create Temporary Channels" permission can create temp voice channels from the sidebar. Everyone on the server sees and can join them. When the last person leaves voice, the channel auto-deletes. There's also a 24-hour safety-net expiry on the off chance nobody ever leaves cleanly. The permission is off by default for all roles. (#163)
+
+### Fixed
+- **Voice permission lost when assigning a channel-scoped role server-wide** — assigning a role like Channel Mod across the whole server was wiping the user's existing server-scoped User role, which took away their voice access. The role replace now only removes roles of the same scope, so server roles and channel roles no longer clobber each other. (#195)
+- **AFK idle skip reverted** — the previous fix that prevented the idle timer from firing while in voice was too broad. Staying in voice while idle should still count as idle (the AFK auto-move depends on it). The mic speech detection already resets idle status when you're actually talking, so active speakers are unaffected. (#217)
+
+---
+
 ## [2.8.9] — 2026-04-01
 
 ### Fixed

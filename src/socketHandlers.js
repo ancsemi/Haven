@@ -342,7 +342,7 @@ const VALID_ROLE_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
-  'create_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
   'view_all_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue',
   'promote_user', 'transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'
 ];
@@ -1131,7 +1131,7 @@ function setupSocketHandlers(io, db) {
         channels = db.prepare(`
           SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                  c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-                 c.parent_channel_id, c.position, c.is_private, c.expires_at,
+                 c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                  c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                  c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
                  c.afk_sub_code, c.afk_timeout_minutes
@@ -1140,7 +1140,7 @@ function setupSocketHandlers(io, db) {
           UNION
           SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                  c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-                 c.parent_channel_id, c.position, c.is_private, c.expires_at,
+                 c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                  c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                  c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
                  c.afk_sub_code, c.afk_timeout_minutes
@@ -1158,7 +1158,7 @@ function setupSocketHandlers(io, db) {
         channels = db.prepare(`
           SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                  c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-                 c.parent_channel_id, c.position, c.is_private, c.expires_at,
+                 c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                  c.streams_enabled, c.music_enabled, c.media_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                  c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
                  c.afk_sub_code, c.afk_timeout_minutes
@@ -1350,6 +1350,82 @@ function setupSocketHandlers(io, db) {
       } catch (err) {
         console.error('Create channel error:', err);
         socket.emit('error-msg', 'Failed to create channel');
+      }
+    });
+
+    // ── Create temporary voice channel (#163) ───────────────
+    // Users with `create_temp_channel` permission can create a temporary voice
+    // channel that auto-deletes when everyone leaves voice in it.
+    socket.on('create-temp-channel', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'create_temp_channel')) {
+        return socket.emit('error-msg', 'You don\'t have permission to create temporary channels');
+      }
+
+      const name = typeof data.name === 'string' ? data.name.trim() : '';
+      if (!name || name.length === 0) {
+        return socket.emit('error-msg', 'Channel name required');
+      }
+      if (name.length > 50) {
+        return socket.emit('error-msg', 'Channel name too long (max 50)');
+      }
+      if (!/^[\w\s\-!?.,'\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/iu.test(name)) {
+        return socket.emit('error-msg', 'Channel name contains invalid characters');
+      }
+
+      // Rate-limit: max 3 temp channels per user at a time
+      try {
+        const existing = db.prepare(
+          "SELECT COUNT(*) as cnt FROM channels WHERE created_by = ? AND expires_at IS NOT NULL"
+        ).get(socket.user.id);
+        if (existing && existing.cnt >= 3) {
+          return socket.emit('error-msg', 'You already have the maximum number of temporary channels (3)');
+        }
+      } catch { /* ignore */ }
+
+      const code = generateChannelCode();
+      // Temporary channels expire after 24h as a safety net (auto-delete-on-empty is the primary cleanup)
+      const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString();
+
+      try {
+        const result = db.prepare(
+          'INSERT INTO channels (name, code, created_by, is_private, expires_at, voice_enabled, is_temp_voice) VALUES (?, ?, ?, 0, ?, 1, 1)'
+        ).run(name.trim(), code, socket.user.id, expiresAt);
+
+        const channelId = result.lastInsertRowid;
+
+        // Add all server users as members so the channel is visible to everyone
+        const allUsers = db.prepare('SELECT id FROM users').all();
+        const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+        for (const u of allUsers) {
+          insertMember.run(channelId, u.id);
+        }
+
+        const channel = {
+          id: channelId,
+          name: name.trim(),
+          code,
+          display_code: code,
+          created_by: socket.user.id,
+          topic: '',
+          is_dm: 0,
+          is_private: 0,
+          expires_at: expiresAt,
+          voice_enabled: 1,
+          is_temp_voice: 1
+        };
+
+        // Join all connected sockets to the channel room so they receive events
+        for (const [, s] of io.sockets.sockets) {
+          if (s.user) s.join(`channel:${code}`);
+        }
+        // Notify all connected users so the channel appears in their sidebar
+        io.emit('temp-channel-created', channel);
+        // Tell the creator to auto-join voice in this channel
+        socket.emit('temp-channel-join-voice', { code });
+      } catch (err) {
+        console.error('Create temp channel error:', err);
+        socket.emit('error-msg', 'Failed to create temporary channel');
       }
     });
 
@@ -1980,7 +2056,7 @@ function setupSocketHandlers(io, db) {
         return socket.emit('error-msg', 'Voice is disabled in this channel');
       }
       // Check use_voice permission (admins bypass)
-      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'use_voice')) {
+      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'use_voice', vch.id)) {
         return socket.emit('error-msg', 'You don\'t have permission to use voice chat');
       }
       if (vchSettings && vchSettings.voice_user_limit > 0) {
@@ -5434,6 +5510,22 @@ function setupSocketHandlers(io, db) {
       if (voiceRoom.size === 0) {
         activeMusic.delete(code);
         musicQueues.delete(code);
+
+        // Auto-delete temporary voice channels when the last person leaves (#163)
+        try {
+          const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
+          if (ch && ch.is_temp_voice) {
+            db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+            db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+            io.emit('channel-deleted', { code, reason: 'temp-empty' });
+            channelUsers.delete(code);
+            voiceUsers.delete(code);
+            console.log(`[Temporary] Temp voice channel "${code}" deleted (everyone left)`);
+          }
+        } catch { /* column may not exist yet */ }
       }
 
       // Clean up AFK tracking if user is no longer in any voice room
@@ -6145,10 +6237,15 @@ function setupSocketHandlers(io, db) {
       try {
         // Replace all existing roles at the same scope —
         // assigning "User" server-wide removes "Jester" server-wide, etc.
+        // Only remove roles of the same scope type so that assigning a channel-scoped
+        // role server-wide doesn't remove the user's server-scoped User role (#195).
         if (channelId) {
           db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?').run(userId, channelId);
         } else {
-          db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id IS NULL').run(userId);
+          db.prepare(
+            `DELETE FROM user_roles WHERE user_id = ? AND channel_id IS NULL
+             AND role_id IN (SELECT id FROM roles WHERE scope = ?)`
+          ).run(userId, role.scope);
         }
         db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id, granted_by, custom_level) VALUES (?, ?, ?, ?, ?)').run(userId, roleId, channelId, socket.user.id, assignLevel !== role.level ? assignLevel : null);
 
