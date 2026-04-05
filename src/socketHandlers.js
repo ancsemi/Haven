@@ -5691,35 +5691,20 @@ function setupSocketHandlers(io, db) {
     socket.on('get-all-members', (data, callback) => {
       const cb = typeof callback === 'function' ? callback : () => {};
 
-      // All authenticated users can view the member list
       const isAdmin = socket.user.isAdmin;
       const canMod = isAdmin || userHasPermission(socket.user.id, 'kick_user') || userHasPermission(socket.user.id, 'ban_user');
       const canSeeAll = canMod || userHasPermission(socket.user.id, 'view_all_members');
 
+      if (!canSeeAll) return cb({ error: 'Permission denied' });
+
       try {
-        // Users with view_all_members, admins, or mods see all users;
-        // regular users only see people they share a channel with
-        let users;
-        if (canSeeAll) {
-          users = db.prepare(`
-            SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
-                   u.is_admin, u.created_at, u.avatar, u.avatar_shape, u.status, u.status_text
-            FROM users u
-            LEFT JOIN bans b ON u.id = b.user_id
-            ORDER BY u.created_at DESC
-          `).all();
-        } else {
-          users = db.prepare(`
-            SELECT DISTINCT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
-                   u.is_admin, u.created_at, u.avatar, u.avatar_shape, u.status, u.status_text
-            FROM users u
-            JOIN channel_members cm ON u.id = cm.user_id
-            WHERE cm.channel_id IN (
-              SELECT channel_id FROM channel_members WHERE user_id = ?
-            )
-            ORDER BY u.created_at DESC
-          `).all(socket.user.id);
-        }
+        const users = db.prepare(`
+          SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
+                 u.is_admin, u.created_at, u.avatar, u.avatar_shape, u.status, u.status_text
+          FROM users u
+          LEFT JOIN bans b ON u.id = b.user_id
+          ORDER BY u.created_at DESC
+        `).all();
 
         // Build online set from connected sockets
         const onlineIds = new Set();

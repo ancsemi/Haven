@@ -56,6 +56,7 @@ _setupSocketListeners() {
     } else {
       document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_soundboard')) ? 'block' : 'none';
     }
+    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members')) ? '' : 'none';
   });
 
   // Roles updated (from admin assigning/revoking)
@@ -69,6 +70,7 @@ _setupSocketListeners() {
     const canCreateChannel = this.user.isAdmin || this._hasPerm('create_channel');
     document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_soundboard')) ? 'block' : 'none';
+    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members')) ? '' : 'none';
     this._showToast(t('toasts.roles_updated'), 'info');
   });
 

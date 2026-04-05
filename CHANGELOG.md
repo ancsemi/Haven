@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.9.1] — 2026-04-04
+
+### Fixed
+- **Sidebar "View All Members" button bypassed permissions** — the 👥 button in the sidebar was visible to all users regardless of the `view_all_members` permission. It's now hidden unless the user is an admin, moderator, or has the `view_all_members` permission. The server also rejects the request outright for unpermissioned users. (#220)
+
+---
+
 ## [2.9.0] — 2026-04-02
 
 ### Added
