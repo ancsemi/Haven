@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.9.4] — 2026-04-05
+
+### Added
+- **Two-way bot webhook callbacks** — bots can now have a Callback URL and optional Callback Secret in the bot settings panel. When a user sends a message in a channel where the bot lives, Haven fires a POST to that URL with event data (message content, author info, channel, timestamp). If a secret is set, the payload is signed with HMAC-SHA256 via an `X-Haven-Signature` header. Webhook messages from the bot itself won't trigger callbacks, preventing loops. (#194)
+- **Community server** — added a "Try Haven" link to the website, README, and nav bar pointing to the volunteer-hosted community server at haven.moviethingy.xyz (hosted by MutantRabbit).
+
+---
+
 ## [2.9.3] — 2026-04-05
 
 ### Changed
