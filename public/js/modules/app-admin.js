@@ -615,7 +615,23 @@ _applyServerBranding() {
 
   // Sidebar brand text
   const brandText = document.querySelector('.brand-text');
-  if (brandText) brandText.textContent = name;
+  if (brandText) {
+    brandText.textContent = name;
+    // Keep glitch scramble system in sync. The scrambler captures each element's
+    // original text in a data-original-text attribute and restores it at the end of
+    // every animation. If the cache is stale (e.g. "HAVEN" from the HTML default) it
+    // will overwrite the real server name on every tick.
+    // We also abort any in-progress animation: the animation closure captures
+    // trueOriginal as a const at start time, so updating the attribute alone won't
+    // prevent that specific closure from writing the stale name when it finishes.
+    brandText.dataset.originalText = name;
+    if (brandText._scrambleInterval) {
+      clearInterval(brandText._scrambleInterval);
+      brandText._scrambleInterval = null;
+    }
+    brandText._scrambling = false;
+    brandText.classList.remove('scrambling');
+  }
 
   // Sidebar brand icon
   const logoSm = document.querySelector('.logo-sm');
