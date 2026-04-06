@@ -587,7 +587,12 @@ _setupSocketListeners() {
   this.socket.on('channel-deleted', (data) => {
     this.channels = this.channels.filter(c => c.code !== data.code);
     this._renderChannels();
+    // Disconnect from voice if the user is in the deleted channel's voice
+    if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.code) {
+      this._leaveVoice();
+    }
     if (this.currentChannel === data.code) {
+      this._renderVoiceUsers([]);
       this.currentChannel = null;
       this._showWelcome();
       this._showToast(t('toasts.channel_deleted'), 'error');

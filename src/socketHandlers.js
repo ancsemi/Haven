@@ -886,7 +886,7 @@ function setupSocketHandlers(io, db) {
         db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
         db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
         db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-        io.to(`channel:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
+        io.to(`channel:${ch.code}`).to(`voice:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
         channelUsers.delete(ch.code);
         voiceUsers.delete(ch.code);
         activeMusic.delete(ch.code);
@@ -3420,7 +3420,7 @@ function setupSocketHandlers(io, db) {
       });
       deleteAll(channel.id);
 
-      io.to(`channel:${code}`).emit('channel-deleted', { code });
+      io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
 
       channelUsers.delete(code);
       voiceUsers.delete(code);
