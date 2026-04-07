@@ -1,7 +1,7 @@
 {
-  "name": "amni-haven",
+  "name": "haven",
   "version": "2.9.5",
-  "description": "Amni-Haven — self-hosted private chat for your server, your rules",
+  "description": "Haven — self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",
   "engines": {
