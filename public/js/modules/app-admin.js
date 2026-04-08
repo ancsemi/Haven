@@ -451,8 +451,11 @@ _snapshotAdminSettings() {
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_poll_options: this.serverSettings.max_poll_options || '10',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
-    default_theme: this.serverSettings.default_theme || ''
+    default_theme: this.serverSettings.default_theme || '',
+    custom_tos: this.serverSettings.custom_tos || ''
   };
+  const tosEl = document.getElementById('custom-tos-input');
+  if (tosEl) tosEl.value = this._adminSnapshot.custom_tos;
   // Load webhooks list for admin preview
   if (this.user?.isAdmin) {
     this.socket.emit('get-webhooks');
@@ -546,6 +549,12 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const customTos = document.getElementById('custom-tos-input')?.value.trim() || '';
+  if (customTos !== (snap.custom_tos || '')) {
+    this.socket.emit('update-server-setting', { key: 'custom_tos', value: customTos });
+    changed = true;
+  }
+
   if (changed) {
     this._showToast(t('settings.admin.settings_saved'), 'success');
   } else {
@@ -583,6 +592,8 @@ _cancelAdminSettings() {
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
     const dt = document.getElementById('default-theme-select');
     if (dt) dt.value = snap.default_theme || '';
+    const ct = document.getElementById('custom-tos-input');
+    if (ct) ct.value = snap.custom_tos || '';
   }
   document.getElementById('settings-modal').style.display = 'none';
 },

@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.9.6] — 2026-04-07
+
+### Added
+- **Custom Terms of Service** — admins can now add custom terms that appear above the default Haven ToS on the login page. Set via a new textarea in Admin Settings. Supports plain text with paragraph breaks, max 50,000 characters. Leave empty to show only the default ToS. (#5229)
+
+### Fixed
+- **Unpin message visual bug** — unpinning a message while viewing the pinned messages panel no longer leaves the pin border on the message. The pinned panel item is also removed in real time and the count updates. (#5228)
+- **Android app popup "Don't show this again"** — the checkbox now persists correctly across sessions. Previously the v3 migration flag used sessionStorage, causing dismissals to reset on every new session.
+- **Android app popup layout** — moved the "NOW AVAILABLE" badge above the title instead of inline, and centered the title text.
+
+---
+
 ## [2.9.5] — 2026-04-07
 
 ### Changed

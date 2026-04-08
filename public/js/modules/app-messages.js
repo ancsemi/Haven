@@ -679,7 +679,7 @@ _renderPinnedPanel(pins) {
   list.querySelectorAll('.pinned-item').forEach(item => {
     item.addEventListener('click', () => {
       const msgId = item.dataset.msgId;
-      const msgEl = document.querySelector(`[data-msg-id="${msgId}"]`);
+      const msgEl = document.querySelector(`#messages [data-msg-id="${msgId}"]`);
       if (msgEl) {
         msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         msgEl.classList.add('highlight-flash');

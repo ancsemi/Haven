@@ -50,6 +50,17 @@
       const titleEl = document.getElementById('server-title');
       if (titleEl) titleEl.textContent = d.server_title;
     }
+    if (d.custom_tos) {
+      const section = document.getElementById('custom-tos-section');
+      const content = document.getElementById('custom-tos-content');
+      if (section && content) {
+        // Render as plain text with paragraph breaks
+        content.innerHTML = d.custom_tos.split(/\n\n+/).map(p =>
+          '<p>' + p.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>') + '</p>'
+        ).join('');
+        section.style.display = 'block';
+      }
+    }
   }).catch(() => {});
 
   // ── EULA ─────────────────────────────────────────────

@@ -175,12 +175,12 @@ _initDesktopAppBanner() {
 _initAndroidBetaBanner() {
   // ── v3 migration: Android app is now a full release; reset dismissals so
   //    users who dismissed the old closed-beta popup see the new announcement ──
-  if (!sessionStorage.getItem('_ab_v3_migrated')) {
+  if (!localStorage.getItem('_ab_v3_migrated')) {
     localStorage.removeItem('haven_android_beta_banner_dismissed');
     localStorage.removeItem('haven_android_beta_promo_dismissed');
     localStorage.removeItem('haven_ab_banner_nodisplay');
     localStorage.removeItem('haven_ab_promo_nodisplay');
-    sessionStorage.setItem('_ab_v3_migrated', '1');
+    localStorage.setItem('_ab_v3_migrated', '1');
   }
 
   // ── Top-bar banner ──

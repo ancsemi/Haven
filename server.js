@@ -597,9 +597,11 @@ app.get('/api/public-config', (req, res) => {
     const db = getDb();
     const themeRow = db.prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get();
     const titleRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_title'").get();
+    const tosRow = db.prepare("SELECT value FROM server_settings WHERE key = 'custom_tos'").get();
     res.json({
       default_theme: themeRow?.value || '',
-      server_title: titleRow?.value || ''
+      server_title: titleRow?.value || '',
+      custom_tos: tosRow?.value || ''
     });
   } catch {
     res.json({ default_theme: '', server_title: '' });

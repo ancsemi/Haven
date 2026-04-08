@@ -1574,6 +1574,12 @@
             <p class="muted-text" data-i18n="settings.admin.no_bots">No bots configured</p>
           </div>
         </div>
+        <!-- Custom Terms of Service (Admin only) -->
+        <div class="admin-settings" id="section-custom-tos" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">⚖️ <span data-i18n="settings.admin.custom_tos_title">Custom Terms of Service</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.custom_tos_hint">Add custom terms that appear before the default ToS on the login page. Supports plain text. Leave empty to show only the default Haven ToS.</small>
+          <textarea id="custom-tos-input" class="settings-textarea" rows="6" maxlength="50000" placeholder="Enter your custom terms of service..." style="margin-top:8px;width:100%;resize:vertical;min-height:80px;font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-family:inherit;"></textarea>
+        </div>
         <!-- Discord Import (Admin only) -->
         <div class="admin-settings" id="section-import" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">📦 <span data-i18n="settings.admin.import_title">Discord Import</span></h5>
@@ -2464,7 +2470,8 @@
   <div class="modal-overlay" id="android-beta-modal" style="display:none">
     <div class="modal android-beta-promo">
       <div class="android-beta-promo-icon">📱</div>
-      <h3 class="android-beta-promo-title"><span data-i18n="modals.android_beta.title">Amni-Haven Android</span> <span class="android-beta-promo-badge" data-i18n="modals.android_beta.badge" style="background:var(--accent-bright,#4caf50)">NOW AVAILABLE</span></h3>
+      <span class="android-beta-promo-badge" data-i18n="modals.android_beta.badge" style="background:var(--accent-bright,#4caf50)">NOW AVAILABLE</span>
+      <h3 class="android-beta-promo-title"><span data-i18n="modals.android_beta.title">Amni-Haven Android</span></h3>
       <p class="android-beta-promo-subtitle" data-i18n="modals.android_beta.subtitle">A native Android app for Haven, built from the ground up by Amnibro!</p>
       <ul class="android-beta-promo-features">
         <li><span class="promo-check">✓</span> <span data-i18n="modals.android_beta.feature_native">Native Android experience</span></li>

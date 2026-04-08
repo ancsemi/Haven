@@ -3389,12 +3389,10 @@ html.rgb-cycling *::after {
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  text-align: center;
 }
 .android-beta-promo-badge {
+  display: inline-block;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -3403,6 +3401,7 @@ html.rgb-cycling *::after {
   color: #fff;
   padding: 2px 8px;
   border-radius: 10px;
+  margin-bottom: 6px;
 }
 .android-beta-promo-subtitle {
   font-size: 14px;

@@ -922,7 +922,7 @@ _setupSocketListeners() {
   // ── Pin / Unpin ──────────────────────────────────
   this.socket.on('message-pinned', (data) => {
     if (data.channelCode === this.currentChannel) {
-      const msgEl = document.querySelector(`[data-msg-id="${data.messageId}"]`);
+      const msgEl = document.querySelector(`#messages [data-msg-id="${data.messageId}"]`);
       if (msgEl) {
         msgEl.classList.add('pinned');
         msgEl.dataset.pinned = '1';
@@ -941,7 +941,7 @@ _setupSocketListeners() {
 
   this.socket.on('message-unpinned', (data) => {
     if (data.channelCode === this.currentChannel) {
-      const msgEl = document.querySelector(`[data-msg-id="${data.messageId}"]`);
+      const msgEl = document.querySelector(`#messages [data-msg-id="${data.messageId}"]`);
       if (msgEl) {
         msgEl.classList.remove('pinned');
         delete msgEl.dataset.pinned;
@@ -950,6 +950,17 @@ _setupSocketListeners() {
         // Update toolbar: swap unpin → pin
         const unpinBtn = msgEl.querySelector('[data-action="unpin"]');
         if (unpinBtn) { unpinBtn.dataset.action = 'pin'; unpinBtn.title = 'Pin'; }
+      }
+      // Remove from pinned panel if it's open
+      const pinnedItem = document.querySelector(`#pinned-panel .pinned-item[data-msg-id="${data.messageId}"]`);
+      if (pinnedItem) {
+        pinnedItem.remove();
+        const count = document.getElementById('pinned-count');
+        const remaining = document.querySelectorAll('#pinned-list .pinned-item').length;
+        count.textContent = `📌 ${t(remaining !== 1 ? 'pinned_panel.count_other' : 'pinned_panel.count_one', { count: remaining })}`;
+        if (remaining === 0) {
+          document.getElementById('pinned-list').innerHTML = `<p class="muted-text" style="padding:12px">${t('pinned_panel.no_messages')}</p>`;
+        }
       }
       this._appendSystemMessage(`📌 ${t('header.messages.message_unpinned')}`);
     }
