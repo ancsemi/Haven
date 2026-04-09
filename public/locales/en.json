@@ -370,6 +370,7 @@
     "mention_everyone": "Mention @everyone",
     "view_history": "View Message History",
     "view_all_members": "View All Server Members",
+    "view_channel_members": "View Channel Members",
     "manage_emojis": "Manage Custom Emojis",
     "manage_soundboard": "Manage Soundboard",
     "promote_user": "Promote Users",
@@ -1358,6 +1359,7 @@
     },
     "all_members": {
       "title": "All Members",
+      "channel_title": "Channel Members",
       "search_placeholder": "Search users...",
       "filter_all": "All",
       "filter_online": "Online",

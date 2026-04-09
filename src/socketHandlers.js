@@ -343,7 +343,7 @@ const VALID_ROLE_PERMS = [
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue',
+  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue',
   'promote_user', 'transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'
 ];
 
@@ -1317,6 +1317,20 @@ function setupSocketHandlers(io, db) {
         voiceUsers.delete(code);
         activeMusic.delete(code);
         musicQueues.delete(code);
+        // Auto-delete temporary voice channels when pruning empties the room
+        try {
+          const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
+          if (ch && ch.is_temp_voice) {
+            db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+            db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+            io.emit('channel-deleted', { code, reason: 'temp-empty' });
+            channelUsers.delete(code);
+            console.log(`[Temporary] Temp voice channel "${code}" deleted (pruned empty)`);
+          }
+        } catch { /* column may not exist yet */ }
       }
     }
 
@@ -3401,11 +3415,15 @@ function setupSocketHandlers(io, db) {
 
     socket.on('delete-channel', (data) => {
       if (!data || typeof data !== 'object') return;
-      if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_channel')) {
+      const delCode = typeof data.code === 'string' ? data.code.trim() : '';
+      // Allow temp channel creators to delete their own temp channels
+      const delCh = delCode ? db.prepare('SELECT created_by, is_temp_voice FROM channels WHERE code = ?').get(delCode) : null;
+      const isOwnTemp = delCh && delCh.is_temp_voice && delCh.created_by === socket.user.id;
+      if (!socket.user.isAdmin && !isOwnTemp && !userHasPermission(socket.user.id, 'delete_channel')) {
         return socket.emit('error-msg', 'Only admins can delete channels');
       }
 
-      const code = typeof data.code === 'string' ? data.code.trim() : '';
+      const code = delCode;
       if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
       const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
       if (!channel) return;
@@ -5776,16 +5794,41 @@ function setupSocketHandlers(io, db) {
       const canMod = isAdmin || userHasPermission(socket.user.id, 'kick_user') || userHasPermission(socket.user.id, 'ban_user');
       const canSeeAll = canMod || userHasPermission(socket.user.id, 'view_all_members');
 
-      if (!canSeeAll) return cb({ error: 'Permission denied' });
+      // Channel-scoped member viewing: if the caller can't see ALL members,
+      // check if they have view_channel_members for the requested channel.
+      let channelOnly = null; // null = all members, otherwise restrict to this channel's members
+      if (!canSeeAll) {
+        const channelCode = data && typeof data.channelCode === 'string' ? data.channelCode : null;
+        if (channelCode) {
+          const ch = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
+          if (ch && userHasPermission(socket.user.id, 'view_channel_members', ch.id)) {
+            channelOnly = ch.id;
+          }
+        }
+        if (channelOnly === null) return cb({ error: 'Permission denied' });
+      }
 
       try {
-        const users = db.prepare(`
-          SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
-                 u.is_admin, u.created_at, u.avatar, u.avatar_shape, u.status, u.status_text
-          FROM users u
-          LEFT JOIN bans b ON u.id = b.user_id
-          ORDER BY u.created_at DESC
-        `).all();
+        let users;
+        if (channelOnly) {
+          // Only fetch members of the specific channel
+          users = db.prepare(`
+            SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
+                   u.is_admin, u.created_at, u.avatar, u.avatar_shape, u.status, u.status_text
+            FROM users u
+            JOIN channel_members cm ON u.id = cm.user_id
+            WHERE cm.channel_id = ?
+            ORDER BY u.created_at DESC
+          `).all(channelOnly);
+        } else {
+          users = db.prepare(`
+            SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
+                   u.is_admin, u.created_at, u.avatar, u.avatar_shape, u.status, u.status_text
+            FROM users u
+            LEFT JOIN bans b ON u.id = b.user_id
+            ORDER BY u.created_at DESC
+          `).all();
+        }
 
         // Build online set from connected sockets
         const onlineIds = new Set();
@@ -5858,6 +5901,7 @@ function setupSocketHandlers(io, db) {
         cb({
           members,
           total: members.length,
+          channelOnly: !!channelOnly,
           allChannels: canMod ? allChannels : undefined,
           callerPerms: {
             isAdmin,
@@ -6104,7 +6148,7 @@ function setupSocketHandlers(io, db) {
           .forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
 
         const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
-        ['kick_user','mute_user','delete_message','pin_message','manage_sub_channels','rename_sub_channel','delete_lower_messages','upload_files','use_voice','view_history','manage_music_queue','delete_own_messages','edit_own_messages']
+        ['kick_user','mute_user','delete_message','pin_message','manage_sub_channels','rename_sub_channel','delete_lower_messages','upload_files','use_voice','view_history','view_channel_members','manage_music_queue','delete_own_messages','edit_own_messages']
           .forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
 
         const userRole = insertRole.run('User', 1, 'server', '#95a5a6');
@@ -6205,6 +6249,7 @@ function setupSocketHandlers(io, db) {
             FROM user_roles ur
             JOIN roles r ON ur.role_id = r.id
             WHERE ur.user_id = ?
+            GROUP BY ur.role_id, COALESCE(ur.channel_id, -1)
           `).all(m.id);
 
           users.push({

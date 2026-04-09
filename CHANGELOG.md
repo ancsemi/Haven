@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.9.7] — 2026-04-09
+
+### Changed
+- **Removed Google STUN dependency** — voice/WebRTC now defaults to open-source public STUN servers (`stun.stunprotocol.org` and `stun.nextcloud.com`) instead of Google's. No functional change for end users, just removes the Google dependency for a project built around self-hosting.
+
+### Added
+- **`STUN_URLS` environment variable** — server admins can now override the default STUN servers with their own (e.g., a self-hosted coturn instance) for fully self-contained voice with zero external dependencies. Comma-separated list of STUN URIs.
+
+---
+
 ## [2.9.6] — 2026-04-07
 
 ### Added

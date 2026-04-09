@@ -12922,7 +12922,7 @@ ul.chat-list { list-style-type: disc; }
 }
 .rac-perm-item.disabled {
   opacity: 0.4;
-  pointer-events: none;
+  cursor: not-allowed;
 }
 
 /* Current role display in config pane */

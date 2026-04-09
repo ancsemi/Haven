@@ -238,6 +238,13 @@ _openChannelCtxMenu(code, btnEl) {
   if (deleteBtn && !canManageChannels && this._hasPerm('delete_channel')) {
     deleteBtn.style.display = '';
   }
+  // Also show delete for users who created a temp channel
+  if (deleteBtn && !canManageChannels && !this._hasPerm('delete_channel')) {
+    const ch = this.channels.find(c => c.code === code);
+    if (ch && ch.is_temp_voice && ch.created_by === this.user?.id) {
+      deleteBtn.style.display = '';
+    }
+  }
   menu.querySelectorAll('.mod-only').forEach(el => {
     el.style.display = isMod ? '' : 'none';
   });

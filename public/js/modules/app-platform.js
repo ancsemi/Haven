@@ -362,6 +362,7 @@ async _setupDesktopAppPrefs() {
   const hiddenRow = document.getElementById('pref-start-hidden-row');
   const trayEl    = document.getElementById('pref-minimize-to-tray');
   const sdrEl     = document.getElementById('pref-force-sdr');
+  const menuBarEl = document.getElementById('pref-hide-menu-bar');
   const versionEl = document.getElementById('desktop-version-info');
 
   if (startEl) { startEl.checked = !!prefs.startOnLogin; }
@@ -369,6 +370,7 @@ async _setupDesktopAppPrefs() {
   if (hiddenRow) { hiddenRow.style.display = prefs.startOnLogin ? '' : 'none'; }
   if (trayEl)  { trayEl.checked  = !!prefs.minimizeToTray; }
   if (sdrEl)   { sdrEl.checked   = !!prefs.forceSDR; }
+  if (menuBarEl) { menuBarEl.checked = !!prefs.hideMenuBar; }
 
   // Show desktop version
   if (versionEl && window.havenDesktop.getVersion) {
@@ -402,6 +404,11 @@ async _setupDesktopAppPrefs() {
         this._showToast('Color profile updated. Restart Haven Desktop to apply.', 'info');
       }
     } catch { sdrEl.checked = !sdrEl.checked; }
+  });
+
+  menuBarEl?.addEventListener('change', async () => {
+    try { await window.havenDesktop.prefs.setHideMenuBar(menuBarEl.checked); }
+    catch { menuBarEl.checked = !menuBarEl.checked; }
   });
 },
 

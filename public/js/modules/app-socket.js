@@ -56,7 +56,7 @@ _setupSocketListeners() {
     } else {
       document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_soundboard')) ? 'block' : 'none';
     }
-    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members')) ? '' : 'none';
+    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
   });
 
   // Roles updated (from admin assigning/revoking)
@@ -70,7 +70,7 @@ _setupSocketListeners() {
     const canCreateChannel = this.user.isAdmin || this._hasPerm('create_channel');
     document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_soundboard')) ? 'block' : 'none';
-    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members')) ? '' : 'none';
+    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
     this._showToast(t('toasts.roles_updated'), 'info');
   });
 
@@ -152,6 +152,11 @@ _setupSocketListeners() {
       setTimeout(() => {
         if (this.socket && !this.socket.connected) this.socket.connect();
       }, 2500);
+      // Browsers don't compute layout accurately while a tab is hidden, so
+      // scrollToBottom during a background reconnect often undershoots.
+      // Re-scroll now that the tab is visible and layout is correct.
+      if (this._coupledToBottom) this._scrollToBottom(true);
+
       // Skip heavy refresh if we just handled a 'connect' event (avoids doubled emits)
       const sinceLast = Date.now() - (this._lastConnectTime || 0);
       if (sinceLast < 3000) return;

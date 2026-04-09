@@ -1628,6 +1628,10 @@ _setupModalExpand() {
 
   // Auto-inject an expand/maximize toggle button into every modal's header
   document.querySelectorAll('.modal').forEach(modal => {
+    // Skip promo/centered popups — they're not regular modals
+    if (modal.classList.contains('android-beta-promo') ||
+        modal.classList.contains('desktop-promo')) return;
+
     // Find the header container — either .settings-header / .activities-header or the first h3
     let headerContainer = modal.querySelector('.settings-header, .activities-header');
     let header = modal.querySelector('h3');
@@ -1645,20 +1649,43 @@ _setupModalExpand() {
       btn.title = isMax ? 'Restore size' : 'Expand';
     });
 
-    if (headerContainer) {
-      // Insert before the close button
-      const closeBtn = headerContainer.querySelector('.settings-close-btn');
-      if (closeBtn) {
-        headerContainer.insertBefore(btn, closeBtn);
-      } else {
-        headerContainer.appendChild(btn);
+    // Create X close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'modal-expand-btn';
+    closeBtn.title = 'Close';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const overlay = modal.closest('.modal-overlay');
+      if (overlay) overlay.style.display = 'none';
+      if (modal.classList.contains('modal-maximized')) {
+        modal.classList.remove('modal-maximized');
+        btn.textContent = '⛶';
+        btn.title = 'Expand / Restore';
       }
+    });
+
+    if (headerContainer) {
+      // Settings/activities modal: wrap buttons in a group to avoid space-between spreading
+      const existingClose = headerContainer.querySelector('.settings-close-btn');
+      const btnGroup = document.createElement('div');
+      btnGroup.style.cssText = 'display:flex;align-items:center;gap:4px;margin-left:auto;';
+      btnGroup.appendChild(btn);
+      if (existingClose) {
+        // Replace the existing close button with our grouped version
+        existingClose.remove();
+        btnGroup.appendChild(closeBtn);
+      }
+      headerContainer.appendChild(btnGroup);
     } else {
-      // Standard modal: make h3 flex and append button
+      // Standard modal: make h3 flex and append buttons
       header.style.display = 'flex';
       header.style.alignItems = 'center';
-      btn.style.marginLeft = 'auto';
-      header.appendChild(btn);
+      const btnGroup = document.createElement('div');
+      btnGroup.style.cssText = 'display:flex;align-items:center;gap:4px;margin-left:auto;';
+      btnGroup.appendChild(btn);
+      btnGroup.appendChild(closeBtn);
+      header.appendChild(btnGroup);
     }
   });
 },

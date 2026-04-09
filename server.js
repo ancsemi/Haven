@@ -309,10 +309,11 @@ app.get('/api/ice-servers', (req, res) => {
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const iceServers = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ];
+  // STUN_URLS env var: comma-separated list of STUN URIs to override defaults
+  const stunUrls = process.env.STUN_URLS
+    ? process.env.STUN_URLS.split(',').map(u => u.trim()).filter(Boolean)
+    : ['stun:stun.stunprotocol.org:3478', 'stun:stun.nextcloud.com:3478'];
+  const iceServers = stunUrls.map(urls => ({ urls }));
 
   const turnUrl = process.env.TURN_URL;
   if (turnUrl) {

@@ -869,8 +869,11 @@ _startStatusBar() {
     // Belt-and-suspenders: ensure the CSS attribute is present (preload
     // sets this on DOMContentLoaded, but reinforce here in case of timing)
     document.documentElement.setAttribute('data-desktop-app', '1');
+    // If the Desktop preload already injected its own fixed footer bar,
+    // don't force the original status bar visible (that causes duplicates)
+    const hasDesktopFooter = !!document.getElementById('haven-desktop-footer');
     const sb = document.getElementById('status-bar');
-    if (sb) {
+    if (sb && !hasDesktopFooter) {
       sb.style.setProperty('display', 'flex', 'important');
       // Safety net: after one frame, verify the bar is actually inside the
       // visible viewport.  If Electron's BrowserView clips it (100dvh

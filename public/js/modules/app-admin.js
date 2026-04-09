@@ -4,7 +4,7 @@ const ALL_PERMS = [
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
+  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
   'manage_roles', 'manage_server', 'delete_channel'
 ];
 //Similarly flavored solution to perm labels
@@ -31,6 +31,7 @@ const PERM_LABELS = {
   get mention_everyone() { return t('permissions.mention_everyone'); },
   get view_history() { return t('permissions.view_history'); },
   get view_all_members() { return t('permissions.view_all_members'); },
+  get view_channel_members() { return t('permissions.view_channel_members'); },
   get manage_emojis() { return t('permissions.manage_emojis'); },
   get manage_soundboard() { return t('permissions.manage_soundboard'); },
   get manage_music_queue() { return t('permissions.manage_music_queue'); },
@@ -797,7 +798,9 @@ _openAllMembersModal() {
   document.getElementById('all-members-count').textContent = '';
   modal.style.display = 'flex';
 
-  this.socket.emit('get-all-members', {}, (res) => {
+  // Pass current channel so the server can fall back to view_channel_members
+  const payload = this.currentChannel ? { channelCode: this.currentChannel } : {};
+  this.socket.emit('get-all-members', payload, (res) => {
     if (res.error) {
       list.innerHTML = `<p class="muted-text" style="text-align:center;padding:20px">${this._escapeHtml(res.error)}</p>`;
       return;
@@ -805,6 +808,11 @@ _openAllMembersModal() {
     this._allMembersData = res.members || [];
     this._allMembersChannels = res.allChannels || [];
     this._allMembersPerms = res.callerPerms || {};
+    // Update title to reflect channel-only vs all members
+    const titleEl = document.querySelector('#all-members-modal [data-i18n="modals.all_members.title"]');
+    if (titleEl) {
+      titleEl.textContent = res.channelOnly ? t('modals.all_members.channel_title') : t('modals.all_members.title');
+    }
     document.getElementById('all-members-count').textContent = `(${res.total})`;
     this._renderAllMembers(this._allMembersData);
   });
@@ -3287,7 +3295,10 @@ _renderRacConfig() {
           const callerHasPerm = callerIsAdmin || callerPerms.includes('*') || callerPerms.includes(p);
           const isAdminOnly = adminOnlyPerms.includes(p) && !callerIsAdmin;
           const isReadOnly = !selectedRoleId || isAdminOnly || !callerHasPerm;
-          return `<label class="rac-perm-item${isReadOnly ? ' disabled' : ''}${checked ? ' checked' : ''}">
+          const tooltip = isReadOnly && selectedRoleId
+            ? (isAdminOnly ? 'Owner only' : 'You don\'t have this permission')
+            : '';
+          return `<label class="rac-perm-item${isReadOnly ? ' disabled' : ''}${checked ? ' checked' : ''}"${tooltip ? ` title="${tooltip}"` : ''}>
             <input type="checkbox" data-perm="${p}" ${checked ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>
             ${permLabels[p] || p}
           </label>`;

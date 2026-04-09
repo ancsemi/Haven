@@ -437,7 +437,7 @@ function initDatabase() {
     const channelModPerms = [
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
       'manage_sub_channels', 'rename_sub_channel', 'delete_lower_messages',
-      'upload_files', 'use_voice', 'view_history', 'manage_music_queue',
+      'upload_files', 'use_voice', 'view_history', 'view_channel_members', 'manage_music_queue',
       'delete_own_messages', 'edit_own_messages'
     ];
     channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
@@ -479,6 +479,9 @@ function initDatabase() {
       GROUP BY user_id, role_id, COALESCE(channel_id, -1)
     )
   `);
+
+  // ── Prevent future NULL-duplicate inserts with a functional unique index ──
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_no_dupes ON user_roles(user_id, role_id, COALESCE(channel_id, -1))');
 
   // ── Migration: custom_level column on user_roles for per-assignment level overrides ──
   try {
