@@ -3248,7 +3248,7 @@ _setupIOSKeyboard() {
     navigator.standalone === true;
 
   // Only needed for iOS standalone PWA (browsers handle it natively)
-  if (!isIOS && !isStandalone) return;
+  if (!isIOS || !isStandalone) return;
 
   const app = document.getElementById('app');
   const messages = document.getElementById('messages');

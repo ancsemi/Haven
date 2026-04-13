@@ -1606,8 +1606,17 @@ _setupLightbox() {
     if (e.target === lb) this._closeLightbox();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && lb.style.display !== 'none') this._closeLightbox();
+    if (lb.style.display === 'none') return;
+    if (e.key === 'Escape') this._closeLightbox();
+    if (e.key === 'ArrowLeft') this._lightboxNavigate(-1);
+    if (e.key === 'ArrowRight') this._lightboxNavigate(1);
   });
+
+  // Nav button clicks
+  const prevBtn = document.getElementById('lightbox-prev');
+  const nextBtn = document.getElementById('lightbox-next');
+  if (prevBtn) prevBtn.addEventListener('click', (e) => { e.stopPropagation(); this._lightboxNavigate(-1); });
+  if (nextBtn) nextBtn.addEventListener('click', (e) => { e.stopPropagation(); this._lightboxNavigate(1); });
 
   // Custom context menu for lightbox image (Save, Copy, Open)
   const lbImg = document.getElementById('lightbox-img');
@@ -1620,12 +1629,46 @@ _setupLightbox() {
   }
 },
 
+_getLightboxImages() {
+  const msgs = document.getElementById('messages');
+  if (!msgs) return [];
+  return Array.from(msgs.querySelectorAll('.chat-image')).map(img => img.src);
+},
+
+_lightboxNavigate(dir) {
+  const imgs = this._getLightboxImages();
+  const lbImg = document.getElementById('lightbox-img');
+  if (!lbImg || imgs.length < 2) return;
+  const curIdx = imgs.indexOf(lbImg.src);
+  if (curIdx < 0) return;
+  const newIdx = curIdx + dir;
+  if (newIdx < 0 || newIdx >= imgs.length) return;
+  lbImg.src = imgs[newIdx];
+  this._updateLightboxNav();
+},
+
+_updateLightboxNav() {
+  const imgs = this._getLightboxImages();
+  const lbImg = document.getElementById('lightbox-img');
+  const prevBtn = document.getElementById('lightbox-prev');
+  const nextBtn = document.getElementById('lightbox-next');
+  if (!lbImg || !prevBtn || !nextBtn) return;
+  const curIdx = imgs.indexOf(lbImg.src);
+  prevBtn.disabled = curIdx <= 0;
+  nextBtn.disabled = curIdx < 0 || curIdx >= imgs.length - 1;
+  // Hide nav if only one image
+  const showNav = imgs.length > 1;
+  prevBtn.style.display = showNav ? '' : 'none';
+  nextBtn.style.display = showNav ? '' : 'none';
+},
+
 _openLightbox(src) {
   const lb = document.getElementById('image-lightbox');
   const img = document.getElementById('lightbox-img');
   if (!lb || !img) return;
   img.src = src;
   lb.style.display = 'flex';
+  this._updateLightboxNav();
 },
 
 _closeLightbox() {

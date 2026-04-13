@@ -4255,8 +4255,8 @@ select.cfn-select.cfn-input {
 .message-input-area textarea::placeholder { color: var(--text-muted); }
 
 .btn-send {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   background: var(--accent);
   color: white;
   border-radius: var(--radius);
@@ -4883,6 +4883,12 @@ select.cfn-select.cfn-input {
 .server-icon.add-server .server-icon-text {
   font-size: 22px;
   color: var(--accent);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 .server-status-dot {
@@ -5543,6 +5549,37 @@ select.cfn-select.cfn-input {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+/* Lightbox navigation arrows */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10001;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, opacity 0.15s ease;
+  opacity: 0.7;
+}
+.lightbox-nav:hover {
+  background: rgba(0, 0, 0, 0.75);
+  opacity: 1;
+}
+.lightbox-nav:disabled {
+  opacity: 0.2;
+  cursor: default;
+  pointer-events: none;
+}
+.lightbox-prev { left: 16px; }
+.lightbox-next { right: 16px; }
 
 /* Image context menu (right-click Save/Copy/Open) */
 .image-context-menu {
@@ -8382,7 +8419,7 @@ select.cfn-select.cfn-input {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 90;
+  z-index: 1090;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -8439,6 +8476,14 @@ select.cfn-select.cfn-input {
    ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
+  /* Safe area insets for notched phones */
+  #app {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
   /* Show hamburger and users button */
   .mobile-menu-btn,
   .mobile-users-btn { display: flex !important; }
@@ -8456,7 +8501,7 @@ select.cfn-select.cfn-input {
   .server-bar { width: 0; min-width: 0; overflow: hidden; border: none; padding: 0; }
 
   /* Main area takes full width on mobile */
-  .main { width: 100%; min-width: 0; }
+  .main { width: 100%; min-width: 0; isolation: isolate; }
 
   /* Welcome screen centered properly */
   .welcome-screen { width: 100%; justify-content: center; align-items: center; }
@@ -8470,11 +8515,12 @@ select.cfn-select.cfn-input {
     bottom: 0;
     width: 280px;
     min-width: 280px;
-    z-index: 100;
+    z-index: 1100;
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
-    /* Android nav bar / browser toolbar safe area */
+    /* Safe area for notched phones */
+    padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
   }
 
@@ -8490,12 +8536,12 @@ select.cfn-select.cfn-input {
     bottom: 0;
     width: 52px;
     min-width: 52px;
-    z-index: 100;
+    z-index: 1100;
     overflow-y: auto;
     transform: translateX(-332px);
     transition: transform 0.25s ease;
     border-right: 1px solid var(--border);
-    padding: 8px 0;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 0 8px;
   }
 
   #app-body.mobile-sidebar-open .server-bar {
@@ -8511,7 +8557,7 @@ select.cfn-select.cfn-input {
     bottom: 0;
     width: 260px;
     min-width: 260px;
-    z-index: 100;
+    z-index: 1100;
     transform: translateX(100%);
     transition: transform 0.25s ease;
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
@@ -8569,14 +8615,6 @@ select.cfn-select.cfn-input {
    ═══════════════════════════════════════════════════════════ */
 
 @media (max-width: 480px) {
-  /* Safe area insets for notched phones */
-  #app {
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    padding-left: env(safe-area-inset-left, 0px);
-    padding-right: env(safe-area-inset-right, 0px);
-  }
-
   /* Sidebar full width on phones */
   .sidebar { width: 85vw; min-width: 85vw; }
 

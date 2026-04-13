@@ -441,7 +441,7 @@
             <!-- Floating "⋯" button for touch-device message actions fallback -->
             <button id="msg-more-btn" aria-label="Message actions">⋯</button>
           </div>
-          <button id="jump-to-bottom" class="jump-to-bottom" style="display:none" data-i18n-title="app.actions.jump_to_bottom" title="Jump to bottom">
+          <button id="jump-to-bottom" class="jump-to-bottom" data-i18n-title="app.actions.jump_to_bottom" title="Jump to bottom">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -2606,7 +2606,13 @@
 
   <!-- Image Lightbox Overlay -->
   <div id="image-lightbox" class="image-lightbox" style="display:none">
+    <button id="lightbox-prev" class="lightbox-nav lightbox-prev" aria-label="Previous image">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
     <img id="lightbox-img" class="lightbox-img" src="" alt="">
+    <button id="lightbox-next" class="lightbox-nav lightbox-next" aria-label="Next image">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+    </button>
   </div>
   <script src="/js/theme.js?v=2.7.3"></script>
   <script src="/js/notifications.js?v=2.6.0"></script>
