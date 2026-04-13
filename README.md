@@ -299,6 +299,21 @@ Haven creates a `.env` config file automatically on first launch — you don't n
 
 After editing `.env`, restart the server.
 
+### Running Multiple Servers
+
+You can run more than one Haven instance on the same machine. Each instance
+needs its own copy of Haven, its own port, and its own data directory so the
+databases don't conflict.
+
+1. Clone or copy the Haven folder to a separate directory for each server.
+2. In each copy, edit `.env` and set a unique `PORT` (e.g. `3000`, `3001`).
+3. Set a unique `HAVEN_DATA_DIR` in each `.env` so each server stores its data
+   separately (e.g. `HAVEN_DATA_DIR=C:\HavenData\server1`).
+4. Start each server independently with `Start Haven.bat` (or `start.sh`).
+
+That's it -- each instance runs on its own port with its own database,
+uploads, and settings.
+
 ---
 
 ## Slash Commands
