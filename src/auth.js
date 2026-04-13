@@ -811,4 +811,43 @@ function generateChannelCode() {
   return crypto.randomBytes(4).toString('hex'); // 8-char hex string
 }
 
+// ── Encrypted Server List (cross-device sync) ───────────
+// Client encrypts/decrypts the server list with the user's password-derived key.
+// Server stores only the opaque blob — no visibility into URLs or network graph.
+
+router.get('/user-servers', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const decoded = token ? verifyToken(token) : null;
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const db = getDb();
+    const row = db.prepare('SELECT encrypted_servers FROM users WHERE id = ?').get(decoded.id);
+    res.json({ blob: row?.encrypted_servers || null });
+  } catch (err) {
+    console.error('Get user-servers error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.put('/user-servers', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const decoded = token ? verifyToken(token) : null;
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+  const blob = typeof req.body.blob === 'string' ? req.body.blob : null;
+  if (blob && blob.length > 65536) {
+    return res.status(400).json({ error: 'Server list too large' });
+  }
+
+  try {
+    const db = getDb();
+    db.prepare('UPDATE users SET encrypted_servers = ? WHERE id = ?').run(blob, decoded.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Put user-servers error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = { router, verifyToken, generateChannelCode, generateToken, authLimiter };

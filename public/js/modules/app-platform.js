@@ -458,6 +458,17 @@ async _initE2E() {
     console.warn('[E2E] Init failed:', err);
     this.e2e = null;
   }
+
+  // Sync server list with server-side encrypted backup (piggybacks on wrapping key)
+  try {
+    const syncKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
+    if (syncKey && this.serverManager) {
+      await this.serverManager.syncWithServer(this.token, syncKey);
+      this._renderServerBar();
+    }
+  } catch (err) {
+    console.warn('[ServerSync] Post-login sync failed:', err.message);
+  }
 },
 
 /** Publish our key and wire up partner-key listeners (idempotent). */

@@ -1868,6 +1868,9 @@ _setupUI() {
         try {
           const newWrap = await HavenE2E.deriveWrappingKey(np);
           await this.e2e.reWrapKey(this.socket, newWrap);
+          // Re-encrypt server list blob with the new wrapping key
+          this._e2eWrappingKey = newWrap;
+          this._pushServerListToServer();
         } catch (err) {
           console.warn('[E2E] Failed to re-wrap key:', err);
         }
@@ -2409,6 +2412,14 @@ _setupUI() {
 // SERVER BAR — multi-server with live status
 // ═══════════════════════════════════════════════════════
 
+/** Push the current server list to the server-side encrypted backup. */
+_pushServerListToServer() {
+  const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
+  if (wrappingKey && this.serverManager && this.token) {
+    this.serverManager._pushToServer(this.token, wrappingKey).catch(() => {});
+  }
+},
+
 _setupServerBar() {
   this.serverManager.startPolling(30000);
   this._renderServerBar();
@@ -2561,6 +2572,7 @@ _addServer() {
       document.getElementById('add-server-modal').style.display = 'none';
       this._renderServerBar();
       this._showToast(t('toasts.server_added', { name }), 'success');
+      this._pushServerListToServer();
       // Auto-pull icon after health check completes
       if (autoPull) {
         const cleanUrl = url.replace(/\/+$/, '');
@@ -2646,10 +2658,12 @@ _renderManageServersList() {
     });
     row.querySelector('.manage-server-delete').addEventListener('click', () => {
       if (!confirm(t('confirm.remove_server', { name: s.name }))) return;
+      this.serverManager.markRemoved(s.url);
       this.serverManager.remove(s.url);
       this._renderServerBar();
       this._renderManageServersList();
       this._showToast(t('toasts.server_removed_named', { name: s.name }), 'success');
+      this._pushServerListToServer();
     });
 
     // CSP-safe icon error handling: hide broken img, show initial letter
@@ -2716,9 +2730,11 @@ _renderServerBar() {
         e.stopPropagation();
         const serverName = el.getAttribute('title')?.split(' — ')[0] || el.dataset.url;
         if (!confirm(t('confirm.remove_server', { name: serverName }))) return;
+        this.serverManager.markRemoved(el.dataset.url);
         this.serverManager.remove(el.dataset.url);
         this._renderServerBar();
         this._showToast(t('toasts.server_removed'), 'success');
+        this._pushServerListToServer();
         return;
       }
       if (window.havenDesktop?.switchServer) {

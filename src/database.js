@@ -766,6 +766,13 @@ function initDatabase() {
     db.exec("ALTER TABLE channels ADD COLUMN read_only INTEGER DEFAULT 0");
   }
 
+  // ── Migration: encrypted server list for cross-device sync ──────────
+  try {
+    db.prepare("SELECT encrypted_servers FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN encrypted_servers TEXT DEFAULT NULL");
+  }
+
   // ── Migration: grant use_tts to all auto-assign roles (default ON) ──
   try {
     const autoAssignRoles = db.prepare('SELECT id FROM roles WHERE auto_assign = 1').all();
