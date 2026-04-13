@@ -1304,10 +1304,12 @@
 [data-theme="win95"] .input-actions-divider { background: #808080; }
 [data-theme="win95"] .input-actions-box .btn-upload,
 [data-theme="win95"] .input-actions-box .btn-emoji,
-[data-theme="win95"] .input-actions-box .btn-gif { color: #000; border-radius: 0; }
+[data-theme="win95"] .input-actions-box .btn-gif,
+[data-theme="win95"] .input-actions-box .btn-poll { color: #000; border-radius: 0; }
 [data-theme="win95"] .input-actions-box .btn-upload:hover,
 [data-theme="win95"] .input-actions-box .btn-emoji:hover,
-[data-theme="win95"] .input-actions-box .btn-gif:hover { background: #dfdfdf; }
+[data-theme="win95"] .input-actions-box .btn-gif:hover,
+[data-theme="win95"] .input-actions-box .btn-poll:hover { background: #dfdfdf; }
 [data-theme="win95"] .input-actions-box .btn-gif { border-color: #808080; }
 [data-theme="win95"] input[type="text"], [data-theme="win95"] textarea { background: #fff; border: 3px inset #808080 !important; border-radius: 0 !important; }
 [data-theme="win95"] .right-sidebar { background: #bfbfbf; border-left: 3px outset #fff; }
@@ -6002,8 +6004,8 @@ select.cfn-select.cfn-input {
 }
 
 .btn-gif:hover {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
   background: var(--bg-tertiary);
 }
 
@@ -8658,7 +8660,8 @@ select.cfn-select.cfn-input {
   .input-actions-box .input-actions-divider { display: none; }
   .input-actions-box .btn-upload,
   .input-actions-box .btn-emoji,
-  .input-actions-box .btn-gif {
+  .input-actions-box .btn-gif,
+  .input-actions-box .btn-poll {
     width: 28px;
     height: 28px;
     min-width: 28px;
@@ -11869,15 +11872,20 @@ ul.chat-list { list-style-type: disc; }
    ═══════════════════════════════════════════ */
 
 .btn-poll {
-  background: none;
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  color: var(--text-muted);
   border: none;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
   cursor: pointer;
-  font-size: 16px;
-  padding: 2px 4px;
-  opacity: 0.7;
-  transition: opacity 0.15s;
 }
-.btn-poll:hover { opacity: 1; }
+.btn-poll:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
 /* Poll widget inside messages */
 .poll-widget {
