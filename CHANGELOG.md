@@ -11,6 +11,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [2.9.9] — 2026-04-13
+
+### Added
+- **Encrypted server list sync** — your server list and ordering now sync across devices via an encrypted key stored on the server. Adding, removing, or reordering servers on one device automatically carries over when you log in elsewhere.
+- **Jump-to-bottom button** — a floating button appears when you scroll up in chat, letting you jump back to the newest messages with one click.
+- **Emoji picker in edit mode** — the emoji picker is now available when editing a message, not just when composing a new one.
+- **`==highlight==` markdown** — wrap text in double equals signs to render it with a highlight background.
+- **`/poll` slash command** — create inline polls with `/poll "Question" "Option 1" "Option 2" ...`.
+
+### Changed
+- **SVG toolbar icons** — the emoji and poll buttons in the message toolbar now use crisp SVG icons instead of text/emoji characters.
+- **Codebase modularization** — the monolithic socket handler has been split into focused domain modules (messages, channels, voice, admin, etc.) for maintainability.
+
+### Fixed
+- **DM scroll position** — switching to a DM conversation no longer starts at the wrong scroll position.
+- **Send button sizing** — the send button is now a consistent 42×42 px.
+- **Lightbox arrow navigation** — left/right arrows in the image lightbox now work correctly.
+- **Safari PWA fixes** — various Safari-specific issues in Progressive Web App mode have been addressed.
+- **Scroll-to-bottom reliability** — improved auto-scroll when new messages arrive.
+- **Add-server dialog centering** — the add server modal is now properly centered.
+- **GIF hover preview** — the GIF hover animation now displays correctly.
+- **Channel handler module export** — fixed a module export issue introduced during codebase modularization.
+
+---
+
 ## [2.9.8] — 2026-04-12
 
 ### Added
