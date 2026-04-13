@@ -10002,6 +10002,14 @@ video:-webkit-full-screen {
   font-style: italic;
 }
 
+/* ── Chat Markdown: Highlight ──────────────────────────── */
+.chat-highlight {
+  background: rgba(250, 200, 50, 0.25);
+  color: inherit;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 /* ── Chat Markdown: Headings ───────────────────────────── */
 .chat-heading {
   font-weight: 700;

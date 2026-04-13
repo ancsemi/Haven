@@ -203,6 +203,9 @@ _formatContent(str) {
   // Render ~~strikethrough~~
   html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
 
+  // Render ==highlight==
+  html = html.replace(/==(.+?)==/g, '<mark class="chat-highlight">$1</mark>');
+
   // Render `inline code`
   html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
