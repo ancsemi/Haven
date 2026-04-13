@@ -8519,9 +8519,9 @@ select.cfn-select.cfn-input {
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
-    /* Safe area for notched phones */
+    /* Safe area for notched phones + Android gesture bar */
     padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 28px);
   }
 
   #app-body.mobile-sidebar-open .sidebar {
