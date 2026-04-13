@@ -7189,6 +7189,18 @@ select.cfn-select.cfn-input {
 
 .edit-cancel-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+.edit-emoji-btn {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  background: var(--bg-tertiary);
+  transition: all var(--transition);
+  line-height: 1;
+}
+.edit-emoji-btn:hover { background: var(--bg-hover); }
+
 
 /* ═══════════════════════════════════════════════════════════
    SPOILER TEXT

@@ -554,7 +554,8 @@ _toggleEmojiPicker() {
         btn.textContent = emoji;
       }
       btn.addEventListener('click', () => {
-        const input = document.getElementById('message-input');
+        // Insert into the active edit textarea if editing, otherwise the main input
+        const input = self._activeEditTextarea || document.getElementById('message-input');
         const start = input.selectionStart;
         const end = input.selectionEnd;
         input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
@@ -1376,10 +1377,21 @@ _startEditMessage(msgEl, msgId) {
   textarea.maxLength = 2000;
   contentEl.appendChild(textarea);
 
+  // Track active edit textarea for emoji picker redirection
+  this._activeEditTextarea = textarea;
+
   const btnRow = document.createElement('div');
   btnRow.className = 'edit-actions';
-  btnRow.innerHTML = `<button class="edit-save-btn">${t('modals.common.save')}</button><button class="edit-cancel-btn">${t('modals.common.cancel')}</button>`;
+  btnRow.innerHTML = `<button class="edit-emoji-btn" title="${t('app.input_bar.emoji_btn') || 'Emoji'}">😀</button><button class="edit-save-btn">${t('modals.common.save')}</button><button class="edit-cancel-btn">${t('modals.common.cancel')}</button>`;
   contentEl.appendChild(btnRow);
+
+  // Emoji button in edit bar opens the picker
+  btnRow.querySelector('.edit-emoji-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    this._activeEditTextarea = textarea;
+    this._toggleEmojiPicker();
+  });
 
   textarea.focus();
   textarea.style.height = 'auto';
@@ -1388,6 +1400,10 @@ _startEditMessage(msgEl, msgId) {
   const cancel = () => {
     msgEl.classList.remove('editing');
     contentEl.innerHTML = originalHtml;
+    if (this._activeEditTextarea === textarea) this._activeEditTextarea = null;
+    // Close emoji picker if it was open for this edit
+    const picker = document.getElementById('emoji-picker');
+    if (picker) picker.style.display = 'none';
   };
 
   btnRow.querySelector('.edit-cancel-btn').addEventListener('click', (e) => {
