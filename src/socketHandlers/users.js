@@ -67,6 +67,26 @@ module.exports = function register(socket, ctx) {
       });
     }
 
+    // Notify all DM partners so their sidebar updates the display name
+    try {
+      const dmPartners = db.prepare(`
+        SELECT DISTINCT cm2.user_id FROM channel_members cm1
+        JOIN channels c ON c.id = cm1.channel_id AND c.is_dm = 1
+        JOIN channel_members cm2 ON cm2.channel_id = c.id AND cm2.user_id != ?
+        WHERE cm1.user_id = ?
+      `).all(socket.user.id, socket.user.id);
+
+      for (const partner of dmPartners) {
+        for (const [, s] of io.sockets.sockets) {
+          if (s.user && s.user.id === partner.user_id) {
+            s.emit('dm-name-updated', { userId: socket.user.id, newName });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('DM name update broadcast error:', err);
+    }
+
     console.log(`✏️  ${oldName} renamed to ${newName}`);
   });
 

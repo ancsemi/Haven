@@ -880,6 +880,27 @@ _setupSocketListeners() {
     }
   });
 
+  // Update DM sidebar names when a user renames
+  this.socket.on('dm-name-updated', (data) => {
+    if (!data || !data.userId || !data.newName) return;
+    let needsRender = false;
+    for (const ch of this.channels) {
+      if (ch.is_dm && ch.dm_target && ch.dm_target.id === data.userId) {
+        ch.dm_target.username = data.newName;
+        needsRender = true;
+      }
+    }
+    if (needsRender) {
+      this._renderChannels(this.channels);
+      // Update channel header if currently viewing a DM with this user
+      const curCh = this.channels.find(c => c.code === this.currentChannel);
+      if (curCh && curCh.is_dm && curCh.dm_target && curCh.dm_target.id === data.userId) {
+        const headerName = document.querySelector('.channel-info h3');
+        if (headerName) headerName.textContent = `@ ${this._getNickname(data.userId, data.newName)}`;
+      }
+    }
+  });
+
   // ── Message edit / delete ──────────────────────────
   this.socket.on('message-edited', async (data) => {
     if (data.channelCode === this.currentChannel) {
