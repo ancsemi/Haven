@@ -3848,6 +3848,39 @@ select.cfn-select.cfn-input {
 
 .message-area { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 
+/* ── Jump to Bottom button ───────────────────────────── */
+.jump-to-bottom {
+  position: absolute;
+  bottom: 120px;
+  right: 24px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.2s ease, transform 0.2s ease;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+.jump-to-bottom.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.jump-to-bottom:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .messages {
   flex: 1;
   overflow-y: auto;

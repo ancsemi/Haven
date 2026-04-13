@@ -396,6 +396,7 @@ _setupSocketListeners() {
     // Simple rule: near bottom → true, scrolled up at all → false.
     this._coupledToBottom = true;
     let lastScrollTop = msgContainer.scrollTop;
+    const jumpBtn = document.getElementById('jump-to-bottom');
     msgContainer.addEventListener('scroll', () => {
       if (this._suppressCoupleCheck) return;
       const st = msgContainer.scrollTop;
@@ -410,7 +411,21 @@ _setupSocketListeners() {
         this._coupledToBottom = false;
       }
       lastScrollTop = st;
+      // Show/hide jump-to-bottom button
+      if (jumpBtn) {
+        if (dist > 400) jumpBtn.classList.add('visible');
+        else jumpBtn.classList.remove('visible');
+      }
     }, { passive: true });
+
+    // Jump-to-bottom click handler
+    if (jumpBtn) {
+      jumpBtn.addEventListener('click', () => {
+        this._scrollToBottom(true);
+        this._coupledToBottom = true;
+        jumpBtn.classList.remove('visible');
+      });
+    }
 
     this._historyDebounce = 0; // timestamp of last history request
     msgContainer.addEventListener('scroll', () => {

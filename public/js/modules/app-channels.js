@@ -12,6 +12,8 @@ async switchChannel(code) {
 
   this.currentChannel = code;
   this._coupledToBottom = true;
+  const jumpBtn = document.getElementById('jump-to-bottom');
+  if (jumpBtn) jumpBtn.classList.remove('visible');
   const channel = this.channels.find(c => c.code === code);
   const isDm = channel && channel.is_dm;
   const displayName = isDm && channel.dm_target
