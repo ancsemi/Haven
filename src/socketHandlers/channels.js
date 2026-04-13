@@ -1,7 +1,7 @@
 // ── Channel CRUD, sub-channels, settings, reordering, categories, DMs ──
 const { isString, isInt } = require('./helpers');
 
-module.exports.register = function register(socket, ctx) {
+module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
