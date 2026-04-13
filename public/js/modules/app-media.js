@@ -1792,7 +1792,22 @@ _showImageContextMenu(e, src) {
       try {
         const resp = await fetch(src);
         const blob = await resp.blob();
-        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        // ClipboardItem only reliably supports image/png — convert if needed
+        let pngBlob = blob;
+        if (blob.type !== 'image/png') {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          const loaded = new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+          img.src = URL.createObjectURL(blob);
+          await loaded;
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          URL.revokeObjectURL(img.src);
+          pngBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        }
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
         this._showToast('Image copied to clipboard', 'success');
       } catch {
         this._showToast('Failed to copy image', 'error');
