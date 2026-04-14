@@ -11,6 +11,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.0.0] — 2026-04-14
+
+### Added
+- **SSO registration (Link Server)** — users can register on a new Haven server using their identity from another Haven server. The "Link Server" tab on the auth page walks through a two-step flow: connect to your home server, approve the identity share, then set a local password. Username and profile picture are imported; E2E encryption is preserved since a password is still required on every server. Server-side includes consent page, auth code approval, authenticate endpoints, CORS handling, rate limiting (5 req/min/IP), and secure avatar download with magic-byte validation.
+- **Advanced search filters** — search now supports `from:username`, `in:#channel`, and `has:image/file/link/video` filters. Filter tags render as badges in the search bar.
+- **Reply notifications** — replies to your messages now trigger a distinct notification sound with separate volume control, configurable in User Settings.
+- **Settings tab reorganization** — the settings panel is now split into User and Admin tabs with a tab bar for cleaner navigation.
+- **Running Multiple Servers** — new README section documenting how to run multiple Haven instances on the same machine.
+
+### Changed
+- **Reply banner redesign** — reply indicators now use a compact pill-style design placed inside the message body instead of above it.
+- **Emoji picker expansion** — expanded food, activities, and objects categories in the emoji picker.
+- **Search bar** — wider input field and visual filter tag badges.
+
+### Fixed
+- **Ordered list renumbering** — messages starting with `2.` or `3.` (etc.) no longer render as `1.` when sent as separate messages. The original number is now preserved via the HTML `start` attribute.
+- **YouTube seek slider alignment** — the progress slider thumb now aligns correctly with the track bar. (#5250)
+- **Jump-to-message for search results and replies** — clicking a search result or reply reference now correctly scrolls to and highlights the target message.
+- **DM search notice** — search in DMs now shows an appropriate notice when no results are found.
+- **Voice double-join guard** — prevented a race condition where rapidly clicking voice join could connect twice.
+- **@mention and :emoji autocomplete in edit mode** — autocomplete now works when editing an existing message, not just when composing.
+- **Copy image clipboard format** — copying an image from chat now converts to PNG for clipboard compatibility. (#5246)
+- **Mobile sidebar padding** — increased bottom padding on mobile sidebar for Android gesture bar clearance.
+- **DM sidebar name updates** — DM sidebar now reflects display name changes without requiring a page reload.
+- **Donors modal expand button** — excluded the donors modal from the expand/close button injection.
+- **Auth page centering** — fixed vertical centering on small screens.
+- **Tab-switch scroll position** — switching tabs while browsing message history no longer resets scroll position.
+- **English flag emoji** — fixed corrupted flag emoji in the language selector.
+
+---
+
 ## [2.9.9] — 2026-04-13
 
 ### Added
