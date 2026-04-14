@@ -2739,8 +2739,10 @@ _renderServerBar() {
     // Use custom icon, auto-pulled icon from health check, or letter initial
     const iconUrl = s.icon || (s.status.icon || null);
     const iconContent = iconUrl
-      ? `<img src="${this._escapeHtml(iconUrl)}" class="server-icon-img" alt=""><span class="server-icon-text" style="display:none">${this._escapeHtml(initial)}</span>`
-      : `<span class="server-icon-text">${this._escapeHtml(initial)}</span>`;
+      ? `<img src="${this._escapeHtml(iconUrl)}" class="server-icon-img"${s.iconData ? ` data-fallback-src="${this._escapeHtml(s.iconData)}"` : ''} alt=""><span class="server-icon-text" style="display:none">${this._escapeHtml(initial)}</span>`
+      : (s.iconData
+        ? `<img src="${this._escapeHtml(s.iconData)}" class="server-icon-img" alt=""><span class="server-icon-text" style="display:none">${this._escapeHtml(initial)}</span>`
+        : `<span class="server-icon-text">${this._escapeHtml(initial)}</span>`);
     return `
       <div class="server-icon remote" data-url="${this._escapeHtml(s.url)}"
            title="${this._escapeHtml(s.name)} — ${statusText}">
@@ -2752,9 +2754,15 @@ _renderServerBar() {
     `;
   }).join('');
 
-  // CSP-safe: handle broken server icons, fall back to letter initial
+  // CSP-safe: handle broken server icons, fall back to thumbnail or letter initial
   list.querySelectorAll('.server-icon-img').forEach(img => {
     img.addEventListener('error', () => {
+      const fallbackSrc = img.dataset.fallbackSrc;
+      if (fallbackSrc && img.src !== fallbackSrc) {
+        img.removeAttribute('data-fallback-src');
+        img.src = fallbackSrc;
+        return;
+      }
       img.style.display = 'none';
       const fallback = img.nextElementSibling;
       if (fallback) fallback.style.display = '';

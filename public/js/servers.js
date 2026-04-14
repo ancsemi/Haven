@@ -87,6 +87,13 @@ class ServerManager {
             entry.icon = discoveredIcon;
             this._save();
           }
+          // Generate a small base64 thumbnail so the icon travels
+          // with the encrypted sync bundle across servers
+          if (entry && !entry.iconData) {
+            this._fetchIconThumbnail(discoveredIcon).then(dataUrl => {
+              if (dataUrl) { entry.iconData = dataUrl; this._save(); }
+            });
+          }
         }
       } else {
         this.statusCache.set(url, { online: false, checkedAt: Date.now() });
@@ -112,6 +119,24 @@ class ServerManager {
   // ── Encrypted server-side sync ───────────────────────
   // Stores the server list as an AES-256-GCM blob on each Haven server.
   // wrappingHex: the 64-char hex string from HavenE2E.deriveWrappingKey()
+
+  /** Fetch a remote icon and shrink it to a tiny base64 data URL. */
+  async _fetchIconThumbnail(iconUrl) {
+    try {
+      const res = await fetch(iconUrl, { mode: 'cors', signal: AbortSignal.timeout(5000) });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (!blob.type.startsWith('image/')) return null;
+      const bmp = await createImageBitmap(blob);
+      const size = 48;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bmp, 0, 0, size, size);
+      bmp.close();
+      return canvas.toDataURL('image/png');
+    } catch { return null; }
+  }
 
   async syncWithServer(token, wrappingHex) {
     if (!token || !wrappingHex) return;
@@ -173,7 +198,7 @@ class ServerManager {
   async _pushToServer(token, wrappingHex) {
     try {
       const payload = JSON.stringify(this.servers.map(s => ({
-        url: s.url, name: s.name, icon: s.icon, addedAt: s.addedAt
+        url: s.url, name: s.name, icon: s.icon, iconData: s.iconData || null, addedAt: s.addedAt
       })));
       const blob = await this._encryptBlob(payload, wrappingHex);
       await fetch('/api/auth/user-servers', {
