@@ -8,6 +8,16 @@ module.exports = function register(socket, ctx) {
           emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels } = ctx;
   const { channelUsers, voiceUsers } = state;
 
+  // Helper: run an UPDATE only if the target table exists (avoids crash on
+  // tables that haven't been created yet, e.g. uploads, channel_emojis).
+  const _tableExists = {};
+  function updateIfTableExists(table, sql, ...params) {
+    if (_tableExists[table] === undefined) {
+      _tableExists[table] = !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
+    }
+    if (_tableExists[table]) db.prepare(sql).run(...params);
+  }
+
   // ── Kick user ───────────────────────────────────────────
   socket.on('kick-user', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -219,12 +229,12 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM eula_acceptances WHERE user_id = ?').run(uid);
       db.prepare('DELETE FROM user_preferences WHERE user_id = ?').run(uid);
       db.prepare('UPDATE channels SET created_by = NULL WHERE created_by = ?').run(uid);
-      db.prepare('UPDATE uploads SET uploaded_by = NULL WHERE uploaded_by = ?').run(uid);
-      db.prepare('UPDATE channel_emojis SET uploaded_by = NULL WHERE uploaded_by = ?').run(uid);
+      updateIfTableExists('uploads', 'UPDATE uploads SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
+      updateIfTableExists('channel_emojis', 'UPDATE channel_emojis SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
       db.prepare('UPDATE bans SET banned_by = ? WHERE banned_by = ?').run(socket.user.id, uid);
       db.prepare('UPDATE mutes SET muted_by = ? WHERE muted_by = ?').run(socket.user.id, uid);
       db.prepare('UPDATE user_roles SET granted_by = NULL WHERE granted_by = ?').run(uid);
-      db.prepare('UPDATE webhook_configs SET created_by = NULL WHERE created_by = ?').run(uid);
+      updateIfTableExists('webhook_configs', 'UPDATE webhook_configs SET created_by = NULL WHERE created_by = ?', uid);
       db.prepare('UPDATE whitelist SET added_by = NULL WHERE added_by = ?').run(uid);
       db.prepare('UPDATE deleted_users SET deleted_by = NULL WHERE deleted_by = ?').run(uid);
       if (data.scrubMessages) {
@@ -317,12 +327,12 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(uid);
       db.prepare('DELETE FROM fcm_tokens WHERE user_id = ?').run(uid);
       db.prepare('UPDATE channels SET created_by = NULL WHERE created_by = ?').run(uid);
-      db.prepare('UPDATE uploads SET uploaded_by = NULL WHERE uploaded_by = ?').run(uid);
-      db.prepare('UPDATE channel_emojis SET uploaded_by = NULL WHERE uploaded_by = ?').run(uid);
+      updateIfTableExists('uploads', 'UPDATE uploads SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
+      updateIfTableExists('channel_emojis', 'UPDATE channel_emojis SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
       db.prepare('UPDATE bans SET banned_by = NULL WHERE banned_by = ?').run(uid);
       db.prepare('UPDATE mutes SET muted_by = NULL WHERE muted_by = ?').run(uid);
       db.prepare('UPDATE user_roles SET granted_by = NULL WHERE granted_by = ?').run(uid);
-      db.prepare('UPDATE webhook_configs SET created_by = NULL WHERE created_by = ?').run(uid);
+      updateIfTableExists('webhook_configs', 'UPDATE webhook_configs SET created_by = NULL WHERE created_by = ?', uid);
       db.prepare('UPDATE whitelist SET added_by = NULL WHERE added_by = ?').run(uid);
       db.prepare('UPDATE deleted_users SET deleted_by = NULL WHERE deleted_by = ?').run(uid);
       db.prepare('UPDATE pinned_messages SET pinned_by = NULL WHERE pinned_by = ?').run(uid);
