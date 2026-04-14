@@ -3270,22 +3270,19 @@ _submitPoll() {
   document.getElementById('poll-modal').style.display = 'none';
 },
 
-/* ── iOS PWA Keyboard Layout Fix ────────────────────── */
-// iOS standalone PWA doesn't reliably shrink the viewport when the
-// virtual keyboard opens.  We use the visualViewport API to detect
-// the keyboard height and apply a CSS custom property so the layout
-// can compensate.
+/* ── iOS Keyboard Layout Fix ────────────────────────── */
+// iOS Safari (both standalone PWA and browser) doesn't always shrink the
+// viewport reliably when the virtual keyboard opens.  We use the
+// visualViewport API to detect the keyboard height and resize #app so
+// the message input stays visible above the keyboard.
 
 _setupIOSKeyboard() {
   if (!window.visualViewport) return;
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-    navigator.standalone === true;
 
-  // Only needed for iOS standalone PWA (browsers handle it natively)
-  if (!isIOS || !isStandalone) return;
+  if (!isIOS) return;
 
   const app = document.getElementById('app');
   const messages = document.getElementById('messages');
