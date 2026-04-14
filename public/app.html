@@ -257,6 +257,10 @@
 
       <!-- ─── Main Content ────────────────────────────── -->
       <main class="main">
+        <!-- Server Banner (background behind header) -->
+        <div id="server-banner-display" class="server-banner-display" style="display:none">
+          <img id="server-banner-img" class="server-banner-img" src="" alt="Server banner">
+        </div>
         <header class="channel-header">
           <button id="mobile-menu-btn" class="mobile-menu-btn" data-i18n-title="header.mobile_menu" data-i18n-aria-label="header.mobile_menu" title="Menu" aria-label="Menu">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -1112,7 +1116,20 @@
         <div class="notif-settings">
           <label class="toggle-row">
             <span data-i18n="settings.sounds_section.notifications">Notifications</span>
-            <input type="checkbox" id="notif-enabled" checked>
+            <input type="checkbox" id="notif-enabled">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px">General message sounds (off by default). @Mentions, replies, and DMs always notify.</small>
+          <label class="toggle-row">
+            <span>@Mentions</span>
+            <input type="checkbox" id="notif-mentions-enabled" checked>
+          </label>
+          <label class="toggle-row">
+            <span>Replies</span>
+            <input type="checkbox" id="notif-replies-enabled" checked>
+          </label>
+          <label class="toggle-row">
+            <span>Direct Messages</span>
+            <input type="checkbox" id="notif-dm-enabled" checked>
           </label>
           <label class="toggle-row">
             <span data-i18n="settings.sounds_section.auto_accept_streams">Auto-accept Streams</span>
@@ -1473,6 +1490,19 @@
               </div>
             </div>
           </div>
+          <div class="server-banner-upload-area" style="margin-top:12px">
+            <div class="server-banner-preview" id="server-banner-preview">
+              <span class="muted-text" style="font-size:11px">No banner</span>
+            </div>
+            <div class="server-banner-upload-controls">
+              <small class="settings-hint">Server banner (wide, max 4 MB). Displayed at the top of channels.</small>
+              <input type="file" id="server-banner-file" accept="image/*" style="font-size:11px;max-width:160px">
+              <div style="display:flex;gap:4px;margin-top:4px">
+                <button class="btn-sm btn-accent" id="server-banner-upload-btn">Upload</button>
+                <button class="btn-sm" id="server-banner-remove-btn">Remove</button>
+              </div>
+            </div>
+          </div>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.default_theme">Default Theme</span>
             <select id="default-theme-select" style="max-width:160px">
@@ -1553,6 +1583,17 @@
             <div style="display:flex;gap:4px;">
               <button class="btn-sm btn-accent" id="generate-server-code-btn" data-i18n="settings.admin.invite_generate_btn">Generate</button>
               <button class="btn-sm" id="clear-server-code-btn" data-i18n="settings.admin.invite_clear_btn">Clear</button>
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <label class="select-row">
+              <span>Vanity Invite Link</span>
+              <input type="text" id="vanity-code-input" maxlength="32" class="settings-text-input" style="max-width:160px" placeholder="my-server">
+            </label>
+            <small class="settings-hint">Custom invite slug (3-32 chars, letters, numbers, hyphens, underscores). People can join via <code>/invite/your-slug</code></small>
+            <div style="display:flex;gap:4px;margin-top:4px">
+              <button class="btn-sm btn-accent" id="vanity-code-save-btn">Save</button>
+              <button class="btn-sm" id="vanity-code-clear-btn">Clear</button>
             </div>
           </div>
         </div>

@@ -393,13 +393,16 @@ _applyServerSettings() {
   const bannerDisplay = document.getElementById('server-banner-display');
   const bannerImg = document.getElementById('server-banner-img');
   const bannerPreview = document.getElementById('server-banner-preview');
+  const mainEl = document.querySelector('.main');
   if (bannerDisplay && bannerImg) {
     if (this.serverSettings.server_banner) {
       bannerImg.src = this.serverSettings.server_banner;
       bannerDisplay.style.display = '';
+      mainEl?.classList.add('has-banner');
     } else {
       bannerDisplay.style.display = 'none';
       bannerImg.src = '';
+      mainEl?.classList.remove('has-banner');
     }
   }
   if (bannerPreview) {

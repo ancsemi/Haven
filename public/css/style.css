@@ -3187,6 +3187,7 @@ html.rgb-cycling *::after {
   flex-direction: column;
   min-width: 0;
   background: var(--bg-primary);
+  position: relative;
 }
 
 .channel-header {
@@ -8697,6 +8698,10 @@ select.cfn-select.cfn-input {
   /* Status bar — hidden on mobile to save vertical space */
   .status-bar { display: none; }
   [data-desktop-app] .status-bar { display: flex !important; }
+
+  /* Server banner — smaller on mobile */
+  .server-banner-display { height: 120px; }
+  .server-banner-display::after { height: 50px; }
 }
 
 
@@ -9047,6 +9052,8 @@ select.cfn-select.cfn-input {
   .message-input-area { padding: 4px 8px 6px; }
   .welcome-icon { font-size: 36px; }
   .welcome-content h2 { font-size: 16px; }
+  .server-banner-display { height: 80px; }
+  .server-banner-display::after { height: 30px; }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -12660,6 +12667,125 @@ ul.chat-list { list-style-type: disc; }
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+}
+
+/* ── Server Banner Upload (admin settings) ─────────── */
+.server-banner-upload-area {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.server-banner-preview {
+  width: 200px;
+  height: 60px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid var(--border);
+}
+.server-banner-upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Server Banner Display (behind channel header) ─── */
+.server-banner-display {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 180px;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.server-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Gradient fade at the bottom */
+.server-banner-display::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, var(--bg-primary));
+  pointer-events: none;
+}
+/* When banner is visible, make header/topic overlay it */
+.main.has-banner .channel-header {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+  min-height: 52px;
+}
+.main.has-banner .channel-topic-bar {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+}
+/* Add a subtle text shadow so header text stays readable over the banner */
+.main.has-banner .channel-header,
+.main.has-banner .channel-topic-bar {
+  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+}
+.main.has-banner .header-actions-box {
+  background: rgba(0,0,0,0.35);
+  border-color: rgba(255,255,255,0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.main.has-banner .channel-code-tag {
+  text-shadow: none;
+}
+/* Voice button and indicators over the banner */
+.main.has-banner .btn-voice,
+.main.has-banner .voice-active-indicator {
+  text-shadow: none;
+}
+.main.has-banner .update-banner,
+.main.has-banner .desktop-app-banner,
+.main.has-banner .android-beta-banner {
+  text-shadow: none;
+}
+.main.has-banner .message-area {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Role Icons ────────────────────────────────────── */
+.role-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+.role-icon-preview {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.role-icon-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 /* ── Discord Import ────────────────────────────────── */
