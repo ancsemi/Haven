@@ -233,10 +233,12 @@ _formatContent(str) {
 
   // ── Ordered lists: consecutive lines starting with "N. " ──
   html = html.replace(/((?:(?:^|\n)\d+\.\s+.+)+)/g, (match) => {
-    const items = match.trim().split('\n').map(line =>
+    const lines = match.trim().split('\n');
+    const startNum = lines[0].match(/^(\d+)/)?.[1] || '1';
+    const items = lines.map(line =>
       `<li>${line.replace(/^\d+\.\s+/, '')}</li>`
     ).join('');
-    return `\n<ol class="chat-list">${items}</ol>`;
+    return `\n<ol class="chat-list" start="${startNum}">${items}</ol>`;
   });
 
   html = html.replace(/\n/g, '<br>');
