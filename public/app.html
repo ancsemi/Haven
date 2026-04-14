@@ -257,10 +257,6 @@
 
       <!-- ─── Main Content ────────────────────────────── -->
       <main class="main">
-        <!-- Server Banner (background behind header) -->
-        <div id="server-banner-display" class="server-banner-display" style="display:none">
-          <img id="server-banner-img" class="server-banner-img" src="" alt="Server banner">
-        </div>
         <header class="channel-header">
           <button id="mobile-menu-btn" class="mobile-menu-btn" data-i18n-title="header.mobile_menu" data-i18n-aria-label="header.mobile_menu" title="Menu" aria-label="Menu">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -353,6 +349,10 @@
 
         <!-- Chat Area -->
         <div id="message-area" class="message-area" style="display:none">
+          <!-- Server Banner -->
+          <div id="server-banner-display" class="server-banner-display" style="display:none">
+            <img id="server-banner-img" class="server-banner-img" src="" alt="Server banner">
+          </div>
           <!-- Webcam Grid -->
           <div id="webcam-container" class="webcam-container" style="display:none">
             <div class="webcam-header">
@@ -1496,11 +1496,16 @@
             </div>
             <div class="server-banner-upload-controls">
               <small class="settings-hint">Server banner (wide, max 4 MB). Displayed at the top of channels.</small>
-              <input type="file" id="server-banner-file" accept="image/*" style="font-size:11px;max-width:160px">
+              <input type="file" id="server-banner-file" accept="image/jpeg,image/png,image/gif,image/webp" style="font-size:11px;max-width:160px">
               <div style="display:flex;gap:4px;margin-top:4px">
                 <button class="btn-sm btn-accent" id="server-banner-upload-btn">Upload</button>
                 <button class="btn-sm" id="server-banner-remove-btn">Remove</button>
               </div>
+              <label class="toggle-row" style="margin-top:8px">
+                <span>Banner overlays header</span>
+                <input type="checkbox" id="banner-overlay-header">
+              </label>
+              <small class="settings-hint">When enabled, the banner extends behind the channel header and topic bar (Discord-style)</small>
             </div>
           </div>
           <label class="select-row" style="margin-top:8px">

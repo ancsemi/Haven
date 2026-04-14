@@ -1187,12 +1187,11 @@ app.post('/api/upload-server-banner', uploadLimiter, (req, res) => {
       const hdr = Buffer.alloc(12);
       fs.readSync(fd, hdr, 0, 12, 0);
       fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
+      const isJpeg = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
+      const isPng  = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
+      const isGif  = hdr.slice(0, 6).toString().startsWith('GIF8');
+      const isWebp = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
+      if (!isJpeg && !isPng && !isGif && !isWebp) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image — only JPG, PNG, GIF, or WebP' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
 
     const bannerUrl = `/uploads/${req.file.filename}`;

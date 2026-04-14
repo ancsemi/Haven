@@ -34,11 +34,11 @@ module.exports = function register(socket, ctx) {
 
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
-      'giphy_api_key', 'server_name', 'server_title', 'server_icon', 'permission_thresholds',
+      'giphy_api_key', 'server_name', 'server_title', 'server_icon', 'server_banner', 'banner_overlay_header', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_poll_options',
       'max_sound_kb', 'max_emoji_kb', 'setup_wizard_complete', 'update_banner_admin_only',
       'default_theme', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
-      'channel_tag_sorts', 'custom_tos', 'welcome_message'
+      'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code'
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -58,6 +58,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
     if (key === 'setup_wizard_complete' && !['true', 'false'].includes(value)) return;
     if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
+    if (key === 'banner_overlay_header' && !['true', 'false'].includes(value)) return;
     if (key === 'channel_sort_mode' && !['manual', 'alpha', 'created', 'oldest', 'dynamic'].includes(value)) return;
     if (key === 'channel_cat_sort' && !['az', 'za', 'manual'].includes(value)) return;
     if (key === 'channel_cat_order') {
@@ -78,6 +79,10 @@ module.exports = function register(socket, ctx) {
     if (key === 'custom_tos') { if (value.length > 50000) return; }
     if (key === 'welcome_message') { if (value.length > 500) return; }
     if (key === 'server_code') return; // managed via generate/rotate events
+    if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
+    if (key === 'vanity_code') {
+      if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
+    }
     if (key === 'permission_thresholds') {
       try {
         const obj = JSON.parse(value);

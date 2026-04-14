@@ -394,17 +394,34 @@ _applyServerSettings() {
   const bannerImg = document.getElementById('server-banner-img');
   const bannerPreview = document.getElementById('server-banner-preview');
   const mainEl = document.querySelector('.main');
+  const overlayEnabled = this.serverSettings.banner_overlay_header === 'true';
   if (bannerDisplay && bannerImg) {
     if (this.serverSettings.server_banner) {
       bannerImg.src = this.serverSettings.server_banner;
       bannerDisplay.style.display = '';
-      mainEl?.classList.add('has-banner');
+      if (overlayEnabled) {
+        // Move banner to .main (first child) for absolute overlay mode
+        if (bannerDisplay.parentElement !== mainEl) {
+          mainEl.insertBefore(bannerDisplay, mainEl.firstChild);
+        }
+        mainEl?.classList.add('has-banner-overlay');
+      } else {
+        // Move banner into message-area (first child) for default below-header mode
+        const msgArea = document.getElementById('message-area');
+        if (msgArea && bannerDisplay.parentElement !== msgArea) {
+          msgArea.insertBefore(bannerDisplay, msgArea.firstChild);
+        }
+        mainEl?.classList.remove('has-banner-overlay');
+      }
     } else {
       bannerDisplay.style.display = 'none';
       bannerImg.src = '';
-      mainEl?.classList.remove('has-banner');
+      mainEl?.classList.remove('has-banner-overlay');
     }
   }
+  // Banner overlay toggle checkbox
+  const overlayCheckbox = document.getElementById('banner-overlay-header');
+  if (overlayCheckbox) overlayCheckbox.checked = overlayEnabled;
   if (bannerPreview) {
     if (this.serverSettings.server_banner) {
       bannerPreview.innerHTML = `<img src="${this._escapeHtml(this.serverSettings.server_banner)}" style="max-width:100%;max-height:80px;border-radius:6px;object-fit:cover">`;
@@ -817,6 +834,12 @@ _initServerBranding() {
   document.getElementById('server-banner-remove-btn')?.addEventListener('click', () => {
     this.socket.emit('update-server-setting', { key: 'server_banner', value: '' });
     this._showToast('Server banner removed', 'success');
+  });
+
+  // Banner overlay header toggle
+  document.getElementById('banner-overlay-header')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', { key: 'banner_overlay_header', value: e.target.checked ? 'true' : 'false' });
+    this._showToast(e.target.checked ? 'Banner will overlay the header' : 'Banner shown below the header', 'success');
   });
 
   // Vanity code

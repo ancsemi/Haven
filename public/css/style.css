@@ -12693,22 +12693,20 @@ ul.chat-list { list-style-type: disc; }
   gap: 2px;
 }
 
-/* ── Server Banner Display (behind channel header) ─── */
+/* ── Server Banner Display (below header, inside chat area) ─── */
 .server-banner-display {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  width: 100%;
   height: 180px;
-  z-index: 0;
   overflow: hidden;
-  pointer-events: none;
+  flex-shrink: 0;
 }
 .server-banner-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  opacity: 0.8;
 }
 /* Gradient fade at the bottom */
 .server-banner-display::after {
@@ -12721,45 +12719,52 @@ ul.chat-list { list-style-type: disc; }
   background: linear-gradient(to bottom, transparent, var(--bg-primary));
   pointer-events: none;
 }
-/* When banner is visible, make header/topic overlay it */
-.main.has-banner .channel-header {
+
+/* ── Banner Overlay Mode (opt-in: banner behind header) ─── */
+.main.has-banner-overlay .server-banner-display {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.main.has-banner-overlay .channel-header {
   position: relative;
   z-index: 1;
   background: transparent !important;
   border-bottom-color: transparent !important;
   min-height: 52px;
 }
-.main.has-banner .channel-topic-bar {
+.main.has-banner-overlay .channel-topic-bar {
   position: relative;
   z-index: 1;
   background: transparent !important;
   border-bottom-color: transparent !important;
 }
-/* Add a subtle text shadow so header text stays readable over the banner */
-.main.has-banner .channel-header,
-.main.has-banner .channel-topic-bar {
+.main.has-banner-overlay .channel-header,
+.main.has-banner-overlay .channel-topic-bar {
   text-shadow: 0 1px 4px rgba(0,0,0,0.7);
 }
-.main.has-banner .header-actions-box {
+.main.has-banner-overlay .header-actions-box {
   background: rgba(0,0,0,0.35);
   border-color: rgba(255,255,255,0.12);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.main.has-banner .channel-code-tag {
+.main.has-banner-overlay .channel-code-tag {
   text-shadow: none;
 }
-/* Voice button and indicators over the banner */
-.main.has-banner .btn-voice,
-.main.has-banner .voice-active-indicator {
+.main.has-banner-overlay .btn-voice,
+.main.has-banner-overlay .voice-active-indicator {
   text-shadow: none;
 }
-.main.has-banner .update-banner,
-.main.has-banner .desktop-app-banner,
-.main.has-banner .android-beta-banner {
+.main.has-banner-overlay .update-banner,
+.main.has-banner-overlay .desktop-app-banner,
+.main.has-banner-overlay .android-beta-banner {
   text-shadow: none;
 }
-.main.has-banner .message-area {
+.main.has-banner-overlay .message-area {
   position: relative;
   z-index: 1;
 }
