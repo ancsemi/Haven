@@ -1951,8 +1951,13 @@ _updateDesktopBadge() {
  * Browser: uses Notification API only when push subscription is NOT active
  *          to avoid duplicate notifications (server-side push handles the rest).
  */
-_fireNativeNotification(message, channelCode) {
-  if (!this.notifications.enabled) return;
+_fireNativeNotification(message, channelCode, opts) {
+  // Check per-type notification toggles
+  const n = this.notifications;
+  if (opts && opts.isMention && n.mentionsEnabled) { /* allowed */ }
+  else if (opts && opts.isReply && n.repliesEnabled) { /* allowed */ }
+  else if (opts && opts.isDm && n.dmEnabled) { /* allowed */ }
+  else if (!n.enabled) return;
   // Don't notify for own messages
   if (message.user_id === this.user?.id) return;
 
@@ -1960,9 +1965,12 @@ _fireNativeNotification(message, channelCode) {
   const channel = this.channels?.find(c => c.code === channelCode);
   const channelLabel = channel?.is_dm ? 'DM' : `#${channel?.name || channelCode}`;
   const title = `${sender} in ${channelLabel}`;
-  const body = (message.content || '').length > 120
-    ? message.content.slice(0, 117) + '...'
-    : (message.content || 'Sent an attachment');
+  let rawContent = message.content || '';
+  // Detect E2E encrypted envelope — show generic text instead of ciphertext
+  try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
+  const body = rawContent.length > 120
+    ? rawContent.slice(0, 117) + '...'
+    : (rawContent || 'Sent a message');
 
   // Desktop app: always use native Electron notifications
   if (window.havenDesktop?.notify) {

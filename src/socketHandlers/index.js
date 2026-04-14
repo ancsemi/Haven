@@ -562,7 +562,14 @@ function setupSocketHandlers(io, db) {
         WHERE cm.channel_id = ? AND ps.user_id != ?
       `).all(channelId, senderUserId);
 
-      const body = messageContent.length > 120 ? messageContent.slice(0, 117) + '...' : messageContent;
+      // Detect E2E encrypted envelope — don't leak ciphertext in notifications
+      let displayContent = messageContent;
+      try {
+        const parsed = JSON.parse(messageContent);
+        if (parsed && parsed.v && parsed.ct) displayContent = 'Sent a message';
+      } catch { /* not JSON, use as-is */ }
+
+      const body = displayContent.length > 120 ? displayContent.slice(0, 117) + '...' : displayContent;
       const title = `${senderUsername} in #${channelName}`;
       const payload = JSON.stringify({
         title, body, channelCode,
@@ -610,6 +617,20 @@ function setupSocketHandlers(io, db) {
   }
 
   // ── Webhook callback helper ─────────────────────────────
+  // SSRF guard: reject private/internal IPs in callback URLs
+  function isSafeCallbackUrl(urlString) {
+    try {
+      const u = new URL(urlString);
+      const h = u.hostname.toLowerCase();
+      if (['localhost','127.0.0.1','[::1]','0.0.0.0','::'].includes(h)) return false;
+      if (h.startsWith('10.') || h.startsWith('192.168.')) return false;
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
+      if (h === '169.254.169.254') return false;
+      if (h.endsWith('.local') || h.endsWith('.internal')) return false;
+      return /^https?:$/i.test(u.protocol);
+    } catch { return false; }
+  }
+
   function fireWebhookCallbacks(channelId, channelCode, message) {
     try {
       const bots = db.prepare(
@@ -631,7 +652,7 @@ function setupSocketHandlers(io, db) {
       for (const bot of bots) {
         if (message.is_webhook) continue;
         const url = bot.callback_url;
-        if (!/^https?:\/\//i.test(url)) continue;
+        if (!isSafeCallbackUrl(url)) continue;
 
         const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Haven-Webhook/1.0' };
         if (bot.callback_secret) {
@@ -926,7 +947,7 @@ function setupSocketHandlers(io, db) {
     });
 
     // ── Slash command processor (per-socket) ──────────────
-    function processSlashCommand(cmd, arg, username) {
+    function processSlashCommand(cmd, arg, username, channelId, channelCode) {
       const commands = {
         shrug:     () => ({ content: `${arg ? arg + ' ' : ''}¯\\_(ツ)_/¯` }),
         tableflip: () => ({ content: `${arg ? arg + ' ' : ''}(╯°□°)╯︵ ┻━┻` }),
@@ -960,8 +981,46 @@ function setupSocketHandlers(io, db) {
         wave:      () => ({ content: `👋 ${username} waves${arg ? ' ' + arg : ''}` }),
       };
       const handler = commands[cmd];
-      if (!handler) return null;
-      return handler();
+      if (handler) return handler();
+
+      // Check for bot-registered slash commands
+      try {
+        const botCmd = db.prepare(`
+          SELECT bc.command, bc.description, w.id as webhook_id, w.callback_url, w.callback_secret, w.token, w.name as bot_name
+          FROM bot_commands bc
+          JOIN webhooks w ON bc.webhook_id = w.id
+          WHERE bc.command = ? AND w.is_active = 1 AND w.callback_url IS NOT NULL
+        `).get(cmd);
+        if (botCmd) {
+          if (!isSafeCallbackUrl(botCmd.callback_url)) {
+            console.error(`Bot command /${cmd}: callback URL blocked by SSRF guard`);
+            return null;
+          }
+          // Fire command callback to the bot
+          const payload = JSON.stringify({
+            event: 'slash_command',
+            command: cmd,
+            args: arg || '',
+            channelCode: channelCode || null,
+            author: { id: socket.user.id, username: socket.user.displayName }
+          });
+          const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Haven-Webhook/1.0' };
+          if (botCmd.callback_secret) {
+            headers['X-Haven-Signature'] = require('crypto').createHmac('sha256', botCmd.callback_secret).update(payload).digest('hex');
+          }
+          fetch(botCmd.callback_url, {
+            method: 'POST', headers, body: payload,
+            signal: AbortSignal.timeout(10000)
+          }).catch(err => {
+            console.error(`Bot command callback failed for /${cmd} → ${botCmd.callback_url}: ${err.message}`);
+          });
+          return { botCommand: true };
+        }
+      } catch (err) {
+        console.error('Bot command lookup error:', err.message);
+      }
+
+      return null;
     }
 
     // ── Build context for domain modules ──────────────────
