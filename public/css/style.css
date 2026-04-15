@@ -12760,21 +12760,25 @@ ul.chat-list { list-style-type: disc; }
   pointer-events: none;
 }
 
-/* Banner visible (non-overlay): header & topic get solid bg to cover the banner */
+/* Banner visible (non-overlay): header & topic above banner, fully opaque */
 .main.has-banner .channel-header {
+  position: relative;
+  z-index: 1;
   background: var(--bg-primary);
 }
 .main.has-banner .channel-topic-bar {
+  position: relative;
+  z-index: 1;
   background: var(--bg-secondary);
 }
 
-/* ── Banner Overlay Mode (opt-in: header becomes transparent) ─── */
+/* ── Banner Overlay Mode (header becomes see-through with dark tint) ─── */
 .main.has-banner-overlay .channel-header {
-  background: transparent !important;
+  background: rgba(0,0,0,0.45) !important;
   border-bottom-color: transparent !important;
 }
 .main.has-banner-overlay .channel-topic-bar {
-  background: transparent !important;
+  background: rgba(0,0,0,0.35) !important;
   border-bottom-color: transparent !important;
 }
 .main.has-banner-overlay .channel-header,
