@@ -172,14 +172,15 @@ _updateTopicBar(topic) {
     if (canEdit) {
       bar.textContent = t('channels.topic_placeholder');
       bar.style.display = 'block';
-      bar.style.opacity = '0.4';
+      bar.style.opacity = '';
+      bar.style.color = 'var(--text-muted)';
       bar.style.cursor = 'pointer';
       bar.onclick = () => this._editTopic();
     } else {
       bar.style.display = 'none';
     }
   }
-  if (topic) bar.style.opacity = '1';
+  if (topic) { bar.style.opacity = '1'; bar.style.color = ''; }
 },
 
 async _editTopic() {
