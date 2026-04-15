@@ -11,6 +11,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.1.1] — 2026-04-15
+
+### Added
+- **Status bar toggle tab** — a small `📊` tab appears in the bottom-right corner when the status bar is hidden, providing an obvious one-click way to reveal it.
+- **Server URL in status bar** — the status bar now displays the server address with click-to-copy functionality. A privacy toggle lets you hide/show the URL (useful for streamers). Copying works even when the address is hidden.
+
+### Changed
+- **Status bar default** — the status bar (debug footer) is now **hidden by default** on web/mobile. Users can enable it from Settings → Layout or by clicking the toggle tab. Desktop app behavior is unchanged.
+- **Banner display settings** — banner height, vertical offset, and header style settings are now stored client-side (per-user preference) instead of server-side, so each user can customize their own view.
+
+### Fixed
+- **Mobile image overlap** — images in chat messages no longer overlap with adjacent messages on mobile devices. Root cause: flex items in the message list could shrink below their content height; now prevented with `flex-shrink: 0`.
+- **Mobile reply banner overflow** — reply banners on mobile now wrap properly instead of overflowing off-screen.
+- **Mobile message text overflow** — long words and URLs in messages now break correctly on mobile instead of overflowing horizontally.
+- **Status bar hidden on mobile** — the status bar was previously force-hidden via CSS on tablets and phones; it now respects the user's setting and condenses non-critical items at smaller breakpoints instead of disappearing entirely.
+
+---
+
 ## [3.1.0] — 2026-04-14
 
 ### Added
