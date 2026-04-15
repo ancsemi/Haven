@@ -12760,12 +12760,18 @@ ul.chat-list { list-style-type: disc; }
   pointer-events: none;
 }
 
-/* Banner visible (non-overlay): header & topic stay solid to cover it */
+/* Banner visible (non-overlay): all content areas get solid bg to cover the banner */
 .main.has-banner .channel-header {
   background: var(--bg-primary);
 }
 .main.has-banner .channel-topic-bar {
   background: var(--bg-secondary);
+}
+.main.has-banner .message-area {
+  background: var(--bg-primary);
+}
+.main.has-banner .welcome-screen {
+  background: var(--bg-primary);
 }
 
 /* ── Banner Overlay Mode (opt-in: header becomes transparent) ─── */

@@ -169,7 +169,7 @@ async _sendMessage() {
 },
 
 _jumpToMessage(msgId) {
-  const existing = document.querySelector(`[data-msg-id="${msgId}"]`);
+  const existing = document.querySelector(`#messages [data-msg-id="${msgId}"]`);
   if (existing) {
     existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
     existing.classList.add('highlight-flash');

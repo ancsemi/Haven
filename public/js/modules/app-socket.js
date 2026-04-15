@@ -1250,8 +1250,12 @@ _setupSocketListeners() {
     // Click to scroll to message
     list.querySelectorAll('.search-result-item').forEach(item => {
       item.addEventListener('click', () => {
-        const msgId = item.dataset.msgId;
-        this._jumpToMessage(parseInt(msgId, 10));
+        const msgId = parseInt(item.dataset.msgId, 10);
+        // Close the search panel so the user can see the result
+        panel.style.display = 'none';
+        document.getElementById('search-container').style.display = 'none';
+        document.getElementById('search-input').value = '';
+        this._jumpToMessage(msgId);
       });
     });
   });
