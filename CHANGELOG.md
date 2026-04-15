@@ -11,6 +11,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.1.0] — 2026-04-14
+
+### Added
+- **Server banners** — servers can now have a banner image displayed at the top of the chat area. Includes overlay and non-overlay display modes, a header style dropdown with four options (Transparent, Tinted, Solid, Full), height and vertical offset sliders, and gradient fade for a polished look.
+- **Server icon sync** — server icon thumbnails are now included in the encrypted sync bundle so server icons persist across devices. (#5240)
+
+### Fixed
+- **Role icon upload** — fixed role icon upload (field name mismatch and response handling) and added auto-resize to 16x16 for consistency.
+- **E2E encrypted notification content** — push and browser notifications for end-to-end encrypted messages now show generic placeholder text instead of raw JSON envelopes. (#5256)
+- **Safari iOS layout** — fixed safe-area insets, keyboard overlap, and navigation dot positioning on Safari iOS.
+- **Delete-user transaction safety** — added guards for non-existent tables in delete-user database transactions to prevent errors on fresh installs. (#5252)
+
+---
+
 ## [3.0.0] — 2026-04-14
 
 ### Added
