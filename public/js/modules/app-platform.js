@@ -161,9 +161,16 @@ _initDesktopAppBanner() {
     });
   }
 
-  // Close on overlay click
+  // Close on overlay click — respect "don't show again" checkbox
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
+      const check = document.getElementById('desktop-promo-dismiss-check');
+      if (check && check.checked) {
+        localStorage.setItem('haven_desktop_promo_dismissed', '1');
+        localStorage.setItem('haven_desktop_banner_dismissed', '1');
+        const banner = document.getElementById('desktop-app-banner');
+        if (banner) banner.style.display = 'none';
+      }
       modal.style.display = 'none';
     }
   });
@@ -259,9 +266,18 @@ _initAndroidBetaBanner() {
     });
   }
 
-  // Close on overlay click
+  // Close on overlay click — respect "don't show again" checkbox
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.style.display = 'none';
+    if (e.target === modal) {
+      const check = document.getElementById('android-beta-dismiss-check');
+      if (check && check.checked) {
+        localStorage.setItem('haven_ab_promo_nodisplay', '1');
+        localStorage.setItem('haven_ab_banner_nodisplay', '1');
+        const banner = document.getElementById('android-beta-banner');
+        if (banner) banner.style.display = 'none';
+      }
+      modal.style.display = 'none';
+    }
   });
 },
 
