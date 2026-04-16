@@ -114,6 +114,7 @@ app.use(helmet({
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'self'"],               // allow mobile app iframe, block third-party clickjacking
+      ...(process.env.FORCE_HTTP?.toLowerCase() === 'true' ? { upgradeInsecureRequests: null } : {}), // helmet 8.x auto-appends upgrade-insecure-requests; disable when FORCE_HTTP=true
     }
   },
   crossOriginEmbedderPolicy: false,  // needed for WebRTC
