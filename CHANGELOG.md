@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.2.0] — 2026-04-16
+
+### Added
+- **Mark as Read context menu** — right-click a channel or DM to mark it as read. The option only appears when the channel has unread messages. Clears the unread badge and updates the server-side read position.
+
+### Fixed
+- **Pinned message jump** — clicking a pinned message now correctly scrolls to and highlights it even when the message has been trimmed from the DOM (more than 100 messages back). Previously this would silently fail.
+- **iOS Safari mobile issues** — fixed double-tap zoom, scroll momentum, safe area insets, emoji picker positioning, and status picker rendering on Safari iOS.
+- **Promo modal dismiss** — clicking the overlay to close a promotional modal now correctly respects the "Don't show again" checkbox. (#5257)
+
+---
+
 ## [3.1.1] — 2026-04-15
 
 ### Added
