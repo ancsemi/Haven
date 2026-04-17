@@ -1148,6 +1148,14 @@ _setupUI() {
     this.switchChannel(channelCode);
     setTimeout(() => this._joinVoice(), 500);
   };
+
+  // Wire up voice-kicked (joined from another client/tab)
+  this.voice.onVoiceKicked = (channelCode, reason) => {
+    this._showToast(reason || 'Voice disconnected — joined from another client', 'info');
+    this._updateVoiceButtons(false);
+    this._updateVoiceStatus(false);
+    this._updateVoiceBar();
+  };
   // Re-render voice user list when webcam status changes
   this.voice.onWebcamStatusChange = () => {
     if (this._lastVoiceUsers) this._renderVoiceUsers(this._lastVoiceUsers);

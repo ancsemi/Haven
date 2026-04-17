@@ -73,14 +73,23 @@ module.exports = function register(socket, ctx) {
     if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
 
     // If this user is already in the same voice channel (e.g. from another
-    // client/tab), remove the old socket entry and leave the old room so
-    // we don't end up with duplicate voice connections.
+    // client/tab), do a full voice-leave on the old socket so peer connections,
+    // screen shares, and webcams are properly cleaned up.  Then notify the old
+    // client so it resets its local voice UI.
     const existingEntry = voiceUsers.get(code).get(socket.user.id);
     if (existingEntry && existingEntry.socketId !== socket.id) {
       const oldSocket = io.sockets.sockets.get(existingEntry.socketId);
-      if (oldSocket) oldSocket.leave(`voice:${code}`);
-      voiceUsers.get(code).delete(socket.user.id);
+      if (oldSocket) {
+        handleVoiceLeave(oldSocket, code);
+        oldSocket.emit('voice-kicked', { channelCode: code, reason: 'Joined from another client' });
+      } else {
+        // Stale entry — socket already disconnected; just clean up the map
+        voiceUsers.get(code).delete(socket.user.id);
+      }
     }
+
+    // Re-create the map if handleVoiceLeave cleaned it up (last user left)
+    if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
 
     socket.join(`voice:${code}`);
 

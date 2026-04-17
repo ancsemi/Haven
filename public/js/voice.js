@@ -226,6 +226,15 @@ class VoiceManager {
       if (this.onAfkMove) this.onAfkMove(data.channelCode);
     });
 
+    // Kicked from voice because user joined from another client/tab
+    this.socket.on('voice-kicked', (data) => {
+      if (!data || !data.channelCode) return;
+      // Only act if we're currently in the channel we got kicked from
+      if (this.currentChannel !== data.channelCode) return;
+      this.leave();
+      if (this.onVoiceKicked) this.onVoiceKicked(data.channelCode, data.reason);
+    });
+
     // Someone started screen sharing
     this.socket.on('screen-share-started', (data) => {
       this.screenSharers.add(data.userId);
