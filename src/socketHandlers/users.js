@@ -394,14 +394,27 @@ module.exports = function register(socket, ctx) {
     try {
       const row = db.prepare('SELECT encrypted_private_key, e2e_key_salt, public_key FROM users WHERE id = ?')
         .get(socket.user.id);
+      const hasBackup = !!(row && row.encrypted_private_key && row.e2e_key_salt);
+      // Forward just the pub-key JWK (x,y) so clients can detect
+      // local-vs-server divergence without an extra round-trip. Additive:
+      // legacy clients ignore it.
+      let publicKey = null;
+      if (row && row.public_key) {
+        try {
+          const parsed = typeof row.public_key === 'string' ? JSON.parse(row.public_key) : row.public_key;
+          if (parsed && parsed.x && parsed.y) publicKey = { kty: parsed.kty, crv: parsed.crv, x: parsed.x, y: parsed.y };
+        } catch { /* stored pub key not JSON — skip */ }
+      }
       socket.emit('encrypted-key-result', {
         encryptedKey: row?.encrypted_private_key || null,
         salt: row?.e2e_key_salt || null,
-        hasPublicKey: !!(row && row.public_key)
+        hasPublicKey: !!(row && row.public_key),
+        publicKey,
+        state: hasBackup ? 'present' : 'empty'
       });
     } catch (err) {
       console.error('Get encrypted key error:', err);
-      socket.emit('encrypted-key-result', { encryptedKey: null, salt: null, hasPublicKey: false });
+      socket.emit('encrypted-key-result', { encryptedKey: null, salt: null, hasPublicKey: false, publicKey: null, state: 'error' });
     }
   });
 

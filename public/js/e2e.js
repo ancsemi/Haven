@@ -68,38 +68,72 @@ class HavenE2E {
       await this._openDB();
       this._keysWereReset = false;
       this._serverBackupExists = false;
+      this._serverBackupState = 'unknown';  // 'present' | 'none' | 'unknown'
+      this._divergent = false;              // local pub != server pub
+      this._ghostState = false;             // init aborted to protect a possibly-good server backup
 
       /* 1. Fast path — local IndexedDB */
       this._keyPair = await this._loadLocal();
 
-      /* 1b. If loaded from IndexedDB but server backup is gone (e.g. after
-       *     account recovery), re-upload so cross-device sync and the public
-       *     key endpoint stay valid. Uses the current wrapping key. */
+      /* 1b. If loaded from IndexedDB, probe server state explicitly.
+       *     Three outcomes:
+       *       present — verify local pub matches server pub; flag divergence if not
+       *       none    — server actually has no backup; re-upload ours
+       *       unknown — request timed out; do NOT mutate server state */
       if (this._keyPair && socket && wrappingKey) {
-        const backup = await this._fetchBackup(socket);
-        if (backup) {
+        const probe = await this._fetchBackupWithState(socket);
+        this._serverBackupState = probe.status;
+        if (probe.status === 'present') {
           this._serverBackupExists = true;
-        } else {
-          // Server backup was cleared — re-upload with the current wrapping key
-          try { await this._uploadBackup(socket, wrappingKey); }
+          try {
+            const localPub = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
+            if (probe.serverPublicKey && localPub && probe.serverPublicKey.x && localPub.x && probe.serverPublicKey.x !== localPub.x) {
+              this._divergent = true;
+              console.warn('[E2E] Local key diverges from server backup — awaiting user action');
+            }
+          } catch { /* best-effort divergence check */ }
+        } else if (probe.status === 'none') {
+          // Server confirmed empty — safe to re-upload our local key
+          try { await this._uploadBackup(socket, wrappingKey); this._serverBackupExists = true; }
           catch (err) { console.warn('[E2E] Re-upload after recovery failed:', err.message); }
+        } else {
+          // probe.status === 'unknown' — flaky network. Do NOT upload; it would
+          // clobber whatever the server actually has.
+          console.warn('[E2E] Could not reach server for backup probe — skipping re-upload to avoid clobber');
         }
       }
 
       /* 2. Cross-device — try server backup (only if we have a wrapping key) */
       if (!this._keyPair && socket && wrappingKey) {
-        this._keyPair = await this._restoreFromServer(socket, wrappingKey);
+        const restored = await this._restoreFromServerWithState(socket, wrappingKey);
+        this._keyPair = restored.pair;
+        this._serverBackupState = restored.status;
+        if (restored.status === 'present') this._serverBackupExists = true;
       }
 
-      /* 3. No key anywhere — generate ONLY if no backup exists on the server.
-       *    If server backup exists but unwrap failed, do NOT generate new keys
-       *    (that would overwrite the existing key and break other devices).
-       *    Instead, leave E2E unavailable and let the user resolve. */
-      if (!this._keyPair && wrappingKey && !this._serverBackupExists) {
+      /* 3. No key anywhere — generate ONLY if we affirmatively confirmed the
+       *    server has no backup. On 'unknown' we bail out entirely: generating
+       *    a fresh key here and uploading would clobber a potentially-good
+       *    backup once the network comes back. A 5-min cooldown prevents
+       *    flap-regenerate storms across reconnects. */
+      if (!this._keyPair && wrappingKey) {
+        if (this._serverBackupState !== 'none') {
+          this._ghostState = true;
+          console.warn('[E2E] Server state ' + this._serverBackupState + ' — refusing to generate keys (would risk clobber)');
+          this._ready = false;
+          return false;
+        }
+        if (!(await this._canAttemptGenerate())) {
+          this._ghostState = true;
+          console.warn('[E2E] Regenerate cooldown active — refusing to mint new keypair');
+          this._ready = false;
+          return false;
+        }
         this._keyPair = await this._generate();
         await this._saveLocal(this._keyPair);
+        await this._markGenerateAttempt();
         this._freshlyGenerated = true;
-        console.log('[E2E] Generated new key pair (first-time setup)');
+        console.log('[E2E] Generated new key pair (first-time setup, server confirmed empty)');
       }
 
       /* 4. Auto-login without IndexedDB — E2E unavailable until real login */
@@ -135,6 +169,15 @@ class HavenE2E {
       return false;
     }
   }
+
+  /** True if local and server backups disagree on the public key. UI can prompt user to sync or reset. */
+  get divergent() { return !!this._divergent; }
+
+  /** True if init bailed out to protect a possibly-good server backup. UI should prompt for action. */
+  get ghostState() { return !!this._ghostState; }
+
+  /** Last observed server backup state: 'present' | 'none' | 'unknown'. */
+  get serverBackupState() { return this._serverBackupState || 'unknown'; }
 
   /**
    * Generate fresh keys, upload backup, publish to server.
@@ -354,13 +397,55 @@ class HavenE2E {
   /* ─── Server communication ────────────────────────── */
 
   _fetchBackup(socket) {
-    return new Promise(resolve => {
-      const t = setTimeout(() => resolve(null), 5000);
+    return this._fetchBackupWithState(socket).then(r => r.status === 'present' ? r.data : null);
+  }
+
+  /**
+   * Fetch encrypted key backup with explicit status tracking.
+   * Returns { status, data, serverPublicKey }:
+   *   status = 'present' — server returned a backup blob
+   *   status = 'none'    — server confirmed there is no backup (safe to generate)
+   *   status = 'unknown' — request timed out or errored (do NOT treat as empty)
+   * Retries once before giving up, so transient network blips aren't treated as "no backup".
+   * This distinction is load-bearing: the previous 5s-timeout-returns-null design
+   * conflated "confirmed empty" with "unreachable", which could let the client
+   * overwrite a good server backup after flaky mobile reconnects.
+   */
+  _fetchBackupWithState(socket) {
+    const TIMEOUT = 15000;
+    const attempt = () => new Promise(resolve => {
+      let done = false;
+      const t = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve({ status: 'unknown', data: null, serverPublicKey: null });
+      }, TIMEOUT);
       socket.once('encrypted-key-result', data => {
+        if (done) return;
+        done = true;
         clearTimeout(t);
-        resolve(data && data.encryptedKey && data.salt ? data : null);
+        const hasBlob = data && data.encryptedKey && data.salt;
+        if (hasBlob) {
+          resolve({ status: 'present', data, serverPublicKey: data.publicKey || null });
+        } else if (data && (data.state === 'empty' || (data.state === undefined && data.hasPublicKey === false))) {
+          // Server-confirmed empty. Legacy servers (no `state` field) fall back to
+          // the hasPublicKey heuristic: if the user has no public key either, the
+          // account is truly fresh.
+          resolve({ status: 'none', data: null, serverPublicKey: null });
+        } else if (data && data.state === 'empty') {
+          resolve({ status: 'none', data: null, serverPublicKey: null });
+        } else {
+          // Legacy server returned null blob but has a public key — ambiguous.
+          // Treat as unknown to be safe; we'd rather retry than risk a clobber.
+          resolve({ status: 'unknown', data: null, serverPublicKey: null });
+        }
       });
       socket.emit('get-encrypted-key');
+    });
+    return attempt().then(first => {
+      if (first.status !== 'unknown') return first;
+      console.warn('[E2E] Backup fetch timed out, retrying once');
+      return attempt();
     });
   }
 
@@ -424,20 +509,68 @@ class HavenE2E {
   /* ─── Server restore helper ───────────────────────── */
 
   async _restoreFromServer(socket, secret) {
-    const backup = await this._fetchBackup(socket);
-    if (!backup) return null;
+    const r = await this._restoreFromServerWithState(socket, secret);
+    return r.pair;
+  }
+
+  /**
+   * Restore with status awareness. Returns { pair, status }:
+   *   status = 'present' — backup found (pair may still be null if unwrap failed)
+   *   status = 'none'    — server confirmed empty; caller may generate fresh keys
+   *   status = 'unknown' — network issue; caller MUST NOT overwrite server state
+   */
+  async _restoreFromServerWithState(socket, secret) {
+    const probe = await this._fetchBackupWithState(socket);
+    if (probe.status !== 'present') return { pair: null, status: probe.status };
     this._serverBackupExists = true;
     try {
-      const jwk = await this._unwrap(secret, backup.encryptedKey, backup.salt);
+      const jwk = await this._unwrap(secret, probe.data.encryptedKey, probe.data.salt);
       const pair = await this._importPair(jwk);
       await this._saveLocal(pair);
       console.log('[E2E] Restored from server backup');
-      return pair;
+      return { pair, status: 'present' };
     } catch {
       console.warn('[E2E] Server backup unwrap failed — keys NOT auto-regenerated to protect other devices');
-      return null;
+      return { pair: null, status: 'present' };
     }
   }
+
+  /* ─── Regenerate cooldown ─────────────────────────── */
+
+  _cooldownGet() {
+    return new Promise(resolve => {
+      try {
+        const tx = this._db.transaction('keys', 'readonly');
+        const r = tx.objectStore('keys').get('last_generate_attempt');
+        tx.oncomplete = () => resolve(typeof r.result === 'number' ? r.result : 0);
+        tx.onerror = () => resolve(0);
+      } catch { resolve(0); }
+    });
+  }
+
+  _cooldownSet(val) {
+    return new Promise(resolve => {
+      try {
+        const tx = this._db.transaction('keys', 'readwrite');
+        const s = tx.objectStore('keys');
+        if (val === null) s.delete('last_generate_attempt');
+        else s.put(val, 'last_generate_attempt');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch { resolve(); }
+    });
+  }
+
+  async _canAttemptGenerate() {
+    const last = await this._cooldownGet();
+    if (!last) return true;
+    return Date.now() - last >= 5 * 60 * 1000;
+  }
+
+  async _markGenerateAttempt() { await this._cooldownSet(Date.now()); }
+
+  /** Clear the regenerate cooldown (e.g. on explicit user-driven reset). */
+  async clearGenerateCooldown() { await this._cooldownSet(null); }
 
   /**
    * Sync keys from the server backup (clears local keys first).
