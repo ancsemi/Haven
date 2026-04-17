@@ -300,6 +300,8 @@ class ModMode {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('application/x-mod-ids', JSON.stringify(this.dragGroup));
     e.dataTransfer.setData('text/plain', id);
+    // Activate float layer as a drop target only while dragging
+    this._activateFloatLayer();
   }
 
   _onDragOver(e) {
@@ -346,6 +348,8 @@ class ModMode {
     });
     this.dragSrc = null;
     this.dragGroup = [];
+    // Deactivate float layer so it stops blocking clicks
+    this._deactivateFloatLayer();
   }
 
   // ── Drop targets (panels accepting sections) ──
@@ -398,7 +402,8 @@ class ModMode {
 
   _armFloatLayer() {
     if (!this.floatLayer) return;
-    this.floatLayer.classList.add('active');
+    // Don't add 'active' here — it enables pointer-events on the full-screen
+    // overlay which blocks all clicks.  Instead, activate only during drags.
     this.floatLayer.addEventListener('dragover', this._bound.floatDrag);
     this.floatLayer.addEventListener('drop', this._bound.floatDrop);
     Object.entries(this.layout.sections).forEach(([id, meta]) => {
@@ -415,6 +420,9 @@ class ModMode {
     this.floatLayer.removeEventListener('dragover', this._bound.floatDrag);
     this.floatLayer.removeEventListener('drop', this._bound.floatDrop);
   }
+
+  _activateFloatLayer()   { if (this.floatLayer) this.floatLayer.classList.add('active'); }
+  _deactivateFloatLayer() { if (this.floatLayer) this.floatLayer.classList.remove('active'); }
 
   _onFloatDragOver(e) {
     if (!this.dragGroup.length) return;
