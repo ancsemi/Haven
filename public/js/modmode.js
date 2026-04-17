@@ -1,11 +1,11 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Mod Mode (layout customisation) v2
-// - Sections can live in any drop-capable panel (not just the
-//   left sidebar) or float freely on a dedicated overlay layer.
-// - Panels can be resized and snapped to edges/corners.
-// - Per-section collapse state, multi-section select + group
-//   drag, 8px grid snapping for floats, and separate layouts
-//   for desktop vs. mobile breakpoints.
+// Haven — Mod Mode (layout customisation) v3
+// - Sections can be reordered within panels via drag-and-drop.
+// - Sections can be floated: free-floating windows that are
+//   draggable and resizable even OUTSIDE mod mode.
+// - A persistent toolbar appears in mod mode with Save & Exit.
+// - Per-section collapse state with safe recovery labels.
+// - Separate layouts for desktop vs. mobile breakpoints.
 // ═══════════════════════════════════════════════════════════
 
 class ModMode {
@@ -13,70 +13,49 @@ class ModMode {
     this.active = false;
     this.container = null;
     this.floatLayer = null;
-    this.draggingPanelKey = null;
-    this.snapZones = [];
-    this.panelHandles = new Map();
-    this.resizeHandles = new Map();
-    this.resizeObservers = new Map();
     this.selection = new Set();
     this.dragSrc = null;
     this.dragGroup = [];
-    this.gridSnap = true;
-    this.gridSize = 8;
 
-    this.panelDefs = {
-      'server-bar':    { selector: '#server-bar',    positions: ['left', 'right'],                    dropMode: null,       resizable: false },
-      'sidebar':       { selector: '.sidebar',       positions: ['left', 'right'],                    dropMode: 'stack',    resizable: true,  resizeAxis: 'x', defaultSize: 280, minSize: 180, maxSize: 520 },
-      'right-sidebar': { selector: '.right-sidebar', positions: ['left', 'right', 'center'],          dropMode: 'stack',    resizable: true,  resizeAxis: 'x', defaultSize: 260, minSize: 180, maxSize: 520 },
-      'status-bar':    { selector: '#status-bar',    positions: ['bottom', 'top'],                    dropMode: 'inline',   resizable: false },
-      'voice-panel':   { selector: '#voice-panel',   positions: ['right-sidebar', 'left-sidebar', 'bottom', 'center'], dropMode: null, resizable: false }
-    };
-
-    this.sectionPanels = ['sidebar-mod-container', 'right-sidebar-drop', 'status-bar-drop', 'float-layer'];
+    /* Section panels — where data-mod-id sections can live */
+    this.sectionPanels = ['sidebar-mod-container', 'right-sidebar', 'status-bar', 'float-layer'];
 
     this.defaultState = () => ({
-      panels: {
-        'server-bar':    { pos: 'left' },
-        'sidebar':       { pos: 'left',  size: 280 },
-        'right-sidebar': { pos: 'right', size: 260 },
-        'status-bar':    { pos: 'bottom' },
-        'voice-panel':   { pos: 'right-sidebar' }
-      },
       sections: {},  // id -> { panel, index, collapsed, float: {x,y,w,h}|null }
-      settings: { gridSnap: true }
     });
 
     this.state = { desktop: this.defaultState(), mobile: this.defaultState() };
 
     this._bound = {
-      dragStart:   this._onDragStart.bind(this),
-      dragOver:    this._onDragOver.bind(this),
-      dragEnter:   this._onDragEnter.bind(this),
-      dragLeave:   this._onDragLeave.bind(this),
-      drop:        this._onDrop.bind(this),
-      dragEnd:     this._onDragEnd.bind(this),
-      panelStart:  this._onPanelDragStart.bind(this),
-      panelEnd:    this._onPanelDragEnd.bind(this),
-      floatDrag:   this._onFloatDragOver.bind(this),
-      floatDrop:   this._onFloatDrop.bind(this),
-      headerClick: this._onHeaderClick.bind(this),
-      keydown:     this._onKey.bind(this),
-      mqChange:    this._onBreakpointChange.bind(this),
+      dragStart:     this._onDragStart.bind(this),
+      dragOver:      this._onDragOver.bind(this),
+      dragEnter:     this._onDragEnter.bind(this),
+      dragLeave:     this._onDragLeave.bind(this),
+      drop:          this._onDrop.bind(this),
+      dragEnd:       this._onDragEnd.bind(this),
+      floatDrag:     this._onFloatDragOver.bind(this),
+      floatDrop:     this._onFloatDrop.bind(this),
+      headerClick:   this._onHeaderClick.bind(this),
+      keydown:       this._onKey.bind(this),
+      mqChange:      this._onBreakpointChange.bind(this),
       panelDropOver: this._onPanelDropOver.bind(this),
-      panelDropDrop: this._onPanelDropDrop.bind(this)
+      panelDropDrop: this._onPanelDropDrop.bind(this),
     };
 
     this.mq = window.matchMedia('(max-width: 900px)');
   }
 
+  // ── Initialisation ──
+
   init() {
     this.container = document.getElementById('sidebar-mod-container');
     if (!this.container) return;
-    this._migrateLegacyState();
     this._loadState();
     this._cacheHomePanels();
     this._ensureFloatLayer();
     this.applyLayout();
+    // Restore floating pane interactivity on load (even outside mod mode)
+    this._armAllFloatingPanes();
     document.getElementById('mod-mode-reset')?.addEventListener('click', () => this.resetLayout());
     this.mq.addEventListener?.('change', this._bound.mqChange);
   }
@@ -85,27 +64,6 @@ class ModMode {
 
   get layoutKey() { return this.mq.matches ? 'mobile' : 'desktop'; }
   get layout()    { return this.state[this.layoutKey]; }
-
-  _migrateLegacyState() {
-    if (localStorage.getItem('haven-layout-v2')) return;
-    let order = null, panel = null;
-    try { order = JSON.parse(localStorage.getItem('haven-layout')); } catch {}
-    try { panel = JSON.parse(localStorage.getItem('haven-panel-layout')); } catch {}
-    if (!order && !panel) return;
-    const desktop = this.defaultState();
-    if (Array.isArray(order)) {
-      order.forEach((id, i) => {
-        desktop.sections[id] = { panel: 'sidebar-mod-container', index: i, collapsed: false, float: null };
-      });
-    }
-    if (panel && typeof panel === 'object') {
-      Object.keys(desktop.panels).forEach(k => {
-        if (this.panelDefs[k]?.positions.includes(panel[k])) desktop.panels[k].pos = panel[k];
-      });
-    }
-    this.state.desktop = desktop;
-    localStorage.setItem('haven-layout-v2', JSON.stringify(this.state));
-  }
 
   _loadState() {
     try {
@@ -117,7 +75,6 @@ class ModMode {
         };
       }
     } catch { /* keep defaults */ }
-    this.gridSnap = this.layout.settings?.gridSnap !== false;
   }
 
   _saveState() {
@@ -134,8 +91,8 @@ class ModMode {
 
   _detectHomePanel(el) {
     if (el.closest('#sidebar-mod-container')) return 'sidebar-mod-container';
-    if (el.closest('.right-sidebar'))         return 'right-sidebar-drop';
-    if (el.closest('#status-bar'))            return 'status-bar-drop';
+    if (el.closest('.right-sidebar'))         return 'right-sidebar';
+    if (el.closest('#status-bar'))            return 'status-bar';
     return 'sidebar-mod-container';
   }
 
@@ -152,33 +109,41 @@ class ModMode {
 
   // ── Enable / Disable ──
 
-  toggle() { this.active ? this._disable() : this._enable(); this.active = !this.active; }
+  toggle() {
+    this.active ? this._disable() : this._enable();
+    this.active = !this.active;
+  }
 
   _enable() {
     // Close settings modal so users can see what they're modifying
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) settingsModal.style.display = 'none';
+
     document.body.classList.add('mod-mode-on');
     this.container.classList.add('mod-mode-active');
+
     this._getAllSections().forEach(s => this._armSection(s));
-    this._armPanels();
     this._armDropTargets();
     this._armFloatLayer();
+    this._showToolbar();
+
     document.addEventListener('keydown', this._bound.keydown);
     document.addEventListener('dragend', this._bound.dragEnd);
-    this._showToast('Mod Mode ON \u2014 drag section headers or \u2725 handles to rearrange');
   }
 
   _disable() {
     document.body.classList.remove('mod-mode-on');
     this.container.classList.remove('mod-mode-active');
+
     this._getAllSections().forEach(s => this._disarmSection(s));
-    this._disarmPanels();
     this._disarmDropTargets();
     this._disarmFloatLayer();
     this._clearSelection();
+    this._hideToolbar();
+
     document.removeEventListener('keydown', this._bound.keydown);
     document.removeEventListener('dragend', this._bound.dragEnd);
+
     this._persistFromDom();
     this._saveState();
     this._showToast('Mod Mode OFF \u2014 layout saved');
@@ -198,6 +163,31 @@ class ModMode {
     }
   }
 
+  // ── Toolbar (visible during mod mode) ──
+
+  _showToolbar() {
+    let bar = document.getElementById('mod-mode-toolbar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'mod-mode-toolbar';
+      bar.className = 'mod-toolbar';
+      bar.innerHTML = `
+        <span class="mod-toolbar-label">\u270f\ufe0f Mod Mode</span>
+        <button type="button" class="mod-toolbar-btn" id="mod-toolbar-reset" title="Reset to defaults">\u21ba Reset</button>
+        <button type="button" class="mod-toolbar-btn mod-toolbar-save" id="mod-toolbar-exit" title="Save & exit mod mode">\u2713 Save & Exit</button>
+      `;
+      document.body.appendChild(bar);
+      bar.querySelector('#mod-toolbar-exit').addEventListener('click', () => this.toggle());
+      bar.querySelector('#mod-toolbar-reset').addEventListener('click', () => this.resetLayout());
+    }
+    bar.style.display = 'flex';
+  }
+
+  _hideToolbar() {
+    const bar = document.getElementById('mod-mode-toolbar');
+    if (bar) bar.style.display = 'none';
+  }
+
   // ── Sections ──
 
   _getAllSections() { return [...document.querySelectorAll('[data-mod-id]')]; }
@@ -212,7 +202,7 @@ class ModMode {
     s.addEventListener('dragleave', this._bound.dragLeave);
     s.addEventListener('drop',      this._bound.drop);
     this._injectSectionControls(s);
-    // Make section labels and the drag handle the actual drag sources —
+    // Make section labels and the drag handle actual drag sources \u2014
     // the section body itself is NOT draggable (prevents scroll conflicts)
     s.querySelectorAll('.section-label').forEach(label => {
       label.setAttribute('draggable', 'true');
@@ -229,7 +219,6 @@ class ModMode {
     s.removeEventListener('dragenter', this._bound.dragEnter);
     s.removeEventListener('dragleave', this._bound.dragLeave);
     s.removeEventListener('drop',      this._bound.drop);
-    // Remove draggable from all labels and handle
     s.querySelectorAll('.section-label').forEach(label => {
       label.removeAttribute('draggable');
       label.removeEventListener('click', this._bound.headerClick);
@@ -237,7 +226,6 @@ class ModMode {
     const handle = s.querySelector('.mod-sec-handle');
     if (handle) handle.removeAttribute('draggable');
     this._removeSectionControls(s);
-    // Remove injected collapsed label (collapse state persists via class)
     s.querySelector(':scope > .mod-collapsed-label')?.remove();
   }
 
@@ -248,7 +236,7 @@ class ModMode {
     bar.innerHTML = `
       <button type="button" class="mod-sec-btn" data-act="collapse" title="Collapse / expand">\u25be</button>
       <button type="button" class="mod-sec-btn" data-act="home" title="Return to home panel">\u2302</button>
-      <span class="mod-sec-handle" title="Drag">\u2725</span>
+      <span class="mod-sec-handle" title="Drag to reorder">\u2725</span>
     `;
     bar.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -277,6 +265,8 @@ class ModMode {
     this._saveState();
   }
 
+  /* For sections without a direct .section-label (e.g. sidebar-split),
+     inject a visible label so they don't vanish when collapsed. */
   _syncCollapseLabel(s) {
     const isCollapsed = s.classList.contains('mod-collapsed');
     const hasDirectLabel = !!s.querySelector(':scope > .section-label:not(.mod-collapsed-label)');
@@ -321,10 +311,14 @@ class ModMode {
     this.selection.clear();
   }
 
-  // ── Section drag/drop ──
+  // ── Section drag/drop (reordering within & between panels) ──
 
   _onDragStart(e) {
+    /* Only start if the drag originated from a draggable child (label/handle) */
+    if (!e.target.matches || !e.target.closest('[draggable="true"]')) return;
     const s = e.currentTarget;
+    /* Don't allow reorder-drag on floating sections \u2014 they use mousedown drag */
+    if (s.classList.contains('mod-floating')) { e.preventDefault(); return; }
     this.dragSrc = s;
     const id = s.dataset.modId;
     if (this.selection.size > 0 && this.selection.has(id)) {
@@ -339,11 +333,12 @@ class ModMode {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('application/x-mod-ids', JSON.stringify(this.dragGroup));
     e.dataTransfer.setData('text/plain', id);
-    // Activate float layer as a drop target only while dragging
+    // Activate float layer as drop target while dragging
     this._activateFloatLayer();
   }
 
   _onDragOver(e) {
+    if (!this.dragGroup.length) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     const target = e.currentTarget;
@@ -355,6 +350,7 @@ class ModMode {
   }
 
   _onDragEnter(e) {
+    if (!this.dragGroup.length) return;
     e.preventDefault();
     if (!this.dragGroup.includes(e.currentTarget.dataset.modId)) {
       e.currentTarget.classList.add('mod-drag-over');
@@ -366,6 +362,7 @@ class ModMode {
   }
 
   _onDrop(e) {
+    if (!this.dragGroup.length) return;
     e.preventDefault();
     const target = e.currentTarget;
     target.classList.remove('mod-drag-over', 'mod-drop-above', 'mod-drop-below');
@@ -376,7 +373,10 @@ class ModMode {
     const anchor = insertBefore ? target : target.nextSibling;
     this.dragGroup.forEach(id => {
       const el = document.querySelector(`[data-mod-id="${id}"]`);
-      if (el && el !== target) parent.insertBefore(el, anchor);
+      if (el && el !== target) {
+        this._unfloatSection(el);
+        parent.insertBefore(el, anchor);
+      }
     });
   }
 
@@ -387,11 +387,10 @@ class ModMode {
     });
     this.dragSrc = null;
     this.dragGroup = [];
-    // Deactivate float layer so it stops blocking clicks
     this._deactivateFloatLayer();
   }
 
-  // ── Drop targets (panels accepting sections) ──
+  // ── Drop targets (panels that accept sections) ──
 
   _armDropTargets() {
     const targets = [
@@ -431,8 +430,7 @@ class ModMode {
     this.dragGroup.forEach(id => {
       const el = document.querySelector(`[data-mod-id="${id}"]`);
       if (!el) return;
-      el.classList.remove('mod-floating');
-      el.style.left = el.style.top = el.style.width = el.style.height = '';
+      this._unfloatSection(el);
       if (el.parentElement !== panel) panel.appendChild(el);
     });
   }
@@ -441,16 +439,8 @@ class ModMode {
 
   _armFloatLayer() {
     if (!this.floatLayer) return;
-    // Don't add 'active' here — it enables pointer-events on the full-screen
-    // overlay which blocks all clicks.  Instead, activate only during drags.
     this.floatLayer.addEventListener('dragover', this._bound.floatDrag);
     this.floatLayer.addEventListener('drop', this._bound.floatDrop);
-    Object.entries(this.layout.sections).forEach(([id, meta]) => {
-      if (meta.panel === 'float-layer' && meta.float) {
-        const el = document.querySelector(`[data-mod-id="${id}"]`);
-        if (el) this._placeFloat(el, meta.float);
-      }
-    });
   }
 
   _disarmFloatLayer() {
@@ -475,8 +465,6 @@ class ModMode {
     const layerRect = this.floatLayer.getBoundingClientRect();
     let x = e.clientX - layerRect.left;
     let y = e.clientY - layerRect.top;
-    const snap = this.gridSnap && !e.altKey;
-    if (snap) { x = Math.round(x / this.gridSize) * this.gridSize; y = Math.round(y / this.gridSize) * this.gridSize; }
     this.dragGroup.forEach((id, i) => {
       const el = document.querySelector(`[data-mod-id="${id}"]`);
       if (!el) return;
@@ -484,8 +472,8 @@ class ModMode {
       const float = {
         x: x + (i * 14),
         y: y + (i * 14),
-        w: existing?.w || 260,
-        h: existing?.h || 200
+        w: existing?.w || 320,
+        h: existing?.h || 260
       };
       this._placeFloat(el, float);
       this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, { panel: 'float-layer', float });
@@ -496,221 +484,97 @@ class ModMode {
   _placeFloat(el, float) {
     if (el.parentElement !== this.floatLayer) this.floatLayer.appendChild(el);
     el.classList.add('mod-floating');
-    el.style.left = float.x + 'px';
-    el.style.top  = float.y + 'px';
-    el.style.width = float.w + 'px';
+    el.style.left   = float.x + 'px';
+    el.style.top    = float.y + 'px';
+    el.style.width  = float.w + 'px';
     el.style.height = float.h + 'px';
-    this._observeFloatResize(el);
+    this._armFloatingPane(el);
   }
 
-  _observeFloatResize(el) {
-    const id = el.dataset.modId;
-    if (this.resizeObservers.has(id)) return;
-    const ro = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        const r = entry.contentRect;
-        const meta = this.layout.sections[id];
-        if (!meta?.float) continue;
-        meta.float.w = Math.round(r.width);
-        meta.float.h = Math.round(r.height);
-      }
-      this._saveStateDebounced();
-    });
-    ro.observe(el);
-    this.resizeObservers.set(id, ro);
-  }
+  /* ---------- Floating pane window-drag (mousedown) ----------
+     Works both IN and OUT of mod mode.  Dragging the .mod-float-titlebar
+     or any .section-label inside the pane moves it. */
+  _armFloatingPane(el) {
+    if (el._floatArmed) return;
+    el._floatArmed = true;
 
-  _saveStateDebounced() {
-    clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => this._saveState(), 400);
-  }
-
-  // ── Panels (snap handles + resize) ──
-
-  _armPanels() {
-    Object.entries(this.panelDefs).forEach(([key, def]) => {
-      const panel = document.querySelector(def.selector);
-      if (!panel) return;
-      panel.classList.add('mod-panel-target');
-      let handle = panel.querySelector(':scope > .mod-panel-handle');
-      if (!handle) {
-        handle = document.createElement('button');
-        handle.type = 'button';
-        handle.className = 'mod-panel-handle';
-        handle.textContent = '\u2725';
-        handle.title = `Drag to reposition ${key.replace(/-/g, ' ')}`;
-        panel.appendChild(handle);
-      }
-      handle.setAttribute('draggable', 'true');
-      handle.dataset.panelKey = key;
-      handle.addEventListener('dragstart', this._bound.panelStart);
-      handle.addEventListener('dragend',   this._bound.panelEnd);
-      this.panelHandles.set(key, handle);
-      if (def.resizable) this._armResize(key, panel, def);
-    });
-  }
-
-  _disarmPanels() {
-    this._clearSnapZones();
-    this.draggingPanelKey = null;
-    this.panelHandles.forEach((handle, key) => {
-      handle.removeEventListener('dragstart', this._bound.panelStart);
-      handle.removeEventListener('dragend',   this._bound.panelEnd);
-      handle.removeAttribute('draggable');
-      const panel = document.querySelector(this.panelDefs[key].selector);
-      panel?.classList.remove('mod-panel-target');
-    });
-    this.panelHandles.clear();
-    this._disarmResize();
-  }
-
-  _armResize(key, panel, def) {
-    let handle = panel.querySelector(':scope > .mod-resize-handle');
-    if (!handle) {
-      handle = document.createElement('div');
-      handle.className = `mod-resize-handle axis-${def.resizeAxis}`;
-      panel.appendChild(handle);
-    }
     const onDown = (e) => {
+      // Only initiate window-drag from title bar / section labels
+      const trigger = e.target.closest('.mod-float-titlebar, .section-label, .mod-collapsed-label');
+      if (!trigger) return;
+      // Don't fight with the HTML5 reorder-drag when mod mode labels are draggable
+      if (trigger.getAttribute('draggable') === 'true' && this.active) return;
       e.preventDefault();
-      const startX = e.clientX;
-      const startW = panel.getBoundingClientRect().width;
-      const isRight = panel.dataset.panelPos === 'right';
+      const rect = el.getBoundingClientRect();
+      const layerRect = this.floatLayer.getBoundingClientRect();
+      const offX = e.clientX - rect.left;
+      const offY = e.clientY - rect.top;
+
       const onMove = (ev) => {
-        const delta = (ev.clientX - startX) * (isRight ? -1 : 1);
-        let w = Math.max(def.minSize, Math.min(def.maxSize, startW + delta));
-        panel.style.width = w + 'px';
-        this.layout.panels[key].size = Math.round(w);
+        let nx = ev.clientX - layerRect.left - offX;
+        let ny = ev.clientY - layerRect.top  - offY;
+        // Clamp to viewport
+        nx = Math.max(0, Math.min(layerRect.width  - 40, nx));
+        ny = Math.max(0, Math.min(layerRect.height - 40, ny));
+        el.style.left = nx + 'px';
+        el.style.top  = ny + 'px';
       };
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        // Persist new position
+        const id = el.dataset.modId;
+        const meta = this.layout.sections[id];
+        if (meta?.float) {
+          meta.float.x = parseInt(el.style.left) || 0;
+          meta.float.y = parseInt(el.style.top)  || 0;
+        }
         this._saveState();
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     };
-    handle.addEventListener('mousedown', onDown);
-    this.resizeHandles.set(key, { handle, onDown });
-  }
 
-  _disarmResize() {
-    this.resizeHandles.forEach(({ handle, onDown }) => {
-      handle.removeEventListener('mousedown', onDown);
-    });
-    this.resizeHandles.clear();
-  }
-
-  _onPanelDragStart(e) {
-    const key = e.currentTarget.dataset.panelKey;
-    if (!key || !this.panelDefs[key]) return;
-    this.draggingPanelKey = key;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', `panel:${key}`);
-    e.currentTarget.classList.add('dragging');
-    this._showSnapZones(key);
-  }
-
-  _onPanelDragEnd(e) {
-    e.currentTarget.classList.remove('dragging');
-    this.draggingPanelKey = null;
-    this._clearSnapZones();
-  }
-
-  _showSnapZones(key) {
-    this._clearSnapZones();
-    const positions = this.panelDefs[key]?.positions || [];
-    const labels = {
-      left: '\u2190 Left', right: 'Right \u2192', top: '\u2191 Top',
-      bottom: '\u2193 Bottom', center: '\u2b24 Float',
-      'right-sidebar': 'In right panel', 'left-sidebar': 'In left panel'
+    el.addEventListener('mousedown', onDown);
+    el._floatCleanup = () => {
+      el.removeEventListener('mousedown', onDown);
+      el._floatArmed = false;
+      delete el._floatCleanup;
     };
-    positions.forEach(pos => {
-      const zone = document.createElement('div');
-      zone.className = `mod-snap-zone ${pos}`;
-      zone.dataset.panelKey = key;
-      zone.dataset.pos = pos;
-      zone.textContent = labels[pos] || pos;
-      zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('active'); });
-      zone.addEventListener('dragleave', () => zone.classList.remove('active'));
-      zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        zone.classList.remove('active');
-        this._setPanelPosition(key, pos);
-      });
-      document.body.appendChild(zone);
-      this.snapZones.push(zone);
+
+    // Inject a title bar for the floating pane
+    if (!el.querySelector(':scope > .mod-float-titlebar')) {
+      const titlebar = document.createElement('div');
+      titlebar.className = 'mod-float-titlebar';
+      const texts = [...el.querySelectorAll('.section-label-text')]
+        .map(t => t.textContent.trim()).filter(Boolean);
+      titlebar.textContent = texts.length ? texts.join(' & ') : (el.dataset.modId || 'Section');
+      el.insertBefore(titlebar, el.firstChild);
+    }
+  }
+
+  _disarmFloatingPane(el) {
+    if (el._floatCleanup) el._floatCleanup();
+    el.querySelector(':scope > .mod-float-titlebar')?.remove();
+  }
+
+  /** Arm all currently-floating panes (called on init for persistence across reload) */
+  _armAllFloatingPanes() {
+    this.floatLayer?.querySelectorAll('.mod-floating').forEach(el => {
+      this._armFloatingPane(el);
     });
-  }
-
-  _clearSnapZones() {
-    this.snapZones.forEach(z => z.remove());
-    this.snapZones = [];
-  }
-
-  _setPanelPosition(key, pos) {
-    if (!this.panelDefs[key]?.positions.includes(pos)) return;
-    this.layout.panels[key] = Object.assign(this.layout.panels[key] || {}, { pos });
-    this.applyPanelLayout();
-    this._saveState();
-    this._showToast(`Moved ${key.replace(/-/g, ' ')} \u2192 ${pos.replace(/-/g, ' ')}`);
   }
 
   // ── Apply layout to DOM ──
 
-  applyLayout() {
-    this.applyPanelLayout();
-    this.applySectionLayout();
-  }
-
-  applyPanelLayout() {
-    const panels = this.layout.panels;
-    const serverBar    = document.getElementById('server-bar');
-    const sidebar      = document.querySelector('.sidebar');
-    const rightSidebar = document.querySelector('.right-sidebar');
-    const app          = document.getElementById('app');
-    const voicePanel   = document.getElementById('voice-panel');
-
-    if (serverBar)    serverBar.dataset.panelPos = panels['server-bar']?.pos || 'left';
-    if (sidebar)      sidebar.dataset.panelPos   = panels.sidebar?.pos || 'left';
-    if (app)          app.dataset.statusPos      = panels['status-bar']?.pos || 'bottom';
-
-    if (sidebar && panels.sidebar?.size) sidebar.style.width = panels.sidebar.size + 'px';
-    if (rightSidebar && panels['right-sidebar']?.size) rightSidebar.style.width = panels['right-sidebar'].size + 'px';
-
-    if (rightSidebar) {
-      const rsPos = panels['right-sidebar']?.pos || 'right';
-      rightSidebar.dataset.panelPos = rsPos;
-      rightSidebar.classList.toggle('mod-float', rsPos === 'center');
-    }
-
-    if (voicePanel) {
-      const vpPos = panels['voice-panel']?.pos || 'right-sidebar';
-      voicePanel.dataset.modPos = vpPos;
-      voicePanel.classList.remove('mod-float', 'mod-voice-bottom', 'mod-voice-left');
-
-      if (vpPos === 'center') {
-        voicePanel.classList.add('mod-float');
-      } else if (vpPos === 'bottom') {
-        voicePanel.classList.add('mod-voice-bottom');
-      } else if (vpPos === 'left-sidebar') {
-        voicePanel.classList.add('mod-voice-left');
-        const sidebarBottom = document.querySelector('.sidebar-bottom');
-        if (sidebarBottom && voicePanel.parentElement !== sidebarBottom) {
-          sidebarBottom.insertBefore(voicePanel, sidebarBottom.firstChild);
-        }
-      } else if (rightSidebar && voicePanel.parentElement !== rightSidebar) {
-        rightSidebar.appendChild(voicePanel);
-      }
-    }
-  }
+  applyLayout() { this.applySectionLayout(); }
 
   applySectionLayout() {
     const sections = this.layout.sections;
     const panelTargets = {
       'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
-      'right-sidebar-drop':    document.querySelector('.right-sidebar'),
-      'status-bar-drop':       document.getElementById('status-bar'),
+      'right-sidebar':         document.querySelector('.right-sidebar'),
+      'status-bar':            document.getElementById('status-bar'),
       'float-layer':           this.floatLayer
     };
     const ordered = Object.entries(sections)
@@ -725,13 +589,20 @@ class ModMode {
       if (meta.panel === 'float-layer' && meta.float) {
         this._placeFloat(el, meta.float);
       } else {
-        el.classList.remove('mod-floating');
-        el.style.left = el.style.top = el.style.width = el.style.height = '';
+        this._unfloatSection(el);
         if (el.parentElement !== parent) parent.appendChild(el);
       }
       el.classList.toggle('mod-collapsed', !!meta.collapsed);
       this._syncCollapseLabel(el);
     });
+  }
+
+  _unfloatSection(el) {
+    if (el.classList.contains('mod-floating')) {
+      this._disarmFloatingPane(el);
+      el.classList.remove('mod-floating');
+      el.style.left = el.style.top = el.style.width = el.style.height = '';
+    }
   }
 
   _persistFromDom() {
@@ -750,29 +621,29 @@ class ModMode {
       };
     });
     this.layout.sections = sections;
-    this.layout.settings = { gridSnap: this.gridSnap };
   }
 
   _resolvePanelOf(el) {
-    if (el.closest('#mod-float-layer'))      return 'float-layer';
-    if (el.closest('#sidebar-mod-container'))return 'sidebar-mod-container';
-    if (el.closest('.right-sidebar'))        return 'right-sidebar-drop';
-    if (el.closest('#status-bar'))           return 'status-bar-drop';
+    if (el.closest('#mod-float-layer'))       return 'float-layer';
+    if (el.closest('#sidebar-mod-container')) return 'sidebar-mod-container';
+    if (el.closest('.right-sidebar'))         return 'right-sidebar';
+    if (el.closest('#status-bar'))            return 'status-bar';
     return el.dataset.modHomePanel || 'sidebar-mod-container';
   }
 
   _resetSectionToHome(id) {
     const el = document.querySelector(`[data-mod-id="${id}"]`);
     if (!el) return;
+    this._unfloatSection(el);
     const home = el.dataset.modHomePanel || 'sidebar-mod-container';
     const homeEl = {
       'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
-      'right-sidebar-drop':    document.querySelector('.right-sidebar'),
-      'status-bar-drop':       document.getElementById('status-bar')
+      'right-sidebar':         document.querySelector('.right-sidebar'),
+      'status-bar':            document.getElementById('status-bar')
     }[home];
     if (homeEl) homeEl.appendChild(el);
-    el.classList.remove('mod-floating');
-    el.style.left = el.style.top = el.style.width = el.style.height = '';
+    el.classList.remove('mod-collapsed');
+    el.querySelector(':scope > .mod-collapsed-label')?.remove();
     this.layout.sections[id] = { panel: home, index: 999, collapsed: false, float: null };
     this._saveState();
   }
@@ -783,27 +654,18 @@ class ModMode {
     this.state[this.layoutKey] = this.defaultState();
     this._saveState();
     this._getAllSections().forEach(el => {
+      this._unfloatSection(el);
       const home = el.dataset.modHomePanel || 'sidebar-mod-container';
       const parent = {
         'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
-        'right-sidebar-drop':    document.querySelector('.right-sidebar'),
-        'status-bar-drop':       document.getElementById('status-bar')
+        'right-sidebar':         document.querySelector('.right-sidebar'),
+        'status-bar':            document.getElementById('status-bar')
       }[home];
       if (parent && el.parentElement !== parent) parent.appendChild(el);
-      el.classList.remove('mod-floating', 'mod-collapsed');
-      el.style.left = el.style.top = el.style.width = el.style.height = '';
+      el.classList.remove('mod-collapsed');
+      el.querySelector(':scope > .mod-collapsed-label')?.remove();
     });
-    const sidebar = document.querySelector('.sidebar');
-    const rightSidebar = document.querySelector('.right-sidebar');
-    if (sidebar) sidebar.style.width = '';
-    if (rightSidebar) rightSidebar.style.width = '';
-    const voicePanel = document.getElementById('voice-panel');
-    if (voicePanel && rightSidebar) {
-      rightSidebar.appendChild(voicePanel);
-      voicePanel.classList.remove('mod-float', 'mod-voice-bottom', 'mod-voice-left');
-    }
-    this.applyPanelLayout();
-    this._showToast('Layout reset to default');
+    this._showToast('Layout reset to defaults');
   }
 
   // ── Toast ──
