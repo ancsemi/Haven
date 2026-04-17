@@ -12087,6 +12087,95 @@ ul.chat-list { list-style-type: disc; }
   opacity: 1;
 }
 
+/* ── Mod Mode v2: section controls, collapse, float, multi-select ── */
+
+.mod-section-controls {
+  display: none;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  gap: 2px;
+  z-index: 5;
+  background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 2px 4px;
+  align-items: center;
+}
+.mod-mode-on .mod-section-controls { display: inline-flex; }
+.mod-section-controls .mod-sec-btn,
+.mod-section-controls .mod-sec-handle {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1;
+}
+.mod-section-controls .mod-sec-btn:hover { color: var(--accent); }
+.mod-section-controls .mod-sec-handle { cursor: grab; }
+
+.mod-mode-on .mod-draggable.mod-collapsed > :not(.section-label):not(.mod-section-controls),
+.mod-draggable.mod-collapsed > :not(.section-label):not(.mod-section-controls) {
+  display: none !important;
+}
+.mod-draggable.mod-collapsed {
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.mod-mode-on .mod-selected {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: -2px;
+}
+
+.mod-drop-panel.mod-drop-panel-active {
+  background: color-mix(in srgb, var(--bg-secondary) 88%, var(--accent) 12%);
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
+
+.mod-float-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 450;
+}
+.mod-float-layer.active { pointer-events: auto; background: rgba(0,0,0,0.02); }
+.mod-float-layer:not(.active) .mod-floating { pointer-events: auto; }
+
+.mod-floating {
+  position: absolute;
+  z-index: 460;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  padding: 8px;
+  overflow: auto;
+  resize: both;
+  min-width: 180px;
+  min-height: 80px;
+}
+
+.mod-resize-handle {
+  position: absolute;
+  background: transparent;
+  z-index: 30;
+}
+.mod-resize-handle.axis-x {
+  top: 0; bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+.sidebar[data-panel-pos="left"] .mod-resize-handle.axis-x,
+.right-sidebar[data-panel-pos="left"] .mod-resize-handle.axis-x { right: -3px; }
+.sidebar[data-panel-pos="right"] .mod-resize-handle.axis-x,
+.right-sidebar[data-panel-pos="right"] .mod-resize-handle.axis-x { left: -3px; }
+.mod-mode-on .mod-resize-handle { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.mod-mode-on .mod-resize-handle:hover { background: var(--accent); }
+
 /* ═══════════════════════════════════════════════════════
    SIDEBAR SPLIT — channels + DM panes with drag divider
    ═══════════════════════════════════════════════════════ */
