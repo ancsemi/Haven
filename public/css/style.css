@@ -12121,9 +12121,21 @@ ul.chat-list { list-style-type: disc; }
   display: none !important;
 }
 .mod-draggable.mod-collapsed {
-  min-height: 0 !important;
+  min-height: 28px !important;
   flex: 0 0 auto !important;
+  position: relative;
 }
+.mod-collapsed-label {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mod-collapsed-label:hover { color: var(--accent); }
+.mod-mode-on .mod-draggable .section-label { cursor: grab; }
 
 .mod-mode-on .mod-selected {
   outline: 2px solid var(--accent) !important;

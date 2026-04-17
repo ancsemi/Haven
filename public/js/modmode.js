@@ -155,6 +155,9 @@ class ModMode {
   toggle() { this.active ? this._disable() : this._enable(); this.active = !this.active; }
 
   _enable() {
+    // Close settings modal so users can see what they're modifying
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) settingsModal.style.display = 'none';
     document.body.classList.add('mod-mode-on');
     this.container.classList.add('mod-mode-active');
     this._getAllSections().forEach(s => this._armSection(s));
@@ -162,7 +165,8 @@ class ModMode {
     this._armDropTargets();
     this._armFloatLayer();
     document.addEventListener('keydown', this._bound.keydown);
-    this._showToast('Mod Mode ON \u2014 shift-click to multi-select, alt-drag to bypass grid');
+    document.addEventListener('dragend', this._bound.dragEnd);
+    this._showToast('Mod Mode ON \u2014 drag section headers or \u2725 handles to rearrange');
   }
 
   _disable() {
@@ -174,6 +178,7 @@ class ModMode {
     this._disarmFloatLayer();
     this._clearSelection();
     document.removeEventListener('keydown', this._bound.keydown);
+    document.removeEventListener('dragend', this._bound.dragEnd);
     this._persistFromDom();
     this._saveState();
     this._showToast('Mod Mode OFF \u2014 layout saved');
@@ -198,31 +203,42 @@ class ModMode {
   _getAllSections() { return [...document.querySelectorAll('[data-mod-id]')]; }
 
   _armSection(s) {
-    s.setAttribute('draggable', 'true');
     s.classList.add('mod-draggable');
+    // dragstart bubbles from draggable children (labels, handle) to the section
     s.addEventListener('dragstart', this._bound.dragStart);
+    // Drop listeners (accept drops from other sections)
     s.addEventListener('dragover',  this._bound.dragOver);
     s.addEventListener('dragenter', this._bound.dragEnter);
     s.addEventListener('dragleave', this._bound.dragLeave);
     s.addEventListener('drop',      this._bound.drop);
-    s.addEventListener('dragend',   this._bound.dragEnd);
     this._injectSectionControls(s);
-    const header = s.querySelector('.section-label');
-    if (header) header.addEventListener('click', this._bound.headerClick);
+    // Make section labels and the drag handle the actual drag sources —
+    // the section body itself is NOT draggable (prevents scroll conflicts)
+    s.querySelectorAll('.section-label').forEach(label => {
+      label.setAttribute('draggable', 'true');
+      label.addEventListener('click', this._bound.headerClick);
+    });
+    const handle = s.querySelector('.mod-sec-handle');
+    if (handle) handle.setAttribute('draggable', 'true');
   }
 
   _disarmSection(s) {
-    s.setAttribute('draggable', 'false');
     s.classList.remove('mod-draggable', 'mod-drag-over', 'mod-drop-above', 'mod-drop-below', 'mod-dragging', 'mod-selected');
     s.removeEventListener('dragstart', this._bound.dragStart);
     s.removeEventListener('dragover',  this._bound.dragOver);
     s.removeEventListener('dragenter', this._bound.dragEnter);
     s.removeEventListener('dragleave', this._bound.dragLeave);
     s.removeEventListener('drop',      this._bound.drop);
-    s.removeEventListener('dragend',   this._bound.dragEnd);
-    const header = s.querySelector('.section-label');
-    if (header) header.removeEventListener('click', this._bound.headerClick);
+    // Remove draggable from all labels and handle
+    s.querySelectorAll('.section-label').forEach(label => {
+      label.removeAttribute('draggable');
+      label.removeEventListener('click', this._bound.headerClick);
+    });
+    const handle = s.querySelector('.mod-sec-handle');
+    if (handle) handle.removeAttribute('draggable');
     this._removeSectionControls(s);
+    // Remove injected collapsed label (collapse state persists via class)
+    s.querySelector(':scope > .mod-collapsed-label')?.remove();
   }
 
   _injectSectionControls(s) {
@@ -245,6 +261,7 @@ class ModMode {
     const id = s.dataset.modId;
     const meta = this.layout.sections[id];
     if (meta?.collapsed) s.classList.add('mod-collapsed');
+    this._syncCollapseLabel(s);
   }
 
   _removeSectionControls(s) {
@@ -256,7 +273,29 @@ class ModMode {
     s.classList.toggle('mod-collapsed');
     const collapsed = s.classList.contains('mod-collapsed');
     this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, { collapsed });
+    this._syncCollapseLabel(s);
     this._saveState();
+  }
+
+  _syncCollapseLabel(s) {
+    const isCollapsed = s.classList.contains('mod-collapsed');
+    const hasDirectLabel = !!s.querySelector(':scope > .section-label:not(.mod-collapsed-label)');
+    const existingLabel = s.querySelector(':scope > .mod-collapsed-label');
+    if (isCollapsed && !hasDirectLabel) {
+      if (!existingLabel) {
+        const label = document.createElement('h5');
+        label.className = 'section-label mod-collapsed-label';
+        const texts = [...s.querySelectorAll('.section-label-text')]
+          .map(el => el.textContent.trim()).filter(Boolean);
+        label.textContent = texts.length ? texts.join(' & ') : (s.dataset.modId || 'Section');
+        label.style.cursor = 'pointer';
+        label.addEventListener('click', () => this._toggleCollapse(s));
+        if (s.classList.contains('mod-draggable')) label.setAttribute('draggable', 'true');
+        s.insertBefore(label, s.firstChild);
+      }
+    } else if (existingLabel) {
+      existingLabel.remove();
+    }
   }
 
   _onHeaderClick(e) {
@@ -691,6 +730,7 @@ class ModMode {
         if (el.parentElement !== parent) parent.appendChild(el);
       }
       el.classList.toggle('mod-collapsed', !!meta.collapsed);
+      this._syncCollapseLabel(el);
     });
   }
 
