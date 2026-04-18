@@ -3,7 +3,8 @@
 // - Sections can be reordered within panels via drag-and-drop.
 // - Sections can be floated: free-floating windows that are
 //   draggable and resizable even OUTSIDE mod mode.
-// - A persistent toolbar appears in mod mode with Save & Exit.
+// - Small floating pill with Save & Exit during mod mode.
+// - Status bar can be positioned top or bottom.
 // - Per-section collapse state with safe recovery labels.
 // - Separate layouts for desktop vs. mobile breakpoints.
 // ═══════════════════════════════════════════════════════════
@@ -22,6 +23,7 @@ class ModMode {
 
     this.defaultState = () => ({
       sections: {},  // id -> { panel, index, collapsed, float: {x,y,w,h}|null }
+      statusBarPos: 'bottom', // 'top' | 'bottom'
     });
 
     this.state = { desktop: this.defaultState(), mobile: this.defaultState() };
@@ -54,6 +56,7 @@ class ModMode {
     this._cacheHomePanels();
     this._ensureFloatLayer();
     this.applyLayout();
+    this._applyStatusBarPos();
     // Restore floating pane interactivity on load (even outside mod mode)
     this._armAllFloatingPanes();
     document.getElementById('mod-mode-reset')?.addEventListener('click', () => this.resetLayout());
@@ -125,7 +128,8 @@ class ModMode {
     this._getAllSections().forEach(s => this._armSection(s));
     this._armDropTargets();
     this._armFloatLayer();
-    this._showToolbar();
+    this._showPill();
+    this._armStatusBarToggle();
 
     document.addEventListener('keydown', this._bound.keydown);
     document.addEventListener('dragend', this._bound.dragEnd);
@@ -139,7 +143,8 @@ class ModMode {
     this._disarmDropTargets();
     this._disarmFloatLayer();
     this._clearSelection();
-    this._hideToolbar();
+    this._hidePill();
+    this._disarmStatusBarToggle();
 
     document.removeEventListener('keydown', this._bound.keydown);
     document.removeEventListener('dragend', this._bound.dragEnd);
@@ -153,6 +158,7 @@ class ModMode {
     if (this.active) this._persistFromDom();
     this._saveState();
     this.applyLayout();
+    this._applyStatusBarPos();
   }
 
   _onKey(e) {
@@ -163,29 +169,76 @@ class ModMode {
     }
   }
 
-  // ── Toolbar (visible during mod mode) ──
+  // ── Floating pill (Save & Exit — bottom-right, non-blocking) ──
 
-  _showToolbar() {
-    let bar = document.getElementById('mod-mode-toolbar');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'mod-mode-toolbar';
-      bar.className = 'mod-toolbar';
-      bar.innerHTML = `
-        <span class="mod-toolbar-label">\u270f\ufe0f Mod Mode</span>
-        <button type="button" class="mod-toolbar-btn" id="mod-toolbar-reset" title="Reset to defaults">\u21ba Reset</button>
-        <button type="button" class="mod-toolbar-btn mod-toolbar-save" id="mod-toolbar-exit" title="Save & exit mod mode">\u2713 Save & Exit</button>
+  _showPill() {
+    let pill = document.getElementById('mod-mode-pill');
+    if (!pill) {
+      pill = document.createElement('div');
+      pill.id = 'mod-mode-pill';
+      pill.className = 'mod-pill';
+      pill.innerHTML = `
+        <button type="button" class="mod-pill-btn mod-pill-save" id="mod-pill-exit" title="Save & exit mod mode">\u2713 Save & Exit</button>
+        <button type="button" class="mod-pill-btn" id="mod-pill-reset" title="Reset to defaults">\u21ba</button>
       `;
-      document.body.appendChild(bar);
-      bar.querySelector('#mod-toolbar-exit').addEventListener('click', () => this.toggle());
-      bar.querySelector('#mod-toolbar-reset').addEventListener('click', () => this.resetLayout());
+      document.body.appendChild(pill);
+      pill.querySelector('#mod-pill-exit').addEventListener('click', () => this.toggle());
+      pill.querySelector('#mod-pill-reset').addEventListener('click', () => this.resetLayout());
     }
-    bar.style.display = 'flex';
+    pill.style.display = 'flex';
   }
 
-  _hideToolbar() {
-    const bar = document.getElementById('mod-mode-toolbar');
-    if (bar) bar.style.display = 'none';
+  _hidePill() {
+    const pill = document.getElementById('mod-mode-pill');
+    if (pill) pill.style.display = 'none';
+  }
+
+  // ── Status bar position (top / bottom) ──
+
+  _applyStatusBarPos() {
+    const pos = this.layout.statusBarPos || 'bottom';
+    const app = document.getElementById('app');
+    if (app) app.dataset.statusPos = pos;
+  }
+
+  _toggleStatusBarPos() {
+    const current = this.layout.statusBarPos || 'bottom';
+    this.layout.statusBarPos = current === 'bottom' ? 'top' : 'bottom';
+    this._applyStatusBarPos();
+    this._saveState();
+    this._updateStatusBarToggleLabel();
+    this._showToast(`Status bar moved to ${this.layout.statusBarPos}`);
+  }
+
+  _armStatusBarToggle() {
+    const bar = document.getElementById('status-bar');
+    if (!bar) return;
+    let btn = bar.querySelector('.mod-statusbar-pos-btn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mod-statusbar-pos-btn';
+      btn.title = 'Move status bar to top / bottom';
+      bar.appendChild(btn);
+    }
+    this._updateStatusBarToggleLabel();
+    btn.style.display = '';
+    btn._handler = () => this._toggleStatusBarPos();
+    btn.addEventListener('click', btn._handler);
+  }
+
+  _disarmStatusBarToggle() {
+    const btn = document.querySelector('.mod-statusbar-pos-btn');
+    if (!btn) return;
+    btn.style.display = 'none';
+    if (btn._handler) { btn.removeEventListener('click', btn._handler); delete btn._handler; }
+  }
+
+  _updateStatusBarToggleLabel() {
+    const btn = document.querySelector('.mod-statusbar-pos-btn');
+    if (!btn) return;
+    const pos = this.layout.statusBarPos || 'bottom';
+    btn.textContent = pos === 'bottom' ? '\u2191 Move to Top' : '\u2193 Move to Bottom';
   }
 
   // ── Sections ──
@@ -567,7 +620,10 @@ class ModMode {
 
   // ── Apply layout to DOM ──
 
-  applyLayout() { this.applySectionLayout(); }
+  applyLayout() {
+    this.applySectionLayout();
+    this._applyStatusBarPos();
+  }
 
   applySectionLayout() {
     const sections = this.layout.sections;
@@ -653,6 +709,7 @@ class ModMode {
   resetLayout() {
     this.state[this.layoutKey] = this.defaultState();
     this._saveState();
+    this._applyStatusBarPos();
     this._getAllSections().forEach(el => {
       this._unfloatSection(el);
       const home = el.dataset.modHomePanel || 'sidebar-mod-container';

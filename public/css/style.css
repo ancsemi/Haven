@@ -11968,14 +11968,14 @@ ul.chat-list { list-style-type: disc; }
 .mod-section-controls {
   display: none;
   position: absolute;
-  top: 4px;
-  right: 4px;
-  gap: 2px;
+  top: 2px;
+  right: 2px;
+  gap: 4px;
   z-index: 5;
   background: color-mix(in srgb, var(--bg-card) 90%, transparent);
   border: 1px solid var(--border-light);
   border-radius: 6px;
-  padding: 2px 4px;
+  padding: 3px 6px;
   align-items: center;
 }
 .mod-mode-on .mod-section-controls { display: inline-flex; }
@@ -11985,12 +11985,12 @@ ul.chat-list { list-style-type: disc; }
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 0 4px;
-  font-size: 12px;
+  padding: 2px 6px;
+  font-size: 16px;
   line-height: 1;
 }
 .mod-section-controls .mod-sec-btn:hover { color: var(--accent); }
-.mod-section-controls .mod-sec-handle { cursor: grab; }
+.mod-section-controls .mod-sec-handle { cursor: grab; font-size: 18px; }
 
 .mod-mode-on .mod-draggable.mod-collapsed > :not(.section-label):not(.mod-section-controls):not(.mod-float-titlebar),
 .mod-draggable.mod-collapsed > :not(.section-label):not(.mod-section-controls):not(.mod-float-titlebar) {
@@ -12065,50 +12065,73 @@ ul.chat-list { list-style-type: disc; }
 }
 .mod-float-titlebar:active { cursor: grabbing; }
 
-/* ── Mod Mode toolbar (fixed bottom bar) ── */
-.mod-toolbar {
+/* ── Mod Mode floating pill (bottom-right, non-blocking) ── */
+.mod-pill {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 12px;
+  right: 12px;
   z-index: 10001;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 8px 16px;
-  background: color-mix(in srgb, var(--bg-secondary) 94%, var(--accent) 6%);
-  border-top: 2px solid var(--accent);
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.35);
+  gap: 6px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--bg-card) 92%, var(--accent) 8%);
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
-.mod-toolbar-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-right: 6px;
-}
-.mod-toolbar-btn {
+.mod-pill-btn {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
-  border-radius: 6px;
+  border-radius: 14px;
   color: var(--text-primary);
-  padding: 5px 14px;
+  padding: 4px 12px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.mod-toolbar-btn:hover {
+.mod-pill-btn:hover {
   background: var(--bg-hover);
   border-color: var(--accent);
 }
-.mod-toolbar-save {
+.mod-pill-save {
   background: var(--accent) !important;
   color: #fff !important;
   border-color: var(--accent) !important;
 }
-.mod-toolbar-save:hover {
+.mod-pill-save:hover {
   filter: brightness(1.15);
+}
+
+/* ── Status bar position toggle (visible during mod mode) ── */
+.mod-statusbar-pos-btn {
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--accent) 20%);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.mod-statusbar-pos-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Status bar top position */
+#app[data-status-pos="top"] #status-bar {
+  order: -1;
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+#app[data-status-pos="bottom"] #status-bar {
+  order: 10;
+  border-top: 1px solid var(--border);
+  border-bottom: none;
 }
 
 /* ── Prominent Mod Mode button in settings ── */

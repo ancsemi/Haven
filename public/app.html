@@ -986,6 +986,7 @@
           <div class="settings-nav-item" data-target="section-plugins">🧩 <span data-i18n="settings.nav.plugins">Plugins & Themes</span></div>
           <div class="settings-nav-item" data-target="section-desktop-shortcuts" id="desktop-shortcuts-nav" style="display:none">⌨️ <span data-i18n="settings.nav.shortcuts">Shortcuts</span></div>
           <div class="settings-nav-item" data-target="section-desktop-app" id="desktop-app-nav" style="display:none">🖥️ <span data-i18n="settings.nav.desktop_app">Desktop App</span></div>
+          <div class="settings-nav-item" data-target="section-modmode">✨ <span data-i18n="settings.nav.mod_mode">Mod Mode</span></div>
           </div>
           <div class="settings-nav-admin-group" style="display:none">
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
@@ -1000,7 +1001,6 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 <span data-i18n="settings.nav.tunnel">Tunnel</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🤖 <span data-i18n="settings.nav.bots">Bots</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-import" style="display:none">📦 <span data-i18n="settings.nav.import">Import</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-modmode" style="display:none">🔧 <span data-i18n="settings.nav.mod_mode">Mod Mode</span></div>
           </div>
         </nav>
         <div class="settings-body" id="settings-body-user">
@@ -1498,7 +1498,13 @@
           <span class="settings-hint" id="desktop-version-info" style="opacity:0.6"></span>
         </div>
       </div>
-
+        <!-- Mod Mode (client-side — available to all users) -->
+        <div class="settings-section" id="section-modmode" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-title">✨ <span data-i18n="settings.modmode_title">Mod Mode</span></h5>
+          <small class="settings-hint" data-i18n="settings.modmode_hint">Rearrange sidebar sections, float panels, and reposition the status bar</small>
+          <button class="mod-mode-hero-btn" id="mod-mode-settings-toggle">✨ <span data-i18n="settings.modmode_toggle_btn">Enter Mod Mode</span></button>
+          <button class="btn-sm btn-full" id="mod-mode-reset" data-i18n="settings.modmode_reset_btn" style="margin-top:6px;">↺ Reset Layout</button>
+        </div>
         </div><!-- /settings-body-user -->
 
         <!-- Admin settings body (separate tab) -->
@@ -1777,13 +1783,7 @@
             <button class="btn-sm btn-full btn-accent" id="open-import-btn">📦 <span data-i18n="settings.admin.import_btn">Import from Discord</span></button>
           </div>
         </div>
-        <!-- Mod Mode (Admin only) -->
-        <div class="admin-settings" id="section-modmode" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🔧 <span data-i18n="settings.admin.modmode_title">Mod Mode</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.modmode_hint">Rearrange sidebar sections and snap server/sidebar/status panels</small>
-          <button class="mod-mode-hero-btn" id="mod-mode-settings-toggle">✨ <span data-i18n="settings.admin.modmode_toggle_btn">Enter Mod Mode</span></button>
-          <button class="btn-sm btn-full" id="mod-mode-reset" data-i18n="settings.admin.modmode_reset_btn" style="margin-top:6px;">↺ Reset Layout</button>
-        </div>
+        <!-- Mod Mode moved to User settings -->
       </div>
         </div><!-- /settings-body-admin -->
       </div><!-- /settings-layout -->
