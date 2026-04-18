@@ -134,6 +134,7 @@ class ModMode {
 
     this._liberateSplit();
     this._getAllSections().forEach(sec => this._armSection(sec));
+    this._armStatusBar();
     this._showPill();
     this._showToast('Mod Mode ON — drag ⋮⋮ handles to rearrange');
 
@@ -146,6 +147,7 @@ class ModMode {
     this._persistFromDom();
     this._saveState();
     this._getAllSections().forEach(sec => this._disarmSection(sec));
+    this._disarmStatusBar();
     this._restoreSplit();
     this._hidePill();
     this._hideDropInd();
@@ -476,27 +478,47 @@ class ModMode {
   }
 
   // ── Status bar ────────────────────────────────────────
+  _armStatusBar() {
+    const bar = document.getElementById('status-bar');
+    if (!bar || bar.querySelector('.mod-statusbar-controls')) return;
+    const ctrl = document.createElement('span');
+    ctrl.className = 'mod-statusbar-controls';
+    const pos = this.layout.statusBarPos || 'bottom';
+    ctrl.innerHTML =
+      `<button type="button" class="mod-sb-toggle" title="Move status bar">${pos === 'bottom' ? '↑ Move Top' : '↓ Move Bottom'}</button>`;
+    ctrl.querySelector('.mod-sb-toggle').addEventListener('click', () => this._toggleStatusBarPos());
+    bar.appendChild(ctrl);
+  }
+  _disarmStatusBar() {
+    document.querySelector('.mod-statusbar-controls')?.remove();
+  }
   _toggleStatusBarPos() {
     const cur = this.layout.statusBarPos || 'bottom';
     this.layout.statusBarPos = cur === 'bottom' ? 'top' : 'bottom';
     this._applyStatusBarPos();
     this._saveState();
-    this._updatePillSb();
-    this._showToast('Status bar \u2192 ' + this.layout.statusBarPos);
+    // Update button label
+    const btn = document.querySelector('.mod-sb-toggle');
+    if (btn) btn.textContent = this.layout.statusBarPos === 'bottom' ? '↑ Move Top' : '↓ Move Bottom';
+    this._showToast('Status bar → ' + this.layout.statusBarPos);
   }
   _applyStatusBarPos() {
     const pos = this.layout.statusBarPos || 'bottom';
     const app = document.getElementById('app');
     const bar = document.getElementById('status-bar');
     if (!app || !bar) return;
-    // Physically move in DOM
-    if (pos === 'top') {
-      app.insertBefore(bar, app.firstChild);
-    } else {
-      const body = document.getElementById('app-body');
-      if (body) app.insertBefore(bar, body.nextSibling);
-    }
     app.dataset.statusPos = pos;
+    // Physically move in DOM for reliable positioning
+    if (pos === 'top') {
+      const body = document.getElementById('app-body');
+      if (body) app.insertBefore(bar, body);
+      else app.insertBefore(bar, app.firstChild);
+    } else {
+      // After #app-body
+      const body = document.getElementById('app-body');
+      if (body && body.nextSibling) app.insertBefore(bar, body.nextSibling);
+      else app.appendChild(bar);
+    }
   }
 
   // ── Pill ──────────────────────────────────────────────
@@ -507,23 +529,15 @@ class ModMode {
       pill.id = 'mod-mode-pill';
       pill.className = 'mod-pill';
       pill.innerHTML =
-        '<button type="button" class="mod-pill-btn mod-pill-save" id="mod-pill-exit" title="Save & exit">\u2713 Save & Exit</button>' +
-        '<button type="button" class="mod-pill-btn" id="mod-pill-reset" title="Reset layout">\u21BA</button>' +
-        '<button type="button" class="mod-pill-btn" id="mod-pill-sb"></button>';
+        '<button type="button" class="mod-pill-btn mod-pill-save" id="mod-pill-exit" title="Save & exit">✓ Save & Exit</button>' +
+        '<button type="button" class="mod-pill-btn" id="mod-pill-reset" title="Reset layout">↺</button>';
       document.body.appendChild(pill);
       pill.querySelector('#mod-pill-exit').addEventListener('click', () => this.toggle());
       pill.querySelector('#mod-pill-reset').addEventListener('click', () => this.resetLayout());
-      pill.querySelector('#mod-pill-sb').addEventListener('click', () => this._toggleStatusBarPos());
     }
     pill.style.display = 'flex';
-    this._updatePillSb();
   }
   _hidePill() { const p = document.getElementById('mod-mode-pill'); if (p) p.style.display = 'none'; }
-  _updatePillSb() {
-    const btn = document.getElementById('mod-pill-sb'); if (!btn) return;
-    const pos = this.layout.statusBarPos || 'bottom';
-    btn.textContent = pos === 'bottom' ? '\u2191 Bar Top' : '\u2193 Bar Bottom';
-  }
 
   // ── Apply layout (page load) ──────────────────────────
   applyLayout() {
@@ -578,7 +592,9 @@ class ModMode {
     this.state[this.layoutKey] = this.defaultState();
     this._saveState();
     this._applyStatusBarPos();
-    this._updatePillSb();
+    // Update status bar button label
+    const sbBtn = document.querySelector('.mod-sb-toggle');
+    if (sbBtn) sbBtn.textContent = '↑ Move Top';
     this._getAllSections().forEach(el => {
       if (el.classList.contains('mod-floating')) {
         this._disarmFloat(el); el.classList.remove('mod-floating');

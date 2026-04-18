@@ -11965,6 +11965,8 @@ ul.chat-list { list-style-type: disc; }
 
 /* ── Mod Mode v5: snap-grid, controls, collapse, float, pin ── */
 
+.mod-draggable { position: relative; }
+
 .mod-section-controls {
   display: none;
   position: absolute;
@@ -12114,13 +12116,14 @@ ul.chat-list { list-style-type: disc; }
 /* Pill (bottom-right, non-blocking) */
 .mod-pill {
   position: fixed;
-  bottom: 12px;
-  right: 12px;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10001;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 6px 14px;
   background: color-mix(in srgb, var(--bg-card) 92%, var(--accent) 8%);
   border: 1px solid var(--accent);
   border-radius: 20px;
@@ -12160,6 +12163,30 @@ ul.chat-list { list-style-type: disc; }
   order: 10;
   border-top: 1px solid var(--border);
   border-bottom: none;
+}
+
+/* Status bar mod-mode controls (inline, right-aligned) */
+.mod-statusbar-controls {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.mod-mode-on .mod-statusbar-controls { display: inline-flex; }
+.mod-statusbar-controls button {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 1px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.mod-statusbar-controls button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* Standalone DM/channel sections (liberated from sidebar-split by mod mode) */
