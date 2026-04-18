@@ -11963,7 +11963,7 @@ ul.chat-list { list-style-type: disc; }
   opacity: 1;
 }
 
-/* ── Mod Mode v2: section controls, collapse, float, multi-select ── */
+/* ── Mod Mode v5: snap-grid, controls, collapse, float, pin ── */
 
 .mod-section-controls {
   display: none;
@@ -11991,7 +11991,14 @@ ul.chat-list { list-style-type: disc; }
 }
 .mod-section-controls .mod-sec-btn:hover { color: var(--accent); }
 .mod-section-controls .mod-sec-handle { cursor: grab; font-size: 18px; }
+.mod-section-controls .mod-sec-handle:active { cursor: grabbing; }
 
+/* Pin button (floating panes) */
+.mod-pin-btn { opacity: 0.4; transition: opacity 0.15s, color 0.15s; }
+.mod-pin-btn:hover { opacity: 0.7; }
+.mod-pin-btn.pinned { opacity: 1; color: var(--accent) !important; }
+
+/* Collapse */
 .mod-mode-on .mod-draggable.mod-collapsed > :not(.section-label):not(.panel-title):not(.mod-section-controls):not(.mod-float-titlebar):not(.mod-collapsed-label),
 .mod-draggable.mod-collapsed > :not(.section-label):not(.panel-title):not(.mod-section-controls):not(.mod-float-titlebar):not(.mod-collapsed-label) {
   display: none !important;
@@ -12011,20 +12018,58 @@ ul.chat-list { list-style-type: disc; }
   text-overflow: ellipsis;
 }
 .mod-collapsed-label:hover { color: var(--accent); }
-.mod-mode-on .mod-draggable .section-label,
-.mod-mode-on .mod-draggable .panel-title { cursor: grab; }
 
+/* Selected */
 .mod-mode-on .mod-selected {
   outline: 2px solid var(--accent) !important;
   outline-offset: -2px;
 }
 
+/* Drag ghost (follows cursor) */
+.mod-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10002;
+  padding: 6px 16px;
+  background: var(--bg-card);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.92;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  white-space: nowrap;
+}
+
+/* Dragging source section */
+.mod-dragging {
+  opacity: 0.35 !important;
+  outline: 2px dashed var(--accent) !important;
+  outline-offset: -2px;
+}
+
+/* Snap-line drop indicator */
+.mod-drop-indicator {
+  position: fixed;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  z-index: 10000;
+  pointer-events: none;
+  box-shadow: 0 0 8px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 60%, transparent);
+  transition: top 0.08s ease, left 0.08s ease, width 0.08s ease;
+}
+
+/* Drop panel highlight */
 .mod-drop-panel.mod-drop-panel-active {
-  background: color-mix(in srgb, var(--bg-secondary) 88%, var(--accent) 12%);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, var(--accent) 12%) !important;
   outline: 2px dashed var(--accent);
   outline-offset: -4px;
 }
 
+/* Float layer */
 .mod-float-layer {
   position: fixed;
   inset: 0;
@@ -12049,7 +12094,7 @@ ul.chat-list { list-style-type: disc; }
   min-height: 80px;
 }
 
-/* ── Floating pane title bar (drag handle) ── */
+/* Floating pane title bar */
 .mod-float-titlebar {
   padding: 6px 10px;
   font-size: 11px;
@@ -12066,7 +12111,7 @@ ul.chat-list { list-style-type: disc; }
 }
 .mod-float-titlebar:active { cursor: grabbing; }
 
-/* ── Mod Mode floating pill (bottom-right, non-blocking) ── */
+/* Pill (bottom-right, non-blocking) */
 .mod-pill {
   position: fixed;
   bottom: 12px;
@@ -12117,7 +12162,24 @@ ul.chat-list { list-style-type: disc; }
   border-bottom: none;
 }
 
-/* ── Prominent Mod Mode button in settings ── */
+/* Standalone DM/channel sections (liberated from sidebar-split by mod mode) */
+#sidebar-mod-container > .dm-section-pane,
+.right-sidebar > .dm-section-pane {
+  flex: 0 1 40%;
+  min-height: 60px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+}
+#sidebar-mod-container > .channel-section .channel-list,
+.right-sidebar > .channel-section .channel-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Prominent Mod Mode button in settings */
 .mod-mode-hero-btn {
   margin-top: 8px;
   padding: 10px 18px;

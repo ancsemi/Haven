@@ -1,66 +1,51 @@
-﻿// ═══════════════════════════════════════════════════════════
-// Haven — Mod Mode v4 (layout customisation)
-// - All sidebar + right-sidebar sections are controllable.
-// - Sections can be reordered, moved between panels, or
-//   floated as draggable/resizable windows.
-// - Floating pill with Save & Exit (non-blocking).
-// - Status bar top/bottom toggle in the pill.
-// - Per-section collapse, multi-select, separate desktop/mobile.
+// ═══════════════════════════════════════════════════════════
+// Haven — Mod Mode v5  (snap-grid layout customisation)
+//
+// - Every headed section is independently remappable.
+// - Custom mousedown drag with glowing snap-line indicators.
+// - Sections can live in left sidebar, right sidebar, or
+//   float as pinnable windows.
+// - Floating pill: Save & Exit, Reset, Status-bar toggle.
+// - Status bar physically moved in the DOM (top / bottom).
 // ═══════════════════════════════════════════════════════════
 
 class ModMode {
   constructor() {
     this.active = false;
-    this.container = null;
+    this.sidebar = null;
+    this.rightSidebar = null;
     this.floatLayer = null;
+    this.dropIndicator = null;
+    this.dragging = null;          // { el, ghost }
+    this._pendingDrop = null;      // { panel, before } | { float:true }
     this.selection = new Set();
-    this.dragSrc = null;
-    this.dragGroup = [];
 
-    this.sectionPanels = ['sidebar-mod-container', 'right-sidebar', 'float-layer'];
-
-    this.defaultState = () => ({
-      sections: {},
-      statusBarPos: 'bottom',
-    });
-
+    this.defaultState = () => ({ sections: {}, statusBarPos: 'bottom' });
     this.state = { desktop: this.defaultState(), mobile: this.defaultState() };
-
-    this._bound = {
-      dragStart:     this._onDragStart.bind(this),
-      dragOver:      this._onDragOver.bind(this),
-      dragEnter:     this._onDragEnter.bind(this),
-      dragLeave:     this._onDragLeave.bind(this),
-      drop:          this._onDrop.bind(this),
-      dragEnd:       this._onDragEnd.bind(this),
-      floatDrag:     this._onFloatDragOver.bind(this),
-      floatDrop:     this._onFloatDrop.bind(this),
-      headerClick:   this._onHeaderClick.bind(this),
-      keydown:       this._onKey.bind(this),
-      mqChange:      this._onBreakpointChange.bind(this),
-      panelDropOver: this._onPanelDropOver.bind(this),
-      panelDropDrop: this._onPanelDropDrop.bind(this),
-    };
-
     this.mq = window.matchMedia('(max-width: 900px)');
+    this._onMq = () => { if (this.active) this._persistFromDom(); this._saveState(); this.applyLayout(); };
   }
 
-  /* ── Init ─────────────────────────────────────────── */
-
+  // ── Init ──────────────────────────────────────────────
   init() {
-    this.container = document.getElementById('sidebar-mod-container');
-    if (!this.container) return;
+    this.sidebar = document.getElementById('sidebar-mod-container');
+    this.rightSidebar = document.querySelector('.right-sidebar');
+    if (!this.sidebar) return;
     this._loadState();
     this._cacheHomePanels();
     this._ensureFloatLayer();
+    this._createDropIndicator();
+    // If there is a saved layout, free sections from sidebar-split
+    // so they can be placed individually.
+    const hasSaved = Object.keys(this.layout.sections).length > 0;
+    if (hasSaved) this._liberateSplit();
     this.applyLayout();
+    if (hasSaved) this._restoreSplit();
     this._armAllFloatingPanes();
-    document.getElementById('mod-mode-reset')?.addEventListener('click', () => this.resetLayout());
-    this.mq.addEventListener?.('change', this._bound.mqChange);
+    this.mq.addEventListener?.('change', this._onMq);
   }
 
-  /* ── State ────────────────────────────────────────── */
-
+  // ── State ─────────────────────────────────────────────
   get layoutKey() { return this.mq.matches ? 'mobile' : 'desktop'; }
   get layout()    { return this.state[this.layoutKey]; }
 
@@ -75,662 +60,541 @@ class ModMode {
       }
     } catch { /* keep defaults */ }
   }
-
   _saveState() {
     try { localStorage.setItem('haven-layout-v2', JSON.stringify(this.state)); } catch {}
   }
 
   _cacheHomePanels() {
     document.querySelectorAll('[data-mod-id]').forEach(el => {
-      if (!el.dataset.modHomePanel) el.dataset.modHomePanel = this._detectHomePanel(el);
+      if (!el.dataset.modHomePanel) {
+        el.dataset.modHomePanel = this._detectHome(el);
+      }
     });
   }
-
-  _detectHomePanel(el) {
-    if (el.closest('#sidebar-mod-container')) return 'sidebar-mod-container';
+  _detectHome(el) {
+    if (el.closest('#sidebar-mod-container')) return 'sidebar';
     if (el.closest('.right-sidebar'))         return 'right-sidebar';
-    return 'sidebar-mod-container';
+    return 'sidebar';
   }
 
+  // ── Infrastructure ────────────────────────────────────
   _ensureFloatLayer() {
-    let layer = document.getElementById('mod-float-layer');
-    if (!layer) {
-      layer = document.createElement('div');
-      layer.id = 'mod-float-layer';
-      layer.className = 'mod-float-layer';
-      document.body.appendChild(layer);
-    }
-    this.floatLayer = layer;
+    let l = document.getElementById('mod-float-layer');
+    if (!l) { l = document.createElement('div'); l.id = 'mod-float-layer'; l.className = 'mod-float-layer'; document.body.appendChild(l); }
+    this.floatLayer = l;
+  }
+  _createDropIndicator() {
+    if (this.dropIndicator) return;
+    const el = document.createElement('div');
+    el.className = 'mod-drop-indicator';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    this.dropIndicator = el;
   }
 
-  /* ── Enable / Disable ─────────────────────────────── */
+  _getDropPanels() { return [this.sidebar, this.rightSidebar].filter(Boolean); }
 
-  toggle() {
-    this.active ? this._disable() : this._enable();
-    this.active = !this.active;
+  _panelKeyOf(el) {
+    if (el.closest('#mod-float-layer'))       return 'float-layer';
+    if (el.closest('#sidebar-mod-container')) return 'sidebar';
+    if (el.closest('.right-sidebar'))         return 'right-sidebar';
+    return el.dataset.modHomePanel || 'sidebar';
   }
+  _panelEl(key) {
+    if (key === 'sidebar' || key === 'sidebar-mod-container') return this.sidebar;
+    if (key === 'right-sidebar') return this.rightSidebar;
+    if (key === 'float-layer')   return this.floatLayer;
+    return this.sidebar;
+  }
+
+  /* When appending into the right sidebar we must not place
+     sections after the fixed panels (voice-settings, voice-panel,
+     settings button). This returns the first "fixed" child
+     that sections should stay above. */
+  _panelAnchor(panel) {
+    if (panel !== this.rightSidebar) return null;
+    return document.getElementById('voice-settings-panel')
+        || document.getElementById('voice-panel')
+        || panel.querySelector('.sidebar-settings-panel')
+        || null;
+  }
+  _appendToPanel(el, panel) {
+    const anchor = this._panelAnchor(panel);
+    if (anchor) panel.insertBefore(el, anchor);
+    else        panel.appendChild(el);
+  }
+
+  // ── Toggle ────────────────────────────────────────────
+  toggle() { this.active ? this._disable() : this._enable(); this.active = !this.active; }
 
   _enable() {
-    const settingsModal = document.getElementById('settings-modal');
-    if (settingsModal) settingsModal.style.display = 'none';
-
+    const s = document.getElementById('settings-modal');
+    if (s) s.style.display = 'none';
     document.body.classList.add('mod-mode-on');
-    this.container?.classList.add('mod-mode-active');
 
-    this._getAllSections().forEach(s => this._armSection(s));
-    this._armDropTargets();
-    this._armFloatLayer();
+    this._liberateSplit();
+    this._getAllSections().forEach(sec => this._armSection(sec));
     this._showPill();
+    this._showToast('Mod Mode ON — drag ⋮⋮ handles to rearrange');
 
-    document.addEventListener('keydown', this._bound.keydown);
-    document.addEventListener('dragend', this._bound.dragEnd);
-    this._showToast('Mod Mode ON — drag headers or ⋮⋮ handles to rearrange');
+    this._keyH = (e) => { if (e.key === 'Escape') this.toggle(); };
+    document.addEventListener('keydown', this._keyH);
   }
 
   _disable() {
     document.body.classList.remove('mod-mode-on');
-    this.container?.classList.remove('mod-mode-active');
-
-    this._getAllSections().forEach(s => this._disarmSection(s));
-    this._disarmDropTargets();
-    this._disarmFloatLayer();
-    this._clearSelection();
-    this._hidePill();
-
-    document.removeEventListener('keydown', this._bound.keydown);
-    document.removeEventListener('dragend', this._bound.dragEnd);
-
     this._persistFromDom();
     this._saveState();
+    this._getAllSections().forEach(sec => this._disarmSection(sec));
+    this._restoreSplit();
+    this._hidePill();
+    this._hideDropInd();
+    if (this._keyH) { document.removeEventListener('keydown', this._keyH); this._keyH = null; }
     this._showToast('Mod Mode OFF — layout saved');
   }
 
-  _onBreakpointChange() {
-    if (this.active) this._persistFromDom();
-    this._saveState();
-    this.applyLayout();
+  // ── Sidebar-split liberation ──────────────────────────
+  _liberateSplit() {
+    const split = document.getElementById('sidebar-split');
+    if (!split) return;
+    const ch = document.getElementById('channels-pane');
+    const dm = document.getElementById('dm-pane');
+    const parent = split.parentElement;
+    if (ch && parent) parent.insertBefore(ch, split);
+    if (dm && parent) parent.insertBefore(dm, split);
+    split.style.display = 'none';
   }
-
-  _onKey(e) {
-    if (e.key === 'Escape' && this.active) { this.toggle(); return; }
-    if (e.key === 'Delete' && this.selection.size > 0) {
-      this.selection.forEach(id => this._resetSectionToHome(id));
-      this._clearSelection();
+  _restoreSplit() {
+    const split = document.getElementById('sidebar-split');
+    if (!split) return;
+    const ch = document.getElementById('channels-pane');
+    const dm = document.getElementById('dm-pane');
+    const handle = document.getElementById('sidebar-split-handle');
+    // Only rejoin if both live in the sidebar
+    if (ch?.closest('#sidebar-mod-container') && dm?.closest('#sidebar-mod-container')) {
+      split.style.display = '';
+      if (ch) split.insertBefore(ch, handle || split.firstChild);
+      if (dm) split.appendChild(dm);
+      // Put the split at the position of the first child or end
+      this.sidebar.appendChild(split);
+    } else {
+      split.style.display = 'none';
     }
   }
 
-  /* ── Pill (floating Save & Exit + status bar toggle) ── */
-
-  _showPill() {
-    let pill = document.getElementById('mod-mode-pill');
-    if (!pill) {
-      pill = document.createElement('div');
-      pill.id = 'mod-mode-pill';
-      pill.className = 'mod-pill';
-      const sbPos = this.layout.statusBarPos || 'bottom';
-      const sbLabel = sbPos === 'bottom' ? '↑ Bar Top' : '↓ Bar Bottom';
-      pill.innerHTML = `
-        <button type="button" class="mod-pill-btn mod-pill-save" id="mod-pill-exit" title="Save & exit">✓ Save & Exit</button>
-        <button type="button" class="mod-pill-btn" id="mod-pill-reset" title="Reset layout">↺</button>
-        <button type="button" class="mod-pill-btn" id="mod-pill-sb" title="Move status bar">${sbLabel}</button>
-      `;
-      document.body.appendChild(pill);
-      pill.querySelector('#mod-pill-exit').addEventListener('click', () => this.toggle());
-      pill.querySelector('#mod-pill-reset').addEventListener('click', () => this.resetLayout());
-      pill.querySelector('#mod-pill-sb').addEventListener('click', () => this._toggleStatusBarPos());
-    }
-    pill.style.display = 'flex';
-    this._updatePillSbLabel();
-  }
-
-  _hidePill() {
-    const pill = document.getElementById('mod-mode-pill');
-    if (pill) pill.style.display = 'none';
-  }
-
-  _toggleStatusBarPos() {
-    const cur = this.layout.statusBarPos || 'bottom';
-    this.layout.statusBarPos = cur === 'bottom' ? 'top' : 'bottom';
-    this._applyStatusBarPos();
-    this._saveState();
-    this._updatePillSbLabel();
-    this._showToast(`Status bar → ${this.layout.statusBarPos}`);
-  }
-
-  _applyStatusBarPos() {
-    const pos = this.layout.statusBarPos || 'bottom';
-    const app = document.getElementById('app');
-    if (app) app.dataset.statusPos = pos;
-  }
-
-  _updatePillSbLabel() {
-    const btn = document.getElementById('mod-pill-sb');
-    if (!btn) return;
-    const pos = this.layout.statusBarPos || 'bottom';
-    btn.textContent = pos === 'bottom' ? '↑ Bar Top' : '↓ Bar Bottom';
-  }
-
-  /* ── Sections ─────────────────────────────────────── */
-
+  // ── Section helpers ───────────────────────────────────
   _getAllSections() { return [...document.querySelectorAll('[data-mod-id]')]; }
 
-  /* Find a label element inside a section — supports both
-     .section-label (sidebar) and .panel-title (right sidebar) */
-  _findLabels(s) {
-    return [...s.querySelectorAll('.section-label, .panel-title')];
+  _getSectionTitle(s) {
+    const txts = [...s.querySelectorAll('.section-label-text')].map(e => e.textContent.trim()).filter(Boolean);
+    if (txts.length) return txts.join(' & ');
+    const pt = s.querySelector('.panel-title');
+    return pt ? pt.textContent.trim() : (s.dataset.modId || 'Section');
   }
 
+  // ── Arm / Disarm ──────────────────────────────────────
   _armSection(s) {
     s.classList.add('mod-draggable');
-    s.addEventListener('dragstart', this._bound.dragStart);
-    s.addEventListener('dragover',  this._bound.dragOver);
-    s.addEventListener('dragenter', this._bound.dragEnter);
-    s.addEventListener('dragleave', this._bound.dragLeave);
-    s.addEventListener('drop',      this._bound.drop);
-    this._injectSectionControls(s);
-    /* Make labels and the drag handle draggable sources */
-    this._findLabels(s).forEach(label => {
-      label.setAttribute('draggable', 'true');
-      label.style.cursor = 'grab';
-      label.addEventListener('click', this._bound.headerClick);
-    });
-    const handle = s.querySelector('.mod-sec-handle');
-    if (handle) handle.setAttribute('draggable', 'true');
+    this._injectControls(s);
   }
-
   _disarmSection(s) {
-    s.classList.remove('mod-draggable', 'mod-drag-over', 'mod-drop-above',
-                       'mod-drop-below', 'mod-dragging', 'mod-selected');
-    s.removeEventListener('dragstart', this._bound.dragStart);
-    s.removeEventListener('dragover',  this._bound.dragOver);
-    s.removeEventListener('dragenter', this._bound.dragEnter);
-    s.removeEventListener('dragleave', this._bound.dragLeave);
-    s.removeEventListener('drop',      this._bound.drop);
-    this._findLabels(s).forEach(label => {
-      label.removeAttribute('draggable');
-      label.style.cursor = '';
-      label.removeEventListener('click', this._bound.headerClick);
-    });
-    const handle = s.querySelector('.mod-sec-handle');
-    if (handle) handle.removeAttribute('draggable');
-    this._removeSectionControls(s);
+    s.classList.remove('mod-draggable', 'mod-dragging', 'mod-selected', 'mod-collapsed');
+    s.querySelector(':scope > .mod-section-controls')?.remove();
     s.querySelector(':scope > .mod-collapsed-label')?.remove();
+    if (s.classList.contains('mod-floating')) {
+      this._disarmFloat(s);
+      s.classList.remove('mod-floating');
+      s.style.left = s.style.top = s.style.width = s.style.height = '';
+    }
+    s.querySelector(':scope > .mod-float-titlebar')?.remove();
   }
 
-  _injectSectionControls(s) {
+  // ── Controls bar ──────────────────────────────────────
+  _injectControls(s) {
     if (s.querySelector(':scope > .mod-section-controls')) return;
-    const isFloating = s.classList.contains('mod-floating');
+    const isFloat  = s.classList.contains('mod-floating');
+    const isPinned = !!this.layout.sections[s.dataset.modId]?.pinned;
     const bar = document.createElement('div');
     bar.className = 'mod-section-controls';
-    bar.innerHTML = `
-      <button type="button" class="mod-sec-btn" data-act="collapse" title="Collapse / Expand">▾</button>
-      <button type="button" class="mod-sec-btn" data-act="float" title="${isFloating ? 'Dock back' : 'Float as window'}">
-        ${isFloating ? '⮽' : '⧉'}
-      </button>
-      <span class="mod-sec-handle" title="Drag to reorder">⋮⋮</span>
-    `;
+    bar.innerHTML =
+      `<button type="button" class="mod-sec-btn" data-act="collapse" title="Collapse / Expand">▾</button>` +
+      `<button type="button" class="mod-sec-btn" data-act="float" title="${isFloat ? 'Dock' : 'Float'}">${isFloat ? '⮽' : '⧉'}</button>` +
+      (isFloat ? `<button type="button" class="mod-sec-btn mod-pin-btn${isPinned ? ' pinned' : ''}" data-act="pin" title="${isPinned ? 'Unpin' : 'Pin'}">📌</button>` : '') +
+      `<span class="mod-sec-handle" title="Drag to reorder">⋮⋮</span>`;
+
     bar.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (!act) return;
       e.stopPropagation();
       if (act === 'collapse') this._toggleCollapse(s);
       else if (act === 'float') this._toggleFloat(s);
+      else if (act === 'pin')   this._togglePin(s);
     });
+
+    // ⋮⋮ handle → snap-grid drag
+    bar.querySelector('.mod-sec-handle').addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      this._startDrag(e, s);
+    });
+
     s.appendChild(bar);
-    const id = s.dataset.modId;
-    const meta = this.layout.sections[id];
+
+    // Restore collapse state
+    const meta = this.layout.sections[s.dataset.modId];
     if (meta?.collapsed) s.classList.add('mod-collapsed');
     this._syncCollapseLabel(s);
   }
-
-  _removeSectionControls(s) {
+  _refreshControls(s) {
     s.querySelector(':scope > .mod-section-controls')?.remove();
+    this._injectControls(s);
   }
 
-  _updateFloatBtn(s) {
-    const btn = s.querySelector('.mod-section-controls [data-act="float"]');
-    if (!btn) return;
-    const isFloating = s.classList.contains('mod-floating');
-    btn.innerHTML = isFloating ? '⮽' : '⧉';
-    btn.title = isFloating ? 'Dock back' : 'Float as window';
-  }
-
+  // ── Collapse ──────────────────────────────────────────
   _toggleCollapse(s) {
-    const id = s.dataset.modId;
     s.classList.toggle('mod-collapsed');
+    const id = s.dataset.modId;
     this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, {
       collapsed: s.classList.contains('mod-collapsed')
     });
     this._syncCollapseLabel(s);
     this._saveState();
   }
+  _syncCollapseLabel(s) {
+    const col = s.classList.contains('mod-collapsed');
+    const hasDirect = !!s.querySelector(':scope > .section-label:not(.mod-collapsed-label)');
+    const existing  = s.querySelector(':scope > .mod-collapsed-label');
+    if (col && !hasDirect) {
+      if (!existing) {
+        const lbl = document.createElement('h5');
+        lbl.className = 'section-label mod-collapsed-label';
+        lbl.textContent = this._getSectionTitle(s);
+        lbl.style.cursor = 'pointer';
+        lbl.addEventListener('click', () => this._toggleCollapse(s));
+        s.insertBefore(lbl, s.firstChild);
+      }
+    } else if (existing) { existing.remove(); }
+  }
 
+  // ── Float / Dock ──────────────────────────────────────
   _toggleFloat(s) {
-    const id = s.dataset.modId;
     if (s.classList.contains('mod-floating')) {
-      /* Dock back to home panel */
-      this._resetSectionToHome(id);
-      this._updateFloatBtn(s);
+      this._dockSection(s);
     } else {
-      /* Float it */
-      const float = { x: 120, y: 80, w: 320, h: 280 };
-      this._placeFloat(s, float);
-      this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, {
-        panel: 'float-layer', float
-      });
-      this._updateFloatBtn(s);
+      const fl = { x: 120, y: 80, w: 320, h: 280 };
+      this._floatSection(s, fl);
+      this.layout.sections[s.dataset.modId] = Object.assign(
+        this.layout.sections[s.dataset.modId] || {}, { panel: 'float-layer', float: fl, pinned: false }
+      );
       this._saveState();
     }
   }
-
-  _syncCollapseLabel(s) {
-    const isCollapsed = s.classList.contains('mod-collapsed');
-    /* Only truly direct .section-label children survive the collapse CSS rule */
-    const hasDirectLabel = !!s.querySelector(':scope > .section-label:not(.mod-collapsed-label)');
-    const existingLabel = s.querySelector(':scope > .mod-collapsed-label');
-    if (isCollapsed && !hasDirectLabel) {
-      if (!existingLabel) {
-        const label = document.createElement('h5');
-        label.className = 'section-label mod-collapsed-label';
-        const texts = [...s.querySelectorAll('.section-label-text')]
-          .map(el => el.textContent.trim()).filter(Boolean);
-        if (!texts.length) {
-          const pt = s.querySelector('.panel-title');
-          if (pt) texts.push(pt.textContent.trim());
-        }
-        label.textContent = texts.length ? texts.join(' & ') : (s.dataset.modId || 'Section');
-        label.style.cursor = 'pointer';
-        label.addEventListener('click', () => this._toggleCollapse(s));
-        if (s.classList.contains('mod-draggable')) label.setAttribute('draggable', 'true');
-        s.insertBefore(label, s.firstChild);
-      }
-    } else if (existingLabel) {
-      existingLabel.remove();
-    }
+  _floatSection(s, fl) {
+    if (s.parentElement !== this.floatLayer) this.floatLayer.appendChild(s);
+    s.classList.add('mod-floating');
+    Object.assign(s.style, { left: fl.x+'px', top: fl.y+'px', width: fl.w+'px', height: fl.h+'px' });
+    this._armFloat(s);
+    this._refreshControls(s);
   }
-
-  _onHeaderClick(e) {
-    if (!this.active) return;
-    if (!e.shiftKey) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const section = e.currentTarget.closest('[data-mod-id]');
-    if (!section) return;
-    this._toggleSelected(section);
-  }
-
-  _toggleSelected(section) {
-    const id = section.dataset.modId;
-    if (this.selection.has(id)) { this.selection.delete(id); section.classList.remove('mod-selected'); }
-    else                        { this.selection.add(id);    section.classList.add('mod-selected'); }
-  }
-
-  _clearSelection() {
-    this.selection.forEach(id => {
-      document.querySelector(`[data-mod-id="${id}"]`)?.classList.remove('mod-selected');
-    });
-    this.selection.clear();
-  }
-
-  /* ── Section drag/drop (reorder within & between panels) ── */
-
-  _onDragStart(e) {
-    /* Only allow drag from an element marked draggable="true" */
-    const draggable = e.target.closest?.('[draggable="true"]');
-    if (!draggable) return;
-    const s = e.currentTarget;
-    /* Floating sections use mousedown-drag, not HTML5 drag */
-    if (s.classList.contains('mod-floating')) { e.preventDefault(); return; }
-    this.dragSrc = s;
+  _dockSection(s) {
     const id = s.dataset.modId;
-    if (this.selection.size > 0 && this.selection.has(id)) {
-      this.dragGroup = [...this.selection];
-    } else {
-      this.dragGroup = [id];
-      this._clearSelection();
-    }
-    this.dragGroup.forEach(gid => {
-      document.querySelector(`[data-mod-id="${gid}"]`)?.classList.add('mod-dragging');
+    this._disarmFloat(s);
+    s.classList.remove('mod-floating');
+    s.style.left = s.style.top = s.style.width = s.style.height = '';
+    const home = s.dataset.modHomePanel || 'sidebar';
+    const panel = this._panelEl(home);
+    if (panel) this._appendToPanel(s, panel);
+    this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, {
+      panel: home, float: null, pinned: false
     });
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-mod-ids', JSON.stringify(this.dragGroup));
-    e.dataTransfer.setData('text/plain', id);
-    this._activateFloatLayer();
-  }
-
-  _onDragOver(e) {
-    if (!this.dragGroup.length) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const target = e.currentTarget;
-    if (this.dragGroup.includes(target.dataset.modId)) return;
-    const rect = target.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    target.classList.toggle('mod-drop-above', e.clientY < midY);
-    target.classList.toggle('mod-drop-below', e.clientY >= midY);
-  }
-
-  _onDragEnter(e) {
-    if (!this.dragGroup.length) return;
-    e.preventDefault();
-    if (!this.dragGroup.includes(e.currentTarget.dataset.modId)) {
-      e.currentTarget.classList.add('mod-drag-over');
-    }
-  }
-
-  _onDragLeave(e) {
-    e.currentTarget.classList.remove('mod-drag-over', 'mod-drop-above', 'mod-drop-below');
-  }
-
-  _onDrop(e) {
-    if (!this.dragGroup.length) return;
-    e.preventDefault();
-    const target = e.currentTarget;
-    target.classList.remove('mod-drag-over', 'mod-drop-above', 'mod-drop-below');
-    if (this.dragGroup.includes(target.dataset.modId)) return;
-    const parent = target.parentElement;
-    const rect = target.getBoundingClientRect();
-    const insertBefore = e.clientY < rect.top + rect.height / 2;
-    const anchor = insertBefore ? target : target.nextSibling;
-    this.dragGroup.forEach(id => {
-      const el = document.querySelector(`[data-mod-id="${id}"]`);
-      if (el && el !== target) {
-        this._unfloatSection(el);
-        parent.insertBefore(el, anchor);
-      }
-    });
-  }
-
-  _onDragEnd() {
-    document.querySelectorAll('.mod-dragging').forEach(el => el.classList.remove('mod-dragging'));
-    document.querySelectorAll('.mod-drag-over, .mod-drop-above, .mod-drop-below').forEach(el => {
-      el.classList.remove('mod-drag-over', 'mod-drop-above', 'mod-drop-below');
-    });
-    this.dragSrc = null;
-    this.dragGroup = [];
-    this._deactivateFloatLayer();
-  }
-
-  /* ── Drop target panels ───────────────────────────── */
-
-  _armDropTargets() {
-    const targets = [
-      document.getElementById('sidebar-mod-container'),
-      document.querySelector('.right-sidebar'),
-    ].filter(Boolean);
-    targets.forEach(t => {
-      t.classList.add('mod-drop-panel');
-      t.addEventListener('dragover', this._bound.panelDropOver);
-      t.addEventListener('drop',     this._bound.panelDropDrop);
-    });
-    this._dropTargets = targets;
-  }
-
-  _disarmDropTargets() {
-    (this._dropTargets || []).forEach(t => {
-      t.removeEventListener('dragover', this._bound.panelDropOver);
-      t.removeEventListener('drop',     this._bound.panelDropDrop);
-      t.classList.remove('mod-drop-panel', 'mod-drop-panel-active');
-    });
-    this._dropTargets = [];
-  }
-
-  _onPanelDropOver(e) {
-    if (!this.dragGroup.length) return;
-    e.preventDefault();
-    e.currentTarget.classList.add('mod-drop-panel-active');
-  }
-
-  _onPanelDropDrop(e) {
-    if (!this.dragGroup.length) return;
-    const panel = e.currentTarget;
-    panel.classList.remove('mod-drop-panel-active');
-    if (e.target.closest('[data-mod-id]')) return;
-    e.preventDefault();
-    this.dragGroup.forEach(id => {
-      const el = document.querySelector(`[data-mod-id="${id}"]`);
-      if (!el) return;
-      this._unfloatSection(el);
-      if (el.parentElement !== panel) panel.appendChild(el);
-    });
-  }
-
-  /* ── Float layer ──────────────────────────────────── */
-
-  _armFloatLayer() {
-    if (!this.floatLayer) return;
-    this.floatLayer.addEventListener('dragover', this._bound.floatDrag);
-    this.floatLayer.addEventListener('drop', this._bound.floatDrop);
-  }
-
-  _disarmFloatLayer() {
-    if (!this.floatLayer) return;
-    this.floatLayer.classList.remove('active');
-    this.floatLayer.removeEventListener('dragover', this._bound.floatDrag);
-    this.floatLayer.removeEventListener('drop', this._bound.floatDrop);
-  }
-
-  _activateFloatLayer()   { if (this.floatLayer) this.floatLayer.classList.add('active'); }
-  _deactivateFloatLayer() { if (this.floatLayer) this.floatLayer.classList.remove('active'); }
-
-  _onFloatDragOver(e) {
-    if (!this.dragGroup.length) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }
-
-  _onFloatDrop(e) {
-    if (!this.dragGroup.length) return;
-    e.preventDefault();
-    const layerRect = this.floatLayer.getBoundingClientRect();
-    let x = e.clientX - layerRect.left;
-    let y = e.clientY - layerRect.top;
-    this.dragGroup.forEach((id, i) => {
-      const el = document.querySelector(`[data-mod-id="${id}"]`);
-      if (!el) return;
-      const existing = this.layout.sections[id]?.float;
-      const float = {
-        x: x + (i * 14),
-        y: y + (i * 14),
-        w: existing?.w || 320,
-        h: existing?.h || 260
-      };
-      this._placeFloat(el, float);
-      this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, {
-        panel: 'float-layer', float
-      });
-    });
+    this._refreshControls(s);
     this._saveState();
   }
 
-  _placeFloat(el, float) {
-    if (el.parentElement !== this.floatLayer) this.floatLayer.appendChild(el);
-    el.classList.add('mod-floating');
-    el.style.left   = float.x + 'px';
-    el.style.top    = float.y + 'px';
-    el.style.width  = float.w + 'px';
-    el.style.height = float.h + 'px';
-    this._armFloatingPane(el);
-    this._updateFloatBtn(el);
+  // ── Pin ───────────────────────────────────────────────
+  _togglePin(s) {
+    const id = s.dataset.modId;
+    const meta = this.layout.sections[id] = this.layout.sections[id] || {};
+    meta.pinned = !meta.pinned;
+    const btn = s.querySelector('.mod-pin-btn');
+    if (btn) { btn.classList.toggle('pinned', meta.pinned); btn.title = meta.pinned ? 'Unpin' : 'Pin'; }
+    this._saveState();
+    this._showToast(meta.pinned ? 'Pinned — window locked' : 'Unpinned — window draggable');
   }
 
-  /* ── Floating pane window-drag (mousedown) ────────── */
-
-  _armFloatingPane(el) {
+  // ── Floating-pane drag (titlebar mousedown) ───────────
+  _armFloat(el) {
     if (el._floatArmed) return;
     el._floatArmed = true;
-
     const onDown = (e) => {
-      const trigger = e.target.closest('.mod-float-titlebar, .section-label, .panel-title, .mod-collapsed-label');
+      if (this.layout.sections[el.dataset.modId]?.pinned) return;
+      const trigger = e.target.closest('.mod-float-titlebar');
       if (!trigger) return;
-      if (trigger.getAttribute('draggable') === 'true' && this.active) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
-      const layerRect = this.floatLayer.getBoundingClientRect();
-      const offX = e.clientX - rect.left;
-      const offY = e.clientY - rect.top;
-      const onMove = (ev) => {
-        let nx = ev.clientX - layerRect.left - offX;
-        let ny = ev.clientY - layerRect.top  - offY;
-        nx = Math.max(0, Math.min(layerRect.width  - 40, nx));
-        ny = Math.max(0, Math.min(layerRect.height - 40, ny));
-        el.style.left = nx + 'px';
-        el.style.top  = ny + 'px';
+      const lr = this.floatLayer.getBoundingClientRect();
+      const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
+      const move = (ev) => {
+        let nx = Math.max(0, Math.min(lr.width - 40, ev.clientX - lr.left - ox));
+        let ny = Math.max(0, Math.min(lr.height - 40, ev.clientY - lr.top - oy));
+        el.style.left = nx + 'px'; el.style.top = ny + 'px';
       };
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        const id = el.dataset.modId;
-        const meta = this.layout.sections[id];
-        if (meta?.float) {
-          meta.float.x = parseInt(el.style.left) || 0;
-          meta.float.y = parseInt(el.style.top)  || 0;
-        }
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        const meta = this.layout.sections[el.dataset.modId];
+        if (meta?.float) { meta.float.x = parseInt(el.style.left)||0; meta.float.y = parseInt(el.style.top)||0; }
         this._saveState();
       };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
     };
-
     el.addEventListener('mousedown', onDown);
-    el._floatCleanup = () => {
-      el.removeEventListener('mousedown', onDown);
-      el._floatArmed = false;
-      delete el._floatCleanup;
-    };
+    el._floatClean = () => { el.removeEventListener('mousedown', onDown); el._floatArmed = false; delete el._floatClean; };
 
     if (!el.querySelector(':scope > .mod-float-titlebar')) {
-      const titlebar = document.createElement('div');
-      titlebar.className = 'mod-float-titlebar';
-      const texts = [...el.querySelectorAll('.section-label-text')]
-        .map(t => t.textContent.trim()).filter(Boolean);
-      if (!texts.length) {
-        const pt = el.querySelector('.panel-title');
-        if (pt) texts.push(pt.textContent.trim());
-      }
-      titlebar.textContent = texts.length ? texts.join(' & ') : (el.dataset.modId || 'Section');
-      el.insertBefore(titlebar, el.firstChild);
+      const tb = document.createElement('div');
+      tb.className = 'mod-float-titlebar';
+      tb.textContent = this._getSectionTitle(el);
+      el.insertBefore(tb, el.firstChild);
     }
   }
-
-  _disarmFloatingPane(el) {
-    if (el._floatCleanup) el._floatCleanup();
+  _disarmFloat(el) {
+    if (el._floatClean) el._floatClean();
     el.querySelector(':scope > .mod-float-titlebar')?.remove();
   }
-
   _armAllFloatingPanes() {
-    this.floatLayer?.querySelectorAll('.mod-floating').forEach(el => {
-      this._armFloatingPane(el);
-    });
+    this.floatLayer?.querySelectorAll('.mod-floating').forEach(el => this._armFloat(el));
   }
 
-  /* ── Apply layout ─────────────────────────────────── */
+  // ═══════════════════════════════════════════════════════
+  //  Snap-Grid Drag System (mousedown-based)
+  // ═══════════════════════════════════════════════════════
 
+  _startDrag(e, section) {
+    const rect = section.getBoundingClientRect();
+    const ghost = document.createElement('div');
+    ghost.className = 'mod-drag-ghost';
+    ghost.textContent = this._getSectionTitle(section);
+    ghost.style.left = e.clientX + 'px';
+    ghost.style.top  = e.clientY + 'px';
+    document.body.appendChild(ghost);
+
+    section.classList.add('mod-dragging');
+    this.dragging = { el: section, ghost };
+    this._getDropPanels().forEach(p => p.classList.add('mod-drop-panel'));
+
+    const move = (ev) => {
+      ghost.style.left = ev.clientX + 'px';
+      ghost.style.top  = ev.clientY + 'px';
+      this._updateDropInd(ev.clientX, ev.clientY, section);
+    };
+    const up = (ev) => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      this._executeDrop(section);
+      ghost.remove();
+      section.classList.remove('mod-dragging');
+      this._getDropPanels().forEach(p => p.classList.remove('mod-drop-panel', 'mod-drop-panel-active'));
+      this._hideDropInd();
+      this.dragging = null;
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
+
+  /* Find the panel under the cursor, then compute the
+     insertion gap between sections and show the glow line. */
+  _updateDropInd(x, y, draggedSection) {
+    let targetPanel = null;
+    for (const p of this._getDropPanels()) {
+      const r = p.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { targetPanel = p; break; }
+    }
+
+    if (!targetPanel) {
+      this._hideDropInd();
+      this._getDropPanels().forEach(p => p.classList.remove('mod-drop-panel-active'));
+      this._pendingDrop = null;
+      return;
+    }
+
+    this._getDropPanels().forEach(p => p.classList.toggle('mod-drop-panel-active', p === targetPanel));
+
+    // Sections in this panel (excluding the one being dragged)
+    const secs = [...targetPanel.querySelectorAll(':scope > [data-mod-id]')]
+                   .filter(s => s !== draggedSection && !s.classList.contains('mod-floating'));
+
+    let insertBefore = null;
+    let indY = 0;
+    const pRect = targetPanel.getBoundingClientRect();
+
+    if (!secs.length) {
+      indY = pRect.top + 8;
+    } else {
+      for (const s of secs) {
+        const sr = s.getBoundingClientRect();
+        if (y < sr.top + sr.height / 2) { insertBefore = s; indY = sr.top; break; }
+      }
+      if (!insertBefore) {
+        indY = secs[secs.length - 1].getBoundingClientRect().bottom;
+      }
+    }
+
+    this._showDropInd(indY, pRect.left + 6, pRect.right - 6);
+    this._pendingDrop = { panel: targetPanel, before: insertBefore };
+  }
+
+  _showDropInd(y, left, right) {
+    const el = this.dropIndicator; if (!el) return;
+    el.style.display = 'block';
+    el.style.top   = (y - 2) + 'px';
+    el.style.left  = left + 'px';
+    el.style.width = (right - left) + 'px';
+  }
+  _hideDropInd() {
+    if (this.dropIndicator) this.dropIndicator.style.display = 'none';
+    this._pendingDrop = null;
+  }
+
+  _executeDrop(section) {
+    const d = this._pendingDrop;
+    if (!d || !d.panel) return;
+
+    // If currently floating, unfloat first
+    if (section.classList.contains('mod-floating')) {
+      this._disarmFloat(section);
+      section.classList.remove('mod-floating');
+      section.style.left = section.style.top = section.style.width = section.style.height = '';
+      this._refreshControls(section);
+    }
+
+    if (d.before) d.panel.insertBefore(section, d.before);
+    else          this._appendToPanel(section, d.panel);
+
+    this._persistFromDom();
+    this._saveState();
+  }
+
+  // ── Status bar ────────────────────────────────────────
+  _toggleStatusBarPos() {
+    const cur = this.layout.statusBarPos || 'bottom';
+    this.layout.statusBarPos = cur === 'bottom' ? 'top' : 'bottom';
+    this._applyStatusBarPos();
+    this._saveState();
+    this._updatePillSb();
+    this._showToast('Status bar \u2192 ' + this.layout.statusBarPos);
+  }
+  _applyStatusBarPos() {
+    const pos = this.layout.statusBarPos || 'bottom';
+    const app = document.getElementById('app');
+    const bar = document.getElementById('status-bar');
+    if (!app || !bar) return;
+    // Physically move in DOM
+    if (pos === 'top') {
+      app.insertBefore(bar, app.firstChild);
+    } else {
+      const body = document.getElementById('app-body');
+      if (body) app.insertBefore(bar, body.nextSibling);
+    }
+    app.dataset.statusPos = pos;
+  }
+
+  // ── Pill ──────────────────────────────────────────────
+  _showPill() {
+    let pill = document.getElementById('mod-mode-pill');
+    if (!pill) {
+      pill = document.createElement('div');
+      pill.id = 'mod-mode-pill';
+      pill.className = 'mod-pill';
+      pill.innerHTML =
+        '<button type="button" class="mod-pill-btn mod-pill-save" id="mod-pill-exit" title="Save & exit">\u2713 Save & Exit</button>' +
+        '<button type="button" class="mod-pill-btn" id="mod-pill-reset" title="Reset layout">\u21BA</button>' +
+        '<button type="button" class="mod-pill-btn" id="mod-pill-sb"></button>';
+      document.body.appendChild(pill);
+      pill.querySelector('#mod-pill-exit').addEventListener('click', () => this.toggle());
+      pill.querySelector('#mod-pill-reset').addEventListener('click', () => this.resetLayout());
+      pill.querySelector('#mod-pill-sb').addEventListener('click', () => this._toggleStatusBarPos());
+    }
+    pill.style.display = 'flex';
+    this._updatePillSb();
+  }
+  _hidePill() { const p = document.getElementById('mod-mode-pill'); if (p) p.style.display = 'none'; }
+  _updatePillSb() {
+    const btn = document.getElementById('mod-pill-sb'); if (!btn) return;
+    const pos = this.layout.statusBarPos || 'bottom';
+    btn.textContent = pos === 'bottom' ? '\u2191 Bar Top' : '\u2193 Bar Bottom';
+  }
+
+  // ── Apply layout (page load) ──────────────────────────
   applyLayout() {
     this._applyStatusBarPos();
-    this.applySectionLayout();
-  }
-
-  applySectionLayout() {
-    const sections = this.layout.sections;
-    const panelTargets = {
-      'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
-      'right-sidebar':         document.querySelector('.right-sidebar'),
-      'float-layer':           this.floatLayer
-    };
-    const ordered = Object.entries(sections)
+    const secs = this.layout.sections;
+    const ordered = Object.entries(secs)
       .filter(([, m]) => typeof m.index === 'number')
       .sort(([, a], [, b]) => a.index - b.index);
 
     ordered.forEach(([id, meta]) => {
       const el = document.querySelector(`[data-mod-id="${id}"]`);
       if (!el) return;
-      const parent = panelTargets[meta.panel];
-      if (!parent) return;
+      const panel = this._panelEl(meta.panel);
+      if (!panel) return;
+
       if (meta.panel === 'float-layer' && meta.float) {
-        this._placeFloat(el, meta.float);
+        this._floatSection(el, meta.float);
       } else {
-        this._unfloatSection(el);
-        if (el.parentElement !== parent) parent.appendChild(el);
+        if (el.classList.contains('mod-floating')) {
+          this._disarmFloat(el);
+          el.classList.remove('mod-floating');
+          el.style.left = el.style.top = el.style.width = el.style.height = '';
+        }
+        if (el.parentElement !== panel) this._appendToPanel(el, panel);
       }
       el.classList.toggle('mod-collapsed', !!meta.collapsed);
-      this._syncCollapseLabel(el);
     });
   }
 
-  _unfloatSection(el) {
-    if (el.classList.contains('mod-floating')) {
-      this._disarmFloatingPane(el);
-      el.classList.remove('mod-floating');
-      el.style.left = el.style.top = el.style.width = el.style.height = '';
-    }
-  }
-
+  // ── Persist from DOM ──────────────────────────────────
   _persistFromDom() {
     const sections = {};
-    const panelIndices = {};
+    const idx = {};
     this._getAllSections().forEach(el => {
       const id = el.dataset.modId;
-      const panel = this._resolvePanelOf(el);
-      panelIndices[panel] = (panelIndices[panel] ?? -1) + 1;
+      const pk = this._panelKeyOf(el);
+      idx[pk] = (idx[pk] ?? -1) + 1;
       const prev = this.layout.sections[id] || {};
       sections[id] = {
-        panel,
-        index: panelIndices[panel],
+        panel: pk,
+        index: idx[pk],
         collapsed: el.classList.contains('mod-collapsed'),
-        float: panel === 'float-layer' ? (prev.float || null) : null
+        float: pk === 'float-layer' ? (prev.float || null) : null,
+        pinned: !!prev.pinned
       };
     });
     this.layout.sections = sections;
   }
 
-  _resolvePanelOf(el) {
-    if (el.closest('#mod-float-layer'))       return 'float-layer';
-    if (el.closest('#sidebar-mod-container')) return 'sidebar-mod-container';
-    if (el.closest('.right-sidebar'))         return 'right-sidebar';
-    return el.dataset.modHomePanel || 'sidebar-mod-container';
-  }
-
-  _resetSectionToHome(id) {
-    const el = document.querySelector(`[data-mod-id="${id}"]`);
-    if (!el) return;
-    this._unfloatSection(el);
-    const home = el.dataset.modHomePanel || 'sidebar-mod-container';
-    const homeEl = {
-      'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
-      'right-sidebar':         document.querySelector('.right-sidebar'),
-    }[home];
-    if (homeEl) homeEl.appendChild(el);
-    el.classList.remove('mod-collapsed');
-    el.querySelector(':scope > .mod-collapsed-label')?.remove();
-    this.layout.sections[id] = { panel: home, index: 999, collapsed: false, float: null };
-    this._updateFloatBtn(el);
-    this._saveState();
-  }
-
-  /* ── Reset ────────────────────────────────────────── */
-
+  // ── Reset ─────────────────────────────────────────────
   resetLayout() {
     this.state[this.layoutKey] = this.defaultState();
     this._saveState();
     this._applyStatusBarPos();
-    this._updatePillSbLabel();
+    this._updatePillSb();
     this._getAllSections().forEach(el => {
-      this._unfloatSection(el);
-      const home = el.dataset.modHomePanel || 'sidebar-mod-container';
-      const parent = {
-        'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
-        'right-sidebar':         document.querySelector('.right-sidebar'),
-      }[home];
-      if (parent && el.parentElement !== parent) parent.appendChild(el);
+      if (el.classList.contains('mod-floating')) {
+        this._disarmFloat(el); el.classList.remove('mod-floating');
+        el.style.left = el.style.top = el.style.width = el.style.height = '';
+      }
+      const home = el.dataset.modHomePanel || 'sidebar';
+      const panel = this._panelEl(home);
+      if (panel && el.parentElement !== panel) this._appendToPanel(el, panel);
       el.classList.remove('mod-collapsed');
       el.querySelector(':scope > .mod-collapsed-label')?.remove();
+      this._refreshControls(el);
     });
-    this._showToast('Layout reset to defaults');
+    this._showToast('Layout reset');
   }
 
-  /* ── Toast ────────────────────────────────────────── */
-
+  // ── Toast ─────────────────────────────────────────────
   _showToast(msg) {
     const t = document.createElement('div');
     t.className = 'mod-toast';
