@@ -12165,6 +12165,11 @@ ul.chat-list { list-style-type: disc; }
   border-bottom: none;
 }
 
+/* Force-show status bar during mod mode (overrides inline display:none) */
+.mod-mode-on #status-bar { display: flex !important; }
+/* Hide upload button during mod mode */
+.mod-mode-on #upload-btn { display: none !important; }
+
 /* Status bar mod-mode controls (inline, right-aligned) */
 .mod-statusbar-controls {
   display: none;

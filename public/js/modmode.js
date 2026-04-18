@@ -135,6 +135,7 @@ class ModMode {
     this._liberateSplit();
     this._getAllSections().forEach(sec => this._armSection(sec));
     this._armStatusBar();
+    this._applyStatusBarPos();
     this._showPill();
     this._showToast('Mod Mode ON — drag ⋮⋮ handles to rearrange');
 
@@ -491,6 +492,13 @@ class ModMode {
   }
   _disarmStatusBar() {
     document.querySelector('.mod-statusbar-controls')?.remove();
+    // Restore status bar to default (bottom) DOM position
+    const app = document.getElementById('app');
+    const bar = document.getElementById('status-bar');
+    if (app && bar) {
+      delete app.dataset.statusPos;
+      app.appendChild(bar);
+    }
   }
   _toggleStatusBarPos() {
     const cur = this.layout.statusBarPos || 'bottom';
