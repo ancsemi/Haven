@@ -1,12 +1,11 @@
-// ═══════════════════════════════════════════════════════════
-// Haven — Mod Mode (layout customisation) v3
-// - Sections can be reordered within panels via drag-and-drop.
-// - Sections can be floated: free-floating windows that are
-//   draggable and resizable even OUTSIDE mod mode.
-// - Small floating pill with Save & Exit during mod mode.
-// - Status bar can be positioned top or bottom.
-// - Per-section collapse state with safe recovery labels.
-// - Separate layouts for desktop vs. mobile breakpoints.
+﻿// ═══════════════════════════════════════════════════════════
+// Haven — Mod Mode v4 (layout customisation)
+// - All sidebar + right-sidebar sections are controllable.
+// - Sections can be reordered, moved between panels, or
+//   floated as draggable/resizable windows.
+// - Floating pill with Save & Exit (non-blocking).
+// - Status bar top/bottom toggle in the pill.
+// - Per-section collapse, multi-select, separate desktop/mobile.
 // ═══════════════════════════════════════════════════════════
 
 class ModMode {
@@ -18,12 +17,11 @@ class ModMode {
     this.dragSrc = null;
     this.dragGroup = [];
 
-    /* Section panels — where data-mod-id sections can live */
-    this.sectionPanels = ['sidebar-mod-container', 'right-sidebar', 'status-bar', 'float-layer'];
+    this.sectionPanels = ['sidebar-mod-container', 'right-sidebar', 'float-layer'];
 
     this.defaultState = () => ({
-      sections: {},  // id -> { panel, index, collapsed, float: {x,y,w,h}|null }
-      statusBarPos: 'bottom', // 'top' | 'bottom'
+      sections: {},
+      statusBarPos: 'bottom',
     });
 
     this.state = { desktop: this.defaultState(), mobile: this.defaultState() };
@@ -47,7 +45,7 @@ class ModMode {
     this.mq = window.matchMedia('(max-width: 900px)');
   }
 
-  // ── Initialisation ──
+  /* ── Init ─────────────────────────────────────────── */
 
   init() {
     this.container = document.getElementById('sidebar-mod-container');
@@ -56,14 +54,12 @@ class ModMode {
     this._cacheHomePanels();
     this._ensureFloatLayer();
     this.applyLayout();
-    this._applyStatusBarPos();
-    // Restore floating pane interactivity on load (even outside mod mode)
     this._armAllFloatingPanes();
     document.getElementById('mod-mode-reset')?.addEventListener('click', () => this.resetLayout());
     this.mq.addEventListener?.('change', this._bound.mqChange);
   }
 
-  // ── State ──
+  /* ── State ────────────────────────────────────────── */
 
   get layoutKey() { return this.mq.matches ? 'mobile' : 'desktop'; }
   get layout()    { return this.state[this.layoutKey]; }
@@ -86,16 +82,13 @@ class ModMode {
 
   _cacheHomePanels() {
     document.querySelectorAll('[data-mod-id]').forEach(el => {
-      if (!el.dataset.modHomePanel) {
-        el.dataset.modHomePanel = this._detectHomePanel(el);
-      }
+      if (!el.dataset.modHomePanel) el.dataset.modHomePanel = this._detectHomePanel(el);
     });
   }
 
   _detectHomePanel(el) {
     if (el.closest('#sidebar-mod-container')) return 'sidebar-mod-container';
     if (el.closest('.right-sidebar'))         return 'right-sidebar';
-    if (el.closest('#status-bar'))            return 'status-bar';
     return 'sidebar-mod-container';
   }
 
@@ -110,7 +103,7 @@ class ModMode {
     this.floatLayer = layer;
   }
 
-  // ── Enable / Disable ──
+  /* ── Enable / Disable ─────────────────────────────── */
 
   toggle() {
     this.active ? this._disable() : this._enable();
@@ -118,47 +111,44 @@ class ModMode {
   }
 
   _enable() {
-    // Close settings modal so users can see what they're modifying
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) settingsModal.style.display = 'none';
 
     document.body.classList.add('mod-mode-on');
-    this.container.classList.add('mod-mode-active');
+    this.container?.classList.add('mod-mode-active');
 
     this._getAllSections().forEach(s => this._armSection(s));
     this._armDropTargets();
     this._armFloatLayer();
     this._showPill();
-    this._armStatusBarToggle();
 
     document.addEventListener('keydown', this._bound.keydown);
     document.addEventListener('dragend', this._bound.dragEnd);
+    this._showToast('Mod Mode ON — drag headers or ⋮⋮ handles to rearrange');
   }
 
   _disable() {
     document.body.classList.remove('mod-mode-on');
-    this.container.classList.remove('mod-mode-active');
+    this.container?.classList.remove('mod-mode-active');
 
     this._getAllSections().forEach(s => this._disarmSection(s));
     this._disarmDropTargets();
     this._disarmFloatLayer();
     this._clearSelection();
     this._hidePill();
-    this._disarmStatusBarToggle();
 
     document.removeEventListener('keydown', this._bound.keydown);
     document.removeEventListener('dragend', this._bound.dragEnd);
 
     this._persistFromDom();
     this._saveState();
-    this._showToast('Mod Mode OFF \u2014 layout saved');
+    this._showToast('Mod Mode OFF — layout saved');
   }
 
   _onBreakpointChange() {
     if (this.active) this._persistFromDom();
     this._saveState();
     this.applyLayout();
-    this._applyStatusBarPos();
   }
 
   _onKey(e) {
@@ -169,7 +159,7 @@ class ModMode {
     }
   }
 
-  // ── Floating pill (Save & Exit — bottom-right, non-blocking) ──
+  /* ── Pill (floating Save & Exit + status bar toggle) ── */
 
   _showPill() {
     let pill = document.getElementById('mod-mode-pill');
@@ -177,15 +167,20 @@ class ModMode {
       pill = document.createElement('div');
       pill.id = 'mod-mode-pill';
       pill.className = 'mod-pill';
+      const sbPos = this.layout.statusBarPos || 'bottom';
+      const sbLabel = sbPos === 'bottom' ? '↑ Bar Top' : '↓ Bar Bottom';
       pill.innerHTML = `
-        <button type="button" class="mod-pill-btn mod-pill-save" id="mod-pill-exit" title="Save & exit mod mode">\u2713 Save & Exit</button>
-        <button type="button" class="mod-pill-btn" id="mod-pill-reset" title="Reset to defaults">\u21ba</button>
+        <button type="button" class="mod-pill-btn mod-pill-save" id="mod-pill-exit" title="Save & exit">✓ Save & Exit</button>
+        <button type="button" class="mod-pill-btn" id="mod-pill-reset" title="Reset layout">↺</button>
+        <button type="button" class="mod-pill-btn" id="mod-pill-sb" title="Move status bar">${sbLabel}</button>
       `;
       document.body.appendChild(pill);
       pill.querySelector('#mod-pill-exit').addEventListener('click', () => this.toggle());
       pill.querySelector('#mod-pill-reset').addEventListener('click', () => this.resetLayout());
+      pill.querySelector('#mod-pill-sb').addEventListener('click', () => this._toggleStatusBarPos());
     }
     pill.style.display = 'flex';
+    this._updatePillSbLabel();
   }
 
   _hidePill() {
@@ -193,7 +188,14 @@ class ModMode {
     if (pill) pill.style.display = 'none';
   }
 
-  // ── Status bar position (top / bottom) ──
+  _toggleStatusBarPos() {
+    const cur = this.layout.statusBarPos || 'bottom';
+    this.layout.statusBarPos = cur === 'bottom' ? 'top' : 'bottom';
+    this._applyStatusBarPos();
+    this._saveState();
+    this._updatePillSbLabel();
+    this._showToast(`Status bar → ${this.layout.statusBarPos}`);
+  }
 
   _applyStatusBarPos() {
     const pos = this.layout.statusBarPos || 'bottom';
@@ -201,64 +203,35 @@ class ModMode {
     if (app) app.dataset.statusPos = pos;
   }
 
-  _toggleStatusBarPos() {
-    const current = this.layout.statusBarPos || 'bottom';
-    this.layout.statusBarPos = current === 'bottom' ? 'top' : 'bottom';
-    this._applyStatusBarPos();
-    this._saveState();
-    this._updateStatusBarToggleLabel();
-    this._showToast(`Status bar moved to ${this.layout.statusBarPos}`);
-  }
-
-  _armStatusBarToggle() {
-    const bar = document.getElementById('status-bar');
-    if (!bar) return;
-    let btn = bar.querySelector('.mod-statusbar-pos-btn');
-    if (!btn) {
-      btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'mod-statusbar-pos-btn';
-      btn.title = 'Move status bar to top / bottom';
-      bar.appendChild(btn);
-    }
-    this._updateStatusBarToggleLabel();
-    btn.style.display = '';
-    btn._handler = () => this._toggleStatusBarPos();
-    btn.addEventListener('click', btn._handler);
-  }
-
-  _disarmStatusBarToggle() {
-    const btn = document.querySelector('.mod-statusbar-pos-btn');
-    if (!btn) return;
-    btn.style.display = 'none';
-    if (btn._handler) { btn.removeEventListener('click', btn._handler); delete btn._handler; }
-  }
-
-  _updateStatusBarToggleLabel() {
-    const btn = document.querySelector('.mod-statusbar-pos-btn');
+  _updatePillSbLabel() {
+    const btn = document.getElementById('mod-pill-sb');
     if (!btn) return;
     const pos = this.layout.statusBarPos || 'bottom';
-    btn.textContent = pos === 'bottom' ? '\u2191 Move to Top' : '\u2193 Move to Bottom';
+    btn.textContent = pos === 'bottom' ? '↑ Bar Top' : '↓ Bar Bottom';
   }
 
-  // ── Sections ──
+  /* ── Sections ─────────────────────────────────────── */
 
   _getAllSections() { return [...document.querySelectorAll('[data-mod-id]')]; }
 
+  /* Find a label element inside a section — supports both
+     .section-label (sidebar) and .panel-title (right sidebar) */
+  _findLabels(s) {
+    return [...s.querySelectorAll('.section-label, .panel-title')];
+  }
+
   _armSection(s) {
     s.classList.add('mod-draggable');
-    // dragstart bubbles from draggable children (labels, handle) to the section
     s.addEventListener('dragstart', this._bound.dragStart);
-    // Drop listeners (accept drops from other sections)
     s.addEventListener('dragover',  this._bound.dragOver);
     s.addEventListener('dragenter', this._bound.dragEnter);
     s.addEventListener('dragleave', this._bound.dragLeave);
     s.addEventListener('drop',      this._bound.drop);
     this._injectSectionControls(s);
-    // Make section labels and the drag handle actual drag sources \u2014
-    // the section body itself is NOT draggable (prevents scroll conflicts)
-    s.querySelectorAll('.section-label').forEach(label => {
+    /* Make labels and the drag handle draggable sources */
+    this._findLabels(s).forEach(label => {
       label.setAttribute('draggable', 'true');
+      label.style.cursor = 'grab';
       label.addEventListener('click', this._bound.headerClick);
     });
     const handle = s.querySelector('.mod-sec-handle');
@@ -266,14 +239,16 @@ class ModMode {
   }
 
   _disarmSection(s) {
-    s.classList.remove('mod-draggable', 'mod-drag-over', 'mod-drop-above', 'mod-drop-below', 'mod-dragging', 'mod-selected');
+    s.classList.remove('mod-draggable', 'mod-drag-over', 'mod-drop-above',
+                       'mod-drop-below', 'mod-dragging', 'mod-selected');
     s.removeEventListener('dragstart', this._bound.dragStart);
     s.removeEventListener('dragover',  this._bound.dragOver);
     s.removeEventListener('dragenter', this._bound.dragEnter);
     s.removeEventListener('dragleave', this._bound.dragLeave);
     s.removeEventListener('drop',      this._bound.drop);
-    s.querySelectorAll('.section-label').forEach(label => {
+    this._findLabels(s).forEach(label => {
       label.removeAttribute('draggable');
+      label.style.cursor = '';
       label.removeEventListener('click', this._bound.headerClick);
     });
     const handle = s.querySelector('.mod-sec-handle');
@@ -284,19 +259,22 @@ class ModMode {
 
   _injectSectionControls(s) {
     if (s.querySelector(':scope > .mod-section-controls')) return;
+    const isFloating = s.classList.contains('mod-floating');
     const bar = document.createElement('div');
     bar.className = 'mod-section-controls';
     bar.innerHTML = `
-      <button type="button" class="mod-sec-btn" data-act="collapse" title="Collapse / expand">\u25be</button>
-      <button type="button" class="mod-sec-btn" data-act="home" title="Return to home panel">\u2302</button>
-      <span class="mod-sec-handle" title="Drag to reorder">\u2725</span>
+      <button type="button" class="mod-sec-btn" data-act="collapse" title="Collapse / Expand">▾</button>
+      <button type="button" class="mod-sec-btn" data-act="float" title="${isFloating ? 'Dock back' : 'Float as window'}">
+        ${isFloating ? '⮽' : '⧉'}
+      </button>
+      <span class="mod-sec-handle" title="Drag to reorder">⋮⋮</span>
     `;
     bar.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (!act) return;
       e.stopPropagation();
       if (act === 'collapse') this._toggleCollapse(s);
-      else if (act === 'home') this._resetSectionToHome(s.dataset.modId);
+      else if (act === 'float') this._toggleFloat(s);
     });
     s.appendChild(bar);
     const id = s.dataset.modId;
@@ -309,19 +287,45 @@ class ModMode {
     s.querySelector(':scope > .mod-section-controls')?.remove();
   }
 
+  _updateFloatBtn(s) {
+    const btn = s.querySelector('.mod-section-controls [data-act="float"]');
+    if (!btn) return;
+    const isFloating = s.classList.contains('mod-floating');
+    btn.innerHTML = isFloating ? '⮽' : '⧉';
+    btn.title = isFloating ? 'Dock back' : 'Float as window';
+  }
+
   _toggleCollapse(s) {
     const id = s.dataset.modId;
     s.classList.toggle('mod-collapsed');
-    const collapsed = s.classList.contains('mod-collapsed');
-    this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, { collapsed });
+    this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, {
+      collapsed: s.classList.contains('mod-collapsed')
+    });
     this._syncCollapseLabel(s);
     this._saveState();
   }
 
-  /* For sections without a direct .section-label (e.g. sidebar-split),
-     inject a visible label so they don't vanish when collapsed. */
+  _toggleFloat(s) {
+    const id = s.dataset.modId;
+    if (s.classList.contains('mod-floating')) {
+      /* Dock back to home panel */
+      this._resetSectionToHome(id);
+      this._updateFloatBtn(s);
+    } else {
+      /* Float it */
+      const float = { x: 120, y: 80, w: 320, h: 280 };
+      this._placeFloat(s, float);
+      this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, {
+        panel: 'float-layer', float
+      });
+      this._updateFloatBtn(s);
+      this._saveState();
+    }
+  }
+
   _syncCollapseLabel(s) {
     const isCollapsed = s.classList.contains('mod-collapsed');
+    /* Only truly direct .section-label children survive the collapse CSS rule */
     const hasDirectLabel = !!s.querySelector(':scope > .section-label:not(.mod-collapsed-label)');
     const existingLabel = s.querySelector(':scope > .mod-collapsed-label');
     if (isCollapsed && !hasDirectLabel) {
@@ -330,6 +334,10 @@ class ModMode {
         label.className = 'section-label mod-collapsed-label';
         const texts = [...s.querySelectorAll('.section-label-text')]
           .map(el => el.textContent.trim()).filter(Boolean);
+        if (!texts.length) {
+          const pt = s.querySelector('.panel-title');
+          if (pt) texts.push(pt.textContent.trim());
+        }
         label.textContent = texts.length ? texts.join(' & ') : (s.dataset.modId || 'Section');
         label.style.cursor = 'pointer';
         label.addEventListener('click', () => this._toggleCollapse(s));
@@ -364,13 +372,14 @@ class ModMode {
     this.selection.clear();
   }
 
-  // ── Section drag/drop (reordering within & between panels) ──
+  /* ── Section drag/drop (reorder within & between panels) ── */
 
   _onDragStart(e) {
-    /* Only start if the drag originated from a draggable child (label/handle) */
-    if (!e.target.matches || !e.target.closest('[draggable="true"]')) return;
+    /* Only allow drag from an element marked draggable="true" */
+    const draggable = e.target.closest?.('[draggable="true"]');
+    if (!draggable) return;
     const s = e.currentTarget;
-    /* Don't allow reorder-drag on floating sections \u2014 they use mousedown drag */
+    /* Floating sections use mousedown-drag, not HTML5 drag */
     if (s.classList.contains('mod-floating')) { e.preventDefault(); return; }
     this.dragSrc = s;
     const id = s.dataset.modId;
@@ -386,7 +395,6 @@ class ModMode {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('application/x-mod-ids', JSON.stringify(this.dragGroup));
     e.dataTransfer.setData('text/plain', id);
-    // Activate float layer as drop target while dragging
     this._activateFloatLayer();
   }
 
@@ -443,13 +451,12 @@ class ModMode {
     this._deactivateFloatLayer();
   }
 
-  // ── Drop targets (panels that accept sections) ──
+  /* ── Drop target panels ───────────────────────────── */
 
   _armDropTargets() {
     const targets = [
       document.getElementById('sidebar-mod-container'),
       document.querySelector('.right-sidebar'),
-      document.getElementById('status-bar')
     ].filter(Boolean);
     targets.forEach(t => {
       t.classList.add('mod-drop-panel');
@@ -478,7 +485,7 @@ class ModMode {
     if (!this.dragGroup.length) return;
     const panel = e.currentTarget;
     panel.classList.remove('mod-drop-panel-active');
-    if (e.target.closest('[data-mod-id]')) return; // section-level drop already handled
+    if (e.target.closest('[data-mod-id]')) return;
     e.preventDefault();
     this.dragGroup.forEach(id => {
       const el = document.querySelector(`[data-mod-id="${id}"]`);
@@ -488,7 +495,7 @@ class ModMode {
     });
   }
 
-  // ── Float layer (detached tiles) ──
+  /* ── Float layer ──────────────────────────────────── */
 
   _armFloatLayer() {
     if (!this.floatLayer) return;
@@ -529,7 +536,9 @@ class ModMode {
         h: existing?.h || 260
       };
       this._placeFloat(el, float);
-      this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, { panel: 'float-layer', float });
+      this.layout.sections[id] = Object.assign(this.layout.sections[id] || {}, {
+        panel: 'float-layer', float
+      });
     });
     this._saveState();
   }
@@ -542,31 +551,27 @@ class ModMode {
     el.style.width  = float.w + 'px';
     el.style.height = float.h + 'px';
     this._armFloatingPane(el);
+    this._updateFloatBtn(el);
   }
 
-  /* ---------- Floating pane window-drag (mousedown) ----------
-     Works both IN and OUT of mod mode.  Dragging the .mod-float-titlebar
-     or any .section-label inside the pane moves it. */
+  /* ── Floating pane window-drag (mousedown) ────────── */
+
   _armFloatingPane(el) {
     if (el._floatArmed) return;
     el._floatArmed = true;
 
     const onDown = (e) => {
-      // Only initiate window-drag from title bar / section labels
-      const trigger = e.target.closest('.mod-float-titlebar, .section-label, .mod-collapsed-label');
+      const trigger = e.target.closest('.mod-float-titlebar, .section-label, .panel-title, .mod-collapsed-label');
       if (!trigger) return;
-      // Don't fight with the HTML5 reorder-drag when mod mode labels are draggable
       if (trigger.getAttribute('draggable') === 'true' && this.active) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const layerRect = this.floatLayer.getBoundingClientRect();
       const offX = e.clientX - rect.left;
       const offY = e.clientY - rect.top;
-
       const onMove = (ev) => {
         let nx = ev.clientX - layerRect.left - offX;
         let ny = ev.clientY - layerRect.top  - offY;
-        // Clamp to viewport
         nx = Math.max(0, Math.min(layerRect.width  - 40, nx));
         ny = Math.max(0, Math.min(layerRect.height - 40, ny));
         el.style.left = nx + 'px';
@@ -575,7 +580,6 @@ class ModMode {
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        // Persist new position
         const id = el.dataset.modId;
         const meta = this.layout.sections[id];
         if (meta?.float) {
@@ -595,12 +599,15 @@ class ModMode {
       delete el._floatCleanup;
     };
 
-    // Inject a title bar for the floating pane
     if (!el.querySelector(':scope > .mod-float-titlebar')) {
       const titlebar = document.createElement('div');
       titlebar.className = 'mod-float-titlebar';
       const texts = [...el.querySelectorAll('.section-label-text')]
         .map(t => t.textContent.trim()).filter(Boolean);
+      if (!texts.length) {
+        const pt = el.querySelector('.panel-title');
+        if (pt) texts.push(pt.textContent.trim());
+      }
       titlebar.textContent = texts.length ? texts.join(' & ') : (el.dataset.modId || 'Section');
       el.insertBefore(titlebar, el.firstChild);
     }
@@ -611,18 +618,17 @@ class ModMode {
     el.querySelector(':scope > .mod-float-titlebar')?.remove();
   }
 
-  /** Arm all currently-floating panes (called on init for persistence across reload) */
   _armAllFloatingPanes() {
     this.floatLayer?.querySelectorAll('.mod-floating').forEach(el => {
       this._armFloatingPane(el);
     });
   }
 
-  // ── Apply layout to DOM ──
+  /* ── Apply layout ─────────────────────────────────── */
 
   applyLayout() {
-    this.applySectionLayout();
     this._applyStatusBarPos();
+    this.applySectionLayout();
   }
 
   applySectionLayout() {
@@ -630,7 +636,6 @@ class ModMode {
     const panelTargets = {
       'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
       'right-sidebar':         document.querySelector('.right-sidebar'),
-      'status-bar':            document.getElementById('status-bar'),
       'float-layer':           this.floatLayer
     };
     const ordered = Object.entries(sections)
@@ -683,7 +688,6 @@ class ModMode {
     if (el.closest('#mod-float-layer'))       return 'float-layer';
     if (el.closest('#sidebar-mod-container')) return 'sidebar-mod-container';
     if (el.closest('.right-sidebar'))         return 'right-sidebar';
-    if (el.closest('#status-bar'))            return 'status-bar';
     return el.dataset.modHomePanel || 'sidebar-mod-container';
   }
 
@@ -695,28 +699,28 @@ class ModMode {
     const homeEl = {
       'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
       'right-sidebar':         document.querySelector('.right-sidebar'),
-      'status-bar':            document.getElementById('status-bar')
     }[home];
     if (homeEl) homeEl.appendChild(el);
     el.classList.remove('mod-collapsed');
     el.querySelector(':scope > .mod-collapsed-label')?.remove();
     this.layout.sections[id] = { panel: home, index: 999, collapsed: false, float: null };
+    this._updateFloatBtn(el);
     this._saveState();
   }
 
-  // ── Reset ──
+  /* ── Reset ────────────────────────────────────────── */
 
   resetLayout() {
     this.state[this.layoutKey] = this.defaultState();
     this._saveState();
     this._applyStatusBarPos();
+    this._updatePillSbLabel();
     this._getAllSections().forEach(el => {
       this._unfloatSection(el);
       const home = el.dataset.modHomePanel || 'sidebar-mod-container';
       const parent = {
         'sidebar-mod-container': document.getElementById('sidebar-mod-container'),
         'right-sidebar':         document.querySelector('.right-sidebar'),
-        'status-bar':            document.getElementById('status-bar')
       }[home];
       if (parent && el.parentElement !== parent) parent.appendChild(el);
       el.classList.remove('mod-collapsed');
@@ -725,7 +729,7 @@ class ModMode {
     this._showToast('Layout reset to defaults');
   }
 
-  // ── Toast ──
+  /* ── Toast ────────────────────────────────────────── */
 
   _showToast(msg) {
     const t = document.createElement('div');

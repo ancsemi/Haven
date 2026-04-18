@@ -11992,8 +11992,8 @@ ul.chat-list { list-style-type: disc; }
 .mod-section-controls .mod-sec-btn:hover { color: var(--accent); }
 .mod-section-controls .mod-sec-handle { cursor: grab; font-size: 18px; }
 
-.mod-mode-on .mod-draggable.mod-collapsed > :not(.section-label):not(.mod-section-controls):not(.mod-float-titlebar),
-.mod-draggable.mod-collapsed > :not(.section-label):not(.mod-section-controls):not(.mod-float-titlebar) {
+.mod-mode-on .mod-draggable.mod-collapsed > :not(.section-label):not(.panel-title):not(.mod-section-controls):not(.mod-float-titlebar):not(.mod-collapsed-label),
+.mod-draggable.mod-collapsed > :not(.section-label):not(.panel-title):not(.mod-section-controls):not(.mod-float-titlebar):not(.mod-collapsed-label) {
   display: none !important;
 }
 .mod-draggable.mod-collapsed {
@@ -12011,7 +12011,8 @@ ul.chat-list { list-style-type: disc; }
   text-overflow: ellipsis;
 }
 .mod-collapsed-label:hover { color: var(--accent); }
-.mod-mode-on .mod-draggable .section-label { cursor: grab; }
+.mod-mode-on .mod-draggable .section-label,
+.mod-mode-on .mod-draggable .panel-title { cursor: grab; }
 
 .mod-mode-on .mod-selected {
   outline: 2px solid var(--accent) !important;
@@ -12102,24 +12103,6 @@ ul.chat-list { list-style-type: disc; }
 }
 .mod-pill-save:hover {
   filter: brightness(1.15);
-}
-
-/* ── Status bar position toggle (visible during mod mode) ── */
-.mod-statusbar-pos-btn {
-  background: color-mix(in srgb, var(--bg-card) 80%, var(--accent) 20%);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  color: var(--text-primary);
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-left: 8px;
-  white-space: nowrap;
-}
-.mod-statusbar-pos-btn:hover {
-  background: var(--accent);
-  color: #fff;
 }
 
 /* Status bar top position */
