@@ -52,7 +52,7 @@ class NotificationManager {
   // ── Synth Tone Engine ───────────────────────────────────
 
   _playTone(frequencies, durations, type = 'sine') {
-    if (!this.enabled || this.volume <= 0) return;
+    if (this.volume <= 0) return;
     try {
       const ctx = this._getCtx();
       const masterGain = ctx.createGain();
@@ -102,7 +102,7 @@ class NotificationManager {
   // ── Custom Sound File Playback ──────────────────────────
 
   _playFile(url) {
-    if (!this.enabled || this.volume <= 0) return;
+    if (this.volume <= 0) return;
     try {
       let audio = this._audioCache[url];
       if (!audio) {
@@ -141,11 +141,13 @@ class NotificationManager {
   // ── Public API ──────────────────────────────────────────
 
   play(event, opts) {
-    // Per-type opt-in check: mentions, replies, DMs always play if their toggle is on
+    // Per-type opt-in: mentions, replies, DMs bypass master toggle if their own toggle is on
     if (opts && opts.isMention && this.mentionsEnabled) { /* allowed */ }
     else if (opts && opts.isReply && this.repliesEnabled) { /* allowed */ }
     else if (opts && opts.isDm && this.dmEnabled) { /* allowed */ }
-    else if (!this.enabled) return;
+    // Regular message & announcement sounds are gated by the master toggle;
+    // everything else (sent, join, leave) always plays
+    else if ((event === 'message' || event === 'announcement') && !this.enabled) return;
 
     const sound = this.sounds[event];
     if (!sound || sound === 'none') return;
@@ -192,7 +194,7 @@ class NotificationManager {
 
   /** Play a named tone directly (bypasses event→sound mapping). Used for UI cues. */
   playDirect(toneName) {
-    if (!this.enabled || this.volume <= 0) return;
+    if (this.volume <= 0) return;
     if (typeof this[toneName] === 'function') this[toneName]();
   }
 
