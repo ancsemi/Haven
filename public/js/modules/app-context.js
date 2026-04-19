@@ -348,6 +348,15 @@ _setupNotifications() {
     });
   }
 
+  // Up arrow edits last message (on by default)
+  const upArrowEditToggle = document.getElementById('up-arrow-edit');
+  if (upArrowEditToggle) {
+    upArrowEditToggle.checked = localStorage.getItem('haven_up_arrow_edit') !== 'false';
+    upArrowEditToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_up_arrow_edit', String(upArrowEditToggle.checked));
+    });
+  }
+
   // Show status bar (opt-in — hidden by default, but Desktop always shows its own footer)
   const showStatusBarToggle = document.getElementById('show-status-bar');
   const statusBarToggleTab = document.getElementById('status-bar-toggle');

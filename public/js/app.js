@@ -5,16 +5,16 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=2.7.9';
-import UIBindMethods   from './modules/app-ui.js?v=2.7.0';
+import UIBindMethods   from './modules/app-ui.js?v=2.7.11';
 import MediaMethods    from './modules/app-media.js?v=2.7.0';
-import ContextMethods  from './modules/app-context.js?v=2.7.3';
+import ContextMethods  from './modules/app-context.js?v=2.7.11';
 import ChannelMethods  from './modules/app-channels.js?v=2.7.8';
-import MessageMethods  from './modules/app-messages.js?v=2.7.10';
+import MessageMethods  from './modules/app-messages.js?v=2.7.11';
 import UserMethods     from './modules/app-users.js?v=2.7.0';
 import VoiceMethods    from './modules/app-voice.js?v=2.7.10';
-import UtilityMethods  from './modules/app-utilities.js?v=2.7.9';
+import UtilityMethods  from './modules/app-utilities.js?v=2.7.11';
 import AdminMethods    from './modules/app-admin.js?v=2.7.0';
-import PlatformMethods from './modules/app-platform.js?v=2.7.8';
+import PlatformMethods from './modules/app-platform.js?v=2.7.11';
 
 class HavenApp {
   constructor() {

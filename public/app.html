@@ -863,7 +863,8 @@
       </div>
       <div class="form-group">
         <label data-i18n="modals.add_server.address_label">Server Address</label>
-        <input type="text" id="server-url-input" placeholder="e.g. https://192.168.1.5:3000">
+        <input type="text" id="server-url-input" placeholder="e.g. https://192.168.1.5:3000" list="known-servers-datalist">
+        <datalist id="known-servers-datalist"></datalist>
       </div>
       <div class="form-group">
         <label data-i18n="modals.add_server.icon_label">Icon URL</label> <span class="muted-text" data-i18n="modals.add_server.icon_optional">(optional)</span>
@@ -1140,6 +1141,16 @@
           </select>
         </label>
         <small class="settings-hint">How the banner interacts with the channel header area. These settings are per-device.</small>
+      </div>
+
+      <!-- Chat Behavior -->
+      <div class="settings-section" id="section-chat-behavior" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">💬 Chat</h5>
+        <label class="toggle-row">
+          <span>Up Arrow Edits Last Message</span>
+          <input type="checkbox" id="up-arrow-edit" checked>
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px">Press the Up arrow key on an empty input to quickly edit your last message.</small>
       </div>
 
       <!-- Status Bar -->

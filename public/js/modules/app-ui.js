@@ -67,6 +67,20 @@ _setupUI() {
       e.preventDefault();
       this._sendMessage();
     }
+
+    // Up arrow on empty input → edit last own message (toggleable)
+    if (e.key === 'ArrowUp' && !msgInput.value && localStorage.getItem('haven_up_arrow_edit') !== 'false') {
+      const msgs = document.getElementById('messages');
+      const allMsgs = [...msgs.querySelectorAll('.message, .message-compact')];
+      for (let i = allMsgs.length - 1; i >= 0; i--) {
+        const el = allMsgs[i];
+        if (parseInt(el.dataset.userId) === this.user.id && !el.classList.contains('editing')) {
+          e.preventDefault();
+          this._startEditMessage(el, parseInt(el.dataset.msgId));
+          break;
+        }
+      }
+    }
   });
 
   msgInput.addEventListener('input', () => {
@@ -1510,6 +1524,8 @@ _setupUI() {
       this._showReactionPicker(msgEl, msgId);
     } else if (action === 'reply') {
       this._setReply(msgEl, msgId);
+    } else if (action === 'quote') {
+      this._quoteMessage(msgEl);
     } else if (action === 'edit') {
       this._startEditMessage(msgEl, msgId);
     } else if (action === 'delete') {
@@ -2478,6 +2494,37 @@ _pushServerListToServer() {
 
 _setupServerBar() {
   this.serverManager.startPolling(30000);
+
+  // Desktop: merge Electron's server history into the web ServerManager
+  // so the sidebar shows ALL known servers even on first login to this server
+  if (window.havenDesktop?.getServerHistory) {
+    window.havenDesktop.getServerHistory().then(history => {
+      const historyUrls = new Set((history || []).map(h => h.url));
+      let added = false;
+
+      // Add Desktop servers to web ServerManager
+      for (const h of (history || [])) {
+        if (h.url && this.serverManager.add(h.name || h.url, h.url)) {
+          added = true;
+        }
+      }
+
+      // Add web ServerManager servers to Desktop history
+      if (window.havenDesktop.addServerHistory) {
+        for (const s of this.serverManager.getAll()) {
+          if (!historyUrls.has(s.url)) {
+            window.havenDesktop.addServerHistory(s.url, s.name).catch(() => {});
+          }
+        }
+      }
+
+      if (added) {
+        this._renderServerBar();
+        this._pushServerListToServer();
+      }
+    }).catch(() => {});
+  }
+
   this._renderServerBar();
   if (this._serverBarInterval) clearInterval(this._serverBarInterval);
   this._serverBarInterval = setInterval(() => this._renderServerBar(), 30000);
@@ -2502,6 +2549,7 @@ _setupServerBar() {
     document.getElementById('server-url-input').disabled = false;
     document.getElementById('add-server-icon-input').value = '';
     document.getElementById('save-server-btn').textContent = t('modals.add_server.add_btn');
+    this._populateKnownServersDatalist();
     document.getElementById('add-server-name-input').focus();
   });
 
@@ -2604,6 +2652,52 @@ _toggleCodeRotationFields() {
   if (label) label.textContent = type === 'time' ? t('modals.code_settings.interval_label') : t('modals.code_settings.rotate_after_joins');
 },
 
+/** Populate the datalist in the Add Server modal with known servers from
+ *  the web ServerManager and (if in Desktop) the Electron server history. */
+async _populateKnownServersDatalist() {
+  const datalist = document.getElementById('known-servers-datalist');
+  if (!datalist) return;
+  datalist.innerHTML = '';
+
+  // Collect from web ServerManager
+  const known = new Map(); // url → name
+  for (const s of this.serverManager.getAll()) {
+    known.set(s.url, s.name || s.url);
+  }
+
+  // Collect from Desktop server history (if running in Electron)
+  if (window.havenDesktop?.getServerHistory) {
+    try {
+      const history = await window.havenDesktop.getServerHistory();
+      for (const h of (history || [])) {
+        if (h.url && !known.has(h.url)) known.set(h.url, h.name || h.url);
+      }
+    } catch { /* not available */ }
+  }
+
+  // Build datalist options
+  for (const [url, name] of known) {
+    const opt = document.createElement('option');
+    opt.value = url;
+    opt.label = name !== url ? name : '';
+    datalist.appendChild(opt);
+  }
+
+  // When the user picks a server from the list, auto-fill the name field
+  const urlInput = document.getElementById('server-url-input');
+  const nameInput = document.getElementById('add-server-name-input');
+  const onChange = () => {
+    const match = known.get(urlInput.value);
+    if (match && !nameInput.value) {
+      nameInput.value = match;
+    }
+  };
+  // Remove previous listener to avoid stacking
+  urlInput.removeEventListener('change', urlInput._knownServerHandler);
+  urlInput._knownServerHandler = onChange;
+  urlInput.addEventListener('change', onChange);
+},
+
 _addServer() {
   const name = document.getElementById('add-server-name-input').value.trim();
   const url = document.getElementById('server-url-input').value.trim();
@@ -2629,6 +2723,12 @@ _addServer() {
       this._renderServerBar();
       this._showToast(t('toasts.server_added', { name }), 'success');
       this._pushServerListToServer();
+      // Also add to Desktop server history so it persists across all servers
+      if (window.havenDesktop?.addServerHistory) {
+        const cleanUrl = url.replace(/\/+$/, '');
+        const finalUrl = /^https?:\/\//.test(cleanUrl) ? cleanUrl : 'https://' + cleanUrl;
+        window.havenDesktop.addServerHistory(finalUrl, name).catch(() => {});
+      }
       // Auto-pull icon after health check completes
       if (autoPull) {
         const cleanUrl = url.replace(/\/+$/, '');
