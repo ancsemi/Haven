@@ -76,7 +76,8 @@
         <div id="sso-step-server">
           <div class="form-group">
             <label for="sso-server-url" data-i18n="auth.sso.server_label">Your Haven server</label>
-            <input type="text" id="sso-server-url" placeholder="haven.example.com" required>
+            <input type="text" id="sso-server-url" list="sso-recent-servers" placeholder="haven.example.com" required>
+            <datalist id="sso-recent-servers"></datalist>
             <small data-i18n="auth.sso.server_hint">Enter the address of the Haven server you already have an account on</small>
           </div>
           <button type="button" class="btn-primary" id="sso-connect-btn" data-i18n="auth.sso.connect">Connect</button>

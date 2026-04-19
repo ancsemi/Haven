@@ -368,6 +368,22 @@
 
   // ── SSO (Link Server) ──────────────────────────────────
   if (ssoForm) {
+    // Populate the recent-servers datalist from localStorage
+    try {
+      const servers = JSON.parse(localStorage.getItem('haven_servers') || '[]');
+      const datalist = document.getElementById('sso-recent-servers');
+      if (datalist && Array.isArray(servers)) {
+        for (const s of servers) {
+          if (s.url) {
+            const opt = document.createElement('option');
+            opt.value = s.url;
+            if (s.name) opt.label = s.name;
+            datalist.appendChild(opt);
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
     let ssoAuthCode = null;
     let ssoServerUrl = null;
     let ssoProfileData = null;
