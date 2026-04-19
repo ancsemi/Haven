@@ -11,6 +11,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.3.0] — 2026-04-18
+
+### Added
+- **Last read message indicator** — a subtle divider marks where you left off when you return to a channel. (#5259)
+- **Per-event volume sliders** — separate volume controls for join and leave notification sounds in User Settings.
+- **Server-list sync improvements** — the encrypted server list now resyncs periodically and on tab focus, so your server list stays current across devices without a full reload.
+
+### Fixed
+- **iOS Safari safe-area overlap** — additional safe-area inset fixes on mobile Safari preventing content from being clipped by notches and home indicator.
+- **CSP upgrade-insecure-requests with FORCE_HTTP** — the Content Security Policy no longer forces HTTPS upgrades when `FORCE_HTTP=true` is set, which was breaking HTTP-only installs. (#5258)
+- **Duplicate voice joins** — properly cleans up stale state from a race condition where rapidly clicking join could register a client twice in the same voice channel. (#5247)
+- **Case-insensitive channel tag grouping** — channel tags are now matched case-insensitively, so `[General]` and `[general]` are treated as the same group. (#5260)
+- **E2E backup clobber prevention** — the encryption backup flow now correctly distinguishes between "no backup exists" and "backup server unreachable," preventing a reachability failure from overwriting a valid backup. (#5261)
+
+---
+
 ## [3.2.0] — 2026-04-16
 
 ### Added
