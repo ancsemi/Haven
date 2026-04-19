@@ -2500,11 +2500,16 @@ _setupServerBar() {
   if (window.havenDesktop?.getServerHistory) {
     window.havenDesktop.getServerHistory().then(history => {
       const historyUrls = new Set((history || []).map(h => h.url));
+      const removed = this.serverManager._loadRemoved();
       let added = false;
 
-      // Add Desktop servers to web ServerManager
+      // Add Desktop servers to web ServerManager (skip removed ones)
       for (const h of (history || [])) {
-        if (h.url && this.serverManager.add(h.name || h.url, h.url)) {
+        if (!h.url) continue;
+        let normalizedUrl;
+        try { normalizedUrl = new URL(h.url).origin; } catch { normalizedUrl = h.url; }
+        if (removed.has(h.url) || removed.has(normalizedUrl)) continue;
+        if (this.serverManager.add(h.name || h.url, h.url)) {
           added = true;
         }
       }
@@ -2770,7 +2775,10 @@ _openManageServersModal() {
 
 _renderManageServersList() {
   const container = document.getElementById('manage-servers-list');
-  const servers = this.serverManager.getAll();
+  const currentOrigin = window.location.origin;
+  const servers = this.serverManager.getAll().filter(s => {
+    try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
+  });
   container.innerHTML = '';
   if (servers.length === 0) return;  // CSS :empty handles empty state
 
@@ -2848,7 +2856,10 @@ _updateServerBadgeDots(badges) {
 
 _renderServerBar() {
   const list = document.getElementById('server-list');
-  const servers = this.serverManager.getAll();
+  const currentOrigin = window.location.origin;
+  const servers = this.serverManager.getAll().filter(s => {
+    try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
+  });
 
   list.innerHTML = servers.map(s => {
     const initial = s.name.charAt(0).toUpperCase();
@@ -3236,7 +3247,10 @@ _renderMobileServerList() {
 _renderMobileSidebarServers() {
   const scroll = document.getElementById('mobile-servers-scroll');
   if (!scroll || !this.serverManager) return;
-  const servers = this.serverManager.getAll();
+  const currentOrigin = window.location.origin;
+  const servers = this.serverManager.getAll().filter(s => {
+    try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
+  });
   if (servers.length === 0) {
     scroll.innerHTML = `<span class="mobile-servers-empty">${t('servers.no_servers')}</span>`;
     return;
