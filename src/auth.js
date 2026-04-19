@@ -351,6 +351,23 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ── Validate token (lightweight, for SSO consent page) ───
+router.get('/validate', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const decoded = token ? verifyToken(token) : null;
+  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
+
+  const db = getDb();
+  const user = db.prepare('SELECT username, display_name, avatar FROM users WHERE id = ?').get(decoded.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  res.json({
+    username: user.username,
+    displayName: user.display_name || user.username,
+    avatar: user.avatar || null
+  });
+});
+
 // ── TOTP Validate (second step of login) ─────────────────
 router.post('/totp/validate', async (req, res) => {
   try {
@@ -1050,27 +1067,52 @@ router.get('/SSO', (req, res) => {
     const origin = '${safeOrigin}';
 
     (async function() {
-      const token = localStorage.getItem('haven_token');
-      if (!token) {
+      function showNotLoggedIn() {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('not-logged-in').style.display = 'block';
+      }
+
+      let token;
+      try {
+        token = localStorage.getItem('haven_token');
+      } catch {
+        // localStorage blocked (third-party cookies, popup restrictions, etc.)
+        showNotLoggedIn();
         return;
       }
 
-      // Verify token and get user info
-      try {
-        const userStr = localStorage.getItem('haven_user');
-        const user = userStr ? JSON.parse(userStr) : null;
-        if (!user) throw new Error('No user data');
+      if (!token) {
+        showNotLoggedIn();
+        return;
+      }
 
-        document.getElementById('sso-username').textContent = user.displayName || user.username || '—';
-        document.getElementById('sso-avatar').textContent = user.avatar ? 'Will be shared' : 'None set';
+      // Verify token is still valid by calling the server
+      try {
+        const verifyRes = await fetch('/api/auth/validate', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (!verifyRes.ok) { showNotLoggedIn(); return; }
+        const userData = await verifyRes.json();
+
+        document.getElementById('sso-username').textContent = userData.displayName || userData.username || '—';
+        document.getElementById('sso-avatar').textContent = userData.avatar ? 'Will be shared' : 'None set';
         document.getElementById('loading').style.display = 'none';
         document.getElementById('consent').style.display = 'block';
       } catch {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('not-logged-in').style.display = 'block';
-        return;
+        // Fall back to localStorage user data if validate endpoint unavailable
+        try {
+          const userStr = localStorage.getItem('haven_user');
+          const user = userStr ? JSON.parse(userStr) : null;
+          if (!user) { showNotLoggedIn(); return; }
+
+          document.getElementById('sso-username').textContent = user.displayName || user.username || '—';
+          document.getElementById('sso-avatar').textContent = user.avatar ? 'Will be shared' : 'None set';
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('consent').style.display = 'block';
+        } catch {
+          showNotLoggedIn();
+          return;
+        }
       }
 
       document.getElementById('approve-btn').addEventListener('click', async () => {
