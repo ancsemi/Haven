@@ -1342,6 +1342,7 @@ _setupUI() {
     if (this.voice && this.voice.inVoice) this.voice.leave();
     localStorage.removeItem('haven_token');
     localStorage.removeItem('haven_user');
+    localStorage.removeItem('haven_sync_key');
     window.location.href = '/';
   });
 
@@ -2315,6 +2316,7 @@ _setupUI() {
         // Account deleted — clear local storage and redirect to login
         localStorage.removeItem('haven_token');
         localStorage.removeItem('haven_e2e_privkey');
+        localStorage.removeItem('haven_sync_key');
         window.location.reload();
       });
     });

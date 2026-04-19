@@ -453,9 +453,17 @@ async _initE2E() {
     const ok = await this.e2e.init(this.socket, wrappingKey);
     // Keep wrapping key in memory for cross-device sync (conflict resolution).
     // Clear from sessionStorage but retain privately for backup restoration.
+    // Also persist to localStorage so server list sync works across page reloads.
     if (wrappingKey) {
       this._e2eWrappingKey = wrappingKey;
       sessionStorage.removeItem('haven_e2e_wrap');
+      try { localStorage.setItem('haven_sync_key', wrappingKey); } catch { /* private mode */ }
+    } else {
+      // On auto-login (no password), recover the sync key from localStorage
+      try {
+        const savedKey = localStorage.getItem('haven_sync_key');
+        if (savedKey) this._e2eWrappingKey = savedKey;
+      } catch { /* ignore */ }
     }
     if (ok) {
       await this._e2eSetupListeners();
