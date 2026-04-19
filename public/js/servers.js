@@ -21,9 +21,15 @@ class ServerManager {
   }
 
   add(name, url, icon = null) {
-    url = url.replace(/\/+$/, '');
-    if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+    url = this._normalizeUrl(url);
     if (this.servers.find(s => s.url === url)) return false;
+
+    // User explicitly adding — clear from removed set so sync won't fight it
+    const removed = this._loadRemoved();
+    if (removed.has(url)) {
+      removed.delete(url);
+      this._saveRemoved(removed);
+    }
 
     this.servers.push({ name, url, icon, addedAt: Date.now() });
     this._save();
@@ -44,6 +50,7 @@ class ServerManager {
     this.servers = this.servers.filter(s => s.url !== url);
     this.statusCache.delete(url);
     this._save();
+    this.markRemoved(url);
   }
 
   getAll() {
@@ -176,8 +183,12 @@ class ServerManager {
 
       // Add remote servers we don't have locally (and haven't removed)
       for (const rs of remoteServers) {
-        if (!localUrls.has(rs.url) && !removed.has(rs.url)) {
+        const normalizedUrl = this._normalizeUrl(rs.url);
+        if (!localUrls.has(rs.url) && !localUrls.has(normalizedUrl)
+            && !removed.has(rs.url) && !removed.has(normalizedUrl)) {
+          rs.url = normalizedUrl; // store the normalized form
           this.servers.push(rs);
+          localUrls.add(normalizedUrl); // prevent duplicate adds within same sync
           changed = true;
         }
       }
@@ -268,6 +279,13 @@ class ServerManager {
     return bytes;
   }
 
+  /** Normalize a URL to its origin (strips paths, trailing slashes, default ports). */
+  _normalizeUrl(url) {
+    url = url.replace(/\/+$/, '');
+    if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+    try { return new URL(url).origin; } catch { return url; }
+  }
+
   // ── Removed-servers tracking (local-only) ─────────────
 
   _loadRemoved() {
@@ -283,6 +301,8 @@ class ServerManager {
   markRemoved(url) {
     const removed = this._loadRemoved();
     removed.add(url);
+    // Also store the normalized origin so sync checks catch URL variants
+    try { removed.add(new URL(url).origin); } catch {}
     this._saveRemoved(removed);
   }
 }
