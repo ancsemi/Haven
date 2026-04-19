@@ -492,7 +492,18 @@ function setupSocketHandlers(io, db) {
   // ── handleVoiceLeave ────────────────────────────────────
   function handleVoiceLeave(socket, code) {
     const voiceRoom = voiceUsers.get(code);
-    if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+    if (!voiceRoom) return;
+
+    const entry = voiceRoom.get(socket.user.id);
+    if (!entry) return;
+
+    // If the stored entry belongs to a different socket (e.g. the user joined
+    // from a second client which kicked this one), don't touch the map — just
+    // remove this stale socket from the room and return.
+    if (entry.socketId !== socket.id) {
+      socket.leave(`voice:${code}`);
+      return;
+    }
 
     voiceRoom.delete(socket.user.id);
     socket.leave(`voice:${code}`);
