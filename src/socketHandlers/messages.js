@@ -89,8 +89,8 @@ module.exports = function register(socket, ctx) {
       db.prepare(`
         SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.id IN (${ph})
-      `).all(...replyIds).forEach(r => replyMap.set(r.id, r));
+        WHERE m.id IN (${ph}) AND m.channel_id = ?
+      `).all(...replyIds, channel.id).forEach(r => replyMap.set(r.id, r));
     }
 
     const reactionMap = new Map();
@@ -392,9 +392,15 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    const replyTo = isInt(data.replyTo) ? data.replyTo : null;
+    let replyTo = isInt(data.replyTo) ? data.replyTo : null;
     const safeContent = sanitizeText(content.trim());
     if (!safeContent) return;
+
+    // Validate replyTo belongs to same channel (prevents cross-channel data leaks)
+    if (replyTo) {
+      const replyMsg = db.prepare('SELECT channel_id FROM messages WHERE id = ?').get(replyTo);
+      if (!replyMsg || replyMsg.channel_id !== channel.id) replyTo = null;
+    }
 
     try {
       const result = db.prepare(
@@ -418,8 +424,8 @@ module.exports = function register(socket, ctx) {
       if (replyTo) {
         message.replyContext = db.prepare(`
           SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username FROM messages m
-          LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?
-        `).get(replyTo) || null;
+          LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ? AND m.channel_id = ?
+        `).get(replyTo, channel.id) || null;
       }
 
       io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });

@@ -186,9 +186,13 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── WebRTC signaling ────────────────────────────────────
+  const MAX_SDP_SIZE = 16384; // 16 KB — generous limit for SDP offers/answers
+  const MAX_ICE_SIZE = 2048;  // 2 KB — ICE candidates are small
+
   socket.on('voice-offer', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.offer) return;
+    if (typeof data.offer !== 'object' || JSON.stringify(data.offer).length > MAX_SDP_SIZE) return;
     if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
     const target = voiceUsers.get(data.code)?.get(data.targetUserId);
     if (target) {
@@ -203,6 +207,7 @@ module.exports = function register(socket, ctx) {
   socket.on('voice-answer', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.answer) return;
+    if (typeof data.answer !== 'object' || JSON.stringify(data.answer).length > MAX_SDP_SIZE) return;
     if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
     const target = voiceUsers.get(data.code)?.get(data.targetUserId);
     if (target) {
@@ -217,6 +222,7 @@ module.exports = function register(socket, ctx) {
   socket.on('voice-ice-candidate', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8) || !isInt(data.targetUserId)) return;
+    if (data.candidate && (typeof data.candidate !== 'object' || JSON.stringify(data.candidate).length > MAX_ICE_SIZE)) return;
     if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
     const target = voiceUsers.get(data.code)?.get(data.targetUserId);
     if (target) {
