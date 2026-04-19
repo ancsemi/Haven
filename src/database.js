@@ -210,6 +210,10 @@ function initDatabase() {
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
 
+  // Unique server fingerprint — used by the multi-server sidebar to detect "self"
+  const crypto = require('crypto');
+  insertSetting.run('server_fingerprint', crypto.randomUUID());
+
   // ── Migration: pinned_messages table ──────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS pinned_messages (

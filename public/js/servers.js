@@ -8,6 +8,19 @@ class ServerManager {
     this.servers = this._load();
     this.statusCache = new Map();
     this.checkInterval = null;
+    this.selfFingerprint = null;
+    this.selfFingerprintReady = this._fetchSelfFingerprint();
+  }
+
+  /** Fetch the current server's fingerprint so we can hide "self" from the sidebar. */
+  async _fetchSelfFingerprint() {
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.fingerprint) this.selfFingerprint = data.fingerprint;
+      }
+    } catch {}
   }
 
   _load() {
@@ -84,6 +97,7 @@ class ServerManager {
           name: data.name || url,
           icon: discoveredIcon,
           version: data.version,
+          fingerprint: data.fingerprint || null,
           checkedAt: Date.now()
         });
         // Persist discovered icon to the server entry so it survives

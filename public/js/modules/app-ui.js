@@ -2534,6 +2534,9 @@ _setupServerBar() {
   if (this._serverBarInterval) clearInterval(this._serverBarInterval);
   this._serverBarInterval = setInterval(() => this._renderServerBar(), 30000);
 
+  // Re-render once the self-fingerprint resolves (hides "self" in sidebar)
+  this.serverManager.selfFingerprintReady?.then(() => this._renderServerBar());
+
   // Desktop notification dots — listen for badge updates from main process
   window.addEventListener('haven-server-badges', (e) => this._updateServerBadgeDots(e.detail));
   window.havenDesktop?.getServerBadges?.().then(b => this._updateServerBadgeDots(b));
@@ -2776,7 +2779,9 @@ _openManageServersModal() {
 _renderManageServersList() {
   const container = document.getElementById('manage-servers-list');
   const currentOrigin = window.location.origin;
+  const selfFp = this.serverManager.selfFingerprint;
   const servers = this.serverManager.getAll().filter(s => {
+    if (selfFp && s.status.fingerprint === selfFp) return false;
     try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
   });
   container.innerHTML = '';
@@ -2857,7 +2862,9 @@ _updateServerBadgeDots(badges) {
 _renderServerBar() {
   const list = document.getElementById('server-list');
   const currentOrigin = window.location.origin;
+  const selfFp = this.serverManager.selfFingerprint;
   const servers = this.serverManager.getAll().filter(s => {
+    if (selfFp && s.status.fingerprint === selfFp) return false;
     try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
   });
 
@@ -3248,7 +3255,9 @@ _renderMobileSidebarServers() {
   const scroll = document.getElementById('mobile-servers-scroll');
   if (!scroll || !this.serverManager) return;
   const currentOrigin = window.location.origin;
+  const selfFp = this.serverManager.selfFingerprint;
   const servers = this.serverManager.getAll().filter(s => {
+    if (selfFp && s.status.fingerprint === selfFp) return false;
     try { return new URL(s.url).origin !== currentOrigin; } catch { return true; }
   });
   if (servers.length === 0) {

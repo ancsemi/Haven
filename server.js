@@ -586,6 +586,7 @@ app.get('/api/health', (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   let name = process.env.SERVER_NAME || 'Haven';
   let icon = null;
+  let fingerprint = null;
   try {
     const { getDb } = require('./src/database');
     const db = getDb();
@@ -593,11 +594,14 @@ app.get('/api/health', (req, res) => {
     if (row && row.value) name = row.value;
     const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
     if (iconRow && iconRow.value) icon = iconRow.value;
+    const fpRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get();
+    if (fpRow && fpRow.value) fingerprint = fpRow.value;
   } catch {}
   res.json({
     status: 'online',
     name,
-    icon
+    icon,
+    fingerprint
     // version intentionally omitted — don't fingerprint the server for attackers
   });
 });
