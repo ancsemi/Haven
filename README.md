@@ -516,7 +516,7 @@ Yes. You can join someone else's Haven server if they share an invite link with 
 Haven supports optional E2EE for direct messages (ECDH P-256 + AES-256-GCM). Channel messages are stored on your server, so your data security depends on your hosting setup.
 
 **Can I create bots for Haven?**
-Yes. Haven supports webhooks with a REST API — bots can send messages, register custom slash commands, and receive message callbacks with HMAC-signed payloads. Set up webhooks in your server's admin settings.
+Yes. Haven supports webhooks with a REST API — bots can send messages, delete messages, play soundboard sounds, register custom slash commands, and receive message callbacks with HMAC-signed payloads. Set up webhooks in **Settings → Server Admin Settings → Bots**. See the [Bot Developer Guide](GUIDE.md#-bot--webhook-developer-guide) for full API docs.
 
 **Does Haven have moderation tools?**
 Yes — role-based permissions, kick/ban/mute, slow mode, read-only announcement channels, IP banning, and a full moderation REST API for bot-driven moderation.

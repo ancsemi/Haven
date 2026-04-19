@@ -666,6 +666,93 @@ Click the **🔐** button in the DM header to view your **safety number** — a 
 
 ---
 
+## 🤖 Bot & Webhook Developer Guide
+
+Haven has a built-in bot API powered by webhooks. Bots can send messages, delete messages, play soundboard sounds, and register custom slash commands.
+
+### Creating a Bot
+
+1. Go to **Settings → Server Admin Settings → Bots** (or open a channel's settings and look for the webhook/bot option)
+2. Create a new webhook — give it a name, optionally set an avatar URL and a callback URL
+3. Copy the **Webhook Token** (64-character hex string) — this is your bot's API key
+
+### Sending Messages
+
+```
+POST https://your-server.com/api/webhooks/<token>
+Content-Type: application/json
+
+{
+  "content": "Hello from my bot!",
+  "username": "MyBot",
+  "avatar_url": "https://example.com/avatar.png"
+}
+```
+
+- `content` (required) — message text, max 4000 characters
+- `username` (optional) — override the bot's display name for this message
+- `avatar_url` (optional) — override the bot's avatar for this message
+
+Response: `{ "success": true, "message_id": 123 }`
+
+### Deleting Messages
+
+```
+DELETE https://your-server.com/api/webhooks/<token>/messages/<message_id>
+```
+
+Bots can delete any message in their assigned channel. Returns `{ "success": true }`.
+
+### Playing Soundboard Sounds
+
+```
+POST https://your-server.com/api/webhooks/<token>/sounds
+Content-Type: application/json
+
+{
+  "sound": "AOL - You've Got Mail"
+}
+```
+
+Plays the named sound for all users currently viewing the bot's channel. Use `GET /api/sounds` (with a Bearer token) to list available sound names.
+
+### Registering Slash Commands
+
+Bots with a `callback_url` can register custom slash commands that users can invoke from chat:
+
+**Register:**
+```
+POST https://your-server.com/api/webhooks/<token>/commands
+Content-Type: application/json
+
+{
+  "command": "leaderboard",
+  "description": "Show the current leaderboard"
+}
+```
+
+**List:**
+```
+GET https://your-server.com/api/webhooks/<token>/commands
+```
+
+**Unregister:**
+```
+DELETE https://your-server.com/api/webhooks/<token>/commands/leaderboard
+```
+
+When a user types `/leaderboard`, Haven sends a POST to your bot's callback URL with the command details, signed with HMAC so you can verify authenticity.
+
+### Rate Limits
+
+All webhook endpoints are rate-limited to **30 requests per minute** per IP.
+
+### Callback Payloads
+
+If your webhook has a `callback_url` and `callback_secret` configured, Haven will POST command invocations to your URL. The payload includes an HMAC signature in the `X-Haven-Signature` header that you should verify using your callback secret.
+
+---
+
 ## 🆘 Troubleshooting
 
 **"SSL_ERROR_RX_RECORD_TOO_LONG" or "ERR_SSL_PROTOCOL_ERROR" in browser**
