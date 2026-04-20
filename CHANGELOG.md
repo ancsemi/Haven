@@ -11,6 +11,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.5.0] — 2026-04-20
+
+### Added
+- **Threaded replies panel** — message threads now open in a dedicated right-side panel with parent context, inline reply flow, and live updates.
+- **Thread previews in channel chat** — parent messages now show thread activity summaries with reply count, recent participants, and last activity timestamp.
+- **Thread panel PiP mode and resize handle** — thread conversations can be popped out into a floating panel and resized for multitasking.
+- **Toolbar icon and layout customization** — settings now include monochrome vs emoji toolbar styles, visible action slot count, and per-action order controls.
+
+### Fixed
+- **SSO approval reliability and feedback** — improved SSO consent/auth flow with clearer status messages, timeout handling, profile return via `postMessage`, and stronger fallback behavior.
+- **Vanity invite continuity through auth redirects** — `invite` query params now persist through login/register flows and redirect correctly into `/app`.
+- **Thread-aware message queries** — primary channel history now excludes thread replies to prevent duplicate rendering and keep main timelines clean.
+- **Cache-busting version query injection** — static asset version query strings are now auto-injected more reliably to reduce stale client bundles after updates.
+
+### Changed
+- **SSO response metadata** — SSO auth responses now include display name data and stricter CORS/origin handling for cross-origin auth handoff.
+- **Database schema for threads** — added `messages.thread_id` migration and index to support efficient threaded message fetches.
+
+---
+
 ## [3.4.0] — 2026-04-19
 
 ### Added

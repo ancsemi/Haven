@@ -296,6 +296,7 @@ _setupSocketListeners() {
     if (inviteCode && !this._inviteHandled) {
       this._inviteHandled = true;
       this.socket.emit('join-channel', { code: inviteCode });
+      sessionStorage.removeItem('haven_pending_invite');
       // Clean up the URL
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, '', cleanUrl);
@@ -728,6 +729,45 @@ _setupSocketListeners() {
     }
   });
 
+  // ── Threads ───────────────────────────────────────
+  this.socket.on('thread-messages', (data) => {
+    if (data.parentUsername) {
+      this._setThreadParentHeader({
+        username: data.parentUsername,
+        avatar: data.parentAvatar || null,
+        avatarShape: data.parentAvatarShape || 'circle'
+      });
+    }
+
+    // Update parent preview from server (authoritative source)
+    if (data.parentContent) {
+      const preview = document.getElementById('thread-parent-preview');
+      if (preview) {
+        const text = data.parentContent.length > 120 ? data.parentContent.substring(0, 120) + '…' : data.parentContent;
+        preview.textContent = text;
+      }
+    }
+    const container = document.getElementById('thread-messages');
+    if (!container) return;
+    container.innerHTML = '';
+    if (data.messages) {
+      data.messages.forEach(msg => this._appendThreadMessage(msg));
+    }
+  });
+
+  this.socket.on('new-thread-message', (data) => {
+    if (data.channelCode !== this.currentChannel) return;
+    // If this thread is open, append the message
+    if (this._activeThreadParent === data.parentId) {
+      this._appendThreadMessage(data.message);
+    }
+  });
+
+  this.socket.on('thread-updated', (data) => {
+    if (data.channelCode !== this.currentChannel) return;
+    this._updateThreadPreview(data.parentId, data.thread);
+  });
+
   // ── Polls ─────────────────────────────────────────
   this.socket.on('poll-updated', (data) => {
     if (data.channelCode === this.currentChannel) {
@@ -960,7 +1000,7 @@ _setupSocketListeners() {
     if (data.channelCode === this.currentChannel) {
       const msgEl = document.querySelector(`[data-msg-id="${data.messageId}"]`);
       if (!msgEl) return;
-      const contentEl = msgEl.querySelector('.message-content');
+      const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
       if (contentEl) {
         // E2E: decrypt if needed
         let displayContent = data.content;

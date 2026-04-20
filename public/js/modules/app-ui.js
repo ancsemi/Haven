@@ -1475,6 +1475,175 @@ _setupUI() {
     this._jumpToMessage(parseInt(replyMsgId, 10));
   });
 
+  // Thread preview click — open thread panel
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const preview = e.target.closest('.thread-preview');
+    if (!preview) return;
+    const parentId = parseInt(preview.dataset.threadParent);
+    if (parentId) this._openThread(parentId);
+  });
+
+  // Thread panel — close, send
+  const threadCloseBtn = document.getElementById('thread-panel-close');
+  if (threadCloseBtn) threadCloseBtn.addEventListener('click', () => this._closeThread());
+
+  const threadPipBtn = document.getElementById('thread-panel-pip');
+  if (threadPipBtn) threadPipBtn.addEventListener('click', () => this._toggleThreadPiP());
+
+  const threadSendBtn = document.getElementById('thread-send-btn');
+  if (threadSendBtn) threadSendBtn.addEventListener('click', () => this._sendThreadMessage());
+
+  const threadInput = document.getElementById('thread-input');
+  if (threadInput) {
+    threadInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this._sendThreadMessage();
+      }
+    });
+  }
+
+  const threadReplyCloseBtn = document.getElementById('thread-reply-close-btn');
+  if (threadReplyCloseBtn) threadReplyCloseBtn.addEventListener('click', () => this._clearThreadReply());
+
+  // Thread panel width resize (drag left edge)
+  const threadPanel = document.getElementById('thread-panel');
+  const threadResizer = document.getElementById('thread-panel-resizer');
+  if (threadPanel) {
+    const savedWidth = parseInt(localStorage.getItem('haven_thread_panel_width') || '', 10);
+    if (Number.isFinite(savedWidth) && savedWidth >= 300 && savedWidth <= 920) {
+      threadPanel.style.width = `${savedWidth}px`;
+    }
+  }
+  if (threadPanel && threadResizer) {
+    let resizing = false;
+    const clampWidth = (w) => {
+      const min = 300;
+      const max = Math.min(920, window.innerWidth - 220);
+      return Math.max(min, Math.min(max, w));
+    };
+    const onMove = (e) => {
+      if (!resizing || threadPanel.classList.contains('pip')) return;
+      const width = clampWidth(window.innerWidth - e.clientX);
+      threadPanel.style.width = `${width}px`;
+    };
+    const onUp = () => {
+      if (!resizing) return;
+      resizing = false;
+      document.body.classList.remove('resizing-thread-panel');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      const current = parseInt(threadPanel.style.width || '', 10);
+      if (Number.isFinite(current)) {
+        localStorage.setItem('haven_thread_panel_width', String(clampWidth(current)));
+      }
+    };
+    threadResizer.addEventListener('mousedown', (e) => {
+      if (threadPanel.classList.contains('pip')) return;
+      resizing = true;
+      e.preventDefault();
+      document.body.classList.add('resizing-thread-panel');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    window.addEventListener('resize', () => {
+      if (threadPanel.classList.contains('pip')) return;
+      const current = parseInt(threadPanel.style.width || '', 10);
+      if (!Number.isFinite(current)) return;
+      const width = clampWidth(current);
+      if (width !== current) {
+        threadPanel.style.width = `${width}px`;
+        localStorage.setItem('haven_thread_panel_width', String(width));
+      }
+    });
+  }
+
+  // Thread panel PiP drag (drag by header)
+  if (threadPanel) {
+    const threadHeaderTop = threadPanel.querySelector('.thread-panel-header-top');
+    let draggingPiP = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    const footerOffset = () => {
+      const raw = getComputedStyle(document.body).getPropertyValue('--thread-footer-offset');
+      const v = parseInt(raw, 10);
+      return Number.isFinite(v) ? v : 0;
+    };
+
+    const clampPiPRect = (left, top, width, height) => {
+      const maxLeft = Math.max(0, window.innerWidth - width);
+      const maxTop = Math.max(0, window.innerHeight - footerOffset() - height);
+      return {
+        left: Math.max(0, Math.min(maxLeft, left)),
+        top: Math.max(0, Math.min(maxTop, top))
+      };
+    };
+
+    const savePiPRect = () => {
+      if (!threadPanel.classList.contains('pip')) return;
+      const r = threadPanel.getBoundingClientRect();
+      const rect = {
+        left: Math.round(r.left),
+        top: Math.round(r.top),
+        width: Math.round(r.width),
+        height: Math.round(r.height)
+      };
+      localStorage.setItem('haven_thread_panel_pip_rect', JSON.stringify(rect));
+    };
+
+    const onPiPMove = (e) => {
+      if (!draggingPiP || !threadPanel.classList.contains('pip')) return;
+      const r = threadPanel.getBoundingClientRect();
+      const rawLeft = e.clientX - dragOffsetX;
+      const rawTop = e.clientY - dragOffsetY;
+      const pos = clampPiPRect(rawLeft, rawTop, r.width, r.height);
+      threadPanel.style.left = `${pos.left}px`;
+      threadPanel.style.top = `${pos.top}px`;
+      threadPanel.style.right = 'auto';
+      threadPanel.style.bottom = 'auto';
+    };
+
+    const onPiPUp = () => {
+      if (!draggingPiP) return;
+      draggingPiP = false;
+      document.removeEventListener('mousemove', onPiPMove);
+      document.removeEventListener('mouseup', onPiPUp);
+      savePiPRect();
+    };
+
+    if (threadHeaderTop) {
+      threadHeaderTop.addEventListener('mousedown', (e) => {
+        if (!threadPanel.classList.contains('pip')) return;
+        if (e.target.closest('button, input, textarea, a')) return;
+        const r = threadPanel.getBoundingClientRect();
+        draggingPiP = true;
+        dragOffsetX = e.clientX - r.left;
+        dragOffsetY = e.clientY - r.top;
+        threadPanel.style.right = 'auto';
+        threadPanel.style.bottom = 'auto';
+        e.preventDefault();
+        document.addEventListener('mousemove', onPiPMove);
+        document.addEventListener('mouseup', onPiPUp);
+      });
+    }
+
+    if (window.ResizeObserver) {
+      const observer = new ResizeObserver(() => {
+        if (!threadPanel.classList.contains('pip')) return;
+        clearTimeout(this._threadPiPSaveTimer);
+        this._threadPiPSaveTimer = setTimeout(() => {
+          const r = threadPanel.getBoundingClientRect();
+          const pos = clampPiPRect(r.left, r.top, r.width, r.height);
+          threadPanel.style.left = `${pos.left}px`;
+          threadPanel.style.top = `${pos.top}px`;
+          savePiPRect();
+        }, 80);
+      });
+      observer.observe(threadPanel);
+    }
+  }
+
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
     this._toggleEmojiPicker();
@@ -1495,7 +1664,7 @@ _setupUI() {
     this._clearReply();
   });
 
-  // Messages container — move-selection mode intercept
+  // Messages container — move-selection mode intercept (supports Shift+click range)
   document.getElementById('messages').addEventListener('click', (e) => {
     if (!this._moveSelectionActive) return;
     // Don't intercept toolbar button clicks
@@ -1504,7 +1673,30 @@ _setupUI() {
     if (msgEl) {
       e.preventDefault();
       e.stopPropagation();
-      this._toggleMoveSelect(msgEl);
+
+      if (e.shiftKey && this._lastMoveSelectedEl) {
+        // Shift+click: select all messages between last selected and this one
+        const container = document.getElementById('messages');
+        const allMsgs = Array.from(container.querySelectorAll('.message, .message-compact'));
+        const lastIdx = allMsgs.indexOf(this._lastMoveSelectedEl);
+        const curIdx = allMsgs.indexOf(msgEl);
+        if (lastIdx !== -1 && curIdx !== -1) {
+          const start = Math.min(lastIdx, curIdx);
+          const end = Math.max(lastIdx, curIdx);
+          for (let i = start; i <= end; i++) {
+            const id = parseInt(allMsgs[i].dataset.msgId);
+            if (id && !this._moveSelectedIds.has(id)) {
+              if (this._moveSelectedIds.size >= 200) break;
+              this._moveSelectedIds.add(id);
+              allMsgs[i].classList.add('move-selected');
+            }
+          }
+          this._updateMoveCount();
+        }
+      } else {
+        this._toggleMoveSelect(msgEl);
+        this._lastMoveSelectedEl = msgEl;
+      }
     }
   }, true); // capture phase so it fires before the toolbar action handler
 
@@ -1524,6 +1716,8 @@ _setupUI() {
       this._showReactionPicker(msgEl, msgId);
     } else if (action === 'reply') {
       this._setReply(msgEl, msgId);
+    } else if (action === 'thread') {
+      this._openThread(msgId);
     } else if (action === 'quote') {
       this._quoteMessage(msgEl);
     } else if (action === 'edit') {
@@ -1547,6 +1741,7 @@ _setupUI() {
   document.getElementById('messages').addEventListener('click', (e) => {
     const badge = e.target.closest('.reaction-badge');
     if (!badge) return;
+    this._hideReactionPopout();
     const msgEl = badge.closest('.message, .message-compact');
     if (!msgEl) return;
     const msgId = parseInt(msgEl.dataset.msgId);
@@ -1558,6 +1753,152 @@ _setupUI() {
       this.socket.emit('add-reaction', { messageId: msgId, emoji });
     }
   });
+
+  // Thread panel reactions: open picker + toggle reaction on badges
+  const threadMessages = document.getElementById('thread-messages');
+  if (threadMessages) {
+    threadMessages.addEventListener('click', (e) => {
+      const threadActionBtn = e.target.closest('[data-thread-action]');
+      if (threadActionBtn) {
+        const msgEl = threadActionBtn.closest('.thread-message');
+        if (!msgEl) return;
+        const msgId = parseInt(msgEl.dataset.msgId, 10);
+        if (!msgId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const action = threadActionBtn.dataset.threadAction;
+        if (action === 'react') {
+          this._showReactionPicker(msgEl, msgId);
+        } else if (action === 'reply') {
+          this._setThreadReply(msgEl, msgId);
+        } else if (action === 'quote') {
+          this._quoteThreadMessage(msgEl);
+        } else if (action === 'edit') {
+          this._startEditMessage(msgEl, msgId);
+        } else if (action === 'delete') {
+          if (confirm(t('confirm.delete_message'))) {
+            this.socket.emit('delete-message', { messageId: msgId });
+          }
+        }
+        return;
+      }
+
+      const banner = e.target.closest('.reply-banner');
+      if (banner) {
+        const replyMsgId = parseInt(banner.dataset.replyMsgId || '', 10);
+        if (!replyMsgId) return;
+        const target = threadMessages.querySelector(`[data-msg-id="${replyMsgId}"]`);
+        if (target) {
+          target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          target.classList.add('thread-highlight');
+          setTimeout(() => target.classList.remove('thread-highlight'), 1200);
+        }
+        return;
+      }
+
+      const badge = e.target.closest('.reaction-badge');
+      if (!badge) return;
+      this._hideReactionPopout();
+      const msgEl = badge.closest('.thread-message');
+      if (!msgEl) return;
+      const msgId = parseInt(msgEl.dataset.msgId, 10);
+      const emoji = badge.dataset.emoji;
+      const hasOwn = badge.classList.contains('own');
+      if (!msgId || !emoji) return;
+      if (hasOwn) {
+        this.socket.emit('remove-reaction', { messageId: msgId, emoji });
+      } else {
+        this.socket.emit('add-reaction', { messageId: msgId, emoji });
+      }
+    });
+  }
+
+  // Keep toolbar overflow menus visible: flip below when top space is too small.
+  const updateToolbarOverflowDirection = (moreWrap) => {
+    if (!moreWrap) return;
+    const overflow = moreWrap.querySelector('.msg-toolbar-overflow, .thread-msg-overflow');
+    if (!overflow) return;
+
+    overflow.classList.remove('flip-below');
+
+    const container = moreWrap.closest('#messages, #thread-messages');
+    const containerRect = container
+      ? container.getBoundingClientRect()
+      : { top: 0, bottom: window.innerHeight };
+    const moreRect = moreWrap.getBoundingClientRect();
+    const menuHeight = Math.max(overflow.scrollHeight, 40) + 8;
+    const spaceAbove = moreRect.top - containerRect.top;
+    const spaceBelow = containerRect.bottom - moreRect.bottom;
+
+    // Open downward when opening upward would clip in the current visible viewport.
+    if (spaceAbove < menuHeight && spaceBelow > spaceAbove) {
+      overflow.classList.add('flip-below');
+    }
+  };
+
+  const bindOverflowDirection = (container) => {
+    if (!container) return;
+
+    container.addEventListener('mouseover', (e) => {
+      const moreWrap = e.target.closest('.msg-toolbar-more, .thread-msg-more');
+      if (!moreWrap) return;
+      updateToolbarOverflowDirection(moreWrap);
+    });
+
+    container.addEventListener('focusin', (e) => {
+      const moreWrap = e.target.closest('.msg-toolbar-more, .thread-msg-more');
+      if (!moreWrap) return;
+      updateToolbarOverflowDirection(moreWrap);
+    });
+  };
+
+  bindOverflowDirection(document.getElementById('messages'));
+  bindOverflowDirection(threadMessages);
+
+  // Reaction badge hover — show popout with user list
+  {
+    let _popoutTimer = null;
+    const msgs = document.getElementById('messages');
+    const threadMsgs = document.getElementById('thread-messages');
+    msgs.addEventListener('mouseover', (e) => {
+      const badge = e.target.closest('.reaction-badge');
+      if (!badge) return;
+      clearTimeout(_popoutTimer);
+      _popoutTimer = setTimeout(() => this._showReactionPopout(badge), 350);
+    });
+    if (threadMsgs) {
+      threadMsgs.addEventListener('mouseover', (e) => {
+        const badge = e.target.closest('.reaction-badge');
+        if (!badge) return;
+        clearTimeout(_popoutTimer);
+        _popoutTimer = setTimeout(() => this._showReactionPopout(badge), 350);
+      });
+      threadMsgs.addEventListener('mouseout', (e) => {
+        const badge = e.target.closest('.reaction-badge');
+        if (!badge && !e.target.closest('#reaction-popout')) {
+          clearTimeout(_popoutTimer);
+          setTimeout(() => {
+            if (!document.querySelector('#reaction-popout:hover')) this._hideReactionPopout();
+          }, 200);
+        }
+      });
+    }
+    msgs.addEventListener('mouseout', (e) => {
+      const badge = e.target.closest('.reaction-badge');
+      if (!badge && !e.target.closest('#reaction-popout')) {
+        clearTimeout(_popoutTimer);
+        setTimeout(() => {
+          if (!document.querySelector('#reaction-popout:hover')) this._hideReactionPopout();
+        }, 200);
+      }
+    });
+    document.addEventListener('mouseover', (e) => {
+      if (!e.target.closest('#reaction-popout') && !e.target.closest('.reaction-badge')) {
+        clearTimeout(_popoutTimer);
+        this._hideReactionPopout();
+      }
+    });
+  }
 
   // ── Poll vote click (delegated from messages container) ──
   document.getElementById('messages').addEventListener('click', (e) => {

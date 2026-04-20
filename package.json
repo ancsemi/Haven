@@ -1,6 +1,6 @@
 {
   "name": "haven",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "Haven — self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",

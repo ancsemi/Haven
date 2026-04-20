@@ -25,7 +25,20 @@ class ServerManager {
 
   _load() {
     try {
-      return JSON.parse(localStorage.getItem('haven_servers') || '[]');
+      const raw = JSON.parse(localStorage.getItem('haven_servers') || '[]');
+      // Normalize URLs on load to dedup legacy entries with mismatched casing
+      const seen = new Set();
+      const deduped = [];
+      for (const s of raw) {
+        try { s.url = new URL(s.url).origin; } catch {}
+        if (seen.has(s.url)) continue;
+        seen.add(s.url);
+        deduped.push(s);
+      }
+      if (deduped.length !== raw.length) {
+        localStorage.setItem('haven_servers', JSON.stringify(deduped));
+      }
+      return deduped;
     } catch { return []; }
   }
 
@@ -35,7 +48,7 @@ class ServerManager {
 
   add(name, url, icon = null) {
     url = this._normalizeUrl(url);
-    if (this.servers.find(s => s.url === url)) return false;
+    if (this.servers.find(s => this._normalizeUrl(s.url) === url)) return false;
 
     // User explicitly adding — clear from removed set so sync won't fight it
     const removed = this._loadRemoved();
@@ -64,6 +77,20 @@ class ServerManager {
     this.statusCache.delete(url);
     this._save();
     this.markRemoved(url);
+  }
+
+  /** Reorder servers by an array of URLs in the desired order. */
+  reorder(orderedUrls) {
+    const map = new Map(this.servers.map(s => [s.url, s]));
+    const reordered = [];
+    for (const url of orderedUrls) {
+      const s = map.get(url);
+      if (s) { reordered.push(s); map.delete(url); }
+    }
+    // Append any servers not in the ordered list (shouldn't happen, but safe)
+    for (const s of map.values()) reordered.push(s);
+    this.servers = reordered;
+    this._save();
   }
 
   getAll() {
@@ -191,8 +218,8 @@ class ServerManager {
       const removed = this._loadRemoved();
 
       // 4. Merge: union by URL, filtering out locally-removed servers
-      const localUrls = new Set(this.servers.map(s => s.url));
-      const remoteUrls = new Set(remoteServers.map(s => s.url));
+      const localUrls = new Set(this.servers.map(s => this._normalizeUrl(s.url)));
+      const remoteUrls = new Set(remoteServers.map(s => this._normalizeUrl(s.url)));
       let changed = false;
 
       // Add remote servers we don't have locally (and haven't removed)

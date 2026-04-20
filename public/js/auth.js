@@ -1,9 +1,15 @@
 // ── Auth Page Logic (with theme support + i18n) ───────────────────────────
 
 (async function () {
+  // Preserve invite param across login/register so vanity invite links work for new users
+  const _urlParams = new URLSearchParams(window.location.search);
+  const _pendingInvite = _urlParams.get('invite') || sessionStorage.getItem('haven_pending_invite') || '';
+  if (_pendingInvite) sessionStorage.setItem('haven_pending_invite', _pendingInvite);
+  const _appUrl = _pendingInvite ? `/app?invite=${encodeURIComponent(_pendingInvite)}` : '/app';
+
   // If already logged in, redirect to app
   if (localStorage.getItem('haven_token')) {
-    window.location.href = '/app';
+    window.location.href = _appUrl;
     return;
   }
 
@@ -191,7 +197,7 @@
       sessionStorage.setItem('haven_e2e_wrap', e2eWrap);
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));
-      window.location.href = '/app';
+      window.location.href = _appUrl;
     } catch {
       showError(t('auth.errors.connection_error'));
     }
@@ -292,7 +298,7 @@
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));
       localStorage.setItem('haven_eula_accepted', '2.0');
-      window.location.href = '/app';
+      window.location.href = _appUrl;
     } catch (err) {
       showError(t('auth.errors.connection_error'));
     }
@@ -325,7 +331,7 @@
       localStorage.setItem('haven_user', JSON.stringify(data.user));
       localStorage.setItem('haven_eula_accepted', '2.0');
       _pendingChallenge = null;
-      window.location.href = '/app';
+      window.location.href = _appUrl;
     } catch (err) {
       showError(t('auth.errors.connection_error'));
     }
@@ -388,6 +394,8 @@
     let ssoServerUrl = null;
     let ssoProfileData = null;
     let ssoWaiting = false;
+    let ssoPollTimer = null;
+    let ssoTimeoutTimer = null;
 
     const ssoConnectBtn   = document.getElementById('sso-connect-btn');
     const ssoStepServer   = document.getElementById('sso-step-server');
@@ -398,7 +406,71 @@
     const ssoBackBtn      = document.getElementById('sso-back-btn');
     const ssoServerInput  = document.getElementById('sso-server-url');
 
+    const stopSsoPolling = () => {
+      if (ssoPollTimer) {
+        clearInterval(ssoPollTimer);
+        ssoPollTimer = null;
+      }
+      if (ssoTimeoutTimer) {
+        clearTimeout(ssoTimeoutTimer);
+        ssoTimeoutTimer = null;
+      }
+    };
+
+    const getSsoOrigin = () => {
+      try { return new URL(ssoServerUrl).origin; } catch { return ssoServerUrl; }
+    };
+
+    const applySsoProfile = (profile, sourceOrigin = null) => {
+      if (!profile) return;
+      ssoProfileData = profile;
+      ssoWaiting = false;
+      stopSsoPolling();
+      ssoConnectBtn.textContent = 'Connect';
+      ssoConnectBtn.disabled = false;
+
+      const profileUsername = (typeof ssoProfileData.username === 'string' ? ssoProfileData.username.trim() : '');
+      const previewName = (typeof ssoProfileData.displayName === 'string' ? ssoProfileData.displayName.trim() : '') || profileUsername;
+
+      if (ssoProfileData.profilePicture) {
+        let src = ssoProfileData.profilePicture;
+        if (src.startsWith('/')) {
+          const base = sourceOrigin || getSsoOrigin();
+          src = base + src;
+        }
+        ssoPreviewAvatar.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:cover" alt="">`;
+      } else {
+        ssoPreviewAvatar.textContent = (previewName || '?')[0].toUpperCase();
+      }
+      ssoPreviewUsername.textContent = previewName || '—';
+
+      ssoStepServer.style.display = 'none';
+      ssoStepRegister.style.display = '';
+      hideError();
+    };
+
+    const tryFetchSsoProfile = async (surfaceError = false) => {
+      if (!ssoWaiting || !ssoAuthCode || !ssoServerUrl) return false;
+      try {
+        const res = await fetch(`${ssoServerUrl}/api/auth/SSO/authenticate?authCode=${encodeURIComponent(ssoAuthCode)}`);
+        if (!res.ok) {
+          if (surfaceError && res.status !== 404) {
+            const data = await res.json().catch(() => ({}));
+            showError(data.error || 'SSO failed — please try again');
+          }
+          return false;
+        }
+        const data = await res.json();
+        applySsoProfile(data, getSsoOrigin());
+        return true;
+      } catch {
+        if (surfaceError) showError('Could not reach home server — please try again');
+        return false;
+      }
+    };
+
     function ssoReset() {
+      stopSsoPolling();
       ssoAuthCode = null;
       ssoServerUrl = null;
       ssoProfileData = null;
@@ -439,44 +511,39 @@
       ssoWaiting = true;
       ssoConnectBtn.textContent = 'Waiting for approval…';
       ssoConnectBtn.disabled = true;
+
+      stopSsoPolling();
+      ssoPollTimer = setInterval(() => {
+        tryFetchSsoProfile(false);
+      }, 2000);
+      ssoTimeoutTimer = setTimeout(() => {
+        if (!ssoWaiting) return;
+        ssoWaiting = false;
+        stopSsoPolling();
+        ssoConnectBtn.textContent = 'Connect';
+        ssoConnectBtn.disabled = false;
+        showError('SSO approval timed out — try connecting again');
+      }, 90000);
     });
 
     // When user returns to this tab after approving on home server
     window.addEventListener('focus', async () => {
       if (!ssoWaiting || !ssoAuthCode || !ssoServerUrl) return;
-      ssoWaiting = false;
+      await tryFetchSsoProfile(true);
+    });
 
-      try {
-        const res = await fetch(`${ssoServerUrl}/api/auth/SSO/authenticate?authCode=${encodeURIComponent(ssoAuthCode)}`);
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          ssoConnectBtn.textContent = 'Connect';
-          ssoConnectBtn.disabled = false;
-          return showError(data.error || 'SSO failed — please try again');
-        }
+    // Preferred path: SSO popup posts profile data back to this window.
+    window.addEventListener('message', (event) => {
+      if (!ssoWaiting || !ssoAuthCode || !ssoServerUrl) return;
+      const data = event.data || {};
+      if (data.type !== 'haven-sso-approved') return;
+      if (data.authCode !== ssoAuthCode) return;
 
-        ssoProfileData = await res.json();
+      const expectedOrigin = getSsoOrigin();
+      if (event.origin !== expectedOrigin) return;
 
-        // Show the profile preview
-        if (ssoProfileData.profilePicture) {
-          let src = ssoProfileData.profilePicture;
-          if (src.startsWith('/')) src = ssoServerUrl + src;
-          ssoPreviewAvatar.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:cover" alt="">`;
-        } else {
-          ssoPreviewAvatar.textContent = (ssoProfileData.username || '?')[0].toUpperCase();
-        }
-        ssoPreviewUsername.textContent = ssoProfileData.username || '—';
-
-        // Switch to step 2
-        ssoStepServer.style.display = 'none';
-        ssoStepRegister.style.display = '';
-        ssoConnectBtn.textContent = 'Connect';
-        ssoConnectBtn.disabled = false;
-      } catch (err) {
-        ssoConnectBtn.textContent = 'Connect';
-        ssoConnectBtn.disabled = false;
-        showError('Could not reach home server — please try again');
-      }
+      if (!data.profile || !data.profile.username) return;
+      applySsoProfile(data.profile, data.serverOrigin || expectedOrigin);
     });
 
     // Back button — return to step 1
@@ -498,6 +565,25 @@
       if (password.length < 8) return showError(t('auth.errors.password_too_short'));
       if (password !== confirm) return showError(t('auth.errors.passwords_no_match'));
 
+      // Prefer canonical username from SSO payload. If a legacy server sends
+      // display-name-like values, normalize into a valid Haven username.
+      const normalizeUsername = (value) => {
+        if (typeof value !== 'string') return '';
+        return value
+          .trim()
+          .replace(/[^a-zA-Z0-9_]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 20);
+      };
+      let registerUsername = normalizeUsername(ssoProfileData.username);
+      if (registerUsername.length < 3) {
+        registerUsername = normalizeUsername(ssoProfileData.displayName);
+      }
+      if (registerUsername.length < 3) {
+        return showError('SSO username is invalid. Please use standard registration.');
+      }
+
       // Build the full profile picture URL for the server to download
       let profilePicUrl = ssoProfileData.profilePicture || null;
       if (profilePicUrl && profilePicUrl.startsWith('/')) {
@@ -509,7 +595,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            username: ssoProfileData.username,
+            username: registerUsername,
             password,
             eulaVersion: '2.0',
             ageVerified: true,
@@ -527,7 +613,7 @@
         localStorage.setItem('haven_token', data.token);
         localStorage.setItem('haven_user', JSON.stringify(data.user));
         localStorage.setItem('haven_eula_accepted', '2.0');
-        window.location.href = '/app';
+        window.location.href = _appUrl;
       } catch (err) {
         showError(t('auth.errors.connection_error'));
       }
@@ -565,7 +651,7 @@
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));
       localStorage.setItem('haven_eula_accepted', '2.0');
-      window.location.href = '/app';
+      window.location.href = _appUrl;
     } catch (err) {
       showError(t('auth.errors.connection_error'));
     }

@@ -531,33 +531,85 @@ _createMessageEl(msg, prevMsg) {
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
+  const threadHtml = msg.thread ? this._renderThreadPreview(msg.id, msg.thread) : '';
   const editedHtml = msg.edited_at ? `<span class="edited-tag" title="${t('app.messages.edited_at', { date: new Date(msg.edited_at).toLocaleString() })}">${t('app.messages.edited')}</span>` : '';
   const pinnedTag = msg.pinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const archivedTag = msg.is_archived ? `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>` : '';
   const e2eTag = msg._e2e ? `<span class="e2e-tag" title="${t('app.messages.e2e_encrypted')}">🔒</span>` : '';
 
-  // Build toolbar with context-aware buttons
-  let toolbarBtns = `<button data-action="react" title="${t('msg_toolbar.react')}">😀</button><button data-action="reply" title="${t('msg_toolbar.reply')}">↩️</button><button data-action="quote" title="${t('msg_toolbar.quote')}">💬</button>`;
+  const iconPair = (emoji, monoSvg) => `<span class="tb-icon tb-icon-emoji" aria-hidden="true">${emoji}</span><span class="tb-icon tb-icon-mono" aria-hidden="true">${monoSvg}</span>`;
+  const iReact = iconPair('😀', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-width="1.8"></circle><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke-width="1.8" stroke-linecap="round"></path><circle cx="9.2" cy="10.2" r="1" fill="currentColor" stroke="none"></circle><circle cx="14.8" cy="10.2" r="1" fill="currentColor" stroke="none"></circle></svg>');
+  const iReply = iconPair('↩️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8L4 12L10 16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M20 12H5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+  const iQuote = iconPair('💬', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 7h-4v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>');
+  const iThread = iconPair('🧵', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 9h8" stroke-width="1.8" stroke-linecap="round"></path><path d="M8 13h6" stroke-width="1.8" stroke-linecap="round"></path><path d="M6 6h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-4 3v-3H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
+  const iPin = iconPair('📌', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8l-2 5v4l2 2H8l2-2V9L8 4z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 15v5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+  const iArchive = iconPair('🛡️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v11H4z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M9 11h6" stroke-width="1.8" stroke-linecap="round"></path><path d="M3 7l2-3h14l2 3" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
+  const iEdit = iconPair('✏️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M13.5 6.5l3.5 3.5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+  const iDelete = iconPair('🗑️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 7V5h6v2" stroke-width="1.8" stroke-linecap="round"></path><path d="M7 7l1 12h8l1-12" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
+  const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
+
+  const toolbarActions = [
+    { key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` },
+    { key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` },
+    { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` },
+    { key: 'thread', html: `<button data-action="thread" title="Thread">${iThread}</button>` }
+  ];
   const canPin = this.user.isAdmin || this._canModerate();
   const canArchive = this.user.isAdmin || this._hasPerm('archive_messages');
   const canDelete = msg.user_id === this.user.id || this.user.isAdmin || this._canModerate();
   if (canPin) {
-    toolbarBtns += msg.pinned
-      ? `<button data-action="unpin" title="${t('msg_toolbar.unpin')}">📌</button>`
-      : `<button data-action="pin" title="${t('msg_toolbar.pin')}">📌</button>`;
+    toolbarActions.push({
+      key: 'pin',
+      html: msg.pinned
+        ? `<button data-action="unpin" title="${t('msg_toolbar.unpin')}">${iPin}</button>`
+        : `<button data-action="pin" title="${t('msg_toolbar.pin')}">${iPin}</button>`
+    });
   }
   if (canArchive) {
-    toolbarBtns += msg.is_archived
-      ? `<button data-action="unarchive" title="${t('app.messages.unprotect_btn')}">🛡️</button>`
-      : `<button data-action="archive" title="${t('app.messages.protect_btn')}">🛡️</button>`;
+    toolbarActions.push({
+      key: 'archive',
+      html: msg.is_archived
+        ? `<button data-action="unarchive" title="${t('app.messages.unprotect_btn')}">${iArchive}</button>`
+        : `<button data-action="archive" title="${t('app.messages.protect_btn')}">${iArchive}</button>`
+    });
   }
   if (msg.user_id === this.user.id) {
-    toolbarBtns += `<button data-action="edit" title="${t('msg_toolbar.edit')}">✏️</button>`;
+    toolbarActions.push({ key: 'edit', html: `<button data-action="edit" title="${t('msg_toolbar.edit')}">${iEdit}</button>` });
   }
   if (canDelete) {
-    toolbarBtns += `<button data-action="delete" title="${t('msg_toolbar.delete')}">🗑️</button>`;
+    toolbarActions.push({ key: 'delete', html: `<button data-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>` });
   }
-  const toolbarHtml = `<div class="msg-toolbar">${toolbarBtns}</div>`;
+
+  const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'pin', 'archive', 'edit', 'delete'];
+  let savedToolbarOrder = [];
+  try {
+    savedToolbarOrder = JSON.parse(localStorage.getItem('haven-toolbar-order') || '[]');
+  } catch {
+    savedToolbarOrder = [];
+  }
+  const normalizedOrder = [];
+  savedToolbarOrder.forEach((key) => {
+    if (defaultToolbarOrder.includes(key) && !normalizedOrder.includes(key)) normalizedOrder.push(key);
+  });
+  defaultToolbarOrder.forEach((key) => {
+    if (!normalizedOrder.includes(key)) normalizedOrder.push(key);
+  });
+
+  const orderRank = new Map(normalizedOrder.map((key, index) => [key, index]));
+  toolbarActions.sort((a, b) => (orderRank.get(a.key) ?? 999) - (orderRank.get(b.key) ?? 999));
+
+  let visibleSlots = parseInt(localStorage.getItem('haven-toolbar-visible-slots') || '3', 10);
+  if (!Number.isFinite(visibleSlots)) visibleSlots = 3;
+  visibleSlots = Math.max(1, Math.min(7, visibleSlots));
+
+  const visibleActions = toolbarActions.slice(0, visibleSlots);
+  const overflowActions = toolbarActions.slice(visibleSlots);
+  const coreToolbarBtns = visibleActions.map(a => a.html).join('');
+  const overflowToolbarBtns = overflowActions.map(a => a.html).join('');
+  const moreMenuHtml = overflowActions.length
+    ? `<div class="msg-toolbar-more"><button class="msg-toolbar-more-btn" type="button" aria-label="More actions">${iMore}</button><div class="msg-toolbar-overflow">${overflowToolbarBtns}</div></div>`
+    : '';
+  const toolbarHtml = `<div class="msg-toolbar"><div class="msg-toolbar-group">${coreToolbarBtns}</div>${moreMenuHtml}</div>`;
   const replyHtml = msg.replyContext ? this._renderReplyBanner(msg.replyContext) : '';
 
   if (isCompact) {
@@ -579,6 +631,7 @@ _createMessageEl(msg, prevMsg) {
         <div class="message-content">${pinnedTag}${archivedTag}${this._formatContent(msg.content)}${editedHtml}</div>
         ${pollHtml}
         ${reactionsHtml}
+        ${threadHtml}
       </div>
       ${e2eTag}
       ${toolbarHtml}
@@ -665,6 +718,7 @@ _createMessageEl(msg, prevMsg) {
         <div class="message-content">${this._formatContent(msg.content)}${editedHtml}</div>
         ${pollHtml}
         ${reactionsHtml}
+        ${threadHtml}
       </div>
       ${toolbarHtml}
       <button class="msg-dots-btn" aria-label="${t('app.actions.message_actions')}">⋯</button>
@@ -1070,6 +1124,7 @@ _enterMoveSelectionMode() {
 _exitMoveSelectionMode() {
   this._moveSelectionActive = false;
   this._moveSelectedIds.clear();
+  this._lastMoveSelectedEl = null;
   document.body.classList.remove('move-selection-mode');
   const toolbar = document.getElementById('move-msg-toolbar');
   if (toolbar) toolbar.style.display = 'none';

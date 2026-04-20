@@ -807,6 +807,14 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_bot_commands_webhook ON bot_commands(webhook_id);
   `);
 
+  // ── Migration: chat threads (thread_id on messages) ─────
+  try {
+    db.prepare("SELECT thread_id FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN thread_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE CASCADE");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL");
+
   return db;
 }
 

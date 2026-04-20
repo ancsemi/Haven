@@ -492,6 +492,7 @@ async _initE2E() {
     if (syncKey && this.serverManager) {
       await this.serverManager.syncWithServer(this.token, syncKey);
       this._renderServerBar();
+      this._pushServersToDesktopHistory();
 
       // Re-sync periodically (every 5 min) so cross-device changes propagate
       // without requiring a full page reload or re-login
@@ -502,6 +503,7 @@ async _initE2E() {
             try {
               await this.serverManager.syncWithServer(this.token, key);
               this._renderServerBar();
+              this._pushServersToDesktopHistory();
             } catch { /* silent — best-effort background sync */ }
           }
         }, 5 * 60 * 1000);
@@ -517,6 +519,7 @@ async _initE2E() {
             try {
               await this.serverManager.syncWithServer(this.token, key);
               this._renderServerBar();
+              this._pushServersToDesktopHistory();
             } catch { /* silent */ }
           }
         });

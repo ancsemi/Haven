@@ -1596,6 +1596,140 @@ _setupRoleDisplayPicker() {
   });
 },
 
+// ── Toolbar Icon Style Picker ──
+
+_setupToolbarIconPicker() {
+  const picker = document.getElementById('toolbar-icon-picker');
+  const slotsInput = document.getElementById('toolbar-visible-slots');
+  const slotsValue = document.getElementById('toolbar-visible-slots-value');
+  const orderList = document.getElementById('toolbar-order-list');
+  const resetBtn = document.getElementById('toolbar-order-reset-btn');
+  if (!picker) return;
+
+  const defaultOrder = ['react', 'reply', 'quote', 'thread', 'pin', 'archive', 'edit', 'delete'];
+  const actionLabels = {
+    react: 'React',
+    reply: 'Reply',
+    quote: 'Quote',
+    thread: 'Thread',
+    pin: 'Pin / Unpin',
+    archive: 'Protect / Unprotect',
+    edit: 'Edit',
+    delete: 'Delete'
+  };
+
+  const normalizeOrder = (value) => {
+    const arr = Array.isArray(value) ? value : [];
+    const clean = [];
+    arr.forEach((k) => {
+      if (defaultOrder.includes(k) && !clean.includes(k)) clean.push(k);
+    });
+    defaultOrder.forEach((k) => {
+      if (!clean.includes(k)) clean.push(k);
+    });
+    return clean;
+  };
+
+  const refreshCurrentMessages = () => {
+    if (this.currentChannel && this.socket?.connected) {
+      this.socket.emit('get-messages', { code: this.currentChannel });
+    }
+  };
+
+  const savedMode = localStorage.getItem('haven-toolbar-icons') || 'mono';
+  const normalizedMode = savedMode === 'color' ? 'emoji' : savedMode;
+  document.documentElement.dataset.toolbaricons = normalizedMode;
+  picker.querySelectorAll('[data-toolbaricons]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.toolbaricons === normalizedMode);
+  });
+
+  let savedSlots = parseInt(localStorage.getItem('haven-toolbar-visible-slots') || '3', 10);
+  if (!Number.isFinite(savedSlots)) savedSlots = 3;
+  savedSlots = Math.max(1, Math.min(7, savedSlots));
+  localStorage.setItem('haven-toolbar-visible-slots', String(savedSlots));
+  if (slotsInput) slotsInput.value = String(savedSlots);
+  if (slotsValue) slotsValue.textContent = String(savedSlots);
+
+  let savedOrder;
+  try {
+    savedOrder = JSON.parse(localStorage.getItem('haven-toolbar-order') || '[]');
+  } catch {
+    savedOrder = [];
+  }
+  let currentOrder = normalizeOrder(savedOrder);
+  localStorage.setItem('haven-toolbar-order', JSON.stringify(currentOrder));
+
+  const renderOrderList = () => {
+    if (!orderList) return;
+    orderList.innerHTML = '';
+    currentOrder.forEach((key, index) => {
+      const row = document.createElement('div');
+      row.className = 'toolbar-order-item';
+      row.innerHTML = `
+        <span class="toolbar-order-item-label">${actionLabels[key] || key}</span>
+        <div class="toolbar-order-item-controls">
+          <button type="button" class="toolbar-order-move" data-dir="up" data-key="${key}" ${index === 0 ? 'disabled' : ''} title="Move up">▲</button>
+          <button type="button" class="toolbar-order-move" data-dir="down" data-key="${key}" ${index === currentOrder.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
+        </div>
+      `;
+      orderList.appendChild(row);
+    });
+  };
+
+  renderOrderList();
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-toolbaricons]');
+    if (!btn) return;
+    const mode = btn.dataset.toolbaricons;
+    document.documentElement.dataset.toolbaricons = mode;
+    localStorage.setItem('haven-toolbar-icons', mode);
+    picker.querySelectorAll('[data-toolbaricons]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    refreshCurrentMessages();
+  });
+
+  if (slotsInput) {
+    slotsInput.addEventListener('input', () => {
+      if (slotsValue) slotsValue.textContent = slotsInput.value;
+    });
+    slotsInput.addEventListener('change', () => {
+      const value = Math.max(1, Math.min(7, parseInt(slotsInput.value || '3', 10) || 3));
+      localStorage.setItem('haven-toolbar-visible-slots', String(value));
+      if (slotsValue) slotsValue.textContent = String(value);
+      refreshCurrentMessages();
+    });
+  }
+
+  if (orderList) {
+    orderList.addEventListener('click', (e) => {
+      const btn = e.target.closest('.toolbar-order-move');
+      if (!btn) return;
+      const key = btn.dataset.key;
+      const dir = btn.dataset.dir;
+      const idx = currentOrder.indexOf(key);
+      if (idx < 0) return;
+      const swapWith = dir === 'up' ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= currentOrder.length) return;
+      const next = currentOrder.slice();
+      [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+      currentOrder = next;
+      localStorage.setItem('haven-toolbar-order', JSON.stringify(currentOrder));
+      renderOrderList();
+      refreshCurrentMessages();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      currentOrder = defaultOrder.slice();
+      localStorage.setItem('haven-toolbar-order', JSON.stringify(currentOrder));
+      renderOrderList();
+      refreshCurrentMessages();
+    });
+  }
+},
+
 // ── Image Lightbox ──
 
 _setupLightbox() {
@@ -1790,26 +1924,31 @@ _showImageContextMenu(e, src) {
       a.remove();
     } else if (action === 'copy') {
       try {
-        const resp = await fetch(src);
-        const blob = await resp.blob();
-        // ClipboardItem only reliably supports image/png — convert if needed
-        let pngBlob = blob;
-        if (blob.type !== 'image/png') {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          const loaded = new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-          img.src = URL.createObjectURL(blob);
-          await loaded;
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          canvas.getContext('2d').drawImage(img, 0, 0);
-          URL.revokeObjectURL(img.src);
-          pngBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        // Always convert via canvas to guarantee a valid image/png blob
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const loaded = new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+        img.src = src;
+        await loaded;
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        const pngBlob = await new Promise((res, rej) => {
+          canvas.toBlob(b => b ? res(b) : rej(new Error('canvas.toBlob returned null')), 'image/png');
+        });
+
+        if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+        } else {
+          // Fallback: copy data URL as text
+          const reader = new FileReader();
+          const dataUrl = await new Promise(r => { reader.onload = () => r(reader.result); reader.readAsDataURL(pngBlob); });
+          await navigator.clipboard.writeText(dataUrl);
         }
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
         this._showToast('Image copied to clipboard', 'success');
-      } catch {
+      } catch (err) {
+        console.error('[Haven] Copy image failed:', err);
         this._showToast('Failed to copy image', 'error');
       }
     } else if (action === 'open') {

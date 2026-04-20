@@ -139,6 +139,7 @@ async switchChannel(code) {
   this.socket.emit('get-channel-members', { code });
   this.socket.emit('request-voice-users', { code });
   this._clearReply();
+  this._closeThread();
 
   // Auto-focus the message input for quick typing
   const msgInput = document.getElementById('message-input');

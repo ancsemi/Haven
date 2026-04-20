@@ -209,9 +209,18 @@ _formatContent(str) {
   // Render `inline code`
   html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
-  // Render > blockquotes (lines starting with >)
-  html = html.replace(/(?:^|\n)&gt;\s?(.+)/g, (_, text) => {
-    return `\n<blockquote class="chat-blockquote">${text}</blockquote>`;
+  // Render grouped > blockquotes and preserve attribution lines inside the quote.
+  const blockquotes = [];
+  html = html.replace(/(^|\n)((?:&gt;[^\n]*(?:\n|$))+)/g, (full, pre, block) => {
+    const lines = block.trim().split('\n').map(line => line.replace(/^&gt;\s?/, ''));
+    let authorHtml = '';
+    if (lines[0] && /^@[^\s].+ wrote:$/.test(lines[0])) {
+      authorHtml = `<div class="chat-blockquote-author">${lines.shift()}</div>`;
+    }
+    const textHtml = lines.join('<br>');
+    const idx = blockquotes.length;
+    blockquotes.push(`${pre}<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
+    return `\x00BLOCKQUOTE_${idx}\x00`;
   });
 
   // ── Headings: # H1, ## H2, ### H3 at start of line ──
@@ -242,6 +251,10 @@ _formatContent(str) {
   });
 
   html = html.replace(/\n/g, '<br>');
+
+  blockquotes.forEach((block, idx) => {
+    html = html.replace(`\x00BLOCKQUOTE_${idx}\x00`, block);
+  });
 
   // ── Restore fenced code blocks ──
   codeBlocks.forEach((block, idx) => {
@@ -919,6 +932,7 @@ _renderReactions(msgId, reactions) {
   const badges = Object.values(grouped).map(g => {
     const isOwn = g.users.some(u => u.id === this.user.id);
     const names = g.users.map(u => u.username).join(', ');
+    const usersJson = this._escapeHtml(JSON.stringify(g.users.map(u => u.username)));
     // Check if it's a custom emoji
     const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
     let emojiDisplay = g.emoji;
@@ -926,7 +940,7 @@ _renderReactions(msgId, reactions) {
       const ce = this.customEmojis.find(e => e.name === customMatch[1]);
       if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;
     }
-    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" title="${names}">${emojiDisplay} ${g.users.length}</button>`;
+    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${names}">${emojiDisplay} ${g.users.length}</button>`;
   }).join('');
 
   return `<div class="reactions-row">${badges}</div>`;
@@ -946,13 +960,56 @@ _updateMessageReactions(messageId, reactions) {
   const html = this._renderReactions(messageId, reactions);
   if (!html) { if (wasAtBottom) this._scrollToBottom(true); return; }
 
-  // Find where to insert — after .message-content
-  const content = msgEl.querySelector('.message-content');
+  // Find where to insert — after main or thread message content
+  const content = msgEl.querySelector('.message-content, .thread-msg-content');
   if (content) {
     content.insertAdjacentHTML('afterend', html);
   }
 
   if (wasAtBottom) this._scrollToBottom(true);
+},
+
+// ── Reaction popout (who reacted) ─────────────────────
+
+_showReactionPopout(badge) {
+  this._hideReactionPopout();
+  let users;
+  try { users = JSON.parse(badge.dataset.users || '[]'); } catch { return; }
+  if (!users.length) return;
+
+  const emoji = badge.dataset.emoji;
+  const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+  let emojiDisplay = emoji;
+  if (customMatch && this.customEmojis) {
+    const ce = this.customEmojis.find(e => e.name === customMatch[1]);
+    if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;
+  }
+
+  const popout = document.createElement('div');
+  popout.id = 'reaction-popout';
+  popout.className = 'reaction-popout';
+  popout.innerHTML = `
+    <div class="reaction-popout-header">${emojiDisplay} <span class="reaction-popout-count">${users.length}</span></div>
+    <div class="reaction-popout-list">
+      ${users.map(u => `<div class="reaction-popout-user">${this._escapeHtml(u)}</div>`).join('')}
+    </div>
+  `;
+  document.body.appendChild(popout);
+
+  // Position above the badge
+  const rect = badge.getBoundingClientRect();
+  popout.style.left = rect.left + 'px';
+  popout.style.top = (rect.top - popout.offsetHeight - 6) + 'px';
+  // Clamp to viewport
+  const pr = popout.getBoundingClientRect();
+  if (pr.right > window.innerWidth) popout.style.left = (window.innerWidth - pr.width - 8) + 'px';
+  if (pr.left < 0) popout.style.left = '8px';
+  if (pr.top < 0) popout.style.top = (rect.bottom + 6) + 'px';
+},
+
+_hideReactionPopout() {
+  const existing = document.getElementById('reaction-popout');
+  if (existing) existing.remove();
 },
 
 _getQuickEmojis() {
@@ -1179,17 +1236,10 @@ _showReactionPicker(msgEl, msgId) {
   // Flip picker below the message if it would be clipped above
   requestAnimationFrame(() => {
     const pickerRect = picker.getBoundingClientRect();
-    if (pickerRect.top < 0) {
+    const container = msgEl.closest('#thread-messages, #messages');
+    const containerTop = container ? container.getBoundingClientRect().top : 0;
+    if (pickerRect.top < containerTop + 4) {
       picker.classList.add('flip-below');
-    } else {
-      // Also check against the messages container top (channel header/topic)
-      const container = document.getElementById('messages');
-      if (container) {
-        const containerRect = container.getBoundingClientRect();
-        if (pickerRect.top < containerRect.top) {
-          picker.classList.add('flip-below');
-        }
-      }
     }
   });
 
@@ -1311,9 +1361,306 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
     searchTimer = setTimeout(() => renderAll(searchInput.value.trim()), 150);
   });
 
-  // Position the panel near the quick picker
-  msgEl.appendChild(panel);
+  // Position the panel relative to quick picker so it never overlaps it
+  quickPicker.appendChild(panel);
+  if (quickPicker.classList.contains('flip-below')) {
+    panel.classList.add('flip-below');
+  }
+
+  requestAnimationFrame(() => {
+    const panelRect = panel.getBoundingClientRect();
+    const container = msgEl.closest('#thread-messages, #messages');
+    const containerTop = container ? container.getBoundingClientRect().top : 0;
+    if (panelRect.top < containerTop + 4) {
+      panel.classList.add('flip-below');
+    }
+  });
   searchInput.focus();
+},
+
+// ═══════════════════════════════════════════════════════
+// THREADS
+// ═══════════════════════════════════════════════════════
+
+_renderThreadPreview(parentId, thread) {
+  if (!thread || !thread.count) return '';
+  const participantAvatars = (thread.participants || []).map(p => {
+    if (p.avatar) {
+      return `<img class="thread-participant-avatar" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
+    }
+    const color = this._getUserColor(p.username);
+    const initial = p.username.charAt(0).toUpperCase();
+    return `<div class="thread-participant-avatar thread-participant-initial" style="background:${color}" title="${this._escapeHtml(p.username)}">${initial}</div>`;
+  }).join('');
+
+  const timeAgo = this._relativeTime(thread.lastReplyAt);
+  return `
+    <button class="thread-preview" data-thread-parent="${parentId}">
+      ${participantAvatars}
+      <span class="thread-preview-count">${thread.count} ${thread.count === 1 ? 'Reply' : 'Replies'}</span>
+      <span class="thread-preview-time">${timeAgo}</span>
+      <span class="thread-preview-arrow">›</span>
+    </button>
+  `;
+},
+
+_relativeTime(isoStr) {
+  if (!isoStr) return '';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+},
+
+_setThreadParentHeader(meta = {}) {
+  const wrap = document.getElementById('thread-parent-avatar-wrap');
+  const nameEl = document.getElementById('thread-parent-name');
+  if (!wrap || !nameEl) return;
+
+  const username = (meta.username || '').trim() || 'Thread starter';
+  const shape = (meta.avatarShape || 'circle') === 'square' ? 'square' : 'circle';
+  const shapeClass = shape === 'square' ? ' thread-parent-avatar-square' : '';
+
+  if (meta.avatar) {
+    wrap.innerHTML = `<img class="thread-parent-avatar${shapeClass}" src="${this._escapeHtml(meta.avatar)}" alt="${this._escapeHtml(username)}">`;
+  } else {
+    const initial = username.charAt(0).toUpperCase() || '?';
+    const color = this._getUserColor(username);
+    wrap.innerHTML = `<div class="thread-parent-avatar-initial${shapeClass}" style="background:${color}">${this._escapeHtml(initial)}</div>`;
+  }
+
+  nameEl.textContent = username;
+  nameEl.title = username;
+},
+
+_setThreadReply(msgEl, msgId) {
+  const author = msgEl.querySelector('.thread-msg-author')?.textContent || 'someone';
+  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
+  const preview = rawContent.length > 70 ? rawContent.substring(0, 70) + '…' : rawContent;
+  this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
+
+  const bar = document.getElementById('thread-reply-bar');
+  const text = document.getElementById('thread-reply-preview-text');
+  if (!bar || !text) return;
+  bar.style.display = 'flex';
+  text.innerHTML = `Replying to <strong>${this._escapeHtml(author)}</strong>: ${this._escapeHtml(preview)}`;
+
+  const input = document.getElementById('thread-input');
+  if (input) input.focus();
+},
+
+_clearThreadReply() {
+  this._threadReplyingTo = null;
+  const bar = document.getElementById('thread-reply-bar');
+  if (bar) bar.style.display = 'none';
+},
+
+_quoteThreadMessage(msgEl) {
+  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
+  const author = msgEl.querySelector('.thread-msg-author')?.textContent || 'someone';
+  const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
+  const quoteText = `> @${author} wrote:\n${quotedLines}\n`;
+
+  const input = document.getElementById('thread-input');
+  if (!input) return;
+  if (input.value) {
+    input.value += '\n' + quoteText;
+  } else {
+    input.value = quoteText;
+  }
+  input.focus();
+  input.dispatchEvent(new Event('input'));
+},
+
+_openThread(parentId) {
+  this._activeThreadParent = parentId;
+  const panel = document.getElementById('thread-panel');
+  if (!panel) return;
+  panel.style.display = 'flex';
+  panel.dataset.parentId = parentId;
+  this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
+
+  // Request thread messages from server
+  this.socket.emit('get-thread-messages', { parentId });
+
+  // Update header
+  const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
+  const author = msgEl?.querySelector('.message-author')?.textContent || 'Thread starter';
+  document.getElementById('thread-panel-title').textContent = 'Thread';
+  const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
+  document.getElementById('thread-parent-preview').textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
+
+  const avatarImg = msgEl?.querySelector('.message-avatar-img');
+  let avatar = null;
+  if (avatarImg && avatarImg.getAttribute('src')) avatar = avatarImg.getAttribute('src');
+  const avatarShape = (avatarImg && avatarImg.classList.contains('avatar-square')) ? 'square' : 'circle';
+  this._setThreadParentHeader({ username: author, avatar, avatarShape });
+
+  // Focus input
+  const input = document.getElementById('thread-input');
+  if (input) input.focus();
+},
+
+_setThreadPiPEnabled(enabled) {
+  const panel = document.getElementById('thread-panel');
+  const pipBtn = document.getElementById('thread-panel-pip');
+  if (!panel || !pipBtn) return;
+
+  const isOn = !!enabled;
+  panel.classList.toggle('pip', isOn);
+  pipBtn.textContent = isOn ? '▣' : '⧉';
+  pipBtn.title = isOn ? 'Dock thread panel' : 'Pop out thread (PiP)';
+  pipBtn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+  localStorage.setItem('haven_thread_panel_pip', isOn ? '1' : '0');
+
+  if (isOn) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('haven_thread_panel_pip_rect') || 'null'); } catch {}
+
+    const minW = 320;
+    const maxW = Math.min(760, window.innerWidth - 28);
+    const minH = 240;
+    const footerOffset = (() => {
+      const raw = getComputedStyle(document.body).getPropertyValue('--thread-footer-offset');
+      const v = parseInt(raw, 10);
+      return Number.isFinite(v) ? v : 0;
+    })();
+    const maxH = Math.max(minH, window.innerHeight - footerOffset - 28);
+
+    const width = Math.max(minW, Math.min(maxW, (saved && saved.width) || panel.offsetWidth || 420));
+    const height = Math.max(minH, Math.min(maxH, (saved && saved.height) || panel.offsetHeight || 460));
+    const defaultLeft = Math.max(0, window.innerWidth - width - 14);
+    const defaultTop = Math.max(0, window.innerHeight - footerOffset - height - 14);
+    const left = Math.max(0, Math.min(window.innerWidth - width, (saved && Number.isFinite(saved.left)) ? saved.left : defaultLeft));
+    const top = Math.max(0, Math.min(window.innerHeight - footerOffset - height, (saved && Number.isFinite(saved.top)) ? saved.top : defaultTop));
+
+    panel.style.width = `${Math.round(width)}px`;
+    panel.style.height = `${Math.round(height)}px`;
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  } else {
+    panel.style.height = '';
+    panel.style.left = '';
+    panel.style.top = '';
+    panel.style.right = '';
+    panel.style.bottom = '';
+  }
+},
+
+_toggleThreadPiP() {
+  const panel = document.getElementById('thread-panel');
+  if (!panel) return;
+  this._setThreadPiPEnabled(!panel.classList.contains('pip'));
+},
+
+_closeThread() {
+  this._activeThreadParent = null;
+  this._clearThreadReply();
+  const panel = document.getElementById('thread-panel');
+  if (panel) {
+    panel.style.display = 'none';
+    panel.dataset.parentId = '';
+  }
+},
+
+_sendThreadMessage() {
+  const input = document.getElementById('thread-input');
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) return;
+  const parentId = this._activeThreadParent;
+  if (!parentId) return;
+  const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
+
+  this.socket.emit('send-thread-message', { parentId, content, replyTo }, (resp) => {
+    if (resp && resp.error) {
+      this._showToast(resp.error, 'error');
+      return;
+    }
+    this._clearThreadReply();
+  });
+  input.value = '';
+},
+
+_appendThreadMessage(msg) {
+  const container = document.getElementById('thread-messages');
+  if (!container) return;
+
+  const color = this._getUserColor(msg.username);
+  const initial = msg.username.charAt(0).toUpperCase();
+  let avatarHtml;
+  if (msg.avatar) {
+    avatarHtml = `<img class="thread-msg-avatar" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
+  } else {
+    avatarHtml = `<div class="thread-msg-avatar thread-msg-avatar-initial" style="background:${color}">${initial}</div>`;
+  }
+
+  const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
+  const replyHtml = msg.replyContext ? this._renderReplyBanner(msg.replyContext) : '';
+  const canDelete = msg.user_id === this.user.id || this.user.isAdmin || this._canModerate();
+  const canEdit = msg.user_id === this.user.id;
+  const iconPair = (emoji, monoSvg) => `<span class="tb-icon tb-icon-emoji" aria-hidden="true">${emoji}</span><span class="tb-icon tb-icon-mono" aria-hidden="true">${monoSvg}</span>`;
+  const iReact = iconPair('😀', '<svg class="thread-action-react-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-width="1.8"></circle><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke-width="1.8" stroke-linecap="round"></path><circle cx="9.2" cy="10.2" r="1" fill="currentColor" stroke="none"></circle><circle cx="14.8" cy="10.2" r="1" fill="currentColor" stroke="none"></circle></svg>');
+  const iReply = iconPair('↩️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8L4 12L10 16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M20 12H5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+  const iQuote = iconPair('💬', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 7h-4v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>');
+  const iEdit = iconPair('✏️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M13.5 6.5l3.5 3.5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+  const iDelete = iconPair('🗑️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 7V5h6v2" stroke-width="1.8" stroke-linecap="round"></path><path d="M7 7l1 12h8l1-12" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
+  const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
+  const threadCoreToolbarBtns = `<button data-thread-action="react" title="React" aria-label="React">${iReact}</button><button data-thread-action="reply" title="Reply">${iReply}</button><button data-thread-action="quote" title="Quote">${iQuote}</button>`;
+  let threadOverflowToolbarBtns = '';
+  if (canEdit) threadOverflowToolbarBtns += `<button data-thread-action="edit" title="Edit">${iEdit}</button>`;
+  if (canDelete) threadOverflowToolbarBtns += `<button data-thread-action="delete" title="Delete">${iDelete}</button>`;
+  const threadOverflowHtml = threadOverflowToolbarBtns
+    ? `<div class="thread-msg-more"><button class="thread-msg-more-btn" type="button" aria-label="More actions">${iMore}</button><div class="thread-msg-overflow">${threadOverflowToolbarBtns}</div></div>`
+    : '';
+
+  const el = document.createElement('div');
+  el.className = 'thread-message';
+  el.dataset.msgId = msg.id;
+  el.dataset.rawContent = msg.content;
+  el.innerHTML = `
+    <div class="thread-msg-row">
+      ${avatarHtml}
+      <div class="thread-msg-body">
+        <div class="thread-msg-header">
+          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(msg.username)}</span>
+          <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
+          <span class="thread-msg-header-spacer"></span>
+          <div class="thread-msg-toolbar">
+            <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
+            ${threadOverflowHtml}
+          </div>
+        </div>
+        ${replyHtml}
+        <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
+        ${reactionsHtml}
+      </div>
+    </div>
+  `;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+},
+
+_updateThreadPreview(parentId, thread) {
+  const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
+  if (!msgEl) return;
+  const oldPreview = msgEl.querySelector('.thread-preview');
+  const newHtml = this._renderThreadPreview(parentId, thread);
+  if (oldPreview) {
+    oldPreview.outerHTML = newHtml;
+  } else if (newHtml) {
+    // Insert after reactions row, or after message-content
+    const reactions = msgEl.querySelector('.reactions-row');
+    const content = msgEl.querySelector('.message-content');
+    const insertAfter = reactions || content;
+    if (insertAfter) insertAfter.insertAdjacentHTML('afterend', newHtml);
+  }
 },
 
 // ═══════════════════════════════════════════════════════
@@ -1382,7 +1729,7 @@ _quoteMessage(msgEl) {
 
   // Build the blockquote text — each line prefixed with >
   const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
-  const quoteText = `${quotedLines}\n@${author} `;
+  const quoteText = `> @${author} wrote:\n${quotedLines}\n`;
 
   const input = document.getElementById('message-input');
   // If there's already text, add a newline before the quote
@@ -1405,7 +1752,7 @@ _startEditMessage(msgEl, msgId) {
   // Guard against re-entering edit mode
   if (msgEl.classList.contains('editing')) return;
 
-  const contentEl = msgEl.querySelector('.message-content');
+  const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
   if (!contentEl) return;
 
   // Use the stored raw markdown content (set on render and kept in sync on

@@ -1036,12 +1036,16 @@ router.get('/SSO', (req, res) => {
     .success { display: none; color: #4ade80; font-size: 15px; margin-top: 12px; }
     .not-logged-in { color: #ef4444; }
     .loading { color: #888; }
+    .debug { margin-top: 10px; font-size: 12px; color: #8f95b2; word-break: break-word; }
+    .debug.error { color: #ef4444; }
+    .debug.ok { color: #4ade80; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>⬡ Haven SSO</h2>
     <div id="loading" class="loading"><p>Checking login status...</p></div>
+    <div id="sso-debug" class="debug">Starting SSO checks...</div>
     <div id="not-logged-in" style="display:none">
       <p class="not-logged-in">You are not logged in to this server.</p>
       <p style="font-size:13px;color:#888;margin-top:8px">Log in first, then try again.</p>
@@ -1065,52 +1069,105 @@ router.get('/SSO', (req, res) => {
   <script>
     const authCode = '${safeAuthCode}';
     const origin = '${safeOrigin}';
+    let approvedProfile = null;
 
     (async function() {
-      function showNotLoggedIn() {
+      const loadingEl = document.getElementById('loading');
+      const debugEl = document.getElementById('sso-debug');
+
+      function setDebug(msg, tone = '') {
+        if (!debugEl) return;
+        debugEl.textContent = msg;
+        debugEl.className = 'debug' + (tone ? (' ' + tone) : '');
+      }
+
+      function showNotLoggedIn(reason = 'No active login was found on this server.') {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('not-logged-in').style.display = 'block';
+        setDebug(reason, 'error');
       }
+
+      function showConsentReady() {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('consent').style.display = 'block';
+        setDebug('Login verified. You can approve this SSO request.', 'ok');
+      }
+
+      // Safety watchdog: if anything stalls, stop showing an indefinite spinner.
+      const bootTimeout = setTimeout(() => {
+        if (loadingEl && loadingEl.style.display !== 'none') {
+          showNotLoggedIn('SSO check timed out. Try refreshing this page or logging in again.');
+        }
+      }, 10000);
 
       let token;
       try {
+        setDebug('Reading local login token...');
         token = localStorage.getItem('haven_token');
       } catch {
         // localStorage blocked (third-party cookies, popup restrictions, etc.)
-        showNotLoggedIn();
+        showNotLoggedIn('Browser storage is blocked in this tab, so Haven cannot read your login token.');
+        clearTimeout(bootTimeout);
         return;
       }
 
       if (!token) {
-        showNotLoggedIn();
+        showNotLoggedIn('No Haven login token found in this browser profile.');
+        clearTimeout(bootTimeout);
         return;
       }
 
       // Verify token is still valid by calling the server
       try {
+        setDebug('Validating token with this server...');
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 7000);
         const verifyRes = await fetch('/api/auth/validate', {
-          headers: { 'Authorization': 'Bearer ' + token }
+          headers: { 'Authorization': 'Bearer ' + token },
+          signal: ctrl.signal
         });
-        if (!verifyRes.ok) { showNotLoggedIn(); return; }
+        clearTimeout(timer);
+        if (!verifyRes.ok) {
+          showNotLoggedIn('Token validation failed (' + verifyRes.status + '). Please log in again.');
+          clearTimeout(bootTimeout);
+          return;
+        }
         const userData = await verifyRes.json();
+        approvedProfile = {
+          username: userData.username || '—',
+          displayName: userData.displayName || userData.username || '—',
+          profilePicture: userData.avatar || null
+        };
 
-        document.getElementById('sso-username').textContent = userData.displayName || userData.username || '—';
+        document.getElementById('sso-username').textContent = approvedProfile.displayName || approvedProfile.username;
         document.getElementById('sso-avatar').textContent = userData.avatar ? 'Will be shared' : 'None set';
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('consent').style.display = 'block';
+        showConsentReady();
+        clearTimeout(bootTimeout);
       } catch {
         // Fall back to localStorage user data if validate endpoint unavailable
         try {
+          setDebug('Validate endpoint unavailable. Falling back to local profile data...');
           const userStr = localStorage.getItem('haven_user');
           const user = userStr ? JSON.parse(userStr) : null;
-          if (!user) { showNotLoggedIn(); return; }
+          if (!user) {
+            showNotLoggedIn('Could not validate token and no cached local user profile was found.');
+            clearTimeout(bootTimeout);
+            return;
+          }
 
-          document.getElementById('sso-username').textContent = user.displayName || user.username || '—';
+          approvedProfile = {
+            username: user.username || '—',
+            displayName: user.displayName || user.username || '—',
+            profilePicture: user.avatar || null
+          };
+
+          document.getElementById('sso-username').textContent = approvedProfile.displayName || approvedProfile.username;
           document.getElementById('sso-avatar').textContent = user.avatar ? 'Will be shared' : 'None set';
-          document.getElementById('loading').style.display = 'none';
-          document.getElementById('consent').style.display = 'block';
+          showConsentReady();
+          clearTimeout(bootTimeout);
         } catch {
-          showNotLoggedIn();
+          showNotLoggedIn('Failed to read cached local profile for SSO consent.');
+          clearTimeout(bootTimeout);
           return;
         }
       }
@@ -1126,15 +1183,28 @@ router.get('/SSO', (req, res) => {
             body: JSON.stringify({ authCode, origin })
           });
           if (res.ok) {
+            setDebug('Approval stored on home server. Returning profile to requesting server...', 'ok');
+            if (origin && window.opener && approvedProfile) {
+              try {
+                window.opener.postMessage({
+                  type: 'haven-sso-approved',
+                  authCode,
+                  profile: approvedProfile,
+                  serverOrigin: window.location.origin
+                }, origin);
+              } catch {}
+            }
             document.getElementById('buttons').style.display = 'none';
             document.getElementById('success-msg').style.display = 'block';
           } else {
             const data = await res.json().catch(() => ({}));
+            setDebug(data.error || 'Approval failed on home server.', 'error');
             alert(data.error || 'Failed to approve');
             btn.disabled = false;
             btn.textContent = 'Approve';
           }
         } catch {
+          setDebug('Connection error while approving SSO request.', 'error');
           alert('Connection error');
           btn.disabled = false;
           btn.textContent = 'Approve';
@@ -1174,6 +1244,13 @@ router.post('/SSO/approve', (req, res) => {
 // GET /api/auth/SSO/authenticate?authCode=X — Foreign server calls this to retrieve user info
 // This is called by the CLIENT on the foreign server, not server-to-server.
 router.get('/SSO/authenticate', ssoAuthLimiter, (req, res) => {
+  const requestOrigin = req.headers.origin;
+  if (requestOrigin) {
+    res.set('Access-Control-Allow-Origin', requestOrigin);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Credentials', 'false');
+  }
+
   const authCode = typeof req.query.authCode === 'string' ? req.query.authCode.trim() : '';
   if (!authCode) return res.status(400).json({ error: 'Missing auth code' });
 
@@ -1183,11 +1260,8 @@ router.get('/SSO/authenticate', ssoAuthLimiter, (req, res) => {
   // One-time use: delete immediately
   pendingSSO.delete(authCode);
 
-  // Set CORS to allow the requesting origin (if provided during approval)
-  if (pending.origin) {
-    res.set('Access-Control-Allow-Origin', pending.origin);
-    res.set('Access-Control-Allow-Credentials', 'false');
-  }
+  // If this auth code was issued for a specific origin, mirror it for strictness.
+  if (pending.origin) res.set('Access-Control-Allow-Origin', pending.origin);
 
   const db = getDb();
   const user = db.prepare('SELECT username, avatar, display_name FROM users WHERE id = ?').get(pending.userId);
@@ -1201,7 +1275,8 @@ router.get('/SSO/authenticate', ssoAuthLimiter, (req, res) => {
   }
 
   res.json({
-    username: user.display_name || user.username,
+    username: user.username,
+    displayName: user.display_name || user.username,
     profilePicture: avatarUrl
   });
 });
