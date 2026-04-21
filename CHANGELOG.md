@@ -11,6 +11,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.6.0] — 2026-04-21
+
+### Added
+- **Channel and message deep links** — right-click any channel or DM to copy a shareable deep link. The message toolbar gains a copy-link button that jumps directly to the message after navigating. Links survive login via sessionStorage handoff (same pattern as invite codes).
+- **Admin remote backup and restore** — the Admin settings tab now includes a Backup section with configurable export checkboxes (channels/roles, users, server settings, messages, uploaded files) and a restore upload field. Restore stages the data and exits so a supervisor (Docker, systemd, installer service) restarts Haven; the previous DB and uploads are preserved as `.pre-restore` copies for one cycle.
+
+### Fixed
+- **Server icon URL cache-busting** — server icon URLs are now cache-busted to bypass stale entries left over from before cross-origin support was added. (#5240)
+- **Server list subpath URL preservation** — subpath-based server URLs (e.g. `https://host/community`) are now correctly preserved during normalization instead of being stripped to the origin.
+- **SSO consent validate timeout** — tightened the SSO validate request to 4 seconds (watchdog at 5s) with fallback to the cached profile, preventing consent screens from getting stuck when validation is slow.
+
+### Security
+- **Cross-Origin-Resource-Policy and Vary headers** — image and health endpoints now return `Cross-Origin-Resource-Policy: cross-origin` and `Vary: Origin` to support cross-server icon loading without CORS errors.
+
+---
+
 ## [3.5.0] — 2026-04-20
 
 ### Added
