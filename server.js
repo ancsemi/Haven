@@ -1191,10 +1191,11 @@ app.post('/api/upload-role-icon', uploadLimiter, (req, res) => {
 });
 
 // ── Admin: Server backup download (admin only) ──
-// Two modes:
-//   ?mode=structure → JSON of channels, users (sanitized), roles, permissions, server settings
-//   ?mode=full      → ZIP of the live haven.db (snapshot via VACUUM INTO) + uploads/
+// Configurable per-section via ?include=channels,users,settings,messages,files
+// Backwards-compat: ?mode=structure → channels,users,settings ;
+//                   ?mode=full      → channels,users,settings,messages,files
 // Token may be passed via ?token=... so the browser can trigger a normal download.
+const ALL_BACKUP_SECTIONS = ['channels', 'users', 'settings', 'messages', 'files'];
 app.get('/api/admin/backup', (req, res) => {
   const token = req.query.token || req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
@@ -1202,9 +1203,28 @@ app.get('/api/admin/backup', (req, res) => {
   if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
   const AdmZip = require('adm-zip');
-  const mode = req.query.mode === 'full' ? 'full' : 'structure';
+
+  // Resolve which sections to include
+  let include = [];
+  if (typeof req.query.include === 'string' && req.query.include.trim()) {
+    include = req.query.include.split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(s => ALL_BACKUP_SECTIONS.includes(s));
+  } else if (req.query.mode === 'full') {
+    include = ALL_BACKUP_SECTIONS.slice();
+  } else {
+    // default / mode=structure
+    include = ['channels', 'users', 'settings'];
+  }
+  if (!include.length) {
+    return res.status(400).json({ error: 'Pick at least one section to back up' });
+  }
+  const has = (s) => include.includes(s);
+  // The restore endpoint only accepts mode='full' — set it when the backup
+  // contains both the live DB and uploads, since that's what restore requires.
+  const mode = (has('messages') && has('files')) ? 'full' : 'partial';
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const filename = `haven-backup-${mode}-${ts}.zip`;
+  const filename = `haven-backup-${mode === 'full' ? 'full' : include.join('-')}-${ts}.zip`;
 
   let tmpDb = null;
   try {
@@ -1217,58 +1237,69 @@ app.get('/api/admin/backup', (req, res) => {
       version: require('./package.json').version,
       exportedAt: new Date().toISOString(),
       mode,
+      include,
       serverName: process.env.SERVER_NAME || 'Haven',
     };
     zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)));
 
-    if (mode === 'structure') {
-      const tables = [
-        'users', 'channels', 'roles', 'role_permissions', 'user_roles',
-        'channel_members', 'server_settings', 'whitelist',
-      ];
+    // Structure JSON — collect tables per selected sections
+    const structureTables = [];
+    if (has('channels')) structureTables.push('channels', 'roles', 'role_permissions', 'user_roles', 'channel_members');
+    if (has('users')) structureTables.push('users');
+    if (has('settings')) structureTables.push('server_settings', 'whitelist');
+
+    if (structureTables.length) {
       const data = {};
-      for (const tbl of tables) {
+      for (const tbl of structureTables) {
         try { data[tbl] = db.prepare(`SELECT * FROM ${tbl}`).all(); }
         catch { data[tbl] = []; }
       }
       // Strip secrets from users — passwords, TOTP, recovery codes never leave the server
-      data.users = (data.users || []).map(u => {
-        const safe = { ...u };
-        delete safe.password_hash;
-        delete safe.password_version;
-        delete safe.totp_secret;
-        delete safe.totp_backup_codes;
-        delete safe.recovery_codes_hash;
-        delete safe.recovery_codes;
-        delete safe.email;
-        return safe;
-      });
-      // Strip JWT secret / VAPID keys / vanity codes that shouldn't travel in structure backups
-      const SENSITIVE_KEYS = new Set(['vanity_code', 'server_invite_code']);
-      data.server_settings = (data.server_settings || []).filter(r => !SENSITIVE_KEYS.has(r.key));
+      if (data.users) {
+        data.users = data.users.map(u => {
+          const safe = { ...u };
+          delete safe.password_hash;
+          delete safe.password_version;
+          delete safe.totp_secret;
+          delete safe.totp_backup_codes;
+          delete safe.recovery_codes_hash;
+          delete safe.recovery_codes;
+          delete safe.email;
+          return safe;
+        });
+      }
+      // Strip vanity codes / invite codes from server_settings
+      if (data.server_settings) {
+        const SENSITIVE_KEYS = new Set(['vanity_code', 'server_invite_code']);
+        data.server_settings = data.server_settings.filter(r => !SENSITIVE_KEYS.has(r.key));
+      }
       zip.addFile('structure.json', Buffer.from(JSON.stringify(data, null, 2)));
-    } else {
-      // Full snapshot: VACUUM INTO produces a consistent copy of the live DB.
+    }
+
+    // Messages — include the full DB snapshot so restore can rebuild everything.
+    // (Cherry-picking message tables would defeat referential integrity.)
+    if (has('messages')) {
       tmpDb = path.join(DATA_DIR, `.backup-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
       try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch {}
       const safePath = tmpDb.replace(/'/g, "''");
       db.prepare(`VACUUM INTO '${safePath}'`).run();
       zip.addLocalFile(tmpDb, '', 'haven.db');
+    }
 
-      if (fs.existsSync(UPLOADS_DIR)) {
-        const walk = (dir, rel) => {
-          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-            if (entry.name === 'deleted-attachments') continue;
-            const full = path.join(dir, entry.name);
-            const sub = rel ? `${rel}/${entry.name}` : entry.name;
-            try {
-              if (entry.isFile()) zip.addLocalFile(full, `uploads${rel ? '/' + rel : ''}`);
-              else if (entry.isDirectory()) walk(full, sub);
-            } catch {}
-          }
-        };
-        walk(UPLOADS_DIR, '');
-      }
+    // Files — uploaded attachments / icons / banners / sounds
+    if (has('files') && fs.existsSync(UPLOADS_DIR)) {
+      const walk = (dir, rel) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (entry.name === 'deleted-attachments') continue;
+          const full = path.join(dir, entry.name);
+          const sub = rel ? `${rel}/${entry.name}` : entry.name;
+          try {
+            if (entry.isFile()) zip.addLocalFile(full, `uploads${rel ? '/' + rel : ''}`);
+            else if (entry.isDirectory()) walk(full, sub);
+          } catch {}
+        }
+      };
+      walk(UPLOADS_DIR, '');
     }
 
     const buf = zip.toBuffer();

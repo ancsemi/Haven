@@ -1768,11 +1768,19 @@
           <small class="settings-hint" data-i18n="settings.admin.backup_hint">Download a backup of this server, or restore from a previous backup. Useful when you don't have shell access to the host machine.</small>
           <div class="settings-group" style="margin-top:10px">
             <small class="settings-group-label" data-i18n="settings.admin.backup_download_label">Download Backup</small>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-              <button class="btn-sm btn-accent" id="backup-download-structure-btn">📋 <span data-i18n="settings.admin.backup_structure_btn">Structure Only</span></button>
-              <button class="btn-sm btn-accent" id="backup-download-full-btn">📦 <span data-i18n="settings.admin.backup_full_btn">Full Backup</span></button>
+            <div class="backup-checkboxes" style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="channels" checked> <span data-i18n="settings.admin.backup_inc_channels">Channels &amp; roles</span></label>
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="users" checked> <span data-i18n="settings.admin.backup_inc_users">Users (no passwords / 2FA / emails)</span></label>
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="settings" checked> <span data-i18n="settings.admin.backup_inc_settings">Server settings</span></label>
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="messages"> <span data-i18n="settings.admin.backup_inc_messages">Messages (chat history)</span></label>
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="files"> <span data-i18n="settings.admin.backup_inc_files">Uploaded files</span></label>
             </div>
-            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_modes_hint"><strong>Structure</strong> includes channels, users (no passwords), roles, and server settings. <strong>Full</strong> also includes all messages and uploaded files. Full backups can be large.</small>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+              <button class="btn-sm btn-accent" id="backup-download-btn">⬇️ <span data-i18n="settings.admin.backup_download_btn">Download Backup</span></button>
+              <button class="btn-sm" id="backup-select-all-btn" type="button" data-i18n="settings.admin.backup_select_all">Select All</button>
+              <button class="btn-sm" id="backup-select-none-btn" type="button" data-i18n="settings.admin.backup_select_none">Clear</button>
+            </div>
+            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_modes_hint">Pick what to include. Messages and uploaded files can make the backup very large; channels / users / settings alone are usually small. User passwords, 2FA secrets, and emails are never exported.</small>
           </div>
           <div class="settings-group" style="margin-top:14px">
             <small class="settings-group-label" data-i18n="settings.admin.backup_restore_label">Restore From Backup</small>
@@ -2377,6 +2385,7 @@
   <div id="channel-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="mark-read">✅ <span data-i18n="context_menu.channel.mark_read">Mark as Read</span></button>
     <button class="channel-ctx-item" data-action="mute">🔔 <span data-i18n="context_menu.channel.mute">Mute Channel</span></button>
+    <button class="channel-ctx-item" data-action="copy-channel-link">🔗 <span data-i18n="context_menu.channel.copy_link">Copy Channel Link</span></button>
     <button class="channel-ctx-item" data-action="join-voice">🎙️ <span data-i18n="voice.join_ctx">Join Voice</span></button>
     <button class="channel-ctx-item" data-action="leave-voice" style="display:none">📴 <span data-i18n="context_menu.channel.disconnect_voice">Disconnect Voice</span></button>
     <hr class="channel-ctx-sep">
@@ -2460,6 +2469,7 @@
   <div id="dm-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="dm-mark-read">✅ <span data-i18n="context_menu.dm.mark_read">Mark as Read</span></button>
     <button class="channel-ctx-item" data-action="dm-mute">🔔 <span data-i18n="context_menu.dm.mute">Mute DM</span></button>
+    <button class="channel-ctx-item" data-action="dm-copy-link">🔗 <span data-i18n="context_menu.dm.copy_link">Copy DM Link</span></button>
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item danger" data-action="dm-delete">🗑️ <span data-i18n="context_menu.dm.delete">Delete DM</span></button>
   </div>

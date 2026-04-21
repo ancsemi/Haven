@@ -202,6 +202,13 @@ _setupUI() {
     localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
     this._renderChannels();
   });
+  // Copy channel link from context menu
+  document.querySelector('#channel-ctx-menu [data-action="copy-channel-link"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this._copyChannelLink(code);
+  });
   // Join voice from context menu
   document.querySelector('[data-action="join-voice"]')?.addEventListener('click', () => {
     const code = this._ctxMenuChannel;
@@ -1734,6 +1741,8 @@ _setupUI() {
       this.socket.emit('archive-message', { messageId: msgId });
     } else if (action === 'unarchive') {
       this.socket.emit('unarchive-message', { messageId: msgId });
+    } else if (action === 'copy-link') {
+      this._copyChannelLink(this.currentChannel, msgId);
     }
   });
 
@@ -2750,11 +2759,10 @@ _setupUI() {
   }
 
   // ── Server backup / restore (admin) ──────────────────
-  const startBackupDownload = (mode) => {
+  const startBackupDownload = (include) => {
     const token = localStorage.getItem('haven_token');
     if (!token) return this._showToast(t('toasts.not_logged_in') || 'Not logged in', 'error');
-    const url = `/api/admin/backup?mode=${encodeURIComponent(mode)}&token=${encodeURIComponent(token)}`;
-    // Use a hidden iframe so we don't navigate the page if anything goes wrong
+    const url = `/api/admin/backup?include=${encodeURIComponent(include)}&token=${encodeURIComponent(token)}`;
     const a = document.createElement('a');
     a.href = url;
     a.style.display = 'none';
@@ -2763,12 +2771,23 @@ _setupUI() {
     setTimeout(() => a.remove(), 1000);
     this._showToast(t('toasts.backup_started') || 'Preparing backup…', 'info');
   };
-  document.getElementById('backup-download-structure-btn')?.addEventListener('click', () => {
-    startBackupDownload('structure');
+  const getBackupIncludes = () => {
+    return Array.from(document.querySelectorAll('.backup-include:checked')).map(el => el.value);
+  };
+  document.getElementById('backup-download-btn')?.addEventListener('click', () => {
+    const includes = getBackupIncludes();
+    if (!includes.length) {
+      return this._showToast(t('toasts.backup_pick_one') || 'Pick at least one section to back up', 'error');
+    }
+    const heavy = includes.includes('messages') || includes.includes('files');
+    if (heavy && !confirm(t('confirm.backup_heavy') || 'This backup includes messages and/or uploaded files. It may take a while and produce a large download. Continue?')) return;
+    startBackupDownload(includes.join(','));
   });
-  document.getElementById('backup-download-full-btn')?.addEventListener('click', () => {
-    if (!confirm(t('confirm.backup_full') || 'Generate a full backup including all messages and uploaded files? This may take a while and produce a large download.')) return;
-    startBackupDownload('full');
+  document.getElementById('backup-select-all-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.backup-include').forEach(el => { el.checked = true; });
+  });
+  document.getElementById('backup-select-none-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.backup-include').forEach(el => { el.checked = false; });
   });
 
   const restoreBtn = document.getElementById('backup-restore-btn');
@@ -2873,6 +2892,40 @@ _setupUI() {
       });
     }
   });
+},
+
+// ═══════════════════════════════════════════════════════
+// CHANNEL & MESSAGE LINKS — copy/share deep-links
+// ═══════════════════════════════════════════════════════
+
+/** Copy a Haven-style deep link to a channel (and optionally a message) to the clipboard. */
+_copyChannelLink(code, messageId = null) {
+  if (!code) return;
+  const base = `${window.location.origin}/app.html?channel=${encodeURIComponent(code)}`;
+  const url = messageId ? `${base}&message=${encodeURIComponent(messageId)}` : base;
+  const onCopied = () => {
+    const key = messageId ? 'toasts.message_link_copied' : 'toasts.channel_link_copied';
+    const fallback = messageId ? 'Message link copied' : 'Channel link copied';
+    this._showToast(t(key) || fallback, 'success');
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(url).then(onCopied).catch(() => this._copyTextFallback(url, onCopied));
+  } else {
+    this._copyTextFallback(url, onCopied);
+  }
+},
+
+_copyTextFallback(text, onCopied) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    onCopied?.();
+  } catch { /* could not copy */ }
 },
 
 // ═══════════════════════════════════════════════════════

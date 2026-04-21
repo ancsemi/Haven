@@ -546,13 +546,15 @@ _createMessageEl(msg, prevMsg) {
   const iArchive = iconPair('🛡️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v11H4z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M9 11h6" stroke-width="1.8" stroke-linecap="round"></path><path d="M3 7l2-3h14l2 3" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
   const iEdit = iconPair('✏️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M13.5 6.5l3.5 3.5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
   const iDelete = iconPair('🗑️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 7V5h6v2" stroke-width="1.8" stroke-linecap="round"></path><path d="M7 7l1 12h8l1-12" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
+  const iLink = iconPair('🔗', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>');
   const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
 
   const toolbarActions = [
     { key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` },
     { key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` },
     { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` },
-    { key: 'thread', html: `<button data-action="thread" title="Thread">${iThread}</button>` }
+    { key: 'thread', html: `<button data-action="thread" title="Thread">${iThread}</button>` },
+    { key: 'copy-link', html: `<button data-action="copy-link" title="${t('msg_toolbar.copy_link') || 'Copy link to message'}">${iLink}</button>` }
   ];
   const canPin = this.user.isAdmin || this._canModerate();
   const canArchive = this.user.isAdmin || this._hasPerm('archive_messages');
@@ -580,7 +582,7 @@ _createMessageEl(msg, prevMsg) {
     toolbarActions.push({ key: 'delete', html: `<button data-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>` });
   }
 
-  const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'pin', 'archive', 'edit', 'delete'];
+  const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'edit', 'delete'];
   let savedToolbarOrder = [];
   try {
     savedToolbarOrder = JSON.parse(localStorage.getItem('haven-toolbar-order') || '[]');

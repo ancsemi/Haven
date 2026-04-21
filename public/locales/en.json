@@ -158,6 +158,9 @@
     "bio_updated": "Bio updated",
     "display_name_changed": "Display name changed to \"{{name}}\"",
     "channel_code_copied": "Channel code copied!",
+    "channel_link_copied": "Channel link copied",
+    "message_link_copied": "Message link copied",
+    "channel_link_unavailable": "Channel not available on this server",
     "channel_muted": "Channel muted",
     "channel_unmuted": "Channel unmuted",
     "left_channel": "Left #{{name}}",
@@ -202,6 +205,7 @@
     "react": "React",
     "reply": "Reply",
     "quote": "Quote",
+    "copy_link": "Copy link to message",
     "pin": "Pin",
     "unpin": "Unpin",
     "edit": "Edit",
@@ -1482,6 +1486,7 @@
     "channel": {
       "mute": "Mute Channel",
       "unmute": "Unmute Channel",
+      "copy_link": "Copy Channel Link",
       "join_voice": "Join Voice",
       "disconnect_voice": "Disconnect Voice",
       "leave": "Leave Channel",
@@ -1498,6 +1503,7 @@
     "dm": {
       "mute": "Mute DM",
       "unmute": "Unmute DM",
+      "copy_link": "Copy DM Link",
       "delete": "Delete DM"
     }
   },

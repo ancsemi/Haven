@@ -302,6 +302,40 @@ _setupSocketListeners() {
       window.history.replaceState({}, '', cleanUrl);
     }
 
+    // Channel / message deep link (?channel=CODE[&message=ID])
+    const linkChannel = urlParams.get('channel');
+    const linkMessage = urlParams.get('message');
+    if (linkChannel && !this._channelLinkHandled) {
+      this._channelLinkHandled = true;
+      sessionStorage.removeItem('haven_pending_channel');
+      sessionStorage.removeItem('haven_pending_message');
+      const known = (channels || []).some(c => c.code === linkChannel);
+      const go = () => {
+        this.switchChannel(linkChannel);
+        if (linkMessage) {
+          const msgId = parseInt(linkMessage, 10);
+          if (!isNaN(msgId)) {
+            // Wait briefly for messages to load before jumping
+            setTimeout(() => this._jumpToMessage(msgId), 600);
+          }
+        }
+      };
+      if (known) {
+        go();
+      } else {
+        // Try to join the channel by code first; if that succeeds the channel
+        // list will update and we can switch. If it fails, fall through silently.
+        this.socket.emit('join-channel', { code: linkChannel }, (res) => {
+          if (res && res.error) {
+            this._showToast?.(t('toasts.channel_link_unavailable') || 'Channel not available on this server', 'error');
+          } else {
+            setTimeout(go, 200);
+          }
+        });
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     // Re-evaluate input area visibility for the current channel (read-only, text/media toggles may have changed)
     if (this.currentChannel) {
       const curCh = this.channels.find(c => c.code === this.currentChannel);

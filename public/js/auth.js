@@ -5,7 +5,20 @@
   const _urlParams = new URLSearchParams(window.location.search);
   const _pendingInvite = _urlParams.get('invite') || sessionStorage.getItem('haven_pending_invite') || '';
   if (_pendingInvite) sessionStorage.setItem('haven_pending_invite', _pendingInvite);
-  const _appUrl = _pendingInvite ? `/app?invite=${encodeURIComponent(_pendingInvite)}` : '/app';
+  // Preserve channel/message deep-link params (?channel=CODE&message=ID) too
+  const _pendingChannel = _urlParams.get('channel') || sessionStorage.getItem('haven_pending_channel') || '';
+  const _pendingMessage = _urlParams.get('message') || sessionStorage.getItem('haven_pending_message') || '';
+  if (_pendingChannel) sessionStorage.setItem('haven_pending_channel', _pendingChannel);
+  if (_pendingMessage) sessionStorage.setItem('haven_pending_message', _pendingMessage);
+
+  const _appQuery = (() => {
+    const parts = [];
+    if (_pendingInvite) parts.push('invite=' + encodeURIComponent(_pendingInvite));
+    if (_pendingChannel) parts.push('channel=' + encodeURIComponent(_pendingChannel));
+    if (_pendingMessage) parts.push('message=' + encodeURIComponent(_pendingMessage));
+    return parts.length ? '?' + parts.join('&') : '';
+  })();
+  const _appUrl = '/app' + _appQuery;
 
   // If already logged in, redirect to app
   if (localStorage.getItem('haven_token')) {
