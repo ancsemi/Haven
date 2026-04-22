@@ -445,7 +445,16 @@ module.exports = function register(socket, ctx) {
       const bannedIds = new Set(bannedRows.map(r => r.user_id));
 
       const channelCounts = {};
-      const ccRows = db.prepare('SELECT user_id, COUNT(*) as cnt FROM channel_members GROUP BY user_id').all();
+      // Only count regular (non-DM) channels that still exist. Without the
+      // is_dm filter every DM thread would be counted, and stale rows for
+      // deleted channels would bloat the count too. (#5273-adjacent)
+      const ccRows = db.prepare(`
+        SELECT cm.user_id, COUNT(*) as cnt
+        FROM channel_members cm
+        JOIN channels c ON cm.channel_id = c.id
+        WHERE c.is_dm = 0
+        GROUP BY cm.user_id
+      `).all();
       ccRows.forEach(r => { channelCounts[r.user_id] = r.cnt; });
 
       let allChannels = [];
