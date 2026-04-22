@@ -3383,6 +3383,9 @@ _renderManageServersList() {
       if (!confirm(t('confirm.remove_server', { name: s.name }))) return;
       this.serverManager.markRemoved(s.url);
       this.serverManager.remove(s.url);
+      // Also drop from Desktop's cross-server history so it stops getting
+      // re-merged into other servers' sidebars on the next sync.
+      window.havenDesktop?.removeServerHistory?.(s.url)?.catch?.(() => {});
       this._renderServerBar();
       this._renderManageServersList();
       this._showToast(t('toasts.server_removed_named', { name: s.name }), 'success');
@@ -3455,7 +3458,7 @@ _renderServerBar() {
            title="${this._escapeHtml(s.name)} — ${statusText}">
         ${iconContent}
         <span class="server-status-dot ${statusClass}"></span>
-        <span class="server-unread-dot"></span>
+        ${window.havenDesktop ? '<span class="server-unread-dot"></span>' : ''}
         <button class="server-remove" title="${t('servers.remove')}">&times;</button>
       </div>
     `;
@@ -3484,6 +3487,9 @@ _renderServerBar() {
         if (!confirm(t('confirm.remove_server', { name: serverName }))) return;
         this.serverManager.markRemoved(el.dataset.url);
         this.serverManager.remove(el.dataset.url);
+        // Also drop from Desktop's cross-server history so it stops getting
+        // re-merged into other servers' sidebars on the next sync.
+        window.havenDesktop?.removeServerHistory?.(el.dataset.url)?.catch?.(() => {});
         this._renderServerBar();
         this._showToast(t('toasts.server_removed'), 'success');
         this._pushServerListToServer();
