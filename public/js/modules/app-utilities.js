@@ -172,31 +172,43 @@ _formatContent(str) {
   );
 
   // Render @mentions with highlight (negative lookbehind prevents matching inside email addresses).
-  // To support usernames containing spaces (e.g. "John Doe"), we first try
-  // to match any known channel-member name, longest-first. We fall back to
-  // the simple word-only pattern for anyone we don't have a member record
-  // for (rendered messages from other channels, historical authors, etc.). (#5273)
-  // Mentions are inserted by login username, not display name, so renames
-  // don't break old @mentions. We still match display names for backwards
-  // compatibility with messages sent before this change.
-  const memberNames = Array.isArray(this.channelMembers)
-    ? [...new Set(this.channelMembers.flatMap(m => m ? [m.username, m.loginName] : []).filter(Boolean))]
-        .sort((a, b) => b.length - a.length)
-    : [];
-  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const namesAlt = memberNames.length ? memberNames.map(escapeRe).join('|') + '|' : '';
-  const mentionRegex = new RegExp(`(?<![\\w@])@(${namesAlt}\\w{1,30})`, 'g');
-  // Quick lookup: loginName -> display name, so messages that reference
-  // @loginname render the user's CURRENT display name (resilient to renames).
+  // Only style as a mention when the matched name resolves to a real
+  // channel member (login name OR display name), or to the current user.
+  // Random `@text` that doesn't match anyone is left as plain text. (#5273)
+  // Match by login name first (longest first, supports spaces), then fall
+  // back to display names. Self-mention falls back to a simple \w match for
+  // when channel members haven't loaded yet.
+  const validNames = new Set();
   const loginToDisplay = new Map();
+  const displayToLogin = new Map();
   if (Array.isArray(this.channelMembers)) {
     for (const m of this.channelMembers) {
-      if (m && m.loginName) loginToDisplay.set(m.loginName.toLowerCase(), m.username || m.loginName);
+      if (!m) continue;
+      if (m.loginName) {
+        validNames.add(m.loginName.toLowerCase());
+        loginToDisplay.set(m.loginName.toLowerCase(), m.username || m.loginName);
+      }
+      if (m.username) {
+        validNames.add(m.username.toLowerCase());
+        displayToLogin.set(m.username.toLowerCase(), m.loginName || m.username);
+      }
     }
   }
+  const selfLogin = (this.user.username || '').toLowerCase();
+  if (selfLogin) validNames.add(selfLogin);
+  const allNames = [...validNames].sort((a, b) => b.length - a.length);
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Build alt list of known names; also keep a generic fallback for any
+  // \w token so we can detect a candidate before validating it below.
+  const namesAlt = allNames.length ? allNames.map(escapeRe).join('|') + '|' : '';
+  const mentionRegex = new RegExp(`(?<![\\w@])@(${namesAlt}\\w{1,30})`, 'gi');
   html = html.replace(mentionRegex, (match, name) => {
     const lower = name.toLowerCase();
-    const isSelf = lower === (this.user.username || '').toLowerCase();
+    // Only render as a mention if this matches a known member or self.
+    // (When channelMembers hasn't loaded yet, allow self-mention only.)
+    const isKnown = validNames.has(lower);
+    const isSelf  = lower === selfLogin;
+    if (!isKnown && !isSelf) return match;
     const display = loginToDisplay.get(lower) || name;
     return `<span class="mention${isSelf ? ' mention-self' : ''}">@${this._escapeHtml(display)}</span>`;
   });

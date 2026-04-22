@@ -860,7 +860,14 @@ _setupSocketListeners() {
   // ── Channel members (for @mentions) ────────────────
   this.socket.on('channel-members', (data) => {
     if (data.channelCode === this.currentChannel) {
+      const wasEmpty = !this.channelMembers || this.channelMembers.length === 0;
       this.channelMembers = data.members;
+      // First load can render messages before members arrive, so the
+      // mention regex falls back to login names. Re-render once members
+      // are known so display names + valid-mention filtering kick in. (#5273)
+      if (wasEmpty && this._lastRenderedMessages && this._lastRenderedMessages.length) {
+        try { this._renderMessages(this._lastRenderedMessages, this._lastRenderedReadId); } catch {}
+      }
     }
   });
 

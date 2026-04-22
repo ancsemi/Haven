@@ -182,6 +182,10 @@ _jumpToMessage(msgId) {
 },
 
 _renderMessages(messages, lastReadMessageId) {
+  // Cache the last batch so other handlers can re-render (e.g. mention
+  // formatting after channel-members arrives on first load). (#5273)
+  this._lastRenderedMessages = messages;
+  this._lastRenderedReadId = lastReadMessageId;
   const container = document.getElementById('messages');
   container.innerHTML = '';
   // Only render the last MAX_DOM_MESSAGES to prevent OOM on large histories
