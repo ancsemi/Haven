@@ -752,6 +752,47 @@ function setupSocketHandlers(io, db) {
     } catch (err) {
       console.error('Temporary channel cleanup error:', err);
     }
+
+    // Safety net: prune empty temp-voice channels that the on-leave path
+    // somehow missed (e.g. abrupt disconnects, reconnects re-binding the
+    // voice entry to a new socket before the old one disconnected, etc.).
+    // Without this, an empty temp channel would linger until the 24-hour
+    // expires_at fires.
+    try {
+      const tempVoice = db.prepare(
+        "SELECT id, code FROM channels WHERE is_temp_voice = 1"
+      ).all();
+      for (const ch of tempVoice) {
+        const room = voiceUsers.get(ch.code);
+        // Only prune when nobody is in the voice room (or the room is gone).
+        if (room && room.size > 0) {
+          // Drop stale socket entries first; if all turn out to be dead,
+          // pruneStaleVoiceUsers itself deletes the channel. Otherwise skip.
+          for (const [userId, entry] of room) {
+            const sock = io.sockets.sockets.get(entry.socketId);
+            if (!sock || !sock.connected) room.delete(userId);
+          }
+          if (room.size > 0) continue;
+        }
+        // Also require the channel to be at least 30s old so we don't race
+        // with the creator who hasn't joined voice yet.
+        const age = db.prepare(
+          "SELECT (julianday('now') - julianday(created_at)) * 86400 AS secs FROM channels WHERE id = ?"
+        ).get(ch.id);
+        if (age && age.secs != null && age.secs < 30) continue;
+        db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+        db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
+        db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+        io.emit('channel-deleted', { code: ch.code, reason: 'temp-empty' });
+        channelUsers.delete(ch.code);
+        voiceUsers.delete(ch.code);
+        activeMusic.delete(ch.code);
+        musicQueues.delete(ch.code);
+        console.log(`[Temporary] Empty temp voice channel "${ch.code}" pruned by safety-net sweep`);
+      }
+    } catch { /* column may not exist yet */ }
   }, 60 * 1000);
 
   // Channel code rotation (every 30s)
