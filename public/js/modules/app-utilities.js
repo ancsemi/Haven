@@ -171,10 +171,21 @@ _formatContent(str) {
     }
   );
 
-  // Render @mentions with highlight (negative lookbehind prevents matching inside email addresses)
-  html = html.replace(/(?<!\w)@(\w{1,30})/g, (match, username) => {
-    const isSelf = username.toLowerCase() === this.user.username.toLowerCase();
-    return `<span class="mention${isSelf ? ' mention-self' : ''}">${match}</span>`;
+  // Render @mentions with highlight (negative lookbehind prevents matching inside email addresses).
+  // To support usernames containing spaces (e.g. "John Doe"), we first try
+  // to match any known channel-member name, longest-first. We fall back to
+  // the simple word-only pattern for anyone we don't have a member record
+  // for (rendered messages from other channels, historical authors, etc.). (#5273)
+  const memberNames = Array.isArray(this.channelMembers)
+    ? [...new Set(this.channelMembers.map(m => m && m.username).filter(Boolean))]
+        .sort((a, b) => b.length - a.length)
+    : [];
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const namesAlt = memberNames.length ? memberNames.map(escapeRe).join('|') + '|' : '';
+  const mentionRegex = new RegExp(`(?<![\\w@])@(${namesAlt}\\w{1,30})`, 'g');
+  html = html.replace(mentionRegex, (match, name) => {
+    const isSelf = name.toLowerCase() === (this.user.username || '').toLowerCase();
+    return `<span class="mention${isSelf ? ' mention-self' : ''}">@${this._escapeHtml(name)}</span>`;
   });
 
   // Render spoilers (||text||) — CSP-safe, uses delegated click handler

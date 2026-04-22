@@ -576,8 +576,11 @@ _setupSocketListeners() {
         const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
         const _isMuted = _mutedChs.includes(data.channelCode);
         if (!_isMuted) {
-          // Check if message contains @mention of current user
-          const mentionRegex = new RegExp(`@${this.user.username}\\b`, 'i');
+          // Check if message contains @mention of current user.
+          // Escape regex chars and use non-word lookahead so usernames
+          // containing spaces or symbols still match. (#5273)
+          const _meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const mentionRegex = new RegExp(`@${_meEsc}(?!\\w)`, 'i');
           const _notifCh = this.channels.find(c => c.code === data.channelCode);
           const _isAnnouncement = _notifCh && _notifCh.notification_type === 'announcement';
           const _isReplyToMe = data.message.replyContext && data.message.replyContext.user_id === this.user.id;
@@ -614,8 +617,9 @@ _setupSocketListeners() {
       }
       // Don't play notification sounds for your own messages in other channels
       if (data.message.user_id !== this.user.id && !_isMuted2) {
-        // Check @mention even in other channels
-        const mentionRegex = new RegExp(`@${this.user.username}\\b`, 'i');
+        // Check @mention even in other channels (escape username, no \b so spaces work). (#5273)
+        const _meEsc2 = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const mentionRegex = new RegExp(`@${_meEsc2}(?!\\w)`, 'i');
         const _notifCh2 = this.channels.find(c => c.code === data.channelCode);
         const _isAnnouncement2 = _notifCh2 && _notifCh2.notification_type === 'announcement';
         const _isReplyToMe2 = data.message.replyContext && data.message.replyContext.user_id === this.user.id;

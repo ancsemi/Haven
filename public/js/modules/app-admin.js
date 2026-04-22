@@ -1324,8 +1324,9 @@ _checkMentionTrigger(inputEl) {
   const cursor = input.selectionStart;
   const text = input.value.substring(0, cursor);
 
-  // Look backwards from cursor for an '@' that starts a word
-  const match = text.match(/@(\w{0,30})$/);
+  // Look backwards from cursor for an '@' that starts a word.
+  // Allow spaces in the query so we can match names like "John Doe". (#5273)
+  const match = text.match(/@([^@\n]{0,30})$/);
   if (match) {
     this.mentionStart = cursor - match[0].length;
     this.mentionQuery = match[1].toLowerCase();
