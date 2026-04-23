@@ -3580,6 +3580,40 @@ _updateServerBadgeDots(badges) {
     const count = normalized[norm(url)] || normalized[url] || badges[url] || 0;
     dot.classList.toggle('active', count > 0);
   });
+  // Report the URLs we can actually surface to the user back to main.
+  // Without this, a background BrowserView for a server the user never
+  // added on this origin would light the taskbar with no visible dot
+  // anywhere — a "phantom" badge. Main filters the taskbar to URLs that
+  // at least one renderer can display. (#5269)
+  this._reportKnownServerUrls();
+},
+
+// Tell the desktop main process which server URLs this view recognises
+// (its own origin + every remote icon currently in its sidebar). Main
+// uses this to filter the taskbar overlay so it never shows a badge for
+// a server the user can't see/visit from any open view.
+_reportKnownServerUrls() {
+  if (!window.havenDesktop?.reportKnownServerUrls) return;
+  const norm = (raw) => {
+    let v = String(raw || '').trim();
+    if (!v) return '';
+    if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
+    try {
+      const u = new URL(v);
+      u.hash = ''; u.search = '';
+      let p = (u.pathname || '/').replace(/\/+$/, '') || '/';
+      p = p.replace(/\/app(?:\.html)?$/i, '') || '/';
+      p = p.replace(/\/+$/, '') || '/';
+      return p === '/' ? u.origin : u.origin + p;
+    } catch { return v.replace(/\/+$/, ''); }
+  };
+  const known = new Set();
+  known.add(norm(window.location.origin));
+  document.querySelectorAll('#server-list .server-icon.remote').forEach(el => {
+    const u = norm(el.dataset.url);
+    if (u) known.add(u);
+  });
+  try { window.havenDesktop.reportKnownServerUrls(Array.from(known)); } catch { /* ignore */ }
 },
 
 // Append a stable cache-buster query param to icon URLs. This forces the
@@ -3676,6 +3710,11 @@ _renderServerBar() {
 
   // Also update mobile sidebar server bubbles
   this._renderMobileSidebarServers();
+
+  // After re-rendering the bar, the set of known server URLs may have
+  // changed — tell main so it can drop phantom taskbar badges from
+  // background views the user no longer has an icon for. (#5269)
+  this._reportKnownServerUrls();
 },
 
 // ═══════════════════════════════════════════════════════
