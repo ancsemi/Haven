@@ -500,43 +500,52 @@ _renderWebhooksList(webhooks) {
 },
 
 _syncSettingsNav() {
-  const isAdmin = document.getElementById('admin-mod-panel')?.style.display !== 'none';
-  // Show/hide individual admin nav items
+  // Use the canonical authoritative flag from the server, not DOM visibility.
+  const isAdmin = !!(this.user && this.user.isAdmin);
+  const canManageEmojis = isAdmin || this._hasPerm('manage_emojis');
+  const canManageSounds = isAdmin || this._hasPerm('manage_soundboard');
+  const canManageRoles = isAdmin || this._hasPerm('manage_roles');
+  const canManageServer = isAdmin || this._hasPerm('manage_server');
+  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageSounds || canManageRoles || canManageServer;
+
+  // Show/hide individual admin nav items (default: hidden for non-admins)
   document.querySelectorAll('.settings-nav-admin').forEach(el => {
     el.style.display = isAdmin ? '' : 'none';
   });
-  // Show/hide the admin tab button in settings header
+  // Show/hide the admin tab button + group + body — gate on ANY admin access
   const adminTab = document.querySelector('.settings-tab-admin');
-  if (adminTab) adminTab.style.display = isAdmin ? '' : 'none';
-  // Show/hide the admin save bar (only visible when admin tab is active)
+  if (adminTab) adminTab.style.display = hasAnyAdminAccess ? '' : 'none';
+  const adminNavGroup = document.querySelector('.settings-nav-admin-group');
+  if (adminNavGroup) adminNavGroup.style.display = hasAnyAdminAccess ? '' : 'none';
+  const adminBody = document.getElementById('settings-body-admin');
+  // settings-body-admin display is governed by tab switching too — only force-hide
+  // when the user has zero admin access so a stale 'block' doesn't leak through.
+  if (adminBody && !hasAnyAdminAccess) adminBody.style.display = 'none';
+  // Show/hide the admin save bar (only visible when admin tab is active AND has access)
   const saveBar = document.querySelector('.admin-save-bar');
   if (saveBar) {
     const adminTabActive = adminTab?.classList.contains('active');
-    saveBar.style.display = (isAdmin && adminTabActive) ? '' : 'none';
+    saveBar.style.display = (hasAnyAdminAccess && adminTabActive) ? '' : 'none';
   }
   // Show the Emojis settings tab for users with manage_emojis permission even if not full admin/mod
   const emojiNavItem = document.querySelector('.settings-nav-item[data-target="section-emojis"]');
-  if (emojiNavItem && !isAdmin && this._hasPerm('manage_emojis')) {
+  if (emojiNavItem && !isAdmin && canManageEmojis) {
     emojiNavItem.style.display = '';
-    if (adminTab) adminTab.style.display = '';
   }
   // Show the Sounds admin tab for users with manage_soundboard permission
   const soundsNavItem = document.querySelector('.settings-nav-item[data-target="section-sounds-admin"]');
-  if (soundsNavItem && !isAdmin && this._hasPerm('manage_soundboard')) {
+  if (soundsNavItem && !isAdmin && canManageSounds) {
     soundsNavItem.style.display = '';
-    if (adminTab) adminTab.style.display = '';
   }
   // Show Roles tab for users with manage_roles permission
   const rolesNavItem = document.querySelector('.settings-nav-item[data-target="section-roles"]');
-  if (rolesNavItem && !isAdmin && this._hasPerm('manage_roles')) {
+  if (rolesNavItem && !isAdmin && canManageRoles) {
     rolesNavItem.style.display = '';
-    if (adminTab) adminTab.style.display = '';
   }
   // Show Server settings tab for users with manage_server permission
   const serverNavItem = document.querySelector('.settings-nav-item[data-target="section-server"]');
-  if (serverNavItem && !isAdmin && this._hasPerm('manage_server')) {
+  if (serverNavItem && !isAdmin && canManageServer) {
     serverNavItem.style.display = '';
-    if (adminTab) adminTab.style.display = '';
   }
   // Also show save bar for users with manage_server perm (when admin tab active)
   if (saveBar && !isAdmin && this._hasPerm('manage_server')) {
