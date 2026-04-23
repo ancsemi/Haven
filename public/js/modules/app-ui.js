@@ -3552,11 +3552,32 @@ _renderManageServersList() {
 
 _updateServerBadgeDots(badges) {
   if (!badges) return;
+  // Main process keys serverBadgeState by normalized URL (no trailing slash,
+  // no /app or /app.html, no query/hash). The DOM stores the raw user-entered
+  // URL, so a direct lookup misses for any server that doesn't already happen
+  // to match exactly. Normalize both sides before comparing.
+  const norm = (raw) => {
+    let v = String(raw || '').trim();
+    if (!v) return '';
+    if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
+    try {
+      const u = new URL(v);
+      u.hash = ''; u.search = '';
+      let p = (u.pathname || '/').replace(/\/+$/, '') || '/';
+      p = p.replace(/\/app(?:\.html)?$/i, '') || '/';
+      p = p.replace(/\/+$/, '') || '/';
+      return p === '/' ? u.origin : u.origin + p;
+    } catch {
+      return v.replace(/\/+$/, '');
+    }
+  };
+  const normalized = {};
+  for (const [k, v] of Object.entries(badges)) normalized[norm(k)] = v;
   document.querySelectorAll('#server-list .server-icon.remote').forEach(el => {
     const url = el.dataset.url;
     const dot = el.querySelector('.server-unread-dot');
     if (!dot) return;
-    const count = badges[url] || 0;
+    const count = normalized[norm(url)] || normalized[url] || badges[url] || 0;
     dot.classList.toggle('active', count > 0);
   });
 },
