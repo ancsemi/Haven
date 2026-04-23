@@ -1099,8 +1099,7 @@ _setupSocketListeners() {
   });
 
   // ── Message edit / delete ──────────────────────────
-  this.socket.on('message-edited', async (data) => {
-    if (data.channelCode === this.currentChannel) {
+  this.socket.on('message-edited', async (data) => {    if (data.channelCode === this.currentChannel) {
       const msgEl = document.querySelector(`[data-msg-id="${data.messageId}"]`);
       if (!msgEl) return;
       const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
@@ -1134,6 +1133,23 @@ _setupSocketListeners() {
           contentEl.appendChild(editedTag);
         }
       }
+    }
+  });
+
+  // ── Bulk purge: admin replaced all of a user's messages with placeholder text ──
+  this.socket.on('user-messages-purged', (data) => {
+    if (!data || !data.channelCode) return;
+    const placeholder = data.placeholder || 'User banned.';
+    if (data.channelCode === this.currentChannel) {
+      const userMsgs = document.querySelectorAll(`[data-user-id="${data.userId}"]`);
+      userMsgs.forEach(msgEl => {
+        const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
+        if (contentEl) {
+          try { contentEl.innerHTML = this._formatContent(placeholder); }
+          catch { contentEl.textContent = placeholder; }
+        }
+        msgEl.dataset.rawContent = placeholder;
+      });
     }
   });
 

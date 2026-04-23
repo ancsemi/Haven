@@ -2158,7 +2158,11 @@ _setupUI() {
     if (action === 'kick') {
       this.socket.emit('kick-user', { userId, reason, scrubMessages, scrubScope });
     } else if (action === 'ban') {
-      this.socket.emit('ban-user', { userId, reason, scrubMessages });
+      const purgeCheckbox = document.getElementById('admin-purge-checkbox');
+      const purgeInput = document.getElementById('admin-purge-message');
+      const purgeMessages = !!(purgeCheckbox && purgeCheckbox.checked);
+      const purgeMessage = purgeInput ? purgeInput.value.trim() : '';
+      this.socket.emit('ban-user', { userId, reason, scrubMessages, purgeMessages, purgeMessage });
     } else if (action === 'mute') {
       this.socket.emit('mute-user', { userId, reason, duration });
     } else if (action === 'delete-user') {

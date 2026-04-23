@@ -2180,6 +2180,38 @@ _showAdminActionModal(action, userId, username) {
     scrubCheckbox.onchange = null;
   }
 
+  // Purge option: replace messages with placeholder. Ban-only for now —
+  // it's a softer, less destructive alternative to scrub. Mutually exclusive
+  // with scrub (you can't both delete and replace the same messages).
+  const purgeGroup = document.getElementById('admin-purge-group');
+  const purgeCheckbox = document.getElementById('admin-purge-checkbox');
+  const purgeMessageRow = document.getElementById('admin-purge-message-row');
+  const purgeMessageInput = document.getElementById('admin-purge-message');
+  if (purgeGroup) {
+    purgeGroup.style.display = action === 'ban' ? 'block' : 'none';
+    if (purgeCheckbox) purgeCheckbox.checked = false;
+    if (purgeMessageRow) purgeMessageRow.style.display = 'none';
+    if (purgeMessageInput) purgeMessageInput.value = '';
+    if (purgeCheckbox && action === 'ban') {
+      purgeCheckbox.onchange = () => {
+        if (purgeMessageRow) purgeMessageRow.style.display = purgeCheckbox.checked ? 'block' : 'none';
+        // Mutually exclusive with scrub
+        if (purgeCheckbox.checked && scrubCheckbox.checked) {
+          scrubCheckbox.checked = false;
+          if (scrubScopeRow) scrubScopeRow.style.display = 'none';
+        }
+      };
+      const origScrubChange = scrubCheckbox.onchange;
+      scrubCheckbox.onchange = () => {
+        if (typeof origScrubChange === 'function') origScrubChange();
+        if (scrubCheckbox.checked && purgeCheckbox.checked) {
+          purgeCheckbox.checked = false;
+          if (purgeMessageRow) purgeMessageRow.style.display = 'none';
+        }
+      };
+    }
+  }
+
   confirmBtn.textContent = labels[action] || t('modals.common.confirm');
 
   document.getElementById('admin-action-reason').value = '';

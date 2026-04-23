@@ -1013,6 +1013,17 @@
         </div>
         <small class="settings-hint" data-i18n="modals.admin_action.scrub_hint">Removes the user's messages (archived/protected messages are preserved)</small>
       </div>
+      <div class="form-group" id="admin-purge-group" style="display:none">
+        <label class="toggle-row">
+          <span data-i18n="modals.admin_action.purge_label">Replace messages with placeholder</span>
+          <input type="checkbox" id="admin-purge-checkbox">
+        </label>
+        <div id="admin-purge-message-row" style="display:none;margin-top:6px;">
+          <label data-i18n="modals.admin_action.purge_message_label">Replacement text (optional)</label>
+          <input type="text" id="admin-purge-message" maxlength="200" data-i18n-placeholder="modals.admin_action.purge_message_placeholder" placeholder="User banned.">
+        </div>
+        <small class="settings-hint" data-i18n="modals.admin_action.purge_hint">Replaces the user's messages with placeholder text instead of deleting them. Default: "User banned."</small>
+      </div>
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-admin-action-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent btn-danger-fill" id="confirm-admin-action-btn" data-i18n="modals.common.confirm">Confirm</button>
@@ -1798,6 +1809,7 @@
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="users" checked> <span data-i18n="settings.admin.backup_inc_users">Users (no passwords / 2FA / emails)</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="settings" checked> <span data-i18n="settings.admin.backup_inc_settings">Server settings</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="messages"> <span data-i18n="settings.admin.backup_inc_messages">Messages (chat history)</span></label>
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="dms"> <span data-i18n="settings.admin.backup_inc_dms">Direct messages</span> <small class="settings-hint" style="margin-left:6px;opacity:.75" data-i18n="settings.admin.backup_inc_dms_hint">(E2E ciphertext; only original key holders can read)</small></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="files"> <span data-i18n="settings.admin.backup_inc_files">Uploaded files</span></label>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
@@ -1841,6 +1853,7 @@
               <label class="checkbox-row"><input type="checkbox" class="auto-backup-include" value="users" checked> Users</label>
               <label class="checkbox-row"><input type="checkbox" class="auto-backup-include" value="settings" checked> Server settings</label>
               <label class="checkbox-row"><input type="checkbox" class="auto-backup-include" value="messages" checked> Messages</label>
+              <label class="checkbox-row"><input type="checkbox" class="auto-backup-include" value="dms"> Direct messages <small class="settings-hint" style="margin-left:6px;opacity:.75">(E2E ciphertext)</small></label>
               <label class="checkbox-row"><input type="checkbox" class="auto-backup-include" value="files"> Uploaded files</label>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
@@ -2953,7 +2966,7 @@
   <script src="/js/voice.js?v=3.4.0"></script>
   <script src="/js/modmode.js?v=3.4.0"></script>
   <script src="/js/e2e.js?v=3.4.0"></script>
-  <script type="module" src="/js/app.js?v=3.4.2"></script>
+  <script type="module" src="/js/app.js?v=3.4.3"></script>
   <script src="/js/plugin-loader.js?v=3.4.0"></script>
 </body>
 </html>
