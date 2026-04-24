@@ -143,9 +143,16 @@ async switchChannel(code) {
   this._clearReply();
   this._closeThread();
 
-  // Auto-focus the message input for quick typing
+  // Auto-focus the message input for quick typing.
+  // Skip on touch devices: focusing an input opens the on-screen keyboard, which
+  // shrinks the visual viewport and can leave the layout shifted up after the
+  // keyboard closes (especially on Android web — see issue #5285).
   const msgInput = document.getElementById('message-input');
-  if (msgInput) setTimeout(() => msgInput.focus(), 50);
+  const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches
+                     || window.matchMedia('(pointer: coarse)').matches
+                     || 'ontouchstart' in window
+                     || navigator.maxTouchPoints > 0;
+  if (msgInput && !isTouchDevice) setTimeout(() => msgInput.focus(), 50);
 
   // Show E2E encryption menu only in DM channels
   const e2eWrapper = document.getElementById('e2e-menu-wrapper');
