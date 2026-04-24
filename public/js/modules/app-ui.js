@@ -1524,6 +1524,16 @@ _setupUI() {
     }
   });
 
+  // PiP emoji button — positions the picker above the button and targets the PiP input
+  const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');
+  if (dmPipEmojiBtn) {
+    dmPipEmojiBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._activeEditTextarea = document.getElementById('dm-pip-input');
+      this._toggleEmojiPicker(dmPipEmojiBtn);
+    });
+  }
+
   const dmPipReplyClose = document.getElementById('dm-pip-reply-close-btn');
   if (dmPipReplyClose) dmPipReplyClose.addEventListener('click', () => this._clearDMPiPReply?.());
 
@@ -1533,6 +1543,26 @@ _setupUI() {
   if (dmPipMessages) {
     dmPipMessages.addEventListener('click', (e) => {
       // Toolbar action buttons
+      // Inline ⋯ dots button — reveals the full toolbar (touch/mobile)
+      const dotsBtn = e.target.closest('.msg-dots-btn');
+      if (dotsBtn) {
+        e.stopPropagation();
+        const msgEl = dotsBtn.closest('.message, .message-compact');
+        if (!msgEl) return;
+        const wasSelected = msgEl.classList.contains('msg-selected');
+        dmPipMessages.querySelectorAll('.msg-selected').forEach(el => {
+          el.classList.remove('msg-selected');
+          const tb = el.querySelector('.msg-toolbar');
+          if (tb) tb.style.removeProperty('display');
+        });
+        if (!wasSelected) {
+          msgEl.classList.add('msg-selected');
+          const tb = msgEl.querySelector('.msg-toolbar');
+          if (tb) tb.style.setProperty('display', 'flex', 'important');
+        }
+        return;
+      }
+
       const actionBtn = e.target.closest('[data-action]');
       if (actionBtn) {
         const msgEl = actionBtn.closest('.message, .message-compact');
@@ -1604,6 +1634,16 @@ _setupUI() {
 
   const threadSendBtn = document.getElementById('thread-send-btn');
   if (threadSendBtn) threadSendBtn.addEventListener('click', () => this._sendThreadMessage());
+
+  // Thread emoji button — positions the picker above the button and targets the thread input
+  const threadEmojiBtn = document.getElementById('thread-emoji-btn');
+  if (threadEmojiBtn) {
+    threadEmojiBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._activeEditTextarea = document.getElementById('thread-input');
+      this._toggleEmojiPicker(threadEmojiBtn);
+    });
+  }
 
   const threadInput = document.getElementById('thread-input');
   if (threadInput) {
@@ -1766,8 +1806,14 @@ _setupUI() {
     const picker = document.getElementById('emoji-picker');
     const btn = document.getElementById('emoji-btn');
     if (picker && picker.style.display !== 'none' &&
-        !picker.contains(e.target) && !btn.contains(e.target)) {
+        !picker.contains(e.target) && !btn.contains(e.target) &&
+        !e.target.closest('#dm-pip-emoji-btn') && !e.target.closest('#thread-emoji-btn')) {
       picker.style.display = 'none';
+      if (picker._havenOrigParent) {
+        picker._havenOrigParent.appendChild(picker);
+        picker._havenOrigParent = null;
+        ['position', 'top', 'left', 'bottom', 'right'].forEach(p => picker.style.removeProperty(p));
+      }
     }
   });
 
@@ -1935,7 +1981,7 @@ _setupUI() {
 
     overflow.classList.remove('flip-below');
 
-    const container = moreWrap.closest('#messages, #thread-messages');
+    const container = moreWrap.closest('#messages, #thread-messages, #dm-pip-messages');
     const containerRect = container
       ? container.getBoundingClientRect()
       : { top: 0, bottom: window.innerHeight };
@@ -1968,6 +2014,7 @@ _setupUI() {
 
   bindOverflowDirection(document.getElementById('messages'));
   bindOverflowDirection(threadMessages);
+  bindOverflowDirection(document.getElementById('dm-pip-messages'));
 
   // Reaction badge hover — show popout with user list
   {
@@ -2012,6 +2059,25 @@ _setupUI() {
         this._hideReactionPopout();
       }
     });
+    // DM PiP reaction badge popout
+    const dmPipMsgs = document.getElementById('dm-pip-messages');
+    if (dmPipMsgs) {
+      dmPipMsgs.addEventListener('mouseover', (e) => {
+        const badge = e.target.closest('.reaction-badge');
+        if (!badge) return;
+        clearTimeout(_popoutTimer);
+        _popoutTimer = setTimeout(() => this._showReactionPopout(badge), 350);
+      });
+      dmPipMsgs.addEventListener('mouseout', (e) => {
+        const badge = e.target.closest('.reaction-badge');
+        if (!badge && !e.target.closest('#reaction-popout')) {
+          clearTimeout(_popoutTimer);
+          setTimeout(() => {
+            if (!document.querySelector('#reaction-popout:hover')) this._hideReactionPopout();
+          }, 200);
+        }
+      });
+    }
   }
 
   // ── Poll vote click (delegated from messages container) ──

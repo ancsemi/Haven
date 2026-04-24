@@ -548,10 +548,15 @@ _showRiskyDownloadWarning(fileName, ext, url) {
 // EMOJI PICKER (categorized + searchable)
 // ═══════════════════════════════════════════════════════
 
-_toggleEmojiPicker() {
+_toggleEmojiPicker(anchorEl) {
   const picker = document.getElementById('emoji-picker');
   if (picker.style.display === 'flex') {
     picker.style.display = 'none';
+    if (picker._havenOrigParent) {
+      picker._havenOrigParent.appendChild(picker);
+      picker._havenOrigParent = null;
+      ['position', 'top', 'left', 'bottom', 'right'].forEach(p => picker.style.removeProperty(p));
+    }
     return;
   }
   picker.innerHTML = '';
@@ -674,6 +679,22 @@ _toggleEmojiPicker() {
       const inputRect = inputArea.getBoundingClientRect();
       picker.style.bottom = (window.innerHeight - inputRect.top) + 'px';
     }
+  }
+
+  // Anchor-based positioning: used when opening from PiP or thread input buttons.
+  // Move the picker to document.body so it escapes any overflow clipping context,
+  // then position it with fixed coords above the anchor button.
+  if (anchorEl) {
+    if (picker.parentElement !== document.body) {
+      picker._havenOrigParent = picker.parentElement;
+      document.body.appendChild(picker);
+    }
+    const r = anchorEl.getBoundingClientRect();
+    const pickerW = 340;
+    const pickerH = 368;
+    const top = Math.max(4, r.top - pickerH - 4);
+    const left = Math.max(4, Math.min(r.left, window.innerWidth - pickerW - 4));
+    picker.style.cssText += '; position:fixed; top:' + top + 'px; left:' + left + 'px; bottom:auto; right:auto;';
   }
 
   picker.style.display = 'flex';
@@ -1305,7 +1326,7 @@ _showReactionPicker(msgEl, msgId) {
   // Flip picker below the message if it would be clipped above
   requestAnimationFrame(() => {
     const pickerRect = picker.getBoundingClientRect();
-    const container = msgEl.closest('#thread-messages, #messages');
+    const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
     const containerTop = container ? container.getBoundingClientRect().top : 0;
     if (pickerRect.top < containerTop + 4) {
       picker.classList.add('flip-below');
@@ -1438,7 +1459,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
 
   requestAnimationFrame(() => {
     const panelRect = panel.getBoundingClientRect();
-    const container = msgEl.closest('#thread-messages, #messages');
+    const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
     const containerTop = container ? container.getBoundingClientRect().top : 0;
     if (panelRect.top < containerTop + 4) {
       panel.classList.add('flip-below');

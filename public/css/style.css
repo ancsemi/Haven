@@ -3425,6 +3425,22 @@ html.rgb-cycling *::after {
 }
 .dm-pip-send:hover { filter: brightness(1.1); }
 
+/* Emoji picker trigger button shared by DM PiP and thread input areas */
+.pip-input-emoji-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 5px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+  align-self: center;
+}
+.pip-input-emoji-btn:hover { opacity: 1; background: var(--bg-tertiary); }
+
 /* ── Private channel styling (muted appearance) ─── */
 .channel-item.private-channel .channel-name { opacity: 0.6; }
 .channel-item.private-channel .channel-hash { opacity: 0.6; }
