@@ -1080,6 +1080,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🤖 <span data-i18n="settings.nav.bots">Bots</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-import" style="display:none">📦 <span data-i18n="settings.nav.import">Import</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-modmode" style="display:none">🔧 <span data-i18n="settings.nav.mod_mode">Mod Mode</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-audit-log" style="display:none">📜 <span data-i18n="settings.nav.audit_log">Audit Log</span></div>
           </div>
         </nav>
         <div class="settings-body" id="settings-body-user">
@@ -2007,6 +2008,12 @@
           <button class="btn-sm btn-full" id="mod-mode-settings-toggle" style="margin-top:6px;">🔧 <span data-i18n="settings.admin.modmode_toggle_btn">Toggle Mod Mode</span></button>
           <button class="btn-sm btn-full" id="mod-mode-reset" data-i18n="settings.admin.modmode_reset_btn" style="margin-top:6px;">↺ Reset Layout</button>
         </div>
+        <!-- Audit Log (Admin only) -->
+        <div class="admin-settings" id="section-audit-log" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">📜 <span data-i18n="settings.admin.audit_log_title">Audit Log</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.audit_log_hint">Track admin and moderator actions: channel changes, role updates, bans, kicks, server settings, and more.</small>
+          <button class="btn-sm btn-full btn-accent" id="open-audit-log-btn" style="margin-top:6px;">📜 <span data-i18n="settings.admin.audit_log_btn">View Audit Log</span></button>
+        </div>
       </div>
         </div><!-- /settings-body-admin -->
       </div><!-- /settings-layout -->
@@ -2374,14 +2381,44 @@
     </div>
   </div>
 
+  <!-- Audit Log Modal -->
+  <div class="modal-overlay" id="audit-log-modal" style="display:none">
+    <div class="modal modal-wide" style="width:760px">
+      <h3>📜 <span data-i18n="modals.audit_log.title">Audit Log</span></h3>
+      <p class="modal-desc" data-i18n="modals.audit_log.desc">A record of admin and moderator actions on this server.</p>
+      <div class="modal-flex-body">
+        <div class="audit-log-toolbar">
+          <label class="organize-toolbar-label" data-i18n="modals.audit_log.filter_action">Action:</label>
+          <select id="audit-log-filter-action">
+            <option value="">All actions</option>
+          </select>
+          <label class="organize-toolbar-label" data-i18n="modals.audit_log.filter_actor">Actor:</label>
+          <input type="text" id="audit-log-filter-actor" placeholder="Username..." maxlength="40" style="width:140px">
+          <button class="btn-sm" id="audit-log-refresh-btn">🔄 <span data-i18n="modals.audit_log.refresh">Refresh</span></button>
+          <div class="organize-spacer"></div>
+          <button class="btn-sm" id="audit-log-export-btn">📥 <span data-i18n="modals.audit_log.export">Export JSON</span></button>
+        </div>
+        <div id="audit-log-list" class="audit-log-list">
+          <div class="audit-log-empty" data-i18n="modals.audit_log.loading">Loading...</div>
+        </div>
+        <button class="btn-sm audit-log-load-more" id="audit-log-load-more" style="display:none" data-i18n="modals.audit_log.load_more">Load 50 More</button>
+        <div class="modal-actions">
+          <button class="btn-sm" id="close-audit-log-btn" data-i18n="modals.common.close">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="bans-modal" style="display:none">
     <div class="modal modal-wide">
       <h3 data-i18n="modals.bans.title">Banned Users</h3>
-      <div id="bans-list" class="bans-list">
+      <div class="modal-flex-body">
+      <div id="bans-list" class="bans-list modal-grow" style="overflow:auto">
         <p class="muted-text" data-i18n="modals.common.loading">Loading...</p>
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="close-bans-btn" data-i18n="modals.common.close">Close</button>
+      </div>
       </div>
     </div>
   </div>
@@ -2389,11 +2426,13 @@
   <div class="modal-overlay" id="deleted-users-modal" style="display:none">
     <div class="modal modal-wide">
       <h3>🗑️ <span data-i18n="modals.deleted_users.title">Deleted Users</span></h3>
-      <div id="deleted-users-list" class="bans-list">
+      <div class="modal-flex-body">
+      <div id="deleted-users-list" class="bans-list modal-grow" style="overflow:auto">
         <p class="muted-text" data-i18n="modals.common.loading">Loading...</p>
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="close-deleted-users-btn" data-i18n="modals.common.close">Close</button>
+      </div>
       </div>
     </div>
   </div>
@@ -2588,6 +2627,7 @@
       </div>
       <p class="modal-desc" id="organize-modal-parent-name"></p>
 
+      <div class="modal-flex-body">
       <div class="organize-toolbar">
         <label class="organize-toolbar-label" data-i18n="modals.organize.sort_label">Sort:</label>
         <select id="organize-global-sort" class="organize-select">
@@ -2625,6 +2665,7 @@
       <div class="modal-actions">
         <button class="btn-sm btn-accent" id="organize-done-btn" data-i18n="modals.common.done">Done</button>
       </div>
+      </div><!-- /modal-flex-body -->
     </div>
   </div>
 
