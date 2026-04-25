@@ -7,8 +7,9 @@ const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath } = require('
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission,
           emitOnlineUsers, broadcastVoiceUsers, generateToken,
-          touchVoiceActivity, DATA_DIR } = ctx;
+          touchVoiceActivity, DATA_DIR, logAudit } = ctx;
   const { channelUsers, voiceUsers } = state;
+  const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
   // ── Rename (display name) ───────────────────────────────
   socket.on('rename-user', (data) => {
@@ -107,6 +108,11 @@ module.exports = function register(socket, ctx) {
     }
 
     console.log(`✏️  ${oldName} renamed to ${newName}`);
+    if (oldName !== newName) {
+      _audit({ actor: socket.user, action: 'user_rename',
+        target_type: 'user', target_id: socket.user.id, target_name: newName,
+        details: { oldName, newName } });
+    }
   });
 
   // ── Avatar ──────────────────────────────────────────────

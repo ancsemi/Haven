@@ -3979,4 +3979,163 @@ _initDonorsModal() {
 },
 
 // ═══════════════════════════════════════════════════════
+// ── Audit Log ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════
+
+_setupAuditLog() {
+  if (this._auditLogSetup) return;
+  this._auditLogSetup = true;
+
+  const modal = document.getElementById('audit-log-modal');
+  const listEl = document.getElementById('audit-log-list');
+  const loadMoreBtn = document.getElementById('audit-log-load-more');
+  const filterAction = document.getElementById('audit-log-filter-action');
+  const filterActor = document.getElementById('audit-log-filter-actor');
+  const refreshBtn = document.getElementById('audit-log-refresh-btn');
+  const exportBtn = document.getElementById('audit-log-export-btn');
+  const closeBtn = document.getElementById('close-audit-log-btn');
+  const openBtn = document.getElementById('open-audit-log-btn');
+  if (!modal || !listEl) return;
+
+  this._auditRows = [];
+  this._auditOldestId = 0;
+  this._auditHasMore = false;
+
+  const ACTION_META = {
+    server_setting_update: { icon: '⚙️', label: 'updated server setting' },
+    channel_create:        { icon: '➕', label: 'created channel' },
+    channel_delete:        { icon: '🗑️', label: 'deleted channel' },
+    channel_rename:        { icon: '✏️', label: 'renamed channel' },
+    role_create:           { icon: '🎭', label: 'created role' },
+    role_update:           { icon: '🎭', label: 'updated role' },
+    role_delete:           { icon: '🎭', label: 'deleted role' },
+    role_assign:           { icon: '👤', label: 'assigned role to' },
+    role_revoke:           { icon: '👤', label: 'revoked role from' },
+    user_kick:             { icon: '👢', label: 'kicked' },
+    user_ban:              { icon: '🚫', label: 'banned' },
+    user_unban:            { icon: '✅', label: 'unbanned' },
+    user_mute:             { icon: '🔇', label: 'muted' },
+    user_unmute:           { icon: '🔊', label: 'unmuted' },
+    user_rename:           { icon: '✏️', label: 'renamed' },
+  };
+
+  const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const _formatTime = (iso) => {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+      return d.toLocaleString();
+    } catch { return iso; }
+  };
+
+  const renderRows = (append = false) => {
+    if (!append) listEl.innerHTML = '';
+    if (!this._auditRows.length) {
+      listEl.innerHTML = '<div class="audit-log-empty">No audit log entries match the current filters.</div>';
+      loadMoreBtn.style.display = 'none';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    const start = append ? listEl.querySelectorAll('.audit-log-row').length : 0;
+    for (let i = start; i < this._auditRows.length; i++) {
+      const r = this._auditRows[i];
+      const meta = ACTION_META[r.action] || { icon: '•', label: r.action };
+      const row = document.createElement('div');
+      row.className = 'audit-log-row';
+      let detailsHtml = '';
+      if (r.details) {
+        try {
+          const obj = JSON.parse(r.details);
+          const parts = [];
+          for (const [k, v] of Object.entries(obj)) {
+            if (v === null || v === undefined || v === false || v === '') continue;
+            const vs = typeof v === 'object' ? JSON.stringify(v) : String(v);
+            parts.push(`<span class="audit-detail-pair"><b>${_esc(k)}:</b> ${_esc(vs.slice(0, 120))}</span>`);
+          }
+          if (parts.length) detailsHtml = `<div class="audit-details">${parts.join('')}</div>`;
+        } catch {
+          detailsHtml = `<div class="audit-details">${_esc(String(r.details).slice(0, 240))}</div>`;
+        }
+      }
+      row.innerHTML = `
+        <span class="audit-icon">${meta.icon}</span>
+        <div class="audit-body">
+          <div class="audit-line">
+            <span class="audit-actor">${_esc(r.actor_username || 'system')}</span>
+            <span class="audit-action">${_esc(meta.label)}</span>
+            ${r.target_name ? `<span class="audit-target">${_esc(r.target_name)}</span>` : ''}
+          </div>
+          ${detailsHtml}
+          <div class="audit-meta">${_formatTime(r.created_at)} · #${r.id}</div>
+        </div>`;
+      frag.appendChild(row);
+    }
+    listEl.appendChild(frag);
+    loadMoreBtn.style.display = this._auditHasMore ? '' : 'none';
+  };
+
+  const load = (append = false) => {
+    const opts = {
+      limit: 50,
+      action: filterAction.value || null,
+      actorUsername: filterActor.value.trim() || null,
+      beforeId: append ? this._auditOldestId : 0
+    };
+    if (!append) {
+      this._auditRows = [];
+      this._auditOldestId = 0;
+      listEl.innerHTML = '<div class="audit-log-empty">Loading...</div>';
+    }
+    this.socket.emit('get-audit-log', opts, (resp) => {
+      if (!resp || resp.error) {
+        listEl.innerHTML = `<div class="audit-log-empty">${_esc(resp && resp.error ? resp.error : 'Failed to load audit log')}</div>`;
+        loadMoreBtn.style.display = 'none';
+        return;
+      }
+      // Populate filter dropdown once
+      if (resp.actions && filterAction.options.length <= 1) {
+        for (const a of resp.actions) {
+          const opt = document.createElement('option');
+          opt.value = a;
+          opt.textContent = (ACTION_META[a] && ACTION_META[a].label) || a;
+          filterAction.appendChild(opt);
+        }
+      }
+      const rows = resp.rows || [];
+      this._auditRows = append ? this._auditRows.concat(rows) : rows;
+      if (rows.length) this._auditOldestId = rows[rows.length - 1].id;
+      this._auditHasMore = !!resp.hasMore;
+      renderRows(append);
+    });
+  };
+
+  openBtn?.addEventListener('click', () => {
+    modal.style.display = 'flex';
+    load(false);
+  });
+  closeBtn?.addEventListener('click', () => { modal.style.display = 'none'; });
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+  refreshBtn?.addEventListener('click', () => load(false));
+  filterAction?.addEventListener('change', () => load(false));
+  filterActor?.addEventListener('input', (() => {
+    let timer = null;
+    return () => { clearTimeout(timer); timer = setTimeout(() => load(false), 300); };
+  })());
+  loadMoreBtn?.addEventListener('click', () => load(true));
+  exportBtn?.addEventListener('click', () => {
+    try {
+      const blob = new Blob([JSON.stringify(this._auditRows, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `haven-audit-log-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error('Audit log export failed:', err);
+    }
+  });
+},
+
+// ═══════════════════════════════════════════════════════
 };

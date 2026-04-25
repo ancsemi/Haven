@@ -815,6 +815,26 @@ function initDatabase() {
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL");
 
+  // ── Audit log ───────────────────────────────────────────
+  // Tracks admin/moderator actions: channel CRUD, role changes,
+  // bans/kicks/mutes, server settings updates, member renames, etc.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_username TEXT,
+      action TEXT NOT NULL,
+      target_type TEXT,
+      target_id INTEGER,
+      target_name TEXT,
+      details TEXT DEFAULT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+  `);
+
   return db;
 }
 

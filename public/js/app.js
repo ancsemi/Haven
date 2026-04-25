@@ -180,6 +180,7 @@ class HavenApp {
     this._setupEmojiManagement();
     this._setupWebhookManagement();
     this._setupDiscordImport();
+    this._setupAuditLog();
     this._initRoleManagement();
     this._initServerBranding();
     this._setupResizableSidebars();

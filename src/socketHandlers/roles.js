@@ -8,9 +8,10 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserRoles, getUserHighestRole,
     emitOnlineUsers, broadcastChannelLists, getEnrichedChannels,
-    transferAdminRef, HAVEN_VERSION
+    transferAdminRef, HAVEN_VERSION, logAudit
   } = ctx;
   const { channelUsers } = state;
+  const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
   // ── Helper: apply role-linked channel access ────────────
   function applyRoleChannelAccess(roleId, userId, direction) {
@@ -168,6 +169,9 @@ module.exports = function register(socket, ctx) {
       });
 
       cb({ success: true, roleId: result.lastInsertRowid });
+      _audit({ actor: socket.user, action: 'role_create',
+        target_type: 'role', target_id: result.lastInsertRowid, target_name: name,
+        details: { level, scope, color, autoAssign: !!autoAssign, permissions: perms } });
     } catch (err) {
       console.error('Create role error:', err);
       cb({ error: 'Failed to create role' });
@@ -239,6 +243,14 @@ module.exports = function register(socket, ctx) {
     for (const [code] of channelUsers) { emitOnlineUsers(code); }
     socket.broadcast.emit('roles-updated');
     cb({ success: true, roles: freshRoles });
+    _audit({ actor: socket.user, action: 'role_update',
+      target_type: 'role', target_id: roleId, target_name: role.name,
+      details: {
+        nameChanged: data.name !== undefined,
+        levelChanged: data.level !== undefined,
+        permissionsChanged: Array.isArray(data.permissions),
+        permissions: Array.isArray(data.permissions) ? data.permissions : undefined
+      } });
   });
 
   // ── Delete role ─────────────────────────────────────────
@@ -258,6 +270,9 @@ module.exports = function register(socket, ctx) {
     db.prepare('DELETE FROM roles WHERE id = ?').run(roleId);
     for (const [code] of channelUsers) { emitOnlineUsers(code); }
     cb({ success: true });
+    _audit({ actor: socket.user, action: 'role_delete',
+      target_type: 'role', target_id: roleId, target_name: null,
+      details: null });
   });
 
   // ── Reset roles to default ─────────────────────────────
@@ -479,6 +494,12 @@ module.exports = function register(socket, ctx) {
       applyRoleChannelAccess(roleId, userId, 'grant');
       refreshUserRoles(userId);
       cb({ success: true });
+      try {
+        const tgt = db.prepare('SELECT COALESCE(display_name, username) AS u FROM users WHERE id = ?').get(userId);
+        _audit({ actor: socket.user, action: 'role_assign',
+          target_type: 'user', target_id: userId, target_name: tgt ? tgt.u : null,
+          details: { roleId, roleName: role.name, channelId, customLevel: assignLevel !== role.level ? assignLevel : null } });
+      } catch {}
     } catch (err) {
       console.error('Assign role error:', err);
       cb({ error: 'Failed to assign role' });
@@ -523,6 +544,13 @@ module.exports = function register(socket, ctx) {
 
     const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
     cb({ success: true, message: `Revoked role from ${target ? target.username : 'user'}` });
+
+    try {
+      const r = db.prepare('SELECT name FROM roles WHERE id = ?').get(roleId);
+      _audit({ actor: socket.user, action: 'role_revoke',
+        target_type: 'user', target_id: userId, target_name: target ? target.username : null,
+        details: { roleId, roleName: r ? r.name : null, channelId } });
+    } catch {}
 
     refreshUserRoles(userId);
   });

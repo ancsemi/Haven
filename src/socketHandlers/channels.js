@@ -6,9 +6,10 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
     handleVoiceLeave, broadcastVoiceUsers, generateChannelCode,
-    applyRoleChannelAccess
+    applyRoleChannelAccess, logAudit
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
+  const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
   // ── Get user's channels ─────────────────────────────────
   socket.on('get-channels', () => {
@@ -101,6 +102,10 @@ module.exports = function register(socket, ctx) {
 
       socket.join(`channel:${code}`);
       socket.emit('channel-created', channel);
+
+      _audit({ actor: socket.user, action: 'channel_create',
+        target_type: 'channel', target_id: result.lastInsertRowid, target_name: name.trim(),
+        details: { code, isPrivate: !!isPrivate, expiresAt } });
 
       // If we mass-added every user, push the new channel to all currently
       // connected sockets so it appears for them without a refresh. (#5271)
@@ -437,6 +442,10 @@ module.exports = function register(socket, ctx) {
     voiceUsers.delete(code);
     activeMusic.delete(code);
     musicQueues.delete(code);
+
+    _audit({ actor: socket.user, action: 'channel_delete',
+      target_type: 'channel', target_id: channel.id, target_name: channel.name,
+      details: { code, parent_channel_id: channel.parent_channel_id || null } });
   });
 
   // ── Rename channel ──────────────────────────────────────
@@ -466,6 +475,9 @@ module.exports = function register(socket, ctx) {
       db.prepare('UPDATE channels SET name = ? WHERE id = ?').run(name, channel.id);
       broadcastChannelLists();
       io.to(code).emit('channel-renamed', { code, name });
+      _audit({ actor: socket.user, action: 'channel_rename',
+        target_type: 'channel', target_id: channel.id, target_name: name,
+        details: { code, oldName: channel.name, newName: name } });
     } catch (err) {
       console.error('Rename channel error:', err);
       socket.emit('error-msg', 'Failed to rename channel');

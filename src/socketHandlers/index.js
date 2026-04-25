@@ -328,6 +328,35 @@ function setupSocketHandlers(io, db) {
     }, 150);
   }
 
+  // ── logAudit — record an admin/moderator action ─────────
+  // entry: { actor, action, target_type?, target_id?, target_name?, details? }
+  // actor can be a user object ({ id, username }) or null for system actions.
+  // details is anything JSON-serializable; stored as a JSON string.
+  // Failures never throw — auditing must not break the calling action.
+  const _auditInsert = db.prepare(
+    'INSERT INTO audit_log (actor_id, actor_username, action, target_type, target_id, target_name, details) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  );
+  function logAudit(entry) {
+    try {
+      if (!entry || typeof entry !== 'object') return;
+      const actor = entry.actor || null;
+      const actorId = actor && typeof actor.id === 'number' ? actor.id : null;
+      const actorUsername = actor ? (actor.displayName || actor.username || null) : null;
+      const action = typeof entry.action === 'string' ? entry.action.slice(0, 60) : null;
+      if (!action) return;
+      const targetType = entry.target_type ? String(entry.target_type).slice(0, 32) : null;
+      const targetId = Number.isInteger(entry.target_id) ? entry.target_id : null;
+      const targetName = entry.target_name ? String(entry.target_name).slice(0, 200) : null;
+      let details = null;
+      if (entry.details !== undefined && entry.details !== null) {
+        try { details = JSON.stringify(entry.details).slice(0, 4000); } catch { details = null; }
+      }
+      _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
+    } catch (err) {
+      console.warn('[audit] log failed:', err.message);
+    }
+  }
+
   // ── pruneStaleVoiceUsers ────────────────────────────────
   function pruneStaleVoiceUsers(code) {
     const room = voiceUsers.get(code);
@@ -1123,6 +1152,8 @@ function setupSocketHandlers(io, db) {
       floodCheck,
       // Transfer admin mutex
       transferAdminRef,
+      // Audit log
+      logAudit,
       // Constants
       HAVEN_VERSION, ADMIN_USERNAME,
       DATA_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR,
