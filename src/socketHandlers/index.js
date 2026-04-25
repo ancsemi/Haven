@@ -387,7 +387,14 @@ function setupSocketHandlers(io, db) {
 
     const scores = {};
     try {
-      const scoreRows = db.prepare('SELECT user_id, score FROM high_scores WHERE game = ? AND score > 0').all('flappy');
+      const scoreRows = db.prepare(`
+        SELECT hs.user_id, hs.score FROM high_scores hs
+        WHERE hs.game = ? AND hs.score > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM user_preferences up
+            WHERE up.user_id = hs.user_id AND up.key = 'hide_score_badge' AND up.value = 'true'
+          )
+      `).all('flappy');
       scoreRows.forEach(r => { scores[r.user_id] = r.score; });
     } catch { /* table may not exist yet */ }
 

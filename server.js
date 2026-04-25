@@ -1976,6 +1976,10 @@ app.get('/api/high-scores/:game', (req, res) => {
     SELECT hs.user_id, COALESCE(u.display_name, u.username) as username, hs.score
     FROM high_scores hs JOIN users u ON hs.user_id = u.id
     WHERE hs.game = ? AND hs.score > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM user_preferences up
+        WHERE up.user_id = u.id AND up.key = 'hide_score_badge' AND up.value = 'true'
+      )
     ORDER BY hs.score DESC LIMIT 50
   `).all(game);
   res.json({ game, leaderboard });
@@ -2003,6 +2007,10 @@ app.post('/api/high-scores', express.json(), (req, res) => {
     SELECT hs.user_id, COALESCE(u.display_name, u.username) as username, hs.score
     FROM high_scores hs JOIN users u ON hs.user_id = u.id
     WHERE hs.game = ? AND hs.score > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM user_preferences up
+        WHERE up.user_id = u.id AND up.key = 'hide_score_badge' AND up.value = 'true'
+      )
     ORDER BY hs.score DESC LIMIT 50
   `).all(game);
   res.json({ game, leaderboard });

@@ -1379,12 +1379,20 @@ _setupSocketListeners() {
 
   // ── User preferences (persistent theme etc.) ───────
   this.socket.on('preferences', (prefs) => {
+    this._userPrefs = prefs || {};
     if (prefs.theme) {
       // User has a saved personal theme preference — apply it
       applyThemeFromServer(prefs.theme);
     } else if (this.serverSettings.default_theme) {
       // No personal preference — apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);
+    }
+    // Sync hide-own-score toggle to the server's stored value so reopening
+    // settings on a fresh device shows the correct state.
+    if (prefs.hide_score_badge != null) {
+      try { localStorage.setItem('haven_hide_own_score', prefs.hide_score_badge); } catch {}
+      const ownToggle = document.getElementById('hide-own-score');
+      if (ownToggle) ownToggle.checked = prefs.hide_score_badge === 'true';
     }
   });
 

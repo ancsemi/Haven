@@ -397,6 +397,32 @@ _setupNotifications() {
     });
   }
 
+  // ── Score badge visibility ──
+  // "Hide other players' badges" is a per-device client-side filter.
+  // "Hide my own badge" is a server-side preference so other clients also
+  // hide it (and it gets stripped from the leaderboard).
+  const hideOtherScoresToggle = document.getElementById('hide-other-scores');
+  if (hideOtherScoresToggle) {
+    hideOtherScoresToggle.checked = localStorage.getItem('haven_hide_other_scores') === 'true';
+    hideOtherScoresToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_hide_other_scores', String(hideOtherScoresToggle.checked));
+      if (this._lastOnlineUsers) this._renderOnlineUsers(this._lastOnlineUsers);
+    });
+  }
+  const hideOwnScoreToggle = document.getElementById('hide-own-score');
+  if (hideOwnScoreToggle) {
+    // Initial value comes from the server-synced preferences cache, falling
+    // back to localStorage so the toggle reflects intent before prefs land.
+    const cached = (this._userPrefs && this._userPrefs.hide_score_badge) || localStorage.getItem('haven_hide_own_score');
+    hideOwnScoreToggle.checked = cached === 'true';
+    hideOwnScoreToggle.addEventListener('change', () => {
+      const v = String(hideOwnScoreToggle.checked);
+      localStorage.setItem('haven_hide_own_score', v);
+      if (this._userPrefs) this._userPrefs.hide_score_badge = v;
+      this.socket?.emit('set-preference', { key: 'hide_score_badge', value: v });
+    });
+  }
+
   // ── Server URL in status bar (copyable, privacy toggle) ──
   const statusUrlEl = document.getElementById('status-url-text');
   const statusUrlToggle = document.getElementById('status-url-toggle');

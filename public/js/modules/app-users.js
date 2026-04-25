@@ -149,7 +149,12 @@ _closeUserGearMenu() {
 _renderUserItem(u, scoreLookup) {
   const onlineClass = u.online === false ? ' offline' : '';
   const score = scoreLookup[u.id] || 0;
-  const scoreBadge = score > 0
+  // Per-device "hide other players' badges" preference. Only suppress badges
+  // for users other than self — own badge stays visible to me unless the
+  // server-side "hide own from server" preference also stripped it.
+  const hideOthers = localStorage.getItem('haven_hide_other_scores') === 'true';
+  const showBadge = score > 0 && (!hideOthers || u.id === this.user.id);
+  const scoreBadge = showBadge
     ? `<span class="user-score-badge" title="${t('users.flappy_score_title', { score })}">🚢${score}</span>`
     : '';
 
