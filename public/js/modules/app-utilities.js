@@ -1676,7 +1676,16 @@ _openDMPiP(code) {
   this._updateBadge?.(code);
 
   const panel = document.getElementById('dm-pip-panel');
-  if (!panel) return;
+  if (!panel) {
+    // Fallback: cached app shell may predate the PiP panel element. Open the
+    // DM in the main pane so the click isn't a no-op (notably for self-DMs
+    // where users were seeing the toast but no panel — issue: SerChiz v3.8).
+    console.warn('[DM] PiP panel not found in DOM, falling back to switchChannel');
+    this._activeDMPip = null;
+    try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
+    this.switchChannel?.(code);
+    return;
+  }
   panel.style.display = 'flex';
   panel.dataset.code = code;
   // Title: partner name
@@ -1688,8 +1697,8 @@ _openDMPiP(code) {
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
   if (avatarWrap) {
     const partnerId = ch.dm_target && ch.dm_target.id;
-    const onlinePartner = partnerId && this.users
-      ? this.users.find(u => u.id === partnerId)
+    const onlinePartner = partnerId && this._lastOnlineUsers
+      ? this._lastOnlineUsers.find(u => u.id === partnerId)
       : null;
     const avatarUrl = (onlinePartner && onlinePartner.avatar) || (ch.dm_target && ch.dm_target.avatar);
     const shape = (onlinePartner && onlinePartner.avatarShape)

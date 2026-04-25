@@ -1117,7 +1117,8 @@ module.exports = function register(socket, ctx) {
     if (existingDm) {
       socket.emit('dm-opened', {
         id: existingDm.id, code: existingDm.code, name: existingDm.name,
-        is_dm: 1, dm_target: { id: target.id, username: target.username }
+        is_dm: 1, is_self_dm: isSelfDm ? 1 : 0,
+        dm_target: { id: target.id, username: target.username }
       });
       return;
     }
@@ -1131,7 +1132,7 @@ module.exports = function register(socket, ctx) {
         db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, targetId);
       }
       socket.join(`channel:${code}`);
-      socket.emit('dm-opened', { id: channelId, code, name: 'DM', is_dm: 1, dm_target: { id: target.id, username: target.username } });
+      socket.emit('dm-opened', { id: channelId, code, name: 'DM', is_dm: 1, is_self_dm: isSelfDm ? 1 : 0, dm_target: { id: target.id, username: target.username } });
       if (!isSelfDm) {
         for (const [, s] of io.of('/').sockets) {
           if (s.user && s.user.id === targetId) {
