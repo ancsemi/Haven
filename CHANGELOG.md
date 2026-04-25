@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.10.0] — 2026-04-25
+
+### Added
+- **Drag-and-drop server reordering in the sidebar** — remote Haven servers in the left rail can now be reordered by dragging, just like channels. The new order persists locally and syncs across your devices via the same encrypted bundle the sidebar already uses.
+- **`View Audit Log` permission** — the audit log is no longer admin-only. Any role with the new `View Audit Log` permission can open Settings → Admin → Audit Log and read the record (no other admin powers required).
+
+### Fixed
+- **Tag category headers in the Organize modal didn't actually reorder when dropped** — the per-tag sort dropdown inside each header was swallowing drag events on some browsers, so dragging looked like it worked but nothing moved. Switched to event delegation on the list container so dragover/drop fire reliably.
+
+---
+
 ## [3.9.0] — 2026-04-25
 
 ### Added
