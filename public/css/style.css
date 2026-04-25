@@ -4003,6 +4003,20 @@ html.rgb-cycling *::after {
 
 /* Channel context menu (sidebar "..." hover button) */
 .channel-item { position: relative; }
+
+/* ── Drag-and-drop channel reordering ──────────────────── */
+.ch-dragging { opacity: 0.4; cursor: grabbing !important; }
+.channel-item[draggable="true"],
+.category-label[draggable="true"],
+.sub-channel-item[draggable="true"] { cursor: grab; }
+.ch-drag-indicator {
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin: 1px 8px;
+  pointer-events: none;
+  flex-shrink: 0;
+}
 .channel-more-btn {
   background: none;
   border: none;
@@ -4516,11 +4530,17 @@ select.cfn-select.cfn-input {
   padding: 1px 8px 1px 56px;
   border-radius: var(--radius-sm);
   transition: background var(--transition);
-  box-shadow: var(--msg-glow);
   flex-shrink: 0;
 }
 
-.message-compact:hover { background: rgba(255,255,255,0.02); }
+.message-compact:hover { background: rgba(255,255,255,0.02); box-shadow: var(--msg-glow); }
+
+/* Thin horizontal separator between different users' message groups */
+.message-user-sep {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
 
 .message-compact .compact-time {
   position: absolute;

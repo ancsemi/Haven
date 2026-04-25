@@ -1136,7 +1136,7 @@ _setupSocketListeners() {
         const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
         if (!contentEl) return;
         contentEl.innerHTML = this._formatContent(displayContent);
-        msgEl.dataset.rawContent = data.content;
+        msgEl.dataset.rawContent = displayContent;
         let editedTag = msgEl.querySelector('.edited-tag');
         if (!editedTag) {
           editedTag = document.createElement('span');

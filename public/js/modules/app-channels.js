@@ -681,12 +681,12 @@ _openReparentModal(code) {
     </div>`;
   }
 
-  for (const t of targets) {
-    const subCount = this.channels.filter(c => c.parent_channel_id === t.id).length;
+  for (const tgt of targets) {
+    const subCount = this.channels.filter(c => c.parent_channel_id === tgt.id).length;
     const badge = subCount > 0 ? ` <span style="opacity:0.4;font-size:0.8em">${t('channels.sub_ch_count', { count: subCount })}</span>` : '';
-    html += `<div class="organize-item reparent-option" data-target="${t.code}">
+    html += `<div class="organize-item reparent-option" data-target="${tgt.code}">
       <span style="opacity:0.5">#</span>
-      <span style="flex:1">${this._escapeHtml(t.name)}${badge}</span>
+      <span style="flex:1">${this._escapeHtml(tgt.name)}${badge}</span>
     </div>`;
   }
 
@@ -1937,6 +1937,234 @@ _renderChannels() {
   this._voiceCountRefreshTimer = setTimeout(() => {
     if (this.socket?.connected) this.socket.emit('get-voice-counts');
   }, 600);
+
+  // Set up drag-and-drop reordering
+  this._setupChannelDragDrop();
+  this._setupDmDragDrop();
+},
+
+// ── Drag-and-drop channel reordering ────────────────────
+
+_setupChannelDragDrop() {
+  const canManage = this.user?.isAdmin || this._hasPerm('manage_server') || this._hasPerm('create_channel');
+  const list = document.getElementById('channel-list');
+  if (!list || !canManage) return;
+
+  // Make eligible items draggable
+  list.querySelectorAll(
+    '.channel-item:not(.sub-channel-item):not(.dm-item):not(.temp-channel-create-btn), .category-label, .sub-channel-item'
+  ).forEach(el => el.setAttribute('draggable', 'true'));
+
+  let dragSrc = null;
+  const indicator = document.createElement('div');
+  indicator.className = 'ch-drag-indicator';
+
+  const cleanUp = () => {
+    if (dragSrc) { dragSrc.classList.remove('ch-dragging'); dragSrc = null; }
+    indicator.remove();
+  };
+
+  // Check whether drag source and potential target are compatible
+  const isCompatible = (src, tgt) => {
+    if (!src || !tgt || src === tgt) return false;
+    if (src.classList.contains('category-label'))
+      return tgt.classList.contains('category-label');
+    if (src.classList.contains('sub-tag-label'))
+      return tgt.classList.contains('sub-tag-label') && tgt.dataset.parentCode === src.dataset.parentCode;
+    if (src.classList.contains('sub-channel-item'))
+      return tgt.classList.contains('sub-channel-item') && !tgt.classList.contains('sub-tag-label') && tgt.dataset.parentId === src.dataset.parentId;
+    // Parent channel: compatible with other parent channel-items or category labels
+    return (tgt.classList.contains('channel-item') && !tgt.classList.contains('sub-channel-item') && !tgt.classList.contains('dm-item') && !tgt.classList.contains('temp-channel-create-btn')) ||
+      tgt.classList.contains('category-label');
+  };
+
+  list.addEventListener('dragstart', (e) => {
+    const el = e.target.closest('[draggable="true"]');
+    if (!el || el.classList.contains('temp-channel-create-btn')) { e.preventDefault(); return; }
+    dragSrc = el;
+    dragSrc.classList.add('ch-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', el.dataset.code || el.dataset.category || el.dataset.tagName || '');
+  });
+
+  list.addEventListener('dragover', (e) => {
+    if (!dragSrc) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const tgt = e.target.closest('.channel-item:not(.temp-channel-create-btn), .category-label');
+    if (!tgt || !isCompatible(dragSrc, tgt)) { indicator.remove(); return; }
+    const rect = tgt.getBoundingClientRect();
+    if (e.clientY < rect.top + rect.height / 2) {
+      list.insertBefore(indicator, tgt);
+    } else {
+      list.insertBefore(indicator, tgt.nextSibling);
+    }
+  });
+
+  list.addEventListener('dragleave', (e) => {
+    if (!list.contains(e.relatedTarget)) indicator.remove();
+  });
+
+  list.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (!dragSrc || !indicator.parentNode) { cleanUp(); return; }
+    indicator.parentNode.insertBefore(dragSrc, indicator);
+    indicator.remove();
+    this._saveDragDropOrder(dragSrc);
+    dragSrc.classList.remove('ch-dragging');
+    dragSrc = null;
+  });
+
+  list.addEventListener('dragend', cleanUp);
+},
+
+_saveDragDropOrder(el) {
+  const list = document.getElementById('channel-list');
+  if (!list) return;
+
+  // Category label was dragged — reorder categories
+  if (el.classList.contains('category-label')) {
+    const newOrder = [...list.querySelectorAll('.category-label')].map(e => e.dataset.category || '__untagged__');
+    localStorage.setItem('haven_cat_order___server__', JSON.stringify(newOrder));
+    localStorage.setItem('haven_cat_sort___server__', 'manual');
+    if (this.serverSettings) {
+      this.serverSettings.channel_cat_order = JSON.stringify(newOrder);
+      this.serverSettings.channel_cat_sort = 'manual';
+    }
+    if (this.user?.isAdmin || this._hasPerm('manage_server')) {
+      this.socket.emit('update-server-setting', { key: 'channel_cat_order', value: JSON.stringify(newOrder) });
+      this.socket.emit('update-server-setting', { key: 'channel_cat_sort', value: 'manual' });
+    }
+    return;
+  }
+
+  // Sub-tag label was dragged — reorder sub-tags within parent
+  if (el.classList.contains('sub-tag-label')) {
+    const parentCode = el.dataset.parentCode;
+    if (!parentCode) return;
+    const newOrder = [...list.querySelectorAll(`.sub-tag-label[data-parent-code="${CSS.escape(parentCode)}"]`)].map(e => e.dataset.tagName || '__untagged__');
+    localStorage.setItem(`haven_cat_order_${parentCode}`, JSON.stringify(newOrder));
+    localStorage.setItem(`haven_cat_sort_${parentCode}`, 'manual');
+    return;
+  }
+
+  // Sub-channel was dragged — reorder subs within parent
+  if (el.classList.contains('sub-channel-item')) {
+    const parentId = parseInt(el.dataset.parentId);
+    const parentCh = this.channels.find(c => c.id === parentId);
+    if (!parentCh) return;
+    const subs = [...list.querySelectorAll(`.sub-channel-item:not(.sub-tag-label)[data-parent-id="${parentId}"]`)];
+    const order = subs.map((e, i) => ({ code: e.dataset.code, position: i }));
+    this.socket.emit('reorder-channels', { order });
+    // Switch parent to manual sort
+    if (parentCh.sort_alphabetical !== 0) {
+      parentCh.sort_alphabetical = 0;
+      this.socket.emit('set-sort-alphabetical', { code: parentCh.code });
+    }
+    // Switch per-sub-tag sort override to manual if the sub-channel had a tag
+    const subTag = el.dataset.subTag;
+    if (subTag) {
+      const tagSorts = JSON.parse(localStorage.getItem(`haven_tag_sorts_${parentCh.code}`) || '{}');
+      tagSorts[subTag] = 'manual';
+      localStorage.setItem(`haven_tag_sorts_${parentCh.code}`, JSON.stringify(tagSorts));
+    }
+    return;
+  }
+
+  // Parent channel was dragged — determine its new category from preceding category label
+  let newCategory = '';
+  let prev = el.previousElementSibling;
+  while (prev) {
+    if (prev.classList.contains('category-label')) { newCategory = prev.dataset.category || ''; break; }
+    prev = prev.previousElementSibling;
+  }
+
+  // If category changed, tell the server
+  const ch = this.channels.find(c => c.code === el.dataset.code);
+  if (ch && (ch.category || '') !== newCategory) {
+    this.socket.emit('set-channel-category', { code: el.dataset.code, category: newCategory });
+    ch.category = newCategory || null;
+  }
+
+  // Reorder all parent channels by new DOM positions
+  const parentItems = [...list.querySelectorAll('.channel-item:not(.sub-channel-item):not(.dm-item):not(.temp-channel-create-btn)')];
+  const order = parentItems.map((e, i) => ({ code: e.dataset.code, position: i }));
+  this.socket.emit('reorder-channels', { order });
+
+  // Switch server to manual sort mode
+  localStorage.setItem('haven_server_sort_mode', 'manual');
+  if (this.serverSettings) this.serverSettings.channel_sort_mode = 'manual';
+  if (this.user?.isAdmin || this._hasPerm('manage_server')) {
+    this.socket.emit('update-server-setting', { key: 'channel_sort_mode', value: 'manual' });
+  }
+
+  // Switch the dropped channel's category tag sort to manual
+  const tagSorts = JSON.parse(localStorage.getItem('haven_tag_sorts___server__') || '{}');
+  const catKey = newCategory || '__untagged__';
+  if (tagSorts[catKey] !== 'manual') {
+    tagSorts[catKey] = 'manual';
+    localStorage.setItem('haven_tag_sorts___server__', JSON.stringify(tagSorts));
+    if (this.user?.isAdmin || this._hasPerm('manage_server')) {
+      this.socket.emit('update-server-setting', { key: 'channel_tag_sorts', value: JSON.stringify(tagSorts) });
+    }
+  }
+},
+
+_setupDmDragDrop() {
+  const dmList = document.getElementById('dm-list');
+  if (!dmList) return;
+
+  dmList.querySelectorAll('.dm-item').forEach(el => el.setAttribute('draggable', 'true'));
+
+  let dragSrc = null;
+  const indicator = document.createElement('div');
+  indicator.className = 'ch-drag-indicator';
+
+  const cleanUp = () => {
+    if (dragSrc) { dragSrc.classList.remove('ch-dragging'); dragSrc = null; }
+    indicator.remove();
+  };
+
+  dmList.addEventListener('dragstart', (e) => {
+    const el = e.target.closest('.dm-item[draggable="true"]');
+    if (!el) return;
+    dragSrc = el;
+    dragSrc.classList.add('ch-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', el.dataset.code || '');
+  });
+
+  dmList.addEventListener('dragover', (e) => {
+    if (!dragSrc) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const tgt = e.target.closest('.dm-item');
+    if (!tgt || tgt === dragSrc) { indicator.remove(); return; }
+    const rect = tgt.getBoundingClientRect();
+    if (e.clientY < rect.top + rect.height / 2) {
+      dmList.insertBefore(indicator, tgt);
+    } else {
+      dmList.insertBefore(indicator, tgt.nextSibling);
+    }
+  });
+
+  dmList.addEventListener('dragleave', (e) => {
+    if (!dmList.contains(e.relatedTarget)) indicator.remove();
+  });
+
+  dmList.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (!dragSrc || !indicator.parentNode) { cleanUp(); return; }
+    indicator.parentNode.insertBefore(dragSrc, indicator);
+    indicator.remove();
+    const newOrder = [...dmList.querySelectorAll('.dm-item')].map(el => el.dataset.code);
+    localStorage.setItem('haven_dm_order', JSON.stringify(newOrder));
+    localStorage.setItem('haven_dm_sort_mode', 'manual');
+    dragSrc.classList.remove('ch-dragging');
+    dragSrc = null;
+  });
+
+  dmList.addEventListener('dragend', cleanUp);
 },
 
 _updateBadge(code) {

@@ -695,6 +695,8 @@ _createMessageEl(msg, prevMsg) {
 
   const el = document.createElement('div');
   el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '') + (msg.is_archived ? ' archived' : '') + (msg.is_webhook ? ' webhook-message' : '') + (msg.imported_from ? ' imported-message' : '') + (isAnnouncement ? ' announcement' : '');
+  // Add separator line between different users' message groups
+  if (prevMsg && prevMsg.user_id !== msg.user_id) el.classList.add('message-user-sep');
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
   el.dataset.timeShort = new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
