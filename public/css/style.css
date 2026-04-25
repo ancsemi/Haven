@@ -8462,6 +8462,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .gear-menu-danger:hover { background: rgba(233,69,96,0.12); color: var(--danger); }
 .gear-menu-divider { height: 1px; background: var(--border); margin: 4px 2px; }
 
+/* ── Context menu scroll fallback (#5286) ──
+   Floating menus (right-click, gear, channel, image, etc.) get capped to the
+   viewport with overflow-y: auto so long menus scroll instead of clipping
+   or running off-screen. The 16px margin keeps a little breathing room.
+   .user-context-menu is omitted because its hover submenu would get clipped
+   by overflow:auto; it stays short on its own. */
+.user-gear-menu,
+.channel-ctx-menu,
+.image-context-menu,
+.channel-functions-panel {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ── Transfer Admin Modal ────────────────── */
 .transfer-admin-modal {
   max-width: 420px;
