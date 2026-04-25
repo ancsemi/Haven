@@ -886,7 +886,7 @@ _renderOrganizeList() {
       html += `<div class="organize-tag-header${isTagSelected ? ' selected' : ''}" data-tag-key="${this._escapeHtml(tagKey)}" draggable="true">
         <span class="organize-tag-drag" title="${t('channels.drag_to_reorder') || 'Drag to reorder'}">⋮⋮</span>
         <span>${label}</span>
-        <select class="tag-sort-select" data-tag="${this._escapeHtml(tagKey)}" title="Sort this group">
+        <select class="tag-sort-select" data-tag="${this._escapeHtml(tagKey)}" title="Sort this group" draggable="false">
           <option value="manual"${group.sort === 'manual' ? ' selected' : ''}>${t('channels.sort.manual')}</option>
           <option value="alpha"${group.sort === 'alpha' ? ' selected' : ''}>${t('channels.sort.alpha')}</option>
           <option value="created"${group.sort === 'created' ? ' selected' : ''}>${t('channels.sort.newest')}</option>
@@ -965,48 +965,61 @@ _renderOrganizeList() {
   });
 
   // ── Drag-and-drop reordering of category headers ──────
-  // Mirrors sidebar channel drag pattern. Dropping a category header onto
-  // another header reorders the categories and switches sort to manual,
-  // persisting both to localStorage and (for server-level) server settings.
-  let _dragKey = null;
-  listEl.querySelectorAll('.organize-tag-header').forEach(header => {
-    header.addEventListener('dragstart', (e) => {
-      _dragKey = header.dataset.tagKey;
+  // Uses event delegation on listEl so drag events still fire when the
+  // cursor is over a child element (e.g. the per-tag <select>) inside the
+  // header, which can otherwise swallow dragover/drop in some browsers.
+  // Re-attach is idempotent because handlers live on listEl, not children.
+  if (!listEl._catDragSetup) {
+    listEl._catDragSetup = true;
+    listEl.addEventListener('dragstart', (e) => {
+      const header = e.target.closest('.organize-tag-header[draggable="true"]');
+      if (!header || !listEl.contains(header)) return;
+      listEl._catDragKey = header.dataset.tagKey;
       header.classList.add('org-dragging');
-      try { e.dataTransfer.setData('text/plain', _dragKey); } catch {}
+      try { e.dataTransfer.setData('text/plain', listEl._catDragKey || ''); } catch {}
       try { e.dataTransfer.effectAllowed = 'move'; } catch {}
     });
-    header.addEventListener('dragend', () => {
-      header.classList.remove('org-dragging');
-      listEl.querySelectorAll('.organize-tag-header').forEach(h => h.classList.remove('org-drop-above', 'org-drop-below'));
+    listEl.addEventListener('dragend', () => {
+      listEl.querySelectorAll('.organize-tag-header').forEach(h => h.classList.remove('org-dragging', 'org-drop-above', 'org-drop-below'));
+      listEl._catDragKey = null;
     });
-    header.addEventListener('dragover', (e) => {
-      if (!_dragKey || header.dataset.tagKey === _dragKey) return;
+    listEl.addEventListener('dragover', (e) => {
+      if (!listEl._catDragKey) return;
+      const header = e.target.closest('.organize-tag-header');
+      if (!header || header.dataset.tagKey === listEl._catDragKey) return;
       e.preventDefault();
       try { e.dataTransfer.dropEffect = 'move'; } catch {}
       const rect = header.getBoundingClientRect();
       const before = (e.clientY - rect.top) < rect.height / 2;
+      // Clear other indicators
+      listEl.querySelectorAll('.organize-tag-header').forEach(h => {
+        if (h !== header) h.classList.remove('org-drop-above', 'org-drop-below');
+      });
       header.classList.toggle('org-drop-above', before);
       header.classList.toggle('org-drop-below', !before);
     });
-    header.addEventListener('dragleave', () => {
-      header.classList.remove('org-drop-above', 'org-drop-below');
+    listEl.addEventListener('dragleave', (e) => {
+      // Only clear when leaving the list entirely
+      if (!listEl.contains(e.relatedTarget)) {
+        listEl.querySelectorAll('.organize-tag-header').forEach(h => h.classList.remove('org-drop-above', 'org-drop-below'));
+      }
     });
-    header.addEventListener('drop', (e) => {
+    listEl.addEventListener('drop', (e) => {
+      const header = e.target.closest('.organize-tag-header');
+      const dragKey = listEl._catDragKey;
+      listEl._catDragKey = null;
+      listEl.querySelectorAll('.organize-tag-header').forEach(h => h.classList.remove('org-drop-above', 'org-drop-below', 'org-dragging'));
+      if (!header || !dragKey || header.dataset.tagKey === dragKey) return;
       e.preventDefault();
-      header.classList.remove('org-drop-above', 'org-drop-below');
-      if (!_dragKey || header.dataset.tagKey === _dragKey) { _dragKey = null; return; }
       const rect = header.getBoundingClientRect();
       const before = (e.clientY - rect.top) < rect.height / 2;
-      // Build current visual order from rendered DOM
       const currentOrder = Array.from(listEl.querySelectorAll('.organize-tag-header'))
         .map(h => h.dataset.tagKey);
-      const fromIdx = currentOrder.indexOf(_dragKey);
-      const targetIdx = currentOrder.indexOf(header.dataset.tagKey);
-      if (fromIdx === -1 || targetIdx === -1) { _dragKey = null; return; }
+      const fromIdx = currentOrder.indexOf(dragKey);
+      if (fromIdx === -1) return;
       currentOrder.splice(fromIdx, 1);
       const insertAt = currentOrder.indexOf(header.dataset.tagKey) + (before ? 0 : 1);
-      currentOrder.splice(insertAt, 0, _dragKey);
+      currentOrder.splice(insertAt, 0, dragKey);
 
       this._organizeCatSort = 'manual';
       this._organizeCatOrder = currentOrder;
@@ -1018,11 +1031,10 @@ _renderOrganizeList() {
         this.socket.emit('update-server-setting', { key: 'channel_cat_order', value: JSON.stringify(currentOrder) });
         this.socket.emit('update-server-setting', { key: 'channel_cat_sort', value: 'manual' });
       }
-      _dragKey = null;
       this._renderOrganizeList();
       this._renderChannels();
     });
-  });
+  }
 
   // Disable up/down based on selection type
   let canMoveUp = false, canMoveDown = false;
