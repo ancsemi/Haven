@@ -2332,7 +2332,28 @@ _updateTabTitle() {
 _updateDesktopBadge() {
   const validCodes = new Set((this.channels || []).map(c => c.code));
   const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => validCodes.has(k) ? s + v : s, 0);
+  // Track last-pushed value so visibility-driven re-syncs (below) can detect
+  // when the desktop main process has fallen out of step with the renderer
+  // and quietly reassert the correct state without spamming IPC.
+  this._lastDesktopBadge = total > 0;
   window.havenDesktop?.setUnreadBadge?.(total > 0);
+},
+
+// Re-assert the desktop badge state when the window/tab regains focus.
+// Catches the case where a stale "true" badge in the main process never
+// got cleared because the renderer that originally raised it was destroyed
+// or hot-reloaded without the corresponding clear IPC.  Also covers
+// renderers that started before the main process finished wiring badge
+// IPC handlers.  Idempotent — sends the current truth, no diff needed.
+_resyncDesktopBadgeOnFocus() {
+  if (this._desktopBadgeFocusBound) return;
+  this._desktopBadgeFocusBound = true;
+  const resync = () => {
+    if (document.hidden) return;
+    try { this._updateDesktopBadge(); } catch {}
+  };
+  window.addEventListener('focus', resync);
+  document.addEventListener('visibilitychange', resync);
 },
 
 /**

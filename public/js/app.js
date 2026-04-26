@@ -164,6 +164,7 @@ class HavenApp {
     this._setupServerBar();
     this._setupNotifications();
     this._setupPushNotifications();
+    this._resyncDesktopBadgeOnFocus?.();
     this._setupImageUpload();
     this._setupGifPicker();
     this._startStatusBar();
