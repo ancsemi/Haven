@@ -1905,10 +1905,11 @@ _handleFileUpload(input) {
 },
 
 /** Upload any file via /api/upload-file — used by drag & drop, paste, and 📎 button */
-_uploadGeneralFile(file) {
-  if (!this.currentChannel) return this._showToast(t('media.select_channel_first'), 'error');
+_uploadGeneralFile(file, targetCode) {
+  const code = targetCode || this.currentChannel;
+  if (!code) return this._showToast(t('media.select_channel_first'), 'error');
   // Block media uploads if disabled in this channel
-  const _ugCh = this.channels.find(c => c.code === this.currentChannel);
+  const _ugCh = this.channels.find(c => c.code === code);
   if (_ugCh && _ugCh.media_enabled === 0) {
     return this._showToast(t('media.uploads_disabled'), 'error');
   }
@@ -1937,12 +1938,12 @@ _uploadGeneralFile(file) {
       content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
     }
     this.socket.emit('send-message', {
-      code: this.currentChannel,
+      code,
       content,
-      replyTo: this.replyingTo ? this.replyingTo.id : null
+      replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
     });
     this.notifications.play('sent');
-    this._clearReply();
+    if (code === this.currentChannel) this._clearReply();
   })
   .catch(err => this._showToast(err.message || t('settings.admin.upload_failed'), 'error'));
 },

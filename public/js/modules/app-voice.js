@@ -1027,6 +1027,25 @@ async _populateAudioDevices() {
     outputSelect.appendChild(opt);
   }
 
+  // Browsers that don't implement HTMLMediaElement.setSinkId (notably
+  // Firefox) can't switch audio output devices in JS. Disable the picker
+  // and surface a hint so users aren't left confused. (#5295)
+  const _supportsSinkId = typeof HTMLAudioElement !== 'undefined'
+    && typeof HTMLAudioElement.prototype.setSinkId === 'function';
+  if (!_supportsSinkId) {
+    outputSelect.disabled = true;
+    outputSelect.title = 'Your browser does not support switching audio output devices. Pick the output in your OS sound settings.';
+    const _hintId = 'voice-output-unsupported-hint';
+    if (!document.getElementById(_hintId) && outputSelect.parentElement) {
+      const hint = document.createElement('small');
+      hint.id = _hintId;
+      hint.className = 'settings-hint';
+      hint.style.cssText = 'display:block;margin-top:4px;opacity:0.85';
+      hint.textContent = 'Your browser can\u2019t switch audio output devices. Use your OS sound settings instead.';
+      outputSelect.parentElement.appendChild(hint);
+    }
+  }
+
   // Populate camera
   if (camSelect) {
     camSelect.innerHTML = `<option value="">${t('voice_settings.default_camera')}</option>`;

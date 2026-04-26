@@ -357,6 +357,15 @@ _setupNotifications() {
     });
   }
 
+  // DM single-click default — open fullscreen DM instead of PiP. (#5295)
+  const dmFsToggle = document.getElementById('dm-fullscreen-default');
+  if (dmFsToggle) {
+    dmFsToggle.checked = localStorage.getItem('haven_dm_fullscreen_default') === 'true';
+    dmFsToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_dm_fullscreen_default', String(dmFsToggle.checked));
+    });
+  }
+
   // Show status bar (opt-in — hidden by default, but Desktop always shows its own footer)
   const showStatusBarToggle = document.getElementById('show-status-bar');
   const statusBarToggleTab = document.getElementById('status-bar-toggle');

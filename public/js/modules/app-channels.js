@@ -1936,12 +1936,24 @@ _renderChannels() {
       el.addEventListener('click', () => {
         // Single-click on a DM opens it in a floating PiP panel overlaid
         // on the user's current channel. Does NOT switch channels.
-        this._openDMPiP?.(ch.code);
+        // Users can flip this in Settings → Chat: when "Open DMs in
+        // fullscreen on single click" is on, single-click switches to the
+        // full DM and double-click opens the PiP. (#5295)
+        if (localStorage.getItem('haven_dm_fullscreen_default') === 'true') {
+          this._closeDMPiP?.();
+          this.switchChannel(ch.code);
+        } else {
+          this._openDMPiP?.(ch.code);
+        }
       });
       el.addEventListener('dblclick', () => {
-        // Double-click switches to the full DM pane (legacy behavior).
-        this._closeDMPiP?.();
-        this.switchChannel(ch.code);
+        if (localStorage.getItem('haven_dm_fullscreen_default') === 'true') {
+          this._openDMPiP?.(ch.code);
+        } else {
+          // Double-click switches to the full DM pane (legacy behavior).
+          this._closeDMPiP?.();
+          this.switchChannel(ch.code);
+        }
       });
       return el;
     };

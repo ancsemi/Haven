@@ -1524,6 +1524,24 @@ _setupUI() {
     }
   });
 
+  // Paste images / files into the DM PiP input — uploads to the active PiP DM
+  // (not the channel currently in the main pane). (#5295)
+  if (dmPipInput) dmPipInput.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const targetCode = this._activeDMPip;
+    if (!targetCode) return;
+    for (const item of items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (!file) continue;
+        e.preventDefault();
+        this._uploadGeneralFile(file, targetCode);
+        return;
+      }
+    }
+  });
+
   // PiP emoji button — positions the picker above the button and targets the PiP input
   const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');
   if (dmPipEmojiBtn) {
