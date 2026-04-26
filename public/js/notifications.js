@@ -117,7 +117,9 @@ class NotificationManager {
 
   // ── Text-to-Speech ──────────────────────────────────────
   speak(text) {
-    if (!this.enabled) return;
+    // TTS is sender-initiated (someone deliberately ran /tts), so don't
+    // gate it behind the listener's master notification toggle. Volume
+    // still applies via utter.volume below; setting volume to 0 mutes it.
     try {
       // Cancel any ongoing speech first to prevent overlap/queuing
       speechSynthesis.cancel();
