@@ -181,16 +181,27 @@ _formatContent(str) {
   const validNames = new Set();
   const loginToDisplay = new Map();
   const displayToLogin = new Map();
+  // Map matched names back to user id so we can prefer the viewer's personal
+  // nickname for the display text. (#5290)
+  const nameToUserId = new Map();
   if (Array.isArray(this.channelMembers)) {
     for (const m of this.channelMembers) {
       if (!m) continue;
       if (m.loginName) {
         validNames.add(m.loginName.toLowerCase());
         loginToDisplay.set(m.loginName.toLowerCase(), m.username || m.loginName);
+        if (m.id) nameToUserId.set(m.loginName.toLowerCase(), m.id);
       }
       if (m.username) {
         validNames.add(m.username.toLowerCase());
         displayToLogin.set(m.username.toLowerCase(), m.loginName || m.username);
+        if (m.id) nameToUserId.set(m.username.toLowerCase(), m.id);
+      }
+      // Also let users autocomplete/style mentions by their assigned nickname.
+      const nick = m.id && this._nicknames ? this._nicknames[m.id] : null;
+      if (nick) {
+        validNames.add(nick.toLowerCase());
+        if (m.id) nameToUserId.set(nick.toLowerCase(), m.id);
       }
     }
   }
@@ -209,7 +220,11 @@ _formatContent(str) {
     const isKnown = validNames.has(lower);
     const isSelf  = lower === selfLogin;
     if (!isKnown && !isSelf) return match;
-    const display = loginToDisplay.get(lower) || name;
+    // Prefer the viewer's personal nickname for that user, then the
+    // server-side display name, then the raw token. (#5290)
+    const uid = nameToUserId.get(lower);
+    const nick = uid && this._nicknames ? this._nicknames[uid] : null;
+    const display = nick || loginToDisplay.get(lower) || name;
     return `<span class="mention${isSelf ? ' mention-self' : ''}">@${this._escapeHtml(display)}</span>`;
   });
 

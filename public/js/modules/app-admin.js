@@ -1444,7 +1444,8 @@ _showMentionDropdown() {
   const filtered = this.channelMembers.filter(m => {
     const dn = (m.username || '').toLowerCase();
     const ln = (m.loginName || '').toLowerCase();
-    return dn.startsWith(query) || ln.startsWith(query);
+    const nk = (m.id && this._nicknames && this._nicknames[m.id] || '').toLowerCase();
+    return dn.startsWith(query) || ln.startsWith(query) || (nk && nk.startsWith(query));
   }).slice(0, 8);
 
   if (filtered.length === 0) {
@@ -1453,10 +1454,12 @@ _showMentionDropdown() {
   }
 
   // Insert by loginName (stable, immune to display-name renames). Show the
-  // display name in the dropdown for recognizability, with the @loginName
-  // suffix when it differs so people know what'll actually be inserted.
+  // viewer's personal nickname (if set) or the display name in the dropdown
+  // for recognizability, with the @loginName suffix when it differs so
+  // people know what'll actually be inserted. (#5290)
   dropdown.innerHTML = filtered.map((m, i) => {
-    const display = m.username || m.loginName || '';
+    const nick = m.id && this._nicknames ? this._nicknames[m.id] : '';
+    const display = nick || m.username || m.loginName || '';
     const login = m.loginName || m.username || '';
     const suffix = (login && display.toLowerCase() !== login.toLowerCase())
       ? ` <span class="mention-item-handle">@${this._escapeHtml(login)}</span>`
