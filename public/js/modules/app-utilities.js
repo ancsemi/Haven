@@ -1541,7 +1541,13 @@ _setThreadParentHeader(meta = {}) {
   const nameEl = document.getElementById('thread-parent-name');
   if (!wrap || !nameEl) return;
 
-  const username = (meta.username || '').trim() || 'Thread starter';
+  const baseUsername = (meta.username || '').trim() || 'Thread starter';
+  // Apply the local user's nickname assignment so threads match the rest of
+  // the UI (members list, message author, mentions). Falls back to the
+  // server-provided display name when no nickname is set. (#5291)
+  const username = meta.userId != null
+    ? (this._getNickname?.(meta.userId, baseUsername) || baseUsername)
+    : baseUsername;
   const shape = (meta.avatarShape || 'circle') === 'square' ? 'square' : 'circle';
   const shapeClass = shape === 'square' ? ' thread-parent-avatar-square' : '';
 
@@ -1981,7 +1987,9 @@ _openThread(parentId) {
   let avatar = null;
   if (avatarImg && avatarImg.getAttribute('src')) avatar = avatarImg.getAttribute('src');
   const avatarShape = (avatarImg && avatarImg.classList.contains('avatar-square')) ? 'square' : 'circle';
-  this._setThreadParentHeader({ username: author, avatar, avatarShape });
+  const parentUserIdRaw = msgEl?.dataset?.userId;
+  const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
+  this._setThreadParentHeader({ userId: parentUserId, username: author, avatar, avatarShape });
 
   // Focus input
   const input = document.getElementById('thread-input');
@@ -2075,8 +2083,11 @@ _appendThreadMessage(msg) {
   const container = document.getElementById('thread-messages');
   if (!container) return;
 
+  // Apply the local user's nickname assignment so thread messages match
+  // everywhere else nicknames are honored. (#5291)
+  const displayName = this._getNickname?.(msg.user_id, msg.username) || msg.username;
   const color = this._getUserColor(msg.username);
-  const initial = msg.username.charAt(0).toUpperCase();
+  const initial = displayName.charAt(0).toUpperCase();
   let avatarHtml;
   if (msg.avatar) {
     avatarHtml = `<img class="thread-msg-avatar" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
@@ -2112,7 +2123,7 @@ _appendThreadMessage(msg) {
       ${avatarHtml}
       <div class="thread-msg-body">
         <div class="thread-msg-header">
-          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(msg.username)}</span>
+          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
           <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
           <span class="thread-msg-header-spacer"></span>
           <div class="thread-msg-toolbar">

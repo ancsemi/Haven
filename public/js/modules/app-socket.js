@@ -803,6 +803,7 @@ _setupSocketListeners() {
   this.socket.on('thread-messages', async (data) => {
     if (data.parentUsername) {
       this._setThreadParentHeader({
+        userId: data.parentUserId || null,
         username: data.parentUsername,
         avatar: data.parentAvatar || null,
         avatarShape: data.parentAvatarShape || 'circle'

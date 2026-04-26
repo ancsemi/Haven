@@ -1180,6 +1180,7 @@ module.exports = function register(socket, ctx) {
     // Verify parent message belongs to this channel and fetch OP metadata
     const parent = db.prepare(`
       SELECT m.id,
+             m.user_id,
              m.content,
              m.created_at,
              COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username,
@@ -1236,6 +1237,7 @@ module.exports = function register(socket, ctx) {
     socket.emit('thread-messages', {
       parentId,
       parentContent: parent.content,
+      parentUserId: parent.user_id || null,
       parentUsername: parent.username || '[Deleted User]',
       parentAvatar: parent.avatar || null,
       parentAvatarShape: parent.avatar_shape || 'circle',
