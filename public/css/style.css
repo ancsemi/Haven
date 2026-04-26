@@ -7307,7 +7307,9 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-left: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
-  z-index: 800;
+  /* Must sit above .input-actions-box (z:1001) so the docked thread panel
+     isn't covered by the channel's message input action buttons. (#5289) */
+  z-index: 1010;
   box-shadow: -4px 0 24px rgba(0,0,0,0.25);
   animation: thread-slide-in 0.2s ease-out;
 }
