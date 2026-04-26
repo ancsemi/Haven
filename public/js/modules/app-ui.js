@@ -3210,11 +3210,44 @@ _setupUI() {
     }
   });
   document.getElementById('update-run-btn')?.addEventListener('click', async () => {
-    if (!lastUpdateCheck || !lastUpdateCheck.runnable) return;
+    const status = updStatusEl();
+    // If the user clicks Run before clicking Check, do the check first so
+    // we always have a fresh `lastUpdateCheck` to act on. (#5267)
+    if (!lastUpdateCheck) {
+      try { document.getElementById('update-check-btn')?.click(); } catch {}
+      if (status) {
+        if (status.style) status.style.display = 'block';
+        status.textContent = 'Checking for updates first… click Update Now again once the check finishes.';
+      }
+      return;
+    }
+    if (!lastUpdateCheck.updateAvailable) {
+      if (status) {
+        if (status.style) status.style.display = 'block';
+        status.textContent = 'Already up to date — nothing to install.';
+      }
+      return;
+    }
+    if (!lastUpdateCheck.runnable) {
+      // Most common case: Docker install. Surface the reason instead of
+      // silently doing nothing so admins know why the button is inert.
+      if (status) {
+        if (status.style) status.style.display = 'block';
+        const reason = lastUpdateCheck.message || `In-app updates aren't supported for the "${lastUpdateCheck.method}" install method.`;
+        status.textContent = reason;
+      }
+      return;
+    }
     if (!confirm(`Apply update to v${lastUpdateCheck.latestVersion}? The server will run an auto-backup, then exit so the supervisor restarts it on the new code. You will be disconnected for ~30 seconds.`)) return;
     const token = localStorage.getItem('haven_token');
     if (!token) return;
-    const status = updStatusEl();
+    // Visible status before the fetch so admins always see *something*
+    // happen on click — helps diagnose cases where the request fails
+    // silently or the host blocks the request. (#5267)
+    if (status) {
+      if (status.style) status.style.display = 'block';
+      status.textContent = 'Sending update request…';
+    }
     try {
       const r = await fetch('/api/admin/update/run', {
         method: 'POST',
