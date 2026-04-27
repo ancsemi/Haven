@@ -3355,6 +3355,13 @@ html.rgb-cycling *::after {
 }
 .dm-pip-messages .message-row {
   gap: 0;
+  /* The default .message-row has padding: 4px 8px which would push the
+     full-message body 8px further right than the compact-message body,
+     making first-in-group messages look indented relative to follow-ups.
+     Zero out the horizontal padding so both align at the same left edge
+     (controlled by the .message / .message-compact padding-left above). */
+  padding-left: 0;
+  padding-right: 0;
 }
 /* Hide per-message avatars — header already shows the partner pfp */
 .dm-pip-messages .message-avatar,
@@ -3364,7 +3371,7 @@ html.rgb-cycling *::after {
 .dm-pip-messages .message .message-body,
 .dm-pip-messages .message-compact .message-body {
   margin-left: 0;
-  padding-left: 4px;
+  padding-left: 0;
   min-width: 0;
   flex: 1;
 }
@@ -7761,6 +7768,42 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 .mention.mention-self {
   background: rgba(124, 92, 252, 0.3);
+}
+
+.mention.mention-everyone {
+  background: rgba(255, 170, 60, 0.18);
+  color: #ffb84d;
+}
+
+.channel-link {
+  background: rgba(124, 92, 252, 0.12);
+  color: var(--accent);
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.channel-link:hover {
+  background: rgba(124, 92, 252, 0.24);
+  text-decoration: underline;
+}
+
+/* Pinned-message indicator dot on the 📌 toggle button when the active
+   channel has at least one pinned message. */
+#pinned-toggle-btn { position: relative; }
+#pinned-toggle-btn.has-pins::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #7c5cfc);
+  box-shadow: 0 0 0 2px var(--bg-secondary, #1c1c20);
+  pointer-events: none;
 }
 
 /* @mention autocomplete dropdown */

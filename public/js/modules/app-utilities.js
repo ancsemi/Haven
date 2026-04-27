@@ -12,6 +12,28 @@ _safeColor(c, fallback = '') {
   return fallback;
 },
 
+/**
+ * Toggle a small dot on the 📌 pinned-toggle button when the active channel
+ * has at least one pinned message. Count-aware so we can also bump live on
+ * pin/unpin events without re-fetching from the server.
+ */
+_updatePinIndicator(count) {
+  const btn = document.getElementById('pinned-toggle-btn');
+  if (!btn) return;
+  const n = Math.max(0, count | 0);
+  this._pinnedCountByChannel = this._pinnedCountByChannel || {};
+  if (this.currentChannel) this._pinnedCountByChannel[this.currentChannel] = n;
+  btn.classList.toggle('has-pins', n > 0);
+  btn.dataset.pinCount = String(n);
+},
+
+_bumpPinIndicator(delta) {
+  if (!this.currentChannel) return;
+  this._pinnedCountByChannel = this._pinnedCountByChannel || {};
+  const cur = this._pinnedCountByChannel[this.currentChannel] || 0;
+  this._updatePinIndicator(Math.max(0, cur + (delta | 0)));
+},
+
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
@@ -227,6 +249,35 @@ _formatContent(str) {
     const display = nick || loginToDisplay.get(lower) || name;
     return `<span class="mention${isSelf ? ' mention-self' : ''}">@${this._escapeHtml(display)}</span>`;
   });
+
+  // ── @everyone / @here mentions ──
+  // Render as a styled mention badge. Notification + audio cue is handled
+  // separately in app-socket.js when a new message arrives.
+  html = html.replace(/(?<![\w@])@(everyone|here)\b/gi, (_m, name) => {
+    return `<span class="mention mention-everyone" data-everyone="${name.toLowerCase()}">@${this._escapeHtml(name.toLowerCase())}</span>`;
+  });
+
+  // ── #channel-name links ──
+  // Recognize #foo / #foo-bar / #🎮general references and turn them into
+  // clickable spans that switch the active channel on click. We resolve
+  // against the user's currently-loaded channel list (case-insensitive).
+  // Matched names must follow a non-word/non-hash boundary so things like
+  // ## headings or message IDs (#1234) don't get linkified spuriously.
+  if (Array.isArray(this.channels) && this.channels.length) {
+    const chanByName = new Map();
+    for (const c of this.channels) {
+      if (c && c.name && c.code && !c.is_dm) {
+        chanByName.set(String(c.name).toLowerCase(), c.code);
+      }
+    }
+    if (chanByName.size > 0) {
+      html = html.replace(/(?<![\w#&])#([\p{L}\p{N}\p{Emoji_Presentation}_-][\p{L}\p{N}\p{Emoji_Presentation}_-]{0,49})/gu, (match, name) => {
+        const code = chanByName.get(name.toLowerCase());
+        if (!code) return match;
+        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(name)}</span>`;
+      });
+    }
+  }
 
   // Render spoilers (||text||) — CSP-safe, uses delegated click handler
   html = html.replace(/\|\|(.+?)\|\|/g, '<span class="spoiler">$1</span>');

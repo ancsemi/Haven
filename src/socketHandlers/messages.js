@@ -35,7 +35,7 @@ module.exports = function register(socket, ctx) {
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
-        ORDER BY m.created_at DESC LIMIT ?
+        ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, before, limit);
     } else if (after) {
       messages = db.prepare(`
@@ -43,7 +43,7 @@ module.exports = function register(socket, ctx) {
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
-        ORDER BY m.created_at ASC LIMIT ?
+        ORDER BY m.created_at ASC, m.id ASC LIMIT ?
       `).all(channel.id, after, limit);
     } else if (around) {
       const half = Math.floor(limit / 2);
@@ -52,7 +52,7 @@ module.exports = function register(socket, ctx) {
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
-        ORDER BY m.created_at DESC LIMIT ?
+        ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, around, half);
       const targetMsg = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data,
@@ -65,7 +65,7 @@ module.exports = function register(socket, ctx) {
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
-        ORDER BY m.created_at ASC LIMIT ?
+        ORDER BY m.created_at ASC, m.id ASC LIMIT ?
       `).all(channel.id, around, half);
       // Combine: beforeMsgs is DESC so reverse it, target, then afterMsgs ASC
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
@@ -75,7 +75,7 @@ module.exports = function register(socket, ctx) {
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.thread_id IS NULL
-        ORDER BY m.created_at DESC LIMIT ?
+        ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, limit);
     }
 
@@ -217,6 +217,7 @@ module.exports = function register(socket, ctx) {
       channelCode: code,
       messages: (after || around) ? enriched : enriched.reverse(),
       lastReadMessageId,
+      pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ?').get(channel.id).cnt,
       ...(around ? { around } : {})
     });
   });
@@ -318,7 +319,7 @@ module.exports = function register(socket, ctx) {
   socket.on('send-message', (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
-    const content = typeof data.content === 'string' ? data.content : '';
+    let content = typeof data.content === 'string' ? data.content : '';
 
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     if (!content || content.trim().length === 0) return;
@@ -350,6 +351,15 @@ module.exports = function register(socket, ctx) {
 
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
       return socket.emit('error-msg', 'This channel is read-only');
+    }
+
+    // Strip @everyone / @here from senders who lack mention_everyone, so
+    // unauthorized users can't trigger an everyone-mention notification.
+    // We replace the trigger with a zero-width-joined form so the visible
+    // text is preserved but the client-side mention regex no longer matches.
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mention_everyone', channel.id)) {
+      const stripped = content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
+      if (stripped !== content) content = stripped;
     }
 
     if (channel.text_enabled === 0) {
@@ -876,14 +886,22 @@ module.exports = function register(socket, ctx) {
         if (!exists) return;
       }
 
-      const code = socket.currentChannel;
-      if (!code) return;
-
-      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
-
-      const msg = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+      // Look up the channel from the message itself, not socket.currentChannel.
+      // Reactions can be triggered from the DM PiP while the user's main pane
+      // (and therefore socket.currentChannel) is a completely different
+      // channel — using socket.currentChannel made the reaction silently
+      // fail because the message wouldn't be found in that channel. (#bug-#4)
+      const msg = db.prepare(
+        'SELECT m.id, c.code, c.id as channel_id FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+      ).get(data.messageId);
       if (!msg) return;
+      const code = msg.code;
+
+      // Verify membership of the channel the message lives in.
+      const member = db.prepare(
+        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+      ).get(msg.channel_id, socket.user.id);
+      if (!member && !socket.user.isAdmin) return;
 
       db.prepare(
         'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
@@ -909,13 +927,17 @@ module.exports = function register(socket, ctx) {
       if (!data || typeof data !== 'object') return;
       if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
 
-      const code = socket.currentChannel;
-      if (!code) return;
+      // Look up the channel from the message (see add-reaction comment).
+      const msgRow = db.prepare(
+        'SELECT m.id, c.code, c.id as channel_id FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+      ).get(data.messageId);
+      if (!msgRow) return;
+      const code = msgRow.code;
 
-      const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-      if (!channel) return;
-      const msgCheck = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
-      if (!msgCheck) return;
+      const member = db.prepare(
+        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+      ).get(msgRow.channel_id, socket.user.id);
+      if (!member && !socket.user.isAdmin) return;
 
       db.prepare(
         'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
@@ -1171,33 +1193,29 @@ module.exports = function register(socket, ctx) {
     const parentId = isInt(data.parentId) ? data.parentId : null;
     if (!parentId) return;
 
-    const code = socket.currentChannel;
-    if (!code) return;
+    // Look up the channel from the parent message rather than relying on
+    // socket.currentChannel — the thread panel can persist across channel
+    // switches, and a stale currentChannel would silently empty the thread
+    // (issue: web users seeing 28 replies but no messages, mobile fine).
+    const parentRow = db.prepare(
+      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
+    ).get(parentId);
+    if (!parentRow) return;
+    const channel = { id: parentRow.channel_id };
+    const parent = parentRow;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    // Verify parent message belongs to this channel and fetch OP metadata
-    const parent = db.prepare(`
-      SELECT m.id,
-             m.user_id,
-             m.content,
-             m.created_at,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username,
-             COALESCE(m.webhook_avatar, u.avatar) as avatar,
-             COALESCE(u.avatar_shape, 'circle') as avatar_shape
-      FROM messages m
-      LEFT JOIN users u ON m.user_id = u.id
-      WHERE m.id = ? AND m.channel_id = ?
-    `).get(parentId, channel.id);
-    if (!parent) return;
+    // Verify the user is a member of the channel (admins exempt).
+    const member = db.prepare(
+      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+    ).get(channel.id, socket.user.id);
+    if (!member && !socket.user.isAdmin) return;
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
              COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
       WHERE m.thread_id = ?
-      ORDER BY m.created_at ASC
+      ORDER BY m.created_at ASC, m.id ASC
     `).all(parentId);
 
     // Enrich with reactions and reply context
@@ -1255,15 +1273,21 @@ module.exports = function register(socket, ctx) {
 
     if (floodCheck('message')) return;
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    // Verify parent message belongs to this channel and is not itself a thread message
-    const parent = db.prepare('SELECT id, thread_id, channel_id FROM messages WHERE id = ? AND channel_id = ?').get(parentId, channel.id);
+    // Resolve channel via the parent message (not socket.currentChannel) so
+    // sending from a thread panel still works after the user has navigated
+    // away from the parent's channel. (#thread-blank-web)
+    const parent = db.prepare(
+      'SELECT m.id, m.thread_id, m.channel_id, c.code as code, c.is_dm FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+    ).get(parentId);
     if (!parent || parent.thread_id) return; // Can't create sub-threads
+    const code = parent.code;
+    const channel = { id: parent.channel_id, is_dm: parent.is_dm };
+
+    // Verify the user is a member of the channel (admins exempt).
+    const tMember = db.prepare(
+      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+    ).get(channel.id, socket.user.id);
+    if (!tMember && !socket.user.isAdmin) return;
 
     const safeContent = sanitizeText(content);
     if (!safeContent) return;

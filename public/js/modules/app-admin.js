@@ -543,10 +543,28 @@ _syncSettingsNav() {
   if (rolesNavItem && !isAdmin && canManageRoles) {
     rolesNavItem.style.display = '';
   }
-  // Show Server settings tab for users with manage_server permission
-  const serverNavItem = document.querySelector('.settings-nav-item[data-target="section-server"]');
-  if (serverNavItem && !isAdmin && canManageServer) {
-    serverNavItem.style.display = '';
+  // Show Server settings tab for users with manage_server permission.
+  // manage_server gates many categories on the server-side, so unhide the
+  // full set of server-management nav items (categories with their own
+  // dedicated perm — emojis/sounds/roles/audit log — are handled separately).
+  if (!isAdmin && canManageServer) {
+    const serverManagedTargets = [
+      'section-branding',
+      'section-members',
+      'section-whitelist',
+      'section-invite',
+      'section-cleanup',
+      'section-backup',
+      'section-uploads',
+      'section-tunnel',
+      'section-bots',
+      'section-import',
+      'section-modmode'
+    ];
+    serverManagedTargets.forEach(target => {
+      const navItem = document.querySelector(`.settings-nav-item[data-target="${target}"]`);
+      if (navItem) navItem.style.display = '';
+    });
   }
   // Show Audit Log nav item for users with view_audit_log permission
   const canViewAuditLog = isAdmin || this._hasPerm('view_audit_log');
@@ -1448,7 +1466,16 @@ _showMentionDropdown() {
     return dn.startsWith(query) || ln.startsWith(query) || (nk && nk.startsWith(query));
   }).slice(0, 8);
 
-  if (filtered.length === 0) {
+  // Offer @everyone / @here as mention options when the query matches and
+  // the user has the mention_everyone permission (admins implicitly have it).
+  const canMentionEveryone = this.user && (this.user.isAdmin || this._hasPerm?.('mention_everyone'));
+  const everyoneOptions = [];
+  if (canMentionEveryone) {
+    if ('everyone'.startsWith(query)) everyoneOptions.push({ name: 'everyone', label: '@everyone', desc: 'Notify everyone in the channel' });
+    if ('here'.startsWith(query)) everyoneOptions.push({ name: 'here', label: '@here', desc: 'Notify online members' });
+  }
+
+  if (filtered.length === 0 && everyoneOptions.length === 0) {
     dropdown.style.display = 'none';
     return;
   }
@@ -1457,15 +1484,23 @@ _showMentionDropdown() {
   // viewer's personal nickname (if set) or the display name in the dropdown
   // for recognizability, with the @loginName suffix when it differs so
   // people know what'll actually be inserted. (#5290)
-  dropdown.innerHTML = filtered.map((m, i) => {
+  const everyoneItems = everyoneOptions.map((opt, i) => {
+    const active = (i === 0 && filtered.length === 0) ? ' active' : '';
+    return `<div class="mention-item${active}" data-username="${opt.name}" data-everyone="1"><strong>${opt.label}</strong> <span class="mention-item-handle">${this._escapeHtml(opt.desc)}</span></div>`;
+  }).join('');
+
+  const memberItems = filtered.map((m, i) => {
+    const isFirstMember = (i === 0 && everyoneOptions.length === 0);
     const nick = m.id && this._nicknames ? this._nicknames[m.id] : '';
     const display = nick || m.username || m.loginName || '';
     const login = m.loginName || m.username || '';
     const suffix = (login && display.toLowerCase() !== login.toLowerCase())
       ? ` <span class="mention-item-handle">@${this._escapeHtml(login)}</span>`
       : '';
-    return `<div class="mention-item${i === 0 ? ' active' : ''}" data-username="${this._escapeHtml(login)}">${this._escapeHtml(display)}${suffix}</div>`;
+    return `<div class="mention-item${isFirstMember ? ' active' : ''}" data-username="${this._escapeHtml(login)}">${this._escapeHtml(display)}${suffix}</div>`;
   }).join('');
+
+  dropdown.innerHTML = everyoneItems + memberItems;
 
   dropdown.style.display = 'block';
 
@@ -2841,6 +2876,7 @@ _renderRoleDetail() {
         </label>
       `).join('')}
       <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn-sm" id="duplicate-role-btn">📋 Duplicate</button>
         <button class="btn-sm danger" id="delete-role-btn">${t('settings.admin.role_form.delete')}</button>
       </div>
     </div>
@@ -2986,6 +3022,30 @@ _renderRoleDetail() {
       this._selectedRoleId = null;
       this._loadRoles();
       this._renderRoleDetail();
+    });
+  });
+
+  // Duplicate: prompt for new name (default = "<original> (copy)") then
+  // create a fresh role with the same level, color, icon, and permissions.
+  // Channel-access linkage and auto-assign are intentionally NOT copied —
+  // both are rarely what an admin wants on a freshly cloned role.
+  document.getElementById('duplicate-role-btn')?.addEventListener('click', () => {
+    const defaultName = `${role.name} (copy)`.slice(0, 30);
+    const newName = prompt('Name for the duplicated role:', defaultName);
+    if (!newName || !newName.trim()) return;
+    const trimmed = newName.trim().slice(0, 30);
+    this.socket.emit('create-role', {
+      name: trimmed,
+      level: role.level,
+      color: role.color || '#aaaaaa',
+      icon: role.icon || null,
+      autoAssign: false,
+      permissions: role.permissions || []
+    }, (res) => {
+      if (res && res.error) { this._showToast(res.error, 'error'); return; }
+      this._showToast(`Duplicated as "${trimmed}"`, 'success');
+      if (res && res.roleId) this._selectedRoleId = res.roleId;
+      this._loadRoles?.();
     });
   });
 },

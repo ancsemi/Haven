@@ -473,6 +473,11 @@ _setupSocketListeners() {
       this._appendE2ENotice(this._pendingE2ENotice);
       this._pendingE2ENotice = null;
     }
+
+    // Update pin indicator dot for the active channel
+    if (typeof data.pinnedCount === 'number' && data.channelCode === this.currentChannel) {
+      this._updatePinIndicator?.(data.pinnedCount);
+    }
   });
 
   // ── Infinite scroll: load older messages on scroll-to-top ──
@@ -613,11 +618,12 @@ _setupSocketListeners() {
           // containing spaces or symbols still match. (#5273)
           const _meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const mentionRegex = new RegExp(`@${_meEsc}(?!\\w)`, 'i');
+          const everyoneRegex = /(?<![\w@])@(everyone|here)\b/i;
           const _notifCh = this.channels.find(c => c.code === data.channelCode);
           const _isAnnouncement = _notifCh && _notifCh.notification_type === 'announcement';
           const _isReplyToMe = data.message.replyContext && data.message.replyContext.user_id === this.user.id;
           const _isDm = _notifCh && _notifCh.is_dm;
-          const _isMention = mentionRegex.test(data.message.content);
+          const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content);
           const _notifOpts = _isMention ? { isMention: true } : _isReplyToMe ? { isReply: true } : _isDm ? { isDm: true } : null;
           if (_isMention) {
             this.notifications.play('mention', { isMention: true });
@@ -652,11 +658,12 @@ _setupSocketListeners() {
         // Check @mention even in other channels (escape username, no \b so spaces work). (#5273)
         const _meEsc2 = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const mentionRegex = new RegExp(`@${_meEsc2}(?!\\w)`, 'i');
+        const everyoneRegex2 = /(?<![\w@])@(everyone|here)\b/i;
         const _notifCh2 = this.channels.find(c => c.code === data.channelCode);
         const _isAnnouncement2 = _notifCh2 && _notifCh2.notification_type === 'announcement';
         const _isReplyToMe2 = data.message.replyContext && data.message.replyContext.user_id === this.user.id;
         const _isDm2 = _notifCh2 && _notifCh2.is_dm;
-        const _isMention2 = mentionRegex.test(data.message.content);
+        const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content);
         const _notifOpts2 = _isMention2 ? { isMention: true } : _isReplyToMe2 ? { isReply: true } : _isDm2 ? { isDm: true } : null;
         if (_isMention2) {
           this.notifications.play('mention', { isMention: true });
@@ -848,7 +855,8 @@ _setupSocketListeners() {
       const _isMuted = _mutedChs.includes(data.channelCode);
       const _meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const mentionRegex = _meEsc ? new RegExp(`@${_meEsc}(?!\\w)`, 'i') : null;
-      const _isMention = mentionRegex && mentionRegex.test(msg.content || '');
+      const everyoneRegex = /(?<![\w@])@(everyone|here)\b/i;
+      const _isMention = (mentionRegex && mentionRegex.test(msg.content || '')) || everyoneRegex.test(msg.content || '');
       const _isReplyToMe = msg.replyContext && msg.replyContext.user_id === this.user.id;
       if ((_isMention || _isReplyToMe) && !_isMuted) {
         this._recordThreadMention(data.channelCode, data.parentId, msg);
@@ -1228,6 +1236,7 @@ _setupSocketListeners() {
         if (pinBtn) { pinBtn.dataset.action = 'unpin'; pinBtn.title = 'Unpin'; }
       }
       this._appendSystemMessage(`📌 ${t('header.messages.pinned_by', { name: data.pinnedBy })}`);
+      this._bumpPinIndicator?.(1);
     }
   });
 
@@ -1255,6 +1264,7 @@ _setupSocketListeners() {
         }
       }
       this._appendSystemMessage(`📌 ${t('header.messages.message_unpinned')}`);
+      this._bumpPinIndicator?.(-1);
     }
   });
 

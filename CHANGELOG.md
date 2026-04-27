@@ -11,6 +11,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+---
+
+## [3.10.2] — 2026-04-26
+
+### Added
+- **Pinned-message indicator** — the 📌 button in the channel header now shows a small accent-colored dot when the active channel has at least one pinned message, so you can tell at a glance without opening the panel. Updates live as messages get pinned and unpinned.
+
+### Fixed
+- **Server settings categories missing for non-admin server managers** — users with the `manage_server` permission (but not full admin) were missing every category they used to see in Settings → Admin. The category nav was looking for a `section-server` element that doesn't exist anymore, so nothing got unhidden. `manage_server` now reveals the full set of server-management categories (branding, members, whitelist, invite, cleanup, backup, limits, tunnel, bots, import, mod mode).
+- **Inconsistent ordering between a message and its attachment** — when a message and its attachment share the same `created_at` timestamp (within the same second), the order they rendered in flipped depending on which scroll direction loaded them. Message queries now use `m.id` as a stable secondary sort key, so the attachment always stays on the same side of its caption.
+- **Desktop crash on launch when a saved server's hostname stops resolving** — the new transient-error retry loop dereferenced `view.webContents` after the background pre-load view had already been destroyed, throwing `TypeError: Cannot read properties of undefined (reading 'isDestroyed')`. The retry now bails out cleanly if the view is gone, and background pre-load views never retry (those are best-effort and were already cleaned up silently).
+
+---
+
+## [3.10.1] — 2026-04-26
+
+### Added
+- **`@everyone` and `@here` mentions** — typing `@everyone` or `@here` now produces a real highlighted mention that pings every member of the channel (subject to the existing `mention_everyone` permission). Both options also appear in the `@`-autocomplete dropdown when you have permission. Senders without the permission have the trigger silently neutralized server-side, so they can't bypass it.
+- **`#channel-name` autolinks** — typing `#general` (or any channel name) inside a message now turns into a clickable channel link that switches to that channel. Names are matched case-insensitively against the channels you can see.
+- **Duplicate Role button** — the role editor now has a "📋 Duplicate" button next to "Delete". Prompts for a new name, then clones the source role's level, color, icon, and permissions. Auto-assign and channel-access linkage are intentionally not copied (they're rarely correct on a fresh clone).
+
+### Fixed
+- **Voice chat: occasional one-way audio when joining an existing call** — ICE candidates that arrived before the remote SDP description was set were being silently dropped, causing the connection to never finish negotiating media in one direction. Candidates are now buffered per-peer and flushed after `setRemoteDescription`, so cold-joining a call no longer ends in "I can see his mic light up but can't hear him".
+- **DM picture-in-picture: first-message vs reply indentation mismatch** — the first message in a group still had its avatar gutter inherited from the main chat layout, so it sat 8 px to the right of compact follow-ups. PiP message rows now zero out their horizontal padding and the message body's left padding, so every line in the PiP aligns identically.
+- **DM picture-in-picture: clicking an emoji in the reaction picker did nothing** — the `add-reaction` / `remove-reaction` server handlers looked up the channel from `socket.currentChannel` (the channel showing in the *main* pane), but the PiP can be opened over an unrelated channel. The lookup now uses the message's actual channel, and reactions inside the PiP are saved correctly.
+- **Threads: web users seeing "X replies" but no messages, and reply box discarding sends** — same root cause. `get-thread-messages` and `send-thread-message` were also keying off `socket.currentChannel`, which gets stale if the user navigates away while a thread panel is still open. Both now resolve the channel from the parent message itself.
+- **Desktop: server restart kicked users back to "Host or Join"** — a single transient `did-fail-load` (e.g. CONNECTION_REFUSED during the brief restart window) was enough to dump users back to the welcome screen. The desktop now retries up to 6 times with exponential back-off on transient errors before giving up.
+
+---
+
 ## [3.10.0] — 2026-04-25
 
 ### Added

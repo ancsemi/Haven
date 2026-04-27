@@ -1530,6 +1530,24 @@ _setupUI() {
     this._jumpToMessage(parseInt(replyMsgId, 10));
   });
 
+  // #channel-name link click — switch to the referenced channel.
+  // Delegated globally so it works inside the main pane, thread panel, and
+  // DM PiP without per-container wiring.
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('.channel-link[data-channel-code]');
+    if (!link) return;
+    const code = link.dataset.channelCode;
+    if (!code) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const ch = (this.channels || []).find(c => c.code === code);
+    if (ch && ch.is_dm) {
+      this._openDMPiP?.(code);
+    } else {
+      this.switchChannel?.(code);
+    }
+  });
+
   // Thread preview click — open thread panel
   document.getElementById('messages').addEventListener('click', (e) => {
     const preview = e.target.closest('.thread-preview');
