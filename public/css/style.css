@@ -3250,7 +3250,7 @@ html.rgb-cycling *::after {
    through behind the messages.                        */
 .dm-pip-panel {
   position: fixed;
-  z-index: 950;
+  z-index: 1010;
   display: none;
   flex-direction: column;
   background: var(--bg-primary, #1e1e1e);
