@@ -9121,6 +9121,12 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .settings-hint.error { color: #e94560; }
 .settings-hint.success { color: #43b581; }
+.settings-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  line-height: 1.45;
+}
 
 /* ── Desktop Shortcuts table ──────────────────────────── */
 .shortcut-table { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }

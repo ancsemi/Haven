@@ -2465,6 +2465,7 @@ _setupUI() {
       document.getElementById('desktop-app-nav')?.style.removeProperty('display');
       document.getElementById('section-desktop-shortcuts')?.style.removeProperty('display');
       document.getElementById('section-desktop-app')?.style.removeProperty('display');
+      document.getElementById('pref-force-sdr-row')?.style.removeProperty('display');
     }
     // Eagerly fetch data that requires async calls so sections don't
     // sit on "Loading..." indefinitely if the user never clicks the nav item.

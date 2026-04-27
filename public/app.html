@@ -1642,14 +1642,6 @@
           <p class="settings-hint" data-i18n="settings.desktop_app_section.hide_menu_bar_hint">Hide the File / Edit / View / Window / Help toolbar. Press Alt to temporarily show it.</p>
         </div>
 
-        <div class="desktop-pref-row">
-          <label class="toggle-row">
-            <input type="checkbox" id="pref-force-sdr">
-            <span class="toggle-label" data-i18n="settings.desktop_app_section.force_sdr">Force SDR (sRGB) Color</span>
-          </label>
-          <p class="settings-hint" data-i18n="settings.desktop_app_section.force_sdr_hint">Fix washed-out or over-saturated colors on HDR monitors. Requires restart.</p>
-        </div>
-
         <div class="desktop-pref-row" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
           <span class="settings-hint" id="desktop-version-info" style="opacity:0.6"></span>
         </div>
@@ -1666,6 +1658,15 @@
             <span class="toggle-label" data-i18n="settings.debug_section.local_talk_indicator">Local mic talk indicator</span>
           </label>
           <p class="settings-hint" data-i18n="settings.debug_section.local_talk_indicator_hint">Highlight your own avatar the moment your mic crosses the talk threshold, instead of waiting for the server to echo it back. Default off — the server echo is usually preferred because it confirms your audio actually reached the server.</p>
+        </div>
+
+        <!-- Desktop-only debug setting: shown when running in Haven Desktop -->
+        <div class="desktop-pref-row" id="pref-force-sdr-row" style="display:none">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-force-sdr">
+            <span class="toggle-label" data-i18n="settings.desktop_app_section.force_sdr">Force SDR (sRGB) Color</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.desktop_app_section.force_sdr_hint">Fix washed-out or over-saturated colors on HDR monitors. Requires restart.</p>
         </div>
       </div>
 
