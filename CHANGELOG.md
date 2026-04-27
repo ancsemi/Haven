@@ -13,6 +13,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.10.4] — 2026-04-27
+
+### Fixed
+- **Self-DM ("Notes to self") sometimes wouldn't open the picture-in-picture panel** — reported by SerChiz. The PiP would show a loading state forever (or appear not to open at all) in specific edge cases: when the same DM was already the user's active main channel, when the local end-to-end key cache was missing the user's own key for self-DMs, or when the partner key fetch silently stalled. The PiP now (a) renders message history regardless of which channel is currently focused, (b) seeds the partner key for self-DMs from the local E2E key directly without a server round-trip, and (c) replaces the "Loading…" placeholder with a friendly fallback after 6 seconds so the panel never appears stuck.
+- **DM picture-in-picture didn't actively clear unread for the DM open in the panel** — new messages arriving for the active PiP DM now mark the DM as read (and clear its unread badge) instead of bumping the unread count, so the badge no longer sticks while you're already reading the conversation.
+
+---
+
 ## [3.10.3] — 2026-04-27
 
 ### Added

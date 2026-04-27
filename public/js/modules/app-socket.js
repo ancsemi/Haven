@@ -398,10 +398,12 @@ _setupSocketListeners() {
   });
 
   this.socket.on('message-history', async (data) => {
-    // DM PiP: if this history is for the active PiP DM, render it there
-    // (and ignore the non-current-channel guard).
-    if (this._activeDMPip && data.channelCode === this._activeDMPip
-        && data.channelCode !== this.currentChannel) {
+    // DM PiP: if this history is for the active PiP DM, render it there.
+    // We render the PiP regardless of currentChannel so the loading
+    // placeholder always clears even when the same DM is also the active
+    // main channel (e.g. user opened the DM in fullscreen previously,
+    // then opened the PiP — issue: SerChiz v3.10.3).
+    if (this._activeDMPip && data.channelCode === this._activeDMPip) {
       // E2E: ensure partner key is fetched before decrypting (self-DMs included)
       const pipCh = this.channels.find(c => c.code === data.channelCode);
       if (pipCh && pipCh.is_dm && pipCh.dm_target && !this._dmPublicKeys[pipCh.dm_target.id]) {
@@ -409,7 +411,9 @@ _setupSocketListeners() {
       }
       await this._decryptMessages(data.messages, data.channelCode);
       this._renderDMPiPHistory?.(data.messages);
-      return;
+      // If the PiP DM isn't ALSO the current channel, we're done.
+      if (data.channelCode !== this.currentChannel) return;
+      // Otherwise fall through so the main pane renders too.
     }
     if (data.channelCode !== this.currentChannel) return;
     // E2E: decrypt DM messages before rendering

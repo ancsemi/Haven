@@ -1833,11 +1833,29 @@ _openDMPiP(code) {
   // Clear messages and request fresh
   const msgsEl = document.getElementById('dm-pip-messages');
   if (msgsEl) msgsEl.innerHTML = '<div class="dm-pip-loading">Loading…</div>';
-  // E2E: ensure partner key is loaded before history arrives so messages decrypt
+  // E2E: ensure partner key is loaded before history arrives so messages decrypt.
+  // For self-DMs the "partner" is the user themselves, so seed our own public
+  // key directly instead of round-tripping through the server. Avoids any
+  // chance of the loading state lingering when the server's get-public-key
+  // for our own id returns null/empty (issue: SerChiz v3.10.3).
   if (ch.dm_target && this._dmPublicKeys && !this._dmPublicKeys[ch.dm_target.id]) {
-    try { this._fetchDMPartnerKey?.(ch); } catch {}
+    if (ch.is_self_dm && this.e2e && this.e2e.publicKeyJwk) {
+      this._dmPublicKeys[ch.dm_target.id] = this.e2e.publicKeyJwk;
+    } else {
+      try { this._fetchDMPartnerKey?.(ch); } catch {}
+    }
   }
   this.socket.emit('get-messages', { code });
+  // Safety: if message-history doesn't arrive within 6s (e.g. a transient
+  // server issue or a stuck E2E key fetch), replace the localized "Loading…"
+  // placeholder so the panel never looks frozen. Cleared on next open/close.
+  clearTimeout(this._dmPipLoadingTimer);
+  this._dmPipLoadingTimer = setTimeout(() => {
+    const stillLoading = document.querySelector('#dm-pip-messages .dm-pip-loading');
+    if (stillLoading && this._activeDMPip === code) {
+      stillLoading.textContent = 'No messages yet.';
+    }
+  }, 6000);
 
   // Clear any stale reply state
   this._clearDMPiPReply();
@@ -1850,6 +1868,7 @@ _openDMPiP(code) {
 _closeDMPiP() {
   this._activeDMPip = null;
   this._dmPipReplyingTo = null;
+  clearTimeout(this._dmPipLoadingTimer);
   try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
   const panel = document.getElementById('dm-pip-panel');
   if (panel) panel.style.display = 'none';
