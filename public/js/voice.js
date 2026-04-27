@@ -128,6 +128,13 @@ class VoiceManager {
       if (!peer) {
         await this._createPeer(from.id, from.username, false);
         peer = this.peers.get(from.id);
+        // Inherit any candidates that arrived before _createPeer ran.
+        if (peer && this._pendingCandidatesByUser && this._pendingCandidatesByUser.has(from.id)) {
+          peer._pendingCandidates = (peer._pendingCandidates || []).concat(
+            this._pendingCandidatesByUser.get(from.id)
+          );
+          this._pendingCandidatesByUser.delete(from.id);
+        }
       }
 
       try {
@@ -146,6 +153,18 @@ class VoiceManager {
           targetUserId: from.id,
           answer: answer
         });
+
+        // Flush any ICE candidates that arrived before the remote
+        // description was set. Without this, intermittently a late-joiner's
+        // first peer can't hear the existing user (or vice-versa) until one
+        // of them rejoins the channel — the lost candidates leave the
+        // connection unable to traverse NAT. (haven#vc-late-join)
+        if (peer._pendingCandidates && peer._pendingCandidates.length) {
+          for (const c of peer._pendingCandidates) {
+            try { await conn.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { /* ignore */ }
+          }
+          peer._pendingCandidates = [];
+        }
       } catch (err) {
         console.error('Error handling voice offer:', err);
       }
@@ -160,6 +179,13 @@ class VoiceManager {
           // (we may have rolled back our offer due to glare)
           if (peer.connection.signalingState === 'have-local-offer') {
             await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            // Flush buffered ICE candidates that arrived before the answer
+            if (peer._pendingCandidates && peer._pendingCandidates.length) {
+              for (const c of peer._pendingCandidates) {
+                try { await peer.connection.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { /* ignore */ }
+              }
+              peer._pendingCandidates = [];
+            }
           }
         } catch (err) {
           console.error('Error handling voice answer:', err);
@@ -170,12 +196,29 @@ class VoiceManager {
     // Received an ICE candidate
     this.socket.on('voice-ice-candidate', async (data) => {
       const peer = this.peers.get(data.from.id);
-      if (peer && data.candidate) {
+      if (!data.candidate) return;
+      if (peer) {
+        // If remote description isn't set yet, the peer connection will
+        // throw when adding candidates. Buffer them until the offer is
+        // applied, then flush in the voice-offer handler. This fixes the
+        // intermittent "can't hear new joiner" bug where the offer and
+        // candidates raced and the candidates were silently dropped.
+        if (!peer.connection.remoteDescription || !peer.connection.remoteDescription.type) {
+          (peer._pendingCandidates ||= []).push(data.candidate);
+          return;
+        }
         try {
           await peer.connection.addIceCandidate(new RTCIceCandidate(data.candidate));
         } catch (err) {
           console.error('Error adding ICE candidate:', err);
         }
+      } else {
+        // Peer not yet created — stash the candidate so it can be applied
+        // once the offer arrives and _createPeer runs.
+        (this._pendingCandidatesByUser ||= new Map());
+        const list = this._pendingCandidatesByUser.get(data.from.id) || [];
+        list.push(data.candidate);
+        this._pendingCandidatesByUser.set(data.from.id, list);
       }
     });
 
