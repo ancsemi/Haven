@@ -1062,7 +1062,7 @@ module.exports = function register(socket, ctx) {
       ts.emit('channels-list', getEnrichedChannels(targetUserId, ts.user.isAdmin, (room) => ts.join(room)));
       ts.emit('toast', { message: `${socket.user.username} invited you to #${channel.name}`, type: 'info' });
     }
-    socket.emit('error-msg', `Invited ${targetUser.username} to #${channel.name}`);
+    socket.emit('toast', { message: `Invited ${targetUser.username} to #${channel.name}`, type: 'success' });
   });
 
   // ── Remove from channel ─────────────────────────────────
