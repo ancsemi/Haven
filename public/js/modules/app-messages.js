@@ -1092,7 +1092,8 @@ _fetchLinkPreviews(containerEl) {
 /**
  * Extract YouTube video ID from various URL formats:
  *   youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID,
- *   youtube.com/shorts/ID, music.youtube.com/watch?v=ID
+ *   youtube.com/shorts/ID, youtube.com/live/ID, youtube.com/v/ID,
+ *   music.youtube.com/watch?v=ID
  */
 _extractYouTubeVideoId(url) {
   try {
@@ -1103,13 +1104,13 @@ _extractYouTubeVideoId(url) {
       const id = u.pathname.slice(1).split('/')[0];
       return id && /^[\w-]{11}$/.test(id) ? id : null;
     }
-    // youtube.com or music.youtube.com
-    if (host === 'youtube.com' || host === 'music.youtube.com') {
+    // youtube.com / music.youtube.com / gaming.youtube.com
+    if (host === 'youtube.com' || host === 'music.youtube.com' || host === 'gaming.youtube.com') {
       // /watch?v=ID
       const v = u.searchParams.get('v');
       if (v && /^[\w-]{11}$/.test(v)) return v;
-      // /embed/ID or /shorts/ID
-      const pathMatch = u.pathname.match(/^\/(?:embed|shorts)\/([\w-]{11})/);
+      // /embed/ID, /shorts/ID, /live/ID, /v/ID
+      const pathMatch = u.pathname.match(/^\/(?:embed|shorts|live|v)\/([\w-]{11})/);
       if (pathMatch) return pathMatch[1];
     }
   } catch {}
