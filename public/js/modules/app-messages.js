@@ -120,13 +120,33 @@ async _sendMessage() {
         const cmd = slashMatch[1].toLowerCase();
         const arg = (slashMatch[2] || '').trim();
         const displayName = this.user.displayName || this.user.username;
+        // Mirror of server `processSlashCommand` (src/socketHandlers/index.js)
+        // so DM slash commands work the same as in normal channels. (#5297)
         const clientSlash = {
           spoiler:   () => arg ? `||${arg}||` : null,
           shrug:     () => `${arg ? arg + ' ' : ''}¯\\_(ツ)_/¯`,
           tableflip: () => `${arg ? arg + ' ' : ''}(╯°□°)╯︵ ┻━┻`,
           unflip:    () => `${arg ? arg + ' ' : ''}┬─┬ ノ( ゜-゜ノ)`,
           lenny:     () => `${arg ? arg + ' ' : ''}( ͡° ͜ʖ ͡°)`,
+          disapprove:() => `${arg ? arg + ' ' : ''}ಠ_ಠ`,
+          bbs:       () => `🕐 ${displayName} will be back soon`,
+          boobs:     () => `( . Y . )`,
+          butt:      () => `( . )( . )`,
+          brb:       () => `⏳ ${displayName} will be right back`,
+          afk:       () => `💤 ${displayName} is away from keyboard`,
           me:        () => arg ? `_${displayName} ${arg}_` : null,
+          flip:      () => `🪙 ${displayName} flipped a coin: **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**!`,
+          roll:      () => {
+            const m = (arg || '1d6').match(/^(\d{1,2})?d(\d{1,4})$/i);
+            if (!m) return `🎲 ${displayName} rolled: **${Math.floor(Math.random() * 6) + 1}**`;
+            const count = Math.min(parseInt(m[1] || '1'), 20);
+            const sides = Math.min(parseInt(m[2]), 1000);
+            const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+            const total = rolls.reduce((a, b) => a + b, 0);
+            return `🎲 ${displayName} rolled ${count}d${sides}: [${rolls.join(', ')}] = **${total}**`;
+          },
+          hug:       () => arg ? `🤗 ${displayName} hugs ${arg}` : null,
+          wave:      () => `👋 ${displayName} waves${arg ? ' ' + arg : ''}`,
         };
         if (clientSlash[cmd]) {
           const transformed = clientSlash[cmd]();
