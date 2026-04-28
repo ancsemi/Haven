@@ -13,6 +13,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.10.5] — 2026-04-28
+
+### Fixed
+- **#5301: Quick reaction picker and customize-quick-reactions panel were missing emoji name tooltips** — the full emoji picker already showed a name on hover, but the small quick-react row above it (and the slot buttons in the customize panel) didn't, so users had to guess what an unfamiliar emoji was called. Both surfaces now show the emoji name on hover, with custom emojis showing their `:name:` form.
+- **#5297: Several slash commands still didn't work in DMs** after the recent const→let fix. The end-to-end DM path only re-implemented six commands client-side (spoiler, shrug, tableflip, unflip, lenny, me); commands like `/disapprove`, `/brb`, `/afk`, `/flip`, `/roll`, `/hug`, `/wave`, `/bbs`, `/boobs`, `/butt` would either show as a literal slash command or get rejected. The client now mirrors the full server-side command map for DMs so they all behave the same as in normal channels.
+- **#5299: DM attachment cleanup didn't fire when the *other* member of the DM deleted the message, or when the entire DM was deleted.** Server-side `delete-message` now accepts the client-supplied attachment list for any DM (not just for the original author), so a recipient with delete permission cleans up the file properly. Server-side `delete-dm` now scans every plaintext message in the DM for `/uploads/...` URLs, accepts a list of decrypted URLs from the client for E2E messages, and moves all of them to `deleted-attachments/` before dropping the DM rows.
+
+### Added
+- **Themed confirm modal helper** so message-action confirms (delete message, pin message, delete DM) no longer show a Windows-styled native popup in Haven Desktop. They now use the same in-app `.modal-overlay` styling as the rest of Haven so they pick up your theme. Other admin/settings confirms still use the native dialog for now and will migrate over time.
+- **Nested-unread "look inside" indicator** on category labels and on parent channels with sub-channels. When a section is expanded but contains an unread channel below the fold, a small accent-colored dot appears on the parent header so it's easier to spot in long sidebars without collapsing everything. The dot is intentionally distinct from the regular count bubble (which still appears when the section is collapsed).
+
+---
+
 ## [3.10.4] — 2026-04-27
 
 ### Fixed
