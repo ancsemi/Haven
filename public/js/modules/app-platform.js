@@ -5,10 +5,25 @@ export default {
 
 _markRead(messageId) {
   if (!this.currentChannel || !messageId) return;
+  // Capture the code at call-time, not when the timer fires.  Without this
+  // a quick channel switch within the 500 ms debounce window would route
+  // the mark-read to whichever channel happens to be current when the
+  // timer fires, leaving the originally-viewed channel (commonly a DM the
+  // user just glanced at) stuck unread forever even after multiple visits.
+  const code = this.currentChannel;
   // Debounce: don't spam the server
   clearTimeout(this._markReadTimer);
   this._markReadTimer = setTimeout(() => {
-    this.socket.emit('mark-read', { code: this.currentChannel, messageId });
+    this.socket.emit('mark-read', { code, messageId });
+    // Mirror locally so badges immediately reflect the read state and
+    // don't bounce back to "1" on the next channels-list snapshot.
+    if (this.unreadCounts && this.unreadCounts[code]) {
+      this.unreadCounts[code] = 0;
+      try { this._updateBadge?.(code); } catch {}
+      try { this._updateDmSectionBadge?.(); } catch {}
+      try { this._updateTabTitle?.(); } catch {}
+      try { this._updateDesktopBadge?.(); } catch {}
+    }
   }, 500);
 },
 

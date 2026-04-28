@@ -137,6 +137,18 @@ async switchChannel(code) {
   this._historyAfter = null;
 
   this.socket.emit('enter-channel', { code });
+  // Belt-and-braces mark-read: if the server already told us the latest
+  // message id for this channel (channels-list snapshot), fire a
+  // mark-read immediately so opening a DM with an empty render or one
+  // that fails to render before the user navigates away is still
+  // recorded as read.  The render-time _markRead in _renderMessages
+  // still fires for the message-id we actually painted; this just
+  // covers the gap where rendering hasn't happened yet.  (Server uses
+  // MAX(last_read, incoming) so an older id from the snapshot can't
+  // ever clobber a newer real id.)
+  if (channel && channel.latestMessageId) {
+    this._markRead(channel.latestMessageId);
+  }
   // E2E: fetch DM partner's public key BEFORE requesting messages
   if (isDm && channel) await this._fetchDMPartnerKey(channel);
   this.socket.emit('get-messages', { code });

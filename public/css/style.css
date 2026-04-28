@@ -1296,13 +1296,13 @@
 [data-theme="win95"] .msg-toolbar button:hover { background: #dfdfdf; }
 [data-theme="win95"] .modal { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; box-shadow: 2px 2px 0 #000; }
 [data-theme="win95"] .modal h3 { background: linear-gradient(90deg, #000080, #1084d0); color: #fff; margin: -20px -24px 16px -24px; padding: 4px 8px; border-radius: 0; font-weight: 700; font-size: 12px; }
-/* Subtle separator between message *groups* (full messages w/ avatar), not
-   every consecutive line. Reported as too distracting in original form. */
-[data-theme="win95"] .message + .message > .message-row:first-child {
-  border-top: 1px solid #c8c8c8;
-  margin-top: 2px;
-  padding-top: 6px;
-}
+/* Message group separators were attempted twice (per-row, then group-only)
+   and both produced visually inconsistent results — sometimes a line, sometimes
+   a half-line, sometimes a doubled line depending on whether the previous
+   author's last message was a compact follow-up vs a group-leader.  The Win95
+   theme already gives enough vertical separation via avatar bevels and the
+   author colour change; an extra horizontal line just looks buggy.  Leaving
+   the rule out entirely is the cleanest option. */
 [data-theme="win95"] .message-row:hover { background: #dfdfdf; }
 [data-theme="win95"] .message-author { color: #000080; font-weight: 700; }
 [data-theme="win95"] .message-input-container { background: #fff; border: 3px inset #808080; border-radius: 0; }

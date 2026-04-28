@@ -13,6 +13,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.10.7] — 2026-04-28
+
+### Fixed
+- **DMs (and any channel) staying unread after they were clearly viewed** — `_markRead` captured `this.currentChannel` lazily *inside* its 500 ms debounce timer. If the user clicked a DM and then switched to another channel within the debounce window (extremely common with quick "did anything new come in?" sweeps), the timer fired with the *new* current channel, so the DM the user actually opened was never marked read on the server. The debounce now snapshots the channel code at call time, mirrors the read state into local `unreadCounts` immediately so badges don't bounce back on the next `channels-list` snapshot, and `switchChannel` also fires an immediate mark-read against the server-supplied `latestMessageId` for the channel being entered — so even an empty render or one that happens after the user has navigated away no longer leaves the DM stuck with a phantom "1".
+- **Win95 message group dividers looked buggy and inconsistent** — the previous attempt put a 1px `#c8c8c8` top-border on `.message + .message > .message-row:first-child`, but the selector only matched two adjacent group-leaders (it never matched `.message-compact → .message`), so the line appeared in some places and not others depending on whether the previous author's burst ended with a single message or a follow-up.  The Win95 theme already separates groups with the avatar bevel and author colour change; the extra divider is removed entirely.
+
+### Desktop
+- **Server-icon unread dots not lighting up for messages from a different/background server** — `notification-badge` used strict `webContents` identity to figure out which server the signal came from.  After a renderer reload (transient navigation, crash recovery), that identity changes and the lookup silently fails — the per-server map never gets updated, so no dot appears on any other view's sidebar.  Sender lookup now falls back to URL-match via `e.sender.getURL()`, and the badge map is broadcast to **every** open BrowserView (not just the currently-active one), so every sidebar updates its dots in real time.  Same fallback applies to the `report-known-server-urls` listener so background views' filter sets don't get lost on reload either.
+
+---
+
+---
+
 ## [3.10.6] — 2026-04-28
 
 ### Fixed
