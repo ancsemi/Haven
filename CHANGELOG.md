@@ -13,6 +13,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.10.6] — 2026-04-28
+
+### Fixed
+- **Win95 theme "dark sections" bug** — the welcome screen and right members panel could render near-black under the win95 theme while the explicitly-styled left sidebar and channel header still looked correct. Root cause was a stale inline CSS custom property (e.g. `--bg-primary`) left on `:root` from a prior `custom`/`rgb` theme session that wasn't cleared before the user landed on win95, so any surface relying on `var(--bg-primary)` inherited the dark colour. `theme-init.js` now strips known custom-theme inline vars from `:root` on load whenever the saved theme is not `custom` or `rgb`, and the win95 stylesheet now explicitly paints body, message area, messages, welcome screen, members panel and sidebar sections with `#bfbfbf !important` so even an exotic var leak can't paint them dark.
+- **Win95 message dividers were too distracting** (Amnibro feedback) — the per-row `#808080` border between every consecutive line in a message group was removed; dividers now appear only between message *groups* (the boundary between one author's burst and the next) as a subtle 1px `#c8c8c8` top-border with a small spacer.
+- **#5304: Multi-tier nested markdown lists** — the message renderer's old flat regex coalesced any indented `- ` or `1.` line into a single top-level list. The renderer is now a small stack-based parser that tracks `{ ordered, depth }` and produces correctly nested `<ul>`/`<ol>` trees. 2 spaces (or 1 tab) per level; mixed `-`, `*`, `+` and `N.` markers at different depths are supported.
+- **#5267: "Update Now" button in admin Update panel was silently inert under Docker** — it now stays enabled regardless of install method. Click re-runs the update check, and for non-runnable methods (Docker, manual) the result modal renders the upgrade command in a code block with a Copy button (and a toast confirms when there's nothing to do).
+- **YouTube embeds now recognise live, `/v/` and `gaming.youtube.com` URLs** — previously only the canonical `watch?v=` and `youtu.be/` forms produced a player; livestream links pasted from a phone share sheet now embed correctly.
+
+### Docs
+- **#5230: README now calls out the `HAVEN_DATA_DIR` pitfall when running under systemd** — services launched under systemd typically don't inherit the user's interactive `HAVEN_DATA_DIR`, so Haven defaults to `/root/.haven` and silently "loses" your existing data. The Data Directory table now points at the unit-file `Environment=` line as the supported way to make the variable visible to the service.
+- **Donor list refreshed** — added ColKlink and Brian "TGS" Gilliford. Thank you both!
+
+---
+
 ## [3.10.5] — 2026-04-28
 
 ### Fixed
