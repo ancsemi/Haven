@@ -1660,7 +1660,7 @@ _setupUI() {
   // #messages handler so reactions/reply/edit/etc. work inside the PiP.
   const dmPipMessages = document.getElementById('dm-pip-messages');
   if (dmPipMessages) {
-    dmPipMessages.addEventListener('click', (e) => {
+    dmPipMessages.addEventListener('click', async (e) => {
       // Toolbar action buttons
       // Inline ⋯ dots button — reveals the full toolbar (touch/mobile)
       const dotsBtn = e.target.closest('.msg-dots-btn');
@@ -1698,11 +1698,11 @@ _setupUI() {
         } else if (action === 'edit') {
           this._startEditMessage?.(msgEl, msgId);
         } else if (action === 'delete') {
-          if (confirm(t('confirm.delete_message'))) {
+          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
             this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
           }
         } else if (action === 'pin') {
-          if (confirm(t('confirm.pin_message'))) {
+          if (await this._showConfirmModal(t('confirm.pin_message'), '')) {
             this.socket.emit('pin-message', { messageId: msgId });
           }
         } else if (action === 'unpin') {
@@ -1988,7 +1988,7 @@ _setupUI() {
   }, true); // capture phase so it fires before the toolbar action handler
 
   // Messages container — delegate reaction and reply button clicks
-  document.getElementById('messages').addEventListener('click', (e) => {
+  document.getElementById('messages').addEventListener('click', async (e) => {
     const target = e.target.closest('[data-action]');
     if (!target) return;
 
@@ -2010,11 +2010,11 @@ _setupUI() {
     } else if (action === 'edit') {
       this._startEditMessage(msgEl, msgId);
     } else if (action === 'delete') {
-      if (confirm(t('confirm.delete_message'))) {
+      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
       }
     } else if (action === 'pin') {
-      if (confirm(t('confirm.pin_message'))) {
+      if (await this._showConfirmModal(t('confirm.pin_message'), '')) {
         this.socket.emit('pin-message', { messageId: msgId });
       }
     } else if (action === 'unpin') {
@@ -2048,7 +2048,7 @@ _setupUI() {
   // Thread panel reactions: open picker + toggle reaction on badges
   const threadMessages = document.getElementById('thread-messages');
   if (threadMessages) {
-    threadMessages.addEventListener('click', (e) => {
+    threadMessages.addEventListener('click', async (e) => {
       const threadActionBtn = e.target.closest('[data-thread-action]');
       if (threadActionBtn) {
         const msgEl = threadActionBtn.closest('.thread-message');
@@ -2067,7 +2067,7 @@ _setupUI() {
         } else if (action === 'edit') {
           this._startEditMessage(msgEl, msgId);
         } else if (action === 'delete') {
-          if (confirm(t('confirm.delete_message'))) {
+          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
             this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
           }
         }

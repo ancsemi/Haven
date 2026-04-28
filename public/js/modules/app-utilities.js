@@ -1291,10 +1291,16 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
       const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
       if (customMatch && this.customEmojis) {
         const ce = this.customEmojis.find(e => e.name === customMatch[1]);
-        if (ce) slot.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:20px;height:20px">`;
-        else slot.textContent = emoji;
+        if (ce) {
+          slot.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:20px;height:20px">`;
+          slot.title = `:${ce.name}:`;
+        } else {
+          slot.textContent = emoji;
+          slot.title = emoji;
+        }
       } else {
         slot.textContent = emoji;
+        slot.title = (this.emojiNames && this.emojiNames[emoji]) ? this.emojiNames[emoji] : emoji;
       }
       slot.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1421,10 +1427,16 @@ _showReactionPicker(msgEl, msgId) {
     const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
     if (customMatch && this.customEmojis) {
       const ce = this.customEmojis.find(e => e.name === customMatch[1]);
-      if (ce) btn.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:20px;height:20px">`;
-      else btn.textContent = emoji;
+      if (ce) {
+        btn.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:20px;height:20px">`;
+        btn.title = `:${ce.name}:`;
+      } else {
+        btn.textContent = emoji;
+        btn.title = emoji;
+      }
     } else {
       btn.textContent = emoji;
+      btn.title = (this.emojiNames && this.emojiNames[emoji]) ? this.emojiNames[emoji] : emoji;
     }
     btn.addEventListener('click', () => {
       this.socket.emit('add-reaction', { messageId: msgId, emoji });
@@ -2732,6 +2744,45 @@ _showPromptModal(title, message, defaultValue = '') {
       if (e.key === 'Enter') close(input.value);
       if (e.key === 'Escape') close(null);
     });
+  });
+},
+
+// ── Generic confirm modal (themed replacement for window.confirm) ──
+_showConfirmModal(title, message, opts = {}) {
+  const {
+    confirmLabel,
+    cancelLabel,
+    danger = false,
+  } = opts;
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '100002';
+    const okClass = danger ? 'btn-sm btn-danger-fill' : 'btn-sm btn-accent';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:420px">
+        <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
+        ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
+        <div class="modal-actions" style="margin-top:12px">
+          <button class="btn-sm" id="confirm-modal-cancel">${this._escapeHtml(cancelLabel || t('modals.common.cancel'))}</button>
+          <button class="${okClass}" id="confirm-modal-ok">${this._escapeHtml(confirmLabel || t('modals.common.confirm'))}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const okBtn = overlay.querySelector('#confirm-modal-ok');
+    const cancelBtn = overlay.querySelector('#confirm-modal-cancel');
+    const close = (val) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close(false);
+      if (e.key === 'Enter') close(true);
+    };
+    okBtn.addEventListener('click', () => close(true));
+    cancelBtn.addEventListener('click', () => close(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    document.addEventListener('keydown', onKey);
+    setTimeout(() => okBtn.focus(), 0);
   });
 },
 
