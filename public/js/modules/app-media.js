@@ -1778,9 +1778,10 @@ _setupLightbox() {
 },
 
 _getLightboxImages() {
-  const msgs = document.getElementById('messages');
-  if (!msgs) return [];
-  return Array.from(msgs.querySelectorAll('.chat-image')).map(img => img.src);
+  // Use whichever container opened the lightbox (main feed, thread panel, DM PiP)
+  const container = this._lightboxContainer || document.getElementById('messages');
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('.chat-image')).map(img => img.src);
 },
 
 _lightboxNavigate(dir) {

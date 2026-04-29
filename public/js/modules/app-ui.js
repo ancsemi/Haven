@@ -1517,6 +1517,7 @@ _setupUI() {
   // Image click — open lightbox overlay (CSP-safe — no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
     if (e.target.classList.contains('chat-image')) {
+      this._lightboxContainer = document.getElementById('messages');
       this._openLightbox(e.target.src);
     }
     // Spoiler reveal toggle
@@ -1524,6 +1525,25 @@ _setupUI() {
       e.target.closest('.spoiler').classList.toggle('revealed');
     }
   });
+
+  // Image click in thread panel and DM PiP — same lightbox with container-aware navigation
+  for (const containerId of ['thread-messages', 'dm-pip-messages']) {
+    const el = document.getElementById(containerId);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        if (e.target.classList.contains('chat-image')) {
+          this._lightboxContainer = el;
+          this._openLightbox(e.target.src);
+        }
+      });
+      el.addEventListener('contextmenu', (e) => {
+        if (e.target.classList.contains('chat-image')) {
+          e.preventDefault();
+          this._showImageContextMenu(e, e.target.src);
+        }
+      });
+    }
+  }
 
   // Image right-click — custom context menu for chat thumbnails
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
@@ -2316,6 +2336,16 @@ _setupUI() {
       this._profilePopupAnchor = userItem;
       this.socket.emit('get-user-profile', { userId });
     }
+  });
+
+  // Double-click a user in the right sidebar to open a DM
+  document.getElementById('online-users').addEventListener('dblclick', (e) => {
+    if (e.target.closest('.user-action-btn') || e.target.closest('.user-admin-actions')) return;
+    const userItem = e.target.closest('.user-item');
+    if (!userItem) return;
+    const userId = parseInt(userItem.dataset.userId);
+    if (isNaN(userId) || userId === this.user.id) return;
+    this.socket.emit('start-dm', { targetUserId: userId });
   });
 
   // ── Right-click user → Invite to channel ──
