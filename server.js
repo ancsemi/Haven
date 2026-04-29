@@ -638,6 +638,7 @@ app.get('/api/public-config', (req, res) => {
     const tosRow = db.prepare("SELECT value FROM server_settings WHERE key = 'custom_tos'").get();
     const nameRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
     const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
+    const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
     res.json({
       default_theme: themeRow?.value || '',
       server_title: titleRow?.value || '',
@@ -645,7 +646,12 @@ app.get('/api/public-config', (req, res) => {
       // Expose name + icon so the login page can brand its tab title and
       // favicon (issue #5284). These are already public via /api/health.
       server_name: nameRow?.value || process.env.SERVER_NAME || '',
-      server_icon: iconRow?.value || ''
+      server_icon: iconRow?.value || '',
+      // Surface security-relevant settings users may want to know about
+      // before signing up (issue #5300). Allowing a user to *see* whether
+      // an admin can reset their password is the trust-and-warning half
+      // of the feature — admins enable, users get the disclosure.
+      admin_password_reset_enabled: adminPwResetRow?.value === 'true'
     });
   } catch {
     res.json({ default_theme: '', server_title: '' });

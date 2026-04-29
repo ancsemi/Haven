@@ -1788,6 +1788,11 @@
             <input type="checkbox" id="update-banner-admin-only">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.update_banner_hint">When enabled, the "update available" banner is only shown to admins</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.admin_pw_reset_label">Allow admin password reset</span>
+            <input type="checkbox" id="admin-password-reset-enabled">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.admin_pw_reset_hint">⚠️ When enabled, admins can reset any user's password to a one-time temp value. The user must change it on next login. Resetting a password also wipes that user's E2E DM history (their wrap key derives from the password). The fact that this is enabled is exposed via /api/public-config so users can see whether admins on this server have this power.</small>
         </div>
         <div class="admin-settings" id="section-whitelist" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.whitelist_title">Whitelist</span></h5>
