@@ -3116,6 +3116,57 @@ function runAutoCleanup() {
       }
     }
 
+    // 3. (#5282) Orphan-DM sweep — delete any DM channel that has dropped
+    // below 2 members (one or both participants deleted their account or
+    // were force-removed). channel_members.user_id has ON DELETE CASCADE
+    // so the row vanishes when the user does, but the DM channel itself
+    // is left lingering with stale messages forever; this is the
+    // "orphaned conversation" issue called out in #5282. Runs regardless
+    // of cleanup_enabled so the data isn't retained indefinitely.
+    try {
+      const orphanRows = db.prepare(`
+        SELECT c.id, c.code, COUNT(cm.user_id) as member_count
+        FROM channels c
+        LEFT JOIN channel_members cm ON cm.channel_id = c.id
+        WHERE c.is_dm = 1
+        GROUP BY c.id
+        HAVING member_count < 2
+      `).all();
+      let orphansDeleted = 0;
+      for (const ch of orphanRows) {
+        try {
+          // Move any /uploads/<file> referenced in this DM's messages to
+          // deleted-attachments first so file cleanup doesn't lose track.
+          const msgs = db.prepare('SELECT content FROM messages WHERE channel_id = ?').all(ch.id);
+          const uploadRe = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
+          const seen = new Set();
+          for (const m of msgs) {
+            if (typeof m.content !== 'string') continue;
+            let mm;
+            while ((mm = uploadRe.exec(m.content)) !== null) seen.add(mm[1]);
+          }
+          if (seen.size) {
+            const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
+            require('fs').mkdirSync(deletedDir, { recursive: true });
+            for (const fn of seen) {
+              const src = path.join(UPLOADS_DIR, fn);
+              if (!require('fs').existsSync(src)) continue;
+              try { require('fs').renameSync(src, path.join(deletedDir, fn)); } catch {}
+            }
+          }
+          // Delete the channel — cascades to messages + read_positions +
+          // channel_members + reactions etc. via the existing FKs.
+          db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+          orphansDeleted++;
+        } catch (e) {
+          console.error('[orphan-DM] failed to clean', ch.code, e.message);
+        }
+      }
+      if (orphansDeleted > 0) {
+        console.log(`🗑️  Auto-cleanup: removed ${orphansDeleted} orphan DM channel(s)`);
+      }
+    } catch (e) { /* sweep is best-effort */ }
+
     if (totalDeleted > 0) {
       console.log(`🗑️  Auto-cleanup: deleted ${totalDeleted} old messages`);
     }
