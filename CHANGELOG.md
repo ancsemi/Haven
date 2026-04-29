@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **#5310 + #5308: DM uploads were only encrypted for images going through the explicit "queue → preview → send" path.** Drag-and-drop, the 📎 button, paste in the main composer (for non-image files), and any paste into the DM PiP all routed through `_uploadGeneralFile`, which had no E2E branch — so non-image files in DMs (and any file pasted into the PiP) hit the server filesystem in plaintext, defeating the DM's E2E guarantee. `_uploadGeneralFile` now first calls `_maybeUploadEncryptedDmFile`: if the channel is an E2E DM with a known partner key, the file's bytes go through `e2e.encryptBytes` → opaque blob upload → and the metadata (mime / size / url / name) is wrapped in a new `e2e-file:{json}` marker that's encrypted as a normal text message. `_formatContent` renders that marker as a 🔒 download row, and a new `_decryptE2EFiles` (called next to `_decryptE2EImages` in every render path) wires the click → fetch → `e2e.decryptBytes` → save-as flow. Server-side static `/uploads` handler is unchanged — encrypted blobs are already opaque.
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed
