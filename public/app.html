@@ -1594,7 +1594,13 @@
             </div>
           </div>
           <div class="shortcut-row" id="shortcut-row-ptt">
-            <span class="shortcut-label"><span data-i18n="settings.desktop_shortcuts_section.ptt">Push-to-Talk</span> <span class="muted-text" style="font-weight:400;font-size:0.85em" data-i18n="settings.desktop_shortcuts_section.ptt_toggle">(toggle)</span></span>
+            <span class="shortcut-label">
+              <span data-i18n="settings.desktop_shortcuts_section.ptt">Push-to-Talk</span>
+              <select id="ptt-mode-select" class="settings-select" style="font-weight:400;font-size:0.85em;margin-left:6px;padding:1px 4px" title="How the PTT key behaves">
+                <option value="hold" data-i18n="settings.desktop_shortcuts_section.ptt_hold">hold</option>
+                <option value="toggle" data-i18n="settings.desktop_shortcuts_section.ptt_toggle_mode">toggle</option>
+              </select>
+            </span>
             <span class="shortcut-key" id="shortcut-key-ptt" data-i18n="settings.desktop_shortcuts_section.not_set">Not set</span>
             <div class="shortcut-btns">
               <button class="btn-xs shortcut-record-btn" data-action="ptt" data-i18n="settings.desktop_shortcuts_section.change_btn">Change</button>
@@ -1602,7 +1608,7 @@
             </div>
           </div>
         </div>
-        <p class="settings-hint" id="shortcut-status" style="margin-top:8px"></p>
+        <p class="settings-hint" id="shortcut-status" style="margin-top:8px" data-i18n="settings.desktop_shortcuts_section.binding_hint">Lone modifiers (Alt / Ctrl / Shift) and extra mouse buttons (Mouse4 / Mouse5) can be bound here. Some bindings require a recent Haven Desktop build to register at the OS level.</p>
       </div>
 
       <!-- Desktop App Settings Section (only shown in Haven Desktop) -->
