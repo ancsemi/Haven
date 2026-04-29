@@ -15487,6 +15487,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 0 1px rgba(237, 66, 69, 0.45), 0 0 8px rgba(237, 66, 69, 0.5);
   pointer-events: none;
   display: none;
+  z-index: 1;
 }
 .server-icon .server-unread-dot.active { display: block; }
 
