@@ -169,6 +169,18 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN edited_at DATETIME DEFAULT NULL");
   }
 
+  // ── Migration: burn-after-read columns on messages (#5280) ──
+  // burn_seconds: 0 = no burn (default); >0 = delete N seconds after first
+  // recipient view. burning_started_at is NULL until the first viewer sends
+  // a `mark-burning` event; once set, the periodic sweep below deletes the
+  // row when (started_at + burn_seconds) < now.
+  try {
+    db.prepare("SELECT burn_seconds FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN burn_seconds INTEGER DEFAULT 0");
+    db.exec("ALTER TABLE messages ADD COLUMN burning_started_at DATETIME DEFAULT NULL");
+  }
+
   // ── Migration: high_scores table ────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS high_scores (

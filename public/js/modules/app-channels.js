@@ -26,6 +26,18 @@ async switchChannel(code) {
   // Clear scramble cache so the effect picks up the new channel name
   const headerEl = document.getElementById('channel-header-name');
   if (headerEl) { delete headerEl.dataset.originalText; headerEl._scrambling = false; }
+  // (#5280) Burn-after-read 🔥 button is DM-only — toggle visibility on
+  // every channel switch and reset the per-message arming so a stale
+  // toggle from another DM doesn't accidentally arm the next message
+  // here in a non-DM channel.
+  const _burnBtn = document.getElementById('burn-btn');
+  const _burnDiv = document.getElementById('burn-divider');
+  if (_burnBtn) {
+    _burnBtn.style.display = isDm ? 'inline-flex' : 'none';
+    _burnBtn.classList.remove('active');
+  }
+  if (_burnDiv) _burnDiv.style.display = isDm ? 'inline-block' : 'none';
+  this._burnArmed = false;
   const displayCode = channel ? (channel.display_code || code) : code;
   const isMaskedCode = (displayCode === '••••••••');
   document.getElementById('channel-code-display').textContent = isDm ? '' : displayCode;

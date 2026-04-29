@@ -1438,6 +1438,23 @@ _setupSocketListeners() {
     }
   });
 
+  // ── Burn-after-read DM events (#5280) ──────────────
+  this.socket.on('message-burning', (data) => {
+    if (!data || !data.messageId) return;
+    const el = document.querySelector(`#messages [data-msg-id="${data.messageId}"], #dm-pip-messages [data-msg-id="${data.messageId}"]`);
+    if (!el) return;
+    el.dataset.burnStartedAt = data.burningStartedAt || new Date().toISOString();
+    el.dataset.burnSeconds = String(data.burnSeconds || 0);
+    this._startBurnCountdown?.(el, data.burnSeconds, el.dataset.burnStartedAt);
+  });
+
+  this.socket.on('message-burned', (data) => {
+    if (!data || !data.messageId) return;
+    document.querySelectorAll(`[data-msg-id="${data.messageId}"]`).forEach(el => {
+      this._replaceBurnedMessage?.(el);
+    });
+  });
+
   // ── Search results ─────────────────────────────────
   this.socket.on('search-results', (data) => {
     const panel = document.getElementById('search-results-panel');

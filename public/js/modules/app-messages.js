@@ -93,6 +93,17 @@ async _sendMessage() {
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
   }
+  // (#5280) Burn-after-read arming — DM-only; cleared in switchChannel
+  // when the user moves to a non-DM channel so a stale flag can't leak.
+  if (this._burnArmed) {
+    payload.burnSeconds = 30;
+    this._burnArmed = false;
+    const _burnBtn = document.getElementById('burn-btn');
+    if (_burnBtn) {
+      _burnBtn.classList.remove('active');
+      _burnBtn.title = 'Burn after read (DM only)';
+    }
+  }
 
   // Clear UI immediately (before any async E2E work)
   input.value = '';
@@ -290,6 +301,8 @@ _renderMessages(messages, lastReadMessageId) {
   this._setupVideos(container);
   // Decrypt E2E images (async — renders as images load)
   this._decryptE2EImages(container);
+  // Wire burn-after-read placeholders + countdowns (#5280)
+  this._wireBurnMessages?.(container);
   // Mark as read (last message ID)
   if (messages.length > 0) {
     this._markRead(messages[messages.length - 1].id);
@@ -527,6 +540,7 @@ _appendMessage(message, forceScroll = false) {
   this._fetchLinkPreviews(msgEl);
   this._setupVideos(msgEl);
   this._decryptE2EImages(msgEl);
+  this._wireBurnMessages?.(msgEl);
   if (wasAtBottom) {
     this._scrollToBottom(true);
   }
@@ -727,6 +741,14 @@ _createMessageEl(msg, prevMsg) {
   if (msg.pinned) el.dataset.pinned = '1';
   if (msg.is_archived) el.dataset.archived = '1';
   if (msg._e2e) el.dataset.e2e = '1';
+  // (#5280) burn-after-read marker — `_wireBurnMessages` (called from
+  // every render path) reads these attrs to set up the click-to-reveal
+  // placeholder + countdown timer.
+  if (msg.burn_seconds && msg.burn_seconds > 0) {
+    el.classList.add('message-burn-pending');
+    el.dataset.burnSeconds = String(msg.burn_seconds);
+    if (msg.burning_started_at) el.dataset.burnStartedAt = msg.burning_started_at;
+  }
   if (msg.poll && msg.poll.anonymous) el.dataset.pollAnonymous = '1';
   el.innerHTML = `
     <div class="message-row">
