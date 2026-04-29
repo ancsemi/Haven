@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **#5294: Admin-configurable login session duration.** New `session_duration_days` server setting (1–365, default 7) replaces the hard-coded `expiresIn: '7d'` on every JWT signing site in `src/auth.js`, and Settings → Uploads & Limits gets a new "Login session duration (days)" input. Existing tokens keep their original expiry — only newly-issued tokens (login, signup, TOTP confirm, password change, recovery, refresh) pick up the new value. Defaults preserve current behavior.
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed

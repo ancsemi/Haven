@@ -352,6 +352,10 @@ _applyServerSettings() {
     if (maxPollOpts) {
       maxPollOpts.value = this.serverSettings.max_poll_options || '10';
     }
+    const sessionDur = document.getElementById('session-duration-days');
+    if (sessionDur) {
+      sessionDur.value = this.serverSettings.session_duration_days || '7';
+    }
     const whitelistToggle = document.getElementById('whitelist-enabled');
     if (whitelistToggle) {
       whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
@@ -596,6 +600,7 @@ _snapshotAdminSettings() {
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_poll_options: this.serverSettings.max_poll_options || '10',
+    session_duration_days: this.serverSettings.session_duration_days || '7',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     default_theme: this.serverSettings.default_theme || '',
     custom_tos: this.serverSettings.custom_tos || '',
@@ -692,6 +697,12 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const sessionDurDays = String(Math.max(1, Math.min(365, parseInt(document.getElementById('session-duration-days')?.value) || 7)));
+  if (sessionDurDays !== (snap.session_duration_days || '7')) {
+    this.socket.emit('update-server-setting', { key: 'session_duration_days', value: sessionDurDays });
+    changed = true;
+  }
+
   const updateBannerAdminOnly = document.getElementById('update-banner-admin-only')?.checked ? 'true' : 'false';
   if (updateBannerAdminOnly !== (snap.update_banner_admin_only || 'false')) {
     this.socket.emit('update-server-setting', { key: 'update_banner_admin_only', value: updateBannerAdminOnly });
@@ -761,6 +772,8 @@ _cancelAdminSettings() {
     if (mek) mek.value = snap.max_emoji_kb || '256';
     const mpo = document.getElementById('max-poll-options');
     if (mpo) mpo.value = snap.max_poll_options || '10';
+    const sdd = document.getElementById('session-duration-days');
+    if (sdd) sdd.value = snap.session_duration_days || '7';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
     const dt = document.getElementById('default-theme-select');

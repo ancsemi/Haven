@@ -16,6 +16,17 @@ if (!JWT_SECRET) {
 }
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
+// Admin-configurable session duration (days). Default 7. Bounded 1–365 to
+// match the validator in src/socketHandlers/admin.js. (#5294)
+function _sessionExpiresIn() {
+  try {
+    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'session_duration_days'").get();
+    const n = parseInt(row && row.value);
+    if (Number.isFinite(n) && n >= 1 && n <= 365) return `${n}d`;
+  } catch {}
+  return '7d';
+}
+
 // ── TOTP helpers ─────────────────────────────────────────
 // Short-lived tokens for the TOTP verification step (not full session tokens)
 function generateTotpChallengeToken(userId) {
@@ -252,7 +263,7 @@ router.post('/register', async (req, res) => {
     const token = jwt.sign(
       { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username, pwv: 1 },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: _sessionExpiresIn() }
     );
 
     // Record EULA acceptance
@@ -329,7 +340,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: _sessionExpiresIn() }
     );
 
     // Record EULA acceptance
@@ -432,7 +443,7 @@ router.post('/totp/validate', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: _sessionExpiresIn() }
     );
 
     res.json({
@@ -543,7 +554,7 @@ router.post('/totp/verify-setup', async (req, res) => {
     const freshToken = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName: user.display_name || user.username, pwv: newPwv },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: _sessionExpiresIn() }
     );
 
     // Send the response first so the client can store the fresh token
@@ -692,7 +703,7 @@ router.post('/change-password', async (req, res) => {
     const freshToken = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName: user.display_name || user.username, pwv: newPwv },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: _sessionExpiresIn() }
     );
 
     // Send the response FIRST so the client can store the fresh token
@@ -903,7 +914,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: true, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: _sessionExpiresIn() }
     );
 
     console.log(`🔑 Admin recovery used for "${user.username}" from ${req.ip || 'unknown'}`);
@@ -915,7 +926,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
 });
 
 function generateToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: _sessionExpiresIn() });
 }
 
 function generateChannelCode() {
