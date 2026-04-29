@@ -2283,6 +2283,21 @@ _setupUI() {
   document.getElementById('poll-btn').addEventListener('click', () => {
     this._openPollModal();
   });
+
+  // (#5280) Burn-after-read toggle (DM-only, default 30 s).
+  // Single click arms the next message; click-and-long-press could later
+  // pop a duration picker but 30 s is a reasonable default. Visual state
+  // mirrors the existing input-action active class.
+  const _burnBtn = document.getElementById('burn-btn');
+  if (_burnBtn) {
+    _burnBtn.addEventListener('click', () => {
+      this._burnArmed = !this._burnArmed;
+      _burnBtn.classList.toggle('active', !!this._burnArmed);
+      _burnBtn.title = this._burnArmed
+        ? 'Burn after read armed — next message will self-destruct 30s after viewing'
+        : 'Burn after read (DM only)';
+    });
+  }
   document.getElementById('poll-cancel-btn').addEventListener('click', () => {
     document.getElementById('poll-modal').style.display = 'none';
   });

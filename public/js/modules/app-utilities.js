@@ -91,6 +91,73 @@ _bumpPinIndicator(delta) {
   this._updatePinIndicator(Math.max(0, cur + (delta | 0)));
 },
 
+// (#5280) Burn-after-read DMs. Walks any message rows in `root` whose
+// `data-burn-seconds` is set and either replaces the content with a
+// click-to-reveal placeholder (not yet started) or wires the countdown
+// (already started — `data-burn-started-at` is set). When the user
+// clicks reveal, emits `mark-burning` so the server stamps the start
+// time and broadcasts `message-burning` to keep the timer in sync
+// across both participants. The actual destructive delete fires from
+// the server's periodic sweep — this is just the UI layer.
+_wireBurnMessages(root) {
+  if (!root) root = document.getElementById('messages');
+  if (!root) return;
+  const rows = root.querySelectorAll('.message-burn-pending:not([data-burn-wired])');
+  rows.forEach(el => {
+    el.dataset.burnWired = '1';
+    const burnSeconds = parseInt(el.dataset.burnSeconds) || 0;
+    const startedAt = el.dataset.burnStartedAt || '';
+    const messageId = parseInt(el.dataset.msgId) || 0;
+    if (!burnSeconds || !messageId) return;
+    if (startedAt) {
+      this._startBurnCountdown(el, burnSeconds, startedAt);
+      return;
+    }
+    const content = el.querySelector('.message-content');
+    if (!content) return;
+    const real = content.innerHTML;
+    el.dataset.burnRealContent = real;
+    content.innerHTML = `<button type="button" class="burn-reveal-btn">🔥 ${this._escapeHtml(t('messages.burn_reveal') || 'Tap to view')} <span class="muted-text">(${burnSeconds}s after viewing)</span></button>`;
+    const btn = content.querySelector('.burn-reveal-btn');
+    btn.addEventListener('click', () => {
+      content.innerHTML = el.dataset.burnRealContent || '';
+      this.socket.emit('mark-burning', { code: this.currentChannel, messageId });
+      this._startBurnCountdown(el, burnSeconds, new Date().toISOString());
+    }, { once: true });
+  });
+},
+
+_startBurnCountdown(el, burnSeconds, startedAtIso) {
+  const started = Date.parse(startedAtIso);
+  if (!Number.isFinite(started)) return;
+  if (el._burnTimer) clearInterval(el._burnTimer);
+  const tick = () => {
+    const left = Math.max(0, Math.ceil((started + burnSeconds * 1000 - Date.now()) / 1000));
+    let pill = el.querySelector('.burn-countdown-pill');
+    if (!pill) {
+      pill = document.createElement('span');
+      pill.className = 'burn-countdown-pill';
+      pill.style.cssText = 'margin-left:6px;font-size:0.75em;opacity:0.7';
+      const head = el.querySelector('.message-content');
+      if (head) head.prepend(pill);
+    }
+    pill.textContent = `🔥 ${left}s`;
+    if (left <= 0) { clearInterval(el._burnTimer); el._burnTimer = null; }
+  };
+  tick();
+  el._burnTimer = setInterval(tick, 1000);
+},
+
+_replaceBurnedMessage(el) {
+  if (!el) return;
+  if (el._burnTimer) { clearInterval(el._burnTimer); el._burnTimer = null; }
+  const content = el.querySelector('.message-content');
+  if (!content) return;
+  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(t('messages.burn_done') || 'Message burned')}</span>`;
+  el.classList.remove('message-burn-pending');
+  el.classList.add('message-burned');
+},
+
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
