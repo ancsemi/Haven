@@ -169,6 +169,18 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       res.setHeader('Vary', 'Origin');
+    } else if (ext === '.svg') {
+      // SVG (issue #5309): renderable inline via <img> tag (browsers run SVG in
+      // "secure static mode" — no scripts, no XHR), but direct navigation still
+      // gets attachment-disposition so opening the raw URL in a new tab can't
+      // execute the file. CSP doubles up on that — even if a future browser
+      // change allowed any external loads inside <img>-rendered SVG, this
+      // header forbids everything except inline styles (needed for fill/stroke).
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     } else {
       res.setHeader('Content-Disposition', 'attachment');
     }

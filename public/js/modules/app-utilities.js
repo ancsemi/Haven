@@ -95,8 +95,8 @@ _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
   if (trimmed.startsWith('e2e-img:')) return true;
-  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) return true;
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
+  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
+  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
   // GIPHY GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
   return false;
@@ -150,7 +150,7 @@ _isEmojiOnly(str) {
 
 _formatContent(str) {
   // E2E encrypted image: e2e-img:<mime>:<url>
-  const e2eImgMatch = str.match(/^e2e-img:(image\/(?:jpeg|png|gif|webp)):(\/uploads\/[\w\-.]+)$/i);
+  const e2eImgMatch = str.match(/^e2e-img:(image\/(?:jpeg|png|gif|webp|svg\+xml)):(\/uploads\/[\w\-.]+)$/i);
   if (e2eImgMatch) {
     const mime = this._escapeHtml(e2eImgMatch[1]);
     const url = this._escapeHtml(e2eImgMatch[2]);

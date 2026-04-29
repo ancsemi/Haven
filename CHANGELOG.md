@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **#5309: SVG files sent in DMs (and elsewhere) showed as a filename row instead of rendering.** `_isImageUrl` and the E2E `e2e-img:` matcher both excluded SVG, so the message renderer fell through to plain-text and the user only saw the URL. Both now accept `.svg` (and `image/svg+xml` for E2E). The static `/uploads` middleware also gives `.svg` proper CORS / CORP headers so cross-origin `<img>` loads work, while keeping `Content-Disposition: attachment` for direct navigation and adding a strict `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` so the SVG can't reference external resources or run scripts even in a future browser that loosens `<img>` secure-static-mode.
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed
