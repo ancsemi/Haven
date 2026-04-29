@@ -157,6 +157,31 @@ _formatContent(str) {
     return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="Encrypted image" title="🔒 End-to-end encrypted image">`;
   }
 
+  // E2E encrypted file: e2e-file:{"mime":...,"size":N,"url":"/uploads/...","name":"..."}
+  // (#5310, #5308) — non-image DM uploads, plus paste-into-PiP, are encrypted
+  // before upload and the metadata is wrapped in this marker.
+  if (str.startsWith('e2e-file:')) {
+    try {
+      const meta = JSON.parse(str.slice(9));
+      if (meta && typeof meta.url === 'string' && meta.url.startsWith('/uploads/')) {
+        const name = this._escapeHtml(typeof meta.name === 'string' ? meta.name : 'file');
+        const url = this._escapeHtml(meta.url);
+        const mime = this._escapeHtml(typeof meta.mime === 'string' ? meta.mime : 'application/octet-stream');
+        const size = Number(meta.size) || 0;
+        const sizeStr = this._escapeHtml(this._formatFileSize ? this._formatFileSize(size) : (size + ' B'));
+        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="🔒 End-to-end encrypted file — click to download">
+          <button type="button" class="file-download-link e2e-file-download">
+            <span class="file-icon">🔒</span>
+            <span class="file-name">${name}</span>
+            <span class="file-size">(${sizeStr})</span>
+            <span class="file-download-arrow">⬇</span>
+          </button>
+        </div>`;
+      }
+    } catch {}
+    return `<span class="muted-text">[Encrypted file — unable to parse]</span>`;
+  }
+
   // Decode legacy HTML entities from old server-side sanitization.
   // The server no longer entity-encodes, but older messages in the DB
   // may still contain entities like &#39; &amp; &lt; etc.

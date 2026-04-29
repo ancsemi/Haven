@@ -2070,33 +2070,93 @@ _uploadGeneralFile(file, targetCode) {
     return;
   }
 
-  const formData = new FormData();
-  formData.append('file', file);
+  // E2E DM path (#5310, #5308): if this channel is an E2E DM, encrypt the
+  // file bytes before upload and send the metadata as an encrypted text
+  // message. Without this, drag-drop / 📎 / paste / PiP-paste of any non-image
+  // file (and any image pasted into the PiP) lands plaintext on the server
+  // filesystem, defeating the DM's E2E guarantee.
+  this._maybeUploadEncryptedDmFile(file, code, _ugCh).then(handled => {
+    if (handled) return;
 
-  this._uploadWithProgress('/api/upload-file', formData)
-  .then(data => {
-    if (data.error) {
-      this._showToast(data.error, 'error');
-      return;
+    const formData = new FormData();
+    formData.append('file', file);
+    this._uploadWithProgress('/api/upload-file', formData)
+    .then(data => {
+      if (data.error) {
+        this._showToast(data.error, 'error');
+        return;
+      }
+      // Send as a message with file attachment format
+      const sizeStr = this._formatFileSize(data.fileSize);
+      let content;
+      if (data.isImage) {
+        content = data.url; // images render inline already
+      } else {
+        // Use a special file attachment format: [file:name](url|size)
+        content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+      }
+      this.socket.emit('send-message', {
+        code,
+        content,
+        replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
+      });
+      this.notifications.play('sent');
+      if (code === this.currentChannel) this._clearReply();
+    })
+    .catch(err => this._showToast(err.message || t('settings.admin.upload_failed'), 'error'));
+  });
+},
+
+/**
+ * If `code` is an E2E DM and the partner key is available, encrypt `file`,
+ * upload as an opaque blob, then send the metadata as an encrypted
+ * `e2e-file:{json}` text message. Returns true if handled, false otherwise
+ * (so the caller can fall back to the plaintext upload path). (#5310, #5308)
+ */
+async _maybeUploadEncryptedDmFile(file, code, ch) {
+  if (!ch || !ch.is_dm || !ch.dm_target) return false;
+  let partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
+  if (!partner && this.e2e && this.e2e.ready) {
+    const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
+    if (jwk) {
+      this._dmPublicKeys[ch.dm_target.id] = jwk;
+      partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
     }
-    // Send as a message with file attachment format
-    const sizeStr = this._formatFileSize(data.fileSize);
-    let content;
-    if (data.isImage) {
-      content = data.url; // images render inline already
-    } else {
-      // Use a special file attachment format: [file:name](url|size)
-      content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+  }
+  if (!partner) return false;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
+    const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+    const formData = new FormData();
+    formData.append('file', blob, 'e2e-file.enc');
+    const data = await this._uploadWithProgress('/api/upload-file', formData);
+    if (!data || !data.url) {
+      this._showToast(t('toasts.encrypted_image_failed') || 'Encrypted upload failed', 'error');
+      return true;
     }
+    const meta = JSON.stringify({
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      url: data.url,
+      name: file.name || 'file'
+    });
+    const marker = `e2e-file:${meta}`;
+    const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
     this.socket.emit('send-message', {
       code,
-      content,
+      content: encryptedText,
+      encrypted: true,
       replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
     });
     this.notifications.play('sent');
     if (code === this.currentChannel) this._clearReply();
-  })
-  .catch(err => this._showToast(err.message || t('settings.admin.upload_failed'), 'error'));
+    return true;
+  } catch (err) {
+    console.warn('[E2E] File encryption failed:', err);
+    this._showToast(t('toasts.encrypted_image_failed') || 'Encrypted upload failed', 'error');
+    return true;
+  }
 },
 
 _formatFileSize(bytes) {

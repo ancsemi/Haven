@@ -1104,6 +1104,63 @@ async _decryptMessages(messages, channelCode = null) {
 },
 
 /**
+ * Wire up download buttons on e2e-file-pending attachments inside `root`.
+ * Click → fetch encrypted blob → decrypt with the DM partner key →
+ * trigger a save-as via an object URL. Marks the row `e2e-file-failed` if the
+ * partner key isn't available so the user understands why download is blocked
+ * instead of getting a silent no-op. (#5310, #5308)
+ */
+_decryptE2EFiles(root) {
+  if (!root) root = document.getElementById('messages');
+  if (!root) return;
+  const rows = root.querySelectorAll('.e2e-file-pending');
+  if (!rows.length) return;
+  const inPip = !!(root.id === 'dm-pip-messages' || (root.closest && root.closest('#dm-pip-messages')));
+  const partner = inPip && this._activeDMPip
+    ? this._getE2EPartnerFor(this._activeDMPip)
+    : this._getE2EPartner();
+  rows.forEach(row => {
+    row.classList.remove('e2e-file-pending');
+    const url = row.dataset.e2eUrl;
+    const mime = row.dataset.e2eMime || 'application/octet-stream';
+    const name = row.dataset.e2eName || 'file';
+    const btn = row.querySelector('.e2e-file-download');
+    if (!url || !url.startsWith('/uploads/') || !partner) {
+      row.classList.add('e2e-file-failed');
+      if (btn) btn.disabled = true;
+      return;
+    }
+    if (!btn) return;
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (btn.disabled) return;
+      btn.disabled = true;
+      row.classList.add('e2e-file-loading');
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(resp.status);
+        const buf = await resp.arrayBuffer();
+        const plain = await this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk);
+        const blob = new Blob([plain], { type: mime });
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      } catch (err) {
+        row.classList.add('e2e-file-failed');
+      } finally {
+        row.classList.remove('e2e-file-loading');
+        btn.disabled = false;
+      }
+    });
+  });
+},
+
+/**
  * Find all e2e-img-pending images in a DOM element (or the messages container),
  * fetch their encrypted data, decrypt, and display as blob URLs.
  */

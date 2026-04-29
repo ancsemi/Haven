@@ -290,6 +290,8 @@ _renderMessages(messages, lastReadMessageId) {
   this._setupVideos(container);
   // Decrypt E2E images (async — renders as images load)
   this._decryptE2EImages(container);
+  // Wire up decryption-on-click for E2E file attachments (#5310, #5308)
+  this._decryptE2EFiles(container);
   // Mark as read (last message ID)
   if (messages.length > 0) {
     this._markRead(messages[messages.length - 1].id);
@@ -426,6 +428,7 @@ _prependMessages(messages) {
     this._fetchLinkPreviews(el);
     this._setupVideos(el);
     this._decryptE2EImages(el);
+    this._decryptE2EFiles(el);
   }
 },
 
@@ -479,6 +482,7 @@ _appendMessages(messages) {
   this._fetchLinkPreviews(container);
   this._setupVideos(container);
   this._decryptE2EImages(container);
+  this._decryptE2EFiles(container);
 
   // Mark as read so the server-side read position advances
   if (messages.length > 0) {
@@ -527,6 +531,7 @@ _appendMessage(message, forceScroll = false) {
   this._fetchLinkPreviews(msgEl);
   this._setupVideos(msgEl);
   this._decryptE2EImages(msgEl);
+  this._decryptE2EFiles(msgEl);
   if (wasAtBottom) {
     this._scrollToBottom(true);
   }
