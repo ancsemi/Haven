@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **#5255: PTT recorder accepts lone modifiers, extra mouse buttons, and a toggle/hold mode.** Three asks from the issue, all in the keybind recorder under Settings → Shortcuts (Haven Desktop only). Lone modifiers (just Alt / Ctrl / Shift) now commit on keyup if no other key was pressed in the meantime — useful while gaming so PTT doesn't pull a hand off WASD. A new `mousedown` listener captures buttons 3+ (Mouse4 / Mouse5 thumb buttons); left/middle/right pass through unchanged. The PTT row now has a hold/toggle select that replaces the previously-hardcoded "(toggle)" label, saved via `havenDesktop.shortcuts.setConfig({ pttMode })` (default `hold`). The actual OS-level registration of bare modifiers / mouse buttons and the runtime honoring of `pttMode` are a separate PR in `ancsemi/Haven-Desktop`; older desktop builds get a clear "may need an update" toast when the new binding is rejected by Electron's `globalShortcut`.
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed
