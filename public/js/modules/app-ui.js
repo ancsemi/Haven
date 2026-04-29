@@ -1718,7 +1718,7 @@ _setupUI() {
         } else if (action === 'edit') {
           this._startEditMessage?.(msgEl, msgId);
         } else if (action === 'delete') {
-          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
+          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
             this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
           }
         } else if (action === 'pin') {
@@ -1801,6 +1801,39 @@ _setupUI() {
       this._checkChannelTrigger(threadInput);
       this._checkEmojiTrigger(threadInput);
       this._checkSlashTrigger(threadInput);
+    });
+    // Paste images / files into the thread input — upload then send as thread message
+    threadInput.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const parentId = this._activeThreadParent;
+      if (!parentId) return;
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (!file) continue;
+          e.preventDefault();
+          const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+          if (file.size > maxMb * 1024 * 1024) {
+            this._showToast(`File too large (max ${maxMb} MB)`, 'error');
+            return;
+          }
+          const formData = new FormData();
+          formData.append('file', file);
+          this._uploadWithProgress('/api/upload-file', formData).then(data => {
+            if (data.error) { this._showToast(data.error, 'error'); return; }
+            let content;
+            if (data.isImage) {
+              content = data.url;
+            } else {
+              const sizeStr = this._formatFileSize(data.fileSize);
+              content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+            }
+            this.socket.emit('send-thread-message', { parentId, content });
+          }).catch(err => this._showToast(err.message || 'Upload failed', 'error'));
+          return;
+        }
+      }
     });
   }
 
@@ -2030,7 +2063,7 @@ _setupUI() {
     } else if (action === 'edit') {
       this._startEditMessage(msgEl, msgId);
     } else if (action === 'delete') {
-      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
+      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
       }
     } else if (action === 'pin') {
@@ -2087,7 +2120,7 @@ _setupUI() {
         } else if (action === 'edit') {
           this._startEditMessage(msgEl, msgId);
         } else if (action === 'delete') {
-          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
+          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
             this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
           }
         }
