@@ -343,10 +343,49 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName }
+      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName },
+      // (#5300) Set when an admin reset this user's password to a temp
+      // placeholder. Client must funnel the user through a mandatory
+      // change-password screen before doing anything else.
+      mustChangePassword: !!user.must_change_password
     });
   } catch (err) {
     console.error('Login error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Forced change-password endpoint (#5300) ─────────────────
+// Used after an admin password reset. Requires a valid session token,
+// validates the new password's length, updates the row, clears the
+// must_change_password flag, and returns a fresh JWT so the client
+// doesn't have to re-login.
+router.post('/change-password-required', authLimiter, async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    let decoded;
+    try { decoded = jwt.verify(auth.slice(7), JWT_SECRET); } catch { return res.status(401).json({ error: 'Unauthorized' }); }
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      return res.status(400).json({ error: 'Password must be 8–128 characters' });
+    }
+    const db = getDb();
+    const user = db.prepare('SELECT id, username, is_admin, display_name, password_version FROM users WHERE id = ?').get(decoded.id);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    const newPwv = (user.password_version || 1) + 1;
+    db.prepare('UPDATE users SET password_hash = ?, password_version = ?, must_change_password = 0 WHERE id = ?')
+      .run(hash, newPwv, user.id);
+    const displayName = user.display_name || user.username;
+    const freshToken = jwt.sign(
+      { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: newPwv },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ token: freshToken, user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName } });
+  } catch (err) {
+    console.error('change-password-required error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

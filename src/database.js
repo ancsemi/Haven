@@ -162,6 +162,17 @@ function initDatabase() {
     db.exec("CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)");
   } catch { /* already exists */ }
 
+  // ── Migration: must_change_password flag on users (#5300) ──
+  // Set to 1 by admin password-reset; cleared the first time the user
+  // sets a new password through the forced-change flow. Login still
+  // succeeds when the flag is set — the client routes the user to a
+  // mandatory change-password screen before the rest of the app loads.
+  try {
+    db.prepare("SELECT must_change_password FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0");
+  }
+
   // ── Migration: edited_at column on messages ───────────
   try {
     db.prepare("SELECT edited_at FROM messages LIMIT 0").get();
@@ -209,6 +220,7 @@ function initDatabase() {
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64–1024)
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
+  insertSetting.run('admin_password_reset_enabled', 'false'); // admin can reset user passwords (#5300) — opt-in, defaults off
 
   // Unique server fingerprint — used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
