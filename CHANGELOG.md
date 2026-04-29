@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **#5307: Delete confirmations were inconsistent — channel delete used the browser's native double-`confirm()` "web info box" while role / DM / message deletes used the themed modal.** All user-data delete actions (channel, role, user, account) now route through the themed `_showConfirmModal`. The two chained channel-delete prompts are merged into one modal that surfaces both the warning copy and the "absolutely sure?" finality copy at once. The themed modal also picks a smarter default button label — when `danger: true` and the caller doesn't pass a `confirmLabel`, the OK button now reads "Delete" instead of "Confirm".
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed
