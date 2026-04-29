@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **#5300: Admin password reset (opt-in).** New `admin_password_reset_enabled` server setting (default `false`) lets admins enable a "reset user password to a one-time temp value" flow. New socket event `admin-reset-user-password` (admin-only, gated on the setting) generates a 16-hex-char temp password (`XXXX-XXXX-XXXX-XXXX`), bcrypt-hashes it, bumps `password_version` (which invalidates the target's existing JWTs via the existing pwv-rejection path), sets a new `must_change_password` flag on the user row, and returns the plaintext temp password to the admin once. Audit-logged as `admin_password_reset`. Login response now carries `mustChangePassword: bool`, and a new `POST /api/auth/change-password-required` endpoint accepts a valid token + new password and clears the flag. The setting is also mirrored into `/api/public-config` so any user can see whether admins on this server have this power before signing up — the disclosure half of the feature. Admin Settings → Members & Visibility gets a checkbox + warning text covering the E2E impact (the user's wrap key derives from the password, so old encrypted DM history becomes unrecoverable on their side, matching the existing recovery-codes flow). The actual "click to reset" admin button on the moderation modal and the client-side mandatory change-password screen are intentionally a fast-follow PR.
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed
