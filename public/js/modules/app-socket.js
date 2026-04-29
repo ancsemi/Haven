@@ -609,13 +609,17 @@ _setupSocketListeners() {
           // Page hidden (backgrounded server view, alt-tabbed, minimised) —
           // count it as unread even though it's the "current" channel, so
           // the sidebar dot + taskbar badge actually fire.
-          this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
-          this._updateBadge(data.channelCode);
+          // Skip the unread bump for muted channels — muting should also silence badges.
+          const _hiddenMutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+          if (!_hiddenMutedChs.includes(data.channelCode)) {
+            this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
+            this._updateBadge(data.channelCode);
+          }
         }
       }
       if (data.message.user_id !== this.user.id) {
         const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-        const _isMuted = _mutedChs.includes(data.channelCode);
+        const _isMuted = _mutedChs.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
         if (!_isMuted) {
           // Check if message contains @mention of current user.
           // Escape regex chars and use non-word lookahead so usernames
@@ -650,7 +654,7 @@ _setupSocketListeners() {
       }
     } else {
       const _mutedChs2 = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-      const _isMuted2 = _mutedChs2.includes(data.channelCode);
+      const _isMuted2 = _mutedChs2.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
       // If this message is for the active DM PiP and the user is actively
       // viewing the app, treat it as read instead of bumping the unread
       // badge — the message is already visible in the floating PiP panel.
@@ -675,7 +679,7 @@ _setupSocketListeners() {
           try { this._updateDmSectionBadge?.(); } catch {}
           try { this._updateTabTitle?.(); } catch {}
           try { this._updateDesktopBadge?.(); } catch {}
-        } else {
+        } else if (!_isMuted2) {
           this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
           this._updateBadge(data.channelCode);
         }
