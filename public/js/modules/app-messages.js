@@ -653,6 +653,10 @@ _createMessageEl(msg, prevMsg) {
     if (msg.is_archived) el.dataset.archived = '1';
     if (msg._e2e) el.dataset.e2e = '1';
     if (msg.poll && msg.poll.anonymous) el.dataset.pollAnonymous = '1';
+    // Store avatar so _promoteCompactToFull can restore the correct image
+    // even when the author is not in the online users list (e.g. offline).
+    if (msg.avatar) el.dataset.avatar = msg.avatar;
+    if (msg.avatar_shape) el.dataset.avatarShape = msg.avatar_shape;
     el.innerHTML = `
       <span class="compact-time">${new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
       <div class="message-body">
@@ -781,9 +785,11 @@ _promoteCompactToFull(compactEl) {
   const color = this._getUserColor(username);
   const initial = username.charAt(0).toUpperCase();
   const onlineUser = this.users ? this.users.find(u => u.id === userId) : null;
-  const msgShape = (onlineUser && onlineUser.avatarShape) || 'circle';
+  // Prefer the avatar stored on the compact element (set at render time from server data).
+  // Fall back to the online-users list so newly-uploaded avatars still appear.
+  const msgShape = compactEl.dataset.avatarShape || (onlineUser && onlineUser.avatarShape) || 'circle';
   const shapeClass = 'avatar-' + msgShape;
-  const avatar = onlineUser && onlineUser.avatar;
+  const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
   const avatarHtml = avatar
     ? `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
