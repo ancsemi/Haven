@@ -41,7 +41,8 @@ module.exports = function register(socket, ctx) {
       'default_theme', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
-      'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections'
+      'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
+      'admin_password_reset_enabled'
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -69,6 +70,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
     if (key === 'setup_wizard_complete' && !['true', 'false'].includes(value)) return;
     if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
+    if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'role_icon_sidebar' && !['true', 'false'].includes(value)) return;
     if (key === 'role_icon_chat' && !['true', 'false'].includes(value)) return;
     if (key === 'role_icon_after_name' && !['true', 'false'].includes(value)) return;
@@ -556,5 +558,62 @@ module.exports = function register(socket, ctx) {
       console.error('get-audit-log error:', err);
       cb({ error: 'Failed to load audit log' });
     }
+  });
+
+  // ── Admin password reset (#5300) ────────────────────────────
+  // Generates a random 16-char temporary password for the target user,
+  // hashes + saves it, sets must_change_password=1 so the user is forced
+  // through a change-password flow on next login, and returns the
+  // plaintext temp password to the admin once (caller is expected to
+  // copy it and hand it to the user out of band).
+  //
+  // Disabled by default. Admin must explicitly opt-in via the
+  // `admin_password_reset_enabled` server setting — and that toggle is
+  // surfaced in `/api/public-config` so users can see whether the
+  // current admin can reset their password (the trust-and-warning side
+  // of the feature requested in the issue).
+  //
+  // E2E impact: bumping `password_version` invalidates all of the
+  // user's existing JWTs (matching the existing pwv-rejection logic)
+  // and the new password no longer derives the same E2E wrap key, so
+  // encrypted DM history that depended on the old key is unrecoverable
+  // from the user's side. This matches the existing
+  // recovery-codes flow behavior.
+  socket.on('admin-reset-user-password', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.user.isAdmin) return cb({ error: 'Admin only' });
+    const enabled = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
+    if (!enabled || enabled.value !== 'true') {
+      return cb({ error: 'Admin password reset is disabled in server settings' });
+    }
+    const userId = parseInt(data && data.userId);
+    if (!Number.isFinite(userId)) return cb({ error: 'Invalid userId' });
+    const target = db.prepare('SELECT id, username, password_version FROM users WHERE id = ?').get(userId);
+    if (!target) return cb({ error: 'User not found' });
+    if (target.id === socket.user.id) return cb({ error: 'Use Settings → Account to change your own password' });
+
+    // 16 hex chars, grouped as XXXX-XXXX-XXXX-XXXX for readability.
+    const raw = crypto.randomBytes(8).toString('hex').toUpperCase();
+    const tempPw = `${raw.slice(0,4)}-${raw.slice(4,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}`;
+    let hash;
+    try {
+      const bcrypt = require('bcryptjs');
+      hash = bcrypt.hashSync(tempPw, 10);
+    } catch (err) {
+      console.error('admin-reset-user-password hash error:', err);
+      return cb({ error: 'Server error' });
+    }
+    const newPwv = (target.password_version || 1) + 1;
+    db.prepare('UPDATE users SET password_hash = ?, password_version = ?, must_change_password = 1 WHERE id = ?')
+      .run(hash, newPwv, target.id);
+
+    if (typeof logAudit === 'function') {
+      logAudit({
+        actor: socket.user, action: 'admin_password_reset',
+        target_type: 'user', target_id: target.id, target_name: target.username,
+        details: { reason: typeof data?.reason === 'string' ? data.reason.slice(0, 200) : '' }
+      });
+    }
+    cb({ ok: true, username: target.username, tempPassword: tempPw });
   });
 };
