@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **#5248: Searching inside a DM previously short-circuited with "search is not available in DMs because messages are end-to-end encrypted" — which made the feature look broken even though the messages were sitting decrypted in front of the user.** The server still can't run `LIKE` against ciphertext rows, but the client already has the decrypted DM messages cached in `_lastRenderedMessages` (the same cache used to render them). Search input now detects when the active channel is a DM and routes the query to a new `_searchDmCacheLocally` helper that scans the cached plaintext and renders results in the existing `search-results-panel` UI with a small `DM (local)` tag in the header so the user understands the scope is "messages already loaded — scroll up to load more". Click-to-jump still works via the existing `_jumpToMessage` path. Server-side DM short-circuit is left in place as defense in depth.
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed

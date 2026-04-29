@@ -91,6 +91,56 @@ _bumpPinIndicator(delta) {
   this._updatePinIndicator(Math.max(0, cur + (delta | 0)));
 },
 
+// Local-only search over the decrypted DM message cache (#5248). The server
+// can't search E2E DMs because the `content` column on the row is ciphertext;
+// the historical behavior was to short-circuit and tell the user "search is
+// not available in DMs" — which made the search box look broken. This walks
+// `_lastRenderedMessages` (the per-channel decrypted cache populated by
+// `_renderMessages`) and renders the same `search-results-panel` UI, with a
+// small "DM (local)" tag so the user understands the scope is "what's already
+// loaded in this view".
+_searchDmCacheLocally(query) {
+  const msgs = Array.isArray(this._lastRenderedMessages) ? this._lastRenderedMessages : [];
+  const q = query.toLowerCase();
+  const results = msgs
+    .filter(m => typeof m.content === 'string' && m.content.toLowerCase().includes(q))
+    .map(m => ({
+      id: m.id,
+      content: m.content,
+      created_at: m.created_at,
+      username: m.username || m.display_name || '[Unknown]',
+      user_id: m.user_id
+    }))
+    .slice(-50)
+    .reverse();
+  const panel = document.getElementById('search-results-panel');
+  const list = document.getElementById('search-results-list');
+  const count = document.getElementById('search-results-count');
+  if (!panel || !list || !count) return;
+  let header = t(results.length === 1 ? 'header.search_results_one' : 'header.search_results_other', { count: results.length, query: this._escapeHtml(query) });
+  header += ` <span class="search-filter-tag" title="DMs are end-to-end encrypted; this search runs locally over messages already loaded in this view. Scroll up to load more history if you don't see what you're looking for.">DM (local)</span>`;
+  count.innerHTML = header;
+  list.innerHTML = results.length === 0
+    ? `<p class="muted-text" style="padding:12px">${t('header.search_no_results')}</p>`
+    : results.map(r => `
+      <div class="search-result-item" data-msg-id="${r.id}">
+        <span class="search-result-author" style="color:${this._getUserColor(r.username)}">${this._escapeHtml(this._getNickname(r.user_id, r.username))}</span>
+        <span class="search-result-time">${this._formatTime(r.created_at)}</span>
+        <div class="search-result-content">${this._highlightSearch(this._escapeHtml(r.content), query)}</div>
+      </div>
+    `).join('');
+  panel.style.display = 'block';
+  list.querySelectorAll('.search-result-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const msgId = parseInt(item.dataset.msgId, 10);
+      panel.style.display = 'none';
+      document.getElementById('search-container').style.display = 'none';
+      document.getElementById('search-input').value = '';
+      this._jumpToMessage(msgId);
+    });
+  });
+},
+
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
