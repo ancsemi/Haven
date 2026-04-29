@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **#5311: Collapsed sub-channel tag rows didn't show an unread indicator.** Categories and parent channels already bubble a count badge when collapsed and a "look inside" dot when expanded, but the per-parent tag groupings (e.g. an `Off-topic` tag inside a `Lounge` parent channel) were missing both. `_updateNestedIndicators` now walks `.sub-tag-label` rows and applies the same rules: count bubble when the tag is collapsed and any sub-channel under it has unreads, dot when the tag is expanded with unreads inside. The tag toggle handler also re-runs the indicator pass so the badge appears/disappears immediately on collapse/expand.
+
+---
+
 ## [3.10.11] — 2026-04-28
 
 ### Fixed

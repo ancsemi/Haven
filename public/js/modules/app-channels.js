@@ -1780,6 +1780,7 @@ _renderChannels() {
             list.querySelectorAll(`.sub-channel-item[data-parent-code="${ch.code}"][data-sub-tag="${CSS.escape(tagName)}"]`).forEach(el => {
               el.style.display = nowCollapsed ? 'none' : '';
             });
+            this._updateNestedIndicators();
           });
           if (isSubCollapsed || catCollapsed) tagLabel.style.display = 'none';
           list.appendChild(tagLabel);
@@ -2437,6 +2438,40 @@ _updateNestedIndicators() {
     const subTotal = subs.reduce((sum, s) => sum + (this.unreadCounts[s.code] || 0), 0);
     setDot(parentEl, subTotal > 0);
   }
+
+  // Tag labels (sub-channel category groups inside a parent channel) — issue #5311.
+  // When the tag row is collapsed, append a count bubble like the one used for
+  // collapsed parent channels. When expanded, fall back to the same dot pattern
+  // as parents/categories so the indication stays consistent.
+  document.querySelectorAll('.sub-tag-label').forEach(tagEl => {
+    const parentCode = tagEl.dataset.parentCode;
+    const tagName = tagEl.dataset.tagName;
+    if (!parentCode || !tagName) return;
+    const parentChannel = this.channels.find(c => c.code === parentCode);
+    if (!parentChannel) return;
+    const subs = subChannelMap[parentChannel.id] || [];
+    const total = subs.reduce((sum, s) => {
+      const subTag = s.category || 'Untagged';
+      if (subTag !== tagName) return sum;
+      return sum + (this.unreadCounts[s.code] || 0);
+    }, 0);
+    const tagKey = `haven_subtag_collapsed_${parentCode}_${tagName}`;
+    const isCollapsed = localStorage.getItem(tagKey) === 'true';
+    let bubble = tagEl.querySelector(':scope > .channel-badge-bubble');
+    if (isCollapsed && total > 0) {
+      if (!bubble) {
+        bubble = document.createElement('span');
+        bubble.className = 'channel-badge channel-badge-bubble';
+        bubble.style.marginLeft = 'auto';
+        tagEl.appendChild(bubble);
+      }
+      bubble.textContent = total > 99 ? '99+' : total;
+      setDot(tagEl, false);
+    } else {
+      if (bubble) bubble.remove();
+      setDot(tagEl, !isCollapsed && total > 0);
+    }
+  });
 },
 
 _updateTabTitle() {
