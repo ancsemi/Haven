@@ -2452,6 +2452,13 @@ _updateTabTitle() {
 },
 
 _updateDesktopBadge() {
+  // If the user has muted this server entirely, always report no-badge so this
+  // instance never adds to the taskbar overlay icon.
+  if (localStorage.getItem('haven_server_muted') === '1') {
+    this._lastDesktopBadge = false;
+    window.havenDesktop?.setUnreadBadge?.(false);
+    return;
+  }
   const validCodes = new Set((this.channels || []).map(c => c.code));
   const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => validCodes.has(k) ? s + v : s, 0);
   // Track last-pushed value so visibility-driven re-syncs (below) can detect
@@ -2485,6 +2492,8 @@ _resyncDesktopBadgeOnFocus() {
  *          to avoid duplicate notifications (server-side push handles the rest).
  */
 _fireNativeNotification(message, channelCode, opts) {
+  // Server-level mute: suppress all notifications from this server instance.
+  if (localStorage.getItem('haven_server_muted') === '1') return;
   // Check per-type notification toggles
   const n = this.notifications;
   if (opts && opts.isMention && n.mentionsEnabled) { /* allowed */ }

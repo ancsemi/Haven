@@ -239,6 +239,13 @@ _setupNotifications() {
   const mentionsToggle = document.getElementById('notif-mentions-enabled');
   const repliesToggle = document.getElementById('notif-replies-enabled');
   const dmToggle = document.getElementById('notif-dm-enabled');
+  const serverMutedToggle = document.getElementById('notif-server-muted');
+  if (serverMutedToggle) {
+    serverMutedToggle.checked = localStorage.getItem('haven_server_muted') === '1';
+    serverMutedToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_server_muted', serverMutedToggle.checked ? '1' : '0');
+    });
+  }
   if (mentionsToggle) { mentionsToggle.checked = this.notifications.mentionsEnabled; mentionsToggle.addEventListener('change', () => { this.notifications.mentionsEnabled = mentionsToggle.checked; this.notifications._savePref('haven_notif_mentions_enabled', mentionsToggle.checked); }); }
   if (repliesToggle) { repliesToggle.checked = this.notifications.repliesEnabled; repliesToggle.addEventListener('change', () => { this.notifications.repliesEnabled = repliesToggle.checked; this.notifications._savePref('haven_notif_replies_enabled', repliesToggle.checked); }); }
   if (dmToggle) { dmToggle.checked = this.notifications.dmEnabled; dmToggle.addEventListener('change', () => { this.notifications.dmEnabled = dmToggle.checked; this.notifications._savePref('haven_notif_dm_enabled', dmToggle.checked); }); }
