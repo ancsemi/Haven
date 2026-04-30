@@ -2261,7 +2261,7 @@ _quoteDMPiPMessage(msgEl) {
 _sendDMPiPMessage() {
   const input = document.getElementById('dm-pip-input');
   if (!input || !this._activeDMPip) return;
-  const content = (input.value || '').trim();
+  let content = (input.value || '').trim();
   if (!content) return;
   const code = this._activeDMPip;
   const replyTo = this._dmPipReplyingTo ? this._dmPipReplyingTo.id : null;
@@ -2285,6 +2285,49 @@ _sendDMPiPMessage() {
         }
       } catch {}
     }
+
+    // Pre-process content-transforming slash commands client-side so they
+    // survive E2E encryption (server can't parse encrypted slash commands).
+    // Mirror of the same block in _sendMessage. (#5297)
+    if (isDm) {
+      const slashMatch = content.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/);
+      if (slashMatch) {
+        const cmd = slashMatch[1].toLowerCase();
+        const arg = (slashMatch[2] || '').trim();
+        const displayName = this.user?.displayName || this.user?.username || '';
+        const clientSlash = {
+          spoiler:    () => arg ? `||${arg}||` : null,
+          shrug:      () => `${arg ? arg + ' ' : ''}¯\\_(ツ)_/¯`,
+          tableflip:  () => `${arg ? arg + ' ' : ''}(╯°□°)╯︵ ┻━┻`,
+          unflip:     () => `${arg ? arg + ' ' : ''}┬─┬ ノ( ゜-゜ノ)`,
+          lenny:      () => `${arg ? arg + ' ' : ''}( ͡° ͜ʖ ͡°)`,
+          disapprove: () => `${arg ? arg + ' ' : ''}ಠ_ಠ`,
+          bbs:        () => `🕐 ${displayName} will be back soon`,
+          boobs:      () => `( . Y . )`,
+          butt:       () => `( . )( . )`,
+          brb:        () => `⏳ ${displayName} will be right back`,
+          afk:        () => `💤 ${displayName} is away from keyboard`,
+          me:         () => arg ? `_${displayName} ${arg}_` : null,
+          flip:       () => `🪙 ${displayName} flipped a coin: **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**!`,
+          roll:       () => {
+            const m = (arg || '1d6').match(/^(\d{1,2})?d(\d{1,4})$/i);
+            if (!m) return `🎲 ${displayName} rolled: **${Math.floor(Math.random() * 6) + 1}**`;
+            const count = Math.min(parseInt(m[1] || '1'), 20);
+            const sides = Math.min(parseInt(m[2]), 1000);
+            const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+            const total = rolls.reduce((a, b) => a + b, 0);
+            return `🎲 ${displayName} rolled ${count}d${sides}: [${rolls.join(', ')}] = **${total}**`;
+          },
+          hug:        () => arg ? `🤗 ${displayName} hugs ${arg}` : null,
+          wave:       () => `👋 ${displayName} waves${arg ? ' ' + arg : ''}`,
+        };
+        if (clientSlash[cmd]) {
+          const transformed = clientSlash[cmd]();
+          if (transformed !== null) content = transformed;
+        }
+      }
+    }
+
     const payload = { code, content };
     if (replyTo) payload.replyTo = replyTo;
     if (partner) {
@@ -2926,7 +2969,7 @@ _showConfirmModal(title, message, opts = {}) {
     overlay.style.zIndex = '100002';
     const okClass = danger ? 'btn-sm btn-danger-fill' : 'btn-sm btn-accent';
     overlay.innerHTML = `
-      <div class="modal" style="max-width:420px">
+      <div class="modal modal-confirm">
         <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
         ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
         <div class="modal-actions" style="margin-top:12px">
