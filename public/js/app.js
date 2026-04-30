@@ -13,7 +13,7 @@ import MessageMethods  from './modules/app-messages.js?v=2.7.12';
 import UserMethods     from './modules/app-users.js?v=2.7.3';
 import VoiceMethods    from './modules/app-voice.js?v=2.7.11';
 import UtilityMethods  from './modules/app-utilities.js?v=2.7.16';
-import AdminMethods    from './modules/app-admin.js?v=2.7.2';
+import AdminMethods    from './modules/app-admin.js?v=2.7.3';
 import PlatformMethods from './modules/app-platform.js?v=2.7.12';
 
 class HavenApp {

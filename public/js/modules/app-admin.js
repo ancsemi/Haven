@@ -3195,9 +3195,9 @@ _renderRoleDetail() {
   // create a fresh role with the same level, color, icon, and permissions.
   // Channel-access linkage and auto-assign are intentionally NOT copied —
   // both are rarely what an admin wants on a freshly cloned role.
-  document.getElementById('duplicate-role-btn')?.addEventListener('click', () => {
+  document.getElementById('duplicate-role-btn')?.addEventListener('click', async () => {
     const defaultName = `${role.name} (copy)`.slice(0, 30);
-    const newName = prompt('Name for the duplicated role:', defaultName);
+    const newName = await this._showPromptModal('Duplicate Role', 'Name for the duplicated role:', defaultName);
     if (!newName || !newName.trim()) return;
     const trimmed = newName.trim().slice(0, 30);
     this.socket.emit('create-role', {
