@@ -2209,6 +2209,19 @@
     </div>
   </div>
 
+  <!-- Role Members Modal (assign/remove role directly from role detail) -->
+  <div class="modal-overlay" id="role-members-modal" style="display:none">
+    <div class="modal" style="width:460px;max-height:80vh;display:flex;flex-direction:column;gap:0">
+      <h3 style="margin-bottom:4px">👥 <span id="role-members-modal-title"></span></h3>
+      <p class="muted-text" style="font-size:12px;margin-bottom:10px">Server-wide assignment only. For channel-specific roles, use the Role Assignment menu in member management.</p>
+      <input type="text" id="role-members-search" class="settings-text-input" placeholder="Search members…" style="margin-bottom:10px;flex-shrink:0">
+      <div id="role-members-list" style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:6px;min-height:100px"></div>
+      <div class="modal-actions" style="margin-top:12px;flex-shrink:0">
+        <button class="btn-sm" id="role-members-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Assign Role Modal -->
   <div class="modal-overlay" id="assign-role-modal" style="display:none">
     <div class="modal" style="width:440px">

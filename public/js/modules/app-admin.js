@@ -3035,7 +3035,8 @@ _renderRoleDetail() {
           <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}>
         </label>
       `).join('')}
-      <div style="margin-top:12px;display:flex;gap:8px">
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-sm btn-accent" id="role-members-btn">👥 Members</button>
         <button class="btn-sm" id="duplicate-role-btn">📋 Duplicate</button>
         <button class="btn-sm danger" id="delete-role-btn">${t('settings.admin.role_form.delete')}</button>
       </div>
@@ -3213,6 +3214,96 @@ _renderRoleDetail() {
       this._loadRoles?.();
     });
   });
+
+  document.getElementById('role-members-btn')?.addEventListener('click', () => {
+    this._openRoleMembersModal(role);
+  });
+},
+
+_openRoleMembersModal(role) {
+  const modal = document.getElementById('role-members-modal');
+  if (!modal) return;
+  document.getElementById('role-members-modal-title').textContent = role.name;
+  document.getElementById('role-members-search').value = '';
+
+  const listEl = document.getElementById('role-members-list');
+  listEl.innerHTML = `<p class="rac-placeholder" style="padding:16px;text-align:center">${t('modals.common.loading')}</p>`;
+
+  modal.style.display = 'flex';
+  modal.style.zIndex = '100004';
+
+  let cachedData = null;
+
+  const renderList = (users, filter) => {
+    const q = (filter || '').toLowerCase();
+    const filtered = users.filter(u =>
+      !q || u.username.toLowerCase().includes(q) ||
+      (u.displayName || '').toLowerCase().includes(q)
+    );
+    if (!filtered.length) {
+      listEl.innerHTML = `<p class="rac-placeholder" style="padding:16px;text-align:center">No members found</p>`;
+      return;
+    }
+    listEl.innerHTML = filtered.map(u => {
+      const hasRole = u.currentRoles.some(r => r.id === role.id && !r.channel_id);
+      const color = this._getUserColor(u.username);
+      const initial = (u.displayName || u.username).charAt(0).toUpperCase();
+      const shapeStyle = u.avatarShape === 'square' ? 'border-radius:4px' : '';
+      const avatarHtml = u.avatar
+        ? `<img class="rac-user-avatar" src="${this._escapeHtml(u.avatar)}" alt="${initial}" style="${shapeStyle}">`
+        : `<span class="rac-user-avatar" style="background-color:${color};${shapeStyle}">${initial}</span>`;
+      const badgeHtml = hasRole
+        ? `<span class="role-member-badge" style="background:${this._safeColor(role.color,'#aaa')}22;color:${this._safeColor(role.color,'#aaa')};border:1px solid ${this._safeColor(role.color,'#aaa')}44;border-radius:4px;padding:1px 6px;font-size:11px;white-space:nowrap">${this._escapeHtml(role.name)}</span>`
+        : '';
+      return `<div class="rac-user-item" style="cursor:default;gap:10px" data-uid="${u.id}">
+        ${avatarHtml}
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">${this._escapeHtml(this._getNickname(u.id, u.displayName))}</span>
+        ${badgeHtml}
+        <button class="btn-sm${hasRole ? ' danger' : ' btn-accent'} role-member-toggle-btn" data-uid="${u.id}" data-has="${hasRole}" style="flex-shrink:0;min-width:64px">
+          ${hasRole ? 'Remove' : 'Assign'}
+        </button>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.role-member-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const uid = parseInt(btn.dataset.uid, 10);
+        const has = btn.dataset.has === 'true';
+        btn.disabled = true;
+        const event = has ? 'revoke-role' : 'assign-role';
+        this.socket.emit(event, { userId: uid, roleId: role.id, channelId: null }, (res) => {
+          if (res && res.error) {
+            this._showToast(res.error, 'error');
+            btn.disabled = false;
+            return;
+          }
+          this.socket.emit('get-role-assignment-data', {}, (r) => {
+            if (!r.error) { cachedData = r; renderList(r.users, document.getElementById('role-members-search').value); }
+          });
+        });
+      });
+    });
+  };
+
+  this.socket.emit('get-role-assignment-data', {}, (res) => {
+    if (res.error) { this._showToast(res.error, 'error'); return; }
+    cachedData = res;
+    renderList(res.users, '');
+  });
+
+  const searchEl = document.getElementById('role-members-search');
+  // Replace old listener by cloning
+  const freshSearch = searchEl.cloneNode(true);
+  searchEl.parentNode.replaceChild(freshSearch, searchEl);
+  freshSearch.addEventListener('input', (e) => {
+    if (cachedData) renderList(cachedData.users, e.target.value);
+  });
+
+  const closeBtn = document.getElementById('role-members-close-btn');
+  const freshClose = closeBtn.cloneNode(true);
+  closeBtn.parentNode.replaceChild(freshClose, closeBtn);
+  freshClose.addEventListener('click', () => { modal.style.display = 'none'; });
+  modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
 },
 
 _loadRoleChannelAccess(roleId) {
