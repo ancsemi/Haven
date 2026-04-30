@@ -164,7 +164,7 @@ function downloadSSOAvatar(url) {
 }
 
 // ── Register ──────────────────────────────────────────────
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   try {
     const username = sanitizeString(req.body.username, 20);
     const password = typeof req.body.password === 'string' ? req.body.password : '';
@@ -275,7 +275,7 @@ router.post('/register', async (req, res) => {
 });
 
 // ── Login ─────────────────────────────────────────────────
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const username = sanitizeString(req.body.username, 20);
     const password = typeof req.body.password === 'string' ? req.body.password : '';
@@ -369,7 +369,7 @@ router.get('/validate', (req, res) => {
 });
 
 // ── TOTP Validate (second step of login) ─────────────────
-router.post('/totp/validate', async (req, res) => {
+router.post('/totp/validate', authLimiter, async (req, res) => {
   try {
     const challengeToken = typeof req.body.challengeToken === 'string' ? req.body.challengeToken : '';
     const code = typeof req.body.code === 'string' ? req.body.code.replace(/\s/g, '') : '';
@@ -446,7 +446,7 @@ router.post('/totp/validate', async (req, res) => {
 });
 
 // ── TOTP Setup (generate secret + QR) ────────────────────
-router.post('/totp/setup', async (req, res) => {
+router.post('/totp/setup', authLimiter, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -490,7 +490,7 @@ router.post('/totp/setup', async (req, res) => {
 });
 
 // ── TOTP Verify Setup (confirm code → enable) ────────────
-router.post('/totp/verify-setup', async (req, res) => {
+router.post('/totp/verify-setup', authLimiter, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -568,7 +568,7 @@ router.post('/totp/verify-setup', async (req, res) => {
 });
 
 // ── TOTP Disable ─────────────────────────────────────────
-router.post('/totp/disable', async (req, res) => {
+router.post('/totp/disable', authLimiter, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -660,7 +660,7 @@ router.post('/totp/regenerate-backup', async (req, res) => {
 });
 
 // ── Change Password ──────────────────────────────────────
-router.post('/change-password', async (req, res) => {
+router.post('/change-password', authLimiter, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -721,7 +721,7 @@ router.post('/change-password', async (req, res) => {
 // ── Helpers ───────────────────────────────────────────────
 
 // ── Verify Password (lightweight, for E2E password prompt) ──
-router.post('/verify-password', async (req, res) => {
+router.post('/verify-password', authLimiter, async (req, res) => {
   try {
     const username = sanitizeString(req.body.username, 20);
     const password = typeof req.body.password === 'string' ? req.body.password : '';

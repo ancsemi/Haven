@@ -263,8 +263,12 @@ const fileUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 * 1024 },  // hard cap 2 GB; DB-configurable limit enforced per-request
 });
 
-// ── API routes (rate-limited) ────────────────────────────
-app.use('/api/auth', authLimiter, authRoutes);
+// ── API routes ────────────────────────────────────────────
+// authLimiter is applied per-route inside auth.js for credential endpoints
+// (login, register, TOTP, password change). Non-credential routes like
+// /validate and /user-servers are intentionally left unlimitted here so
+// 50+ concurrent users joining a stream event don't trip the limiter. (#5323)
+app.use('/api/auth', authRoutes);
 
 // ── Push notification VAPID public key endpoint ──────────
 app.get('/api/push/vapid-key', (req, res) => {
