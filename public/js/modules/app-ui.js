@@ -25,7 +25,7 @@ _handleAutocompleteKeydown(e) {
       this._navigateSlashDropdown(e.key === 'ArrowDown' ? 1 : -1);
       return true;
     }
-    if (e.key === 'Tab') {
+    if (e.key === 'Enter' || e.key === 'Tab') {
       const active = slashDd.querySelector('.slash-item.active');
       if (active) { e.preventDefault(); active.click(); return true; }
     }
@@ -92,7 +92,7 @@ _setupUI() {
         this._navigateSlashDropdown(e.key === 'ArrowDown' ? 1 : -1);
         return;
       }
-      if (e.key === 'Tab') {
+      if (e.key === 'Enter' || e.key === 'Tab') {
         const active = slashDd.querySelector('.slash-item.active');
         if (active) { e.preventDefault(); active.click(); return; }
       }
@@ -250,13 +250,17 @@ _setupUI() {
   // ── Channel context menu ("..." on hover) ──────────
   this._initChannelContextMenu();
   this._initDmContextMenu();
-  // Delete channel with TWO confirmations (from ctx menu)
-  document.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+  // Delete channel — themed confirm (issue #5307: was using two chained native confirm() calls)
+  document.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
-    if (!confirm('⚠️ ' + t('confirm.delete_channel'))) return;
-    if (!confirm('⚠️ ' + t('confirm.delete_channel_sure'))) return;
+    const ok = await this._showConfirmModal(
+      '⚠️ ' + t('confirm.delete_channel'),
+      t('confirm.delete_channel_sure'),
+      { danger: true }
+    );
+    if (!ok) return;
     this.socket.emit('delete-channel', { code });
   });
   // Mark channel as read
@@ -2500,9 +2504,9 @@ _setupUI() {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
 
-  document.getElementById('confirm-admin-action-btn').addEventListener('click', () => {
+  document.getElementById('confirm-admin-action-btn').addEventListener('click', async () => {
     if (!this.adminActionTarget) return;
-    const { action, userId } = this.adminActionTarget;
+    const { action, userId, username } = this.adminActionTarget;
     const reason = document.getElementById('admin-action-reason').value.trim();
     const duration = parseInt(document.getElementById('admin-action-duration').value) || 10;
     const scrubMessages = document.getElementById('admin-scrub-checkbox').checked;
@@ -2519,7 +2523,8 @@ _setupUI() {
     } else if (action === 'mute') {
       this.socket.emit('mute-user', { userId, reason, duration });
     } else if (action === 'delete-user') {
-      if (!confirm(t('confirm.delete_user', { username: this.adminActionTarget.username }))) return;
+      const ok = await this._showConfirmModal(t('confirm.delete_user', { username }), '', { danger: true });
+      if (!ok) return;
       this.socket.emit('delete-user', { userId, reason, scrubMessages });
     }
 
@@ -3057,13 +3062,14 @@ _setupUI() {
     overlay.querySelector('.self-delete-cancel').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-    overlay.querySelector('.self-delete-confirm').addEventListener('click', () => {
+    overlay.querySelector('.self-delete-confirm').addEventListener('click', async () => {
       const pw = document.getElementById('self-delete-pw').value;
       const scrub = document.getElementById('self-delete-scrub').checked;
       const status = overlay.querySelector('.self-delete-status');
 
       if (!pw) { status.textContent = t('settings.delete_account_section.password_required'); return; }
-      if (!confirm(t('confirm.delete_account'))) return;
+      const ok = await this._showConfirmModal(t('confirm.delete_account'), '', { danger: true });
+      if (!ok) return;
 
       status.textContent = t('settings.delete_account_section.deleting');
       overlay.querySelector('.self-delete-confirm').disabled = true;

@@ -2931,7 +2931,7 @@ _showConfirmModal(title, message, opts = {}) {
         ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
         <div class="modal-actions" style="margin-top:12px">
           <button class="btn-sm" id="confirm-modal-cancel">${this._escapeHtml(cancelLabel || t('modals.common.cancel'))}</button>
-          <button class="${okClass}" id="confirm-modal-ok">${this._escapeHtml(confirmLabel || t('modals.common.confirm'))}</button>
+          <button class="${okClass}" id="confirm-modal-ok">${this._escapeHtml(confirmLabel || (danger ? (t('messages.delete') || 'Delete') : t('modals.common.confirm')))}</button>
         </div>
       </div>
     `;

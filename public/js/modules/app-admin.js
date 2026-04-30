@@ -3174,8 +3174,13 @@ _renderRoleDetail() {
     });
   });
 
-  document.getElementById('delete-role-btn').addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_delete_confirm', { name: role.name }))) return;
+  document.getElementById('delete-role-btn').addEventListener('click', async () => {
+    const ok = await this._showConfirmModal(
+      t('settings.admin.roles_delete_confirm', { name: role.name }),
+      '',
+      { danger: true }
+    );
+    if (!ok) return;
     this.socket.emit('delete-role', { roleId: role.id }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_deleted'), 'success');
@@ -3522,8 +3527,13 @@ _renderChannelRolesRoleDetail() {
     });
   });
 
-  document.getElementById('cr-delete-role-btn').addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_delete_confirm', { name: role.name }))) return;
+  document.getElementById('cr-delete-role-btn').addEventListener('click', async () => {
+    const ok = await this._showConfirmModal(
+      t('settings.admin.roles_delete_confirm', { name: role.name }),
+      '',
+      { danger: true }
+    );
+    if (!ok) return;
     this.socket.emit('delete-role', { roleId: role.id }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_deleted'), 'success');
