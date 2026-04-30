@@ -11,7 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [3.10.12] — 2026-04-30
 
 ### Added
 - **#5282: Orphan-DM watchdog.** When one or both participants of a DM delete their account (or get force-removed), the `channel_members` rows vanish via `ON DELETE CASCADE` but the DM channel itself was left lingering with stale messages forever. The auto-cleanup routine now sweeps `is_dm=1` channels with member count below 2, moves their `/uploads/...` attachments into `deleted-attachments/`, and `DELETE`s the channel. Runs unconditionally — `cleanup_enabled` only gates message-age expiry.
