@@ -1310,7 +1310,12 @@ _setupUI() {
     const q = e.target.value.trim();
     if (q.length >= 2 && this.currentChannel) {
       searchTimeout = setTimeout(() => {
-        this.socket.emit('search-messages', { code: this.currentChannel, query: q });
+        const ch = (this.channels || []).find(c => c.code === this.currentChannel);
+        if (ch && ch.is_dm) {
+          this._searchDmCacheLocally(q);
+        } else {
+          this.socket.emit('search-messages', { code: this.currentChannel, query: q });
+        }
       }, 400);
     } else {
       document.getElementById('search-results-panel').style.display = 'none';
