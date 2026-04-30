@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Role Management: "Members" button** lets admins assign or remove a role directly from the role detail panel, without having to navigate to member management. Opens a searchable member list showing who currently holds the role, with Assign / Remove toggles per member. Server-wide only; channel-specific role config is still in the Role Assignment menu.
+
+### Fixed
+- **#5309: SVG files sent in chat showed as a filename row, not as an image (PR #5314).** `_isImageUrl` and the E2E `e2e-img:` matcher both excluded `.svg`, so the renderer fell through to plain text. Both now accept `.svg` / `image/svg+xml`. The static `/uploads` middleware gives SVGs the same CORS headers as raster images so cross-origin `<img>` loads work, while keeping `Content-Disposition: attachment` for direct navigation and adding `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` to block any external resource loads or script execution inside the SVG.
+
+---
+
 ## [3.10.12] — 2026-04-30
 
 ### Added
