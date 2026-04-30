@@ -1651,6 +1651,8 @@ _setupUI() {
 
   // Paste images / files into the DM PiP input — uploads to the active PiP DM
   // (not the channel currently in the main pane). (#5295)
+  // Raster images use _uploadImage (E2E-aware, displays inline); other files use
+  // _uploadGeneralFile. (#5324)
   if (dmPipInput) dmPipInput.addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -1661,7 +1663,11 @@ _setupUI() {
         const file = item.getAsFile();
         if (!file) continue;
         e.preventDefault();
-        this._uploadGeneralFile(file, targetCode);
+        if (/^image\/(jpeg|png|gif|webp)$/.test(item.type)) {
+          this._uploadImage(file, targetCode);
+        } else {
+          this._uploadGeneralFile(file, targetCode);
+        }
         return;
       }
     }
@@ -5044,11 +5050,11 @@ _uploadWithProgress(url, formData) {
   });
 },
 
-async _uploadImage(file) {
-  if (!this.currentChannel) return;
+async _uploadImage(file, targetCode) {
+  if (!this.currentChannel && !targetCode) return;
   // Capture the target channel NOW (before any await) so a mid-upload channel
   // switch doesn't send the image to the wrong channel.
-  const targetChannel = this.currentChannel;
+  const targetChannel = targetCode || this.currentChannel;
   const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('toasts.image_too_large', { max: _maxMb }), 'error');
@@ -5057,10 +5063,10 @@ async _uploadImage(file) {
   // Detect E2E DM — encrypt file bytes before uploading
   const ch = this.channels.find(c => c.code === targetChannel);
   const isDm = ch && ch.is_dm && ch.dm_target;
-  let partner = isDm ? this._getE2EPartner() : null;
+  let partner = isDm ? this._getE2EPartnerFor(targetChannel) : null;
   if (isDm && !partner && this.e2e && this.e2e.ready) {
     const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-    if (jwk) { this._dmPublicKeys[ch.dm_target.id] = jwk; partner = this._getE2EPartner(); }
+    if (jwk) { this._dmPublicKeys[ch.dm_target.id] = jwk; partner = this._getE2EPartnerFor(targetChannel); }
   }
 
   if (partner) {
