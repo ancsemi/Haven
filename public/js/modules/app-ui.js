@@ -4255,7 +4255,7 @@ _setupImageUpload() {
   fileInput.addEventListener('change', () => {
     if (!fileInput.files[0]) return;
     const file = fileInput.files[0];
-    if (file.type.startsWith('image/')) {
+    if (/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
       this._queueImage(file);
     } else {
       this._uploadGeneralFile(file);
@@ -4263,12 +4263,12 @@ _setupImageUpload() {
     fileInput.value = '';
   });
 
-  // Paste from clipboard — images get queued, other files go to general upload
+  // Paste from clipboard — raster images get queued, SVG + other files go to general upload
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (/^image\/(jpeg|png|gif|webp)$/.test(item.type)) {
         e.preventDefault();
         this._queueImage(item.getAsFile());
         return;
@@ -4297,7 +4297,7 @@ _setupImageUpload() {
     messageArea.classList.remove('drag-over');
     const file = e.dataTransfer?.files[0];
     if (!file) return;
-    if (file.type.startsWith('image/')) {
+    if (/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
       this._queueImage(file);
     } else {
       this._uploadGeneralFile(file);

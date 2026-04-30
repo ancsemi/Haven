@@ -305,7 +305,8 @@ _formatContent(str) {
   // Render server-hosted images inline (early return)
   // No loading="lazy" — content-visibility:auto on .message already skips off-screen
   // rendering; lazy loading on top creates 0→real-height jumps when scrolling history.
-  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(str.trim())) {
+  // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
+  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
     return `<img src="${this._escapeHtml(str.trim())}" class="chat-image" alt="image">`;
   }
 
