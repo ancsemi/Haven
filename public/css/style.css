@@ -13576,6 +13576,57 @@ ul.chat-list { list-style-type: disc; }
 }
 .btn-poll:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
+/* Burn-after-read input button (#5325) */
+.btn-burn {
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 18px;
+}
+.btn-burn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.btn-burn.active {
+  color: #ff6b35;
+  background: rgba(255, 107, 53, 0.15);
+}
+.btn-burn.active:hover {
+  color: #ff8c5a;
+  background: rgba(255, 107, 53, 0.25);
+}
+
+/* Burn-after-read message states */
+.message-burn-pending .message-content {
+  border-left: 2px solid rgba(255, 107, 53, 0.5);
+  padding-left: 8px;
+}
+.burn-reveal-btn {
+  background: rgba(255, 107, 53, 0.12);
+  color: #ff6b35;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all var(--transition);
+}
+.burn-reveal-btn:hover {
+  background: rgba(255, 107, 53, 0.22);
+  border-color: rgba(255, 107, 53, 0.5);
+}
+.message-burned .message-content {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+}
+
 /* Poll widget inside messages */
 .poll-widget {
   background: var(--bg-secondary, #2b2d31);
