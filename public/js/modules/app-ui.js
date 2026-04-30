@@ -1723,7 +1723,7 @@ _setupUI() {
           this._startEditMessage?.(msgEl, msgId);
         } else if (action === 'delete') {
           if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
-            this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
+            this.socket.emit('delete-message', { messageId: msgId, channelCode: this._activeDMPip, attachments: this._getMessageAttachments?.(msgId) });
           }
         } else if (action === 'pin') {
           if (await this._showConfirmModal(t('confirm.pin_message'), '')) {
@@ -4000,6 +4000,9 @@ _renderManageServersList() {
 
 _updateServerBadgeDots(badges) {
   if (!badges) return;
+  // Cache so _renderServerBar can reapply dots immediately after a re-render
+  // instead of waiting for the next haven-server-badges event. (#5300)
+  this._lastServerBadges = badges;
   // Main process keys serverBadgeState by normalized URL (no trailing slash,
   // no /app or /app.html, no query/hash). The DOM stores the raw user-entered
   // URL, so a direct lookup misses for any server that doesn't already happen
@@ -4228,6 +4231,11 @@ _renderServerBar() {
   // changed — tell main so it can drop phantom taskbar badges from
   // background views the user no longer has an icon for. (#5269)
   this._reportKnownServerUrls();
+
+  // Re-apply cached badge dots — _renderServerBar wipes innerHTML so any
+  // previously lit dots are destroyed. Reapply immediately from the last
+  // known badge state so dots don't vanish until the next IPC event. (#5300)
+  if (this._lastServerBadges) this._updateServerBadgeDots(this._lastServerBadges);
 },
 
 // ═══════════════════════════════════════════════════════

@@ -632,7 +632,11 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const code = socket.currentChannel;
+    // Allow the PiP DM overlay (and similar cases where the socket is joined to
+    // a different channel) to pass the target channel explicitly so the lookup
+    // isn't blocked by socket.currentChannel pointing at a server channel.
+    const rawCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : null;
+    const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
     if (!code) return;
 
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
