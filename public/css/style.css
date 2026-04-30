@@ -5667,8 +5667,14 @@ select.cfn-select.cfn-input {
   transition: none;
 }
 
-/* Disable resize handle on small modals (confirmation dialogs, etc.) */
-.modal[style*="max-width:380px"] { resize: none; }
+/* Disable resize handle on confirmation dialogs and other small modals */
+.modal.modal-confirm {
+  resize: none;
+  min-height: unset;
+  max-width: 380px;
+  width: min(90%, 380px);
+  padding: 22px 24px 20px;
+}
 
 /* Expand/restore toggle button in modal headers */
 .modal-expand-btn {
