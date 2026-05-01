@@ -46,12 +46,13 @@ function setupSocketHandlers(io, db) {
   const activeWebcamUsers   = new Map(); // code → Set<userId>
   const streamViewers       = new Map(); // "code:sharerId" → Set<viewerUserId>
   const slowModeTracker     = new Map(); // "slow:{userId}:{channelId}" → timestamp
+  const pendingTempDelete   = new Map(); // code → timeout handle (grace-period before deleting temp-voice channel)
 
   const state = {
     channelUsers, voiceUsers, voiceLastActivity,
     activeMusic, musicQueues,
     activeScreenSharers, activeWebcamUsers, streamViewers,
-    slowModeTracker
+    slowModeTracker, pendingTempDelete
   };
 
   // Transfer-admin mutex (shared across all connections to prevent race conditions)
@@ -539,7 +540,7 @@ function setupSocketHandlers(io, db) {
   }
 
   // ── handleVoiceLeave ────────────────────────────────────
-  function handleVoiceLeave(socket, code) {
+  function handleVoiceLeave(socket, code, { softDisconnect = false } = {}) {
     const voiceRoom = voiceUsers.get(code);
     if (!voiceRoom) return;
 
@@ -584,20 +585,46 @@ function setupSocketHandlers(io, db) {
     if (voiceRoom.size === 0) {
       activeMusic.delete(code);
       musicQueues.delete(code);
-      try {
-        const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
-        if (ch && ch.is_temp_voice) {
-          db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-          db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-          io.emit('channel-deleted', { code, reason: 'temp-empty' });
-          channelUsers.delete(code);
-          voiceUsers.delete(code);
-          console.log(`[Temporary] Temp voice channel "${code}" deleted (everyone left)`);
+
+      const doDeleteTempChannel = () => {
+        try {
+          const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
+          if (ch && ch.is_temp_voice) {
+            // Double-check the room is still empty — someone may have rejoined
+            // during the grace period.
+            const currentRoom = voiceUsers.get(code);
+            if (currentRoom && currentRoom.size > 0) return;
+            db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+            db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+            io.emit('channel-deleted', { code, reason: 'temp-empty' });
+            channelUsers.delete(code);
+            voiceUsers.delete(code);
+            pendingTempDelete.delete(code);
+            console.log(`[Temporary] Temp voice channel "${code}" deleted (everyone left)`);
+          }
+        } catch { /* column may not exist yet */ }
+      };
+
+      if (softDisconnect) {
+        // Grace period: wait 8 s before deleting the temp channel.
+        // This prevents the channel from vanishing when a socket briefly
+        // drops and immediately reconnects (e.g. network hiccup, or the
+        // Desktop app's memory-based page reload).
+        if (pendingTempDelete.has(code)) clearTimeout(pendingTempDelete.get(code));
+        const timer = setTimeout(doDeleteTempChannel, 8000);
+        pendingTempDelete.set(code, timer);
+        console.log(`[Temporary] Temp voice channel "${code}" grace period started (socket disconnect)`);
+      } else {
+        // Intentional leave — cancel any pending grace-period timer and delete immediately.
+        if (pendingTempDelete.has(code)) {
+          clearTimeout(pendingTempDelete.get(code));
+          pendingTempDelete.delete(code);
         }
-      } catch { /* column may not exist yet */ }
+        doDeleteTempChannel();
+      }
     }
 
     let stillInVoice = false;
@@ -1200,7 +1227,7 @@ function setupSocketHandlers(io, db) {
       for (const [code, room] of voiceUsers) {
         const voiceEntry = room.get(socket.user.id);
         if (voiceEntry && voiceEntry.socketId === socket.id) {
-          handleVoiceLeave(socket, code);
+          handleVoiceLeave(socket, code, { softDisconnect: true });
         }
       }
     });
