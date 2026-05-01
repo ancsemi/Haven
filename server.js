@@ -2946,7 +2946,7 @@ const io = new Server(server, {
     origin: false,         // same-origin only — no cross-site connections
   },
   maxHttpBufferSize: 64 * 1024,  // 64KB max per message (was 1MB)
-  pingTimeout: 30000,
+  pingTimeout: 60000,
   pingInterval: 25000,
   connectTimeout: 10000,
 });
