@@ -2699,7 +2699,7 @@ _startEditMessage(msgEl, msgId) {
   textarea.className = 'edit-textarea';
   textarea.value = rawText;
   textarea.rows = 1;
-  textarea.maxLength = 2000;
+  textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
   contentEl.appendChild(textarea);
 
   // Track active edit textarea for emoji picker redirection

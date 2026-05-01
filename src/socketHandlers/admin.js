@@ -41,7 +41,8 @@ module.exports = function register(socket, ctx) {
       'default_theme', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
-      'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections'
+      'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
+      'max_message_chars'
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -49,8 +50,9 @@ module.exports = function register(socket, ctx) {
     if (key === 'cleanup_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'cleanup_max_age_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 3650) return; }
     if (key === 'cleanup_max_size_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
-    if (key === 'max_upload_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 2048) return; }
+    if (key === 'max_upload_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 102400) return; }
     if (key === 'max_poll_options') { const n = parseInt(value); if (isNaN(n) || n < 2 || n > 25) return; }
+    if (key === 'max_message_chars') { const n = parseInt(value); if (isNaN(n) || n < 200 || n > 100000) return; }
     if (key === 'max_sound_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
     if (key === 'max_emoji_kb') { const n = parseInt(value); if (isNaN(n) || n < 64 || n > 1024) return; }
     if (key === 'auto_backup_enabled' && !['true', 'false'].includes(value)) return;

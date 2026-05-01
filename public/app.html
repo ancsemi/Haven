@@ -1937,9 +1937,14 @@
           <h5 class="settings-section-subtitle">📁 <span data-i18n="settings.admin.uploads_title">Uploads &amp; Limits</span></h5>
           <label class="select-row">
             <span data-i18n="settings.admin.max_upload">Max Upload Size (MB)</span>
-            <input type="number" id="max-upload-mb" min="1" max="2048" value="25" class="settings-number-input">
+            <input type="number" id="max-upload-mb" min="1" max="102400" value="25" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload (1–2048 MB, default 25)</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload in MB (default 25). No hard cap — limited by your server's available disk space.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_message_chars">Max Message Length (characters)</span>
+            <input type="number" id="max-message-chars" min="200" max="100000" value="2000" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_message_chars_hint">Maximum characters per message, post, or DM (200–100000, default 2000)</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_sound">Max Sound File Size (KB)</span>
             <input type="number" id="max-sound-kb" min="256" max="10240" value="1024" class="settings-number-input">

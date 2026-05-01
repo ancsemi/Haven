@@ -323,8 +323,10 @@ module.exports = function register(socket, ctx) {
 
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     if (!content || content.trim().length === 0) return;
-    if (content.length > 2000) {
-      return socket.emit('error-msg', 'Message too long (max 2000 characters)');
+    const _maxCharsRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
+    const _maxChars = parseInt(_maxCharsRow?.value) || 2000;
+    if (content.length > _maxChars) {
+      return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
     }
 
     touchVoiceActivity(socket.user.id);
@@ -580,7 +582,9 @@ module.exports = function register(socket, ctx) {
   // ── Edit message ────────────────────────────────────────
   socket.on('edit-message', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!isInt(data.messageId) || !isString(data.content, 1, 2000)) return;
+    const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
+    const _editMax = parseInt(_editMaxRow?.value) || 2000;
+    if (!isInt(data.messageId) || !isString(data.content, 1, _editMax)) return;
 
     const code = socket.currentChannel;
     if (!code) return;

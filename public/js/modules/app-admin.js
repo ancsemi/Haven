@@ -352,6 +352,10 @@ _applyServerSettings() {
     if (maxPollOpts) {
       maxPollOpts.value = this.serverSettings.max_poll_options || '10';
     }
+    const maxMsgChars = document.getElementById('max-message-chars');
+    if (maxMsgChars) {
+      maxMsgChars.value = this.serverSettings.max_message_chars || '2000';
+    }
     const whitelistToggle = document.getElementById('whitelist-enabled');
     if (whitelistToggle) {
       whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
@@ -397,6 +401,12 @@ _applyServerSettings() {
     serverCodeEl.textContent = code || '—';
     serverCodeEl.style.opacity = code ? '1' : '0.4';
   }
+
+  // Apply configurable message length limit to message input and edit textareas
+  const _maxMsgChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  const msgInput = document.getElementById('message-input');
+  if (msgInput) msgInput.maxLength = _maxMsgChars;
+  document.querySelectorAll('.edit-textarea').forEach(el => { el.maxLength = _maxMsgChars; });
 
   // Vanity code — update input if modal is open
   if (!modalOpen) {
@@ -596,6 +606,7 @@ _snapshotAdminSettings() {
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_poll_options: this.serverSettings.max_poll_options || '10',
+    max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     default_theme: this.serverSettings.default_theme || '',
     custom_tos: this.serverSettings.custom_tos || '',
@@ -668,7 +679,7 @@ _saveAdminSettings() {
     changed = true;
   }
 
-  const maxUpload = String(Math.max(1, Math.min(2048, parseInt(document.getElementById('max-upload-mb')?.value) || 25)));
+  const maxUpload = String(Math.max(1, Math.min(102400, parseInt(document.getElementById('max-upload-mb')?.value) || 25)));
   if (maxUpload !== (snap.max_upload_mb || '25')) {
     this.socket.emit('update-server-setting', { key: 'max_upload_mb', value: maxUpload });
     changed = true;
@@ -689,6 +700,12 @@ _saveAdminSettings() {
   const maxPollOpts = String(Math.max(2, Math.min(25, parseInt(document.getElementById('max-poll-options')?.value) || 10)));
   if (maxPollOpts !== (snap.max_poll_options || '10')) {
     this.socket.emit('update-server-setting', { key: 'max_poll_options', value: maxPollOpts });
+    changed = true;
+  }
+
+  const maxMsgChars = String(Math.max(200, Math.min(100000, parseInt(document.getElementById('max-message-chars')?.value) || 2000)));
+  if (maxMsgChars !== (snap.max_message_chars || '2000')) {
+    this.socket.emit('update-server-setting', { key: 'max_message_chars', value: maxMsgChars });
     changed = true;
   }
 
@@ -761,6 +778,8 @@ _cancelAdminSettings() {
     if (mek) mek.value = snap.max_emoji_kb || '256';
     const mpo = document.getElementById('max-poll-options');
     if (mpo) mpo.value = snap.max_poll_options || '10';
+    const mmc = document.getElementById('max-message-chars');
+    if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
     const dt = document.getElementById('default-theme-select');

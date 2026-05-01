@@ -258,10 +258,10 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
-// Image-only upload — multer cap is high; real limit enforced per-request from DB
+// Image-only upload — multer cap is generous; real limit enforced per-request from DB
 const upload = multer({
   storage: uploadStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
   fileFilter: (req, file, cb) => {
     if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
     else cb(new Error('Only images allowed (jpg, png, gif, webp)'));
@@ -272,7 +272,7 @@ const upload = multer({
 // Content-Disposition: attachment on non-image downloads (see /uploads handler)
 const fileUpload = multer({
   storage: uploadStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },  // hard cap 2 GB; DB-configurable limit enforced per-request
+  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
 });
 
 // ── API routes ────────────────────────────────────────────
