@@ -1703,7 +1703,7 @@ _renderChannels() {
 
   for (const cat of sortedCats) {
     const catKey = cat || '';
-    const catCollapsed = cat ? localStorage.getItem(`haven_cat_collapsed_${cat}`) === 'true' : false;
+    const catCollapsed = cat ? localStorage.getItem(`haven_cat_collapsed_${cat.toLowerCase()}`) === 'true' : false;
 
     if (cat) {
       const catLabel = document.createElement('h5');
@@ -1721,7 +1721,7 @@ _renderChannels() {
 
       catLabel.addEventListener('click', () => {
         const nowCollapsed = arrow.classList.toggle('collapsed');
-        localStorage.setItem(`haven_cat_collapsed_${cat}`, nowCollapsed);
+        localStorage.setItem(`haven_cat_collapsed_${cat.toLowerCase()}`, nowCollapsed);
         list.querySelectorAll(`[data-cat-group="${CSS.escape(cat)}"]`).forEach(el => {
           el.style.display = nowCollapsed ? 'none' : '';
         });
@@ -2632,9 +2632,8 @@ _updateChannelVoiceIndicators() {
       }
       userList.innerHTML = users.map(u => {
         const isSelf = u.id === this.user.id;
-        // Self-talking is gated behind the debug toggle: when off, the
-        // highlight comes from the server echoing voice-speaking back, so
-        // there's no 'self' entry in talkingState.
+        // Self-talking state is driven by the local analyser directly (not
+        // server echo), so talkingState.get('self') reflects real-time mic level.
         const isTalking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
         return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}</div>`;
       }).join('');
