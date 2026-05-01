@@ -70,6 +70,78 @@ async _flushImageQueue() {
   }
 },
 
+// ── PiP DM Image Queue (#5324) ──────────────────────────
+
+_queueImageForPiP(file, targetCode) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  if (file.size > _maxMb * 1024 * 1024) {
+    return this._showToast(`Image too large (max ${_maxMb} MB)`, 'error');
+  }
+  if (!this._pipImageQueue) this._pipImageQueue = [];
+  if (!this._pipImageQueueTarget) this._pipImageQueueTarget = targetCode;
+  if (this._pipImageQueue.length >= 5) {
+    return this._showToast('Max 5 images at once', 'error');
+  }
+  this._pipImageQueue.push(file);
+  this._pipImageQueueTarget = targetCode;
+  this._renderPiPImageQueue();
+  document.getElementById('dm-pip-input')?.focus();
+},
+
+_renderPiPImageQueue() {
+  const bar = document.getElementById('dm-pip-image-queue-bar');
+  if (!bar) return;
+  if (!this._pipImageQueue || this._pipImageQueue.length === 0) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+  bar.style.display = 'flex';
+  bar.innerHTML = '';
+  this._pipImageQueue.forEach((file, idx) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'image-queue-thumb';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    img.alt = file.name;
+    img.onload = () => URL.revokeObjectURL(img.src);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'image-queue-remove';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      this._pipImageQueue.splice(idx, 1);
+      this._renderPiPImageQueue();
+    });
+    thumb.appendChild(img);
+    thumb.appendChild(removeBtn);
+    bar.appendChild(thumb);
+  });
+  if (this._pipImageQueue.length > 1) {
+    const clearAll = document.createElement('button');
+    clearAll.className = 'image-queue-clear-all';
+    clearAll.textContent = 'Clear All';
+    clearAll.addEventListener('click', () => {
+      this._pipImageQueue = [];
+      this._renderPiPImageQueue();
+    });
+    bar.appendChild(clearAll);
+  }
+},
+
+async _flushPiPImageQueue() {
+  if (!this._pipImageQueue || this._pipImageQueue.length === 0) return;
+  const files = [...this._pipImageQueue];
+  const target = this._pipImageQueueTarget;
+  this._pipImageQueue = [];
+  this._pipImageQueueTarget = null;
+  this._renderPiPImageQueue();
+  for (const file of files) {
+    await this._uploadImage(file, target);
+  }
+},
+
 // ═══════════════════════════════════════════════════════
 // AVATAR / PFP CUSTOMIZER
 // ═══════════════════════════════════════════════════════

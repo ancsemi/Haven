@@ -2141,7 +2141,11 @@ async _maybeUploadEncryptedDmFile(file, code, ch) {
       url: data.url,
       name: file.name || 'file'
     });
-    const marker = `e2e-file:${meta}`;
+    // Images (including SVG) use e2e-img: so they render inline (#5309)
+    const isImage = (file.type || '').startsWith('image/');
+    const marker = isImage
+      ? `e2e-img:${file.type || 'image/png'}:${data.url}`
+      : `e2e-file:${meta}`;
     const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
     this.socket.emit('send-message', {
       code,

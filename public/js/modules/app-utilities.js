@@ -2138,6 +2138,9 @@ _openDMPiP(code) {
 _closeDMPiP() {
   this._activeDMPip = null;
   this._dmPipReplyingTo = null;
+  this._pipImageQueue = [];
+  this._pipImageQueueTarget = null;
+  this._renderPiPImageQueue?.();
   clearTimeout(this._dmPipLoadingTimer);
   try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
   const panel = document.getElementById('dm-pip-panel');
@@ -2304,7 +2307,8 @@ _sendDMPiPMessage() {
   const input = document.getElementById('dm-pip-input');
   if (!input || !this._activeDMPip) return;
   let content = (input.value || '').trim();
-  if (!content) return;
+  const hasPiPImages = this._pipImageQueue && this._pipImageQueue.length > 0;
+  if (!content && !hasPiPImages) return;
   const code = this._activeDMPip;
   const replyTo = this._dmPipReplyingTo ? this._dmPipReplyingTo.id : null;
 
@@ -2372,17 +2376,24 @@ _sendDMPiPMessage() {
 
     const payload = { code, content };
     if (replyTo) payload.replyTo = replyTo;
-    if (partner) {
-      try {
-        const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
-        payload.content = encrypted;
-        payload.encrypted = true;
-      } catch (err) {
-        console.warn('[E2E][PiP] Encryption failed:', err);
+    if (content) {
+      if (partner) {
+        try {
+          const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
+          payload.content = encrypted;
+          payload.encrypted = true;
+        } catch (err) {
+          console.warn('[E2E][PiP] Encryption failed:', err);
+        }
       }
+      this.socket.emit('send-message', payload);
+      try { this.notifications?.play?.('sent'); } catch {}
     }
-    this.socket.emit('send-message', payload);
-    try { this.notifications?.play?.('sent'); } catch {}
+
+    // Flush any queued images (same as main channel behavior, #5324)
+    if (hasPiPImages) {
+      await this._flushPiPImageQueue?.();
+    }
   })();
 },
 

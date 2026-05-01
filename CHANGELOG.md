@@ -15,6 +15,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.10.14] — 2026-05-01
+
+### Fixed
+- **Long pinned messages were cut off and had no way to expand or scroll.** `.pinned-item-content` had a hard `max-height: 60px; overflow: hidden` cap — anything beyond a couple of lines was silently clipped with no indicator. Removed the cap; the pinned panel itself already scrolls, so long messages now show in full.
+- **#5326: Message action toolbar and its overflow dropdown appeared behind other messages' `...` buttons on mobile/tablet.** The base `.msg-toolbar` z-index (10) was lower than `.msg-dots-btn` (12), and the overflow panel's z-index (12) was evaluated inside the toolbar's own stacking context, landing even lower in the paint order. Raised the base toolbar to z-20, the overflow panel to z-200, and explicitly set the selected-state toolbar to z-100 on coarse-pointer devices.
+- **#5324: Images pasted into the DM PiP were sent instantly without a preview.** They now enter a per-PiP image queue that shows a preview bar above the input (same as the main channel), and are sent when the user presses Enter or taps Send — just like pasting into the main composer. The preview bar is cleared when the PiP is closed.
+- **#5309: SVG files in DMs showed as a locked downloadable `.enc` file.** `_maybeUploadEncryptedDmFile` was always wrapping uploads in an `e2e-file:` marker (download attachment); image types including SVG now use the `e2e-img:` marker so they decrypt and render inline. Also, SVGs and other images are no longer sent immediately when selected or pasted in regular channels — they now go through the same preview queue as raster images, giving users a chance to review before sending.
+
+---
+
 ## [3.10.13] — 2026-04-30
 
 ### Added

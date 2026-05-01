@@ -1654,10 +1654,8 @@ _setupUI() {
     this._checkSlashTrigger(dmPipInput);
   });
 
-  // Paste images / files into the DM PiP input — uploads to the active PiP DM
-  // (not the channel currently in the main pane). (#5295)
-  // Raster images use _uploadImage (E2E-aware, displays inline); other files use
-  // _uploadGeneralFile. (#5324)
+  // Paste images / files into the DM PiP input — queues images for preview
+  // (same as main channel paste behavior). (#5324)
   if (dmPipInput) dmPipInput.addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -1668,8 +1666,8 @@ _setupUI() {
         const file = item.getAsFile();
         if (!file) continue;
         e.preventDefault();
-        if (/^image\/(jpeg|png|gif|webp)$/.test(item.type)) {
-          this._uploadImage(file, targetCode);
+        if (item.type.startsWith('image/')) {
+          this._queueImageForPiP(file, targetCode);
         } else {
           this._uploadGeneralFile(file, targetCode);
         }
@@ -4266,7 +4264,7 @@ _setupImageUpload() {
   fileInput.addEventListener('change', () => {
     if (!fileInput.files[0]) return;
     const file = fileInput.files[0];
-    if (/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
+    if (file.type.startsWith('image/')) {
       this._queueImage(file);
     } else {
       this._uploadGeneralFile(file);
@@ -4274,12 +4272,12 @@ _setupImageUpload() {
     fileInput.value = '';
   });
 
-  // Paste from clipboard — raster images get queued, SVG + other files go to general upload
+  // Paste from clipboard — images (incl. SVG) get queued for preview; other files go to general upload
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
-      if (/^image\/(jpeg|png|gif|webp)$/.test(item.type)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
         e.preventDefault();
         this._queueImage(item.getAsFile());
         return;
@@ -4308,7 +4306,7 @@ _setupImageUpload() {
     messageArea.classList.remove('drag-over');
     const file = e.dataTransfer?.files[0];
     if (!file) return;
-    if (/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
+    if (file.type.startsWith('image/')) {
       this._queueImage(file);
     } else {
       this._uploadGeneralFile(file);
@@ -5099,11 +5097,18 @@ async _uploadImage(file, targetCode) {
     return;
   }
 
-  const formData = new FormData();
-  formData.append('image', file);
-
   try {
-    const data = await this._uploadWithProgress('/api/upload', formData);
+    // SVG must use /api/upload-file (the raster-only /api/upload rejects it)
+    let data;
+    if (file.type === 'image/svg+xml') {
+      const fd = new FormData();
+      fd.append('file', file);
+      data = await this._uploadWithProgress('/api/upload-file', fd);
+    } else {
+      const formData = new FormData();
+      formData.append('image', file);
+      data = await this._uploadWithProgress('/api/upload', formData);
+    }
 
     // Send the image URL as a message to the channel that was active at upload time
     this.socket.emit('send-message', {

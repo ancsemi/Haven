@@ -7039,7 +7039,7 @@ select.cfn-select.cfn-input {
   border-radius: 8px;
   padding: 2px 4px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 10;
+  z-index: 20;
 }
 .msg-toolbar-group {
   display: flex;
@@ -7065,7 +7065,7 @@ select.cfn-select.cfn-input {
   border-radius: 8px;
   padding: 4px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-  z-index: 12;
+  z-index: 200;
   opacity: 0;
   visibility: hidden;
   transform: translateY(4px);
@@ -10500,6 +10500,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
 
   .msg-selected .msg-toolbar {
     display: flex !important;
+    z-index: 100;
   }
 
   .msg-selected {
@@ -11581,9 +11582,6 @@ video:-webkit-full-screen {
   font-size: 13px;
   color: var(--text-primary);
   line-height: 1.4;
-  max-height: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .pinned-item-footer {
