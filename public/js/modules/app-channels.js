@@ -508,22 +508,21 @@ _initDmContextMenu() {
         while ((m = re.exec(msg.content)) !== null) attachments.push('/uploads/' + m[1]);
       }
     };
-    if (code === this.currentChannel && Array.isArray(this._lastRenderedMessages)) {
-      // Fast path: messages are already decrypted in the render buffer.
-      _scanMsgsForAttachments(this._lastRenderedMessages);
-    } else {
-      // DM is not currently open — fetch a batch of recent messages and
-      // decrypt them so we can scan for E2E attachment URLs. (#5299)
-      try {
-        const channel = this.channels?.find(c => c.code === code);
-        if (channel?.is_dm && channel.dm_target) {
-          await this._fetchDMPartnerKey(channel);
-        }
-        const msgs = await new Promise((resolve) => {
+    // Paginate through ALL messages in the DM so we don't miss E2E
+    // attachment URLs in older messages that haven't been rendered yet. (#5299)
+    try {
+      const channel = this.channels?.find(c => c.code === code);
+      if (channel?.is_dm && channel.dm_target) {
+        await this._fetchDMPartnerKey(channel);
+      }
+      const PAGE_LIMIT = 100;
+      let before = null;
+      for (;;) {
+        const page = await new Promise((resolve) => {
           const timer = setTimeout(() => {
             this.socket.off('message-history', onHistory);
             resolve([]);
-          }, 3000);
+          }, 5000);
           const onHistory = (data) => {
             if (!data || data.channelCode !== code) return;
             this.socket.off('message-history', onHistory);
@@ -531,12 +530,16 @@ _initDmContextMenu() {
             resolve(Array.isArray(data.messages) ? data.messages : []);
           };
           this.socket.on('message-history', onHistory);
-          this.socket.emit('get-messages', { code });
+          this.socket.emit('get-messages', { code, before, limit: PAGE_LIMIT });
         });
-        try { await this._decryptMessages(msgs, code); } catch {}
-        _scanMsgsForAttachments(msgs);
-      } catch { /* best-effort — server still cleans up plaintext messages */ }
-    }
+        if (page.length === 0) break;
+        try { await this._decryptMessages(page, code); } catch {}
+        _scanMsgsForAttachments(page);
+        if (page.length < PAGE_LIMIT) break;
+        // Messages arrive in DESC order; last item is the oldest — use it as cursor.
+        before = page[page.length - 1].id;
+      }
+    } catch { /* best-effort — server still cleans up plaintext messages */ }
     this.socket.emit('delete-dm', { code, attachments });
   });
 
