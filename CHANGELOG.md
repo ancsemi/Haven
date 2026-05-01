@@ -13,11 +13,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+---
+
+## [3.10.13] — 2026-04-30
+
 ### Added
 - **Role Management: "Members" button** lets admins assign or remove a role directly from the role detail panel, without having to navigate to member management. Opens a searchable member list showing who currently holds the role, with Assign / Remove toggles per member. Server-wide only; channel-specific role config is still in the Role Assignment menu.
+- **#5248: Client-side DM search.** Searching inside a DM now runs locally against the cached message history for instant results, falling back to the server for older messages not yet loaded.
 
 ### Fixed
-- **#5309: SVG files sent in chat showed as a filename row, not as an image (PR #5314).** `_isImageUrl` and the E2E `e2e-img:` matcher both excluded `.svg`, so the renderer fell through to plain text. Both now accept `.svg` / `image/svg+xml`. The static `/uploads` middleware gives SVGs the same CORS headers as raster images so cross-origin `<img>` loads work, while keeping `Content-Disposition: attachment` for direct navigation and adding `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` to block any external resource loads or script execution inside the SVG.
+- **Voice speaking indicator stops illuminating after a while in VC.** The self-speaking highlight was driven by the server echoing `voice-speaking` back to the sender. If the sender's socket ever briefly lost its `voice:channel` room membership (e.g. during a reconnect grace-period window), the echo never arrived — and because `wasTalking` was already `true`, no new event was emitted until the next pause. The fix changes the self-indicator to use the local mic analyser directly, so it is driven purely by real-time mic level and is not affected by socket room state. Other users still see your talking indicator via the server relay, which is unchanged.
+- **Voice: desktop app memory monitor could hard-reload the page mid-call** (visible every ~2 minutes during screen sharing). When screen sharing, RAM easily climbed above the previous 512 MB threshold, triggering a hard page reload. The threshold is now raised to 1536 MB, the soft-trim warning threshold to 500 MB, and the reload cooldown to 5 minutes. If the user is currently in voice or screen sharing the hard reload is skipped entirely regardless of memory level.
+- **Voice: temp-voice channel deleted during a brief socket disconnect kicked users back to the welcome screen.** `handleVoiceLeave` now uses an 8-second grace period on socket disconnect before removing an empty temp channel. If the user reconnects within that window the deletion is cancelled. Intentional `voice-leave` events still clean up immediately.
+- **Server `pingTimeout` raised from 30 s to 60 s** to give the Socket.IO heartbeat more slack during bandwidth-heavy screen-sharing sessions.
+- **Channel category collapse state not persisting after server restart.** The localStorage key included the raw category name casing; if channels came back in different order after restart the key would not match. The key is now always lowercase.
+- **#5309: SVG files sent in chat showed as a filename row, not as an image (PR #5314).** `_isImageUrl` and the E2E `e2e-img:` matcher now accept `.svg` / `image/svg+xml`. The static `/uploads` middleware gives SVGs appropriate CORS headers while keeping `Content-Disposition: attachment` for direct navigation and adding a strict CSP to block script execution inside the SVG.
+- **#5324: Images pasted into the DM PiP were sent as download attachments instead of rendering inline.** Pasting into the PiP now uses the E2E-aware `_uploadImage` path for raster images.
+- **#5325: Missing CSS for the burn-after-read feature.**
+- **PiP DM: slash commands now processed before sending** (previously sent as literal text).
+- **PiP DM message deletion** now correctly passes the channel code to the server.
+- **Confirm modal sizing:** non-resizable, tighter layout.
+- **Duplicate role button** now uses the themed prompt modal instead of `window.prompt`.
 
 ---
 
