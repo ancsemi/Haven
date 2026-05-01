@@ -500,13 +500,42 @@ _initDmContextMenu() {
     // for this DM so the server can move E2E ciphertext-hidden uploads
     // to deleted-attachments. (#5299)
     const attachments = [];
-    if (code === this.currentChannel && Array.isArray(this._lastRenderedMessages)) {
+    const _scanMsgsForAttachments = (msgs) => {
       const re = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
-      for (const msg of this._lastRenderedMessages) {
+      for (const msg of msgs) {
         if (!msg || typeof msg.content !== 'string') continue;
         let m;
         while ((m = re.exec(msg.content)) !== null) attachments.push('/uploads/' + m[1]);
       }
+    };
+    if (code === this.currentChannel && Array.isArray(this._lastRenderedMessages)) {
+      // Fast path: messages are already decrypted in the render buffer.
+      _scanMsgsForAttachments(this._lastRenderedMessages);
+    } else {
+      // DM is not currently open — fetch a batch of recent messages and
+      // decrypt them so we can scan for E2E attachment URLs. (#5299)
+      try {
+        const channel = this.channels?.find(c => c.code === code);
+        if (channel?.is_dm && channel.dm_target) {
+          await this._fetchDMPartnerKey(channel);
+        }
+        const msgs = await new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            this.socket.off('message-history', onHistory);
+            resolve([]);
+          }, 3000);
+          const onHistory = (data) => {
+            if (!data || data.channelCode !== code) return;
+            this.socket.off('message-history', onHistory);
+            clearTimeout(timer);
+            resolve(Array.isArray(data.messages) ? data.messages : []);
+          };
+          this.socket.on('message-history', onHistory);
+          this.socket.emit('get-messages', { code });
+        });
+        try { await this._decryptMessages(msgs, code); } catch {}
+        _scanMsgsForAttachments(msgs);
+      } catch { /* best-effort — server still cleans up plaintext messages */ }
     }
     this.socket.emit('delete-dm', { code, attachments });
   });
