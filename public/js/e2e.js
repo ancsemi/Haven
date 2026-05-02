@@ -290,7 +290,11 @@ class HavenE2E {
    */
   async getVerificationCode(myJwk, theirJwk) {
     const sorted = [myJwk, theirJwk].sort((a, b) => (a.x < b.x ? -1 : a.x > b.x ? 1 : 0));
-    const data = new TextEncoder().encode(JSON.stringify(sorted[0]) + JSON.stringify(sorted[1]));
+    // Normalize to only the essential fields in a fixed order so that local keys
+    // (which may carry 'ext', 'key_ops', etc.) and server-fetched keys (plain JSON)
+    // produce identical strings — and therefore identical safety numbers.
+    const normalize = jwk => ({ kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y });
+    const data = new TextEncoder().encode(JSON.stringify(normalize(sorted[0])) + JSON.stringify(normalize(sorted[1])));
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
     // 32 bytes → 12 groups (3 bytes each = 36 bytes, but we XOR-fold excess)
     // Use first 30 bytes directly → 10 groups, then fold remaining 2 bytes
