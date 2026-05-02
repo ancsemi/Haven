@@ -16,7 +16,7 @@
       "password_label": "Hasło",
       "submit": "Zaloguj się",
       "forgot_password": "Nie pamiętasz hasła?",
-      "locked_out": "Zablokowany? Odzyskiwanie przez administratora",
+      "locked_out": "Odzyskiwanie dostępu administratora",
       "admin_recover_hint": "Wprowadź dane administratora powyżej i kliknij Odzyskaj",
       "admin_recover_btn": "Odzyskaj dostęp administratora"
     },
