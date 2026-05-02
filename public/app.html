@@ -1778,6 +1778,15 @@
             </label>
             <small class="settings-hint">Shown when a new user joins a channel. Use <code>{user}</code> for the username. Leave blank to disable.</small>
           </div>
+
+          <!-- Custom Themes -->
+          <div class="settings-group" style="margin-top:12px">
+            <small class="settings-group-label">Custom Themes</small>
+            <p class="settings-hint" style="margin:0 0 8px">Drop <code>.theme.css</code> files into the <code>themes/</code> folder, then check the ones you want to appear in the theme picker for all users.</p>
+            <div id="admin-theme-list" style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:12px;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>
+            </div>
+          </div>
         </div>
 
         <div class="admin-settings" id="section-members" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">

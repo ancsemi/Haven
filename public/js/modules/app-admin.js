@@ -383,6 +383,7 @@ _applyServerSettings() {
     if (defaultTheme) {
       defaultTheme.value = this.serverSettings.default_theme || '';
     }
+    this._renderAdminThemeList();
 
     // Tunnel settings (live state, not part of Save/Cancel flow)
     const tunnelProvider = document.getElementById('tunnel-provider-select');
@@ -609,6 +610,7 @@ _snapshotAdminSettings() {
     max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     default_theme: this.serverSettings.default_theme || '',
+    published_themes: this.serverSettings.published_themes || '[]',
     custom_tos: this.serverSettings.custom_tos || '',
     role_icon_sidebar: this.serverSettings.role_icon_sidebar || 'true',
     role_icon_chat: this.serverSettings.role_icon_chat || 'false',
@@ -721,6 +723,26 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const publishedThemes = JSON.stringify(
+    [...document.querySelectorAll('#admin-theme-list input[type="checkbox"]')]
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.file)
+  );
+  if (publishedThemes !== (snap.published_themes || '[]')) {
+    this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
+    changed = true;
+  }
+
+  const publishedThemes = JSON.stringify(
+    [...document.querySelectorAll('#admin-theme-list input[type="checkbox"]')]
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.file)
+  );
+  if (publishedThemes !== (snap.published_themes || '[]')) {
+    this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
+    changed = true;
+  }
+
   const customTos = document.getElementById('custom-tos-input')?.value.trim() || '';
   if (customTos !== (snap.custom_tos || '')) {
     this.socket.emit('update-server-setting', { key: 'custom_tos', value: customTos });
@@ -788,6 +810,62 @@ _cancelAdminSettings() {
     if (ct) ct.value = snap.custom_tos || '';
   }
   document.getElementById('settings-modal').style.display = 'none';
+},
+
+async _renderAdminThemeList() {
+  const container = document.getElementById('admin-theme-list');
+  if (!container) return;
+  let themes = [];
+  try {
+    themes = await fetch('/api/themes').then(r => r.json());
+  } catch { /* server not ready */ }
+
+  if (themes.length === 0) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>';
+    return;
+  }
+
+  container.innerHTML = '';
+  for (const theme of themes) {
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.file = theme.file;
+    cb.checked = !!theme.published;
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = theme.name || theme.file;
+    const descSpan = document.createElement('span');
+    descSpan.style.cssText = 'font-size:11px;color:var(--text-muted)';
+    descSpan.textContent = theme.description || '';
+    label.append(cb, nameSpan);
+    if (theme.description) label.append(descSpan);
+    container.appendChild(label);
+  }
+
+  // Sync published file themes into the default-theme-select
+  const dtSelect = document.getElementById('default-theme-select');
+  if (dtSelect) {
+    // Remove any previously injected file: options
+    dtSelect.querySelectorAll('option[data-custom-theme]').forEach(o => o.remove());
+    const published = themes.filter(t => t.published);
+    if (published.length > 0) {
+      const sep = document.createElement('option');
+      sep.disabled = true;
+      sep.textContent = '── Custom ──';
+      sep.setAttribute('data-custom-theme', '1');
+      dtSelect.appendChild(sep);
+      for (const theme of published) {
+        const opt = document.createElement('option');
+        opt.value = `file:${theme.file}`;
+        opt.textContent = theme.name || theme.file;
+        opt.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(opt);
+      }
+    }
+    // Re-apply saved value (may be a file: value)
+    dtSelect.value = this.serverSettings.default_theme || '';
+  }
 },
 
 _renderWhitelist(list) {

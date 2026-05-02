@@ -1,0 +1,77 @@
+/**
+ * @name        My Custom Theme
+ * @description A custom theme for my Haven server.
+ * @author      YourName
+ * @version     1.0
+ * @icon        🎨
+ */
+
+/*
+  HOW TO USE
+  ──────────
+  1. Rename this file to something like "mytheme.theme.css"
+  2. Edit the CSS variables below to your liking
+  3. Drop the file into the Haven/themes/ folder
+  4. In Admin Settings → Custom Themes, check the box next to your theme
+  5. It will appear as a button in the theme picker for all users
+
+  The @icon line above sets the emoji shown on the theme picker button.
+  You can use any emoji or a short text character (e.g. ★, ♦, 🌙).
+
+  All variables are optional — omit the ones you want to inherit from the
+  base Haven theme. Only override what you actually want to change.
+*/
+
+:root {
+  /* ── Backgrounds ───────────────────────────────── */
+  --bg-primary:    #191b28;   /* main app background */
+  --bg-secondary:  #1e2035;   /* sidebar / panels */
+  --bg-tertiary:   #252840;   /* nested panels, channel list */
+  --bg-hover:      #2c2f4a;   /* hover states */
+  --bg-active:     #333660;   /* active / selected items */
+  --bg-input:      #15172a;   /* text input background */
+  --bg-card:       #1c1e33;   /* message cards, modals */
+
+  /* ── Accent (buttons, links, highlights) ───────── */
+  --accent:        #7c5cfc;
+  --accent-hover:  #9478ff;
+  --accent-dim:    #5a3fd4;
+  --accent-glow:   rgba(124, 92, 252, 0.25);
+
+  /* ── Text ──────────────────────────────────────── */
+  --text-primary:  #e2e4f0;   /* main message text */
+  --text-secondary:#9498b3;   /* timestamps, hints */
+  --text-muted:    #5d6180;   /* subtle labels, placeholders */
+  --text-link:     #82aaff;   /* hyperlinks */
+
+  /* ── Borders ───────────────────────────────────── */
+  --border:        #2d3050;
+  --border-light:  #383b5e;
+
+  /* ── Status colors ─────────────────────────────── */
+  --success:       #43b581;
+  --danger:        #f04747;
+  --warning:       #faa61a;
+
+  /* ── Online indicator LED ──────────────────────── */
+  --led-on:        #43b581;
+  --led-off:       #555;
+  --led-glow:      rgba(67, 181, 129, 0.5);
+
+  /* ── Typography ────────────────────────────────── */
+  --font-main:     'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono:     'Consolas', 'Courier New', monospace;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+
+  /* ── Layout ────────────────────────────────────── */
+  --radius:        8px;       /* default border radius */
+  --radius-sm:     4px;
+  --sidebar-width: 270px;
+  --right-width:   260px;
+  --transition:    0.15s ease;
+
+  /* ── Theme-specific decorative vars ────────────── */
+  --theme-logo:    "⬡";      /* text shown in logo area */
+  --msg-glow:      none;      /* glow on messages, e.g. 0 0 8px #7c5cfc */
+  --scanline:      none;      /* scanline effect overlay (CRT-style) */
+}

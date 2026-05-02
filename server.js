@@ -226,6 +226,11 @@ app.get('/api/plugins', (req, res) => {
 app.get('/api/themes', (req, res) => {
   try {
     const files = fs.readdirSync(THEMES_DIR).filter(f => f.endsWith('.theme.css'));
+    let published = [];
+    try {
+      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
+      if (row) published = JSON.parse(row.value);
+    } catch { /* DB not ready yet or parse error — default to empty */ }
     const themes = files.map(f => {
       const content = fs.readFileSync(path.join(THEMES_DIR, f), 'utf8');
       const meta = {};
@@ -236,12 +241,14 @@ app.get('/api/themes', (req, res) => {
         const descM = block.match(/@description\s+(.+)/);
         const authM = block.match(/@author\s+(.+)/);
         const verM  = block.match(/@version\s+(.+)/);
+        const iconM = block.match(/@icon\s+(.+)/);
         if (nameM) meta.name = nameM[1].trim();
         if (descM) meta.description = descM[1].trim();
         if (authM) meta.author = authM[1].trim();
         if (verM)  meta.version = verM[1].trim();
+        if (iconM) meta.icon = iconM[1].trim();
       }
-      return { file: f, ...meta };
+      return { file: f, ...meta, published: published.includes(f) };
     });
     res.json(themes);
   } catch { res.json([]); }
