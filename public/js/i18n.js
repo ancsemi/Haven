@@ -14,7 +14,7 @@ const I18n = (() => {
   let _ready = null;  // shared init promise — ensures init() is only run once
 
   // Locales available — add entries here as you create new locale files
-  const SUPPORTED = ['en', 'fr', 'de', 'es', 'ru', 'zh'];
+  const SUPPORTED = ['en', 'fr', 'de', 'es', 'pl', 'ru', 'zh'];
   const DEFAULT   = 'en';
 
   // ── Detect preferred locale ──────────────────────────────────────────
