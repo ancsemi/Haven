@@ -733,16 +733,6 @@ _saveAdminSettings() {
     changed = true;
   }
 
-  const publishedThemes = JSON.stringify(
-    [...document.querySelectorAll('#admin-theme-list input[type="checkbox"]')]
-      .filter(cb => cb.checked)
-      .map(cb => cb.dataset.file)
-  );
-  if (publishedThemes !== (snap.published_themes || '[]')) {
-    this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
-    changed = true;
-  }
-
   const customTos = document.getElementById('custom-tos-input')?.value.trim() || '';
   if (customTos !== (snap.custom_tos || '')) {
     this.socket.emit('update-server-setting', { key: 'custom_tos', value: customTos });

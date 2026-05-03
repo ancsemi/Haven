@@ -436,6 +436,9 @@ _setupNotifications() {
       localStorage.setItem('haven_hide_own_score', v);
       if (this._userPrefs) this._userPrefs.hide_score_badge = v;
       this.socket?.emit('set-preference', { key: 'hide_score_badge', value: v });
+      // Re-render immediately so the badge appears/disappears without waiting
+      // for the next organic online-users broadcast.
+      if (this._lastOnlineUsers) this._renderOnlineUsers(this._lastOnlineUsers);
     });
   }
 

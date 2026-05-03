@@ -69,6 +69,23 @@ const { initFcm } = require('./src/fcm');
 
 const app = express();
 
+// Trust proxy configuration — controls how many reverse-proxy hops to trust
+// when reading the real client IP from X-Forwarded-For.
+//
+//   TRUST_PROXY=1  (default) — trust the first hop (nginx/Traefik/Cloudflare)
+//   TRUST_PROXY=0             — direct exposure; do NOT trust XFF headers
+//                               (prevents attackers from spoofing their IP to
+//                               bypass the auth rate limiter)
+//   TRUST_PROXY=2             — two proxy hops, etc.
+//
+// Without this every user behind a reverse proxy shares the loopback IP in
+// the auth rate limiter, causing innocent users to hit the limit on their
+// very first login/register attempt.
+const _trustProxy = process.env.TRUST_PROXY !== undefined
+  ? (isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY))
+  : 1;
+app.set('trust proxy', _trustProxy);
+
 // ── Helper: verify admin from DB (don't trust JWT claims alone) ─────
 // JWT isAdmin may be stale if admin was demoted since token was issued.
 function verifyAdminFromDb(user) {
