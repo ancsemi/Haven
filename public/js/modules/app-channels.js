@@ -494,7 +494,7 @@ _initDmContextMenu() {
     const code = this._dmCtxMenuCode;
     if (!code) return;
     this._closeDmCtxMenu();
-    const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('settings.admin.delete') || 'Delete' });
+    const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') });
     if (!ok) return;
     // Gather all attachment URLs from the (decrypted) cached messages
     // for this DM so the server can move E2E ciphertext-hidden uploads
