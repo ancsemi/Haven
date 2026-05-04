@@ -855,6 +855,9 @@
       "manage_sounds_btn": "Manage Sounds",
       "emojis_title": "Custom Emojis",
       "manage_emojis_btn": "Manage Emojis",
+      "stickers_title": "Stickers",
+      "stickers_hint": "Upload sticker images grouped into packs",
+      "manage_stickers_btn": "Manage Stickers",
       "roles_title": "Role Management",
       "manage_roles_btn": "Manage Roles",
       "reset_roles_btn": "Reset to Default",
@@ -1360,6 +1363,14 @@
       "crop_applied": "Crop applied — ready to upload",
       "adjust_btn": "Adjust"
     },
+    "sticker_mgmt": {
+      "title": "Sticker Management",
+      "upload_hint": "Upload sticker images (max 1 MB, png/gif/webp). Group stickers into packs by setting the same pack name. Sticker name must be lowercase, no spaces.",
+      "name_placeholder": "sticker_name (optional)",
+      "pack_placeholder": "Pack name (optional)",
+      "upload_btn": "Upload",
+      "no_stickers": "No stickers uploaded"
+    },
     "emoji_crop": {
       "title": "Crop Emoji",
       "hint": "Drag to reposition · Slider to zoom",
@@ -1579,6 +1590,10 @@
   "emoji": {
     "search_placeholder": "Search emoji…",
     "no_results": "No emoji found",
+    "section_emoji": "Emoji",
+    "section_sticker": "Stickers",
+    "sticker_search_placeholder": "Search stickers",
+    "no_stickers": "No stickers yet — an admin can upload some from the Manage Stickers panel",
     "all_emojis_title": "All emojis",
     "customize_quick_title": "Customize Quick Reactions",
     "customize_quick_hint": "Click a slot, then pick an emoji to replace it.",

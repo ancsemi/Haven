@@ -1328,6 +1328,127 @@ _renderEmojiList(emojis) {
 },
 
 // ═══════════════════════════════════════════════════════
+// STICKERS (admin upload, anyone can send)
+// ═══════════════════════════════════════════════════════
+
+async _loadStickers() {
+  try {
+    const res = await fetch('/api/stickers', {
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    this.stickers = data.stickers || [];
+    this._renderStickerList(this.stickers);
+  } catch { /* ignore */ }
+},
+
+_renderStickerList(stickers) {
+  const list = document.getElementById('stickers-list');
+  if (!list) return;
+  if (!stickers || stickers.length === 0) {
+    list.innerHTML = '<p class="muted-text" data-i18n="modals.sticker_mgmt.no_stickers">No stickers uploaded</p>';
+    return;
+  }
+  // Group by pack for display
+  const packs = {};
+  stickers.forEach(s => {
+    const p = s.pack_name || 'General';
+    (packs[p] = packs[p] || []).push(s);
+  });
+  list.innerHTML = Object.keys(packs).sort().map(pack => `
+    <div class="sticker-pack-group" style="margin-top:8px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary)">${this._escapeHtml(pack)}</div>
+      ${packs[pack].map(s => `
+        <div class="custom-sound-item">
+          <img src="${this._escapeHtml(s.url)}" alt=":${this._escapeHtml(s.name)}:" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;object-fit:contain;border-radius:4px;background:var(--bg-secondary)">
+          <span class="custom-sound-name">:${this._escapeHtml(s.name)}:</span>
+          <button class="btn-xs sticker-delete-btn" data-name="${this._escapeHtml(s.name)}" title="Delete">🗑️</button>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.sticker-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.name;
+      try {
+        const res = await fetch(`/api/stickers/${encodeURIComponent(name)}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${this.token}` }
+        });
+        if (res.ok) {
+          this._showToast(`Sticker :${name}: deleted`, 'success');
+          this._loadStickers();
+        } else {
+          this._showToast('Delete failed', 'error');
+        }
+      } catch {
+        this._showToast('Delete failed', 'error');
+      }
+    });
+  });
+},
+
+_setupStickerManagement() {
+  const openBtn = document.getElementById('open-sticker-manager-btn');
+  const modal = document.getElementById('sticker-modal');
+  const closeBtn = document.getElementById('close-sticker-modal-btn');
+  const uploadBtn = document.getElementById('sticker-upload-btn');
+  const fileInput = document.getElementById('sticker-file-input');
+  const nameInput = document.getElementById('sticker-name-input');
+  const packInput = document.getElementById('sticker-pack-input');
+
+  if (openBtn && modal) {
+    openBtn.addEventListener('click', () => {
+      modal.style.display = 'flex';
+      this._loadStickers();
+    });
+  }
+  if (closeBtn && modal) {
+    closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+  }
+
+  if (uploadBtn && fileInput) {
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) return this._showToast('Choose a file first', 'error');
+      const maxKb = parseInt(this.serverSettings?.max_sticker_kb) || 1024;
+      if (file.size > maxKb * 1024) return this._showToast(`File exceeds ${maxKb} KB limit`, 'error');
+
+      const formData = new FormData();
+      formData.append('sticker', file, file.name);
+      const name = (nameInput?.value || '').trim();
+      const pack = (packInput?.value || '').trim();
+      if (name) formData.append('name', name);
+      if (pack) formData.append('pack_name', pack);
+
+      try {
+        const res = await fetch('/api/upload-sticker', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.token}` },
+          body: formData
+        });
+        if (!res.ok) {
+          let errMsg = `Upload failed (${res.status})`;
+          try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+          return this._showToast(errMsg, 'error');
+        }
+        const data = await res.json();
+        this._showToast(`Sticker :${data.name}: uploaded`, 'success');
+        if (nameInput) nameInput.value = '';
+        fileInput.value = '';
+        this._loadStickers();
+      } catch {
+        this._showToast('Upload failed', 'error');
+      }
+    });
+  }
+
+  this._loadStickers();
+},
+
+// ═══════════════════════════════════════════════════════
 // WEBHOOKS / BOT MANAGEMENT
 // ═══════════════════════════════════════════════════════
 

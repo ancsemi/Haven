@@ -1156,6 +1156,87 @@ app.delete('/api/emojis/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete emoji' }); }
 });
 
+// ── Stickers (admin/manage_emojis-only upload, anyone can list/send) ──
+// Stored under uploads/stickers/<file> so message rendering can detect
+// them by URL prefix and render at sticker dimensions.
+const STICKERS_DIR = path.join(uploadDir, 'stickers');
+try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch {}
+const stickerStorage = multer.diskStorage({
+  destination: STICKERS_DIR,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
+  }
+});
+function createStickerUpload() {
+  const { getDb } = require('./src/database');
+  // Stickers are larger than emojis by design — separate setting, default 1 MB.
+  const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_sticker_kb')?.value) || 1024;
+  return multer({
+    storage: stickerStorage,
+    limits: { fileSize: maxKb * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^image\/(png|gif|webp|jpeg)$/.test(file.mimetype)) cb(null, true);
+      else cb(new Error('Only images allowed (png, gif, webp, jpg)'));
+    }
+  });
+}
+
+app.post('/api/upload-sticker', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
+
+  createStickerUpload().single('sticker')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+    if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
+    if (name.length > 40) name = name.slice(0, 40);
+
+    let pack = (req.body.pack_name || '').trim().slice(0, 40);
+    if (!pack) pack = 'General';
+
+    const { getDb } = require('./src/database');
+    try {
+      getDb().prepare(
+        'INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)'
+      ).run(name, pack, req.file.filename, user.id);
+      res.json({ name, pack_name: pack, url: `/uploads/stickers/${req.file.filename}` });
+    } catch { res.status(500).json({ error: 'Failed to save sticker' }); }
+  });
+});
+
+app.get('/api/stickers', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const { getDb } = require('./src/database');
+  try {
+    const rows = getDb().prepare('SELECT id, name, pack_name, filename FROM stickers ORDER BY pack_name COLLATE NOCASE, name COLLATE NOCASE').all();
+    res.json({ stickers: rows.map(r => ({ id: r.id, name: r.name, pack_name: r.pack_name, url: `/uploads/stickers/${r.filename}` })) });
+  } catch { res.json({ stickers: [] }); }
+});
+
+app.delete('/api/stickers/:name', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
+  const name = req.params.name;
+  const { getDb } = require('./src/database');
+  try {
+    const row = getDb().prepare('SELECT filename FROM stickers WHERE name = ?').get(name);
+    if (row) {
+      try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch {}
+      getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
+    }
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
+});
+
 // ── GIF search proxy (GIPHY API — keeps key server-side) ──
 function getGiphyKey() {
   // Check database first (set via admin panel), fall back to .env

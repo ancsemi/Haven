@@ -1986,6 +1986,13 @@
             <button class="btn-sm btn-full btn-accent" id="open-emoji-manager-btn">⚙️ <span data-i18n="settings.admin.manage_emojis_btn">Manage Emojis</span></button>
           </div>
         </div>
+        <div class="admin-settings" id="section-stickers" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🖼️ <span data-i18n="settings.admin.stickers_title">Stickers</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.stickers_hint">Upload sticker images grouped into packs</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-sticker-manager-btn">⚙️ <span data-i18n="settings.admin.manage_stickers_btn">Manage Stickers</span></button>
+          </div>
+        </div>
         <!-- Role Management (Admin only) -->
         <div class="admin-settings" id="section-roles" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
@@ -2424,6 +2431,26 @@
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="close-emoji-modal-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticker Management Modal -->
+  <div class="modal-overlay" id="sticker-modal" style="display:none">
+    <div class="modal" style="width:520px">
+      <h3>🖼️ <span data-i18n="modals.sticker_mgmt.title">Sticker Management</span></h3>
+      <small class="settings-hint" style="display:block;margin-bottom:12px" data-i18n="modals.sticker_mgmt.upload_hint">Upload sticker images (max 1 MB, png/gif/webp). Group stickers into packs by setting the same pack name. Sticker name must be lowercase, no spaces.</small>
+      <div class="whitelist-add-row">
+        <input type="text" id="sticker-name-input" data-i18n-placeholder="modals.sticker_mgmt.name_placeholder" placeholder="sticker_name (optional)" maxlength="40" class="settings-text-input">
+        <input type="text" id="sticker-pack-input" data-i18n-placeholder="modals.sticker_mgmt.pack_placeholder" placeholder="Pack name (optional)" maxlength="40" class="settings-text-input">
+        <input type="file" id="sticker-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:11px">
+        <button class="btn-sm btn-accent" id="sticker-upload-btn" data-i18n="modals.sticker_mgmt.upload_btn">Upload</button>
+      </div>
+      <div id="stickers-list" style="margin-top:12px;">
+        <p class="muted-text" data-i18n="modals.sticker_mgmt.no_stickers">No stickers uploaded</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="close-sticker-modal-btn" data-i18n="modals.common.close">Close</button>
       </div>
     </div>
   </div>

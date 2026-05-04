@@ -162,7 +162,7 @@ _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
   if (trimmed.startsWith('e2e-img:')) return true;
-  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
+  if (/^\/uploads\/(stickers\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
   if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
   // GIPHY GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
@@ -341,6 +341,11 @@ _formatContent(str) {
         <span class="file-download-arrow">⬇</span>
       </a>
     </div>`;
+  }
+
+  // Render server-hosted stickers inline at sticker dimensions (CSS-controlled)
+  if (/^\/uploads\/stickers\/[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
+    return `<img src="${this._escapeHtml(str.trim())}" class="sticker-img" alt="sticker">`;
   }
 
   // Render server-hosted images inline (early return)
@@ -888,6 +893,133 @@ _toggleEmojiPicker(anchorEl) {
   }
   picker.innerHTML = '';
   this._emojiActiveCategory = this._emojiActiveCategory || Object.keys(this.emojiCategories)[0];
+  this._emojiPickerSection = this._emojiPickerSection || 'emoji';
+
+  // Section toggle (Emoji | Sticker)
+  const sectionRow = document.createElement('div');
+  sectionRow.className = 'emoji-section-row';
+  const mkSectionBtn = (key, label) => {
+    const b = document.createElement('button');
+    b.className = 'emoji-section-tab' + (this._emojiPickerSection === key ? ' active' : '');
+    b.textContent = label;
+    b.addEventListener('click', () => {
+      this._emojiPickerSection = key;
+      // Re-open to rebuild contents in the new section.
+      picker.style.display = 'none';
+      this._toggleEmojiPicker(anchorEl);
+    });
+    return b;
+  };
+  sectionRow.appendChild(mkSectionBtn('emoji', t('emoji.section_emoji') || 'Emoji'));
+  sectionRow.appendChild(mkSectionBtn('sticker', t('emoji.section_sticker') || 'Stickers'));
+  picker.appendChild(sectionRow);
+
+  // ── Sticker section ──
+  if (this._emojiPickerSection === 'sticker') {
+    const stickerSearchRow = document.createElement('div');
+    stickerSearchRow.className = 'emoji-search-row';
+    const stickerSearch = document.createElement('input');
+    stickerSearch.type = 'text';
+    stickerSearch.className = 'emoji-search-input';
+    stickerSearch.placeholder = t('emoji.sticker_search_placeholder') || 'Search stickers';
+    stickerSearch.maxLength = 30;
+    stickerSearchRow.appendChild(stickerSearch);
+    picker.appendChild(stickerSearchRow);
+
+    const stickers = Array.isArray(this.stickers) ? this.stickers : [];
+    const packs = [...new Set(stickers.map(s => s.pack_name || 'General'))].sort((a, b) => a.localeCompare(b));
+    this._activeStickerPack = this._activeStickerPack && packs.includes(this._activeStickerPack)
+      ? this._activeStickerPack
+      : (packs[0] || null);
+
+    if (packs.length > 1) {
+      const packRow = document.createElement('div');
+      packRow.className = 'sticker-pack-row';
+      packs.forEach(pack => {
+        const tab = document.createElement('button');
+        tab.className = 'sticker-pack-btn' + (pack === this._activeStickerPack ? ' active' : '');
+        tab.textContent = pack;
+        tab.title = pack;
+        tab.addEventListener('click', () => {
+          this._activeStickerPack = pack;
+          stickerSearch.value = '';
+          renderStickers();
+          packRow.querySelectorAll('.sticker-pack-btn').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+        });
+        packRow.appendChild(tab);
+      });
+      picker.appendChild(packRow);
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'sticker-grid';
+    picker.appendChild(grid);
+
+    const self = this;
+    function renderStickers(filter) {
+      grid.innerHTML = '';
+      let list = stickers;
+      if (filter) {
+        const q = filter.toLowerCase();
+        list = stickers.filter(s =>
+          (s.name || '').toLowerCase().includes(q) ||
+          (s.pack_name || '').toLowerCase().includes(q)
+        );
+      } else if (self._activeStickerPack) {
+        list = stickers.filter(s => (s.pack_name || 'General') === self._activeStickerPack);
+      }
+      if (list.length === 0) {
+        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">${
+          stickers.length === 0
+            ? (t('emoji.no_stickers') || 'No stickers yet — an admin can upload some from the Manage Stickers panel')
+            : (t('emoji.no_results') || 'No results')
+        }</p>`;
+        return;
+      }
+      list.forEach(sticker => {
+        const btn = document.createElement('button');
+        btn.className = 'sticker-picker-item';
+        btn.title = `:${sticker.name}:`;
+        btn.innerHTML = `<img src="${self._escapeHtml(sticker.url)}" alt=":${self._escapeHtml(sticker.name)}:" class="sticker-picker-thumb">`;
+        btn.addEventListener('click', () => {
+          self._sendStickerMessage(sticker.url);
+          picker.style.display = 'none';
+          if (picker._havenOrigParent) {
+            picker._havenOrigParent.appendChild(picker);
+            picker._havenOrigParent = null;
+            ['position', 'top', 'left', 'bottom', 'right', 'z-index'].forEach(p => picker.style.removeProperty(p));
+          }
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    stickerSearch.addEventListener('input', () => {
+      const q = stickerSearch.value.trim();
+      renderStickers(q || null);
+    });
+
+    renderStickers();
+
+    // Anchor positioning + display reused below — fall through to common code.
+    if (anchorEl) {
+      if (picker.parentElement !== document.body) {
+        picker._havenOrigParent = picker.parentElement;
+        document.body.appendChild(picker);
+      }
+      const r = anchorEl.getBoundingClientRect();
+      const pickerW = 340;
+      const pickerH = 368;
+      const top = Math.max(4, r.top - pickerH - 4);
+      const left = Math.max(4, Math.min(r.left, window.innerWidth - pickerW - 4));
+      picker.style.cssText += '; position:fixed; top:' + top + 'px; left:' + left + 'px; bottom:auto; right:auto; z-index:100030;';
+    }
+    picker.style.display = 'flex';
+    return;
+  }
+
+  // ── Emoji section (default) ──
 
   // Search bar
   const searchRow = document.createElement('div');
@@ -1208,6 +1340,37 @@ _sendGifMessage(url) {
   }
   this.socket.emit('send-message', payload);
   this.notifications.play('sent');
+},
+
+// Send a sticker URL as a message. Routes to the active picker context
+// (main composer, thread composer, or DM PiP) so stickers respect the
+// surrounding scope, replies, and E2E encryption that each composer applies.
+_sendStickerMessage(url) {
+  if (!url) return;
+  const ctx = this._emojiPickerContext || 'main';
+  if (ctx === 'thread') {
+    if (!this._activeThreadParent) return;
+    const input = document.getElementById('thread-input');
+    if (!input) return;
+    input.value = url;
+    this._sendThreadMessage();
+    return;
+  }
+  if (ctx === 'dmpip') {
+    if (!this._activeDMPip) return;
+    const input = document.getElementById('dm-pip-input');
+    if (!input) return;
+    input.value = url;
+    this._sendDMPiPMessage();
+    return;
+  }
+  // Main composer — go through _sendMessage so E2E DMs and slash-command
+  // pre-processing apply uniformly.
+  const input = document.getElementById('message-input');
+  if (!input || !this.currentChannel) return;
+  input.value = url;
+  if (typeof this._sendMessage === 'function') this._sendMessage();
+  else this.socket.emit('send-message', { code: this.currentChannel, content: url });
 },
 
 // /gif slash command — inline GIF search results above the input

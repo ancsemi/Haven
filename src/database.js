@@ -303,6 +303,20 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: stickers table (admin-uploaded server stickers) ──
+  // Stickers are sent as standalone /uploads/stickers/<file> URLs (same
+  // mechanism as GIFs) and grouped into packs in the picker.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stickers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      pack_name TEXT NOT NULL DEFAULT 'General',
+      filename TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // ── Migration: channel topic column ─────────────────────
   try {
     db.prepare("SELECT topic FROM channels LIMIT 0").get();

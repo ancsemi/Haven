@@ -139,6 +139,9 @@ class HavenApp {
     this._hasPerm = (p) => this.user.isAdmin || (this.user.permissions || []).includes('*') || (this.user.permissions || []).includes(p);
 
     this.customEmojis = []; // [{name, url}] — loaded from server
+    this.stickers = []; // [{id, name, pack_name, url}] — loaded from server
+    this._emojiPickerContext = 'main'; // 'main' | 'thread' | 'dmpip' — set by emoji button handlers
+    this._emojiPickerSection = 'emoji'; // 'emoji' | 'sticker' — last-used picker tab
 
     this._init();
   }
@@ -179,6 +182,7 @@ class HavenApp {
     // this._setupAvatarUpload(); // Moved to top of _init
     this._setupSoundManagement();
     this._setupEmojiManagement();
+    this._setupStickerManagement();
     this._setupWebhookManagement();
     this._setupDiscordImport();
     this._setupAuditLog();

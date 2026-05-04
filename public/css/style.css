@@ -6558,6 +6558,111 @@ select.cfn-select.cfn-input {
   transform: scale(1.2);
 }
 
+/* ── Stickers ───────────────────────────────────────── */
+/* Inline rendered sticker in messages — larger than chat-image, no background. */
+.sticker-img {
+  max-width: 180px;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius);
+  display: block;
+  margin: 4px 0;
+}
+
+/* Picker section toggle (Emoji | Sticker) */
+.emoji-section-row {
+  display: flex;
+  gap: 4px;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.emoji-section-tab {
+  flex: 1;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  transition: opacity var(--transition), background var(--transition), color var(--transition);
+}
+.emoji-section-tab:hover { opacity: 1; }
+.emoji-section-tab.active {
+  opacity: 1;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Pack switcher row inside the sticker section */
+.sticker-pack-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  max-height: 64px;
+  overflow-y: auto;
+}
+.sticker-pack-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  transition: opacity var(--transition), background var(--transition), color var(--transition);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sticker-pack-btn:hover { opacity: 1; }
+.sticker-pack-btn.active {
+  opacity: 1;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Sticker picker grid */
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 240px;
+  padding: 2px;
+}
+.sticker-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  transition: background var(--transition), transform 0.1s ease;
+}
+.sticker-picker-item:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.05);
+}
+.sticker-picker-thumb {
+  width: 100%;
+  height: 64px;
+  object-fit: contain;
+  display: block;
+}
+
 /* Custom emoji (inline in messages + pickers) */
 .custom-emoji {
   width: 1.4em;

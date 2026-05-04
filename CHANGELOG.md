@@ -15,6 +15,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.11.0] — 2026-05-01
+
+### Added
+- **Stickers (#5335).** Server admins (and anyone with `manage_emojis`) can upload sticker images grouped into named packs from Settings → Admin → Stickers. Stickers are larger than emojis (default 1 MB max, configurable via the `max_sticker_kb` server setting) and are sent as standalone images, not inline with text. The emoji picker now has an Emoji / Stickers section toggle; in the Stickers tab, packs appear as horizontal pills and stickers render as a 4-column thumbnail grid. Sending a sticker routes through the active composer (main channel, thread, or DM PiP) so replies and DM encryption keep working. Sticker URLs use the `/uploads/stickers/` prefix and render at sticker dimensions (`max-width: 180px`) instead of the regular chat-image cap.
+
+### Fixed
+- **#5333: DM PiP popped open over the channel you were already viewing.** `_openDMPiP` had no early return when the requested DM matched `currentChannel`, so the sidebar click handler, `dm-opened` socket event, channel-link click, and "Message [user]" button all could spawn a PiP that hovered over its own fullscreen view. Added a guard at the top of `_openDMPiP` so the function bails out when the DM is already the current channel.
+
+---
+
 ## [3.10.14] — 2026-05-01
 
 ### Fixed

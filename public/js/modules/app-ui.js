@@ -1682,6 +1682,7 @@ _setupUI() {
     dmPipEmojiBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this._activeEditTextarea = document.getElementById('dm-pip-input');
+      this._emojiPickerContext = 'dmpip';
       this._toggleEmojiPicker(dmPipEmojiBtn);
     });
   }
@@ -1795,6 +1796,7 @@ _setupUI() {
     threadEmojiBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this._activeEditTextarea = document.getElementById('thread-input');
+      this._emojiPickerContext = 'thread';
       this._toggleEmojiPicker(threadEmojiBtn);
     });
   }
@@ -1993,6 +1995,7 @@ _setupUI() {
 
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
+    this._emojiPickerContext = 'main';
     this._toggleEmojiPicker();
   });
 
