@@ -117,7 +117,9 @@ _wireBurnMessages(root) {
     if (!content) return;
     const real = content.innerHTML;
     el.dataset.burnRealContent = real;
-    content.innerHTML = `<button type="button" class="burn-reveal-btn">🔥 ${this._escapeHtml(t('messages.burn_reveal') || 'Tap to view')} <span class="muted-text">(${burnSeconds}s after viewing)</span></button>`;
+    const revealLabel = t('messages.burn_reveal');
+    const revealText = (revealLabel && revealLabel !== 'messages.burn_reveal') ? revealLabel : 'Tap to view';
+    content.innerHTML = `<button type="button" class="burn-reveal-btn">🔥 ${this._escapeHtml(revealText)} <span class="muted-text">(${burnSeconds}s after viewing)</span></button>`;
     const btn = content.querySelector('.burn-reveal-btn');
     btn.addEventListener('click', () => {
       content.innerHTML = el.dataset.burnRealContent || '';
@@ -153,7 +155,9 @@ _replaceBurnedMessage(el) {
   if (el._burnTimer) { clearInterval(el._burnTimer); el._burnTimer = null; }
   const content = el.querySelector('.message-content');
   if (!content) return;
-  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(t('messages.burn_done') || 'Message burned')}</span>`;
+  const doneLabel = t('messages.burn_done');
+  const doneText = (doneLabel && doneLabel !== 'messages.burn_done') ? doneLabel : 'Message burned';
+  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
   el.classList.remove('message-burn-pending');
   el.classList.add('message-burned');
 },
@@ -902,7 +906,15 @@ _toggleEmojiPicker(anchorEl) {
     const b = document.createElement('button');
     b.className = 'emoji-section-tab' + (this._emojiPickerSection === key ? ' active' : '');
     b.textContent = label;
-    b.addEventListener('click', () => {
+    b.addEventListener('click', (ev) => {
+      // (#5335) Prevent the click from bubbling to the global outside-click
+      // handler in app-ui.js. Without this, the rebuild below detaches the
+      // tab DOM node mid-event, so by the time the document listener checks
+      // `picker.contains(e.target)` the original target is gone, the check
+      // returns false, and the picker is auto-closed every time the user
+      // switches between Emoji and Stickers.
+      ev.stopPropagation();
+      if (this._emojiPickerSection === key) return;
       this._emojiPickerSection = key;
       // Re-open to rebuild contents in the new section.
       picker.style.display = 'none';

@@ -2309,9 +2309,20 @@ _setupUI() {
     _burnBtn.addEventListener('click', () => {
       this._burnArmed = !this._burnArmed;
       _burnBtn.classList.toggle('active', !!this._burnArmed);
+      // Use literal English for title — t() returns raw key on miss so the
+      // previous `t() || 'fallback'` pattern never showed the fallback. (#5325)
       _burnBtn.title = this._burnArmed
         ? 'Burn after read armed — next message will self-destruct 30s after viewing'
         : 'Burn after read (DM only)';
+      // Surface a toast so users get visible confirmation. The button alone
+      // wasn't obvious enough that anything had happened. (#5325)
+      const toastKey = this._burnArmed ? 'toasts.burn_armed' : 'toasts.burn_disarmed';
+      const toastFallback = this._burnArmed
+        ? '🔥 Burn-after-read armed — next message will self-destruct 30s after viewing'
+        : 'Burn-after-read disabled';
+      const translated = t(toastKey);
+      const toastText = (translated && translated !== toastKey) ? translated : toastFallback;
+      this._showToast?.(toastText, 'info');
     });
   }
   document.getElementById('poll-cancel-btn').addEventListener('click', () => {
@@ -2606,6 +2617,7 @@ _setupUI() {
       const isAdmin = !!(this.user && this.user.isAdmin);
       const hasAdminAccess = isAdmin
         || this._hasPerm?.('manage_emojis')
+        || this._hasPerm?.('manage_stickers')
         || this._hasPerm?.('manage_soundboard')
         || this._hasPerm?.('manage_roles')
         || this._hasPerm?.('manage_server')
