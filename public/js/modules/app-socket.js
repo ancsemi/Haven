@@ -120,10 +120,15 @@ _setupSocketListeners() {
         const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
         if (savedVoiceChannel && /^[a-f0-9]{8}$/i.test(savedVoiceChannel)) {
           // Auto-rejoin saved voice channel after delay (wait for channels to load)
-          setTimeout(() => {
+          setTimeout(async () => {
             if (this.voice && !this.voice.inVoice) {
               console.log('[Voice] Auto-rejoining saved voice channel:', savedVoiceChannel);
-              this.voice.join(savedVoiceChannel);
+              const ok = await this.voice.join(savedVoiceChannel);
+              if (ok) {
+                this._updateVoiceButtons(true);
+                this._updateVoiceStatus(true);
+                this._updateVoiceBar();
+              }
             }
           }, 1500);
         }
@@ -193,9 +198,14 @@ _setupSocketListeners() {
         const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
         if (savedVoiceChannel && this.voice && !this.voice.inVoice && this.socket?.connected) {
           console.log('[Voice] Mobile foreground — rejoining voice channel:', savedVoiceChannel);
-          setTimeout(() => {
+          setTimeout(async () => {
             if (this.voice && !this.voice.inVoice) {
-              this.voice.join(savedVoiceChannel);
+              const ok = await this.voice.join(savedVoiceChannel);
+              if (ok) {
+                this._updateVoiceButtons(true);
+                this._updateVoiceStatus(true);
+                this._updateVoiceBar();
+              }
             }
           }, 500);
         }
