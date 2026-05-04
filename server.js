@@ -1156,11 +1156,52 @@ app.delete('/api/emojis/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete emoji' }); }
 });
 
-// ── Stickers (admin/manage_emojis-only upload, anyone can list/send) ──
+// ── Stickers (admin/manage_stickers-only upload, anyone can list/send) ──
+// (#5335) `manage_stickers` is the canonical permission. We still accept
+// `manage_emojis` as a fallback so anyone who already had emoji-management
+// access keeps sticker access without an explicit re-grant.
 // Stored under uploads/stickers/<file> so message rendering can detect
 // them by URL prefix and render at sticker dimensions.
 const STICKERS_DIR = path.join(uploadDir, 'stickers');
 try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch {}
+
+// (#5335) Seed a small starter pack on first run so the picker isn't empty
+// out of the box. Files in public/starter-stickers/ are copied into
+// uploads/stickers/ and registered in the `stickers` table under the
+// "Starter" pack — but only if there are zero stickers in the DB. Once
+// any sticker exists we leave things alone so admin uploads or deletions
+// aren't trampled on next restart.
+function seedStarterStickers() {
+  try {
+    const { getDb } = require('./src/database');
+    const db = getDb();
+    const existing = db.prepare('SELECT COUNT(*) as c FROM stickers').get();
+    if (existing && existing.c > 0) return;
+    const seedDir = path.join(__dirname, 'public', 'starter-stickers');
+    if (!fs.existsSync(seedDir)) return;
+    const files = fs.readdirSync(seedDir).filter(f => /\.(svg|png|gif|webp|jpg|jpeg)$/i.test(f));
+    const insert = db.prepare(
+      'INSERT OR IGNORE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, NULL)'
+    );
+    let seeded = 0;
+    for (const file of files) {
+      try {
+        const ext = path.extname(file).toLowerCase();
+        const baseName = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        if (!baseName) continue;
+        const destName = `starter-${baseName}${ext}`;
+        const destPath = path.join(STICKERS_DIR, destName);
+        if (!fs.existsSync(destPath)) fs.copyFileSync(path.join(seedDir, file), destPath);
+        insert.run(baseName, 'Starter', destName);
+        seeded++;
+      } catch {}
+    }
+    if (seeded > 0) console.log(`[stickers] Seeded ${seeded} starter sticker(s) into the "Starter" pack.`);
+  } catch (err) {
+    // Non-fatal — the server runs fine without the starter pack.
+    console.warn('[stickers] Could not seed starter pack:', err?.message || err);
+  }
+}
 const stickerStorage = multer.diskStorage({
   destination: STICKERS_DIR,
   filename: (req, file, cb) => {
@@ -1186,7 +1227,7 @@ app.post('/api/upload-sticker', uploadLimiter, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
 
   createStickerUpload().single('sticker')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
@@ -1224,7 +1265,7 @@ app.delete('/api/stickers/:name', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
   const name = req.params.name;
   const { getDb } = require('./src/database');
   try {
@@ -3058,6 +3099,9 @@ const io = new Server(server, {
 
 // Initialize
 const db = initDatabase();
+
+// (#5335) Seed starter stickers now that the DB is ready.
+try { seedStarterStickers(); } catch {}
 
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.

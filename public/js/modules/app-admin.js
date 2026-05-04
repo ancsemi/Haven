@@ -4,7 +4,7 @@ const ALL_PERMS = [
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
+  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log'
 ];
 //Similarly flavored solution to perm labels
@@ -33,6 +33,7 @@ const PERM_LABELS = {
   get view_all_members() { return t('permissions.view_all_members'); },
   get view_channel_members() { return t('permissions.view_channel_members'); },
   get manage_emojis() { return t('permissions.manage_emojis'); },
+  get manage_stickers() { return t('permissions.manage_stickers'); },
   get manage_soundboard() { return t('permissions.manage_soundboard'); },
   get manage_music_queue() { return t('permissions.manage_music_queue'); },
   get promote_user() { return t('permissions.promote_user'); },
@@ -515,10 +516,11 @@ _syncSettingsNav() {
   // Use the canonical authoritative flag from the server, not DOM visibility.
   const isAdmin = !!(this.user && this.user.isAdmin);
   const canManageEmojis = isAdmin || this._hasPerm('manage_emojis');
+  const canManageStickers = isAdmin || this._hasPerm('manage_stickers') || this._hasPerm('manage_emojis');
   const canManageSounds = isAdmin || this._hasPerm('manage_soundboard');
   const canManageRoles = isAdmin || this._hasPerm('manage_roles');
   const canManageServer = isAdmin || this._hasPerm('manage_server');
-  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageSounds || canManageRoles || canManageServer;
+  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageStickers || canManageSounds || canManageRoles || canManageServer;
 
   // Show/hide individual admin nav items (default: hidden for non-admins)
   document.querySelectorAll('.settings-nav-admin').forEach(el => {
@@ -540,10 +542,20 @@ _syncSettingsNav() {
     saveBar.style.display = (hasAnyAdminAccess && adminTabActive) ? '' : 'none';
   }
   // Show the Emojis settings tab for users with manage_emojis permission even if not full admin/mod
+  // (#5335) manage_stickers also unhides this tab — the Stickers admin block
+  // currently lives inside the Emojis section so users with sticker access
+  // need to see that nav item even if they can't touch emojis themselves.
   const emojiNavItem = document.querySelector('.settings-nav-item[data-target="section-emojis"]');
-  if (emojiNavItem && !isAdmin && canManageEmojis) {
+  if (emojiNavItem && !isAdmin && (canManageEmojis || canManageStickers)) {
     emojiNavItem.style.display = '';
   }
+  // Hide the emoji-only and sticker-only sub-blocks based on which perms the
+  // user actually has, so a manage_stickers-only user doesn't see an Emoji
+  // upload panel they can't use (and vice versa).
+  const emojiBlock = document.getElementById('section-emojis');
+  const stickerBlock = document.getElementById('section-stickers');
+  if (emojiBlock && !isAdmin) emojiBlock.style.display = canManageEmojis ? '' : 'none';
+  if (stickerBlock && !isAdmin) stickerBlock.style.display = canManageStickers ? '' : 'none';
   // Show the Sounds admin tab for users with manage_soundboard permission
   const soundsNavItem = document.querySelector('.settings-nav-item[data-target="section-sounds-admin"]');
   if (soundsNavItem && !isAdmin && canManageSounds) {

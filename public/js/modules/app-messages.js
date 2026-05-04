@@ -18,6 +18,26 @@ async _sendMessage() {
     return;
   }
 
+  // (#5335) Sticker shortcode — if the message is exactly `:stickername:`
+  // (whitespace-trimmed) and that name matches an uploaded sticker, route
+  // it through _sendStickerMessage so it goes out as a standalone sticker
+  // image instead of a literal `:name:` text message.
+  if (!hasImages && /^:[a-zA-Z0-9_-]+:$/.test(content)) {
+    const stickerName = content.slice(1, -1).toLowerCase();
+    const stickers = Array.isArray(this.stickers) ? this.stickers : [];
+    const sticker = stickers.find(s => (s.name || '').toLowerCase() === stickerName);
+    if (sticker && sticker.url) {
+      input.value = '';
+      input.style.height = 'auto';
+      this._clearReply();
+      this._hideMentionDropdown();
+      this._hideSlashDropdown();
+      this._emojiPickerContext = 'main';
+      this._sendStickerMessage(sticker.url);
+      return;
+    }
+  }
+
   // Client-side slash commands (not sent to server)
   if (content.startsWith('/')) {
     // /tts:stop — cancel all speech synthesis immediately
