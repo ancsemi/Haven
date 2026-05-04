@@ -2215,7 +2215,7 @@
 
   <!-- Role Management Modal -->
   <div class="modal-overlay" id="role-modal" style="display:none">
-    <div class="modal modal-wide">
+    <div class="modal modal-wide role-management-modal">
       <h3>👑 <span data-i18n="modals.role_management.title">Role Management</span></h3>
       <div class="role-editor-layout">
         <div class="role-sidebar">
@@ -2546,7 +2546,11 @@
       <div id="all-members-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:4px">
         <p class="muted-text" style="text-align:center;padding:20px" data-i18n="modals.common.loading">Loading...</p>
       </div>
-      <div class="modal-actions">
+      <div class="modal-actions" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-sm" id="aml-view-bans-btn" style="display:none">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
+          <button class="btn-sm" id="aml-view-deleted-btn" style="display:none">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
+        </div>
         <button class="btn-sm" id="close-all-members-btn" data-i18n="modals.common.close">Close</button>
       </div>
     </div>

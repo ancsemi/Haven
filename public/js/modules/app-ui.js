@@ -3147,6 +3147,19 @@ _setupUI() {
   document.getElementById('all-members-search').addEventListener('input', () => this._filterAllMembers());
   document.getElementById('all-members-filter').addEventListener('change', () => this._filterAllMembers());
 
+  // Members-list shortcuts to bans / deleted users (visibility gated by perms in
+  // _openAllMembersModal; server handlers re-check permissions on emit).
+  document.getElementById('aml-view-bans-btn')?.addEventListener('click', () => {
+    document.getElementById('all-members-modal').style.display = 'none';
+    this.socket.emit('get-bans');
+    document.getElementById('bans-modal').style.display = 'flex';
+  });
+  document.getElementById('aml-view-deleted-btn')?.addEventListener('click', () => {
+    document.getElementById('all-members-modal').style.display = 'none';
+    this.socket.emit('get-deleted-users');
+    document.getElementById('deleted-users-modal').style.display = 'flex';
+  });
+
   // ── Cleanup controls (admin) — saved via admin Save button ──
   const cleanupAge = document.getElementById('cleanup-max-age');
   if (cleanupAge) {

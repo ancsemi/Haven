@@ -12744,6 +12744,26 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* ── Role management modal ───────────────────────────── */
+/* Make the role-modal flex its body so the sidebar/detail panes grow with the
+   modal and the Close button pins to the bottom-right at any resize size. */
+.role-management-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(95vw, 720px);
+  max-width: 95vw;
+  height: min(85vh, 640px);
+  min-height: 360px;
+  padding-bottom: 18px;
+}
+.role-management-modal > .role-editor-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+.role-management-modal > .modal-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+}
 .role-editor-layout {
   display: flex;
   gap: 16px;

@@ -1179,6 +1179,12 @@ _openAllMembersModal() {
       titleEl.textContent = res.channelOnly ? t('modals.all_members.channel_title') : t('modals.all_members.title');
     }
     document.getElementById('all-members-count').textContent = `(${res.total})`;
+    // Toggle moderator-only nav buttons (View Bans / View Deleted) based on perms.
+    // Server-side handlers re-validate, so DOM tampering can't reveal data.
+    const banBtn = document.getElementById('aml-view-bans-btn');
+    const delBtn = document.getElementById('aml-view-deleted-btn');
+    if (banBtn) banBtn.style.display = (this._allMembersPerms.canBan || this._allMembersPerms.isAdmin) ? '' : 'none';
+    if (delBtn) delBtn.style.display = this._allMembersPerms.isAdmin ? '' : 'none';
     this._renderAllMembers(this._allMembersData);
   });
 },
@@ -4350,9 +4356,9 @@ _initRoleAssignCenter() {
   // Manage Roles button (admin only - opens main role management modal)
   document.getElementById('rac-manage-roles-btn')?.addEventListener('click', () => {
     document.getElementById('role-assign-center-modal').style.display = 'none';
-    this._loadRoles(() => {
-      document.getElementById('role-modal').style.display = 'flex';
-    });
+    // _openRoleModal shows the modal first, then loads — ensures the sidebar
+    // re-renders once roles arrive (fixes #5xxx: blank role list when opened from RAC).
+    this._openRoleModal();
   });
 
   // User search
