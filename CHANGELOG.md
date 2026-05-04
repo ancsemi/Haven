@@ -15,6 +15,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.11.1] — 2026-05-01
+
+### Fixed
+- **#184: Voice audio routed to the system default playback device instead of the user's chosen output.** `_ensureAudioCtx` constructed the `AudioContext` with no `sinkId` and `switchOutputDevice` only ran when the user opened the device picker, so anyone who picked their headset once and then re-joined voice would hear voice through their speakers until they re-opened the picker. The context now reads `localStorage.haven_output_device` at construction time and applies it via the `sinkId` constructor option (with a `setSinkId()` fallback for browsers/Electron builds that don't accept the option) so the saved sink takes effect on the very first track-add.
+
+---
+
 ## [3.11.0] — 2026-05-01
 
 ### Added

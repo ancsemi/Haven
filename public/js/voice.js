@@ -1713,7 +1713,28 @@ class VoiceManager {
    */
   _ensureAudioCtx() {
     if (!this.audioCtx) {
-      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Honor the user's persisted output device at construction time.
+      // Without this, the context defaults to the system default playout
+      // and switchOutputDevice() never fires until the user opens the
+      // device picker, which is exactly the symptom in #184 (audio routes
+      // to speakers when the user already chose their headset).
+      const savedOutput = localStorage.getItem('haven_output_device') || '';
+      const ctxOpts = {};
+      if (savedOutput && typeof AudioContext !== 'undefined' &&
+          AudioContext.prototype && 'setSinkId' in AudioContext.prototype) {
+        ctxOpts.sinkId = savedOutput;
+      }
+      try {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)(ctxOpts);
+      } catch {
+        // Older Chromium throws when sinkId is passed in options.
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Best-effort: if sinkId-in-options wasn't honored but setSinkId() is
+      // available on the instance, apply it now.
+      if (savedOutput && typeof this.audioCtx.setSinkId === 'function') {
+        this.audioCtx.setSinkId(savedOutput).catch(() => {});
+      }
       // Attach watchdog once so it survives future suspend/resume cycles.
       this.audioCtx.addEventListener('statechange', () => {
         if (this.audioCtx && this.audioCtx.state === 'suspended') {
