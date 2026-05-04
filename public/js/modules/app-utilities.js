@@ -2232,10 +2232,11 @@ _appendDMPiPMessage(msg) {
   const wasAtBottom = (list.scrollHeight - list.clientHeight - list.scrollTop) < 80;
   const el = this._createMessageEl(msg, prevMsg);
   list.appendChild(el);
-  // Async content (link previews, E2E images, videos) — hook into existing pipelines
+  // Async content (link previews, E2E images/files, videos) — hook into existing pipelines
   try { this._fetchLinkPreviews?.(el); } catch {}
   try { this._setupVideos?.(el); } catch {}
   try { this._decryptE2EImages?.(el); } catch {}
+  try { this._decryptE2EFiles?.(el); } catch {}
   if (wasAtBottom) list.scrollTop = list.scrollHeight;
 },
 
@@ -2251,6 +2252,7 @@ _renderDMPiPHistory(messages) {
   try { this._fetchLinkPreviews?.(list); } catch {}
   try { this._setupVideos?.(list); } catch {}
   try { this._decryptE2EImages?.(list); } catch {}
+  try { this._decryptE2EFiles?.(list); } catch {}
   list.scrollTop = list.scrollHeight;
 },
 
@@ -2572,6 +2574,9 @@ _appendThreadMessage(msg) {
     </div>
   `;
   container.appendChild(el);
+  try { this._decryptE2EImages?.(el); } catch {}
+  try { this._decryptE2EFiles?.(el); } catch {}
+  try { this._setupVideos?.(el); } catch {}
   container.scrollTop = container.scrollHeight;
 },
 

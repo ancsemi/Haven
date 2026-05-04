@@ -1217,15 +1217,25 @@ _decryptE2EFiles(root) {
           mediaEl.src = objectUrl;
           if (isVideo) mediaEl.className = 'file-video';
 
+          row.classList.remove('e2e-file-loading');
+          row.innerHTML = '';
+
+          // Info bar matching the non-E2E file-attachment header style
+          const infoBar = document.createElement('div');
+          infoBar.className = 'file-info';
+          const icon = isVideo ? '🎬' : '🎵';
+          const nameSafe = name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          infoBar.innerHTML = `${icon} <span class="file-name">${nameSafe}</span>`;
+
           const dlBtn = document.createElement('a');
           dlBtn.href = objectUrl;
           dlBtn.download = name;
           dlBtn.className = 'file-download-link';
-          dlBtn.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:0.8em';
-          dlBtn.innerHTML = '⬇ Download';
+          dlBtn.title = `Download ${name}`;
+          dlBtn.innerHTML = '⬇';
+          infoBar.appendChild(dlBtn);
+          row.appendChild(infoBar);
 
-          row.classList.remove('e2e-file-loading');
-          row.innerHTML = '';
           if (isVideo) {
             const wrap = document.createElement('div');
             wrap.className = 'file-video-wrap';
@@ -1234,7 +1244,6 @@ _decryptE2EFiles(root) {
           } else {
             row.appendChild(mediaEl);
           }
-          row.appendChild(dlBtn);
 
           // Revoke blob URL when the media element is removed from DOM
           const obs = new MutationObserver(() => {
