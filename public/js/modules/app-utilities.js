@@ -2018,6 +2018,10 @@ _openMostRecentThreadMention() {
 // own message view — receives `new-message` events filtered by code,
 // sends via `send-message` with the PiP channel code.
 _openDMPiP(code) {
+  // Don't open as PiP if this DM is already the active main channel — user is
+  // already viewing it. This prevents sidebar clicks, dm-opened events, and
+  // channel-link clicks from spawning a redundant PiP overlay.
+  if (code === this.currentChannel) return;
   const ch = (this.channels || []).find(c => c.code === code);
   if (!ch || !ch.is_dm) return;
   this._activeDMPip = code;
