@@ -1206,6 +1206,46 @@ _decryptE2EFiles(root) {
         const plain = await this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk);
         const blob = new Blob([plain], { type: mime });
         const objectUrl = URL.createObjectURL(blob);
+
+        // Video/audio types get an inline player instead of a silent download
+        const isVideo = mime.startsWith('video/');
+        const isAudio = mime.startsWith('audio/');
+        if (isVideo || isAudio) {
+          const mediaEl = document.createElement(isVideo ? 'video' : 'audio');
+          mediaEl.controls = true;
+          mediaEl.preload = 'metadata';
+          mediaEl.src = objectUrl;
+          if (isVideo) mediaEl.className = 'file-video';
+
+          const dlBtn = document.createElement('a');
+          dlBtn.href = objectUrl;
+          dlBtn.download = name;
+          dlBtn.className = 'file-download-link';
+          dlBtn.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:0.8em';
+          dlBtn.innerHTML = '⬇ Download';
+
+          row.classList.remove('e2e-file-loading');
+          row.innerHTML = '';
+          if (isVideo) {
+            const wrap = document.createElement('div');
+            wrap.className = 'file-video-wrap';
+            wrap.appendChild(mediaEl);
+            row.appendChild(wrap);
+          } else {
+            row.appendChild(mediaEl);
+          }
+          row.appendChild(dlBtn);
+
+          // Revoke blob URL when the media element is removed from DOM
+          const obs = new MutationObserver(() => {
+            if (!document.contains(mediaEl)) { URL.revokeObjectURL(objectUrl); obs.disconnect(); }
+          });
+          obs.observe(document.body, { childList: true, subtree: true });
+          btn.disabled = false;
+          return;
+        }
+
+        // Non-media: trigger download and notify user
         const a = document.createElement('a');
         a.href = objectUrl;
         a.download = name;
@@ -1213,6 +1253,7 @@ _decryptE2EFiles(root) {
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        this._showToast(`Downloaded: ${name}`, 'success');
       } catch (err) {
         row.classList.add('e2e-file-failed');
       } finally {
