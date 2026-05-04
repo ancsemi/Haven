@@ -15,6 +15,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.12.0] — 2026-05-05
+
+### Added
+- **#5335: Starter sticker pack.** Fresh installs now ship with a small built-in "Starter" pack (8 reaction stickers: 👍, ❤️, 😂, 🔥, 🎉, ✅, ❌, 👀) so the picker isn't empty before any sticker is uploaded. The pack is seeded once at first run if no stickers exist; existing servers keep whatever they already have.
+- **#5335: `:stickername:` shortcode in the composer.** Typing a sticker name surrounded by colons (e.g. `:fire:`) sends that sticker the same way `:emoji:` works for custom emojis. Lookup is exact-match against the stored sticker name.
+- **#5335: Dedicated `manage_stickers` role permission.** Previously sticker upload/management was gated by `manage_emojis` for backwards-compat. There is now a separate `manage_stickers` permission that can be granted independently from emoji management. Existing roles with `manage_emojis` retain sticker access so nothing breaks on upgrade.
+
+### Fixed
+- **#5335: Emoji picker auto-closed when switching to the Stickers tab (and vice versa).** The picker rebuilt the section button DOM on each tab switch, but the global outside-click handler ran *after* the rebuild and saw the original click target detached from the picker subtree, so `picker.contains(e.target)` returned false and the picker was dismissed. The section toggle now calls `stopPropagation()` on the click event and short-circuits if the user re-clicks the active section, so the picker stays open across tab switches.
+- **#5325 / #5280: Burn-after-read DM button gave no visible feedback and the placeholder showed a raw i18n key.** Both `_wireBurnMessages` and `_replaceBurnedMessage` used the broken `t('key') || 'fallback'` pattern — but `t()` returns the key string itself when a translation is missing, so the `||` short-circuit never fired and the literal `messages.burn_reveal` text was rendered to users on locales that didn't have the keys. Added the missing `app.input_bar.burn_btn`, `app.input_bar.burn_btn_armed`, `toasts.burn_armed`, `toasts.burn_disarmed`, `messages.burn_reveal`, and `messages.burn_done` keys to `en.json`, then switched every burn-related call site to a key-aware fallback (`const v = t(k); const text = (v && v !== k) ? v : 'fallback'`). The 🔥 toggle button also now fires a toast confirming the armed/disarmed state so the user knows the click registered.
+
+---
+
 ## [3.11.2] — 2026-05-04
 
 ### Added
