@@ -3444,20 +3444,17 @@ html.rgb-cycling *::after {
   word-wrap: break-word;
   overflow-wrap: anywhere;
 }
+/* In PiP the avatar gutter doesn't exist, so position the compact
+   timestamp on the right side of the row instead. That way it appears
+   on hover without shifting any content leftward. */
 .dm-pip-messages .message-compact .compact-time {
   font-size: 10px;
-  width: 36px;
   text-align: right;
-  padding-right: 4px;
-  /* Cap the absolute-positioned timestamp to the gutter so it doesn't
-     bleed across the message body when the content area is wider than
-     the gutter. (#5292) */
-  left: 0;
-}
-/* Always reserve gutter space so the absolutely-positioned compact
-   timestamp appears without shifting message content on hover. */
-.dm-pip-panel .dm-pip-messages .message-compact {
-  padding-left: 42px;
+  left: auto;
+  right: 6px;
+  top: 2px;
+  width: auto;
+  padding-right: 0;
 }
 /* Slim reactions, polls, link previews to fit the smaller frame */
 .dm-pip-messages .reactions-row { gap: 4px; margin-top: 2px; }
@@ -6486,7 +6483,7 @@ select.cfn-select.cfn-input {
   width: 340px;
   max-height: 360px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 1000;
+  z-index: 1050;
 }
 
 .emoji-search-row {
@@ -6737,7 +6734,7 @@ select.cfn-select.cfn-input {
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 1000;
+  z-index: 1050;
   overflow: hidden;
 }
 
@@ -8453,7 +8450,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 1000;
+  z-index: 1050;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -15689,7 +15686,7 @@ ul.chat-list { list-style-type: disc; }
   border: 1px solid var(--border, #3f4147);
   border-radius: 10px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 1000;
+  z-index: 1050;
   font-size: 14px;
   color: var(--text-primary, #dbdee1);
 }
