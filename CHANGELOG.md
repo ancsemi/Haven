@@ -15,6 +15,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.11.2] — 2026-05-04
+
+### Added
+- **Quick links to Bans / Deleted Users from the All Members modal.** Mods and admins now see "View Bans" and "View Deleted Users" buttons in the bottom-left of the members list so they can jump between the three lists without going back through Settings → Admin. Buttons are hidden for users without `ban_user` (View Bans) or admin (View Deleted Users), and the server handlers re-validate permissions on emit, so DOM tampering can't reveal the lists.
+
+### Fixed
+- **#5307 (follow-up): "Delete DM" and "Delete Channel" confirm dialogs showed `settings.admin.delete` / `messages.delete` raw i18n keys instead of "Delete".** The DM-delete confirm passed `t('settings.admin.delete')` (no such key) as the button label, and the generic confirm modal's danger fallback referenced `t('messages.delete')` (also missing). `t()` returns the key string when a key is missing, so the `|| 'Delete'` short-circuit never fired. Both call sites now use `t('msg_toolbar.delete')`, which exists in every locale.
+- **Manage Roles modal opened from the Role Assignment center showed an empty role list.** The click handler called `_loadRoles(cb)` and only opened the modal inside the callback, but `_loadRoles` only re-renders the sidebar when the role-modal is already visible — so by the time the modal opened, the sidebar render had already been skipped. The handler now uses `_openRoleModal()`, which shows the modal first and then loads, matching how the modal is opened from Settings.
+- **Role Management modal didn't fill its window and resized vertical-only.** The inner role-editor layout was capped at `max-height: 60vh` so growing the modal taller left a tall blank gap above the Close button; `.modal-wide`'s `max-width: 720px` blocked horizontal resize entirely. The role modal is now a flex column (sidebar/detail panes grow with the modal, Close button pinned to the bottom-right), and its max-width is raised to `95vw` so the resize handle works in both directions.
+
+---
+
 ## [3.11.1] — 2026-05-01
 
 ### Fixed
