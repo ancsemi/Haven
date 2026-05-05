@@ -1735,19 +1735,24 @@ const dns = require('dns');
 const { promisify } = require('util');
 const dnsResolve = promisify(dns.resolve4);
 
-// Rate limit link preview fetches (per IP, separate from upload limiter)
+// Rate limit link preview fetches (per IP, separate from upload limiter).
+// Returns true when the request is within the window, false if the caller
+// should serve a 429.  The route handler invokes this AFTER the cache
+// lookup, so cache hits never consume a rate-limit token — fixes a bug
+// where reopening a chat with many links 429'd legitimate fresh requests
+// because each cached preview burned a slot.  (#5337)
 const previewLimitStore = new Map();
-function previewLimiter(req, res, next) {
+function previewLimiterCheck(req) {
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxReqs = 30; // 30 previews per minute per user
+  const maxReqs = 60; // 60 previews/min/user (was 30; bumped per #5337)
   if (!previewLimitStore.has(ip)) previewLimitStore.set(ip, []);
   const stamps = previewLimitStore.get(ip).filter(t => now - t < windowMs);
   previewLimitStore.set(ip, stamps);
-  if (stamps.length >= maxReqs) return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  if (stamps.length >= maxReqs) return false;
   stamps.push(now);
-  next();
+  return true;
 }
 setInterval(() => { const now = Date.now(); for (const [ip, t] of previewLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) previewLimitStore.delete(ip); else previewLimitStore.set(ip, f); } }, 5 * 60 * 1000);
 
@@ -1798,7 +1803,7 @@ async function validateUrlSafe(urlStr) {
   return parsed;
 }
 
-app.get('/api/link-preview', previewLimiter, async (req, res) => {
+app.get('/api/link-preview', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1806,18 +1811,25 @@ app.get('/api/link-preview', previewLimiter, async (req, res) => {
   const url = (req.query.url || '').trim();
   if (!url) return res.status(400).json({ error: 'Missing url param' });
 
+  // Cache check FIRST — cache hits should never consume a rate-limit slot.
+  // Reopening a chat full of links was hitting 429 because the limiter ran
+  // before the cache lookup. (#5337)
+  const cached = linkPreviewCache.get(url);
+  if (cached && Date.now() - cached.ts < PREVIEW_CACHE_TTL) {
+    return res.json(cached.data);
+  }
+
+  // Cache miss — now apply the per-IP rate limit.
+  if (!previewLimiterCheck(req)) {
+    return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  }
+
   // Validate the initial URL is safe (protocol, hostname, DNS)
   let parsed;
   try {
     parsed = await validateUrlSafe(url);
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Invalid URL' });
-  }
-
-  // Cache check
-  const cached = linkPreviewCache.get(url);
-  if (cached && Date.now() - cached.ts < PREVIEW_CACHE_TTL) {
-    return res.json(cached.data);
   }
 
   // Use a real browser UA — many sites (Twitter/X, Instagram, etc.) serve
