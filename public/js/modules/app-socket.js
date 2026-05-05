@@ -54,7 +54,7 @@ _setupSocketListeners() {
     if (this.user.isAdmin) {
       document.getElementById('admin-mod-panel').style.display = 'block';
     } else {
-      document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_soundboard') || this._hasPerm('view_audit_log')) ? 'block' : 'none';
+      document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_stickers') || this._hasPerm('manage_soundboard') || this._hasPerm('view_audit_log')) ? 'block' : 'none';
     }
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
   });
@@ -69,7 +69,7 @@ _setupSocketListeners() {
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
     const canCreateChannel = this.user.isAdmin || this._hasPerm('create_channel');
     document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
-    document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_soundboard') || this._hasPerm('view_audit_log')) ? 'block' : 'none';
+    document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_stickers') || this._hasPerm('manage_soundboard') || this._hasPerm('view_audit_log')) ? 'block' : 'none';
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
     this._showToast(t('toasts.roles_updated'), 'info');
   });
@@ -120,10 +120,15 @@ _setupSocketListeners() {
         const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
         if (savedVoiceChannel && /^[a-f0-9]{8}$/i.test(savedVoiceChannel)) {
           // Auto-rejoin saved voice channel after delay (wait for channels to load)
-          setTimeout(() => {
+          setTimeout(async () => {
             if (this.voice && !this.voice.inVoice) {
               console.log('[Voice] Auto-rejoining saved voice channel:', savedVoiceChannel);
-              this.voice.join(savedVoiceChannel);
+              const ok = await this.voice.join(savedVoiceChannel);
+              if (ok) {
+                this._updateVoiceButtons(true);
+                this._updateVoiceStatus(true);
+                this._updateVoiceBar();
+              }
             }
           }, 1500);
         }
@@ -193,9 +198,14 @@ _setupSocketListeners() {
         const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
         if (savedVoiceChannel && this.voice && !this.voice.inVoice && this.socket?.connected) {
           console.log('[Voice] Mobile foreground — rejoining voice channel:', savedVoiceChannel);
-          setTimeout(() => {
+          setTimeout(async () => {
             if (this.voice && !this.voice.inVoice) {
-              this.voice.join(savedVoiceChannel);
+              const ok = await this.voice.join(savedVoiceChannel);
+              if (ok) {
+                this._updateVoiceButtons(true);
+                this._updateVoiceStatus(true);
+                this._updateVoiceBar();
+              }
             }
           }, 500);
         }
@@ -609,13 +619,17 @@ _setupSocketListeners() {
           // Page hidden (backgrounded server view, alt-tabbed, minimised) —
           // count it as unread even though it's the "current" channel, so
           // the sidebar dot + taskbar badge actually fire.
-          this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
-          this._updateBadge(data.channelCode);
+          // Skip the unread bump for muted channels — muting should also silence badges.
+          const _hiddenMutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+          if (!_hiddenMutedChs.includes(data.channelCode)) {
+            this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
+            this._updateBadge(data.channelCode);
+          }
         }
       }
       if (data.message.user_id !== this.user.id) {
         const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-        const _isMuted = _mutedChs.includes(data.channelCode);
+        const _isMuted = _mutedChs.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
         if (!_isMuted) {
           // Check if message contains @mention of current user.
           // Escape regex chars and use non-word lookahead so usernames
@@ -650,7 +664,7 @@ _setupSocketListeners() {
       }
     } else {
       const _mutedChs2 = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-      const _isMuted2 = _mutedChs2.includes(data.channelCode);
+      const _isMuted2 = _mutedChs2.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
       // If this message is for the active DM PiP and the user is actively
       // viewing the app, treat it as read instead of bumping the unread
       // badge — the message is already visible in the floating PiP panel.
@@ -675,7 +689,7 @@ _setupSocketListeners() {
           try { this._updateDmSectionBadge?.(); } catch {}
           try { this._updateTabTitle?.(); } catch {}
           try { this._updateDesktopBadge?.(); } catch {}
-        } else {
+        } else if (!_isMuted2) {
           this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
           this._updateBadge(data.channelCode);
         }
@@ -1436,6 +1450,23 @@ _setupSocketListeners() {
       const ownToggle = document.getElementById('hide-own-score');
       if (ownToggle) ownToggle.checked = prefs.hide_score_badge === 'true';
     }
+  });
+
+  // ── Burn-after-read DM events (#5280) ──────────────
+  this.socket.on('message-burning', (data) => {
+    if (!data || !data.messageId) return;
+    const el = document.querySelector(`#messages [data-msg-id="${data.messageId}"], #dm-pip-messages [data-msg-id="${data.messageId}"]`);
+    if (!el) return;
+    el.dataset.burnStartedAt = data.burningStartedAt || new Date().toISOString();
+    el.dataset.burnSeconds = String(data.burnSeconds || 0);
+    this._startBurnCountdown?.(el, data.burnSeconds, el.dataset.burnStartedAt);
+  });
+
+  this.socket.on('message-burned', (data) => {
+    if (!data || !data.messageId) return;
+    document.querySelectorAll(`[data-msg-id="${data.messageId}"]`).forEach(el => {
+      this._replaceBurnedMessage?.(el);
+    });
   });
 
   // ── Search results ─────────────────────────────────

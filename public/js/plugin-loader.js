@@ -383,10 +383,100 @@ window.HavenPluginLoader = (function () {
       for (const p of pluginRes) await loadPlugin(p);
 
       renderPluginUI();
+      injectPublishedThemeButtons(themeRes);
       console.log(`[Haven] Loaded ${loadedPlugins.size} plugin(s), ${loadedThemes.size} theme(s)`);
     } catch (err) {
       console.warn('[Haven] Plugin/theme init error:', err);
     }
+  }
+
+  /**
+   * Inject published .theme.css files as selectable buttons into #theme-selector.
+   * These behave just like built-in themes but apply an external CSS file.
+   */
+  function injectPublishedThemeButtons(themeRes) {
+    const selector = document.getElementById('theme-selector');
+    if (!selector) return;
+    const published = themeRes.filter(t => t.published);
+    if (published.length === 0) return;
+
+    // Remove any previously injected custom-theme buttons (in case of re-init)
+    selector.querySelectorAll('.theme-btn[data-custom-theme]').forEach(b => b.remove());
+
+    for (const theme of published) {
+      const btn = document.createElement('button');
+      btn.className = 'theme-btn';
+      btn.dataset.theme = `file:${theme.file}`;
+      btn.dataset.customTheme = '1';
+      btn.title = theme.name || theme.file;
+      const icon = document.createElement('span');
+      icon.className = 'theme-icon';
+      icon.textContent = theme.icon || '🎨';
+      btn.appendChild(icon);
+
+      btn.addEventListener('click', () => {
+        // Apply the file theme exclusively
+        applyFileTheme(theme.file);
+        // Notify the socket if available
+        if (window.havenSocket && window.havenSocket.connected) {
+          window.havenSocket.emit('set-preference', { key: 'theme', value: `file:${theme.file}` });
+        }
+      });
+
+      selector.appendChild(btn);
+    }
+
+    // Restore active state if a file theme is saved
+    const saved = localStorage.getItem('haven_theme') || '';
+    if (saved.startsWith('file:')) {
+      selector.querySelectorAll('.theme-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === saved);
+      });
+      applyFileTheme(saved.slice(5), false);
+    }
+  }
+
+  /**
+   * Apply a .theme.css file as the active theme.
+   * Clears built-in theme vars, removes other injected theme links,
+   * and injects the chosen file's link.
+   * @param {string} file  - e.g. "mytheme.theme.css"
+   * @param {boolean} [persist=true] - whether to save to localStorage
+   */
+  function applyFileTheme(file, persist = true) {
+    // Clear inline custom-theme vars (from the triangle editor / rgb cycle)
+    if (typeof clearCustomVars === 'function') clearCustomVars();
+    if (typeof stopRgbCycle === 'function') stopRgbCycle();
+
+    // Hide custom/rgb editors if open
+    document.getElementById('custom-theme-editor')?._hide?.();
+    document.getElementById('rgb-theme-editor')?._hide?.();
+
+    // Remove all previously injected file-theme links
+    document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
+    loadedThemes.forEach((t, f) => { t.enabled = false; t.linkEl = null; });
+
+    // Inject the chosen file
+    const linkEl = document.createElement('link');
+    linkEl.rel = 'stylesheet';
+    linkEl.href = `/themes/${file}?_=${Date.now()}`;
+    linkEl.id = `haven-theme-${file}`;
+    document.head.appendChild(linkEl);
+    const t = loadedThemes.get(file);
+    if (t) { t.enabled = true; t.linkEl = linkEl; }
+
+    // Use 'haven' as the base data-theme so layout CSS is stable;
+    // the injected stylesheet overrides the :root vars since it loads later.
+    document.documentElement.setAttribute('data-theme', 'haven');
+
+    if (persist) {
+      localStorage.setItem('haven_theme', `file:${file}`);
+    }
+
+    // Update active state on all theme buttons
+    document.querySelectorAll('.theme-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.theme === `file:${file}`);
+    });
   }
 
   // Start when the app is ready
@@ -404,6 +494,7 @@ window.HavenPluginLoader = (function () {
     enableTheme,
     disableTheme,
     renderPluginUI,
+    applyFileTheme,
     refresh: init,
   };
 })();

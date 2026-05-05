@@ -153,7 +153,11 @@ _renderUserItem(u, scoreLookup) {
   // for users other than self — own badge stays visible to me unless the
   // server-side "hide own from server" preference also stripped it.
   const hideOthers = localStorage.getItem('haven_hide_other_scores') === 'true';
-  const showBadge = score > 0 && (!hideOthers || u.id === this.user.id);
+  const hideOwn    = localStorage.getItem('haven_hide_own_score')    === 'true';
+  const isOwnUser  = u.id === this.user?.id;
+  // Show badge unless: hideOthers is on and this is someone else,
+  //                 OR hideOwn is on and this is the current user.
+  const showBadge = score > 0 && (!hideOthers || isOwnUser) && !(hideOwn && isOwnUser);
   const scoreBadge = showBadge
     ? `<span class="user-score-badge" title="${t('users.flappy_score_title', { score })}">🚢${score}</span>`
     : '';

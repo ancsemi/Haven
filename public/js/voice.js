@@ -397,10 +397,8 @@ class VoiceManager {
       await this._fetchIceServers();
 
       // Create/resume AudioContext with user gesture (needed for volume boost)
-      if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+      this._ensureAudioCtx();
+      await this.audioCtx.resume().catch(() => {});
 
       // Use saved input device if the user picked one
       const savedInputId = localStorage.getItem('haven_input_device') || '';
@@ -1241,6 +1239,13 @@ class VoiceManager {
       this.screenGainNodes.delete(userId);
       this.gainNodes.delete(userId);
       this.peers.delete(userId);
+      // Always stop the analyser here too, not just in voice-user-left.
+      // _restartIce failure calls _removePeer directly (without _stopAnalyser),
+      // which would leave an orphaned interval connected to the dead stream.
+      // On reconnect _startAnalyser would then hit the analysers.has() guard
+      // and return early, making voice-activity indicators permanently dead for
+      // that peer without this cleanup.
+      this._stopAnalyser(userId);
     }
   }
 
@@ -1319,8 +1324,7 @@ class VoiceManager {
     if (this._cachedSilentTrack && this._cachedSilentTrack.readyState === 'live') {
       return this._cachedSilentTrack;
     }
-    const ctx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (!this.audioCtx) this.audioCtx = ctx; // save for reuse
+    const ctx = this._ensureAudioCtx();
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
     gain.gain.value = 0; // completely silent
@@ -1497,8 +1501,7 @@ class VoiceManager {
     }
 
     try {
-      if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (this.audioCtx.state === 'suspended') this.audioCtx.resume().catch(() => {});
+      this._ensureAudioCtx();
       const source = this.audioCtx.createMediaStreamSource(stream);
       const gainNode = this.audioCtx.createGain();
       gainNode.gain.value = this._getAppliedIncomingVolume(this._getSavedStreamVolume(userId));
@@ -1698,6 +1701,53 @@ class VoiceManager {
     this.currentMicLevel = 0;
   }
 
+  // ── AudioContext lifecycle ──────────────────────────────
+
+  /**
+   * Create (or reuse) the shared AudioContext and attach a one-time
+   * statechange watchdog that auto-resumes whenever Chromium suspends it.
+   * Chromium (including Electron) automatically suspends an AudioContext
+   * when document.hidden becomes true (window minimised).  Without this
+   * watchdog the talking-detection analysers return zeros after the window
+   * is restored, making all voice-activity indicators go dark permanently.
+   */
+  _ensureAudioCtx() {
+    if (!this.audioCtx) {
+      // Honor the user's persisted output device at construction time.
+      // Without this, the context defaults to the system default playout
+      // and switchOutputDevice() never fires until the user opens the
+      // device picker, which is exactly the symptom in #184 (audio routes
+      // to speakers when the user already chose their headset).
+      const savedOutput = localStorage.getItem('haven_output_device') || '';
+      const ctxOpts = {};
+      if (savedOutput && typeof AudioContext !== 'undefined' &&
+          AudioContext.prototype && 'setSinkId' in AudioContext.prototype) {
+        ctxOpts.sinkId = savedOutput;
+      }
+      try {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)(ctxOpts);
+      } catch {
+        // Older Chromium throws when sinkId is passed in options.
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Best-effort: if sinkId-in-options wasn't honored but setSinkId() is
+      // available on the instance, apply it now.
+      if (savedOutput && typeof this.audioCtx.setSinkId === 'function') {
+        this.audioCtx.setSinkId(savedOutput).catch(() => {});
+      }
+      // Attach watchdog once so it survives future suspend/resume cycles.
+      this.audioCtx.addEventListener('statechange', () => {
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume().catch(() => {});
+        }
+      });
+    }
+    if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+    return this.audioCtx;
+  }
+
   // ── Talking Detection ───────────────────────────────────
 
   _startAnalyser(userId, analyserNode, dataArray) {
@@ -1750,10 +1800,7 @@ class VoiceManager {
   _startLocalTalkDetection() {
     if (!this.rawStream || this._localTalkInterval) return;
     try {
-      if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+      this._ensureAudioCtx();
 
       const source = this.audioCtx.createMediaStreamSource(this.rawStream);
       const analyser = this.audioCtx.createAnalyser();
@@ -1769,14 +1816,14 @@ class VoiceManager {
 
       this._localTalkAnalyser = { analyser, source };
       const setSelfTalking = (talking) => {
-        // Optional debug mode: highlight the local user as soon as the mic
-        // crosses the talk threshold, instead of waiting for the server to
-        // echo voice-speaking back. The default behaviour (off) keeps the
-        // highlight tied to the server echo so it doubles as confirmation
-        // that the server actually heard you.
-        try {
-          if (localStorage.getItem('debug_local_talk_indicator') !== '1') return;
-        } catch { return; }
+        // Always update the self-speaking indicator directly from the local
+        // analyser rather than waiting for the server echo.  The server echo
+        // path (voice-speaking → server → broadcast back) is unreliable for
+        // self: if the socket ever briefly loses voice-room membership (e.g.
+        // after a reconnect grace-period window), the echo never arrives and
+        // the indicator stays permanently dark.  Audio and the server-side
+        // speaking events for OTHER users are unaffected — we still emit
+        // voice-speaking to the server so peers see the indicator too.
         if (talking) this.talkingState.set('self', true);
         else this.talkingState.delete('self');
         if (this.onTalkingChange) this.onTalkingChange('self', talking);
@@ -1861,10 +1908,7 @@ class VoiceManager {
     // CRITICAL: use ONE MediaStreamSource for both analyser & gain to avoid
     // browsers muting the stream when multiple sources compete.
     try {
-      if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+      this._ensureAudioCtx();
 
       const source = this.audioCtx.createMediaStreamSource(stream);
 

@@ -26,6 +26,18 @@ async switchChannel(code) {
   // Clear scramble cache so the effect picks up the new channel name
   const headerEl = document.getElementById('channel-header-name');
   if (headerEl) { delete headerEl.dataset.originalText; headerEl._scrambling = false; }
+  // (#5280) Burn-after-read 🔥 button is DM-only — toggle visibility on
+  // every channel switch and reset the per-message arming so a stale
+  // toggle from another DM doesn't accidentally arm the next message
+  // here in a non-DM channel.
+  const _burnBtn = document.getElementById('burn-btn');
+  const _burnDiv = document.getElementById('burn-divider');
+  if (_burnBtn) {
+    _burnBtn.style.display = isDm ? 'inline-flex' : 'none';
+    _burnBtn.classList.remove('active');
+  }
+  if (_burnDiv) _burnDiv.style.display = isDm ? 'inline-block' : 'none';
+  this._burnArmed = false;
   const displayCode = channel ? (channel.display_code || code) : code;
   const isMaskedCode = (displayCode === '••••••••');
   document.getElementById('channel-code-display').textContent = isDm ? '' : displayCode;
@@ -482,20 +494,52 @@ _initDmContextMenu() {
     const code = this._dmCtxMenuCode;
     if (!code) return;
     this._closeDmCtxMenu();
-    const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('settings.admin.delete') || 'Delete' });
+    const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') });
     if (!ok) return;
     // Gather all attachment URLs from the (decrypted) cached messages
     // for this DM so the server can move E2E ciphertext-hidden uploads
     // to deleted-attachments. (#5299)
     const attachments = [];
-    if (code === this.currentChannel && Array.isArray(this._lastRenderedMessages)) {
+    const _scanMsgsForAttachments = (msgs) => {
       const re = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
-      for (const msg of this._lastRenderedMessages) {
+      for (const msg of msgs) {
         if (!msg || typeof msg.content !== 'string') continue;
         let m;
         while ((m = re.exec(msg.content)) !== null) attachments.push('/uploads/' + m[1]);
       }
-    }
+    };
+    // Paginate through ALL messages in the DM so we don't miss E2E
+    // attachment URLs in older messages that haven't been rendered yet. (#5299)
+    try {
+      const channel = this.channels?.find(c => c.code === code);
+      if (channel?.is_dm && channel.dm_target) {
+        await this._fetchDMPartnerKey(channel);
+      }
+      const PAGE_LIMIT = 100;
+      let before = null;
+      for (;;) {
+        const page = await new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            this.socket.off('message-history', onHistory);
+            resolve([]);
+          }, 5000);
+          const onHistory = (data) => {
+            if (!data || data.channelCode !== code) return;
+            this.socket.off('message-history', onHistory);
+            clearTimeout(timer);
+            resolve(Array.isArray(data.messages) ? data.messages : []);
+          };
+          this.socket.on('message-history', onHistory);
+          this.socket.emit('get-messages', { code, before, limit: PAGE_LIMIT });
+        });
+        if (page.length === 0) break;
+        try { await this._decryptMessages(page, code); } catch {}
+        _scanMsgsForAttachments(page);
+        if (page.length < PAGE_LIMIT) break;
+        // Messages arrive in DESC order; last item is the oldest — use it as cursor.
+        before = page[page.length - 1].id;
+      }
+    } catch { /* best-effort — server still cleans up plaintext messages */ }
     this.socket.emit('delete-dm', { code, attachments });
   });
 
@@ -1691,7 +1735,7 @@ _renderChannels() {
 
   for (const cat of sortedCats) {
     const catKey = cat || '';
-    const catCollapsed = cat ? localStorage.getItem(`haven_cat_collapsed_${cat}`) === 'true' : false;
+    const catCollapsed = cat ? localStorage.getItem(`haven_cat_collapsed_${cat.toLowerCase()}`) === 'true' : false;
 
     if (cat) {
       const catLabel = document.createElement('h5');
@@ -1709,7 +1753,7 @@ _renderChannels() {
 
       catLabel.addEventListener('click', () => {
         const nowCollapsed = arrow.classList.toggle('collapsed');
-        localStorage.setItem(`haven_cat_collapsed_${cat}`, nowCollapsed);
+        localStorage.setItem(`haven_cat_collapsed_${cat.toLowerCase()}`, nowCollapsed);
         list.querySelectorAll(`[data-cat-group="${CSS.escape(cat)}"]`).forEach(el => {
           el.style.display = nowCollapsed ? 'none' : '';
         });
@@ -1780,6 +1824,7 @@ _renderChannels() {
             list.querySelectorAll(`.sub-channel-item[data-parent-code="${ch.code}"][data-sub-tag="${CSS.escape(tagName)}"]`).forEach(el => {
               el.style.display = nowCollapsed ? 'none' : '';
             });
+            this._updateNestedIndicators();
           });
           if (isSubCollapsed || catCollapsed) tagLabel.style.display = 'none';
           list.appendChild(tagLabel);
@@ -2404,14 +2449,16 @@ _updateNestedIndicators() {
     }
   };
 
-  // Category labels: dot if expanded AND any contained channel/sub
-  // has unreads. (When collapsed the existing count bubble shows the
-  // total instead, so we suppress the dot to avoid duplication.)
+  // Category labels: when EXPANDED show a small dot (the per-channel
+  // badges already show the actual counts); when COLLAPSED show a count
+  // bubble like collapsed parent channels do, otherwise the unreads
+  // would be invisible (channel rows are hidden with the category) and
+  // the user would see a taskbar badge with no on-screen indicator
+  // anywhere — exactly the phantom-badge bug. (#desktop-phantom-badge)
   document.querySelectorAll('.section-label.category-label[data-category]').forEach(catEl => {
     const cat = catEl.dataset.category;
     if (!cat) return;
     const collapsed = localStorage.getItem(`haven_cat_collapsed_${cat}`) === 'true';
-    if (collapsed) { setDot(catEl, false); return; }
     let total = 0;
     for (const c of this.channels) {
       if (c.is_dm || c.parent_channel_id) continue;
@@ -2421,7 +2468,20 @@ _updateNestedIndicators() {
         total += this.unreadCounts[s.code] || 0;
       }
     }
-    setDot(catEl, total > 0);
+    let bubble = catEl.querySelector(':scope > .channel-badge-bubble');
+    if (collapsed && total > 0) {
+      if (!bubble) {
+        bubble = document.createElement('span');
+        bubble.className = 'channel-badge channel-badge-bubble';
+        bubble.style.marginLeft = 'auto';
+        catEl.appendChild(bubble);
+      }
+      bubble.textContent = total > 99 ? '99+' : total;
+      setDot(catEl, false);
+    } else {
+      if (bubble) bubble.remove();
+      setDot(catEl, !collapsed && total > 0);
+    }
   });
 
   // Parent channels with sub-channels: dot if subs are expanded AND
@@ -2437,11 +2497,53 @@ _updateNestedIndicators() {
     const subTotal = subs.reduce((sum, s) => sum + (this.unreadCounts[s.code] || 0), 0);
     setDot(parentEl, subTotal > 0);
   }
+
+  // Tag labels (sub-channel category groups inside a parent channel) — issue #5311.
+  // When the tag row is collapsed, append a count bubble like the one used for
+  // collapsed parent channels. When expanded, fall back to the same dot pattern
+  // as parents/categories so the indication stays consistent.
+  document.querySelectorAll('.sub-tag-label').forEach(tagEl => {
+    const parentCode = tagEl.dataset.parentCode;
+    const tagName = tagEl.dataset.tagName;
+    if (!parentCode || !tagName) return;
+    const parentChannel = this.channels.find(c => c.code === parentCode);
+    if (!parentChannel) return;
+    const subs = subChannelMap[parentChannel.id] || [];
+    const total = subs.reduce((sum, s) => {
+      const subTag = s.category || 'Untagged';
+      if (subTag !== tagName) return sum;
+      return sum + (this.unreadCounts[s.code] || 0);
+    }, 0);
+    const tagKey = `haven_subtag_collapsed_${parentCode}_${tagName}`;
+    const isCollapsed = localStorage.getItem(tagKey) === 'true';
+    let bubble = tagEl.querySelector(':scope > .channel-badge-bubble');
+    if (isCollapsed && total > 0) {
+      if (!bubble) {
+        bubble = document.createElement('span');
+        bubble.className = 'channel-badge channel-badge-bubble';
+        bubble.style.marginLeft = 'auto';
+        tagEl.appendChild(bubble);
+      }
+      bubble.textContent = total > 99 ? '99+' : total;
+      setDot(tagEl, false);
+    } else {
+      if (bubble) bubble.remove();
+      setDot(tagEl, !isCollapsed && total > 0);
+    }
+  });
 },
 
 _updateTabTitle() {
+  let mutedSet = null;
+  try {
+    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+  } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
-  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => validCodes.has(k) ? s + v : s, 0);
+  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => {
+    if (!validCodes.has(k)) return s;
+    if (mutedSet.has(k)) return s;
+    return s + v;
+  }, 0);
   // Include the server's display name so multiple Haven tabs are easy to tell
   // apart at a glance (issue #5284).
   const serverName = (this.serverSettings && this.serverSettings.server_name) || '';
@@ -2452,8 +2554,28 @@ _updateTabTitle() {
 },
 
 _updateDesktopBadge() {
+  // If the user has muted this server entirely, always report no-badge so this
+  // instance never adds to the taskbar overlay icon.
+  if (localStorage.getItem('haven_server_muted') === '1') {
+    this._lastDesktopBadge = false;
+    window.havenDesktop?.setUnreadBadge?.(false);
+    return;
+  }
+  // Exclude muted channels from the desktop total. The channels-list
+  // snapshot from the server doesn't know about local mutes (they live in
+  // localStorage), so a muted channel with new messages was lighting up
+  // the taskbar even though every sidebar indicator was suppressed —
+  // looked like a phantom badge to the user. (#desktop-phantom-badge)
+  let mutedSet = null;
+  try {
+    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+  } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
-  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => validCodes.has(k) ? s + v : s, 0);
+  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => {
+    if (!validCodes.has(k)) return s;
+    if (mutedSet.has(k)) return s;
+    return s + v;
+  }, 0);
   // Track last-pushed value so visibility-driven re-syncs (below) can detect
   // when the desktop main process has fallen out of step with the renderer
   // and quietly reassert the correct state without spamming IPC.
@@ -2485,6 +2607,8 @@ _resyncDesktopBadgeOnFocus() {
  *          to avoid duplicate notifications (server-side push handles the rest).
  */
 _fireNativeNotification(message, channelCode, opts) {
+  // Server-level mute: suppress all notifications from this server instance.
+  if (localStorage.getItem('haven_server_muted') === '1') return;
   // Check per-type notification toggles
   const n = this.notifications;
   if (opts && opts.isMention && n.mentionsEnabled) { /* allowed */ }
@@ -2576,9 +2700,8 @@ _updateChannelVoiceIndicators() {
       }
       userList.innerHTML = users.map(u => {
         const isSelf = u.id === this.user.id;
-        // Self-talking is gated behind the debug toggle: when off, the
-        // highlight comes from the server echoing voice-speaking back, so
-        // there's no 'self' entry in talkingState.
+        // Self-talking state is driven by the local analyser directly (not
+        // server echo), so talkingState.get('self') reflects real-time mic level.
         const isTalking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
         return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}</div>`;
       }).join('');

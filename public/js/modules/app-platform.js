@@ -350,38 +350,85 @@ async _setupDesktopShortcuts() {
       // doesn't swallow the keystroke before the BrowserView sees it
       window.havenDesktop.shortcuts.setConfig({ [action]: '' }).catch(() => {});
 
-      const onKeyDown = async (e) => {
+      // (#5255) Three things the previous recorder couldn't do:
+      // 1. Lone modifiers (just Alt / Ctrl / Shift) — useful while gaming so
+      //    you can transmit without lifting a hand off WASD.
+      // 2. Extra mouse buttons (Mouse4 / Mouse5) for thumb-button push-to-talk.
+      // 3. The PTT mode (toggle vs hold) lives on a sibling control wired up
+      //    elsewhere; the recorder itself just captures the keystroke / button.
+      //
+      // Bare-modifier capture works by deferring commit to keyup: keydown for
+      // a modifier alone arms a "pending lone modifier" that will commit if
+      // the user releases without ever pressing a non-modifier. Pressing a
+      // non-modifier in the meantime falls through to the original combo path
+      // and clears the pending state.
+      const MOD_KEYS = new Set(['Control', 'Meta', 'Alt', 'Shift']);
+      let pendingLoneMod = null;
+
+      const finish = async (accel) => {
+        document.removeEventListener('keydown', onKeyDown, true);
+        document.removeEventListener('keyup', onKeyUp, true);
+        document.removeEventListener('mousedown', onMouseDown, true);
+        recordBtn.classList.remove('recording');
+        recordBtn.textContent = 'Record';
+        keyEl.classList.remove('recording-label');
+        try {
+          await window.havenDesktop.shortcuts.setConfig({ [action]: accel });
+          config[action] = accel;
+          keyEl.textContent = formatAccel(accel);
+        } catch (err) {
+          await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch(() => {});
+          keyEl.textContent = formatAccel(config[action] || '');
+          this._showToast?.('Failed to register shortcut — it may already be in use, or the desktop app version doesn\'t support this binding type yet.', 'error');
+        }
+      };
+
+      const onKeyDown = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Ignore lone modifiers
-        if (['Control', 'Meta', 'Alt', 'Shift'].includes(e.key)) return;
-
+        if (MOD_KEYS.has(e.key)) {
+          // Don't commit yet — wait for keyup to decide if this is a lone-mod
+          // press or the modifier half of a combo.
+          pendingLoneMod = e.key;
+          keyEl.textContent = `${e.key}…`;
+          return;
+        }
+        // Non-modifier pressed — kill the pending lone-mod and commit a combo.
+        pendingLoneMod = null;
         const parts = [];
         if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
         if (e.altKey)  parts.push('Alt');
         if (e.shiftKey) parts.push('Shift');
         const mapped = keyMap[e.key] || (e.key.length === 1 ? e.key.toUpperCase() : e.key);
         parts.push(mapped);
-        const accel = parts.join('+');
+        finish(parts.join('+'));
+      };
 
-        document.removeEventListener('keydown', onKeyDown, true);
-        recordBtn.classList.remove('recording');
-        recordBtn.textContent = 'Record';
-        keyEl.classList.remove('recording-label');
+      const onKeyUp = (e) => {
+        // Only commit a lone modifier if the user released the SAME modifier
+        // they pressed and never pressed anything else in between.
+        if (!MOD_KEYS.has(e.key)) return;
+        if (pendingLoneMod !== e.key) return;
+        pendingLoneMod = null;
+        // Map "Control"/"Meta" → "CommandOrControl" to match Electron's
+        // accelerator format. "Alt" / "Shift" pass through.
+        const mapped = (e.key === 'Control' || e.key === 'Meta') ? 'CommandOrControl' : e.key;
+        finish(mapped);
+      };
 
-        try {
-          await window.havenDesktop.shortcuts.setConfig({ [action]: accel });
-          config[action] = accel;
-          keyEl.textContent = formatAccel(accel);
-        } catch (err) {
-          // Restore previous shortcut
-          await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch(() => {});
-          keyEl.textContent = formatAccel(config[action] || '');
-          this._showToast?.('Failed to register shortcut — it may already be in use.', 'error');
-        }
+      const onMouseDown = (e) => {
+        // 0/1/2 are left/middle/right — leave those alone so the user can still
+        // click around. 3+ are the extra mouse buttons (mouse4 / mouse5).
+        if (e.button < 3) return;
+        e.preventDefault();
+        e.stopPropagation();
+        pendingLoneMod = null;
+        finish(`Mouse${e.button + 1}`);
       };
 
       document.addEventListener('keydown', onKeyDown, true);
+      document.addEventListener('keyup', onKeyUp, true);
+      document.addEventListener('mousedown', onMouseDown, true);
     });
 
     clearBtn.addEventListener('click', async () => {
@@ -392,6 +439,22 @@ async _setupDesktopShortcuts() {
       } catch (err) {}
     });
   });
+
+  // (#5255) PTT mode select — toggle vs hold-to-transmit. Stored on the same
+  // shortcuts config object alongside the keybinds. Default to "hold" since
+  // that's what most voice apps use and what the issue reporter wanted.
+  const pttModeSel = document.getElementById('ptt-mode-select');
+  if (pttModeSel) {
+    pttModeSel.value = (config.pttMode === 'toggle') ? 'toggle' : 'hold';
+    pttModeSel.addEventListener('change', async () => {
+      try {
+        await window.havenDesktop.shortcuts.setConfig({ pttMode: pttModeSel.value });
+        config.pttMode = pttModeSel.value;
+      } catch (err) {
+        this._showToast?.('Failed to save PTT mode — desktop app may need an update.', 'error');
+      }
+    });
+  }
 },
 
 /* ── Desktop App Preferences (start on login, tray, SDR) ── */
@@ -1101,6 +1164,113 @@ async _decryptMessages(messages, channelCode = null) {
       }
     }
   }
+},
+
+/**
+ * Wire up download buttons on e2e-file-pending attachments inside `root`.
+ * Click → fetch encrypted blob → decrypt with the DM partner key →
+ * trigger a save-as via an object URL. Marks the row `e2e-file-failed` if the
+ * partner key isn't available so the user understands why download is blocked
+ * instead of getting a silent no-op. (#5310, #5308)
+ */
+_decryptE2EFiles(root) {
+  if (!root) root = document.getElementById('messages');
+  if (!root) return;
+  const rows = root.querySelectorAll('.e2e-file-pending');
+  if (!rows.length) return;
+  const inPip = !!(root.id === 'dm-pip-messages' || (root.closest && root.closest('#dm-pip-messages')));
+  const partner = inPip && this._activeDMPip
+    ? this._getE2EPartnerFor(this._activeDMPip)
+    : this._getE2EPartner();
+  rows.forEach(row => {
+    row.classList.remove('e2e-file-pending');
+    const url = row.dataset.e2eUrl;
+    const mime = row.dataset.e2eMime || 'application/octet-stream';
+    const name = row.dataset.e2eName || 'file';
+    const btn = row.querySelector('.e2e-file-download');
+    if (!url || !url.startsWith('/uploads/') || !partner) {
+      row.classList.add('e2e-file-failed');
+      if (btn) btn.disabled = true;
+      return;
+    }
+    if (!btn) return;
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (btn.disabled) return;
+      btn.disabled = true;
+      row.classList.add('e2e-file-loading');
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(resp.status);
+        const buf = await resp.arrayBuffer();
+        const plain = await this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk);
+        const blob = new Blob([plain], { type: mime });
+        const objectUrl = URL.createObjectURL(blob);
+
+        // Video/audio types get an inline player instead of a silent download
+        const isVideo = mime.startsWith('video/');
+        const isAudio = mime.startsWith('audio/');
+        if (isVideo || isAudio) {
+          const mediaEl = document.createElement(isVideo ? 'video' : 'audio');
+          mediaEl.controls = true;
+          mediaEl.preload = 'metadata';
+          mediaEl.src = objectUrl;
+          if (isVideo) mediaEl.className = 'file-video';
+
+          row.classList.remove('e2e-file-loading');
+          row.innerHTML = '';
+
+          // Info bar matching the non-E2E file-attachment header style
+          const infoBar = document.createElement('div');
+          infoBar.className = 'file-info';
+          const icon = isVideo ? '🎬' : '🎵';
+          const nameSafe = name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          infoBar.innerHTML = `${icon} <span class="file-name">${nameSafe}</span>`;
+
+          const dlBtn = document.createElement('a');
+          dlBtn.href = objectUrl;
+          dlBtn.download = name;
+          dlBtn.className = 'file-download-link';
+          dlBtn.title = `Download ${name}`;
+          dlBtn.innerHTML = '⬇';
+          infoBar.appendChild(dlBtn);
+          row.appendChild(infoBar);
+
+          if (isVideo) {
+            const wrap = document.createElement('div');
+            wrap.className = 'file-video-wrap';
+            wrap.appendChild(mediaEl);
+            row.appendChild(wrap);
+          } else {
+            row.appendChild(mediaEl);
+          }
+
+          // Revoke blob URL when the media element is removed from DOM
+          const obs = new MutationObserver(() => {
+            if (!document.contains(mediaEl)) { URL.revokeObjectURL(objectUrl); obs.disconnect(); }
+          });
+          obs.observe(document.body, { childList: true, subtree: true });
+          btn.disabled = false;
+          return;
+        }
+
+        // Non-media: trigger download and notify user
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        this._showToast(`Downloaded: ${name}`, 'success');
+      } catch (err) {
+        row.classList.add('e2e-file-failed');
+      } finally {
+        row.classList.remove('e2e-file-loading');
+        btn.disabled = false;
+      }
+    });
+  });
 },
 
 /**

@@ -7,7 +7,7 @@ module.exports = function register(socket, ctx) {
           broadcastVoiceUsers, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
           getActiveMusicSyncState, getMusicQueuePayload } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
-          activeScreenSharers, activeWebcamUsers, streamViewers } = state;
+          activeScreenSharers, activeWebcamUsers, streamViewers, pendingTempDelete } = state;
 
   // ── Local helper: broadcast stream/viewer info ──────────
   function broadcastStreamInfo(code) {
@@ -71,6 +71,14 @@ module.exports = function register(socket, ctx) {
     }
 
     if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
+
+    // Cancel any pending grace-period deletion for this temp-voice channel —
+    // the user is rejoining before the 8-second window expired.
+    if (pendingTempDelete && pendingTempDelete.has(code)) {
+      clearTimeout(pendingTempDelete.get(code));
+      pendingTempDelete.delete(code);
+      console.log(`[Temporary] Grace-period deletion cancelled — user rejoined "${code}"`);
+    }
 
     // If this user is already in the same voice channel (e.g. from another
     // client/tab), do a full voice-leave on the old socket so peer connections,

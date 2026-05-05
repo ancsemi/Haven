@@ -3444,20 +3444,17 @@ html.rgb-cycling *::after {
   word-wrap: break-word;
   overflow-wrap: anywhere;
 }
+/* In PiP the avatar gutter doesn't exist, so position the compact
+   timestamp on the right side of the row instead. That way it appears
+   on hover without shifting any content leftward. */
 .dm-pip-messages .message-compact .compact-time {
   font-size: 10px;
-  width: 36px;
   text-align: right;
-  padding-right: 4px;
-  /* Cap the absolute-positioned timestamp to the gutter so it doesn't
-     bleed across the message body when the content area is wider than
-     the gutter. (#5292) */
-  left: 0;
-}
-/* Reserve gutter space on hover so the absolutely-positioned compact
-   timestamp doesn't overlap the message text in the narrow PiP layout. */
-@media (hover: hover) {
-  .dm-pip-messages .message-compact:hover { padding-left: 44px; }
+  left: auto;
+  right: 6px;
+  top: 2px;
+  width: auto;
+  padding-right: 0;
 }
 /* Slim reactions, polls, link previews to fit the smaller frame */
 .dm-pip-messages .reactions-row { gap: 4px; margin-top: 2px; }
@@ -3492,8 +3489,9 @@ html.rgb-cycling *::after {
 .dm-pip-reply-bar > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dm-pip-input-area {
   display: flex;
+  align-items: flex-end;
   gap: 6px;
-  padding: 8px;
+  padding: 14px 8px 8px;
   border-top: 1px solid var(--border, #444);
   background: rgba(20, 20, 20, 0.55);
   backdrop-filter: blur(6px);
@@ -3509,7 +3507,9 @@ html.rgb-cycling *::after {
   padding: 6px 8px;
   font-family: inherit;
   font-size: 13px;
-  max-height: 120px;
+  min-height: 34px;
+  max-height: 200px;
+  overflow-y: auto;
 }
 .dm-pip-send {
   background: var(--accent, #5865f2);
@@ -3523,6 +3523,33 @@ html.rgb-cycling *::after {
   justify-content: center;
 }
 .dm-pip-send:hover { filter: brightness(1.1); }
+
+/* Drag handle at the top of PiP input areas — drag upward to expand the textarea */
+.pip-input-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 14px;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.pip-input-resizer::before {
+  content: '';
+  width: 36px;
+  height: 3px;
+  background: var(--border, #555);
+  border-radius: 2px;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s;
+}
+.pip-input-resizer:hover::before {
+  opacity: 1;
+  background: var(--accent, #5865f2);
+}
 
 /* Emoji picker trigger button shared by DM PiP and thread input areas */
 .pip-input-emoji-btn {
@@ -5667,8 +5694,14 @@ select.cfn-select.cfn-input {
   transition: none;
 }
 
-/* Disable resize handle on small modals (confirmation dialogs, etc.) */
-.modal[style*="max-width:380px"] { resize: none; }
+/* Disable resize handle on confirmation dialogs and other small modals */
+.modal.modal-confirm {
+  resize: none;
+  min-height: unset;
+  max-width: 380px;
+  width: min(90%, 380px);
+  padding: 22px 24px 20px;
+}
 
 /* Expand/restore toggle button in modal headers */
 .modal-expand-btn {
@@ -6480,7 +6513,7 @@ select.cfn-select.cfn-input {
   width: 340px;
   max-height: 360px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 1000;
+  z-index: 1050;
 }
 
 .emoji-search-row {
@@ -6550,6 +6583,111 @@ select.cfn-select.cfn-input {
 .emoji-item:hover {
   background: var(--bg-tertiary);
   transform: scale(1.2);
+}
+
+/* ── Stickers ───────────────────────────────────────── */
+/* Inline rendered sticker in messages — larger than chat-image, no background. */
+.sticker-img {
+  max-width: 180px;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius);
+  display: block;
+  margin: 4px 0;
+}
+
+/* Picker section toggle (Emoji | Sticker) */
+.emoji-section-row {
+  display: flex;
+  gap: 4px;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.emoji-section-tab {
+  flex: 1;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  transition: opacity var(--transition), background var(--transition), color var(--transition);
+}
+.emoji-section-tab:hover { opacity: 1; }
+.emoji-section-tab.active {
+  opacity: 1;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Pack switcher row inside the sticker section */
+.sticker-pack-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  max-height: 64px;
+  overflow-y: auto;
+}
+.sticker-pack-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  transition: opacity var(--transition), background var(--transition), color var(--transition);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sticker-pack-btn:hover { opacity: 1; }
+.sticker-pack-btn.active {
+  opacity: 1;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Sticker picker grid */
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 240px;
+  padding: 2px;
+}
+.sticker-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  transition: background var(--transition), transform 0.1s ease;
+}
+.sticker-picker-item:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.05);
+}
+.sticker-picker-thumb {
+  width: 100%;
+  height: 64px;
+  object-fit: contain;
+  display: block;
 }
 
 /* Custom emoji (inline in messages + pickers) */
@@ -6626,7 +6764,7 @@ select.cfn-select.cfn-input {
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 1000;
+  z-index: 1050;
   overflow: hidden;
 }
 
@@ -7033,7 +7171,7 @@ select.cfn-select.cfn-input {
   border-radius: 8px;
   padding: 2px 4px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 10;
+  z-index: 20;
 }
 .msg-toolbar-group {
   display: flex;
@@ -7059,7 +7197,7 @@ select.cfn-select.cfn-input {
   border-radius: 8px;
   padding: 4px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-  z-index: 12;
+  z-index: 200;
   opacity: 0;
   visibility: hidden;
   transform: translateY(4px);
@@ -7655,7 +7793,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 14px 14px 10px;
   border-top: 1px solid var(--border-light);
   flex-shrink: 0;
   /* Anchor for autocomplete dropdowns positioned with bottom: 100% (#5296) */
@@ -7693,7 +7831,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   padding: 8px 12px;
   font-size: 13px;
   font-family: inherit;
-  max-height: 120px;
+  min-height: 36px;
+  max-height: 200px;
   overflow-y: auto;
 }
 .thread-input:focus { outline: none; border-color: var(--accent); }
@@ -8342,7 +8481,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 1000;
+  z-index: 1050;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -10494,6 +10633,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
 
   .msg-selected .msg-toolbar {
     display: flex !important;
+    z-index: 100;
   }
 
   .msg-selected {
@@ -11575,9 +11715,6 @@ video:-webkit-full-screen {
   font-size: 13px;
   color: var(--text-primary);
   line-height: 1.4;
-  max-height: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .pinned-item-footer {
@@ -12638,6 +12775,26 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* ── Role management modal ───────────────────────────── */
+/* Make the role-modal flex its body so the sidebar/detail panes grow with the
+   modal and the Close button pins to the bottom-right at any resize size. */
+.role-management-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(95vw, 720px);
+  max-width: 95vw;
+  height: min(85vh, 640px);
+  min-height: 360px;
+  padding-bottom: 18px;
+}
+.role-management-modal > .role-editor-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+.role-management-modal > .modal-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+}
 .role-editor-layout {
   display: flex;
   gap: 16px;
@@ -13569,6 +13726,57 @@ ul.chat-list { list-style-type: disc; }
   cursor: pointer;
 }
 .btn-poll:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+
+/* Burn-after-read input button (#5325) */
+.btn-burn {
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 18px;
+}
+.btn-burn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.btn-burn.active {
+  color: #ff6b35;
+  background: rgba(255, 107, 53, 0.15);
+}
+.btn-burn.active:hover {
+  color: #ff8c5a;
+  background: rgba(255, 107, 53, 0.25);
+}
+
+/* Burn-after-read message states */
+.message-burn-pending .message-content {
+  border-left: 2px solid rgba(255, 107, 53, 0.5);
+  padding-left: 8px;
+}
+.burn-reveal-btn {
+  background: rgba(255, 107, 53, 0.12);
+  color: #ff6b35;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all var(--transition);
+}
+.burn-reveal-btn:hover {
+  background: rgba(255, 107, 53, 0.22);
+  border-color: rgba(255, 107, 53, 0.5);
+}
+.message-burned .message-content {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+}
 
 /* Poll widget inside messages */
 .poll-widget {
@@ -15487,6 +15695,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 0 1px rgba(237, 66, 69, 0.45), 0 0 8px rgba(237, 66, 69, 0.5);
   pointer-events: none;
   display: none;
+  z-index: 1;
 }
 .server-icon .server-unread-dot.active { display: block; }
 
@@ -15528,7 +15737,7 @@ ul.chat-list { list-style-type: disc; }
   border: 1px solid var(--border, #3f4147);
   border-radius: 10px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 1000;
+  z-index: 1050;
   font-size: 14px;
   color: var(--text-primary, #dbdee1);
 }

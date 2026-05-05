@@ -14,7 +14,103 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
-- **#5294: Admin-configurable login session duration.** New `session_duration_days` server setting (1–365, default 7) replaces the hard-coded `expiresIn: '7d'` on every JWT signing site in `src/auth.js`, and Settings → Uploads & Limits gets a new "Login session duration (days)" input. Existing tokens keep their original expiry — only newly-issued tokens (login, signup, TOTP confirm, password change, recovery, refresh) pick up the new value. Defaults preserve current behavior.
+- **#5294: Admin-configurable login session duration.** New `session_duration_days` server setting (1–365, default 7) replaces the hard-coded `expiresIn: '7d'` on every JWT signing site in `src/auth.js`, and Settings → Uploads & Limits gets a new "Login session duration (days)" input. Existing tokens keep their original expiry — only newly-issued tokens (login, signup, TOTP confirm, password change, recovery, refresh) pick up the new value. Defaults preserve current behavior. Thanks @amnibro.
+
+### Fixed
+- **#5337: Link previews show 429s when reopening a chat with multiple links.** Two compounding bugs — (1) the per-IP rate limiter ran *before* the cache lookup, so cached previews still burned a token and a chat with 30+ links could exhaust the budget on a single re-render; (2) the client refetched every preview from scratch on every channel switch / scroll re-render with no in-flight dedupe. Server now consults the cache first and only rate-limits cache misses, the per-minute budget is doubled (30 → 60), and the client keeps a 10-minute in-memory preview cache plus a per-URL inflight Promise so concurrent re-renders share one network request.
+- **Phantom taskbar overlay badge with no on-screen indicator anywhere.** Two cases: (1) `_updateNestedIndicators` short-circuited on collapsed category labels, so unread sub-channels inside a collapsed category contributed to the desktop badge total without rendering any visible bubble — exactly the "taskbar lit, sidebar empty" symptom from the user-reported screenshots. Collapsed category labels now render a count bubble identical to collapsed parent channels. (2) `_updateDesktopBadge` and `_updateTabTitle` no longer count locally-muted channels, since their per-channel sidebar dot is suppressed and the server's snapshot doesn't know about local mutes — without this, a muted channel with new messages lit the taskbar with nothing visible to clear it.
+
+### Docs
+- **#5336: Threads in DMs are not E2E-encrypted.** Verified by code inspection: `_sendThreadMessage` emits plaintext, the `send-thread-message` server handler stores raw `safeContent`, and `_appendThreadMessage` never decrypts. Per the issue author's instruction, added `docs/THREAD-REMOVAL-PLAN.md` — a step-by-step demolition plan covering the DB column drop, server-handler removal, renderer module cleanup, HTML/CSS deletion, and a safe deploy ordering. No reply was posted on #5336 (per instructions).
+
+---
+
+## [3.12.0] — 2026-05-05
+
+### Added
+- **#5335: Starter sticker pack.** Fresh installs now ship with a small built-in "Starter" pack (8 reaction stickers: 👍, ❤️, 😂, 🔥, 🎉, ✅, ❌, 👀) so the picker isn't empty before any sticker is uploaded. The pack is seeded once at first run if no stickers exist; existing servers keep whatever they already have.
+- **#5335: `:stickername:` shortcode in the composer.** Typing a sticker name surrounded by colons (e.g. `:fire:`) sends that sticker the same way `:emoji:` works for custom emojis. Lookup is exact-match against the stored sticker name.
+- **#5335: Dedicated `manage_stickers` role permission.** Previously sticker upload/management was gated by `manage_emojis` for backwards-compat. There is now a separate `manage_stickers` permission that can be granted independently from emoji management. Existing roles with `manage_emojis` retain sticker access so nothing breaks on upgrade.
+
+### Fixed
+- **#5335: Emoji picker auto-closed when switching to the Stickers tab (and vice versa).** The picker rebuilt the section button DOM on each tab switch, but the global outside-click handler ran *after* the rebuild and saw the original click target detached from the picker subtree, so `picker.contains(e.target)` returned false and the picker was dismissed. The section toggle now calls `stopPropagation()` on the click event and short-circuits if the user re-clicks the active section, so the picker stays open across tab switches.
+- **#5325 / #5280: Burn-after-read DM button gave no visible feedback and the placeholder showed a raw i18n key.** Both `_wireBurnMessages` and `_replaceBurnedMessage` used the broken `t('key') || 'fallback'` pattern — but `t()` returns the key string itself when a translation is missing, so the `||` short-circuit never fired and the literal `messages.burn_reveal` text was rendered to users on locales that didn't have the keys. Added the missing `app.input_bar.burn_btn`, `app.input_bar.burn_btn_armed`, `toasts.burn_armed`, `toasts.burn_disarmed`, `messages.burn_reveal`, and `messages.burn_done` keys to `en.json`, then switched every burn-related call site to a key-aware fallback (`const v = t(k); const text = (v && v !== k) ? v : 'fallback'`). The 🔥 toggle button also now fires a toast confirming the armed/disarmed state so the user knows the click registered.
+
+---
+
+## [3.11.2] — 2026-05-04
+
+### Added
+- **Quick links to Bans / Deleted Users from the All Members modal.** Mods and admins now see "View Bans" and "View Deleted Users" buttons in the bottom-left of the members list so they can jump between the three lists without going back through Settings → Admin. Buttons are hidden for users without `ban_user` (View Bans) or admin (View Deleted Users), and the server handlers re-validate permissions on emit, so DOM tampering can't reveal the lists.
+
+### Fixed
+- **#5307 (follow-up): "Delete DM" and "Delete Channel" confirm dialogs showed `settings.admin.delete` / `messages.delete` raw i18n keys instead of "Delete".** The DM-delete confirm passed `t('settings.admin.delete')` (no such key) as the button label, and the generic confirm modal's danger fallback referenced `t('messages.delete')` (also missing). `t()` returns the key string when a key is missing, so the `|| 'Delete'` short-circuit never fired. Both call sites now use `t('msg_toolbar.delete')`, which exists in every locale.
+- **Manage Roles modal opened from the Role Assignment center showed an empty role list.** The click handler called `_loadRoles(cb)` and only opened the modal inside the callback, but `_loadRoles` only re-renders the sidebar when the role-modal is already visible — so by the time the modal opened, the sidebar render had already been skipped. The handler now uses `_openRoleModal()`, which shows the modal first and then loads, matching how the modal is opened from Settings.
+- **Role Management modal didn't fill its window and resized vertical-only.** The inner role-editor layout was capped at `max-height: 60vh` so growing the modal taller left a tall blank gap above the Close button; `.modal-wide`'s `max-width: 720px` blocked horizontal resize entirely. The role modal is now a flex column (sidebar/detail panes grow with the modal, Close button pinned to the bottom-right), and its max-width is raised to `95vw` so the resize handle works in both directions.
+
+---
+
+## [3.11.1] — 2026-05-01
+
+### Fixed
+- **#184: Voice audio routed to the system default playback device instead of the user's chosen output.** `_ensureAudioCtx` constructed the `AudioContext` with no `sinkId` and `switchOutputDevice` only ran when the user opened the device picker, so anyone who picked their headset once and then re-joined voice would hear voice through their speakers until they re-opened the picker. The context now reads `localStorage.haven_output_device` at construction time and applies it via the `sinkId` constructor option (with a `setSinkId()` fallback for browsers/Electron builds that don't accept the option) so the saved sink takes effect on the very first track-add.
+
+---
+
+## [3.11.0] — 2026-05-01
+
+### Added
+- **Stickers (#5335).** Server admins (and anyone with `manage_emojis`) can upload sticker images grouped into named packs from Settings → Admin → Stickers. Stickers are larger than emojis (default 1 MB max, configurable via the `max_sticker_kb` server setting) and are sent as standalone images, not inline with text. The emoji picker now has an Emoji / Stickers section toggle; in the Stickers tab, packs appear as horizontal pills and stickers render as a 4-column thumbnail grid. Sending a sticker routes through the active composer (main channel, thread, or DM PiP) so replies and DM encryption keep working. Sticker URLs use the `/uploads/stickers/` prefix and render at sticker dimensions (`max-width: 180px`) instead of the regular chat-image cap.
+
+### Fixed
+- **#5333: DM PiP popped open over the channel you were already viewing.** `_openDMPiP` had no early return when the requested DM matched `currentChannel`, so the sidebar click handler, `dm-opened` socket event, channel-link click, and "Message [user]" button all could spawn a PiP that hovered over its own fullscreen view. Added a guard at the top of `_openDMPiP` so the function bails out when the DM is already the current channel.
+
+---
+
+## [3.10.14] — 2026-05-01
+
+### Fixed
+- **Long pinned messages were cut off and had no way to expand or scroll.** `.pinned-item-content` had a hard `max-height: 60px; overflow: hidden` cap — anything beyond a couple of lines was silently clipped with no indicator. Removed the cap; the pinned panel itself already scrolls, so long messages now show in full.
+- **#5326: Message action toolbar and its overflow dropdown appeared behind other messages' `...` buttons on mobile/tablet.** The base `.msg-toolbar` z-index (10) was lower than `.msg-dots-btn` (12), and the overflow panel's z-index (12) was evaluated inside the toolbar's own stacking context, landing even lower in the paint order. Raised the base toolbar to z-20, the overflow panel to z-200, and explicitly set the selected-state toolbar to z-100 on coarse-pointer devices.
+- **#5324: Images pasted into the DM PiP were sent instantly without a preview.** They now enter a per-PiP image queue that shows a preview bar above the input (same as the main channel), and are sent when the user presses Enter or taps Send — just like pasting into the main composer. The preview bar is cleared when the PiP is closed.
+- **#5309: SVG files in DMs showed as a locked downloadable `.enc` file.** `_maybeUploadEncryptedDmFile` was always wrapping uploads in an `e2e-file:` marker (download attachment); image types including SVG now use the `e2e-img:` marker so they decrypt and render inline. Also, SVGs and other images are no longer sent immediately when selected or pasted in regular channels — they now go through the same preview queue as raster images, giving users a chance to review before sending.
+
+---
+
+## [3.10.13] — 2026-04-30
+
+### Added
+- **Role Management: "Members" button** lets admins assign or remove a role directly from the role detail panel, without having to navigate to member management. Opens a searchable member list showing who currently holds the role, with Assign / Remove toggles per member. Server-wide only; channel-specific role config is still in the Role Assignment menu.
+- **#5248: Client-side DM search.** Searching inside a DM now runs locally against the cached message history for instant results, falling back to the server for older messages not yet loaded.
+
+### Fixed
+- **Voice speaking indicator stops illuminating after a while in VC.** The self-speaking highlight was driven by the server echoing `voice-speaking` back to the sender. If the sender's socket ever briefly lost its `voice:channel` room membership (e.g. during a reconnect grace-period window), the echo never arrived — and because `wasTalking` was already `true`, no new event was emitted until the next pause. The fix changes the self-indicator to use the local mic analyser directly, so it is driven purely by real-time mic level and is not affected by socket room state. Other users still see your talking indicator via the server relay, which is unchanged.
+- **Voice: desktop app memory monitor could hard-reload the page mid-call** (visible every ~2 minutes during screen sharing). When screen sharing, RAM easily climbed above the previous 512 MB threshold, triggering a hard page reload. The threshold is now raised to 1536 MB, the soft-trim warning threshold to 500 MB, and the reload cooldown to 5 minutes. If the user is currently in voice or screen sharing the hard reload is skipped entirely regardless of memory level.
+- **Voice: temp-voice channel deleted during a brief socket disconnect kicked users back to the welcome screen.** `handleVoiceLeave` now uses an 8-second grace period on socket disconnect before removing an empty temp channel. If the user reconnects within that window the deletion is cancelled. Intentional `voice-leave` events still clean up immediately.
+- **Server `pingTimeout` raised from 30 s to 60 s** to give the Socket.IO heartbeat more slack during bandwidth-heavy screen-sharing sessions.
+- **Channel category collapse state not persisting after server restart.** The localStorage key included the raw category name casing; if channels came back in different order after restart the key would not match. The key is now always lowercase.
+- **#5309: SVG files sent in chat showed as a filename row, not as an image (PR #5314).** `_isImageUrl` and the E2E `e2e-img:` matcher now accept `.svg` / `image/svg+xml`. The static `/uploads` middleware gives SVGs appropriate CORS headers while keeping `Content-Disposition: attachment` for direct navigation and adding a strict CSP to block script execution inside the SVG.
+- **#5324: Images pasted into the DM PiP were sent as download attachments instead of rendering inline.** Pasting into the PiP now uses the E2E-aware `_uploadImage` path for raster images.
+- **#5325: Missing CSS for the burn-after-read feature.**
+- **PiP DM: slash commands now processed before sending** (previously sent as literal text).
+- **PiP DM message deletion** now correctly passes the channel code to the server.
+- **Confirm modal sizing:** non-resizable, tighter layout.
+- **Duplicate role button** now uses the themed prompt modal instead of `window.prompt`.
+
+---
+
+## [3.10.12] — 2026-04-30
+
+### Added
+- **#5282: Orphan-DM watchdog.** When one or both participants of a DM delete their account (or get force-removed), the `channel_members` rows vanish via `ON DELETE CASCADE` but the DM channel itself was left lingering with stale messages forever. The auto-cleanup routine now sweeps `is_dm=1` channels with member count below 2, moves their `/uploads/...` attachments into `deleted-attachments/`, and `DELETE`s the channel. Runs unconditionally — `cleanup_enabled` only gates message-age expiry.
+- **#5255: PTT recorder accepts lone modifiers, extra mouse buttons, and a hold/toggle mode select.** Settings → Shortcuts → PTT (Haven Desktop only). Lone modifiers (just Alt / Ctrl / Shift) now commit on keyup if no other key was pressed — useful while gaming so PTT doesn't pull a hand off WASD. A new `mousedown` listener captures buttons 3+ (Mouse4 / Mouse5); left/middle/right pass through unchanged. The hardcoded "(toggle)" label is replaced with a hold/toggle `<select>` saved via `havenDesktop.shortcuts.setConfig({ pttMode })` (default `hold`). OS-level registration of bare modifiers/mouse buttons is a follow-up in Haven-Desktop; older desktop builds get an informative toast instead of a generic "in use" error.
+
+### Fixed
+- **#5310 + #5308: DM uploads were only encrypted for images going through the explicit "queue → preview → send" path.** Drag-and-drop, the 📎 button, paste in the main composer (for non-image files), and any paste into the DM PiP all routed through `_uploadGeneralFile`, which had no E2E branch — so non-image files in DMs (and any file pasted into the PiP) hit the server filesystem in plaintext, defeating the DM's E2E guarantee. `_uploadGeneralFile` now first calls `_maybeUploadEncryptedDmFile`: if the channel is an E2E DM with a known partner key, the file's bytes go through `e2e.encryptBytes` → opaque blob upload → and the metadata (mime / size / url / name) is wrapped in a new `e2e-file:{json}` marker that's encrypted as a normal text message. `_formatContent` renders that marker as a 🔒 download row, and a new `_decryptE2EFiles` (called next to `_decryptE2EImages` in every render path) wires the click → fetch → `e2e.decryptBytes` → save-as flow. Server-side static `/uploads` handler is unchanged — encrypted blobs are already opaque.
+- **#5311: Collapsed sub-channel tag rows didn't show an unread indicator.** Categories and parent channels already bubble a count badge when collapsed and a "look inside" dot when expanded, but the per-parent tag groupings (e.g. an `Off-topic` tag inside a `Lounge` parent channel) were missing both. `_updateNestedIndicators` now walks `.sub-tag-label` rows and applies the same rules: count bubble when the tag is collapsed and any sub-channel under it has unreads, dot when the tag is expanded with unreads inside. The tag toggle handler also re-runs the indicator pass so the badge appears/disappears immediately on collapse/expand.
+- **#5307: Delete confirmations were inconsistent — channel delete used the browser's native double-`confirm()` "web info box" while role/DM/message deletes used the themed modal.** All user-data delete actions (channel, role, user, account) now route through the themed `_showConfirmModal`. The two chained channel-delete prompts are merged into one modal with both the warning and finality copy. The themed modal also picks a smarter default button label: when `danger: true` and no `confirmLabel` is supplied, the OK button now reads "Delete" instead of "Confirm".
+- **#5323: Large streaming sessions (50+ users joining around the same time) could trigger the auth rate limiter, blocking login with "Too many attempts".** The `authLimiter` was applied globally to every `/api/auth` route, including lightweight token-validation GETs that fire on every page load. Non-credential routes (`/validate`, `/user-servers`, `/totp/status`, etc.) no longer hit the limiter — it now only covers the routes that actually accept passwords or 2FA codes (login, register, TOTP validate/setup/disable, change-password, verify-password, and recovery flows).
+- **Slash command autocomplete: pressing Enter when the dropdown is open now selects the active suggestion** (previously only Tab worked, causing partial commands like `/sh` to be sent as literal text in DMs where the server can't transform unrecognized commands).
 
 ---
 

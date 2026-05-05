@@ -1479,14 +1479,23 @@ function initThemeSwitcher(containerId, socket) {
   if (saved === 'rgb') {
     startRgbCycle();
   }
+  // File themes are restored by plugin-loader after it fetches theme metadata.
+  // Nothing to do here for 'file:...' — it will be handled once the loader runs.
 
-  // Set active button
+  // Set active button (file: theme buttons are injected later by plugin-loader,
+  // so they will pick up the active state via injectPublishedThemeButtons)
   container.querySelectorAll('.theme-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.theme === saved);
 
     btn.addEventListener('click', () => {
       const theme = btn.dataset.theme;
-      document.documentElement.setAttribute('data-theme', theme);
+
+      // Switching to a built-in theme: remove any injected file-theme links
+      if (!theme.startsWith('file:')) {
+        document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
+      }
+
+      document.documentElement.setAttribute('data-theme', theme.startsWith('file:') ? 'haven' : theme);
       localStorage.setItem('haven_theme', theme);
 
       document.querySelectorAll('.theme-btn').forEach(b => {
@@ -1543,6 +1552,19 @@ function initThemeSwitcher(containerId, socket) {
 
 function applyThemeFromServer(theme) {
   if (!theme) return;
+
+  // File theme — delegate to plugin-loader if available; otherwise fall back to haven
+  if (theme.startsWith('file:')) {
+    const file = theme.slice(5);
+    if (window.HavenPluginLoader?.applyFileTheme) {
+      window.HavenPluginLoader.applyFileTheme(file);
+    } else {
+      // Loader not ready yet — store it; loader will restore on init
+      localStorage.setItem('haven_theme', theme);
+    }
+    return;
+  }
+
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('haven_theme', theme);
   document.querySelectorAll('.theme-btn').forEach(b => {

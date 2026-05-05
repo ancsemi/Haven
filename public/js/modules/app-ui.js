@@ -25,7 +25,7 @@ _handleAutocompleteKeydown(e) {
       this._navigateSlashDropdown(e.key === 'ArrowDown' ? 1 : -1);
       return true;
     }
-    if (e.key === 'Tab') {
+    if (e.key === 'Enter' || e.key === 'Tab') {
       const active = slashDd.querySelector('.slash-item.active');
       if (active) { e.preventDefault(); active.click(); return true; }
     }
@@ -92,7 +92,7 @@ _setupUI() {
         this._navigateSlashDropdown(e.key === 'ArrowDown' ? 1 : -1);
         return;
       }
-      if (e.key === 'Tab') {
+      if (e.key === 'Enter' || e.key === 'Tab') {
         const active = slashDd.querySelector('.slash-item.active');
         if (active) { e.preventDefault(); active.click(); return; }
       }
@@ -250,13 +250,17 @@ _setupUI() {
   // ── Channel context menu ("..." on hover) ──────────
   this._initChannelContextMenu();
   this._initDmContextMenu();
-  // Delete channel with TWO confirmations (from ctx menu)
-  document.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+  // Delete channel — themed confirm (issue #5307: was using two chained native confirm() calls)
+  document.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
-    if (!confirm('⚠️ ' + t('confirm.delete_channel'))) return;
-    if (!confirm('⚠️ ' + t('confirm.delete_channel_sure'))) return;
+    const ok = await this._showConfirmModal(
+      '⚠️ ' + t('confirm.delete_channel'),
+      t('confirm.delete_channel_sure'),
+      { danger: true }
+    );
+    if (!ok) return;
     this.socket.emit('delete-channel', { code });
   });
   // Mark channel as read
@@ -1306,7 +1310,12 @@ _setupUI() {
     const q = e.target.value.trim();
     if (q.length >= 2 && this.currentChannel) {
       searchTimeout = setTimeout(() => {
-        this.socket.emit('search-messages', { code: this.currentChannel, query: q });
+        const ch = (this.channels || []).find(c => c.code === this.currentChannel);
+        if (ch && ch.is_dm) {
+          this._searchDmCacheLocally(q);
+        } else {
+          this.socket.emit('search-messages', { code: this.currentChannel, query: q });
+        }
       }, 400);
     } else {
       document.getElementById('search-results-panel').style.display = 'none';
@@ -1517,6 +1526,7 @@ _setupUI() {
   // Image click — open lightbox overlay (CSP-safe — no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
     if (e.target.classList.contains('chat-image')) {
+      this._lightboxContainer = document.getElementById('messages');
       this._openLightbox(e.target.src);
     }
     // Spoiler reveal toggle
@@ -1524,6 +1534,25 @@ _setupUI() {
       e.target.closest('.spoiler').classList.toggle('revealed');
     }
   });
+
+  // Image click in thread panel and DM PiP — same lightbox with container-aware navigation
+  for (const containerId of ['thread-messages', 'dm-pip-messages']) {
+    const el = document.getElementById(containerId);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        if (e.target.classList.contains('chat-image')) {
+          this._lightboxContainer = el;
+          this._openLightbox(e.target.src);
+        }
+      });
+      el.addEventListener('contextmenu', (e) => {
+        if (e.target.classList.contains('chat-image')) {
+          e.preventDefault();
+          this._showImageContextMenu(e, e.target.src);
+        }
+      });
+    }
+  }
 
   // Image right-click — custom context menu for chat thumbnails
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
@@ -1625,8 +1654,8 @@ _setupUI() {
     this._checkSlashTrigger(dmPipInput);
   });
 
-  // Paste images / files into the DM PiP input — uploads to the active PiP DM
-  // (not the channel currently in the main pane). (#5295)
+  // Paste images / files into the DM PiP input — queues images for preview
+  // (same as main channel paste behavior). (#5324)
   if (dmPipInput) dmPipInput.addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -1637,7 +1666,11 @@ _setupUI() {
         const file = item.getAsFile();
         if (!file) continue;
         e.preventDefault();
-        this._uploadGeneralFile(file, targetCode);
+        if (item.type.startsWith('image/')) {
+          this._queueImageForPiP(file, targetCode);
+        } else {
+          this._uploadGeneralFile(file, targetCode);
+        }
         return;
       }
     }
@@ -1649,6 +1682,7 @@ _setupUI() {
     dmPipEmojiBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this._activeEditTextarea = document.getElementById('dm-pip-input');
+      this._emojiPickerContext = 'dmpip';
       this._toggleEmojiPicker(dmPipEmojiBtn);
     });
   }
@@ -1698,8 +1732,8 @@ _setupUI() {
         } else if (action === 'edit') {
           this._startEditMessage?.(msgEl, msgId);
         } else if (action === 'delete') {
-          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
-            this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
+          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
+            this.socket.emit('delete-message', { messageId: msgId, channelCode: this._activeDMPip, attachments: this._getMessageAttachments?.(msgId) });
           }
         } else if (action === 'pin') {
           if (await this._showConfirmModal(t('confirm.pin_message'), '')) {
@@ -1762,6 +1796,7 @@ _setupUI() {
     threadEmojiBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this._activeEditTextarea = document.getElementById('thread-input');
+      this._emojiPickerContext = 'thread';
       this._toggleEmojiPicker(threadEmojiBtn);
     });
   }
@@ -1781,6 +1816,39 @@ _setupUI() {
       this._checkChannelTrigger(threadInput);
       this._checkEmojiTrigger(threadInput);
       this._checkSlashTrigger(threadInput);
+    });
+    // Paste images / files into the thread input — upload then send as thread message
+    threadInput.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const parentId = this._activeThreadParent;
+      if (!parentId) return;
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (!file) continue;
+          e.preventDefault();
+          const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+          if (file.size > maxMb * 1024 * 1024) {
+            this._showToast(`File too large (max ${maxMb} MB)`, 'error');
+            return;
+          }
+          const formData = new FormData();
+          formData.append('file', file);
+          this._uploadWithProgress('/api/upload-file', formData).then(data => {
+            if (data.error) { this._showToast(data.error, 'error'); return; }
+            let content;
+            if (data.isImage) {
+              content = data.url;
+            } else {
+              const sizeStr = this._formatFileSize(data.fileSize);
+              content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+            }
+            this.socket.emit('send-thread-message', { parentId, content });
+          }).catch(err => this._showToast(err.message || 'Upload failed', 'error'));
+          return;
+        }
+      }
     });
   }
 
@@ -1925,8 +1993,39 @@ _setupUI() {
     }
   }
 
+  // PiP input area height resize — drag the top handle upward to expand the textarea
+  document.querySelectorAll('.pip-input-resizer').forEach(handle => {
+    let startY = 0;
+    let startHeight = 0;
+    let ta = null;
+
+    const onMove = (e) => {
+      if (!ta) return;
+      const delta = startY - e.clientY; // positive when dragging up
+      const newHeight = Math.max(34, Math.min(200, startHeight + delta));
+      ta.style.height = `${newHeight}px`;
+    };
+
+    const onUp = () => {
+      ta = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    handle.addEventListener('mousedown', (e) => {
+      ta = handle.parentElement?.querySelector('textarea');
+      if (!ta) return;
+      startY = e.clientY;
+      startHeight = ta.getBoundingClientRect().height;
+      e.preventDefault();
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
+    this._emojiPickerContext = 'main';
     this._toggleEmojiPicker();
   });
 
@@ -2010,7 +2109,7 @@ _setupUI() {
     } else if (action === 'edit') {
       this._startEditMessage(msgEl, msgId);
     } else if (action === 'delete') {
-      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
+      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
       }
     } else if (action === 'pin') {
@@ -2067,7 +2166,7 @@ _setupUI() {
         } else if (action === 'edit') {
           this._startEditMessage(msgEl, msgId);
         } else if (action === 'delete') {
-          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('messages.delete') })) {
+          if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
             this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
           }
         }
@@ -2230,6 +2329,32 @@ _setupUI() {
   document.getElementById('poll-btn').addEventListener('click', () => {
     this._openPollModal();
   });
+
+  // (#5280) Burn-after-read toggle (DM-only, default 30 s).
+  // Single click arms the next message; click-and-long-press could later
+  // pop a duration picker but 30 s is a reasonable default. Visual state
+  // mirrors the existing input-action active class.
+  const _burnBtn = document.getElementById('burn-btn');
+  if (_burnBtn) {
+    _burnBtn.addEventListener('click', () => {
+      this._burnArmed = !this._burnArmed;
+      _burnBtn.classList.toggle('active', !!this._burnArmed);
+      // Use literal English for title — t() returns raw key on miss so the
+      // previous `t() || 'fallback'` pattern never showed the fallback. (#5325)
+      _burnBtn.title = this._burnArmed
+        ? 'Burn after read armed — next message will self-destruct 30s after viewing'
+        : 'Burn after read (DM only)';
+      // Surface a toast so users get visible confirmation. The button alone
+      // wasn't obvious enough that anything had happened. (#5325)
+      const toastKey = this._burnArmed ? 'toasts.burn_armed' : 'toasts.burn_disarmed';
+      const toastFallback = this._burnArmed
+        ? '🔥 Burn-after-read armed — next message will self-destruct 30s after viewing'
+        : 'Burn-after-read disabled';
+      const translated = t(toastKey);
+      const toastText = (translated && translated !== toastKey) ? translated : toastFallback;
+      this._showToast?.(toastText, 'info');
+    });
+  }
   document.getElementById('poll-cancel-btn').addEventListener('click', () => {
     document.getElementById('poll-modal').style.display = 'none';
   });
@@ -2316,6 +2441,16 @@ _setupUI() {
       this._profilePopupAnchor = userItem;
       this.socket.emit('get-user-profile', { userId });
     }
+  });
+
+  // Double-click a user in the right sidebar to open a DM
+  document.getElementById('online-users').addEventListener('dblclick', (e) => {
+    if (e.target.closest('.user-action-btn') || e.target.closest('.user-admin-actions')) return;
+    const userItem = e.target.closest('.user-item');
+    if (!userItem) return;
+    const userId = parseInt(userItem.dataset.userId);
+    if (isNaN(userId) || userId === this.user.id) return;
+    this.socket.emit('start-dm', { targetUserId: userId });
   });
 
   // ── Right-click user → Invite to channel ──
@@ -2422,9 +2557,9 @@ _setupUI() {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
 
-  document.getElementById('confirm-admin-action-btn').addEventListener('click', () => {
+  document.getElementById('confirm-admin-action-btn').addEventListener('click', async () => {
     if (!this.adminActionTarget) return;
-    const { action, userId } = this.adminActionTarget;
+    const { action, userId, username } = this.adminActionTarget;
     const reason = document.getElementById('admin-action-reason').value.trim();
     const duration = parseInt(document.getElementById('admin-action-duration').value) || 10;
     const scrubMessages = document.getElementById('admin-scrub-checkbox').checked;
@@ -2441,7 +2576,8 @@ _setupUI() {
     } else if (action === 'mute') {
       this.socket.emit('mute-user', { userId, reason, duration });
     } else if (action === 'delete-user') {
-      if (!confirm(t('confirm.delete_user', { username: this.adminActionTarget.username }))) return;
+      const ok = await this._showConfirmModal(t('confirm.delete_user', { username }), '', { danger: true });
+      if (!ok) return;
       this.socket.emit('delete-user', { userId, reason, scrubMessages });
     }
 
@@ -2511,6 +2647,7 @@ _setupUI() {
       const isAdmin = !!(this.user && this.user.isAdmin);
       const hasAdminAccess = isAdmin
         || this._hasPerm?.('manage_emojis')
+        || this._hasPerm?.('manage_stickers')
         || this._hasPerm?.('manage_soundboard')
         || this._hasPerm?.('manage_roles')
         || this._hasPerm?.('manage_server')
@@ -2979,13 +3116,14 @@ _setupUI() {
     overlay.querySelector('.self-delete-cancel').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-    overlay.querySelector('.self-delete-confirm').addEventListener('click', () => {
+    overlay.querySelector('.self-delete-confirm').addEventListener('click', async () => {
       const pw = document.getElementById('self-delete-pw').value;
       const scrub = document.getElementById('self-delete-scrub').checked;
       const status = overlay.querySelector('.self-delete-status');
 
       if (!pw) { status.textContent = t('settings.delete_account_section.password_required'); return; }
-      if (!confirm(t('confirm.delete_account'))) return;
+      const ok = await this._showConfirmModal(t('confirm.delete_account'), '', { danger: true });
+      if (!ok) return;
 
       status.textContent = t('settings.delete_account_section.deleting');
       overlay.querySelector('.self-delete-confirm').disabled = true;
@@ -3050,6 +3188,19 @@ _setupUI() {
   });
   document.getElementById('all-members-search').addEventListener('input', () => this._filterAllMembers());
   document.getElementById('all-members-filter').addEventListener('change', () => this._filterAllMembers());
+
+  // Members-list shortcuts to bans / deleted users (visibility gated by perms in
+  // _openAllMembersModal; server handlers re-check permissions on emit).
+  document.getElementById('aml-view-bans-btn')?.addEventListener('click', () => {
+    document.getElementById('all-members-modal').style.display = 'none';
+    this.socket.emit('get-bans');
+    document.getElementById('bans-modal').style.display = 'flex';
+  });
+  document.getElementById('aml-view-deleted-btn')?.addEventListener('click', () => {
+    document.getElementById('all-members-modal').style.display = 'none';
+    this.socket.emit('get-deleted-users');
+    document.getElementById('deleted-users-modal').style.display = 'flex';
+  });
 
   // ── Cleanup controls (admin) — saved via admin Save button ──
   const cleanupAge = document.getElementById('cleanup-max-age');
@@ -3916,6 +4067,9 @@ _renderManageServersList() {
 
 _updateServerBadgeDots(badges) {
   if (!badges) return;
+  // Cache so _renderServerBar can reapply dots immediately after a re-render
+  // instead of waiting for the next haven-server-badges event. (#5300)
+  this._lastServerBadges = badges;
   // Main process keys serverBadgeState by normalized URL (no trailing slash,
   // no /app or /app.html, no query/hash). The DOM stores the raw user-entered
   // URL, so a direct lookup misses for any server that doesn't already happen
@@ -4144,6 +4298,11 @@ _renderServerBar() {
   // changed — tell main so it can drop phantom taskbar badges from
   // background views the user no longer has an icon for. (#5269)
   this._reportKnownServerUrls();
+
+  // Re-apply cached badge dots — _renderServerBar wipes innerHTML so any
+  // previously lit dots are destroyed. Reapply immediately from the last
+  // known badge state so dots don't vanish until the next IPC event. (#5300)
+  if (this._lastServerBadges) this._updateServerBadgeDots(this._lastServerBadges);
 },
 
 // ═══════════════════════════════════════════════════════
@@ -4171,12 +4330,12 @@ _setupImageUpload() {
     fileInput.value = '';
   });
 
-  // Paste from clipboard — images get queued, other files go to general upload
+  // Paste from clipboard — images (incl. SVG) get queued for preview; other files go to general upload
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
         e.preventDefault();
         this._queueImage(item.getAsFile());
         return;
@@ -4952,11 +5111,11 @@ _uploadWithProgress(url, formData) {
   });
 },
 
-async _uploadImage(file) {
-  if (!this.currentChannel) return;
+async _uploadImage(file, targetCode) {
+  if (!this.currentChannel && !targetCode) return;
   // Capture the target channel NOW (before any await) so a mid-upload channel
   // switch doesn't send the image to the wrong channel.
-  const targetChannel = this.currentChannel;
+  const targetChannel = targetCode || this.currentChannel;
   const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('toasts.image_too_large', { max: _maxMb }), 'error');
@@ -4965,10 +5124,10 @@ async _uploadImage(file) {
   // Detect E2E DM — encrypt file bytes before uploading
   const ch = this.channels.find(c => c.code === targetChannel);
   const isDm = ch && ch.is_dm && ch.dm_target;
-  let partner = isDm ? this._getE2EPartner() : null;
+  let partner = isDm ? this._getE2EPartnerFor(targetChannel) : null;
   if (isDm && !partner && this.e2e && this.e2e.ready) {
     const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-    if (jwk) { this._dmPublicKeys[ch.dm_target.id] = jwk; partner = this._getE2EPartner(); }
+    if (jwk) { this._dmPublicKeys[ch.dm_target.id] = jwk; partner = this._getE2EPartnerFor(targetChannel); }
   }
 
   if (partner) {
@@ -4996,11 +5155,18 @@ async _uploadImage(file) {
     return;
   }
 
-  const formData = new FormData();
-  formData.append('image', file);
-
   try {
-    const data = await this._uploadWithProgress('/api/upload', formData);
+    // SVG must use /api/upload-file (the raster-only /api/upload rejects it)
+    let data;
+    if (file.type === 'image/svg+xml') {
+      const fd = new FormData();
+      fd.append('file', file);
+      data = await this._uploadWithProgress('/api/upload-file', fd);
+    } else {
+      const formData = new FormData();
+      formData.append('image', file);
+      data = await this._uploadWithProgress('/api/upload', formData);
+    }
 
     // Send the image URL as a message to the channel that was active at upload time
     this.socket.emit('send-message', {

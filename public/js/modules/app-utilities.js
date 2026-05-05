@@ -91,12 +91,83 @@ _bumpPinIndicator(delta) {
   this._updatePinIndicator(Math.max(0, cur + (delta | 0)));
 },
 
+// (#5280) Burn-after-read DMs. Walks any message rows in `root` whose
+// `data-burn-seconds` is set and either replaces the content with a
+// click-to-reveal placeholder (not yet started) or wires the countdown
+// (already started — `data-burn-started-at` is set). When the user
+// clicks reveal, emits `mark-burning` so the server stamps the start
+// time and broadcasts `message-burning` to keep the timer in sync
+// across both participants. The actual destructive delete fires from
+// the server's periodic sweep — this is just the UI layer.
+_wireBurnMessages(root) {
+  if (!root) root = document.getElementById('messages');
+  if (!root) return;
+  const rows = root.querySelectorAll('.message-burn-pending:not([data-burn-wired])');
+  rows.forEach(el => {
+    el.dataset.burnWired = '1';
+    const burnSeconds = parseInt(el.dataset.burnSeconds) || 0;
+    const startedAt = el.dataset.burnStartedAt || '';
+    const messageId = parseInt(el.dataset.msgId) || 0;
+    if (!burnSeconds || !messageId) return;
+    if (startedAt) {
+      this._startBurnCountdown(el, burnSeconds, startedAt);
+      return;
+    }
+    const content = el.querySelector('.message-content');
+    if (!content) return;
+    const real = content.innerHTML;
+    el.dataset.burnRealContent = real;
+    const revealLabel = t('messages.burn_reveal');
+    const revealText = (revealLabel && revealLabel !== 'messages.burn_reveal') ? revealLabel : 'Tap to view';
+    content.innerHTML = `<button type="button" class="burn-reveal-btn">🔥 ${this._escapeHtml(revealText)} <span class="muted-text">(${burnSeconds}s after viewing)</span></button>`;
+    const btn = content.querySelector('.burn-reveal-btn');
+    btn.addEventListener('click', () => {
+      content.innerHTML = el.dataset.burnRealContent || '';
+      this.socket.emit('mark-burning', { code: this.currentChannel, messageId });
+      this._startBurnCountdown(el, burnSeconds, new Date().toISOString());
+    }, { once: true });
+  });
+},
+
+_startBurnCountdown(el, burnSeconds, startedAtIso) {
+  const started = Date.parse(startedAtIso);
+  if (!Number.isFinite(started)) return;
+  if (el._burnTimer) clearInterval(el._burnTimer);
+  const tick = () => {
+    const left = Math.max(0, Math.ceil((started + burnSeconds * 1000 - Date.now()) / 1000));
+    let pill = el.querySelector('.burn-countdown-pill');
+    if (!pill) {
+      pill = document.createElement('span');
+      pill.className = 'burn-countdown-pill';
+      pill.style.cssText = 'margin-left:6px;font-size:0.75em;opacity:0.7';
+      const head = el.querySelector('.message-content');
+      if (head) head.prepend(pill);
+    }
+    pill.textContent = `🔥 ${left}s`;
+    if (left <= 0) { clearInterval(el._burnTimer); el._burnTimer = null; }
+  };
+  tick();
+  el._burnTimer = setInterval(tick, 1000);
+},
+
+_replaceBurnedMessage(el) {
+  if (!el) return;
+  if (el._burnTimer) { clearInterval(el._burnTimer); el._burnTimer = null; }
+  const content = el.querySelector('.message-content');
+  if (!content) return;
+  const doneLabel = t('messages.burn_done');
+  const doneText = (doneLabel && doneLabel !== 'messages.burn_done') ? doneLabel : 'Message burned';
+  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
+  el.classList.remove('message-burn-pending');
+  el.classList.add('message-burned');
+},
+
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
   if (trimmed.startsWith('e2e-img:')) return true;
-  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) return true;
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
+  if (/^\/uploads\/(stickers\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
+  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
   // GIPHY GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
   return false;
@@ -115,6 +186,47 @@ _getMessageAttachments(messageId) {
   let m;
   while ((m = re.exec(msg.content)) !== null) out.push('/uploads/' + m[1]);
   return out;
+},
+
+// Client-side DM message search — walks _lastRenderedMessages (already decrypted)
+// and renders results into the shared search-results-panel. (#5248)
+_searchDmCacheLocally(query) {
+  const panel = document.getElementById('search-results-panel');
+  const list  = document.getElementById('search-results-list');
+  const count = document.getElementById('search-results-count');
+  if (!panel || !list || !count) return;
+
+  const q = query.toLowerCase();
+  // Newest-first so the most recent matches appear at the top
+  const msgs = (this._lastRenderedMessages || []).slice().reverse();
+  const matches = msgs
+    .filter(m => m && typeof m.content === 'string' && m.content.toLowerCase().includes(q))
+    .slice(0, 50);
+
+  count.innerHTML = `${matches.length} result${matches.length === 1 ? '' : 's'} for "${this._escapeHtml(query)}" <span class="search-filter-tag">DM (local)</span>`;
+
+  if (matches.length === 0) {
+    list.innerHTML = `<p class="muted-text" style="padding:12px">${t('header.search_no_results')}</p>`;
+  } else {
+    list.innerHTML = matches.map(r => `
+      <div class="search-result-item" data-msg-id="${r.id}">
+        <span class="search-result-author" style="color:${this._getUserColor(r.username)}">${this._escapeHtml(this._getNickname(r.user_id, r.username))}</span>
+        <span class="search-result-time">${this._formatTime(r.created_at)}</span>
+        <div class="search-result-content">${this._highlightSearch(this._escapeHtml(r.content), query)}</div>
+      </div>
+    `).join('');
+  }
+  panel.style.display = 'block';
+
+  list.querySelectorAll('.search-result-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const msgId = parseInt(item.dataset.msgId, 10);
+      panel.style.display = 'none';
+      document.getElementById('search-container').style.display = 'none';
+      document.getElementById('search-input').value = '';
+      this._jumpToMessage(msgId);
+    });
+  });
 },
 
 _highlightSearch(escapedHtml, query) {
@@ -150,11 +262,36 @@ _isEmojiOnly(str) {
 
 _formatContent(str) {
   // E2E encrypted image: e2e-img:<mime>:<url>
-  const e2eImgMatch = str.match(/^e2e-img:(image\/(?:jpeg|png|gif|webp)):(\/uploads\/[\w\-.]+)$/i);
+  const e2eImgMatch = str.match(/^e2e-img:(image\/(?:jpeg|png|gif|webp|svg\+xml)):(\/uploads\/[\w\-.]+)$/i);
   if (e2eImgMatch) {
     const mime = this._escapeHtml(e2eImgMatch[1]);
     const url = this._escapeHtml(e2eImgMatch[2]);
     return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="Encrypted image" title="🔒 End-to-end encrypted image">`;
+  }
+
+  // E2E encrypted file: e2e-file:{"mime":...,"size":N,"url":"/uploads/...","name":"..."}
+  // (#5310, #5308) — non-image DM uploads, plus paste-into-PiP, are encrypted
+  // before upload and the metadata is wrapped in this marker.
+  if (str.startsWith('e2e-file:')) {
+    try {
+      const meta = JSON.parse(str.slice(9));
+      if (meta && typeof meta.url === 'string' && meta.url.startsWith('/uploads/')) {
+        const name = this._escapeHtml(typeof meta.name === 'string' ? meta.name : 'file');
+        const url = this._escapeHtml(meta.url);
+        const mime = this._escapeHtml(typeof meta.mime === 'string' ? meta.mime : 'application/octet-stream');
+        const size = Number(meta.size) || 0;
+        const sizeStr = this._escapeHtml(this._formatFileSize ? this._formatFileSize(size) : (size + ' B'));
+        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="🔒 End-to-end encrypted file — click to download">
+          <button type="button" class="file-download-link e2e-file-download">
+            <span class="file-icon">🔒</span>
+            <span class="file-name">${name}</span>
+            <span class="file-size">(${sizeStr})</span>
+            <span class="file-download-arrow">⬇</span>
+          </button>
+        </div>`;
+      }
+    } catch {}
+    return `<span class="muted-text">[Encrypted file — unable to parse]</span>`;
   }
 
   // Decode legacy HTML entities from old server-side sanitization.
@@ -210,10 +347,16 @@ _formatContent(str) {
     </div>`;
   }
 
+  // Render server-hosted stickers inline at sticker dimensions (CSS-controlled)
+  if (/^\/uploads\/stickers\/[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
+    return `<img src="${this._escapeHtml(str.trim())}" class="sticker-img" alt="sticker">`;
+  }
+
   // Render server-hosted images inline (early return)
   // No loading="lazy" — content-visibility:auto on .message already skips off-screen
   // rendering; lazy loading on top creates 0→real-height jumps when scrolling history.
-  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(str.trim())) {
+  // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
+  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
     return `<img src="${this._escapeHtml(str.trim())}" class="chat-image" alt="image">`;
   }
 
@@ -754,6 +897,141 @@ _toggleEmojiPicker(anchorEl) {
   }
   picker.innerHTML = '';
   this._emojiActiveCategory = this._emojiActiveCategory || Object.keys(this.emojiCategories)[0];
+  this._emojiPickerSection = this._emojiPickerSection || 'emoji';
+
+  // Section toggle (Emoji | Sticker)
+  const sectionRow = document.createElement('div');
+  sectionRow.className = 'emoji-section-row';
+  const mkSectionBtn = (key, label) => {
+    const b = document.createElement('button');
+    b.className = 'emoji-section-tab' + (this._emojiPickerSection === key ? ' active' : '');
+    b.textContent = label;
+    b.addEventListener('click', (ev) => {
+      // (#5335) Prevent the click from bubbling to the global outside-click
+      // handler in app-ui.js. Without this, the rebuild below detaches the
+      // tab DOM node mid-event, so by the time the document listener checks
+      // `picker.contains(e.target)` the original target is gone, the check
+      // returns false, and the picker is auto-closed every time the user
+      // switches between Emoji and Stickers.
+      ev.stopPropagation();
+      if (this._emojiPickerSection === key) return;
+      this._emojiPickerSection = key;
+      // Re-open to rebuild contents in the new section.
+      picker.style.display = 'none';
+      this._toggleEmojiPicker(anchorEl);
+    });
+    return b;
+  };
+  sectionRow.appendChild(mkSectionBtn('emoji', t('emoji.section_emoji') || 'Emoji'));
+  sectionRow.appendChild(mkSectionBtn('sticker', t('emoji.section_sticker') || 'Stickers'));
+  picker.appendChild(sectionRow);
+
+  // ── Sticker section ──
+  if (this._emojiPickerSection === 'sticker') {
+    const stickerSearchRow = document.createElement('div');
+    stickerSearchRow.className = 'emoji-search-row';
+    const stickerSearch = document.createElement('input');
+    stickerSearch.type = 'text';
+    stickerSearch.className = 'emoji-search-input';
+    stickerSearch.placeholder = t('emoji.sticker_search_placeholder') || 'Search stickers';
+    stickerSearch.maxLength = 30;
+    stickerSearchRow.appendChild(stickerSearch);
+    picker.appendChild(stickerSearchRow);
+
+    const stickers = Array.isArray(this.stickers) ? this.stickers : [];
+    const packs = [...new Set(stickers.map(s => s.pack_name || 'General'))].sort((a, b) => a.localeCompare(b));
+    this._activeStickerPack = this._activeStickerPack && packs.includes(this._activeStickerPack)
+      ? this._activeStickerPack
+      : (packs[0] || null);
+
+    if (packs.length > 1) {
+      const packRow = document.createElement('div');
+      packRow.className = 'sticker-pack-row';
+      packs.forEach(pack => {
+        const tab = document.createElement('button');
+        tab.className = 'sticker-pack-btn' + (pack === this._activeStickerPack ? ' active' : '');
+        tab.textContent = pack;
+        tab.title = pack;
+        tab.addEventListener('click', () => {
+          this._activeStickerPack = pack;
+          stickerSearch.value = '';
+          renderStickers();
+          packRow.querySelectorAll('.sticker-pack-btn').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+        });
+        packRow.appendChild(tab);
+      });
+      picker.appendChild(packRow);
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'sticker-grid';
+    picker.appendChild(grid);
+
+    const self = this;
+    function renderStickers(filter) {
+      grid.innerHTML = '';
+      let list = stickers;
+      if (filter) {
+        const q = filter.toLowerCase();
+        list = stickers.filter(s =>
+          (s.name || '').toLowerCase().includes(q) ||
+          (s.pack_name || '').toLowerCase().includes(q)
+        );
+      } else if (self._activeStickerPack) {
+        list = stickers.filter(s => (s.pack_name || 'General') === self._activeStickerPack);
+      }
+      if (list.length === 0) {
+        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">${
+          stickers.length === 0
+            ? (t('emoji.no_stickers') || 'No stickers yet — an admin can upload some from the Manage Stickers panel')
+            : (t('emoji.no_results') || 'No results')
+        }</p>`;
+        return;
+      }
+      list.forEach(sticker => {
+        const btn = document.createElement('button');
+        btn.className = 'sticker-picker-item';
+        btn.title = `:${sticker.name}:`;
+        btn.innerHTML = `<img src="${self._escapeHtml(sticker.url)}" alt=":${self._escapeHtml(sticker.name)}:" class="sticker-picker-thumb">`;
+        btn.addEventListener('click', () => {
+          self._sendStickerMessage(sticker.url);
+          picker.style.display = 'none';
+          if (picker._havenOrigParent) {
+            picker._havenOrigParent.appendChild(picker);
+            picker._havenOrigParent = null;
+            ['position', 'top', 'left', 'bottom', 'right', 'z-index'].forEach(p => picker.style.removeProperty(p));
+          }
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    stickerSearch.addEventListener('input', () => {
+      const q = stickerSearch.value.trim();
+      renderStickers(q || null);
+    });
+
+    renderStickers();
+
+    // Anchor positioning + display reused below — fall through to common code.
+    if (anchorEl) {
+      if (picker.parentElement !== document.body) {
+        picker._havenOrigParent = picker.parentElement;
+        document.body.appendChild(picker);
+      }
+      const r = anchorEl.getBoundingClientRect();
+      const pickerW = 340;
+      const pickerH = 368;
+      const top = Math.max(4, r.top - pickerH - 4);
+      const left = Math.max(4, Math.min(r.left, window.innerWidth - pickerW - 4));
+      picker.style.cssText += '; position:fixed; top:' + top + 'px; left:' + left + 'px; bottom:auto; right:auto; z-index:100030;';
+    }
+    picker.style.display = 'flex';
+    return;
+  }
+
+  // ── Emoji section (default) ──
 
   // Search bar
   const searchRow = document.createElement('div');
@@ -1074,6 +1352,37 @@ _sendGifMessage(url) {
   }
   this.socket.emit('send-message', payload);
   this.notifications.play('sent');
+},
+
+// Send a sticker URL as a message. Routes to the active picker context
+// (main composer, thread composer, or DM PiP) so stickers respect the
+// surrounding scope, replies, and E2E encryption that each composer applies.
+_sendStickerMessage(url) {
+  if (!url) return;
+  const ctx = this._emojiPickerContext || 'main';
+  if (ctx === 'thread') {
+    if (!this._activeThreadParent) return;
+    const input = document.getElementById('thread-input');
+    if (!input) return;
+    input.value = url;
+    this._sendThreadMessage();
+    return;
+  }
+  if (ctx === 'dmpip') {
+    if (!this._activeDMPip) return;
+    const input = document.getElementById('dm-pip-input');
+    if (!input) return;
+    input.value = url;
+    this._sendDMPiPMessage();
+    return;
+  }
+  // Main composer — go through _sendMessage so E2E DMs and slash-command
+  // pre-processing apply uniformly.
+  const input = document.getElementById('message-input');
+  if (!input || !this.currentChannel) return;
+  input.value = url;
+  if (typeof this._sendMessage === 'function') this._sendMessage();
+  else this.socket.emit('send-message', { code: this.currentChannel, content: url });
 },
 
 // /gif slash command — inline GIF search results above the input
@@ -1884,6 +2193,10 @@ _openMostRecentThreadMention() {
 // own message view — receives `new-message` events filtered by code,
 // sends via `send-message` with the PiP channel code.
 _openDMPiP(code) {
+  // Don't open as PiP if this DM is already the active main channel — user is
+  // already viewing it. This prevents sidebar clicks, dm-opened events, and
+  // channel-link clicks from spawning a redundant PiP overlay.
+  if (code === this.currentChannel) return;
   const ch = (this.channels || []).find(c => c.code === code);
   if (!ch || !ch.is_dm) return;
   this._activeDMPip = code;
@@ -2004,6 +2317,9 @@ _openDMPiP(code) {
 _closeDMPiP() {
   this._activeDMPip = null;
   this._dmPipReplyingTo = null;
+  this._pipImageQueue = [];
+  this._pipImageQueueTarget = null;
+  this._renderPiPImageQueue?.();
   clearTimeout(this._dmPipLoadingTimer);
   try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
   const panel = document.getElementById('dm-pip-panel');
@@ -2095,10 +2411,11 @@ _appendDMPiPMessage(msg) {
   const wasAtBottom = (list.scrollHeight - list.clientHeight - list.scrollTop) < 80;
   const el = this._createMessageEl(msg, prevMsg);
   list.appendChild(el);
-  // Async content (link previews, E2E images, videos) — hook into existing pipelines
+  // Async content (link previews, E2E images/files, videos) — hook into existing pipelines
   try { this._fetchLinkPreviews?.(el); } catch {}
   try { this._setupVideos?.(el); } catch {}
   try { this._decryptE2EImages?.(el); } catch {}
+  try { this._decryptE2EFiles?.(el); } catch {}
   if (wasAtBottom) list.scrollTop = list.scrollHeight;
 },
 
@@ -2114,6 +2431,7 @@ _renderDMPiPHistory(messages) {
   try { this._fetchLinkPreviews?.(list); } catch {}
   try { this._setupVideos?.(list); } catch {}
   try { this._decryptE2EImages?.(list); } catch {}
+  try { this._decryptE2EFiles?.(list); } catch {}
   list.scrollTop = list.scrollHeight;
 },
 
@@ -2169,8 +2487,9 @@ _quoteDMPiPMessage(msgEl) {
 _sendDMPiPMessage() {
   const input = document.getElementById('dm-pip-input');
   if (!input || !this._activeDMPip) return;
-  const content = (input.value || '').trim();
-  if (!content) return;
+  let content = (input.value || '').trim();
+  const hasPiPImages = this._pipImageQueue && this._pipImageQueue.length > 0;
+  if (!content && !hasPiPImages) return;
   const code = this._activeDMPip;
   const replyTo = this._dmPipReplyingTo ? this._dmPipReplyingTo.id : null;
 
@@ -2193,19 +2512,69 @@ _sendDMPiPMessage() {
         }
       } catch {}
     }
-    const payload = { code, content };
-    if (replyTo) payload.replyTo = replyTo;
-    if (partner) {
-      try {
-        const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
-        payload.content = encrypted;
-        payload.encrypted = true;
-      } catch (err) {
-        console.warn('[E2E][PiP] Encryption failed:', err);
+
+    // Pre-process content-transforming slash commands client-side so they
+    // survive E2E encryption (server can't parse encrypted slash commands).
+    // Mirror of the same block in _sendMessage. (#5297)
+    if (isDm) {
+      const slashMatch = content.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/);
+      if (slashMatch) {
+        const cmd = slashMatch[1].toLowerCase();
+        const arg = (slashMatch[2] || '').trim();
+        const displayName = this.user?.displayName || this.user?.username || '';
+        const clientSlash = {
+          spoiler:    () => arg ? `||${arg}||` : null,
+          shrug:      () => `${arg ? arg + ' ' : ''}¯\\_(ツ)_/¯`,
+          tableflip:  () => `${arg ? arg + ' ' : ''}(╯°□°)╯︵ ┻━┻`,
+          unflip:     () => `${arg ? arg + ' ' : ''}┬─┬ ノ( ゜-゜ノ)`,
+          lenny:      () => `${arg ? arg + ' ' : ''}( ͡° ͜ʖ ͡°)`,
+          disapprove: () => `${arg ? arg + ' ' : ''}ಠ_ಠ`,
+          bbs:        () => `🕐 ${displayName} will be back soon`,
+          boobs:      () => `( . Y . )`,
+          butt:       () => `( . )( . )`,
+          brb:        () => `⏳ ${displayName} will be right back`,
+          afk:        () => `💤 ${displayName} is away from keyboard`,
+          me:         () => arg ? `_${displayName} ${arg}_` : null,
+          flip:       () => `🪙 ${displayName} flipped a coin: **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**!`,
+          roll:       () => {
+            const m = (arg || '1d6').match(/^(\d{1,2})?d(\d{1,4})$/i);
+            if (!m) return `🎲 ${displayName} rolled: **${Math.floor(Math.random() * 6) + 1}**`;
+            const count = Math.min(parseInt(m[1] || '1'), 20);
+            const sides = Math.min(parseInt(m[2]), 1000);
+            const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+            const total = rolls.reduce((a, b) => a + b, 0);
+            return `🎲 ${displayName} rolled ${count}d${sides}: [${rolls.join(', ')}] = **${total}**`;
+          },
+          hug:        () => arg ? `🤗 ${displayName} hugs ${arg}` : null,
+          wave:       () => `👋 ${displayName} waves${arg ? ' ' + arg : ''}`,
+        };
+        if (clientSlash[cmd]) {
+          const transformed = clientSlash[cmd]();
+          if (transformed !== null) content = transformed;
+        }
       }
     }
-    this.socket.emit('send-message', payload);
-    try { this.notifications?.play?.('sent'); } catch {}
+
+    const payload = { code, content };
+    if (replyTo) payload.replyTo = replyTo;
+    if (content) {
+      if (partner) {
+        try {
+          const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
+          payload.content = encrypted;
+          payload.encrypted = true;
+        } catch (err) {
+          console.warn('[E2E][PiP] Encryption failed:', err);
+        }
+      }
+      this.socket.emit('send-message', payload);
+      try { this.notifications?.play?.('sent'); } catch {}
+    }
+
+    // Flush any queued images (same as main channel behavior, #5324)
+    if (hasPiPImages) {
+      await this._flushPiPImageQueue?.();
+    }
   })();
 },
 
@@ -2384,6 +2753,9 @@ _appendThreadMessage(msg) {
     </div>
   `;
   container.appendChild(el);
+  try { this._decryptE2EImages?.(el); } catch {}
+  try { this._decryptE2EFiles?.(el); } catch {}
+  try { this._setupVideos?.(el); } catch {}
   container.scrollTop = container.scrollHeight;
 },
 
@@ -2511,7 +2883,7 @@ _startEditMessage(msgEl, msgId) {
   textarea.className = 'edit-textarea';
   textarea.value = rawText;
   textarea.rows = 1;
-  textarea.maxLength = 2000;
+  textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
   contentEl.appendChild(textarea);
 
   // Track active edit textarea for emoji picker redirection
@@ -2834,12 +3206,12 @@ _showConfirmModal(title, message, opts = {}) {
     overlay.style.zIndex = '100002';
     const okClass = danger ? 'btn-sm btn-danger-fill' : 'btn-sm btn-accent';
     overlay.innerHTML = `
-      <div class="modal" style="max-width:420px">
+      <div class="modal modal-confirm">
         <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
         ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
         <div class="modal-actions" style="margin-top:12px">
           <button class="btn-sm" id="confirm-modal-cancel">${this._escapeHtml(cancelLabel || t('modals.common.cancel'))}</button>
-          <button class="${okClass}" id="confirm-modal-ok">${this._escapeHtml(confirmLabel || t('modals.common.confirm'))}</button>
+          <button class="${okClass}" id="confirm-modal-ok">${this._escapeHtml(confirmLabel || (danger ? t('msg_toolbar.delete') : t('modals.common.confirm')))}</button>
         </div>
       </div>
     `;

@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=3.4.1">
+  <link rel="stylesheet" href="/css/style.css?v=3.4.2">
   <script src="/js/theme-init.js?v=3.4.0"></script>
 </head>
 <body>
@@ -498,6 +498,8 @@
                   <line x1="2"  y1="20" x2="22" y2="20"/>
                 </svg>
               </button>
+              <span class="input-actions-divider" id="burn-divider" style="display:none"></span>
+              <button id="burn-btn" class="btn-burn" data-i18n-title="app.input_bar.burn_btn" title="Burn after read (DM only)" style="display:none">🔥</button>
             </div>
             <div id="emoji-picker" class="emoji-picker" style="display:none"></div>
             <div id="gif-picker" class="gif-picker" style="display:none">
@@ -733,7 +735,9 @@
       <span id="dm-pip-reply-preview-text"></span>
       <button id="dm-pip-reply-close-btn" class="icon-btn small" aria-label="Cancel reply">&times;</button>
     </div>
+    <div id="dm-pip-image-queue-bar" class="image-queue-bar" style="display:none"></div>
     <div class="dm-pip-input-area">
+      <div class="pip-input-resizer" aria-hidden="true"></div>
       <button id="dm-pip-emoji-btn" class="pip-input-emoji-btn" title="Emoji"><span class="tb-icon tb-icon-emoji" aria-hidden="true">😀</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg></span></button>
       <textarea id="dm-pip-input" class="dm-pip-input" placeholder="Reply…" rows="1"></textarea>
       <button id="dm-pip-send" class="dm-pip-send" title="Send">
@@ -765,6 +769,7 @@
       <button id="thread-reply-close-btn" class="icon-btn small" aria-label="Cancel thread reply">&times;</button>
     </div>
     <div class="thread-input-area">
+      <div class="pip-input-resizer" aria-hidden="true"></div>
       <button id="thread-emoji-btn" class="pip-input-emoji-btn" title="Emoji"><span class="tb-icon tb-icon-emoji" aria-hidden="true">😀</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg></span></button>
       <textarea id="thread-input" class="thread-input" placeholder="Reply in thread..." rows="1"></textarea>
       <button id="thread-send-btn" class="thread-send-btn">
@@ -1056,6 +1061,7 @@
           <div class="settings-nav-user">
           <div class="settings-nav-item active" data-target="section-language">🗣️ <span data-i18n="settings.nav.language">Language</span></div>
           <div class="settings-nav-item" data-target="section-density">📐 <span data-i18n="settings.nav.layout">Layout</span></div>
+          <div class="settings-nav-item" data-target="section-score-badges">🚢 Score Badges</div>
           <div class="settings-nav-item" data-target="section-sounds">🔔 <span data-i18n="settings.nav.sounds">Sounds</span></div>
           <div class="settings-nav-item" data-target="section-push">📲 <span data-i18n="settings.nav.push">Push</span></div>
           <div class="settings-nav-item" data-target="section-password">🔒 <span data-i18n="settings.nav.password">Password</span></div>
@@ -1097,6 +1103,7 @@
             <option value="fr">🇫🇷 Français</option>
             <option value="de">🇩🇪 Deutsch</option>
             <option value="es">🇪🇸 Español</option>
+            <option value="pl">🇵🇱 Polski</option>
             <option value="ru">🇷🇺 Русский</option>
             <option value="zh">🇨🇳 中文</option>
           </select>
@@ -1308,6 +1315,11 @@
             <input type="checkbox" id="notif-enabled">
           </label>
           <small class="settings-hint" style="display:block;margin-bottom:6px">General message sounds (off by default). @Mentions, replies, and DMs always notify.</small>
+          <label class="toggle-row">
+            <span>Mute this server</span>
+            <input type="checkbox" id="notif-server-muted">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px">Suppress all notifications, sounds, and taskbar badge from this server.</small>
           <label class="toggle-row">
             <span>@Mentions</span>
             <input type="checkbox" id="notif-mentions-enabled" checked>
@@ -1594,7 +1606,13 @@
             </div>
           </div>
           <div class="shortcut-row" id="shortcut-row-ptt">
-            <span class="shortcut-label"><span data-i18n="settings.desktop_shortcuts_section.ptt">Push-to-Talk</span> <span class="muted-text" style="font-weight:400;font-size:0.85em" data-i18n="settings.desktop_shortcuts_section.ptt_toggle">(toggle)</span></span>
+            <span class="shortcut-label">
+              <span data-i18n="settings.desktop_shortcuts_section.ptt">Push-to-Talk</span>
+              <select id="ptt-mode-select" class="settings-select" style="font-weight:400;font-size:0.85em;margin-left:6px;padding:1px 4px" title="How the PTT key behaves">
+                <option value="hold" data-i18n="settings.desktop_shortcuts_section.ptt_hold">hold</option>
+                <option value="toggle" data-i18n="settings.desktop_shortcuts_section.ptt_toggle_mode">toggle</option>
+              </select>
+            </span>
             <span class="shortcut-key" id="shortcut-key-ptt" data-i18n="settings.desktop_shortcuts_section.not_set">Not set</span>
             <div class="shortcut-btns">
               <button class="btn-xs shortcut-record-btn" data-action="ptt" data-i18n="settings.desktop_shortcuts_section.change_btn">Change</button>
@@ -1602,7 +1620,7 @@
             </div>
           </div>
         </div>
-        <p class="settings-hint" id="shortcut-status" style="margin-top:8px"></p>
+        <p class="settings-hint" id="shortcut-status" style="margin-top:8px" data-i18n="settings.desktop_shortcuts_section.binding_hint">Lone modifiers (Alt / Ctrl / Shift) and extra mouse buttons (Mouse4 / Mouse5) can be bound here. Some bindings require a recent Haven Desktop build to register at the OS level.</p>
       </div>
 
       <!-- Desktop App Settings Section (only shown in Haven Desktop) -->
@@ -1764,6 +1782,15 @@
             </label>
             <small class="settings-hint">Shown when a new user joins a channel. Use <code>{user}</code> for the username. Leave blank to disable.</small>
           </div>
+
+          <!-- Custom Themes -->
+          <div class="settings-group" style="margin-top:12px">
+            <small class="settings-group-label">Custom Themes</small>
+            <p class="settings-hint" style="margin:0 0 8px">Drop <code>.theme.css</code> files into the <code>themes/</code> folder, then check the ones you want to appear in the theme picker for all users.</p>
+            <div id="admin-theme-list" style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:12px;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>
+            </div>
+          </div>
         </div>
 
         <div class="admin-settings" id="section-members" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
@@ -1923,9 +1950,14 @@
           <h5 class="settings-section-subtitle">📁 <span data-i18n="settings.admin.uploads_title">Uploads &amp; Limits</span></h5>
           <label class="select-row">
             <span data-i18n="settings.admin.max_upload">Max Upload Size (MB)</span>
-            <input type="number" id="max-upload-mb" min="1" max="2048" value="25" class="settings-number-input">
+            <input type="number" id="max-upload-mb" min="1" max="102400" value="25" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload (1–2048 MB, default 25)</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload in MB (default 25). No hard cap — limited by your server's available disk space.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_message_chars">Max Message Length (characters)</span>
+            <input type="number" id="max-message-chars" min="200" max="100000" value="2000" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_message_chars_hint">Maximum characters per message, post, or DM (200–100000, default 2000)</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_sound">Max Sound File Size (KB)</span>
             <input type="number" id="max-sound-kb" min="256" max="10240" value="1024" class="settings-number-input">
@@ -1959,6 +1991,13 @@
           <small class="settings-hint" data-i18n="settings.admin.emojis_hint">Upload images for custom server emojis</small>
           <div style="margin-top:8px;">
             <button class="btn-sm btn-full btn-accent" id="open-emoji-manager-btn">⚙️ <span data-i18n="settings.admin.manage_emojis_btn">Manage Emojis</span></button>
+          </div>
+        </div>
+        <div class="admin-settings" id="section-stickers" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🖼️ <span data-i18n="settings.admin.stickers_title">Stickers</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.stickers_hint">Upload sticker images grouped into packs</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-sticker-manager-btn">⚙️ <span data-i18n="settings.admin.manage_stickers_btn">Manage Stickers</span></button>
           </div>
         </div>
         <!-- Role Management (Admin only) -->
@@ -2183,7 +2222,7 @@
 
   <!-- Role Management Modal -->
   <div class="modal-overlay" id="role-modal" style="display:none">
-    <div class="modal modal-wide">
+    <div class="modal modal-wide role-management-modal">
       <h3>👑 <span data-i18n="modals.role_management.title">Role Management</span></h3>
       <div class="role-editor-layout">
         <div class="role-sidebar">
@@ -2197,6 +2236,19 @@
       <div class="modal-actions">
         <button class="btn-sm btn-accent" id="save-role-btn" data-i18n="modals.common.save" style="display:none">Save</button>
         <button class="btn-sm" id="close-role-modal-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role Members Modal (assign/remove role directly from role detail) -->
+  <div class="modal-overlay" id="role-members-modal" style="display:none">
+    <div class="modal" style="width:460px;max-height:80vh;display:flex;flex-direction:column;gap:0">
+      <h3 style="margin-bottom:4px">👥 <span id="role-members-modal-title"></span></h3>
+      <p class="muted-text" style="font-size:12px;margin-bottom:10px">Server-wide assignment only. For channel-specific roles, use the Role Assignment menu in member management.</p>
+      <input type="text" id="role-members-search" class="settings-text-input" placeholder="Search members…" style="margin-bottom:10px;flex-shrink:0">
+      <div id="role-members-list" style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:6px;min-height:100px"></div>
+      <div class="modal-actions" style="margin-top:12px;flex-shrink:0">
+        <button class="btn-sm" id="role-members-close-btn">Close</button>
       </div>
     </div>
   </div>
@@ -2390,6 +2442,26 @@
     </div>
   </div>
 
+  <!-- Sticker Management Modal -->
+  <div class="modal-overlay" id="sticker-modal" style="display:none">
+    <div class="modal" style="width:520px">
+      <h3>🖼️ <span data-i18n="modals.sticker_mgmt.title">Sticker Management</span></h3>
+      <small class="settings-hint" style="display:block;margin-bottom:12px" data-i18n="modals.sticker_mgmt.upload_hint">Upload sticker images (max 1 MB, png/gif/webp). Group stickers into packs by setting the same pack name. Sticker name must be lowercase, no spaces.</small>
+      <div class="whitelist-add-row">
+        <input type="text" id="sticker-name-input" data-i18n-placeholder="modals.sticker_mgmt.name_placeholder" placeholder="sticker_name (optional)" maxlength="40" class="settings-text-input">
+        <input type="text" id="sticker-pack-input" data-i18n-placeholder="modals.sticker_mgmt.pack_placeholder" placeholder="Pack name (optional)" maxlength="40" class="settings-text-input">
+        <input type="file" id="sticker-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:11px">
+        <button class="btn-sm btn-accent" id="sticker-upload-btn" data-i18n="modals.sticker_mgmt.upload_btn">Upload</button>
+      </div>
+      <div id="stickers-list" style="margin-top:12px;">
+        <p class="muted-text" data-i18n="modals.sticker_mgmt.no_stickers">No stickers uploaded</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="close-sticker-modal-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Emoji Crop Modal -->
   <div class="modal-overlay" id="emoji-crop-modal" style="display:none">
     <div class="modal" style="width:320px;text-align:center">
@@ -2481,7 +2553,11 @@
       <div id="all-members-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:4px">
         <p class="muted-text" style="text-align:center;padding:20px" data-i18n="modals.common.loading">Loading...</p>
       </div>
-      <div class="modal-actions">
+      <div class="modal-actions" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-sm" id="aml-view-bans-btn" style="display:none">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
+          <button class="btn-sm" id="aml-view-deleted-btn" style="display:none">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
+        </div>
         <button class="btn-sm" id="close-all-members-btn" data-i18n="modals.common.close">Close</button>
       </div>
     </div>
@@ -3056,7 +3132,8 @@
   <script src="/js/voice.js?v=3.4.0"></script>
   <script src="/js/modmode.js?v=3.4.0"></script>
   <script src="/js/e2e.js?v=3.4.0"></script>
-  <script type="module" src="/js/app.js?v=3.4.3"></script>
+  <script type="module" src="/js/app.js?v=3.4.5"></script>
   <script src="/js/plugin-loader.js?v=3.4.0"></script>
+  <script src="/js/modules/stream-debug.js?v=3.10.11"></script>
 </body>
 </html>

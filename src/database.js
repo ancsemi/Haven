@@ -169,6 +169,18 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN edited_at DATETIME DEFAULT NULL");
   }
 
+  // ── Migration: burn-after-read columns on messages (#5280) ──
+  // burn_seconds: 0 = no burn (default); >0 = delete N seconds after first
+  // recipient view. burning_started_at is NULL until the first viewer sends
+  // a `mark-burning` event; once set, the periodic sweep below deletes the
+  // row when (started_at + burn_seconds) < now.
+  try {
+    db.prepare("SELECT burn_seconds FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN burn_seconds INTEGER DEFAULT 0");
+    db.exec("ALTER TABLE messages ADD COLUMN burning_started_at DATETIME DEFAULT NULL");
+  }
+
   // ── Migration: high_scores table ────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS high_scores (
@@ -205,11 +217,13 @@ function initDatabase() {
   insertSetting.run('server_code', '');                // server-wide invite code (joins all channels)
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
+  insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64–1024)
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
   insertSetting.run('session_duration_days', '7');       // login token lifetime (1–365); admins can extend per #5294
+  insertSetting.run('published_themes', '[]');             // JSON array of *.theme.css filenames shown in the theme picker
 
   // Unique server fingerprint — used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
@@ -284,6 +298,20 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS custom_emojis (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
+      filename TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // ── Migration: stickers table (admin-uploaded server stickers) ──
+  // Stickers are sent as standalone /uploads/stickers/<file> URLs (same
+  // mechanism as GIFs) and grouped into packs in the picker.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stickers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      pack_name TEXT NOT NULL DEFAULT 'General',
       filename TEXT NOT NULL,
       uploaded_by INTEGER REFERENCES users(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP

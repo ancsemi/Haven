@@ -4,7 +4,7 @@ const ALL_PERMS = [
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
+  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log'
 ];
 //Similarly flavored solution to perm labels
@@ -33,6 +33,7 @@ const PERM_LABELS = {
   get view_all_members() { return t('permissions.view_all_members'); },
   get view_channel_members() { return t('permissions.view_channel_members'); },
   get manage_emojis() { return t('permissions.manage_emojis'); },
+  get manage_stickers() { return t('permissions.manage_stickers'); },
   get manage_soundboard() { return t('permissions.manage_soundboard'); },
   get manage_music_queue() { return t('permissions.manage_music_queue'); },
   get promote_user() { return t('permissions.promote_user'); },
@@ -356,6 +357,10 @@ _applyServerSettings() {
     if (sessionDur) {
       sessionDur.value = this.serverSettings.session_duration_days || '7';
     }
+    const maxMsgChars = document.getElementById('max-message-chars');
+    if (maxMsgChars) {
+      maxMsgChars.value = this.serverSettings.max_message_chars || '2000';
+    }
     const whitelistToggle = document.getElementById('whitelist-enabled');
     if (whitelistToggle) {
       whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
@@ -383,6 +388,7 @@ _applyServerSettings() {
     if (defaultTheme) {
       defaultTheme.value = this.serverSettings.default_theme || '';
     }
+    this._renderAdminThemeList();
 
     // Tunnel settings (live state, not part of Save/Cancel flow)
     const tunnelProvider = document.getElementById('tunnel-provider-select');
@@ -401,6 +407,12 @@ _applyServerSettings() {
     serverCodeEl.textContent = code || '—';
     serverCodeEl.style.opacity = code ? '1' : '0.4';
   }
+
+  // Apply configurable message length limit to message input and edit textareas
+  const _maxMsgChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  const msgInput = document.getElementById('message-input');
+  if (msgInput) msgInput.maxLength = _maxMsgChars;
+  document.querySelectorAll('.edit-textarea').forEach(el => { el.maxLength = _maxMsgChars; });
 
   // Vanity code — update input if modal is open
   if (!modalOpen) {
@@ -508,10 +520,11 @@ _syncSettingsNav() {
   // Use the canonical authoritative flag from the server, not DOM visibility.
   const isAdmin = !!(this.user && this.user.isAdmin);
   const canManageEmojis = isAdmin || this._hasPerm('manage_emojis');
+  const canManageStickers = isAdmin || this._hasPerm('manage_stickers') || this._hasPerm('manage_emojis');
   const canManageSounds = isAdmin || this._hasPerm('manage_soundboard');
   const canManageRoles = isAdmin || this._hasPerm('manage_roles');
   const canManageServer = isAdmin || this._hasPerm('manage_server');
-  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageSounds || canManageRoles || canManageServer;
+  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageStickers || canManageSounds || canManageRoles || canManageServer;
 
   // Show/hide individual admin nav items (default: hidden for non-admins)
   document.querySelectorAll('.settings-nav-admin').forEach(el => {
@@ -533,10 +546,20 @@ _syncSettingsNav() {
     saveBar.style.display = (hasAnyAdminAccess && adminTabActive) ? '' : 'none';
   }
   // Show the Emojis settings tab for users with manage_emojis permission even if not full admin/mod
+  // (#5335) manage_stickers also unhides this tab — the Stickers admin block
+  // currently lives inside the Emojis section so users with sticker access
+  // need to see that nav item even if they can't touch emojis themselves.
   const emojiNavItem = document.querySelector('.settings-nav-item[data-target="section-emojis"]');
-  if (emojiNavItem && !isAdmin && canManageEmojis) {
+  if (emojiNavItem && !isAdmin && (canManageEmojis || canManageStickers)) {
     emojiNavItem.style.display = '';
   }
+  // Hide the emoji-only and sticker-only sub-blocks based on which perms the
+  // user actually has, so a manage_stickers-only user doesn't see an Emoji
+  // upload panel they can't use (and vice versa).
+  const emojiBlock = document.getElementById('section-emojis');
+  const stickerBlock = document.getElementById('section-stickers');
+  if (emojiBlock && !isAdmin) emojiBlock.style.display = canManageEmojis ? '' : 'none';
+  if (stickerBlock && !isAdmin) stickerBlock.style.display = canManageStickers ? '' : 'none';
   // Show the Sounds admin tab for users with manage_soundboard permission
   const soundsNavItem = document.querySelector('.settings-nav-item[data-target="section-sounds-admin"]');
   if (soundsNavItem && !isAdmin && canManageSounds) {
@@ -601,8 +624,10 @@ _snapshotAdminSettings() {
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_poll_options: this.serverSettings.max_poll_options || '10',
     session_duration_days: this.serverSettings.session_duration_days || '7',
+    max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     default_theme: this.serverSettings.default_theme || '',
+    published_themes: this.serverSettings.published_themes || '[]',
     custom_tos: this.serverSettings.custom_tos || '',
     role_icon_sidebar: this.serverSettings.role_icon_sidebar || 'true',
     role_icon_chat: this.serverSettings.role_icon_chat || 'false',
@@ -673,7 +698,7 @@ _saveAdminSettings() {
     changed = true;
   }
 
-  const maxUpload = String(Math.max(1, Math.min(2048, parseInt(document.getElementById('max-upload-mb')?.value) || 25)));
+  const maxUpload = String(Math.max(1, Math.min(102400, parseInt(document.getElementById('max-upload-mb')?.value) || 25)));
   if (maxUpload !== (snap.max_upload_mb || '25')) {
     this.socket.emit('update-server-setting', { key: 'max_upload_mb', value: maxUpload });
     changed = true;
@@ -703,6 +728,12 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const maxMsgChars = String(Math.max(200, Math.min(100000, parseInt(document.getElementById('max-message-chars')?.value) || 2000)));
+  if (maxMsgChars !== (snap.max_message_chars || '2000')) {
+    this.socket.emit('update-server-setting', { key: 'max_message_chars', value: maxMsgChars });
+    changed = true;
+  }
+
   const updateBannerAdminOnly = document.getElementById('update-banner-admin-only')?.checked ? 'true' : 'false';
   if (updateBannerAdminOnly !== (snap.update_banner_admin_only || 'false')) {
     this.socket.emit('update-server-setting', { key: 'update_banner_admin_only', value: updateBannerAdminOnly });
@@ -712,6 +743,16 @@ _saveAdminSettings() {
   const defaultTheme = document.getElementById('default-theme-select')?.value || '';
   if (defaultTheme !== (snap.default_theme || '')) {
     this.socket.emit('update-server-setting', { key: 'default_theme', value: defaultTheme });
+    changed = true;
+  }
+
+  const publishedThemes = JSON.stringify(
+    [...document.querySelectorAll('#admin-theme-list input[type="checkbox"]')]
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.file)
+  );
+  if (publishedThemes !== (snap.published_themes || '[]')) {
+    this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
     changed = true;
   }
 
@@ -774,6 +815,8 @@ _cancelAdminSettings() {
     if (mpo) mpo.value = snap.max_poll_options || '10';
     const sdd = document.getElementById('session-duration-days');
     if (sdd) sdd.value = snap.session_duration_days || '7';
+    const mmc = document.getElementById('max-message-chars');
+    if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
     const dt = document.getElementById('default-theme-select');
@@ -782,6 +825,62 @@ _cancelAdminSettings() {
     if (ct) ct.value = snap.custom_tos || '';
   }
   document.getElementById('settings-modal').style.display = 'none';
+},
+
+async _renderAdminThemeList() {
+  const container = document.getElementById('admin-theme-list');
+  if (!container) return;
+  let themes = [];
+  try {
+    themes = await fetch('/api/themes').then(r => r.json());
+  } catch { /* server not ready */ }
+
+  if (themes.length === 0) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>';
+    return;
+  }
+
+  container.innerHTML = '';
+  for (const theme of themes) {
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.file = theme.file;
+    cb.checked = !!theme.published;
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = theme.name || theme.file;
+    const descSpan = document.createElement('span');
+    descSpan.style.cssText = 'font-size:11px;color:var(--text-muted)';
+    descSpan.textContent = theme.description || '';
+    label.append(cb, nameSpan);
+    if (theme.description) label.append(descSpan);
+    container.appendChild(label);
+  }
+
+  // Sync published file themes into the default-theme-select
+  const dtSelect = document.getElementById('default-theme-select');
+  if (dtSelect) {
+    // Remove any previously injected file: options
+    dtSelect.querySelectorAll('option[data-custom-theme]').forEach(o => o.remove());
+    const published = themes.filter(t => t.published);
+    if (published.length > 0) {
+      const sep = document.createElement('option');
+      sep.disabled = true;
+      sep.textContent = '── Custom ──';
+      sep.setAttribute('data-custom-theme', '1');
+      dtSelect.appendChild(sep);
+      for (const theme of published) {
+        const opt = document.createElement('option');
+        opt.value = `file:${theme.file}`;
+        opt.textContent = theme.name || theme.file;
+        opt.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(opt);
+      }
+    }
+    // Re-apply saved value (may be a file: value)
+    dtSelect.value = this.serverSettings.default_theme || '';
+  }
 },
 
 _renderWhitelist(list) {
@@ -1105,6 +1204,12 @@ _openAllMembersModal() {
       titleEl.textContent = res.channelOnly ? t('modals.all_members.channel_title') : t('modals.all_members.title');
     }
     document.getElementById('all-members-count').textContent = `(${res.total})`;
+    // Toggle moderator-only nav buttons (View Bans / View Deleted) based on perms.
+    // Server-side handlers re-validate, so DOM tampering can't reveal data.
+    const banBtn = document.getElementById('aml-view-bans-btn');
+    const delBtn = document.getElementById('aml-view-deleted-btn');
+    if (banBtn) banBtn.style.display = (this._allMembersPerms.canBan || this._allMembersPerms.isAdmin) ? '' : 'none';
+    if (delBtn) delBtn.style.display = this._allMembersPerms.isAdmin ? '' : 'none';
     this._renderAllMembers(this._allMembersData);
   });
 },
@@ -2083,33 +2188,97 @@ _uploadGeneralFile(file, targetCode) {
     return;
   }
 
-  const formData = new FormData();
-  formData.append('file', file);
+  // E2E DM path (#5310, #5308): if this channel is an E2E DM, encrypt the
+  // file bytes before upload and send the metadata as an encrypted text
+  // message. Without this, drag-drop / 📎 / paste / PiP-paste of any non-image
+  // file (and any image pasted into the PiP) lands plaintext on the server
+  // filesystem, defeating the DM's E2E guarantee.
+  this._maybeUploadEncryptedDmFile(file, code, _ugCh).then(handled => {
+    if (handled) return;
 
-  this._uploadWithProgress('/api/upload-file', formData)
-  .then(data => {
-    if (data.error) {
-      this._showToast(data.error, 'error');
-      return;
+    const formData = new FormData();
+    formData.append('file', file);
+    this._uploadWithProgress('/api/upload-file', formData)
+    .then(data => {
+      if (data.error) {
+        this._showToast(data.error, 'error');
+        return;
+      }
+      // Send as a message with file attachment format
+      const sizeStr = this._formatFileSize(data.fileSize);
+      let content;
+      if (data.isImage) {
+        content = data.url; // images render inline already
+      } else {
+        // Use a special file attachment format: [file:name](url|size)
+        content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+      }
+      this.socket.emit('send-message', {
+        code,
+        content,
+        replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
+      });
+      this.notifications.play('sent');
+      if (code === this.currentChannel) this._clearReply();
+    })
+    .catch(err => this._showToast(err.message || t('settings.admin.upload_failed'), 'error'));
+  });
+},
+
+/**
+ * If `code` is an E2E DM and the partner key is available, encrypt `file`,
+ * upload as an opaque blob, then send the metadata as an encrypted
+ * `e2e-file:{json}` text message. Returns true if handled, false otherwise
+ * (so the caller can fall back to the plaintext upload path). (#5310, #5308)
+ */
+async _maybeUploadEncryptedDmFile(file, code, ch) {
+  if (!ch || !ch.is_dm || !ch.dm_target) return false;
+  let partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
+  if (!partner && this.e2e && this.e2e.ready) {
+    const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
+    if (jwk) {
+      this._dmPublicKeys[ch.dm_target.id] = jwk;
+      partner = this._getE2EPartnerFor ? this._getE2EPartnerFor(code) : this._getE2EPartner();
     }
-    // Send as a message with file attachment format
-    const sizeStr = this._formatFileSize(data.fileSize);
-    let content;
-    if (data.isImage) {
-      content = data.url; // images render inline already
-    } else {
-      // Use a special file attachment format: [file:name](url|size)
-      content = `[file:${data.originalName}](${data.url}|${sizeStr})`;
+  }
+  if (!partner) return false;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
+    const blob = new Blob([encrypted], { type: 'application/octet-stream' });
+    const formData = new FormData();
+    formData.append('file', blob, 'e2e-file.enc');
+    const data = await this._uploadWithProgress('/api/upload-file', formData);
+    if (!data || !data.url) {
+      this._showToast(t('toasts.encrypted_image_failed') || 'Encrypted upload failed', 'error');
+      return true;
     }
+    const meta = JSON.stringify({
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      url: data.url,
+      name: file.name || 'file'
+    });
+    // Images (including SVG) use e2e-img: so they render inline (#5309)
+    const isImage = (file.type || '').startsWith('image/');
+    const marker = isImage
+      ? `e2e-img:${file.type || 'image/png'}:${data.url}`
+      : `e2e-file:${meta}`;
+    const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
     this.socket.emit('send-message', {
       code,
-      content,
+      content: encryptedText,
+      encrypted: true,
       replyTo: (code === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null
     });
     this.notifications.play('sent');
     if (code === this.currentChannel) this._clearReply();
-  })
-  .catch(err => this._showToast(err.message || t('settings.admin.upload_failed'), 'error'));
+    return true;
+  } catch (err) {
+    console.warn('[E2E] File encryption failed:', err);
+    this._showToast(t('toasts.encrypted_image_failed') || 'Encrypted upload failed', 'error');
+    return true;
+  }
 },
 
 _formatFileSize(bytes) {
@@ -2988,7 +3157,8 @@ _renderRoleDetail() {
           <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}>
         </label>
       `).join('')}
-      <div style="margin-top:12px;display:flex;gap:8px">
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-sm btn-accent" id="role-members-btn">👥 Members</button>
         <button class="btn-sm" id="duplicate-role-btn">📋 Duplicate</button>
         <button class="btn-sm danger" id="delete-role-btn">${t('settings.admin.role_form.delete')}</button>
       </div>
@@ -3127,8 +3297,13 @@ _renderRoleDetail() {
     });
   });
 
-  document.getElementById('delete-role-btn').addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_delete_confirm', { name: role.name }))) return;
+  document.getElementById('delete-role-btn').addEventListener('click', async () => {
+    const ok = await this._showConfirmModal(
+      t('settings.admin.roles_delete_confirm', { name: role.name }),
+      '',
+      { danger: true }
+    );
+    if (!ok) return;
     this.socket.emit('delete-role', { roleId: role.id }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_deleted'), 'success');
@@ -3142,9 +3317,9 @@ _renderRoleDetail() {
   // create a fresh role with the same level, color, icon, and permissions.
   // Channel-access linkage and auto-assign are intentionally NOT copied —
   // both are rarely what an admin wants on a freshly cloned role.
-  document.getElementById('duplicate-role-btn')?.addEventListener('click', () => {
+  document.getElementById('duplicate-role-btn')?.addEventListener('click', async () => {
     const defaultName = `${role.name} (copy)`.slice(0, 30);
-    const newName = prompt('Name for the duplicated role:', defaultName);
+    const newName = await this._showPromptModal('Duplicate Role', 'Name for the duplicated role:', defaultName);
     if (!newName || !newName.trim()) return;
     const trimmed = newName.trim().slice(0, 30);
     this.socket.emit('create-role', {
@@ -3161,6 +3336,96 @@ _renderRoleDetail() {
       this._loadRoles?.();
     });
   });
+
+  document.getElementById('role-members-btn')?.addEventListener('click', () => {
+    this._openRoleMembersModal(role);
+  });
+},
+
+_openRoleMembersModal(role) {
+  const modal = document.getElementById('role-members-modal');
+  if (!modal) return;
+  document.getElementById('role-members-modal-title').textContent = role.name;
+  document.getElementById('role-members-search').value = '';
+
+  const listEl = document.getElementById('role-members-list');
+  listEl.innerHTML = `<p class="rac-placeholder" style="padding:16px;text-align:center">${t('modals.common.loading')}</p>`;
+
+  modal.style.display = 'flex';
+  modal.style.zIndex = '100004';
+
+  let cachedData = null;
+
+  const renderList = (users, filter) => {
+    const q = (filter || '').toLowerCase();
+    const filtered = users.filter(u =>
+      !q || u.username.toLowerCase().includes(q) ||
+      (u.displayName || '').toLowerCase().includes(q)
+    );
+    if (!filtered.length) {
+      listEl.innerHTML = `<p class="rac-placeholder" style="padding:16px;text-align:center">No members found</p>`;
+      return;
+    }
+    listEl.innerHTML = filtered.map(u => {
+      const hasRole = u.currentRoles.some(r => r.id === role.id && !r.channel_id);
+      const color = this._getUserColor(u.username);
+      const initial = (u.displayName || u.username).charAt(0).toUpperCase();
+      const shapeStyle = u.avatarShape === 'square' ? 'border-radius:4px' : '';
+      const avatarHtml = u.avatar
+        ? `<img class="rac-user-avatar" src="${this._escapeHtml(u.avatar)}" alt="${initial}" style="${shapeStyle}">`
+        : `<span class="rac-user-avatar" style="background-color:${color};${shapeStyle}">${initial}</span>`;
+      const badgeHtml = hasRole
+        ? `<span class="role-member-badge" style="background:${this._safeColor(role.color,'#aaa')}22;color:${this._safeColor(role.color,'#aaa')};border:1px solid ${this._safeColor(role.color,'#aaa')}44;border-radius:4px;padding:1px 6px;font-size:11px;white-space:nowrap">${this._escapeHtml(role.name)}</span>`
+        : '';
+      return `<div class="rac-user-item" style="cursor:default;gap:10px" data-uid="${u.id}">
+        ${avatarHtml}
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">${this._escapeHtml(this._getNickname(u.id, u.displayName))}</span>
+        ${badgeHtml}
+        <button class="btn-sm${hasRole ? ' danger' : ' btn-accent'} role-member-toggle-btn" data-uid="${u.id}" data-has="${hasRole}" style="flex-shrink:0;min-width:64px">
+          ${hasRole ? 'Remove' : 'Assign'}
+        </button>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.role-member-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const uid = parseInt(btn.dataset.uid, 10);
+        const has = btn.dataset.has === 'true';
+        btn.disabled = true;
+        const event = has ? 'revoke-role' : 'assign-role';
+        this.socket.emit(event, { userId: uid, roleId: role.id, channelId: null }, (res) => {
+          if (res && res.error) {
+            this._showToast(res.error, 'error');
+            btn.disabled = false;
+            return;
+          }
+          this.socket.emit('get-role-assignment-data', {}, (r) => {
+            if (!r.error) { cachedData = r; renderList(r.users, document.getElementById('role-members-search').value); }
+          });
+        });
+      });
+    });
+  };
+
+  this.socket.emit('get-role-assignment-data', {}, (res) => {
+    if (res.error) { this._showToast(res.error, 'error'); return; }
+    cachedData = res;
+    renderList(res.users, '');
+  });
+
+  const searchEl = document.getElementById('role-members-search');
+  // Replace old listener by cloning
+  const freshSearch = searchEl.cloneNode(true);
+  searchEl.parentNode.replaceChild(freshSearch, searchEl);
+  freshSearch.addEventListener('input', (e) => {
+    if (cachedData) renderList(cachedData.users, e.target.value);
+  });
+
+  const closeBtn = document.getElementById('role-members-close-btn');
+  const freshClose = closeBtn.cloneNode(true);
+  closeBtn.parentNode.replaceChild(freshClose, closeBtn);
+  freshClose.addEventListener('click', () => { modal.style.display = 'none'; });
+  modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
 },
 
 _loadRoleChannelAccess(roleId) {
@@ -3475,8 +3740,13 @@ _renderChannelRolesRoleDetail() {
     });
   });
 
-  document.getElementById('cr-delete-role-btn').addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_delete_confirm', { name: role.name }))) return;
+  document.getElementById('cr-delete-role-btn').addEventListener('click', async () => {
+    const ok = await this._showConfirmModal(
+      t('settings.admin.roles_delete_confirm', { name: role.name }),
+      '',
+      { danger: true }
+    );
+    if (!ok) return;
     this.socket.emit('delete-role', { roleId: role.id }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_deleted'), 'success');
@@ -4111,9 +4381,9 @@ _initRoleAssignCenter() {
   // Manage Roles button (admin only - opens main role management modal)
   document.getElementById('rac-manage-roles-btn')?.addEventListener('click', () => {
     document.getElementById('role-assign-center-modal').style.display = 'none';
-    this._loadRoles(() => {
-      document.getElementById('role-modal').style.display = 'flex';
-    });
+    // _openRoleModal shows the modal first, then loads — ensures the sidebar
+    // re-renders once roles arrive (fixes #5xxx: blank role list when opened from RAC).
+    this._openRoleModal();
   });
 
   // User search

@@ -18,6 +18,26 @@ async _sendMessage() {
     return;
   }
 
+  // (#5335) Sticker shortcode — if the message is exactly `:stickername:`
+  // (whitespace-trimmed) and that name matches an uploaded sticker, route
+  // it through _sendStickerMessage so it goes out as a standalone sticker
+  // image instead of a literal `:name:` text message.
+  if (!hasImages && /^:[a-zA-Z0-9_-]+:$/.test(content)) {
+    const stickerName = content.slice(1, -1).toLowerCase();
+    const stickers = Array.isArray(this.stickers) ? this.stickers : [];
+    const sticker = stickers.find(s => (s.name || '').toLowerCase() === stickerName);
+    if (sticker && sticker.url) {
+      input.value = '';
+      input.style.height = 'auto';
+      this._clearReply();
+      this._hideMentionDropdown();
+      this._hideSlashDropdown();
+      this._emojiPickerContext = 'main';
+      this._sendStickerMessage(sticker.url);
+      return;
+    }
+  }
+
   // Client-side slash commands (not sent to server)
   if (content.startsWith('/')) {
     // /tts:stop — cancel all speech synthesis immediately
@@ -92,6 +112,17 @@ async _sendMessage() {
   const payload = { code: this.currentChannel, content };
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
+  }
+  // (#5280) Burn-after-read arming — DM-only; cleared in switchChannel
+  // when the user moves to a non-DM channel so a stale flag can't leak.
+  if (this._burnArmed) {
+    payload.burnSeconds = 30;
+    this._burnArmed = false;
+    const _burnBtn = document.getElementById('burn-btn');
+    if (_burnBtn) {
+      _burnBtn.classList.remove('active');
+      _burnBtn.title = 'Burn after read (DM only)';
+    }
   }
 
   // Clear UI immediately (before any async E2E work)
@@ -290,6 +321,10 @@ _renderMessages(messages, lastReadMessageId) {
   this._setupVideos(container);
   // Decrypt E2E images (async — renders as images load)
   this._decryptE2EImages(container);
+  // Wire up decryption-on-click for E2E file attachments (#5310, #5308)
+  this._decryptE2EFiles(container);
+  // Wire burn-after-read placeholders + countdowns (#5280)
+  this._wireBurnMessages?.(container);
   // Mark as read (last message ID)
   if (messages.length > 0) {
     this._markRead(messages[messages.length - 1].id);
@@ -426,6 +461,7 @@ _prependMessages(messages) {
     this._fetchLinkPreviews(el);
     this._setupVideos(el);
     this._decryptE2EImages(el);
+    this._decryptE2EFiles(el);
   }
 },
 
@@ -479,6 +515,7 @@ _appendMessages(messages) {
   this._fetchLinkPreviews(container);
   this._setupVideos(container);
   this._decryptE2EImages(container);
+  this._decryptE2EFiles(container);
 
   // Mark as read so the server-side read position advances
   if (messages.length > 0) {
@@ -527,6 +564,8 @@ _appendMessage(message, forceScroll = false) {
   this._fetchLinkPreviews(msgEl);
   this._setupVideos(msgEl);
   this._decryptE2EImages(msgEl);
+  this._decryptE2EFiles(msgEl);
+  this._wireBurnMessages?.(msgEl);
   if (wasAtBottom) {
     this._scrollToBottom(true);
   }
@@ -653,6 +692,10 @@ _createMessageEl(msg, prevMsg) {
     if (msg.is_archived) el.dataset.archived = '1';
     if (msg._e2e) el.dataset.e2e = '1';
     if (msg.poll && msg.poll.anonymous) el.dataset.pollAnonymous = '1';
+    // Store avatar so _promoteCompactToFull can restore the correct image
+    // even when the author is not in the online users list (e.g. offline).
+    if (msg.avatar) el.dataset.avatar = msg.avatar;
+    if (msg.avatar_shape) el.dataset.avatarShape = msg.avatar_shape;
     el.innerHTML = `
       <span class="compact-time">${new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
       <div class="message-body">
@@ -727,6 +770,14 @@ _createMessageEl(msg, prevMsg) {
   if (msg.pinned) el.dataset.pinned = '1';
   if (msg.is_archived) el.dataset.archived = '1';
   if (msg._e2e) el.dataset.e2e = '1';
+  // (#5280) burn-after-read marker — `_wireBurnMessages` (called from
+  // every render path) reads these attrs to set up the click-to-reveal
+  // placeholder + countdown timer.
+  if (msg.burn_seconds && msg.burn_seconds > 0) {
+    el.classList.add('message-burn-pending');
+    el.dataset.burnSeconds = String(msg.burn_seconds);
+    if (msg.burning_started_at) el.dataset.burnStartedAt = msg.burning_started_at;
+  }
   if (msg.poll && msg.poll.anonymous) el.dataset.pollAnonymous = '1';
   el.innerHTML = `
     <div class="message-row">
@@ -781,9 +832,11 @@ _promoteCompactToFull(compactEl) {
   const color = this._getUserColor(username);
   const initial = username.charAt(0).toUpperCase();
   const onlineUser = this.users ? this.users.find(u => u.id === userId) : null;
-  const msgShape = (onlineUser && onlineUser.avatarShape) || 'circle';
+  // Prefer the avatar stored on the compact element (set at render time from server data).
+  // Fall back to the online-users list so newly-uploaded avatars still appear.
+  const msgShape = compactEl.dataset.avatarShape || (onlineUser && onlineUser.avatarShape) || 'circle';
   const shapeClass = 'avatar-' + msgShape;
-  const avatar = onlineUser && onlineUser.avatar;
+  const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
   const avatarHtml = avatar
     ? `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
@@ -1015,6 +1068,18 @@ _generateVideoThumbnail(video) {
 // ── Link Previews ─────────────────────────────────────
 
 _fetchLinkPreviews(containerEl) {
+  // Per-URL client cache so re-rendering a channel (or scrolling history,
+  // or popping out a DM PiP) doesn't re-fetch previews we already have.
+  // Without this, opening a chat with N links emits N requests every time
+  // the message list is re-rendered, which trips the server's per-IP rate
+  // limit and turns most cards into 429s. (#5337)
+  //
+  // - this._linkPreviewCache: url -> { data, ts }   (10-minute TTL)
+  // - this._linkPreviewInflight: url -> Promise<data>  (dedupe concurrent fetches)
+  if (!this._linkPreviewCache) this._linkPreviewCache = new Map();
+  if (!this._linkPreviewInflight) this._linkPreviewInflight = new Map();
+  const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
+
   const links = containerEl.querySelectorAll('.message-content a[href]');
   const seen = new Set();
   links.forEach(link => {
@@ -1041,12 +1106,36 @@ _fetchLinkPreviews(containerEl) {
       return; // skip generic link preview for YouTube
     }
 
-    fetch(`/api/link-preview?url=${encodeURIComponent(url)}`, {
-      headers: { 'Authorization': `Bearer ${this.token}` }
-    })
-      .then(r => r.json())
+    // Resolve preview data via cache → inflight → network, in that order.
+    const fromCache = this._linkPreviewCache.get(url);
+    let dataPromise;
+    if (fromCache && Date.now() - fromCache.ts < PREVIEW_CLIENT_TTL) {
+      dataPromise = Promise.resolve(fromCache.data);
+    } else if (this._linkPreviewInflight.has(url)) {
+      dataPromise = this._linkPreviewInflight.get(url);
+    } else {
+      const p = fetch(`/api/link-preview?url=${encodeURIComponent(url)}`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data) this._linkPreviewCache.set(url, { data, ts: Date.now() });
+          // Light cap so the cache can't grow unbounded over a long session.
+          if (this._linkPreviewCache.size > 500) {
+            const firstKey = this._linkPreviewCache.keys().next().value;
+            this._linkPreviewCache.delete(firstKey);
+          }
+          return data;
+        })
+        .catch(() => null)
+        .finally(() => { this._linkPreviewInflight.delete(url); });
+      this._linkPreviewInflight.set(url, p);
+      dataPromise = p;
+    }
+
+    dataPromise
       .then(data => {
-        if (!data.title && !data.description) return;
+        if (!data || (!data.title && !data.description)) return;
         const msgContent = link.closest('.message-content');
         if (!msgContent) return;
 

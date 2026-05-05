@@ -69,6 +69,23 @@ const { initFcm } = require('./src/fcm');
 
 const app = express();
 
+// Trust proxy configuration — controls how many reverse-proxy hops to trust
+// when reading the real client IP from X-Forwarded-For.
+//
+//   TRUST_PROXY=1  (default) — trust the first hop (nginx/Traefik/Cloudflare)
+//   TRUST_PROXY=0             — direct exposure; do NOT trust XFF headers
+//                               (prevents attackers from spoofing their IP to
+//                               bypass the auth rate limiter)
+//   TRUST_PROXY=2             — two proxy hops, etc.
+//
+// Without this every user behind a reverse proxy shares the loopback IP in
+// the auth rate limiter, causing innocent users to hit the limit on their
+// very first login/register attempt.
+const _trustProxy = process.env.TRUST_PROXY !== undefined
+  ? (isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY))
+  : 1;
+app.set('trust proxy', _trustProxy);
+
 // ── Helper: verify admin from DB (don't trust JWT claims alone) ─────
 // JWT isAdmin may be stale if admin was demoted since token was issued.
 function verifyAdminFromDb(user) {
@@ -169,6 +186,18 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       res.setHeader('Vary', 'Origin');
+    } else if (ext === '.svg') {
+      // SVG (issue #5309): renderable inline via <img> tag (browsers run SVG in
+      // "secure static mode" — no scripts, no XHR), but direct navigation still
+      // gets attachment-disposition so opening the raw URL in a new tab can't
+      // execute the file. CSP doubles up on that — even if a future browser
+      // change allowed any external loads inside <img>-rendered SVG, this
+      // header forbids everything except inline styles (needed for fill/stroke).
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     } else {
       res.setHeader('Content-Disposition', 'attachment');
     }
@@ -214,6 +243,11 @@ app.get('/api/plugins', (req, res) => {
 app.get('/api/themes', (req, res) => {
   try {
     const files = fs.readdirSync(THEMES_DIR).filter(f => f.endsWith('.theme.css'));
+    let published = [];
+    try {
+      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
+      if (row) published = JSON.parse(row.value);
+    } catch { /* DB not ready yet or parse error — default to empty */ }
     const themes = files.map(f => {
       const content = fs.readFileSync(path.join(THEMES_DIR, f), 'utf8');
       const meta = {};
@@ -224,12 +258,14 @@ app.get('/api/themes', (req, res) => {
         const descM = block.match(/@description\s+(.+)/);
         const authM = block.match(/@author\s+(.+)/);
         const verM  = block.match(/@version\s+(.+)/);
+        const iconM = block.match(/@icon\s+(.+)/);
         if (nameM) meta.name = nameM[1].trim();
         if (descM) meta.description = descM[1].trim();
         if (authM) meta.author = authM[1].trim();
         if (verM)  meta.version = verM[1].trim();
+        if (iconM) meta.icon = iconM[1].trim();
       }
-      return { file: f, ...meta };
+      return { file: f, ...meta, published: published.includes(f) };
     });
     res.json(themes);
   } catch { res.json([]); }
@@ -246,10 +282,10 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
-// Image-only upload — multer cap is high; real limit enforced per-request from DB
+// Image-only upload — multer cap is generous; real limit enforced per-request from DB
 const upload = multer({
   storage: uploadStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
   fileFilter: (req, file, cb) => {
     if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
     else cb(new Error('Only images allowed (jpg, png, gif, webp)'));
@@ -260,11 +296,15 @@ const upload = multer({
 // Content-Disposition: attachment on non-image downloads (see /uploads handler)
 const fileUpload = multer({
   storage: uploadStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },  // hard cap 2 GB; DB-configurable limit enforced per-request
+  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
 });
 
-// ── API routes (rate-limited) ────────────────────────────
-app.use('/api/auth', authLimiter, authRoutes);
+// ── API routes ────────────────────────────────────────────
+// authLimiter is applied per-route inside auth.js for credential endpoints
+// (login, register, TOTP, password change). Non-credential routes like
+// /validate and /user-servers are intentionally left unlimitted here so
+// 50+ concurrent users joining a stream event don't trip the limiter. (#5323)
+app.use('/api/auth', authRoutes);
 
 // ── Push notification VAPID public key endpoint ──────────
 app.get('/api/push/vapid-key', (req, res) => {
@@ -1116,6 +1156,128 @@ app.delete('/api/emojis/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete emoji' }); }
 });
 
+// ── Stickers (admin/manage_stickers-only upload, anyone can list/send) ──
+// (#5335) `manage_stickers` is the canonical permission. We still accept
+// `manage_emojis` as a fallback so anyone who already had emoji-management
+// access keeps sticker access without an explicit re-grant.
+// Stored under uploads/stickers/<file> so message rendering can detect
+// them by URL prefix and render at sticker dimensions.
+const STICKERS_DIR = path.join(uploadDir, 'stickers');
+try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch {}
+
+// (#5335) Seed a small starter pack on first run so the picker isn't empty
+// out of the box. Files in public/starter-stickers/ are copied into
+// uploads/stickers/ and registered in the `stickers` table under the
+// "Starter" pack — but only if there are zero stickers in the DB. Once
+// any sticker exists we leave things alone so admin uploads or deletions
+// aren't trampled on next restart.
+function seedStarterStickers() {
+  try {
+    const { getDb } = require('./src/database');
+    const db = getDb();
+    const existing = db.prepare('SELECT COUNT(*) as c FROM stickers').get();
+    if (existing && existing.c > 0) return;
+    const seedDir = path.join(__dirname, 'public', 'starter-stickers');
+    if (!fs.existsSync(seedDir)) return;
+    const files = fs.readdirSync(seedDir).filter(f => /\.(svg|png|gif|webp|jpg|jpeg)$/i.test(f));
+    const insert = db.prepare(
+      'INSERT OR IGNORE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, NULL)'
+    );
+    let seeded = 0;
+    for (const file of files) {
+      try {
+        const ext = path.extname(file).toLowerCase();
+        const baseName = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        if (!baseName) continue;
+        const destName = `starter-${baseName}${ext}`;
+        const destPath = path.join(STICKERS_DIR, destName);
+        if (!fs.existsSync(destPath)) fs.copyFileSync(path.join(seedDir, file), destPath);
+        insert.run(baseName, 'Starter', destName);
+        seeded++;
+      } catch {}
+    }
+    if (seeded > 0) console.log(`[stickers] Seeded ${seeded} starter sticker(s) into the "Starter" pack.`);
+  } catch (err) {
+    // Non-fatal — the server runs fine without the starter pack.
+    console.warn('[stickers] Could not seed starter pack:', err?.message || err);
+  }
+}
+const stickerStorage = multer.diskStorage({
+  destination: STICKERS_DIR,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
+  }
+});
+function createStickerUpload() {
+  const { getDb } = require('./src/database');
+  // Stickers are larger than emojis by design — separate setting, default 1 MB.
+  const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_sticker_kb')?.value) || 1024;
+  return multer({
+    storage: stickerStorage,
+    limits: { fileSize: maxKb * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^image\/(png|gif|webp|jpeg)$/.test(file.mimetype)) cb(null, true);
+      else cb(new Error('Only images allowed (png, gif, webp, jpg)'));
+    }
+  });
+}
+
+app.post('/api/upload-sticker', uploadLimiter, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
+
+  createStickerUpload().single('sticker')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+    if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
+    if (name.length > 40) name = name.slice(0, 40);
+
+    let pack = (req.body.pack_name || '').trim().slice(0, 40);
+    if (!pack) pack = 'General';
+
+    const { getDb } = require('./src/database');
+    try {
+      getDb().prepare(
+        'INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)'
+      ).run(name, pack, req.file.filename, user.id);
+      res.json({ name, pack_name: pack, url: `/uploads/stickers/${req.file.filename}` });
+    } catch { res.status(500).json({ error: 'Failed to save sticker' }); }
+  });
+});
+
+app.get('/api/stickers', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const { getDb } = require('./src/database');
+  try {
+    const rows = getDb().prepare('SELECT id, name, pack_name, filename FROM stickers ORDER BY pack_name COLLATE NOCASE, name COLLATE NOCASE').all();
+    res.json({ stickers: rows.map(r => ({ id: r.id, name: r.name, pack_name: r.pack_name, url: `/uploads/stickers/${r.filename}` })) });
+  } catch { res.json({ stickers: [] }); }
+});
+
+app.delete('/api/stickers/:name', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
+  const name = req.params.name;
+  const { getDb } = require('./src/database');
+  try {
+    const row = getDb().prepare('SELECT filename FROM stickers WHERE name = ?').get(name);
+    if (row) {
+      try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch {}
+      getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
+    }
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
+});
+
 // ── GIF search proxy (GIPHY API — keeps key server-side) ──
 function getGiphyKey() {
   // Check database first (set via admin panel), fall back to .env
@@ -1573,19 +1735,24 @@ const dns = require('dns');
 const { promisify } = require('util');
 const dnsResolve = promisify(dns.resolve4);
 
-// Rate limit link preview fetches (per IP, separate from upload limiter)
+// Rate limit link preview fetches (per IP, separate from upload limiter).
+// Returns true when the request is within the window, false if the caller
+// should serve a 429.  The route handler invokes this AFTER the cache
+// lookup, so cache hits never consume a rate-limit token — fixes a bug
+// where reopening a chat with many links 429'd legitimate fresh requests
+// because each cached preview burned a slot.  (#5337)
 const previewLimitStore = new Map();
-function previewLimiter(req, res, next) {
+function previewLimiterCheck(req) {
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxReqs = 30; // 30 previews per minute per user
+  const maxReqs = 60; // 60 previews/min/user (was 30; bumped per #5337)
   if (!previewLimitStore.has(ip)) previewLimitStore.set(ip, []);
   const stamps = previewLimitStore.get(ip).filter(t => now - t < windowMs);
   previewLimitStore.set(ip, stamps);
-  if (stamps.length >= maxReqs) return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  if (stamps.length >= maxReqs) return false;
   stamps.push(now);
-  next();
+  return true;
 }
 setInterval(() => { const now = Date.now(); for (const [ip, t] of previewLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) previewLimitStore.delete(ip); else previewLimitStore.set(ip, f); } }, 5 * 60 * 1000);
 
@@ -1636,7 +1803,7 @@ async function validateUrlSafe(urlStr) {
   return parsed;
 }
 
-app.get('/api/link-preview', previewLimiter, async (req, res) => {
+app.get('/api/link-preview', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1644,18 +1811,25 @@ app.get('/api/link-preview', previewLimiter, async (req, res) => {
   const url = (req.query.url || '').trim();
   if (!url) return res.status(400).json({ error: 'Missing url param' });
 
+  // Cache check FIRST — cache hits should never consume a rate-limit slot.
+  // Reopening a chat full of links was hitting 429 because the limiter ran
+  // before the cache lookup. (#5337)
+  const cached = linkPreviewCache.get(url);
+  if (cached && Date.now() - cached.ts < PREVIEW_CACHE_TTL) {
+    return res.json(cached.data);
+  }
+
+  // Cache miss — now apply the per-IP rate limit.
+  if (!previewLimiterCheck(req)) {
+    return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  }
+
   // Validate the initial URL is safe (protocol, hostname, DNS)
   let parsed;
   try {
     parsed = await validateUrlSafe(url);
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Invalid URL' });
-  }
-
-  // Cache check
-  const cached = linkPreviewCache.get(url);
-  if (cached && Date.now() - cached.ts < PREVIEW_CACHE_TTL) {
-    return res.json(cached.data);
   }
 
   // Use a real browser UA — many sites (Twitter/X, Instagram, etc.) serve
@@ -2930,13 +3104,16 @@ const io = new Server(server, {
     origin: false,         // same-origin only — no cross-site connections
   },
   maxHttpBufferSize: 64 * 1024,  // 64KB max per message (was 1MB)
-  pingTimeout: 30000,
+  pingTimeout: 60000,
   pingInterval: 25000,
   connectTimeout: 10000,
 });
 
 // Initialize
 const db = initDatabase();
+
+// (#5335) Seed starter stickers now that the DB is ready.
+try { seedStarterStickers(); } catch {}
 
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.
@@ -3115,6 +3292,57 @@ function runAutoCleanup() {
         }
       }
     }
+
+    // 3. (#5282) Orphan-DM sweep — delete any DM channel that has dropped
+    // below 2 members (one or both participants deleted their account or
+    // were force-removed). channel_members.user_id has ON DELETE CASCADE
+    // so the row vanishes when the user does, but the DM channel itself
+    // is left lingering with stale messages forever; this is the
+    // "orphaned conversation" issue called out in #5282. Runs regardless
+    // of cleanup_enabled so the data isn't retained indefinitely.
+    try {
+      const orphanRows = db.prepare(`
+        SELECT c.id, c.code, COUNT(cm.user_id) as member_count
+        FROM channels c
+        LEFT JOIN channel_members cm ON cm.channel_id = c.id
+        WHERE c.is_dm = 1
+        GROUP BY c.id
+        HAVING member_count < 2
+      `).all();
+      let orphansDeleted = 0;
+      for (const ch of orphanRows) {
+        try {
+          // Move any /uploads/<file> referenced in this DM's messages to
+          // deleted-attachments first so file cleanup doesn't lose track.
+          const msgs = db.prepare('SELECT content FROM messages WHERE channel_id = ?').all(ch.id);
+          const uploadRe = /\/uploads\/((?!deleted-attachments)[\w\-.]+)/g;
+          const seen = new Set();
+          for (const m of msgs) {
+            if (typeof m.content !== 'string') continue;
+            let mm;
+            while ((mm = uploadRe.exec(m.content)) !== null) seen.add(mm[1]);
+          }
+          if (seen.size) {
+            const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
+            require('fs').mkdirSync(deletedDir, { recursive: true });
+            for (const fn of seen) {
+              const src = path.join(UPLOADS_DIR, fn);
+              if (!require('fs').existsSync(src)) continue;
+              try { require('fs').renameSync(src, path.join(deletedDir, fn)); } catch {}
+            }
+          }
+          // Delete the channel — cascades to messages + read_positions +
+          // channel_members + reactions etc. via the existing FKs.
+          db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+          orphansDeleted++;
+        } catch (e) {
+          console.error('[orphan-DM] failed to clean', ch.code, e.message);
+        }
+      }
+      if (orphansDeleted > 0) {
+        console.log(`🗑️  Auto-cleanup: removed ${orphansDeleted} orphan DM channel(s)`);
+      }
+    } catch (e) { /* sweep is best-effort */ }
 
     if (totalDeleted > 0) {
       console.log(`🗑️  Auto-cleanup: deleted ${totalDeleted} old messages`);

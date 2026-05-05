@@ -31,7 +31,7 @@ module.exports = function register(socket, ctx) {
     let messages;
     if (before) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
@@ -39,7 +39,7 @@ module.exports = function register(socket, ctx) {
       `).all(channel.id, before, limit);
     } else if (after) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
@@ -48,20 +48,20 @@ module.exports = function register(socket, ctx) {
     } else if (around) {
       const half = Math.floor(limit / 2);
       const beforeMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, around, half);
       const targetMsg = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id = ?
       `).all(channel.id, around);
       const afterMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
@@ -71,7 +71,7 @@ module.exports = function register(socket, ctx) {
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
     } else {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.thread_id IS NULL
@@ -323,8 +323,10 @@ module.exports = function register(socket, ctx) {
 
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     if (!content || content.trim().length === 0) return;
-    if (content.length > 2000) {
-      return socket.emit('error-msg', 'Message too long (max 2000 characters)');
+    const _maxCharsRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
+    const _maxChars = parseInt(_maxCharsRow?.value) || 2000;
+    if (content.length > _maxChars) {
+      return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
     }
 
     touchVoiceActivity(socket.user.id);
@@ -449,10 +451,18 @@ module.exports = function register(socket, ctx) {
       if (!replyMsg || replyMsg.channel_id !== channel.id) replyTo = null;
     }
 
+    // (#5280) burn-after-read for DMs — capped at 5 minutes; only honored
+    // for is_dm channels (the issue scopes burn to direct messages only).
+    let burnSeconds = 0;
+    if (channel.is_dm) {
+      const reqBurn = parseInt(data && data.burnSeconds);
+      if (Number.isFinite(reqBurn) && reqBurn >= 1 && reqBurn <= 300) burnSeconds = reqBurn;
+    }
+
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to) VALUES (?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, safeContent, replyTo);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds) VALUES (?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, safeContent, replyTo, burnSeconds);
 
       const message = {
         id: result.lastInsertRowid,
@@ -466,7 +476,8 @@ module.exports = function register(socket, ctx) {
         replyContext: null,
         reactions: [],
         edited_at: null,
-        thread: null
+        thread: null,
+        burn_seconds: burnSeconds || undefined
       };
 
       if (replyTo) {
@@ -493,6 +504,65 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // ── Burn-after-read mark + sweep (#5280) ────────────────────
+  // The recipient (or sender, but typically recipient) emits `mark-burning`
+  // the first time the message is revealed. Server stamps
+  // `burning_started_at` once and fans out `message-burning` so every
+  // viewer can run a synced countdown. Subsequent emits for the same
+  // message are no-ops. The actual delete fires from the periodic sweep
+  // below, which also handles the "server restarted mid-timer" case
+  // (sweep on next get-messages catches expired burns regardless).
+  socket.on('mark-burning', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const messageId = parseInt(data.messageId);
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!Number.isFinite(messageId) || !code) return;
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    if (!channel || !channel.is_dm) return;
+    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    if (!member) return;
+    const msg = db.prepare('SELECT id, channel_id, burn_seconds, burning_started_at FROM messages WHERE id = ?').get(messageId);
+    if (!msg || msg.channel_id !== channel.id) return;
+    if (!msg.burn_seconds || msg.burn_seconds <= 0) return;
+    if (msg.burning_started_at) return; // already burning — synced countdown is already live
+    const startedAt = new Date().toISOString();
+    db.prepare('UPDATE messages SET burning_started_at = ? WHERE id = ?').run(startedAt, messageId);
+    io.to(`channel:${code}`).emit('message-burning', {
+      channelCode: code,
+      messageId,
+      burnSeconds: msg.burn_seconds,
+      burningStartedAt: startedAt
+    });
+  });
+
+  // Periodic sweep: every 10 seconds, delete any burning message whose
+  // timer is up. Emits `message-burned` so clients can replace the row
+  // with a "[message burned]" placeholder. Uses datetime() arithmetic
+  // so SQLite handles the timezone math.
+  if (!global.__havenBurnSweep) {
+    global.__havenBurnSweep = setInterval(() => {
+      try {
+        const expired = db.prepare(`
+          SELECT m.id, m.channel_id, c.code AS channel_code
+          FROM messages m
+          JOIN channels c ON c.id = m.channel_id
+          WHERE m.burn_seconds > 0
+            AND m.burning_started_at IS NOT NULL
+            AND datetime(m.burning_started_at, '+' || m.burn_seconds || ' seconds') <= datetime('now')
+        `).all();
+        for (const row of expired) {
+          db.prepare('DELETE FROM messages WHERE id = ?').run(row.id);
+          io.to(`channel:${row.channel_code}`).emit('message-burned', {
+            channelCode: row.channel_code,
+            messageId: row.id
+          });
+        }
+      } catch (err) {
+        console.error('[burn-sweep] error:', err.message);
+      }
+    }, 10000);
+  }
+
   // ── Typing indicator ────────────────────────────────────
   socket.on('typing', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -512,7 +582,9 @@ module.exports = function register(socket, ctx) {
   // ── Edit message ────────────────────────────────────────
   socket.on('edit-message', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!isInt(data.messageId) || !isString(data.content, 1, 2000)) return;
+    const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
+    const _editMax = parseInt(_editMaxRow?.value) || 2000;
+    if (!isInt(data.messageId) || !isString(data.content, 1, _editMax)) return;
 
     const code = socket.currentChannel;
     if (!code) return;
@@ -564,7 +636,11 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const code = socket.currentChannel;
+    // Allow the PiP DM overlay (and similar cases where the socket is joined to
+    // a different channel) to pass the target channel explicitly so the lookup
+    // isn't blocked by socket.currentChannel pointing at a server channel.
+    const rawCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : null;
+    const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
     if (!code) return;
 
     const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);

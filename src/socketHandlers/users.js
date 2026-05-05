@@ -464,6 +464,13 @@ module.exports = function register(socket, ctx) {
     ).run(socket.user.id, key, value);
 
     socket.emit('preference-saved', { key, value });
+
+    // When the score-badge visibility changes, re-broadcast the online-users
+    // list for the user's current channel so every connected client immediately
+    // sees (or stops seeing) the badge without waiting for the next organic update.
+    if (key === 'hide_score_badge' && socket.currentChannel) {
+      emitOnlineUsers(socket.currentChannel);
+    }
   });
 
   // ── High Scores ─────────────────────────────────────────

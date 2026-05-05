@@ -130,7 +130,9 @@
       "emoji_btn": "Emoji",
       "gif_btn": "Search GIFs",
       "gif_label": "GIF",
-      "poll_btn": "Create Poll"
+      "poll_btn": "Create Poll",
+      "burn_btn": "Burn after read (DM only)",
+      "burn_btn_armed": "Burn after read armed — next message self-destructs 30s after viewing"
     },
     "profile": {
       "login_username": "Your login username",
@@ -193,7 +195,13 @@
     "no_results_for": "No results for \"{{query}}\"",
     "loading_more": "Loading more…",
     "no_music_playing": "No music playing",
-    "record_set": "{{user}} set a new {{game}} record: {{score}}!"
+    "record_set": "{{user}} set a new {{game}} record: {{score}}!",
+    "burn_armed": "🔥 Burn-after-read armed — next message will self-destruct 30s after viewing",
+    "burn_disarmed": "Burn-after-read disabled"
+  },
+  "messages": {
+    "burn_reveal": "Tap to view",
+    "burn_done": "Message burned"
   },
   "utils": {
     "today_at": "Today at {{time}}",
@@ -379,6 +387,7 @@
     "view_all_members": "View All Server Members",
     "view_channel_members": "View Channel Members",
     "manage_emojis": "Manage Custom Emojis",
+    "manage_stickers": "Manage Stickers",
     "manage_soundboard": "Manage Soundboard",
     "promote_user": "Promote Users",
     "transfer_admin": "Transfer Admin",
@@ -850,10 +859,14 @@
       "max_sound": "Max Sound File Size (KB)",
       "max_emoji": "Max Emoji File Size (KB)",
       "max_poll_options": "Max Poll Options",
+      "max_message_chars": "Max Message Length (characters)",
       "sounds_title": "Custom Sounds",
       "manage_sounds_btn": "Manage Sounds",
       "emojis_title": "Custom Emojis",
       "manage_emojis_btn": "Manage Emojis",
+      "stickers_title": "Stickers",
+      "stickers_hint": "Upload sticker images grouped into packs",
+      "manage_stickers_btn": "Manage Stickers",
       "roles_title": "Role Management",
       "manage_roles_btn": "Manage Roles",
       "reset_roles_btn": "Reset to Default",
@@ -882,10 +895,11 @@
       "copy_code_title": "Copy code",
       "cleanup_age_hint": "Delete messages older than N days (0 = off)",
       "cleanup_size_hint": "Trim oldest messages when DB exceeds N MB (0 = off)",
-      "max_upload_hint": "Maximum file size users can upload (1–2048 MB, default 25)",
+      "max_upload_hint": "Maximum file size users can upload in MB (default 25). No hard cap — limited by available disk space.",
       "max_sound_hint": "Max soundboard upload size (256–10240 KB, default 1024 / 1 MB)",
       "max_emoji_hint": "Max custom emoji upload size (64–1024 KB, default 256)",
       "max_poll_hint": "Maximum answer choices per poll (2–25, default 10)",
+      "max_message_chars_hint": "Maximum characters per message, post, or DM (200–100000, default 2000)",
       "sounds_hint": "Upload audio files for custom notification sounds",
       "emojis_hint": "Upload images for custom server emojis",
       "emojis_upload_hint": "Upload images for custom server emojis (max 256 KB, png/gif/webp). Name must be lowercase, no spaces.",
@@ -1358,6 +1372,14 @@
       "crop_applied": "Crop applied — ready to upload",
       "adjust_btn": "Adjust"
     },
+    "sticker_mgmt": {
+      "title": "Sticker Management",
+      "upload_hint": "Upload sticker images (max 1 MB, png/gif/webp). Group stickers into packs by setting the same pack name. Sticker name must be lowercase, no spaces.",
+      "name_placeholder": "sticker_name (optional)",
+      "pack_placeholder": "Pack name (optional)",
+      "upload_btn": "Upload",
+      "no_stickers": "No stickers uploaded"
+    },
     "emoji_crop": {
       "title": "Crop Emoji",
       "hint": "Drag to reposition · Slider to zoom",
@@ -1577,6 +1599,10 @@
   "emoji": {
     "search_placeholder": "Search emoji…",
     "no_results": "No emoji found",
+    "section_emoji": "Emoji",
+    "section_sticker": "Stickers",
+    "sticker_search_placeholder": "Search stickers",
+    "no_stickers": "No stickers yet — an admin can upload some from the Manage Stickers panel",
     "all_emojis_title": "All emojis",
     "customize_quick_title": "Customize Quick Reactions",
     "customize_quick_hint": "Click a slot, then pick an emoji to replace it.",
