@@ -3489,6 +3489,7 @@ html.rgb-cycling *::after {
 .dm-pip-reply-bar > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dm-pip-input-area {
   display: flex;
+  align-items: flex-end;
   gap: 6px;
   padding: 8px;
   border-top: 1px solid var(--border, #444);
@@ -3498,7 +3499,7 @@ html.rgb-cycling *::after {
 }
 .dm-pip-input {
   flex: 1;
-  resize: none;
+  resize: vertical;
   border-radius: 6px;
   border: 1px solid var(--border, #444);
   background: var(--bg-primary, #1e1e1e);
@@ -3506,7 +3507,8 @@ html.rgb-cycling *::after {
   padding: 6px 8px;
   font-family: inherit;
   font-size: 13px;
-  max-height: 120px;
+  min-height: 34px;
+  max-height: 200px;
 }
 .dm-pip-send {
   background: var(--accent, #5865f2);
@@ -7793,7 +7795,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .thread-input {
   flex: 1;
-  resize: none;
+  resize: vertical;
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
   background: var(--bg-secondary);
@@ -7801,7 +7803,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   padding: 8px 12px;
   font-size: 13px;
   font-family: inherit;
-  max-height: 120px;
+  min-height: 36px;
+  max-height: 200px;
   overflow-y: auto;
 }
 .thread-input:focus { outline: none; border-color: var(--accent); }
