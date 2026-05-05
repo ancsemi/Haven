@@ -1993,6 +1993,36 @@ _setupUI() {
     }
   }
 
+  // PiP input area height resize — drag the top handle upward to expand the textarea
+  document.querySelectorAll('.pip-input-resizer').forEach(handle => {
+    let startY = 0;
+    let startHeight = 0;
+    let ta = null;
+
+    const onMove = (e) => {
+      if (!ta) return;
+      const delta = startY - e.clientY; // positive when dragging up
+      const newHeight = Math.max(34, Math.min(200, startHeight + delta));
+      ta.style.height = `${newHeight}px`;
+    };
+
+    const onUp = () => {
+      ta = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    handle.addEventListener('mousedown', (e) => {
+      ta = handle.parentElement?.querySelector('textarea');
+      if (!ta) return;
+      startY = e.clientY;
+      startHeight = ta.getBoundingClientRect().height;
+      e.preventDefault();
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
     this._emojiPickerContext = 'main';

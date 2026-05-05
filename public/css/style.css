@@ -3491,7 +3491,7 @@ html.rgb-cycling *::after {
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  padding: 8px;
+  padding: 14px 8px 8px;
   border-top: 1px solid var(--border, #444);
   background: rgba(20, 20, 20, 0.55);
   backdrop-filter: blur(6px);
@@ -3499,7 +3499,7 @@ html.rgb-cycling *::after {
 }
 .dm-pip-input {
   flex: 1;
-  resize: vertical;
+  resize: none;
   border-radius: 6px;
   border: 1px solid var(--border, #444);
   background: var(--bg-primary, #1e1e1e);
@@ -3509,6 +3509,7 @@ html.rgb-cycling *::after {
   font-size: 13px;
   min-height: 34px;
   max-height: 200px;
+  overflow-y: auto;
 }
 .dm-pip-send {
   background: var(--accent, #5865f2);
@@ -3522,6 +3523,33 @@ html.rgb-cycling *::after {
   justify-content: center;
 }
 .dm-pip-send:hover { filter: brightness(1.1); }
+
+/* Drag handle at the top of PiP input areas — drag upward to expand the textarea */
+.pip-input-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 14px;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.pip-input-resizer::before {
+  content: '';
+  width: 36px;
+  height: 3px;
+  background: var(--border, #555);
+  border-radius: 2px;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s;
+}
+.pip-input-resizer:hover::before {
+  opacity: 1;
+  background: var(--accent, #5865f2);
+}
 
 /* Emoji picker trigger button shared by DM PiP and thread input areas */
 .pip-input-emoji-btn {
@@ -7765,7 +7793,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 14px 14px 10px;
   border-top: 1px solid var(--border-light);
   flex-shrink: 0;
   /* Anchor for autocomplete dropdowns positioned with bottom: 100% (#5296) */
@@ -7795,7 +7823,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .thread-input {
   flex: 1;
-  resize: vertical;
+  resize: none;
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
   background: var(--bg-secondary);
