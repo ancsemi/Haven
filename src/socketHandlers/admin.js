@@ -8,7 +8,7 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserRoles, getUserHighestRole,
     emitOnlineUsers, broadcastChannelLists, generateChannelCode,
-    logAudit
+    logAudit, fireWebhookEvent
   } = ctx;
   const { channelUsers } = state;
 
@@ -281,6 +281,8 @@ module.exports = function register(socket, ctx) {
       const webhooks = db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
+               w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
+               w.last_delivery_error, w.failure_count,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -302,7 +304,7 @@ module.exports = function register(socket, ctx) {
       if (!channel) return;
 
       const webhooks = db.prepare(
-        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, callback_url, callback_secret FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
+        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
       ).all(channel.id);
       socket.emit('webhooks-list', { channelCode, webhooks });
     } else {
@@ -310,6 +312,8 @@ module.exports = function register(socket, ctx) {
       const webhooks = db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
+               w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
+               w.last_delivery_error, w.failure_count,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -336,6 +340,8 @@ module.exports = function register(socket, ctx) {
       const webhooks = db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
+               w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
+               w.last_delivery_error, w.failure_count,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -365,6 +371,8 @@ module.exports = function register(socket, ctx) {
       const webhooks = db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
+               w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
+               w.last_delivery_error, w.failure_count,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -405,16 +413,62 @@ module.exports = function register(socket, ctx) {
       const secret = typeof data.callback_secret === 'string' ? data.callback_secret.trim().slice(0, 256) : null;
       db.prepare('UPDATE webhooks SET callback_secret = ? WHERE id = ?').run(secret || null, webhookId);
     }
+    // 3.13.0 — per-event subscriptions. Accepts CSV string or array.
+    // Allowed: 'message', 'reaction-added', 'member-joined'. Use '*' for all.
+    if (data.subscribed_events !== undefined) {
+      const allowed = new Set(['message', 'reaction-added', 'member-joined']);
+      let raw = data.subscribed_events;
+      if (Array.isArray(raw)) raw = raw.join(',');
+      let value = '*';
+      if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if (trimmed === '' || trimmed === '*') {
+          value = '*';
+        } else {
+          const parts = trimmed.split(',').map(s => s.trim()).filter(s => allowed.has(s));
+          value = parts.length ? parts.join(',') : '*';
+        }
+      }
+      db.prepare('UPDATE webhooks SET subscribed_events = ? WHERE id = ?').run(value, webhookId);
+    }
 
     const webhooks = db.prepare(`
       SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
              w.callback_url, w.callback_secret,
+             w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
+             w.last_delivery_error, w.failure_count,
              c.name as channel_name, c.code as channel_code
       FROM webhooks w JOIN channels c ON w.channel_id = c.id
       ORDER BY w.created_at DESC
     `).all();
     socket.emit('webhooks-list', { webhooks });
     socket.emit('bot-updated', 'Bot updated');
+  });
+
+  // 3.13.0 — fire a synthetic test event to a webhook's callback URL so
+  // admins can verify the bot is reachable from the admin UI.
+  socket.on('test-webhook', (data) => {
+    if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can manage webhooks');
+    if (!data || typeof data !== 'object') return;
+    const webhookId = parseInt(data.id || data.webhookId);
+    if (isNaN(webhookId)) return;
+
+    const wh = db.prepare(`
+      SELECT w.id, w.channel_id, w.callback_url, c.code AS channel_code
+      FROM webhooks w JOIN channels c ON w.channel_id = c.id
+      WHERE w.id = ? AND w.is_active = 1
+    `).get(webhookId);
+    if (!wh) return socket.emit('error-msg', 'Webhook not found or inactive');
+    if (!wh.callback_url) return socket.emit('error-msg', 'Webhook has no callback URL');
+
+    if (typeof fireWebhookEvent === 'function') {
+      fireWebhookEvent(wh.channel_id, wh.channel_code, 'test', {
+        triggered_by: { id: socket.user.id, username: socket.user.displayName }
+      });
+      socket.emit('error-msg', 'Test event dispatched. Check delivery status in a few seconds.');
+    } else {
+      socket.emit('error-msg', 'Webhook dispatcher unavailable');
+    }
   });
 
   // ── Get all members ─────────────────────────────────────

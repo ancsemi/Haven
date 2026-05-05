@@ -596,7 +596,6 @@ _createMessageEl(msg, prevMsg) {
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
-  const threadHtml = msg.thread ? this._renderThreadPreview(msg.id, msg.thread) : '';
   const editedHtml = msg.edited_at ? `<span class="edited-tag" title="${t('app.messages.edited_at', { date: new Date(msg.edited_at).toLocaleString() })}">${t('app.messages.edited')}</span>` : '';
   const pinnedTag = msg.pinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const archivedTag = msg.is_archived ? `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>` : '';
@@ -606,7 +605,6 @@ _createMessageEl(msg, prevMsg) {
   const iReact = iconPair('😀', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-width="1.8"></circle><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke-width="1.8" stroke-linecap="round"></path><circle cx="9.2" cy="10.2" r="1" fill="currentColor" stroke="none"></circle><circle cx="14.8" cy="10.2" r="1" fill="currentColor" stroke="none"></circle></svg>');
   const iReply = iconPair('↩️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8L4 12L10 16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M20 12H5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
   const iQuote = iconPair('💬', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 7h-4v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>');
-  const iThread = iconPair('🧵', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 9h8" stroke-width="1.8" stroke-linecap="round"></path><path d="M8 13h6" stroke-width="1.8" stroke-linecap="round"></path><path d="M6 6h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-4 3v-3H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
   const iPin = iconPair('📌', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8l-2 5v4l2 2H8l2-2V9L8 4z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 15v5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
   const iArchive = iconPair('🛡️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v11H4z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M9 11h6" stroke-width="1.8" stroke-linecap="round"></path><path d="M3 7l2-3h14l2 3" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
   const iEdit = iconPair('✏️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M13.5 6.5l3.5 3.5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
@@ -618,7 +616,6 @@ _createMessageEl(msg, prevMsg) {
     { key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` },
     { key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` },
     { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` },
-    { key: 'thread', html: `<button data-action="thread" title="Thread">${iThread}</button>` },
     { key: 'copy-link', html: `<button data-action="copy-link" title="${t('msg_toolbar.copy_link') || 'Copy link to message'}">${iLink}</button>` }
   ];
   const canPin = this.user.isAdmin || this._canModerate();
@@ -647,7 +644,7 @@ _createMessageEl(msg, prevMsg) {
     toolbarActions.push({ key: 'delete', html: `<button data-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>` });
   }
 
-  const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'edit', 'delete'];
+  const defaultToolbarOrder = ['react', 'reply', 'quote', 'copy-link', 'pin', 'archive', 'edit', 'delete'];
   let savedToolbarOrder = [];
   try {
     savedToolbarOrder = JSON.parse(localStorage.getItem('haven-toolbar-order') || '[]');
@@ -702,7 +699,6 @@ _createMessageEl(msg, prevMsg) {
         <div class="message-content">${pinnedTag}${archivedTag}${this._formatContent(msg.content)}${editedHtml}</div>
         ${pollHtml}
         ${reactionsHtml}
-        ${threadHtml}
       </div>
       ${e2eTag}
       ${toolbarHtml}
@@ -799,7 +795,6 @@ _createMessageEl(msg, prevMsg) {
         <div class="message-content">${this._formatContent(msg.content)}${editedHtml}</div>
         ${pollHtml}
         ${reactionsHtml}
-        ${threadHtml}
       </div>
       ${toolbarHtml}
       <button class="msg-dots-btn" aria-label="${t('app.actions.message_actions')}">⋯</button>

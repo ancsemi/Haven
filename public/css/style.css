@@ -3253,15 +3253,6 @@ html.rgb-cycling *::after {
   padding: 0 5px;
 }
 
-/* Thread @mention bell badge in sidebar — distinct amber/yellow */
-.channel-badge.thread-mention-badge {
-  background: #f5a623;
-  color: #1a1a1a;
-  font-size: 10px;
-  margin-left: 4px;
-  padding: 0 6px;
-}
-
 /* Nested-unread dot — small marker on category labels and parent
    channels to hint that one of their (uncollapsed) children has
    unread messages. Visually distinct from the count bubble so the
@@ -3280,23 +3271,6 @@ html.rgb-cycling *::after {
 }
 .channel-badge-nested-dot.has-mention {
   background: var(--danger);
-}
-
-/* Header pill: "🔔 N" mentions in threads */
-.thread-mentions-pill {
-  background: rgba(245, 166, 35, 0.18);
-  color: #f5a623;
-  border: 1px solid rgba(245, 166, 35, 0.6);
-  padding: 2px 8px;
-  font-weight: 700;
-  border-radius: 12px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.thread-mentions-pill:hover {
-  background: rgba(245, 166, 35, 0.32);
 }
 
 /* ── DM Picture-in-Picture floating panel ──────────
@@ -3551,7 +3525,7 @@ html.rgb-cycling *::after {
   background: var(--accent, #5865f2);
 }
 
-/* Emoji picker trigger button shared by DM PiP and thread input areas */
+/* Emoji picker trigger button shared by DM PiP input area */
 .pip-input-emoji-btn {
   flex-shrink: 0;
   background: none;
@@ -7177,13 +7151,11 @@ select.cfn-select.cfn-input {
   display: flex;
   gap: 2px;
 }
-.msg-toolbar-more,
-.thread-msg-more {
+.msg-toolbar-more {
   position: relative;
   display: flex;
 }
-.msg-toolbar-overflow,
-.thread-msg-overflow {
+.msg-toolbar-overflow {
   position: absolute;
   top: auto;
   bottom: 100%;
@@ -7204,15 +7176,12 @@ select.cfn-select.cfn-input {
   pointer-events: none;
   transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 180ms;
 }
-.msg-toolbar-overflow.flip-below,
-.thread-msg-overflow.flip-below {
+.msg-toolbar-overflow.flip-below {
   bottom: auto;
   top: 100%;
 }
 .msg-toolbar-more:hover .msg-toolbar-overflow,
-.msg-toolbar-more:focus-within .msg-toolbar-overflow,
-.thread-msg-more:hover .thread-msg-overflow,
-.thread-msg-more:focus-within .thread-msg-overflow {
+.msg-toolbar-more:focus-within .msg-toolbar-overflow {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -7252,8 +7221,7 @@ select.cfn-select.cfn-input {
   color: var(--text-primary);
 }
 
-.msg-toolbar button svg,
-.thread-msg-toolbar button svg {
+.msg-toolbar button svg {
   width: 14px;
   height: 14px;
   stroke: currentColor;
@@ -7464,393 +7432,6 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 
 .reply-bar-close:hover { color: var(--text-primary); background: var(--bg-secondary); }
-
-/* ═══════════════════════════════════════════════════════════
-   THREAD PREVIEW (under messages)
-   ═══════════════════════════════════════════════════════════ */
-.thread-preview {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 4px 10px;
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--accent);
-  font-weight: 600;
-  transition: background 0.15s;
-}
-.thread-preview:hover {
-  background: var(--bg-tertiary);
-}
-.thread-participant-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.thread-participant-avatar + .thread-participant-avatar {
-  margin-left: -6px;
-}
-.thread-participant-initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-}
-.thread-preview-count {
-  margin-left: 4px;
-}
-.thread-preview-time {
-  color: var(--text-muted);
-  font-weight: 400;
-  margin-left: 4px;
-}
-.thread-preview-arrow {
-  font-size: 16px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.thread-preview:hover .thread-preview-arrow { opacity: 1; }
-
-/* ═══════════════════════════════════════════════════════════
-   THREAD PANEL (right side)
-   ═══════════════════════════════════════════════════════════ */
-.thread-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: var(--thread-footer-offset, 0px);
-  width: 380px;
-  min-width: 300px;
-  max-width: min(78vw, 920px);
-  max-width: 100vw;
-  background: var(--bg-primary);
-  border-left: 1px solid var(--border-light);
-  display: flex;
-  flex-direction: column;
-  /* Must sit above .input-actions-box (z:1001) so the docked thread panel
-     isn't covered by the channel's message input action buttons. (#5289) */
-  z-index: 1010;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.25);
-  animation: thread-slide-in 0.2s ease-out;
-}
-.thread-panel-resizer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  cursor: ew-resize;
-  z-index: 2;
-}
-.thread-panel.pip {
-  top: auto;
-  right: 14px;
-  bottom: calc(var(--thread-footer-offset, 0px) + 14px);
-  width: min(420px, calc(100vw - 28px));
-  height: min(58vh, 520px);
-  max-height: calc(100vh - var(--thread-footer-offset, 0px) - 28px);
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
-  resize: both;
-  overflow: hidden;
-  z-index: 10020;
-}
-.thread-panel.pip .thread-panel-resizer {
-  display: none;
-}
-@keyframes thread-slide-in {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-.thread-panel-header {
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-}
-.thread-panel-header-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.thread-panel.pip .thread-panel-header-top {
-  cursor: move;
-}
-.thread-panel-icon { font-size: 18px; }
-.thread-panel-title {
-  flex: 1;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.thread-parent-meta {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.thread-parent-avatar-wrap {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-.thread-parent-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.thread-parent-avatar.thread-parent-avatar-square {
-  border-radius: 6px;
-}
-.thread-parent-avatar-initial {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-}
-.thread-parent-avatar-initial.thread-parent-avatar-square {
-  border-radius: 6px;
-}
-.thread-parent-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.thread-parent-preview {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.thread-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 14px;
-}
-.thread-message {
-  margin-bottom: 10px;
-  position: relative;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition), box-shadow var(--transition);
-}
-.thread-message:hover {
-  background: rgba(255,255,255,0.02);
-  box-shadow: var(--msg-glow);
-}
-.thread-message.thread-highlight {
-  background: rgba(255,255,255,0.035);
-  box-shadow: var(--msg-glow);
-}
-.thread-msg-row {
-  display: flex;
-  gap: 10px;
-  padding: 4px 8px;
-}
-.thread-msg-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  object-fit: cover;
-}
-.thread-msg-avatar-initial {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: #fff;
-}
-.thread-msg-body { flex: 1; min-width: 0; }
-.thread-msg-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-}
-.thread-msg-header-spacer { flex: 1; }
-.thread-msg-toolbar {
-  position: absolute;
-  top: 2px;
-  right: 8px;
-  display: none;
-  gap: 2px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 2px 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 10;
-}
-/* Only show toolbar on real mouse hover so it doesn't appear on touch
-   taps and doesn't reflow the message header (matches main message
-   toolbar behavior). */
-@media (hover: hover) and (pointer: fine) {
-  .thread-message:hover .thread-msg-toolbar,
-  .thread-message.showing-picker .thread-msg-toolbar {
-    display: inline-flex;
-  }
-}
-.thread-message.showing-picker .thread-msg-toolbar {
-  display: inline-flex;
-}
-.thread-message.editing .thread-msg-toolbar {
-  display: none !important;
-}
-.thread-msg-toolbar button {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-}
-.thread-msg-toolbar button:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-.thread-action-react-icon {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-}
-.thread-msg-author {
-  font-size: 13px;
-  font-weight: 600;
-}
-.thread-msg-time {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.thread-msg-content {
-  font-size: 13px;
-  color: var(--text-primary);
-  line-height: 1.4;
-  word-wrap: break-word;
-}
-.thread-msg-actions {
-  margin-left: auto;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-.thread-message:hover .thread-msg-actions,
-.thread-message.showing-picker .thread-msg-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-.thread-react-btn {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: 6px;
-  padding: 0;
-  cursor: pointer;
-}
-.thread-react-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-.thread-react-btn svg {
-  width: 16px;
-  height: 16px;
-  stroke: currentColor;
-  fill: none;
-}
-.thread-input-area {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 14px 14px 10px;
-  border-top: 1px solid var(--border-light);
-  flex-shrink: 0;
-  /* Anchor for autocomplete dropdowns positioned with bottom: 100% (#5296) */
-  position: relative;
-}
-.thread-reply-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border-light);
-  background: var(--bg-secondary);
-  font-size: 12px;
-  color: var(--text-muted);
-}
-#thread-reply-preview-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-[data-desktop-app] {
-  --thread-footer-offset: 35px;
-}
-[data-desktop-app][data-hide-statusbar] {
-  --thread-footer-offset: 0px;
-}
-.thread-input {
-  flex: 1;
-  resize: none;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  min-height: 36px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.thread-input:focus { outline: none; border-color: var(--accent); }
-.thread-send-btn {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s;
-}
-.thread-send-btn:hover { filter: brightness(1.15); }
 
 /* ═══════════════════════════════════════════════════════════
    IMAGE QUEUE BAR (paste/drop preview before sending)

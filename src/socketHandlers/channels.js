@@ -9,7 +9,7 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
     handleVoiceLeave, broadcastVoiceUsers, generateChannelCode,
-    applyRoleChannelAccess, logAudit
+    applyRoleChannelAccess, logAudit, fireWebhookEvent
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -322,6 +322,13 @@ module.exports = function register(socket, ctx) {
       channelCode: activeCode,
       user: { id: socket.user.id, username: socket.user.displayName }
     });
+
+    // Webhook event: member-joined (3.13.0)
+    try {
+      fireWebhookEvent?.(channel.id, activeCode, 'member-joined', {
+        user: { id: socket.user.id, username: socket.user.displayName }
+      });
+    } catch { /* best-effort */ }
 
     const isPrivateCode = channel.code_visibility === 'private' || channel.is_private;
     const joinerCanSeeCode = socket.user.isAdmin

@@ -847,86 +847,6 @@ _setupSocketListeners() {
     }
   });
 
-  // ── Threads ───────────────────────────────────────
-  this.socket.on('thread-messages', async (data) => {
-    if (data.parentUsername) {
-      this._setThreadParentHeader({
-        userId: data.parentUserId || null,
-        username: data.parentUsername,
-        avatar: data.parentAvatar || null,
-        avatarShape: data.parentAvatarShape || 'circle'
-      });
-    }
-
-    // E2E: thread lives inside a DM channel — decrypt parent + messages
-    // before rendering so the preview/header and message bodies show plain text.
-    const channelCode = data.channelCode || this.currentChannel;
-    if (data.parentContent && window.HavenE2E && HavenE2E.isEncrypted(data.parentContent)) {
-      const wrapper = [{ content: data.parentContent }];
-      try { await this._decryptMessages(wrapper, channelCode); } catch {}
-      data.parentContent = wrapper[0].content;
-    }
-    if (data.messages && data.messages.length) {
-      try { await this._decryptMessages(data.messages, channelCode); } catch {}
-    }
-
-    // Update parent preview from server (authoritative source)
-    if (data.parentContent) {
-      const preview = document.getElementById('thread-parent-preview');
-      if (preview) {
-        const text = data.parentContent.length > 120 ? data.parentContent.substring(0, 120) + '…' : data.parentContent;
-        preview.textContent = text;
-      }
-    }
-    const container = document.getElementById('thread-messages');
-    if (!container) return;
-    container.innerHTML = '';
-    if (data.messages) {
-      data.messages.forEach(msg => this._appendThreadMessage(msg));
-    }
-  });
-
-  this.socket.on('new-thread-message', async (data) => {
-    // Detect @mentions / replies-to-self in thread messages, even when the
-    // thread (or even the channel) is not currently open. Server broadcasts
-    // new-thread-message to the entire channel room, so all members get it.
-    const msg = data && data.message;
-    if (msg && msg.user_id !== this.user.id) {
-      const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-      const _isMuted = _mutedChs.includes(data.channelCode);
-      const _meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const mentionRegex = _meEsc ? new RegExp(`@${_meEsc}(?!\\w)`, 'i') : null;
-      const everyoneRegex = /(?<![\w@])@(everyone|here)\b/i;
-      const _isMention = (mentionRegex && mentionRegex.test(msg.content || '')) || everyoneRegex.test(msg.content || '');
-      const _isReplyToMe = msg.replyContext && msg.replyContext.user_id === this.user.id;
-      if ((_isMention || _isReplyToMe) && !_isMuted) {
-        this._recordThreadMention(data.channelCode, data.parentId, msg);
-        if (!_isMuted) this.notifications.play('mention', { isMention: true });
-        if (document.hidden) {
-          this._fireNativeNotification(
-            { ...msg, content: `[thread] ${msg.content || ''}` },
-            data.channelCode,
-            { isMention: true }
-          );
-        }
-      }
-    }
-    if (data.channelCode !== this.currentChannel) return;
-    // If this thread is open, append the message
-    if (this._activeThreadParent === data.parentId) {
-      // E2E: decrypt before render for DM threads
-      if (data.message) {
-        try { await this._decryptMessages([data.message], data.channelCode); } catch {}
-      }
-      this._appendThreadMessage(data.message);
-    }
-  });
-
-  this.socket.on('thread-updated', (data) => {
-    if (data.channelCode !== this.currentChannel) return;
-    this._updateThreadPreview(data.parentId, data.thread);
-  });
-
   // ── Polls ─────────────────────────────────────────
   this.socket.on('poll-updated', (data) => {
     if (data.channelCode === this.currentChannel) {
@@ -1183,7 +1103,7 @@ _setupSocketListeners() {
         }
       }
       msgEls.forEach((msgEl) => {
-        const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
+        const contentEl = msgEl.querySelector('.message-content');
         if (!contentEl) return;
         contentEl.innerHTML = this._formatContent(displayContent);
         msgEl.dataset.rawContent = displayContent;
@@ -1206,7 +1126,7 @@ _setupSocketListeners() {
     if (data.channelCode === this.currentChannel) {
       const userMsgs = document.querySelectorAll(`[data-user-id="${data.userId}"]`);
       userMsgs.forEach(msgEl => {
-        const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
+        const contentEl = msgEl.querySelector('.message-content');
         if (contentEl) {
           try { contentEl.innerHTML = this._formatContent(placeholder); }
           catch { contentEl.textContent = placeholder; }

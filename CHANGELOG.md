@@ -11,17 +11,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [3.13.0] — 2026-05-06
 
 ### Added
 - **#5294: Admin-configurable login session duration.** New `session_duration_days` server setting (1–365, default 7) replaces the hard-coded `expiresIn: '7d'` on every JWT signing site in `src/auth.js`, and Settings → Uploads & Limits gets a new "Login session duration (days)" input. Existing tokens keep their original expiry — only newly-issued tokens (login, signup, TOTP confirm, password change, recovery, refresh) pick up the new value. Defaults preserve current behavior. Thanks @amnibro.
+- **Webhook integration expansion.** Outbound bot callbacks now include:
+  - **Per-event subscriptions** via a new `subscribed_events` column (CSV: `message`, `reaction-added`, `member-joined`, or `*` for all). Existing webhooks default to `*` so behavior is unchanged on upgrade.
+  - **HMAC signature header upgraded** to the standard `sha256=<hex>` format under `X-Haven-Signature`, plus a new `X-Haven-Event` header so consumers can route without parsing the body.
+  - **One automatic retry** with a 5-second delay on 5xx responses or network failures. 4xx responses are treated as bot rejection and not retried.
+  - **Per-webhook delivery health** (`last_delivery_status`, `last_delivery_at`, `last_delivery_error`, `failure_count`) recorded on every attempt and surfaced in `webhooks-list` payloads for admin UIs.
+  - **New event types** beyond the existing `message`: `reaction-added` fires when a user reacts to a message; `member-joined` fires when a user joins the channel.
+  - **`test-webhook` admin socket event** that fires a synthetic `test` event so admins can verify their bot is reachable without manually triggering a real channel event.
+  - **Inbound `reply_to` support** at `POST /api/webhooks/:token` — bots can now reply to a specific message in their channel; the response renders the standard inline reply preview in clients.
+  - **Inbound `avatar_url` per-message override** alongside the existing `username` override, so a single bot can post under multiple personas.
 
 ### Fixed
 - **#5337: Link previews show 429s when reopening a chat with multiple links.** Two compounding bugs — (1) the per-IP rate limiter ran *before* the cache lookup, so cached previews still burned a token and a chat with 30+ links could exhaust the budget on a single re-render; (2) the client refetched every preview from scratch on every channel switch / scroll re-render with no in-flight dedupe. Server now consults the cache first and only rate-limits cache misses, the per-minute budget is doubled (30 → 60), and the client keeps a 10-minute in-memory preview cache plus a per-URL inflight Promise so concurrent re-renders share one network request.
 - **Phantom taskbar overlay badge with no on-screen indicator anywhere.** Two cases: (1) `_updateNestedIndicators` short-circuited on collapsed category labels, so unread sub-channels inside a collapsed category contributed to the desktop badge total without rendering any visible bubble — exactly the "taskbar lit, sidebar empty" symptom from the user-reported screenshots. Collapsed category labels now render a count bubble identical to collapsed parent channels. (2) `_updateDesktopBadge` and `_updateTabTitle` no longer count locally-muted channels, since their per-channel sidebar dot is suppressed and the server's snapshot doesn't know about local mutes — without this, a muted channel with new messages lit the taskbar with nothing visible to clear it.
 
-### Docs
-- **#5336: Threads in DMs are not E2E-encrypted.** Verified by code inspection: `_sendThreadMessage` emits plaintext, the `send-thread-message` server handler stores raw `safeContent`, and `_appendThreadMessage` never decrypts. Per the issue author's instruction, added `docs/THREAD-REMOVAL-PLAN.md` — a step-by-step demolition plan covering the DB column drop, server-handler removal, renderer module cleanup, HTML/CSS deletion, and a safe deploy ordering. No reply was posted on #5336 (per instructions).
+### Removed
+- **#5336: DM threads system fully removed.** Per the issue author's request, the entire threads feature has been demolished rather than retrofitted with E2E encryption: all thread-related socket handlers, client modules, HTML panels, CSS rules, and the thread-mentions pill are deleted. Migration drops thread reply rows and the `idx_messages_thread` index on first boot; the `thread_id` column is left in place because SQLite cannot drop columns referenced by an index history without a full table rebuild, but it is no longer read or written by any code path. The forum-style "thread" *channel type* (a separate feature) is unaffected.
 
 ---
 

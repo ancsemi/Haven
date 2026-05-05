@@ -132,8 +132,6 @@ async switchChannel(code) {
 
   this.unreadCounts[code] = 0;
   this._updateBadge(code);
-  // Refresh thread-mention pill for the channel we just entered
-  this._updateThreadMentionsPill?.();
 
   document.getElementById('status-channel').textContent = isDm && channel.dm_target
     ? t('channels.dm_status', { name: channel.dm_target.username }) : channel ? channel.name : code;
@@ -178,7 +176,6 @@ async switchChannel(code) {
   this.socket.emit('get-channel-members', { code });
   this.socket.emit('request-voice-users', { code });
   this._clearReply();
-  this._closeThread();
 
   // Auto-focus the message input for quick typing.
   // Skip on touch devices: focusing an input opens the on-screen keyboard, which
@@ -1626,16 +1623,6 @@ _renderChannels() {
       badge.textContent = count > 99 ? '99+' : count;
       el.appendChild(badge);
     }
-    // Thread @mention indicator (bell, distinct from unread bubble)
-    const tmCount = ((this._threadMentions || {})[ch.code] || []).length;
-    if (tmCount > 0) {
-      const bell = document.createElement('span');
-      bell.className = 'channel-badge thread-mention-badge';
-      bell.title = `${tmCount} mention${tmCount === 1 ? '' : 's'} in thread${tmCount === 1 ? '' : 's'}`;
-      bell.textContent = `🔔${tmCount > 9 ? '9+' : tmCount}`;
-      el.appendChild(bell);
-    }
-
     el.addEventListener('click', () => this.switchChannel(ch.code));
     // Double-click to join voice in the channel (blocked for text-only)
     el.addEventListener('dblclick', () => {
