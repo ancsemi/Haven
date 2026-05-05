@@ -2449,14 +2449,16 @@ _updateNestedIndicators() {
     }
   };
 
-  // Category labels: dot if expanded AND any contained channel/sub
-  // has unreads. (When collapsed the existing count bubble shows the
-  // total instead, so we suppress the dot to avoid duplication.)
+  // Category labels: when EXPANDED show a small dot (the per-channel
+  // badges already show the actual counts); when COLLAPSED show a count
+  // bubble like collapsed parent channels do, otherwise the unreads
+  // would be invisible (channel rows are hidden with the category) and
+  // the user would see a taskbar badge with no on-screen indicator
+  // anywhere — exactly the phantom-badge bug. (#desktop-phantom-badge)
   document.querySelectorAll('.section-label.category-label[data-category]').forEach(catEl => {
     const cat = catEl.dataset.category;
     if (!cat) return;
     const collapsed = localStorage.getItem(`haven_cat_collapsed_${cat}`) === 'true';
-    if (collapsed) { setDot(catEl, false); return; }
     let total = 0;
     for (const c of this.channels) {
       if (c.is_dm || c.parent_channel_id) continue;
@@ -2466,7 +2468,20 @@ _updateNestedIndicators() {
         total += this.unreadCounts[s.code] || 0;
       }
     }
-    setDot(catEl, total > 0);
+    let bubble = catEl.querySelector(':scope > .channel-badge-bubble');
+    if (collapsed && total > 0) {
+      if (!bubble) {
+        bubble = document.createElement('span');
+        bubble.className = 'channel-badge channel-badge-bubble';
+        bubble.style.marginLeft = 'auto';
+        catEl.appendChild(bubble);
+      }
+      bubble.textContent = total > 99 ? '99+' : total;
+      setDot(catEl, false);
+    } else {
+      if (bubble) bubble.remove();
+      setDot(catEl, !collapsed && total > 0);
+    }
   });
 
   // Parent channels with sub-channels: dot if subs are expanded AND
@@ -2519,8 +2534,16 @@ _updateNestedIndicators() {
 },
 
 _updateTabTitle() {
+  let mutedSet = null;
+  try {
+    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+  } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
-  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => validCodes.has(k) ? s + v : s, 0);
+  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => {
+    if (!validCodes.has(k)) return s;
+    if (mutedSet.has(k)) return s;
+    return s + v;
+  }, 0);
   // Include the server's display name so multiple Haven tabs are easy to tell
   // apart at a glance (issue #5284).
   const serverName = (this.serverSettings && this.serverSettings.server_name) || '';
@@ -2538,8 +2561,21 @@ _updateDesktopBadge() {
     window.havenDesktop?.setUnreadBadge?.(false);
     return;
   }
+  // Exclude muted channels from the desktop total. The channels-list
+  // snapshot from the server doesn't know about local mutes (they live in
+  // localStorage), so a muted channel with new messages was lighting up
+  // the taskbar even though every sidebar indicator was suppressed —
+  // looked like a phantom badge to the user. (#desktop-phantom-badge)
+  let mutedSet = null;
+  try {
+    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+  } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
-  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => validCodes.has(k) ? s + v : s, 0);
+  const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => {
+    if (!validCodes.has(k)) return s;
+    if (mutedSet.has(k)) return s;
+    return s + v;
+  }, 0);
   // Track last-pushed value so visibility-driven re-syncs (below) can detect
   // when the desktop main process has fallen out of step with the renderer
   // and quietly reassert the correct state without spamming IPC.
