@@ -353,6 +353,10 @@ _applyServerSettings() {
     if (maxPollOpts) {
       maxPollOpts.value = this.serverSettings.max_poll_options || '10';
     }
+    const sessionDur = document.getElementById('session-duration-days');
+    if (sessionDur) {
+      sessionDur.value = this.serverSettings.session_duration_days || '7';
+    }
     const maxMsgChars = document.getElementById('max-message-chars');
     if (maxMsgChars) {
       maxMsgChars.value = this.serverSettings.max_message_chars || '2000';
@@ -619,6 +623,7 @@ _snapshotAdminSettings() {
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_poll_options: this.serverSettings.max_poll_options || '10',
+    session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     default_theme: this.serverSettings.default_theme || '',
@@ -717,6 +722,12 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const sessionDurDays = String(Math.max(1, Math.min(365, parseInt(document.getElementById('session-duration-days')?.value) || 7)));
+  if (sessionDurDays !== (snap.session_duration_days || '7')) {
+    this.socket.emit('update-server-setting', { key: 'session_duration_days', value: sessionDurDays });
+    changed = true;
+  }
+
   const maxMsgChars = String(Math.max(200, Math.min(100000, parseInt(document.getElementById('max-message-chars')?.value) || 2000)));
   if (maxMsgChars !== (snap.max_message_chars || '2000')) {
     this.socket.emit('update-server-setting', { key: 'max_message_chars', value: maxMsgChars });
@@ -802,6 +813,8 @@ _cancelAdminSettings() {
     if (mek) mek.value = snap.max_emoji_kb || '256';
     const mpo = document.getElementById('max-poll-options');
     if (mpo) mpo.value = snap.max_poll_options || '10';
+    const sdd = document.getElementById('session-duration-days');
+    if (sdd) sdd.value = snap.session_duration_days || '7';
     const mmc = document.getElementById('max-message-chars');
     if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');

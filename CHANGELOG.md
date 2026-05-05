@@ -13,6 +13,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Added
+- **#5294: Admin-configurable login session duration.** New `session_duration_days` server setting (1–365, default 7) replaces the hard-coded `expiresIn: '7d'` on every JWT signing site in `src/auth.js`, and Settings → Uploads & Limits gets a new "Login session duration (days)" input. Existing tokens keep their original expiry — only newly-issued tokens (login, signup, TOTP confirm, password change, recovery, refresh) pick up the new value. Defaults preserve current behavior. Thanks @amnibro.
+
+### Fixed
+- **#5337: Link previews show 429s when reopening a chat with multiple links.** Two compounding bugs — (1) the per-IP rate limiter ran *before* the cache lookup, so cached previews still burned a token and a chat with 30+ links could exhaust the budget on a single re-render; (2) the client refetched every preview from scratch on every channel switch / scroll re-render with no in-flight dedupe. Server now consults the cache first and only rate-limits cache misses, the per-minute budget is doubled (30 → 60), and the client keeps a 10-minute in-memory preview cache plus a per-URL inflight Promise so concurrent re-renders share one network request.
+- **Phantom taskbar overlay badge with no on-screen indicator anywhere.** Two cases: (1) `_updateNestedIndicators` short-circuited on collapsed category labels, so unread sub-channels inside a collapsed category contributed to the desktop badge total without rendering any visible bubble — exactly the "taskbar lit, sidebar empty" symptom from the user-reported screenshots. Collapsed category labels now render a count bubble identical to collapsed parent channels. (2) `_updateDesktopBadge` and `_updateTabTitle` no longer count locally-muted channels, since their per-channel sidebar dot is suppressed and the server's snapshot doesn't know about local mutes — without this, a muted channel with new messages lit the taskbar with nothing visible to clear it.
+
+### Docs
+- **#5336: Threads in DMs are not E2E-encrypted.** Verified by code inspection: `_sendThreadMessage` emits plaintext, the `send-thread-message` server handler stores raw `safeContent`, and `_appendThreadMessage` never decrypts. Per the issue author's instruction, added `docs/THREAD-REMOVAL-PLAN.md` — a step-by-step demolition plan covering the DB column drop, server-handler removal, renderer module cleanup, HTML/CSS deletion, and a safe deploy ordering. No reply was posted on #5336 (per instructions).
+
 ---
 
 ## [3.12.0] — 2026-05-05

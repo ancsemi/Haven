@@ -42,7 +42,7 @@ module.exports = function register(socket, ctx) {
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
-      'max_message_chars'
+      'session_duration_days', 'max_message_chars'
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -55,6 +55,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'max_message_chars') { const n = parseInt(value); if (isNaN(n) || n < 200 || n > 100000) return; }
     if (key === 'max_sound_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
     if (key === 'max_emoji_kb') { const n = parseInt(value); if (isNaN(n) || n < 64 || n > 1024) return; }
+    if (key === 'session_duration_days') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 365) return; }
     if (key === 'auto_backup_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'auto_backup_interval_hours') { const n = parseInt(value); if (isNaN(n) || ![6, 12, 24, 168, 720].includes(n)) return; }
     if (key === 'auto_backup_retention') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; }

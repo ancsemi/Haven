@@ -1973,6 +1973,11 @@
             <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_poll_hint">Maximum answer choices per poll (2–25, default 10)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.session_duration">Login session duration (days)</span>
+            <input type="number" id="session-duration-days" min="1" max="365" value="7" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.session_duration_hint">How long a login token stays valid before users must sign in again (1–365 days, default 7). Applies to new logins; existing tokens keep their original expiry until they expire or rotate.</small>
         </div>
         <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔊 <span data-i18n="settings.admin.sounds_title">Custom Sounds</span></h5>

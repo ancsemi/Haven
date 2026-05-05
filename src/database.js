@@ -222,6 +222,7 @@ function initDatabase() {
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64–1024)
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
+  insertSetting.run('session_duration_days', '7');       // login token lifetime (1–365); admins can extend per #5294
   insertSetting.run('published_themes', '[]');             // JSON array of *.theme.css filenames shown in the theme picker
 
   // Unique server fingerprint — used by the multi-server sidebar to detect "self"
