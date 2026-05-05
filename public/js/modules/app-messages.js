@@ -1068,6 +1068,18 @@ _generateVideoThumbnail(video) {
 // ── Link Previews ─────────────────────────────────────
 
 _fetchLinkPreviews(containerEl) {
+  // Per-URL client cache so re-rendering a channel (or scrolling history,
+  // or popping out a DM PiP) doesn't re-fetch previews we already have.
+  // Without this, opening a chat with N links emits N requests every time
+  // the message list is re-rendered, which trips the server's per-IP rate
+  // limit and turns most cards into 429s. (#5337)
+  //
+  // - this._linkPreviewCache: url -> { data, ts }   (10-minute TTL)
+  // - this._linkPreviewInflight: url -> Promise<data>  (dedupe concurrent fetches)
+  if (!this._linkPreviewCache) this._linkPreviewCache = new Map();
+  if (!this._linkPreviewInflight) this._linkPreviewInflight = new Map();
+  const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
+
   const links = containerEl.querySelectorAll('.message-content a[href]');
   const seen = new Set();
   links.forEach(link => {
@@ -1094,12 +1106,36 @@ _fetchLinkPreviews(containerEl) {
       return; // skip generic link preview for YouTube
     }
 
-    fetch(`/api/link-preview?url=${encodeURIComponent(url)}`, {
-      headers: { 'Authorization': `Bearer ${this.token}` }
-    })
-      .then(r => r.json())
+    // Resolve preview data via cache → inflight → network, in that order.
+    const fromCache = this._linkPreviewCache.get(url);
+    let dataPromise;
+    if (fromCache && Date.now() - fromCache.ts < PREVIEW_CLIENT_TTL) {
+      dataPromise = Promise.resolve(fromCache.data);
+    } else if (this._linkPreviewInflight.has(url)) {
+      dataPromise = this._linkPreviewInflight.get(url);
+    } else {
+      const p = fetch(`/api/link-preview?url=${encodeURIComponent(url)}`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data) this._linkPreviewCache.set(url, { data, ts: Date.now() });
+          // Light cap so the cache can't grow unbounded over a long session.
+          if (this._linkPreviewCache.size > 500) {
+            const firstKey = this._linkPreviewCache.keys().next().value;
+            this._linkPreviewCache.delete(firstKey);
+          }
+          return data;
+        })
+        .catch(() => null)
+        .finally(() => { this._linkPreviewInflight.delete(url); });
+      this._linkPreviewInflight.set(url, p);
+      dataPromise = p;
+    }
+
+    dataPromise
       .then(data => {
-        if (!data.title && !data.description) return;
+        if (!data || (!data.title && !data.description)) return;
         const msgContent = link.closest('.message-content');
         if (!msgContent) return;
 
