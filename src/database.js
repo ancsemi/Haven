@@ -572,6 +572,12 @@ function initDatabase() {
   const webhookCallbackCols = [
     { name: 'callback_url',    sql: "ALTER TABLE webhooks ADD COLUMN callback_url TEXT DEFAULT NULL" },
     { name: 'callback_secret', sql: "ALTER TABLE webhooks ADD COLUMN callback_secret TEXT DEFAULT NULL" },
+    // 3.13.0 webhook expansion — per-event filtering, delivery health
+    { name: 'subscribed_events',    sql: "ALTER TABLE webhooks ADD COLUMN subscribed_events TEXT DEFAULT '*'" },
+    { name: 'last_delivery_status', sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_status INTEGER DEFAULT NULL" },
+    { name: 'last_delivery_at',     sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_at DATETIME DEFAULT NULL" },
+    { name: 'last_delivery_error',  sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_error TEXT DEFAULT NULL" },
+    { name: 'failure_count',        sql: "ALTER TABLE webhooks ADD COLUMN failure_count INTEGER DEFAULT 0" },
   ];
   for (const col of webhookCallbackCols) {
     try { db.prepare(`SELECT ${col.name} FROM webhooks LIMIT 0`).get(); } catch { db.exec(col.sql); }

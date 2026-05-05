@@ -718,46 +718,108 @@ function setupSocketHandlers(io, db) {
     } catch { return false; }
   }
 
-  function fireWebhookCallbacks(channelId, channelCode, message) {
+  // ── Webhook event delivery (3.13.0 expansion) ───────────
+  // Generalized event dispatch — filters by per-webhook subscribed_events,
+  // signs with HMAC when callback_secret is set, performs one delayed retry
+  // on transient failures, and records last delivery health for the admin UI.
+  // `subscribed_events`: '*' means all events; otherwise CSV (e.g. 'message,reaction-added').
+  function _webhookSubscribed(bot, eventType) {
+    const sub = (bot.subscribed_events || '*').trim();
+    if (sub === '*' || sub === '') return true;
+    const events = sub.split(',').map(s => s.trim()).filter(Boolean);
+    return events.includes(eventType);
+  }
+
+  function _recordWebhookDelivery(botId, status, errorMsg) {
+    try {
+      const isOk = status >= 200 && status < 300;
+      db.prepare(
+        `UPDATE webhooks
+         SET last_delivery_status = ?,
+             last_delivery_at = CURRENT_TIMESTAMP,
+             last_delivery_error = ?,
+             failure_count = CASE WHEN ? THEN 0 ELSE COALESCE(failure_count, 0) + 1 END
+         WHERE id = ?`
+      ).run(status || 0, isOk ? null : (errorMsg || null), isOk ? 1 : 0, botId);
+    } catch { /* best-effort */ }
+  }
+
+  // POSTs the event to the bot's callback. Single retry after 5s on 5xx /
+  // network error. 4xx responses are NOT retried (treated as bot rejection).
+  async function _deliverWebhook(bot, payload, headers, attempt = 0) {
+    try {
+      const resp = await fetch(bot.callback_url, {
+        method: 'POST', headers, body: payload,
+        signal: AbortSignal.timeout(10000)
+      });
+      if (resp.ok) {
+        _recordWebhookDelivery(bot.id, resp.status, null);
+        return;
+      }
+      if (resp.status >= 500 && attempt < 1) {
+        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
+        return;
+      }
+      _recordWebhookDelivery(bot.id, resp.status, `HTTP ${resp.status}`);
+    } catch (err) {
+      const msg = (err && err.message) || String(err);
+      if (attempt < 1) {
+        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
+        return;
+      }
+      _recordWebhookDelivery(bot.id, 0, msg.slice(0, 200));
+      console.error(`Webhook callback failed for bot ${bot.id} → ${bot.callback_url}: ${msg}`);
+    }
+  }
+
+  function fireWebhookEvent(channelId, channelCode, eventType, body) {
     try {
       const bots = db.prepare(
-        'SELECT id, callback_url, callback_secret FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
+        'SELECT id, callback_url, callback_secret, subscribed_events FROM webhooks WHERE channel_id = ? AND is_active = 1 AND callback_url IS NOT NULL'
       ).all(channelId);
       if (!bots.length) return;
 
       const payload = JSON.stringify({
-        event: 'message', channelId: channelCode,
-        message: {
-          id: message.id, content: message.content,
-          author: { id: message.user_id, username: message.username },
-          reply_to: message.reply_to || null,
-          is_webhook: message.is_webhook || false,
-          timestamp: message.created_at
-        }
+        event: eventType,
+        channelId: channelCode,
+        timestamp: new Date().toISOString(),
+        ...body
       });
 
       for (const bot of bots) {
-        if (message.is_webhook) continue;
-        const url = bot.callback_url;
-        if (!isSafeCallbackUrl(url)) continue;
+        if (!_webhookSubscribed(bot, eventType)) continue;
+        if (!isSafeCallbackUrl(bot.callback_url)) continue;
 
-        const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Haven-Webhook/1.0' };
+        const headers = {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Haven-Webhook/1.1',
+          'X-Haven-Event': eventType
+        };
         if (bot.callback_secret) {
-          const signature = crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
-          headers['X-Haven-Signature'] = signature;
+          headers['X-Haven-Signature'] =
+            'sha256=' + crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
         }
 
-        fetch(url, {
-          method: 'POST', headers, body: payload,
-          signal: AbortSignal.timeout(10000)
-        }).catch(err => {
-          console.error(`Webhook callback failed for bot ${bot.id} → ${url}: ${err.message}`);
-        });
+        _deliverWebhook(bot, payload, headers).catch(() => {});
       }
     } catch (err) {
-      console.error('Webhook callback error:', err.message);
+      console.error('Webhook event dispatch error:', err.message);
     }
   }
+
+  function fireWebhookCallbacks(channelId, channelCode, message) {
+    if (message && message.is_webhook) return;
+    fireWebhookEvent(channelId, channelCode, 'message', {
+      message: {
+        id: message.id, content: message.content,
+        author: { id: message.user_id, username: message.username },
+        reply_to: message.reply_to || null,
+        is_webhook: !!message.is_webhook,
+        timestamp: message.created_at
+      }
+    });
+  }
+
 
   // ══════════════════════════════════════════════════════════
   // INTERVALS
@@ -1162,7 +1224,7 @@ function setupSocketHandlers(io, db) {
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
       broadcastStreamInfo, touchVoiceActivity,
       // Push / webhooks
-      sendPushNotifications, fireWebhookCallbacks,
+      sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,
       // Slash commands
       processSlashCommand,
       // Music helpers

@@ -6,7 +6,7 @@ const { utcStamp, isString, isInt, sanitizeText } = require('./helpers');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
-          sendPushNotifications, fireWebhookCallbacks, processSlashCommand,
+          sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
           touchVoiceActivity, floodCheck, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
 
@@ -1012,6 +1012,15 @@ module.exports = function register(socket, ctx) {
         messageId: data.messageId,
         reactions
       });
+
+      // Webhook event: reaction-added (3.13.0)
+      try {
+        fireWebhookEvent?.(msg.channel_id, code, 'reaction-added', {
+          messageId: data.messageId,
+          emoji: data.emoji,
+          author: { id: socket.user.id, username: socket.user.displayName }
+        });
+      } catch { /* best-effort */ }
     } catch (err) {
       console.error('add-reaction error:', err.message);
     }
