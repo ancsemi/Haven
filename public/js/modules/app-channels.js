@@ -94,6 +94,11 @@ async switchChannel(code) {
   // Show/hide topic bar
   this._updateTopicBar(channel?.topic || '');
 
+  // DM auto-cleanup notice (#5340) — only visible in DMs when admin has enabled
+  // age-based cleanup. Lets users know old messages are pruned, instead of being
+  // surprised when history disappears.
+  this._updateDmCleanupNotice(channel);
+
   // Show/hide message input — keep upload button visible for media-only channels
   const msgInputArea = document.getElementById('message-input-area');
   const _textOff = channel && channel.text_enabled === 0;
@@ -199,6 +204,34 @@ async switchChannel(code) {
   if (e2eDropdown) e2eDropdown.style.display = 'none';
 },
 
+_updateDmCleanupNotice(channel) {
+  // Build / locate the notice element. Sits just below the topic bar (or the
+  // header if no topic bar) so the layout is identical for everyone — the
+  // banner is the only thing that toggles.
+  let bar = document.getElementById('dm-cleanup-notice');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'dm-cleanup-notice';
+    bar.className = 'dm-cleanup-notice';
+    const topicBar = document.getElementById('channel-topic-bar');
+    const header = document.querySelector('.channel-header');
+    const anchor = topicBar || header;
+    if (anchor && anchor.parentNode) {
+      anchor.parentNode.insertBefore(bar, anchor.nextSibling);
+    }
+  }
+  const isDm = !!(channel && channel.is_dm);
+  const enabled = this.serverSettings && this.serverSettings.cleanup_enabled === 'true';
+  const days = parseInt(this.serverSettings && this.serverSettings.cleanup_max_age_days) || 0;
+  if (isDm && enabled && days > 0) {
+    bar.textContent = t('channels.dm_cleanup_notice', { days });
+    bar.style.display = 'block';
+  } else {
+    bar.style.display = 'none';
+    bar.textContent = '';
+  }
+},
+
 _updateTopicBar(topic) {
   let bar = document.getElementById('channel-topic-bar');
   if (!bar) {
@@ -260,6 +293,8 @@ _showWelcome() {
   document.getElementById('status-online-count').textContent = '0';
   const topicBar = document.getElementById('channel-topic-bar');
   if (topicBar) topicBar.style.display = 'none';
+  const dmNotice = document.getElementById('dm-cleanup-notice');
+  if (dmNotice) { dmNotice.style.display = 'none'; dmNotice.textContent = ''; }
 },
 
 /* ── Channel context menu helpers ─────────────────────── */

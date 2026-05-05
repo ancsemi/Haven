@@ -414,6 +414,13 @@ _applyServerSettings() {
   if (msgInput) msgInput.maxLength = _maxMsgChars;
   document.querySelectorAll('.edit-textarea').forEach(el => { el.maxLength = _maxMsgChars; });
 
+  // Refresh DM cleanup notice (#5340) when cleanup_enabled / cleanup_max_age_days
+  // change live, so the banner appears or disappears without needing a channel switch.
+  if (typeof this._updateDmCleanupNotice === 'function' && this.currentChannel) {
+    const ch = this.channels.find(c => c.code === this.currentChannel);
+    this._updateDmCleanupNotice(ch);
+  }
+
   // Vanity code — update input if modal is open
   if (!modalOpen) {
     const vanityInput = document.getElementById('vanity-code-input');

@@ -11977,6 +11977,23 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* ═══════════════════════════════════════════════════════════
+   DM auto-cleanup notice (#5340)
+   ═══════════════════════════════════════════════════════════ */
+
+.dm-cleanup-notice {
+  display: none;
+  padding: 4px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+
+/* ═══════════════════════════════════════════════════════════
    Channel Topic Bar
    ═══════════════════════════════════════════════════════════ */
 

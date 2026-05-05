@@ -14,6 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [3.13.0] — 2026-05-05
 
 ### Added
+- **#5340: DM auto-cleanup notice banner.** When admin has enabled `cleanup_enabled` with a non-zero `cleanup_max_age_days`, every DM channel now shows a small one-line banner under the channel header reading "Messages older than N days are auto-deleted on this server." Reacts live to setting changes (no channel switch required) and is hidden in regular channels and on the welcome screen. Pure UX add — no schema or behavior change to cleanup itself.
 - **#5294: Admin-configurable login session duration.** New `session_duration_days` server setting (1–365, default 7) replaces the hard-coded `expiresIn: '7d'` on every JWT signing site in `src/auth.js`, and Settings → Uploads & Limits gets a new "Login session duration (days)" input. Existing tokens keep their original expiry — only newly-issued tokens (login, signup, TOTP confirm, password change, recovery, refresh) pick up the new value. Defaults preserve current behavior. Thanks @amnibro.
 - **Webhook integration expansion.** Outbound bot callbacks now include:
   - **Per-event subscriptions** via a new `subscribed_events` column (CSV: `message`, `reaction-added`, `member-joined`, or `*` for all). Existing webhooks default to `*` so behavior is unchanged on upgrade.

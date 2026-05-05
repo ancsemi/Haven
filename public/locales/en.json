@@ -276,6 +276,7 @@
   "channels": {
     "status_none": "None",
     "dm_status": "DM: {{name}}",
+    "dm_cleanup_notice": "Messages older than {{days}} days are auto-deleted on this server.",
     "topic_edit_hint": "Click to edit topic",
     "topic_placeholder": "Click to set a topic...",
     "topic_modal_title": "Channel Topic",
