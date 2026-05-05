@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const path = require('path');
 const fs   = require('fs');
@@ -6,7 +6,7 @@ const { utcStamp, isString, isInt, sanitizeText } = require('./helpers');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
-          sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
+          sendPushNotifications, fireWebhookCallbacks, processSlashCommand,
           touchVoiceActivity, floodCheck, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
 
@@ -34,7 +34,7 @@ module.exports = function register(socket, ctx) {
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id < ?
+        WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, before, limit);
     } else if (after) {
@@ -42,7 +42,7 @@ module.exports = function register(socket, ctx) {
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id > ?
+        WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
       `).all(channel.id, after, limit);
     } else if (around) {
@@ -51,7 +51,7 @@ module.exports = function register(socket, ctx) {
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id < ?
+        WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, around, half);
       const targetMsg = db.prepare(`
@@ -64,7 +64,7 @@ module.exports = function register(socket, ctx) {
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id > ?
+        WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
       `).all(channel.id, around, half);
       // Combine: beforeMsgs is DESC so reverse it, target, then afterMsgs ASC
@@ -74,7 +74,7 @@ module.exports = function register(socket, ctx) {
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at,
                COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ?
+        WHERE m.channel_id = ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, limit);
     }
@@ -179,6 +179,7 @@ module.exports = function register(socket, ctx) {
       obj.reactions = reactionMap.get(m.id) || [];
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
+      obj.thread = threadMap.get(m.id) || null;
       if (m.poll_data) {
         try {
           obj.poll = JSON.parse(m.poll_data);
@@ -1011,15 +1012,6 @@ module.exports = function register(socket, ctx) {
         messageId: data.messageId,
         reactions
       });
-
-      // Webhook event: reaction-added (3.13.0)
-      try {
-        fireWebhookEvent?.(msg.channel_id, code, 'reaction-added', {
-          messageId: data.messageId,
-          emoji: data.emoji,
-          author: { id: socket.user.id, username: socket.user.displayName }
-        });
-      } catch { /* best-effort */ }
     } catch (err) {
       console.error('add-reaction error:', err.message);
     }
@@ -1271,7 +1263,9 @@ module.exports = function register(socket, ctx) {
     if (!member) return;
 
     try {
-      const latest = db.prepare('SELECT MAX(id) AS maxId FROM messages WHERE channel_id = ?').get(channel.id);
+      // Mark up to the latest non-thread message. Thread replies have their
+      // own panel and don't participate in channel-level read positions.
+      const latest = db.prepare('SELECT MAX(id) AS maxId FROM messages WHERE channel_id = ? AND thread_id IS NULL').get(channel.id);
       if (!latest || !latest.maxId) return;
 
       db.prepare(`
@@ -1281,6 +1275,187 @@ module.exports = function register(socket, ctx) {
       `).run(socket.user.id, channel.id, latest.maxId);
     } catch (err) {
       console.error('Mark read channel error:', err);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // THREADS
+  // ═══════════════════════════════════════════════════════
+
+  // ── Get thread messages ─────────────────────────────────
+  socket.on('get-thread-messages', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const parentId = isInt(data.parentId) ? data.parentId : null;
+    if (!parentId) return;
+
+    // Look up the channel from the parent message rather than relying on
+    // socket.currentChannel — the thread panel can persist across channel
+    // switches, and a stale currentChannel would silently empty the thread
+    // (issue: web users seeing 28 replies but no messages, mobile fine).
+    const parentRow = db.prepare(
+      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
+    ).get(parentId);
+    if (!parentRow) return;
+    const channel = { id: parentRow.channel_id };
+    const parent = parentRow;
+
+    // Verify the user is a member of the channel (admins exempt).
+    const member = db.prepare(
+      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+    ).get(channel.id, socket.user.id);
+    if (!member && !socket.user.isAdmin) return;
+
+    const messages = db.prepare(`
+      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
+             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+      FROM messages m LEFT JOIN users u ON m.user_id = u.id
+      WHERE m.thread_id = ?
+      ORDER BY m.created_at ASC, m.id ASC
+    `).all(parentId);
+
+    // Enrich with reactions and reply context
+    const msgIds = messages.map(m => m.id);
+    const replyIds = [...new Set(messages.filter(m => m.reply_to).map(m => m.reply_to))];
+
+    const replyMap = new Map();
+    if (replyIds.length > 0) {
+      const ph = replyIds.map(() => '?').join(',');
+      db.prepare(`
+        SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username
+        FROM messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.id IN (${ph})
+      `).all(...replyIds).forEach(r => replyMap.set(r.id, r));
+    }
+
+    const reactionMap = new Map();
+    if (msgIds.length > 0) {
+      const ph = msgIds.map(() => '?').join(',');
+      db.prepare(`
+        SELECT r.message_id, r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username
+        FROM reactions r JOIN users u ON r.user_id = u.id WHERE r.message_id IN (${ph}) ORDER BY r.id
+      `).all(...msgIds).forEach(r => {
+        if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
+        reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
+      });
+    }
+
+    const enriched = messages.map(m => {
+      const obj = { ...m };
+      if (obj.created_at && !obj.created_at.endsWith('Z')) obj.created_at = utcStamp(obj.created_at);
+      if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
+      obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
+      obj.reactions = reactionMap.get(m.id) || [];
+      return obj;
+    });
+
+    socket.emit('thread-messages', {
+      parentId,
+      parentContent: parent.content,
+      parentUserId: parent.user_id || null,
+      parentUsername: parent.username || '[Deleted User]',
+      parentAvatar: parent.avatar || null,
+      parentAvatarShape: parent.avatar_shape || 'circle',
+      parentCreatedAt: utcStamp(parent.created_at),
+      messages: enriched
+    });
+  });
+
+  // ── Send message to thread ──────────────────────────────
+  socket.on('send-thread-message', (data, callback) => {
+    if (!data || typeof data !== 'object') return;
+    const parentId = isInt(data.parentId) ? data.parentId : null;
+    let content = typeof data.content === 'string' ? data.content.trim() : '';
+    if (!parentId || !content) return;
+
+    if (floodCheck('message')) return;
+
+    // Resolve channel via the parent message (not socket.currentChannel) so
+    // sending from a thread panel still works after the user has navigated
+    // away from the parent's channel. (#thread-blank-web)
+    const parent = db.prepare(
+      'SELECT m.id, m.thread_id, m.channel_id, c.code as code, c.is_dm FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+    ).get(parentId);
+    if (!parent || parent.thread_id) return; // Can't create sub-threads
+    const code = parent.code;
+    const channel = { id: parent.channel_id, is_dm: parent.is_dm };
+
+    // Verify the user is a member of the channel (admins exempt).
+    const tMember = db.prepare(
+      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+    ).get(channel.id, socket.user.id);
+    if (!tMember && !socket.user.isAdmin) return;
+
+    const safeContent = sanitizeText(content);
+    if (!safeContent) return;
+
+    let replyTo = isInt(data.replyTo) ? data.replyTo : null;
+    if (replyTo) {
+      const replyMsg = db.prepare('SELECT thread_id FROM messages WHERE id = ?').get(replyTo);
+      if (!replyMsg || replyMsg.thread_id !== parentId) replyTo = null;
+    }
+
+    try {
+      const result = db.prepare(
+        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to) VALUES (?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo);
+
+      const message = {
+        id: result.lastInsertRowid,
+        content: safeContent,
+        created_at: new Date().toISOString(),
+        username: socket.user.displayName,
+        user_id: socket.user.id,
+        avatar: socket.user.avatar || null,
+        avatar_shape: socket.user.avatar_shape || 'circle',
+        reply_to: replyTo,
+        replyContext: null,
+        reactions: [],
+        edited_at: null,
+        thread_id: parentId
+      };
+
+      if (replyTo) {
+        message.replyContext = db.prepare(`
+          SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username
+          FROM messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?
+        `).get(replyTo) || null;
+      }
+
+      // Emit to everyone in the channel who has the thread open
+      io.to(`channel:${code}`).emit('new-thread-message', {
+        channelCode: code,
+        parentId,
+        message
+      });
+
+      // Update thread preview on the parent message for all users
+      const threadCount = db.prepare('SELECT COUNT(*) as count FROM messages WHERE thread_id = ?').get(parentId);
+      const lastMsg = db.prepare(`
+        SELECT m.id, m.content, m.created_at, COALESCE(u.display_name, u.username) as username
+        FROM messages m LEFT JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ? ORDER BY m.created_at DESC LIMIT 1
+      `).get(parentId);
+
+      // Get up to 5 unique participants
+      const participants = db.prepare(`
+        SELECT DISTINCT COALESCE(u.display_name, u.username) as username, u.avatar
+        FROM messages m JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ? ORDER BY m.created_at DESC LIMIT 5
+      `).all(parentId);
+
+      io.to(`channel:${code}`).emit('thread-updated', {
+        channelCode: code,
+        parentId,
+        thread: {
+          count: threadCount.count,
+          lastReplyAt: lastMsg ? lastMsg.created_at : null,
+          participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
+        }
+      });
+
+      if (typeof callback === 'function') callback({ success: true });
+    } catch (err) {
+      console.error('send-thread-message error:', err.message);
+      if (typeof callback === 'function') callback({ error: 'Failed to send thread message' });
     }
   });
 };

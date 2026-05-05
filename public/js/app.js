@@ -27,11 +27,16 @@ class HavenApp {
     this.typingTimeout = null;
     this.lastTypingEmit = 0;
     this.unreadCounts = {};
+    // Per-channel thread @mention list, persisted to localStorage
+    try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
+    catch { this._threadMentions = {}; }
     this.onlineCount = 0;
     this.pingInterval = null;
     this.serverManager = new ServerManager();
     this.notifications = new NotificationManager();
     this.replyingTo = null;        // message object being replied to
+    this._threadReplyingTo = null; // thread message being replied to
+    this._activeThreadParent = null; // currently open thread parent message ID
     this._lastMoveSelectedEl = null; // last clicked message in move-selection mode
     this._imageQueue = [];         // queued images awaiting send
     this.channelMembers = [];      // for @mention autocomplete
@@ -135,7 +140,7 @@ class HavenApp {
 
     this.customEmojis = []; // [{name, url}] — loaded from server
     this.stickers = []; // [{id, name, pack_name, url}] — loaded from server
-    this._emojiPickerContext = 'main'; // 'main' | 'dmpip' — set by emoji button handlers
+    this._emojiPickerContext = 'main'; // 'main' | 'thread' | 'dmpip' — set by emoji button handlers
     this._emojiPickerSection = 'emoji'; // 'emoji' | 'sticker' — last-used picker tab
 
     this._init();

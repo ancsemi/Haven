@@ -288,6 +288,7 @@
             <h3 id="channel-header-name" data-i18n="header.select_channel">Select a channel</h3>
           </div>
           <div class="header-actions-box" id="header-actions-box" style="display:none">
+            <button id="thread-mentions-pill" class="icon-btn small thread-mentions-pill" title="Mentions in threads" style="display:none">🔔 <span id="thread-mentions-pill-count">0</span></button>
             <span class="channel-code-tag" id="channel-code-display" data-i18n-title="header.channel_code" title="Channel code"></span>
             <button id="copy-code-btn" class="icon-btn small" data-i18n-title="header.copy_code" title="Copy code">📋</button>
             <button id="channel-code-settings-btn" class="icon-btn small" data-i18n-title="header.channel_code_settings" title="Channel code settings">⚙️</button>
@@ -718,6 +719,7 @@
     </div>
   </div>
 
+  <!-- Thread Panel (slides in from right) -->
   <!-- DM PiP floating panel (overlay; doesn't switch the active channel) -->
   <div id="dm-pip-panel" class="dm-pip-panel" style="display:none">
     <div id="dm-pip-banner" class="dm-pip-banner" aria-hidden="true"></div>
@@ -740,6 +742,38 @@
       <textarea id="dm-pip-input" class="dm-pip-input" placeholder="Reply…" rows="1"></textarea>
       <button id="dm-pip-send" class="dm-pip-send" title="Send">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="thread-panel" class="thread-panel" style="display:none">
+    <div class="thread-panel-resizer" id="thread-panel-resizer" aria-hidden="true"></div>
+    <div class="thread-panel-header">
+      <div class="thread-panel-header-top">
+        <span class="thread-panel-icon">🧵</span>
+        <span id="thread-panel-title" class="thread-panel-title">Thread</span>
+        <button id="thread-panel-pip" class="icon-btn small" title="Pop out thread (PiP)" aria-pressed="false">⧉</button>
+        <button id="thread-panel-close" class="icon-btn small">&times;</button>
+      </div>
+      <div class="thread-parent-meta" id="thread-parent-meta">
+        <div class="thread-parent-avatar-wrap" id="thread-parent-avatar-wrap"></div>
+        <span class="thread-parent-name" id="thread-parent-name">Thread starter</span>
+      </div>
+      <div class="thread-parent-preview" id="thread-parent-preview"></div>
+    </div>
+    <div class="thread-messages" id="thread-messages"></div>
+    <div class="thread-reply-bar" id="thread-reply-bar" style="display:none">
+      <span id="thread-reply-preview-text"></span>
+      <button id="thread-reply-close-btn" class="icon-btn small" aria-label="Cancel thread reply">&times;</button>
+    </div>
+    <div class="thread-input-area">
+      <div class="pip-input-resizer" aria-hidden="true"></div>
+      <button id="thread-emoji-btn" class="pip-input-emoji-btn" title="Emoji"><span class="tb-icon tb-icon-emoji" aria-hidden="true">😀</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg></span></button>
+      <textarea id="thread-input" class="thread-input" placeholder="Reply in thread..." rows="1"></textarea>
+      <button id="thread-send-btn" class="thread-send-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/>
         </svg>
       </button>
@@ -1189,7 +1223,7 @@
           </div>
           <div id="toolbar-order-list" class="toolbar-order-list"></div>
         </div>
-        <small class="settings-hint" style="margin-top:4px;display:block">Applies to message hover action bars.</small>
+        <small class="settings-hint" style="margin-top:4px;display:block">Applies to message and thread hover action bars.</small>
       </div>
 
       <!-- Image Display Mode -->

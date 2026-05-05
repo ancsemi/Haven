@@ -572,12 +572,6 @@ function initDatabase() {
   const webhookCallbackCols = [
     { name: 'callback_url',    sql: "ALTER TABLE webhooks ADD COLUMN callback_url TEXT DEFAULT NULL" },
     { name: 'callback_secret', sql: "ALTER TABLE webhooks ADD COLUMN callback_secret TEXT DEFAULT NULL" },
-    // 3.13.0 webhook expansion — per-event filtering, delivery health
-    { name: 'subscribed_events',    sql: "ALTER TABLE webhooks ADD COLUMN subscribed_events TEXT DEFAULT '*'" },
-    { name: 'last_delivery_status', sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_status INTEGER DEFAULT NULL" },
-    { name: 'last_delivery_at',     sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_at DATETIME DEFAULT NULL" },
-    { name: 'last_delivery_error',  sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_error TEXT DEFAULT NULL" },
-    { name: 'failure_count',        sql: "ALTER TABLE webhooks ADD COLUMN failure_count INTEGER DEFAULT 0" },
   ];
   for (const col of webhookCallbackCols) {
     try { db.prepare(`SELECT ${col.name} FROM webhooks LIMIT 0`).get(); } catch { db.exec(col.sql); }
@@ -842,18 +836,13 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_bot_commands_webhook ON bot_commands(webhook_id);
   `);
 
-  // ── Migration: chat threads removed (#5336) ─────────────
-  // Threads in DMs were never E2E-encrypted, exposing plaintext replies to
-  // server admins. The renderer/socket layer is gone; here we delete any
-  // surviving thread-reply rows so they don't reappear as loose channel
-  // messages once the thread_id filter is removed from the message queries.
-  // The thread_id column itself is left in place — SQLite ALTER TABLE DROP
-  // COLUMN requires a rebuild and the dead column is harmless.
+  // ── Migration: chat threads (thread_id on messages) ─────
   try {
     db.prepare("SELECT thread_id FROM messages LIMIT 0").get();
-    db.exec("DELETE FROM messages WHERE thread_id IS NOT NULL");
-    db.exec("DROP INDEX IF EXISTS idx_messages_thread");
-  } catch { /* column never existed on this database */ }
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN thread_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE CASCADE");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL");
 
   // ── Audit log ───────────────────────────────────────────
   // Tracks admin/moderator actions: channel CRUD, role changes,

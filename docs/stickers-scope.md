@@ -110,6 +110,15 @@ New method `_sendStickerMessage(sticker)` (similar to `_sendGifMessage`):
 _sendStickerMessage(sticker) {
   const ctx = this._emojiPickerContext || 'main';
 
+  if (ctx === 'thread') {
+    // Thread panel (docked or PiP)
+    const parentId = this._activeThreadParent;
+    if (!parentId) return;
+    this.socket.emit('send-thread-message', { parentId, content: sticker.url });
+    this.notifications.play('sent');
+    return;
+  }
+
   const code = ctx === 'pip' ? this._activeDMPip : this.currentChannel;
   if (!code) return;
 

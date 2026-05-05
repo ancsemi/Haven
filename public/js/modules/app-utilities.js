@@ -1158,10 +1158,10 @@ _toggleEmojiPicker(anchorEl) {
     }
   }
 
-  // Anchor-based positioning: used when opening from PiP input buttons.
+  // Anchor-based positioning: used when opening from PiP or thread input buttons.
   // Move the picker to document.body so it escapes any overflow clipping context,
   // then position it with fixed coords above the anchor button. Boost z-index so
-  // it renders above the dm-pip-panel (z-index 950).
+  // it renders above the dm-pip-panel (z-index 950) and pip-mode thread-panel
   // (z-index 10020).
   if (anchorEl) {
     if (picker.parentElement !== document.body) {
@@ -1355,11 +1355,19 @@ _sendGifMessage(url) {
 },
 
 // Send a sticker URL as a message. Routes to the active picker context
-// (main composer or DM PiP) so stickers respect the
+// (main composer, thread composer, or DM PiP) so stickers respect the
 // surrounding scope, replies, and E2E encryption that each composer applies.
 _sendStickerMessage(url) {
   if (!url) return;
   const ctx = this._emojiPickerContext || 'main';
+  if (ctx === 'thread') {
+    if (!this._activeThreadParent) return;
+    const input = document.getElementById('thread-input');
+    if (!input) return;
+    input.value = url;
+    this._sendThreadMessage();
+    return;
+  }
   if (ctx === 'dmpip') {
     if (!this._activeDMPip) return;
     const input = document.getElementById('dm-pip-input');
@@ -1554,7 +1562,7 @@ _updateMessageReactions(messageId, reactions) {
     const oldRow = msgEl.querySelector('.reactions-row');
     if (oldRow) oldRow.remove();
     if (!html) return;
-    const content = msgEl.querySelector('.message-content');
+    const content = msgEl.querySelector('.message-content, .thread-msg-content');
     if (content) content.insertAdjacentHTML('afterend', html);
   });
 
@@ -1837,11 +1845,11 @@ _showReactionPicker(msgEl, msgId) {
 
   msgEl.appendChild(picker);
 
-  // PiP context: the dm-pip-panel has
+  // PiP context: the dm-pip-panel and pip-mode thread-panel both have
   // `overflow: hidden`, which clips this absolute-positioned picker. Pop the
   // picker out to <body> with fixed positioning so it can render above the
   // floating panel.
-  const pipParent = msgEl.closest('.dm-pip-panel');
+  const pipParent = msgEl.closest('.dm-pip-panel, .thread-panel.pip');
   if (pipParent) {
     const msgRect = msgEl.getBoundingClientRect();
     document.body.appendChild(picker);
@@ -1868,7 +1876,7 @@ _showReactionPicker(msgEl, msgId) {
   requestAnimationFrame(() => {
     if (pipParent) return; // fixed-position branch handles placement
     const pickerRect = picker.getBoundingClientRect();
-    const container = msgEl.closest('#messages, #dm-pip-messages');
+    const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
     const containerTop = container ? container.getBoundingClientRect().top : 0;
     if (pickerRect.top < containerTop + 4) {
       picker.classList.add('flip-below');
@@ -2001,7 +2009,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
 
   requestAnimationFrame(() => {
     const panelRect = panel.getBoundingClientRect();
-    const container = msgEl.closest('#messages, #dm-pip-messages');
+    const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
     const containerTop = container ? container.getBoundingClientRect().top : 0;
     if (panelRect.top < containerTop + 4) {
       panel.classList.add('flip-below');
@@ -2010,7 +2018,176 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
   searchInput.focus();
 },
 
-// ── DM Picture-in-Picture (overlay panel) ──
+// ═══════════════════════════════════════════════════════
+// THREADS
+// ═══════════════════════════════════════════════════════
+
+_renderThreadPreview(parentId, thread) {
+  if (!thread || !thread.count) return '';
+  const participantAvatars = (thread.participants || []).map(p => {
+    if (p.avatar) {
+      return `<img class="thread-participant-avatar" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
+    }
+    const color = this._getUserColor(p.username);
+    const initial = p.username.charAt(0).toUpperCase();
+    return `<div class="thread-participant-avatar thread-participant-initial" style="background:${color}" title="${this._escapeHtml(p.username)}">${initial}</div>`;
+  }).join('');
+
+  const timeAgo = this._relativeTime(thread.lastReplyAt);
+  return `
+    <button class="thread-preview" data-thread-parent="${parentId}">
+      ${participantAvatars}
+      <span class="thread-preview-count">${thread.count} ${thread.count === 1 ? 'Reply' : 'Replies'}</span>
+      <span class="thread-preview-time">${timeAgo}</span>
+      <span class="thread-preview-arrow">›</span>
+    </button>
+  `;
+},
+
+_relativeTime(isoStr) {
+  if (!isoStr) return '';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+},
+
+_setThreadParentHeader(meta = {}) {
+  const wrap = document.getElementById('thread-parent-avatar-wrap');
+  const nameEl = document.getElementById('thread-parent-name');
+  if (!wrap || !nameEl) return;
+
+  const baseUsername = (meta.username || '').trim() || 'Thread starter';
+  // Apply the local user's nickname assignment so threads match the rest of
+  // the UI (members list, message author, mentions). Falls back to the
+  // server-provided display name when no nickname is set. (#5291)
+  const username = meta.userId != null
+    ? (this._getNickname?.(meta.userId, baseUsername) || baseUsername)
+    : baseUsername;
+  const shape = (meta.avatarShape || 'circle') === 'square' ? 'square' : 'circle';
+  const shapeClass = shape === 'square' ? ' thread-parent-avatar-square' : '';
+
+  if (meta.avatar) {
+    wrap.innerHTML = `<img class="thread-parent-avatar${shapeClass}" src="${this._escapeHtml(meta.avatar)}" alt="${this._escapeHtml(username)}">`;
+  } else {
+    const initial = username.charAt(0).toUpperCase() || '?';
+    const color = this._getUserColor(username);
+    wrap.innerHTML = `<div class="thread-parent-avatar-initial${shapeClass}" style="background:${color}">${this._escapeHtml(initial)}</div>`;
+  }
+
+  nameEl.textContent = username;
+  nameEl.title = username;
+},
+
+_setThreadReply(msgEl, msgId) {
+  const author = msgEl.querySelector('.thread-msg-author')?.textContent || 'someone';
+  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
+  const preview = rawContent.length > 70 ? rawContent.substring(0, 70) + '…' : rawContent;
+  this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
+
+  const bar = document.getElementById('thread-reply-bar');
+  const text = document.getElementById('thread-reply-preview-text');
+  if (!bar || !text) return;
+  bar.style.display = 'flex';
+  text.innerHTML = `Replying to <strong>${this._escapeHtml(author)}</strong>: ${this._escapeHtml(preview)}`;
+
+  const input = document.getElementById('thread-input');
+  if (input) input.focus();
+},
+
+_clearThreadReply() {
+  this._threadReplyingTo = null;
+  const bar = document.getElementById('thread-reply-bar');
+  if (bar) bar.style.display = 'none';
+},
+
+_quoteThreadMessage(msgEl) {
+  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
+  const author = msgEl.querySelector('.thread-msg-author')?.textContent || 'someone';
+  const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
+  const quoteText = `> @${author} wrote:\n${quotedLines}\n`;
+
+  const input = document.getElementById('thread-input');
+  if (!input) return;
+  if (input.value) {
+    input.value += '\n' + quoteText;
+  } else {
+    input.value = quoteText;
+  }
+  input.focus();
+  input.dispatchEvent(new Event('input'));
+},
+
+// ── Thread @mention tracking ──────────────────────
+_recordThreadMention(channelCode, parentId, msg) {
+  if (!this._threadMentions) {
+    try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
+    catch { this._threadMentions = {}; }
+  }
+  const list = this._threadMentions[channelCode] || (this._threadMentions[channelCode] = []);
+  // Dedupe by messageId
+  if (list.some(m => m.messageId === msg.id)) return;
+  list.push({
+    parentId,
+    messageId: msg.id,
+    username: msg.username || '',
+    snippet: (msg.content || '').slice(0, 140),
+    when: Date.now()
+  });
+  this._persistThreadMentions();
+  this._renderChannels?.();
+  this._updateThreadMentionsPill();
+},
+_clearThreadMentionsForParent(channelCode, parentId) {
+  if (!this._threadMentions || !this._threadMentions[channelCode]) return;
+  this._threadMentions[channelCode] = this._threadMentions[channelCode].filter(m => m.parentId !== parentId);
+  if (this._threadMentions[channelCode].length === 0) delete this._threadMentions[channelCode];
+  this._persistThreadMentions();
+  this._renderChannels?.();
+  this._updateThreadMentionsPill();
+},
+_clearThreadMentionsForChannel(channelCode) {
+  if (!this._threadMentions || !this._threadMentions[channelCode]) return;
+  delete this._threadMentions[channelCode];
+  this._persistThreadMentions();
+  this._renderChannels?.();
+  this._updateThreadMentionsPill();
+},
+_persistThreadMentions() {
+  try { localStorage.setItem('haven_thread_mentions', JSON.stringify(this._threadMentions || {})); } catch {}
+},
+_updateThreadMentionsPill() {
+  const pill = document.getElementById('thread-mentions-pill');
+  const cnt = document.getElementById('thread-mentions-pill-count');
+  if (!pill || !cnt) return;
+  if (!this._threadMentions) {
+    try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
+    catch { this._threadMentions = {}; }
+  }
+  const list = (this._threadMentions[this.currentChannel] || []);
+  if (list.length === 0) {
+    pill.style.display = 'none';
+    return;
+  }
+  pill.style.display = '';
+  cnt.textContent = String(list.length);
+  pill.title = list.length === 1
+    ? `1 mention in a thread — click to open`
+    : `${list.length} mentions in threads — click to open the most recent`;
+},
+_openMostRecentThreadMention() {
+  if (!this._threadMentions) return;
+  const list = this._threadMentions[this.currentChannel];
+  if (!list || list.length === 0) return;
+  const newest = list[list.length - 1];
+  this._openThread(newest.parentId);
+},
+
+// ── DM Picture-in-Picture (overlay panel, like thread PiP) ──
 // Opens a floating, draggable, resizable panel that hosts a DM
 // without leaving the user's current channel. The DM panel is its
 // own message view — receives `new-message` events filtered by code,
@@ -2401,6 +2578,203 @@ _sendDMPiPMessage() {
   })();
 },
 
+_openThread(parentId) {
+  this._activeThreadParent = parentId;
+  // Clear any pending thread mentions for this thread/channel
+  this._clearThreadMentionsForParent(this.currentChannel, parentId);
+  const panel = document.getElementById('thread-panel');
+  if (!panel) return;
+  panel.style.display = 'flex';
+  panel.dataset.parentId = parentId;
+  this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
+
+  // Request thread messages from server
+  this.socket.emit('get-thread-messages', { parentId });
+
+  // Update header
+  const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
+  const author = msgEl?.querySelector('.message-author')?.textContent || 'Thread starter';
+  document.getElementById('thread-panel-title').textContent = 'Thread';
+  const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
+  document.getElementById('thread-parent-preview').textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
+
+  const avatarImg = msgEl?.querySelector('.message-avatar-img');
+  let avatar = null;
+  if (avatarImg && avatarImg.getAttribute('src')) avatar = avatarImg.getAttribute('src');
+  const avatarShape = (avatarImg && avatarImg.classList.contains('avatar-square')) ? 'square' : 'circle';
+  const parentUserIdRaw = msgEl?.dataset?.userId;
+  const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
+  this._setThreadParentHeader({ userId: parentUserId, username: author, avatar, avatarShape });
+
+  // Focus input
+  const input = document.getElementById('thread-input');
+  if (input) input.focus();
+},
+
+_setThreadPiPEnabled(enabled) {
+  const panel = document.getElementById('thread-panel');
+  const pipBtn = document.getElementById('thread-panel-pip');
+  if (!panel || !pipBtn) return;
+
+  const isOn = !!enabled;
+  panel.classList.toggle('pip', isOn);
+  pipBtn.textContent = isOn ? '▣' : '⧉';
+  pipBtn.title = isOn ? 'Dock thread panel' : 'Pop out thread (PiP)';
+  pipBtn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+  localStorage.setItem('haven_thread_panel_pip', isOn ? '1' : '0');
+
+  if (isOn) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('haven_thread_panel_pip_rect') || 'null'); } catch {}
+
+    const minW = 320;
+    const maxW = Math.min(760, window.innerWidth - 28);
+    const minH = 240;
+    const footerOffset = (() => {
+      const raw = getComputedStyle(document.body).getPropertyValue('--thread-footer-offset');
+      const v = parseInt(raw, 10);
+      return Number.isFinite(v) ? v : 0;
+    })();
+    const maxH = Math.max(minH, window.innerHeight - footerOffset - 28);
+
+    const width = Math.max(minW, Math.min(maxW, (saved && saved.width) || panel.offsetWidth || 420));
+    const height = Math.max(minH, Math.min(maxH, (saved && saved.height) || panel.offsetHeight || 460));
+    const defaultLeft = Math.max(0, window.innerWidth - width - 14);
+    const defaultTop = Math.max(0, window.innerHeight - footerOffset - height - 14);
+    const left = Math.max(0, Math.min(window.innerWidth - width, (saved && Number.isFinite(saved.left)) ? saved.left : defaultLeft));
+    const top = Math.max(0, Math.min(window.innerHeight - footerOffset - height, (saved && Number.isFinite(saved.top)) ? saved.top : defaultTop));
+
+    panel.style.width = `${Math.round(width)}px`;
+    panel.style.height = `${Math.round(height)}px`;
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  } else {
+    panel.style.height = '';
+    panel.style.left = '';
+    panel.style.top = '';
+    panel.style.right = '';
+    panel.style.bottom = '';
+  }
+},
+
+_toggleThreadPiP() {
+  const panel = document.getElementById('thread-panel');
+  if (!panel) return;
+  this._setThreadPiPEnabled(!panel.classList.contains('pip'));
+},
+
+_closeThread() {
+  this._activeThreadParent = null;
+  this._clearThreadReply();
+  const panel = document.getElementById('thread-panel');
+  if (panel) {
+    panel.style.display = 'none';
+    panel.dataset.parentId = '';
+  }
+},
+
+_sendThreadMessage() {
+  const input = document.getElementById('thread-input');
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) return;
+  const parentId = this._activeThreadParent;
+  if (!parentId) return;
+  const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
+
+  this.socket.emit('send-thread-message', { parentId, content, replyTo }, (resp) => {
+    if (resp && resp.error) {
+      this._showToast(resp.error, 'error');
+      return;
+    }
+    this._clearThreadReply();
+  });
+  input.value = '';
+},
+
+_appendThreadMessage(msg) {
+  const container = document.getElementById('thread-messages');
+  if (!container) return;
+
+  // Apply the local user's nickname assignment so thread messages match
+  // everywhere else nicknames are honored. (#5291)
+  const displayName = this._getNickname?.(msg.user_id, msg.username) || msg.username;
+  const color = this._getUserColor(msg.username);
+  const initial = displayName.charAt(0).toUpperCase();
+  let avatarHtml;
+  if (msg.avatar) {
+    avatarHtml = `<img class="thread-msg-avatar" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
+  } else {
+    avatarHtml = `<div class="thread-msg-avatar thread-msg-avatar-initial" style="background:${color}">${initial}</div>`;
+  }
+
+  const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
+  const replyHtml = msg.replyContext ? this._renderReplyBanner(msg.replyContext) : '';
+  const canDelete = msg.user_id === this.user.id || this.user.isAdmin || this._canModerate();
+  const canEdit = msg.user_id === this.user.id;
+  const iconPair = (emoji, monoSvg) => `<span class="tb-icon tb-icon-emoji" aria-hidden="true">${emoji}</span><span class="tb-icon tb-icon-mono" aria-hidden="true">${monoSvg}</span>`;
+  const iReact = iconPair('😀', '<svg class="thread-action-react-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-width="1.8"></circle><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke-width="1.8" stroke-linecap="round"></path><circle cx="9.2" cy="10.2" r="1" fill="currentColor" stroke="none"></circle><circle cx="14.8" cy="10.2" r="1" fill="currentColor" stroke="none"></circle></svg>');
+  const iReply = iconPair('↩️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8L4 12L10 16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M20 12H5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+  const iQuote = iconPair('💬', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 7h-4v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>');
+  const iEdit = iconPair('✏️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M13.5 6.5l3.5 3.5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
+  const iDelete = iconPair('🗑️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 7V5h6v2" stroke-width="1.8" stroke-linecap="round"></path><path d="M7 7l1 12h8l1-12" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
+  const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
+  const threadCoreToolbarBtns = `<button data-thread-action="react" title="React" aria-label="React">${iReact}</button><button data-thread-action="reply" title="Reply">${iReply}</button><button data-thread-action="quote" title="Quote">${iQuote}</button>`;
+  let threadOverflowToolbarBtns = '';
+  if (canEdit) threadOverflowToolbarBtns += `<button data-thread-action="edit" title="Edit">${iEdit}</button>`;
+  if (canDelete) threadOverflowToolbarBtns += `<button data-thread-action="delete" title="Delete">${iDelete}</button>`;
+  const threadOverflowHtml = threadOverflowToolbarBtns
+    ? `<div class="thread-msg-more"><button class="thread-msg-more-btn" type="button" aria-label="More actions">${iMore}</button><div class="thread-msg-overflow">${threadOverflowToolbarBtns}</div></div>`
+    : '';
+
+  const el = document.createElement('div');
+  el.className = 'thread-message';
+  el.dataset.msgId = msg.id;
+  el.dataset.rawContent = msg.content;
+  el.innerHTML = `
+    <div class="thread-msg-row">
+      ${avatarHtml}
+      <div class="thread-msg-body">
+        <div class="thread-msg-header">
+          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
+          <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
+          <span class="thread-msg-header-spacer"></span>
+          <div class="thread-msg-toolbar">
+            <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
+            ${threadOverflowHtml}
+          </div>
+        </div>
+        ${replyHtml}
+        <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
+        ${reactionsHtml}
+      </div>
+    </div>
+  `;
+  container.appendChild(el);
+  try { this._decryptE2EImages?.(el); } catch {}
+  try { this._decryptE2EFiles?.(el); } catch {}
+  try { this._setupVideos?.(el); } catch {}
+  container.scrollTop = container.scrollHeight;
+},
+
+_updateThreadPreview(parentId, thread) {
+  const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
+  if (!msgEl) return;
+  const oldPreview = msgEl.querySelector('.thread-preview');
+  const newHtml = this._renderThreadPreview(parentId, thread);
+  if (oldPreview) {
+    oldPreview.outerHTML = newHtml;
+  } else if (newHtml) {
+    // Insert after reactions row, or after message-content
+    const reactions = msgEl.querySelector('.reactions-row');
+    const content = msgEl.querySelector('.message-content');
+    const insertAfter = reactions || content;
+    if (insertAfter) insertAfter.insertAdjacentHTML('afterend', newHtml);
+  }
+},
+
 // ═══════════════════════════════════════════════════════
 // REPLY
 // ═══════════════════════════════════════════════════════
@@ -2490,7 +2864,7 @@ _startEditMessage(msgEl, msgId) {
   // Guard against re-entering edit mode
   if (msgEl.classList.contains('editing')) return;
 
-  const contentEl = msgEl.querySelector('.message-content');
+  const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
   if (!contentEl) return;
 
   // Use the stored raw markdown content (set on render and kept in sync on

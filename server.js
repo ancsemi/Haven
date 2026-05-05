@@ -2225,40 +2225,10 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     avatarUrl = /^https?:\/\//i.test(trimmed) ? trimmed : null;
   }
 
-  // Optional reply_to — bot replying to a message in the same channel (3.13.0)
-  let replyTo = null;
-  if (req.body.reply_to !== undefined && req.body.reply_to !== null) {
-    const rid = parseInt(req.body.reply_to, 10);
-    if (Number.isInteger(rid) && rid > 0) {
-      const target = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(rid, webhook.channel_id);
-      if (target) replyTo = rid;
-    }
-  }
-
   // Insert the message into the DB
   const result = db.prepare(
-    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to) VALUES (?, ?, ?, 1, ?, ?, ?)'
-  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo);
-
-  // Build replyContext if this is a reply (so the client renders the inline preview)
-  let replyContext = null;
-  if (replyTo) {
-    try {
-      const r = db.prepare(`
-        SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username,
-               COALESCE(u.display_name, u.username) AS username
-        FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.id = ?
-      `).get(replyTo);
-      if (r) {
-        replyContext = {
-          id: r.id,
-          content: (r.content || '').slice(0, 200),
-          username: r.is_webhook ? `[BOT] ${r.webhook_username || 'Bot'}` : (r.username || 'Unknown')
-        };
-      }
-    } catch { /* best-effort */ }
-  }
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, 1, ?, ?)'
+  ).run(webhook.channel_id, null, content, username, avatarUrl || null);
 
   const message = {
     id: result.lastInsertRowid,
@@ -2268,8 +2238,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     user_id: null,
     avatar: avatarUrl || null,
     avatar_shape: 'square',
-    reply_to: replyTo,
-    replyContext,
+    reply_to: null,
+    replyContext: null,
     reactions: [],
     is_webhook: true,
     webhook_name: username
