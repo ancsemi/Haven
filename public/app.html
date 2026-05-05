@@ -1074,6 +1074,7 @@
           <div class="settings-nav-item" data-target="section-debug">🐞 <span data-i18n="settings.nav.debug">Debug</span></div>
           </div>
           <div class="settings-nav-admin-group" style="display:none">
+          <div class="settings-nav-item settings-nav-admin" data-target="section-update" style="display:none">⬆️ <span data-i18n="settings.nav.server_updates">Server Updates</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-members" style="display:none">👥 <span data-i18n="settings.nav.members">Members</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🛡️ <span data-i18n="settings.nav.whitelist">Whitelist</span></div>
@@ -1696,6 +1697,17 @@
       <!-- Admin Section (hidden for non-admins) -->
       <div class="settings-section admin-settings-section" id="admin-mod-panel" style="display:none">
 
+        <!-- Server Updates -->
+        <div class="admin-settings" id="section-update">
+          <h5 class="settings-section-subtitle">⬆️ <span data-i18n="settings.admin.update_title">Server Updates</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.update_hint">Check for new Haven releases and apply them in place. The server will create a pre-update backup automatically and restart itself.</small>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+            <button class="btn-sm btn-accent" id="update-check-btn" data-i18n="settings.admin.update_check_btn">Check for Updates</button>
+            <button class="btn-sm" id="update-run-btn" disabled data-i18n="settings.admin.update_run_btn">Update Now</button>
+          </div>
+          <div id="update-status" style="margin-top:10px;padding:8px;border:1px solid var(--border);border-radius:4px;display:none"></div>
+        </div>
+
         <!-- Server Branding -->
         <div class="admin-settings" id="section-branding">
           <h5 class="settings-section-subtitle">🏠 <span data-i18n="settings.admin.branding_title">Server Branding</span></h5>
@@ -1802,9 +1814,11 @@
               <option value="none" data-i18n="settings.admin.members_hidden">Hidden</option>
             </select>
           </label>
-          <button class="btn-sm btn-full" id="view-bans-btn">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
-          <button class="btn-sm btn-full" id="view-deleted-users-btn" style="margin-top:6px">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
-          <button class="btn-sm btn-full" id="view-all-members-btn" style="margin-top:6px">👥 <span data-i18n="settings.admin.view_all_members_btn">View All Members</span></button>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            <button class="btn-sm" id="view-bans-btn">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
+            <button class="btn-sm" id="view-deleted-users-btn">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
+            <button class="btn-sm" id="view-all-members-btn">👥 <span data-i18n="settings.admin.view_all_members_btn">View All Members</span></button>
+          </div>
           <label class="toggle-row" style="margin-top:8px">
             <span data-i18n="settings.admin.update_banner_label">Update banner (admins only)</span>
             <input type="checkbox" id="update-banner-admin-only">
@@ -1937,15 +1951,7 @@
             <div id="auto-backup-list" style="margin-top:10px;display:flex;flex-direction:column;gap:4px"></div>
           </div>
         </div>
-        <div class="admin-settings" id="section-update" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">⬆️ <span data-i18n="settings.admin.update_title">Server Updates</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.update_hint">Check for new Haven releases and apply them in place. The server will create a pre-update backup automatically and restart itself.</small>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-            <button class="btn-sm btn-accent" id="update-check-btn" data-i18n="settings.admin.update_check_btn">Check for Updates</button>
-            <button class="btn-sm" id="update-run-btn" disabled data-i18n="settings.admin.update_run_btn">Update Now</button>
-          </div>
-          <div id="update-status" style="margin-top:10px;padding:8px;border:1px solid var(--border);border-radius:4px;display:none"></div>
-        </div>
+
         <div class="admin-settings" id="section-uploads" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">📁 <span data-i18n="settings.admin.uploads_title">Uploads &amp; Limits</span></h5>
           <label class="select-row">
@@ -1983,21 +1989,21 @@
           <h5 class="settings-section-subtitle">🔊 <span data-i18n="settings.admin.sounds_title">Custom Sounds</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.sounds_hint">Upload audio files for custom notification sounds</small>
           <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-sound-manager-btn">⚙️ <span data-i18n="settings.admin.manage_sounds_btn">Manage Sounds</span></button>
+            <button class="btn-sm btn-accent" id="open-sound-manager-btn">⚙️ <span data-i18n="settings.admin.manage_sounds_btn">Manage Sounds</span></button>
           </div>
         </div>
         <div class="admin-settings" id="section-emojis" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">😎 <span data-i18n="settings.admin.emojis_title">Custom Emojis</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.emojis_hint">Upload images for custom server emojis</small>
           <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-emoji-manager-btn">⚙️ <span data-i18n="settings.admin.manage_emojis_btn">Manage Emojis</span></button>
+            <button class="btn-sm btn-accent" id="open-emoji-manager-btn">⚙️ <span data-i18n="settings.admin.manage_emojis_btn">Manage Emojis</span></button>
           </div>
         </div>
         <div class="admin-settings" id="section-stickers" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🖼️ <span data-i18n="settings.admin.stickers_title">Stickers</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.stickers_hint">Upload sticker images grouped into packs</small>
           <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-sticker-manager-btn">⚙️ <span data-i18n="settings.admin.manage_stickers_btn">Manage Stickers</span></button>
+            <button class="btn-sm btn-accent" id="open-sticker-manager-btn">⚙️ <span data-i18n="settings.admin.manage_stickers_btn">Manage Stickers</span></button>
           </div>
         </div>
         <!-- Role Management (Admin only) -->
@@ -2005,7 +2011,7 @@
           <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
           <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn-sm btn-full btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
+            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
             <button class="btn-sm" id="reset-roles-btn" title="Reset all roles to deployment defaults">🔄 <span data-i18n="settings.admin.reset_roles_btn">Reset to Default</span></button>
           </div>
           <div class="settings-group" style="margin-top:12px">
