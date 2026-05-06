@@ -207,7 +207,17 @@ _renderUserItem(u, scoreLookup) {
     : '';
 
   // Build tooltip
-  const tooltipRole = u.role ? `<div class="tooltip-role" style="color:${roleColor}">● ${this._escapeHtml(u.role.name)}</div>` : '';
+  // Show all roles the user holds in this channel (multi-role) when more than
+  // one is present; otherwise fall back to the single highest role line.
+  let tooltipRole = '';
+  if (Array.isArray(u.roles) && u.roles.length > 1) {
+    tooltipRole = '<div class="tooltip-role-list">' + u.roles.map(r => {
+      const c = this._safeColor(r.color, 'var(--text-muted)');
+      return `<div class="tooltip-role" style="color:${c}">\u25CF ${this._escapeHtml(r.name)}</div>`;
+    }).join('') + '</div>';
+  } else if (u.role) {
+    tooltipRole = `<div class="tooltip-role" style="color:${roleColor}">\u25CF ${this._escapeHtml(u.role.name)}</div>`;
+  }
   const tooltipStatus = u.statusText ? `<div class="tooltip-status">${this._escapeHtml(u.statusText)}</div>` : '';
   const tooltipOnline = u.online === false ? `<div class="tooltip-status">${t('app.profile.offline')}</div>` : '';
   const tooltip = `<div class="user-item-tooltip"><div class="tooltip-username">${this._escapeHtml(u.username)}</div>${tooltipRole}${tooltipStatus}${tooltipOnline}</div>`;

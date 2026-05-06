@@ -146,34 +146,59 @@ module.exports = function createPermissions(db) {
   }
 
   function getUserHighestRole(userId, channelId = null) {
-    const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
-    if (user && user.is_admin) return { name: 'Admin', level: 100, color: '#e74c3c', icon: null };
+    const all = getUserAllRoles(userId, channelId);
+    return all.length > 0 ? all[0] : null;
+  }
 
-    let role = db.prepare(`
-      SELECT r.name, COALESCE(ur.custom_level, r.level) as level, r.color, r.icon FROM roles r
-      JOIN user_roles ur ON r.id = ur.role_id
+  // Returns every role that applies to `userId` in `channelId`'s context:
+  // server-scoped roles + channel-scoped roles for the channel and any parent
+  // it inherits from. Sorted highest level first. Each entry includes
+  // { id, name, level, color, icon, scope, channel_id }. Used for multi-role
+  // display so the member tooltip / chat hover can list all roles a user holds.
+  function getUserAllRoles(userId, channelId = null) {
+    const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+    if (user && user.is_admin) {
+      return [{ id: 0, name: 'Admin', level: 100, color: '#e74c3c', icon: null, scope: 'server', channel_id: null }];
+    }
+
+    const seen = new Set();
+    const out = [];
+    const push = (r) => {
+      const key = `${r.id}:${r.channel_id || 0}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(r);
+    };
+
+    const serverRows = db.prepare(`
+      SELECT r.id, r.name, COALESCE(ur.custom_level, r.level) as level,
+             r.color, r.icon, r.scope, ur.channel_id
+      FROM roles r JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = ? AND ur.channel_id IS NULL
-      ORDER BY COALESCE(ur.custom_level, r.level) DESC LIMIT 1
-    `).get(userId);
+    `).all(userId);
+    serverRows.forEach(push);
 
     if (channelId) {
       const chain = getChannelRoleChain(channelId);
       if (chain.length > 0) {
         const placeholders = chain.map(() => '?').join(',');
-        const chRole = db.prepare(`
-          SELECT r.name, COALESCE(ur.custom_level, r.level) as level, r.color, r.icon FROM roles r
-          JOIN user_roles ur ON r.id = ur.role_id
+        const chRows = db.prepare(`
+          SELECT r.id, r.name, COALESCE(ur.custom_level, r.level) as level,
+                 r.color, r.icon, r.scope, ur.channel_id
+          FROM roles r JOIN user_roles ur ON r.id = ur.role_id
           WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
-          ORDER BY COALESCE(ur.custom_level, r.level) DESC LIMIT 1
-        `).get(userId, ...chain);
-        if (chRole && (!role || chRole.level > role.level)) role = chRole;
+        `).all(userId, ...chain);
+        chRows.forEach(push);
       }
     }
-    return role || null;
+
+    out.sort((a, b) => (b.level || 0) - (a.level || 0));
+    return out;
   }
 
   return {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
-    userHasPermission, getUserPermissions, getUserRoles, getUserHighestRole
+    userHasPermission, getUserPermissions, getUserRoles,
+    getUserHighestRole, getUserAllRoles
   };
 };
