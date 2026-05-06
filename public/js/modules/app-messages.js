@@ -115,14 +115,11 @@ async _sendMessage() {
   }
   // (#5280) Burn-after-read arming — DM-only; cleared in switchChannel
   // when the user moves to a non-DM channel so a stale flag can't leak.
+  // The button is a *persistent* toggle: once armed, every message in
+  // this DM is burn-after-read until the user clicks the button to
+  // disarm it (or switches channels).
   if (this._burnArmed) {
     payload.burnSeconds = 30;
-    this._burnArmed = false;
-    const _burnBtn = document.getElementById('burn-btn');
-    if (_burnBtn) {
-      _burnBtn.classList.remove('active');
-      _burnBtn.title = 'Burn after read (DM only)';
-    }
   }
 
   // Clear UI immediately (before any async E2E work)

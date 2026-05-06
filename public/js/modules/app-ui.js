@@ -2331,9 +2331,10 @@ _setupUI() {
   });
 
   // (#5280) Burn-after-read toggle (DM-only, default 30 s).
-  // Single click arms the next message; click-and-long-press could later
-  // pop a duration picker but 30 s is a reasonable default. Visual state
-  // mirrors the existing input-action active class.
+  // Persistent toggle: once armed, every outgoing message in the
+  // current DM is burn-after-read until the user clicks the button
+  // again to disarm it (or switches channels). Default duration is
+  // 30 s; a long-press could later pop a duration picker.
   const _burnBtn = document.getElementById('burn-btn');
   if (_burnBtn) {
     _burnBtn.addEventListener('click', () => {
@@ -2342,13 +2343,13 @@ _setupUI() {
       // Use literal English for title — t() returns raw key on miss so the
       // previous `t() || 'fallback'` pattern never showed the fallback. (#5325)
       _burnBtn.title = this._burnArmed
-        ? 'Burn after read armed — next message will self-destruct 30s after viewing'
+        ? 'Burn-after-read ON — every message in this DM self-destructs 30s after viewing. Click to turn off.'
         : 'Burn after read (DM only)';
       // Surface a toast so users get visible confirmation. The button alone
       // wasn't obvious enough that anything had happened. (#5325)
       const toastKey = this._burnArmed ? 'toasts.burn_armed' : 'toasts.burn_disarmed';
       const toastFallback = this._burnArmed
-        ? '🔥 Burn-after-read armed — next message will self-destruct 30s after viewing'
+        ? '🔥 Burn-after-read ON — every message in this DM will self-destruct 30s after viewing'
         : 'Burn-after-read disabled';
       const translated = t(toastKey);
       const toastText = (translated && translated !== toastKey) ? translated : toastFallback;
