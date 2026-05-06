@@ -715,8 +715,9 @@ _createMessageEl(msg, prevMsg) {
 
   const color = this._getUserColor(msg.username);
   const initial = msg.username.charAt(0).toUpperCase();
-  // Look up user's role from online users list
-  const onlineUser = this.users ? this.users.find(u => u.id === msg.user_id) : null;
+  // Look up user's role from online users list (falls back to channelMembers for offline users)
+  const _userPool = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
+  const onlineUser = _userPool.find(u => u.id === msg.user_id) || null;
   // Use the message sender's avatar_shape (from server), not the local user's preference
   const msgShape = msg.avatar_shape || (onlineUser && onlineUser.avatarShape) || 'circle';
   const shapeClass = 'avatar-' + msgShape;
@@ -833,7 +834,8 @@ _promoteCompactToFull(compactEl) {
 
   const color = this._getUserColor(username);
   const initial = username.charAt(0).toUpperCase();
-  const onlineUser = this.users ? this.users.find(u => u.id === userId) : null;
+  const _userPool2 = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
+  const onlineUser = _userPool2.find(u => u.id === userId) || null;
   // Prefer the avatar stored on the compact element (set at render time from server data).
   // Fall back to the online-users list so newly-uploaded avatars still appear.
   const msgShape = compactEl.dataset.avatarShape || (onlineUser && onlineUser.avatarShape) || 'circle';
