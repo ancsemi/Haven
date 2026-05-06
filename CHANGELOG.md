@@ -11,7 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [3.13.0] — 2026-05-06
+## [3.14.0] — 2026-05-06
+
+### Added
+- **#5344: Registration token gate.** New admin-controlled gate that sits alongside (or instead of) the username whitelist on the registration page. When enabled, anyone signing up must enter a token the admin generated. The token is a 16-character hex string with Generate / Reroll, Copy, and Clear buttons in Settings → Admin → Whitelist. New `GET /api/auth/registration-info` exposes only a `requiresToken` boolean (never the token itself) so the registration page can reveal the field on demand. Whitelist + token can be active at the same time — both checks must pass.
+- **#5345: Default channels for invite joiners + private-channel safety fix.** When someone joins via the server invite code or vanity link, admins can now curate exactly which public channels they land in via a checkbox list under Settings → Admin → Server Invite Code. "Select all" stores no allowlist (default behavior — every public channel). At the same time, the auto-join logic was tightened so private parent channels (`is_private = 1` or `code_visibility = 'private'`) are **never** unlocked by an invite code regardless of the allowlist — previously a private top-level channel was being granted alongside everything else, contradicting the original spec.
+
+### Fixed
+- **#5280: Burn-after-read DM toggle is now a true on/off toggle.** The 🔥 button used to auto-disarm itself after a single message, even though the click handler reads as a toggle. Now the toggle persists across messages until the user clicks it again to disarm (or switches to a non-DM channel, which still clears it for safety). Tooltip and toast text updated to reflect the persistent behavior.
 
 ### Added
 - **#5341: Multi-role assignments per user.** Users can now hold multiple roles in the same channel or category scope simultaneously. The single-role dropdown in the "Assign Role" modal has been replaced with a checkbox list that pre-checks every role the user already holds and diffs the result on confirm — one click assigns newly checked roles and revokes unchecked ones, all without a reload. The Role Assignment Center (RAC) config pane now shows a per-role card list with state indicators (held / pending add / pending remove / edited), a Configure button that opens a level + permissions editor with an optional apply-to-sub-channels checkbox, and an add-role dropdown for assigning additional roles to the same scope. Voice users now carry a full `roles[]` array; in chat, the author's primary badge continues to use the highest role with a `+N` suffix when more roles are held (hover reveals the full list). The All Members admin list and profile popup both show the complete role set. A one-time admin notice explains the new system on first login.
