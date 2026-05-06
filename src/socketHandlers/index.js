@@ -33,8 +33,7 @@ function setupSocketHandlers(io, db) {
   // ── Permission helpers (shared across all connections) ───
   const {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
-    userHasPermission, getUserPermissions, getUserRoles,
-    getUserHighestRole, getUserAllRoles
+    userHasPermission, getUserPermissions, getUserRoles, getUserHighestRole
   } = createPermissions(db);
 
   // ── Shared state Maps ───────────────────────────────────
@@ -466,8 +465,7 @@ function setupSocketHandlers(io, db) {
         statusText: statusMap[m.id]?.statusText || '',
         avatar: statusMap[m.id]?.avatar || null,
         avatarShape: statusMap[m.id]?.avatarShape || 'circle',
-        role: getUserHighestRole(m.id, channel ? channel.id : null),
-        roles: getUserAllRoles(m.id, channel ? channel.id : null)
+        role: getUserHighestRole(m.id, channel ? channel.id : null)
       }));
     } else {
       const onlineMap = new Map();
@@ -480,8 +478,7 @@ function setupSocketHandlers(io, db) {
             statusText: statusMap[s.user.id]?.statusText || '',
             avatar: statusMap[s.user.id]?.avatar || s.user.avatar || null,
             avatarShape: statusMap[s.user.id]?.avatarShape || s.user.avatar_shape || 'circle',
-            role: getUserHighestRole(s.user.id, channel ? channel.id : null),
-            roles: getUserAllRoles(s.user.id, channel ? channel.id : null)
+            role: getUserHighestRole(s.user.id, channel ? channel.id : null)
           });
         }
       }
@@ -1221,8 +1218,7 @@ function setupSocketHandlers(io, db) {
       io, db, state,
       // Permissions
       getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
-      userHasPermission, getUserPermissions, getUserRoles,
-      getUserHighestRole, getUserAllRoles,
+      userHasPermission, getUserPermissions, getUserRoles, getUserHighestRole,
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,

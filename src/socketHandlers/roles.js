@@ -27,24 +27,8 @@ module.exports = function register(socket, ctx) {
       const ins = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
       channelRows.forEach(r => ins.run(r.channel_id, userId));
     } else {
-      // Multi-role safe: only remove channel membership for channels NOT
-      // also granted by another link_channel_access role the user still
-      // holds. Otherwise revoking role A would kick the user out of a
-      // channel that role B (still held) grants them. (multi-role)
       const del = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
-      const stillGranted = db.prepare(`
-        SELECT 1 FROM user_roles ur
-        JOIN roles r ON r.id = ur.role_id
-        JOIN role_channel_access rca ON rca.role_id = r.id
-        WHERE ur.user_id = ? AND r.id != ? AND r.link_channel_access = 1
-          AND rca.grant_on_promote = 1 AND rca.channel_id = ?
-        LIMIT 1
-      `);
-      channelRows.forEach(r => {
-        if (!stillGranted.get(userId, roleId, r.channel_id)) {
-          del.run(r.channel_id, userId);
-        }
-      });
+      channelRows.forEach(r => del.run(r.channel_id, userId));
     }
 
     for (const [, s] of io.sockets.sockets) {
@@ -478,17 +462,16 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      // Multi-role: a user may hold multiple roles per scope. Re-assigning the
-      // same (user, role, channel) tuple updates its custom_level / granted_by
-      // instead of being silently rejected by the UNIQUE index. Other roles
-      // the user holds at this scope are left intact.
-      // Use INSERT ... ON CONFLICT so SQLite returns the new/updated row.
+      if (channelId) {
+        db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?').run(userId, channelId);
+      } else {
+        db.prepare(
+          `DELETE FROM user_roles WHERE user_id = ? AND channel_id IS NULL
+           AND role_id IN (SELECT id FROM roles WHERE scope = ?)`
+        ).run(userId, role.scope);
+      }
       db.prepare(
-        `INSERT INTO user_roles (user_id, role_id, channel_id, granted_by, custom_level)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(user_id, role_id, COALESCE(channel_id, -1)) DO UPDATE SET
-           granted_by = excluded.granted_by,
-           custom_level = excluded.custom_level`
+        'INSERT INTO user_roles (user_id, role_id, channel_id, granted_by, custom_level) VALUES (?, ?, ?, ?, ?)'
       ).run(userId, roleId, channelId, socket.user.id, assignLevel !== role.level ? assignLevel : null);
 
       if (data.customPerms && Array.isArray(data.customPerms)) {
