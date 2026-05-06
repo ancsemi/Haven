@@ -138,6 +138,8 @@
    dark-bg + green-text + green-border for consistent legibility */
 [data-theme="matrix"] .btn-primary,
 [data-theme="matrix"] .btn-sm.btn-accent,
+[data-theme="matrix"] .btn-accent,
+[data-theme="matrix"] .btn-admin-save,
 [data-theme="matrix"] .btn-send,
 [data-theme="matrix"] .thread-send-btn,
 [data-theme="matrix"] .settings-tab.active,
@@ -147,11 +149,13 @@
 [data-theme="matrix"] .profile-dm-btn {
   background: var(--bg-tertiary);
   color: var(--accent);
-  border: 3px solid var(--accent) !important;
+  border: 2px solid var(--accent) !important;
   text-shadow: 0 0 4px rgba(0, 255, 65, 0.4);
 }
 [data-theme="matrix"] .btn-primary:hover,
 [data-theme="matrix"] .btn-sm.btn-accent:hover,
+[data-theme="matrix"] .btn-accent:hover,
+[data-theme="matrix"] .btn-admin-save:hover,
 [data-theme="matrix"] .btn-send:hover,
 [data-theme="matrix"] .thread-send-btn:hover,
 [data-theme="matrix"] .profile-dm-btn:hover {
@@ -866,6 +870,8 @@
    dark-bg + green-text + green-border for consistent legibility */
 [data-theme="fallout"] .btn-primary,
 [data-theme="fallout"] .btn-sm.btn-accent,
+[data-theme="fallout"] .btn-accent,
+[data-theme="fallout"] .btn-admin-save,
 [data-theme="fallout"] .btn-send,
 [data-theme="fallout"] .thread-send-btn,
 [data-theme="fallout"] .settings-tab.active,
@@ -875,11 +881,13 @@
 [data-theme="fallout"] .profile-dm-btn {
   background: var(--bg-tertiary);
   color: var(--accent);
-  border: 3px solid var(--accent) !important;
+  border: 2px solid var(--accent) !important;
   text-shadow: 0 0 4px rgba(20, 254, 23, 0.4);
 }
 [data-theme="fallout"] .btn-primary:hover,
 [data-theme="fallout"] .btn-sm.btn-accent:hover,
+[data-theme="fallout"] .btn-accent:hover,
+[data-theme="fallout"] .btn-admin-save:hover,
 [data-theme="fallout"] .btn-send:hover,
 [data-theme="fallout"] .thread-send-btn:hover,
 [data-theme="fallout"] .profile-dm-btn:hover {
