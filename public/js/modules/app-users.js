@@ -220,7 +220,7 @@ _renderUserItem(u, scoreLookup) {
   }
   const tooltipStatus = u.statusText ? `<div class="tooltip-status">${this._escapeHtml(u.statusText)}</div>` : '';
   const tooltipOnline = u.online === false ? `<div class="tooltip-status">${t('app.profile.offline')}</div>` : '';
-  const tooltip = `<div class="user-item-tooltip"><div class="tooltip-username">${this._escapeHtml(u.username)}</div>${tooltipRole}${tooltipStatus}${tooltipOnline}</div>`;
+  // Tooltip removed — the full profile popup (hover/click) provides this info.
 
   const dmBtn = u.id === this.user.id
     ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="Notes to self (DM yourself)">📝</button>`
@@ -246,7 +246,6 @@ _renderUserItem(u, scoreLookup) {
       ${statusTextHtml}
       ${scoreBadge}
       ${modBtns}
-      ${tooltip}
     </div>
   `;
 },

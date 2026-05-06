@@ -4174,6 +4174,21 @@ _renderRacConfig() {
   // Roles available to add: grantable, not already in cards.
   const addableRoles = grantableRoles.filter(r => !seenRoleIds.has(r.id));
 
+  // Inherited roles: server-wide and parent-channel roles visible as
+  // read-only context when the admin is viewing a channel scope.
+  const inheritedRoles = [];
+  if (channelId !== null) {
+    const serverWide = user.currentRoles.filter(r => !r.channel_id);
+    serverWide.forEach(r => inheritedRoles.push({ ...r, _inheritedFrom: t('settings.admin.roles_server_wide') || 'Server-wide' }));
+
+    const thisChannel = this._racData.channels.find(c => c.id === channelId);
+    if (thisChannel && thisChannel.parentId) {
+      const parentRoles = user.currentRoles.filter(r => r.channel_id === thisChannel.parentId);
+      const parentName = this._racData.channels.find(c => c.id === thisChannel.parentId)?.name || `#${thisChannel.parentId}`;
+      parentRoles.forEach(r => inheritedRoles.push({ ...r, _inheritedFrom: `#${this._escapeHtml(parentName)}` }));
+    }
+  }
+
   // Header
   const userColor = this._getUserColor(user.username);
   const scopeLabel = channelId
@@ -4275,6 +4290,23 @@ _renderRacConfig() {
     <div class="rac-config-section rac-roles-list">
       ${cards.length ? cards.map(renderCard).join('') : `<p class="rac-placeholder">${this._escapeHtml(t('settings.admin.roles_no_assigned') || 'No roles assigned at this scope.')}</p>`}
     </div>
+
+    ${inheritedRoles.length ? `
+    <div class="rac-config-section rac-inherited-section">
+      <div class="rac-config-label" style="opacity:0.7;margin-top:4px">${this._escapeHtml(t('settings.admin.roles_inherited_label') || 'Inherited (read-only)')}</div>
+      ${inheritedRoles.map(r => {
+        const color = this._safeColor(r.color, '#888');
+        return `<div class="rac-role-card rac-role-inherited">
+          <div class="rac-card-head">
+            <span class="rac-role-dot" style="background:${color}"></span>
+            <span class="rac-card-name" style="opacity:0.8">${this._escapeHtml(r.name)}</span>
+            <span class="rac-card-level">Lv.${r.level}</span>
+            <span class="rac-card-locked" title="${this._escapeHtml(t('settings.admin.roles_inherited_title') || 'Inherited — manage at the source scope')}">↑ ${this._escapeHtml(r._inheritedFrom)}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    ` : ''}
 
     <div class="rac-config-section rac-add-role-section">
       <div class="rac-config-label">${this._escapeHtml(t('settings.admin.roles_add_label') || 'Add another role')}</div>

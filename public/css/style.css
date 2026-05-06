@@ -3673,6 +3673,8 @@ html.rgb-cycling *::after {
   border-bottom: 1px solid var(--border);
   min-height: 52px;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .channel-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -15117,7 +15119,7 @@ ul.chat-list { list-style-type: disc; }
      `max-width: 960px !important` made the corner-resize one-way (shrink
      only) on large displays. We keep a sensible upper cap (98vw / 92vh)
      so the modal can never exceed the viewport. */
-  width: 960px;
+  width: min(960px, 82vw);
   max-width: 98vw;
   height: 80vh;
   max-height: 92vh;
@@ -15143,7 +15145,6 @@ ul.chat-list { list-style-type: disc; }
   overflow: hidden;
   flex: 1;
   min-height: 340px;
-  max-height: 55vh;
 }
 .rac-pane {
   display: flex;
@@ -15425,18 +15426,14 @@ ul.chat-list { list-style-type: disc; }
 .rac-card-hint {
   font-size: 0.78rem;
   color: var(--text-muted);
-  margin: 42px 6px;
-  border-radius: 3px;
-  font-weight: 600;
-  margin-left: 4px;
-  white-space: nowrap;
-  line-height: 1.2;
-  display: inline-flex;
-  align-items: centerem;
+  margin: 6px 4px 12px;
   padding: 1px 6px;
   border-radius: 3px;
   font-weight: 600;
-  margin-left: 4px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  display: block;
 }
 .rac-state-held {
   background: rgba(46, 204, 113, 0.15);
@@ -15453,6 +15450,11 @@ ul.chat-list { list-style-type: disc; }
 .rac-state-edited {
   background: rgba(230, 126, 34, 0.18);
   color: #e67e22;
+}
+.rac-inherited-section .rac-role-card {
+  opacity: 0.7;
+  border-style: dashed;
+  pointer-events: none;
 }
 .rac-add-role-section {
   border-top: 1px solid var(--border);
