@@ -3359,11 +3359,11 @@ html.rgb-cycling *::after {
   user-select: none;
 }
 .dm-pip-avatar-wrap {
+  position: relative;
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
   border-radius: 50%;
-  overflow: hidden;
   background: var(--bg-secondary, #2a2a2a);
   display: flex;
   align-items: center;
@@ -3371,15 +3371,42 @@ html.rgb-cycling *::after {
   font-size: 12px;
   font-weight: 700;
   color: #fff;
+  /* Inner avatar imagery is rounded by inheriting the wrap's border-radius
+     on the <img>; we no longer clip the wrap itself so the status dot can
+     bleed slightly outside the circle the same way the sidebar does. */
 }
 .dm-pip-avatar-wrap img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: inherit;
 }
-.dm-pip-avatar-wrap.avatar-square { border-radius: 6px; }
-.dm-pip-avatar-wrap.avatar-rounded { border-radius: 8px; }
+.dm-pip-avatar-wrap.avatar-square,
+.dm-pip-avatar-wrap.avatar-square img { border-radius: 6px; }
+.dm-pip-avatar-wrap.avatar-rounded,
+.dm-pip-avatar-wrap.avatar-rounded img { border-radius: 8px; }
+.dm-pip-avatar-initial {
+  position: relative;
+  z-index: 0;
+}
+/* Online presence dot in the bottom-right of the PiP DM avatar — mirrors
+   the sidebar `.user-status-dot` styling so the colors stay consistent. */
+.dm-pip-status-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2ecc71; /* online (default) */
+  border: 2px solid var(--bg-primary, #1e1e1e);
+  box-sizing: content-box;
+  pointer-events: none;
+}
+.dm-pip-status-dot.away    { background: #95a5a6; }
+.dm-pip-status-dot.dnd     { background: #e74c3c; }
+.dm-pip-status-dot.invisible { background: transparent; border-color: var(--text-muted, #888); }
 .dm-pip-title { font-weight: 600; font-size: 13px; }
 .dm-pip-spacer { flex: 1; }
 .dm-pip-messages {
@@ -15085,11 +15112,21 @@ ul.chat-list { list-style-type: disc; }
    Centralized Role Assignment — 3-Pane Modal (RAC)
    ═══════════════════════════════════════════════════════════ */
 .role-assign-center-box {
-  max-width: 960px !important;
-  width: 94vw;
-  max-height: 80vh;
+  /* Default size: spacious-but-bounded. The user can drag the bottom-right
+     corner to grow the modal to whatever fits their screen — the previous
+     `max-width: 960px !important` made the corner-resize one-way (shrink
+     only) on large displays. We keep a sensible upper cap (98vw / 92vh)
+     so the modal can never exceed the viewport. */
+  width: 960px;
+  max-width: 98vw;
+  height: 80vh;
+  max-height: 92vh;
+  min-width: 560px;
+  min-height: 420px;
   display: flex;
   flex-direction: column;
+  resize: both;
+  overflow: hidden;
 }
 .role-assign-center-subtitle {
   font-size: 0.82rem;
@@ -15363,10 +15400,14 @@ ul.chat-list { list-style-type: disc; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .rac-card-name {
   font-weight: 600;
   font-size: 0.92rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .rac-card-level {
   font-size: 0.78rem;
@@ -15384,10 +15425,14 @@ ul.chat-list { list-style-type: disc; }
 .rac-card-hint {
   font-size: 0.78rem;
   color: var(--text-muted);
-  margin: 4px 0 0;
-}
-.rac-state-badge {
-  font-size: 0.68rem;
+  margin: 42px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  margin-left: 4px;
+  white-space: nowrap;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: centerem;
   padding: 1px 6px;
   border-radius: 3px;
   font-weight: 600;

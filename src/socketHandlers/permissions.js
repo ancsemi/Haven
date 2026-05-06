@@ -161,13 +161,18 @@ module.exports = function createPermissions(db) {
       return [{ id: 0, name: 'Admin', level: 100, color: '#e74c3c', icon: null, scope: 'server', channel_id: null }];
     }
 
-    const seen = new Set();
-    const out = [];
-    const push = (r) => {
-      const key = `${r.id}:${r.channel_id || 0}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      out.push(r);
+    // Dedupe by role.id for display purposes — if a user holds the same
+    // role in multiple channels (or both server-wide and a channel), we
+    // surface it once with the highest effective level. Channel scope is
+    // not meaningful in chat/tooltip/profile-card surfaces; permission
+    // checks use getUserEffectiveLevel/getUserPermissions, which correctly
+    // walk every assignment row independently. (Without this dedupe,
+    // hover cards rendered "Channel Mod Channel Mod" for users who held
+    // the same role in two channels — issue raised on experimental/multi-role.)
+    const byId = new Map();
+    const consider = (r) => {
+      const existing = byId.get(r.id);
+      if (!existing || (r.level || 0) > (existing.level || 0)) byId.set(r.id, r);
     };
 
     const serverRows = db.prepare(`
@@ -176,7 +181,7 @@ module.exports = function createPermissions(db) {
       FROM roles r JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = ? AND ur.channel_id IS NULL
     `).all(userId);
-    serverRows.forEach(push);
+    serverRows.forEach(consider);
 
     if (channelId) {
       const chain = getChannelRoleChain(channelId);
@@ -188,10 +193,11 @@ module.exports = function createPermissions(db) {
           FROM roles r JOIN user_roles ur ON r.id = ur.role_id
           WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
         `).all(userId, ...chain);
-        chRows.forEach(push);
+        chRows.forEach(consider);
       }
     }
 
+    const out = Array.from(byId.values());
     out.sort((a, b) => (b.level || 0) - (a.level || 0));
     return out;
   }

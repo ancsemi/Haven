@@ -1014,6 +1014,20 @@
       "roles_save_errors": "{{count}} error(s): {{error}}",
       "roles_changes_saved_one": "{{count}} role change saved",
       "roles_changes_saved_other": "{{count}} role changes saved",
+      "roles_held": "Held",
+      "roles_pending_add": "Pending add",
+      "roles_pending_remove": "Pending remove",
+      "roles_pending_edit": "Edited",
+      "roles_undo": "Undo",
+      "roles_remove": "Remove",
+      "roles_discard": "Discard",
+      "roles_collapse": "Collapse",
+      "roles_configure": "Configure",
+      "roles_add_label": "Add another role",
+      "roles_select_to_add": "-- Select a role to add --",
+      "roles_no_addable": "No more roles available",
+      "roles_none": "No roles defined yet.",
+      "roles_multi_hint": "Users may hold multiple roles per scope. Effective permissions are the union of every held role; the highest role drives display color.",
       "role_form": {
         "name": "Name",
         "level": "Level (1-99)",
@@ -1024,6 +1038,7 @@
         "link_channel_access": "Link channel access to this role",
         "link_channel_access_hint": "When enabled, assigning/revoking this role will automatically grant/revoke channel memberships.",
         "reapply_access": "Reapply Access to All Users",
+        "reapply_access_tooltip": "Re-runs the channel-access rules above against every user who already holds this role. Useful after editing the Grant/Revoke checkboxes: it brings existing members in line with the current configuration without you having to re-assign the role.",
         "permissions": "Permissions",
         "delete": "Delete"
       }

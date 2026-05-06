@@ -3191,7 +3191,7 @@ _renderRoleDetail() {
           <div class="role-channel-access-list" id="role-channel-access-list">
             <p class="muted-text" style="padding:12px;text-align:center;font-size:12px">${t('modals.common.loading')}</p>
           </div>
-          <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
+          <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn" title="${this._escapeHtml(t('settings.admin.role_form.reapply_access_tooltip') || 'Re-runs the channel-access rules above against every user who already holds this role. Useful after editing the Grant/Revoke checkboxes: it brings existing members in line with the current configuration without you having to re-assign the role.')}">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
         </div>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>

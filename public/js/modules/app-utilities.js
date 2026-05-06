@@ -2264,13 +2264,35 @@ _openDMPiP(code) {
       || (ch.dm_target && ch.dm_target.avatarShape)
       || 'circle';
     avatarWrap.className = `dm-pip-avatar-wrap avatar-${shape}`;
+    // Determine status: 'online' / 'away' / 'dnd' / 'invisible' / 'offline'
+    // (matches the sidebar `.user-status-dot` modifier classes — empty
+    // class = online green; 'away'/'dnd'/'invisible' for explicit states;
+    // offline users are treated as 'away' visually like the sidebar does
+    // so a self-DM (always us) doesn't render a meaningless gray dot.)
+    let statusClass = '';
+    if (ch.is_self_dm) {
+      statusClass = '';
+    } else if (onlinePartner) {
+      const s = onlinePartner.status;
+      statusClass = s === 'dnd' ? 'dnd'
+        : s === 'away' ? 'away'
+        : s === 'invisible' ? 'invisible' : '';
+    } else {
+      statusClass = 'away'; // partner not in online list → treat as offline/away
+    }
+    const statusLabel = statusClass === 'dnd' ? 'Do Not Disturb'
+      : statusClass === 'away' ? 'Offline / Away'
+      : statusClass === 'invisible' ? 'Invisible'
+      : 'Online';
+    const statusDot = `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
     if (avatarUrl) {
-      avatarWrap.innerHTML = `<img src="${this._escapeHtml(avatarUrl)}" alt="">`;
+      avatarWrap.style.backgroundColor = '';
+      avatarWrap.innerHTML = `<img src="${this._escapeHtml(avatarUrl)}" alt="">${statusDot}`;
     } else {
       const initial = (partnerName || '?').charAt(0).toUpperCase();
       const color = this._getUserColor(partnerName || '');
       avatarWrap.style.backgroundColor = color;
-      avatarWrap.textContent = initial;
+      avatarWrap.innerHTML = `<span class="dm-pip-avatar-initial">${this._escapeHtml(initial)}</span>${statusDot}`;
     }
   }
 
