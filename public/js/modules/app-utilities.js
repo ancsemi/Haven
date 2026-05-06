@@ -109,10 +109,23 @@ _wireBurnMessages(root) {
     const startedAt = el.dataset.burnStartedAt || '';
     const messageId = parseInt(el.dataset.msgId) || 0;
     if (!burnSeconds || !messageId) return;
+    // Always attach a row-level flame label so the burn status is visible at a glance
+    if (!el.querySelector('.burn-pending-label')) {
+      const label = document.createElement('span');
+      label.className = 'burn-pending-label';
+      label.title = `Self-destructs ${burnSeconds}s after the recipient views it`;
+      label.textContent = '🔥';
+      const header = el.querySelector('.message-header');
+      if (header) header.appendChild(label);
+    }
     if (startedAt) {
       this._startBurnCountdown(el, burnSeconds, startedAt);
       return;
     }
+    // Sender's own burn message: show content normally — they already know
+    // what they wrote. Starting the burn timer is the recipient's action.
+    const isSender = parseInt(el.dataset.userId) === (this.user?.id || 0);
+    if (isSender) return;
     const content = el.querySelector('.message-content');
     if (!content) return;
     const real = content.innerHTML;

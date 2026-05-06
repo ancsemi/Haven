@@ -462,6 +462,7 @@ _prependMessages(messages) {
     this._setupVideos(el);
     this._decryptE2EImages(el);
     this._decryptE2EFiles(el);
+    this._wireBurnMessages?.(el);
   }
 },
 
@@ -516,6 +517,7 @@ _appendMessages(messages) {
   this._setupVideos(container);
   this._decryptE2EImages(container);
   this._decryptE2EFiles(container);
+  this._wireBurnMessages?.(container);
 
   // Mark as read so the server-side read position advances
   if (messages.length > 0) {

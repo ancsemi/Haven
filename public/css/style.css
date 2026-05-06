@@ -13775,6 +13775,17 @@ ul.chat-list { list-style-type: disc; }
   border-left: 2px solid rgba(255, 107, 53, 0.5);
   padding-left: 8px;
 }
+/* Row-level flame label shown on all unstarted burn messages (#5280) */
+.burn-pending-label {
+  font-size: 0.78em;
+  margin-left: 6px;
+  opacity: 0.75;
+  cursor: default;
+  vertical-align: middle;
+}
+.message-burn-pending .message-header .burn-pending-label {
+  color: #ff6b35;
+}
 .burn-reveal-btn {
   background: rgba(255, 107, 53, 0.12);
   color: #ff6b35;

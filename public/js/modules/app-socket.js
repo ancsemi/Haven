@@ -1459,6 +1459,8 @@ _setupSocketListeners() {
     if (!el) return;
     el.dataset.burnStartedAt = data.burningStartedAt || new Date().toISOString();
     el.dataset.burnSeconds = String(data.burnSeconds || 0);
+    // Remove the static "pending" flame label once the countdown is live
+    el.querySelector('.burn-pending-label')?.remove();
     this._startBurnCountdown?.(el, data.burnSeconds, el.dataset.burnStartedAt);
   });
 
