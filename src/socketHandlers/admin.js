@@ -520,7 +520,7 @@ module.exports = function register(socket, ctx) {
       const roleRows = db.prepare(`
         SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color
         FROM user_roles ur JOIN roles r ON ur.role_id = r.id
-        WHERE ur.channel_id IS NULL ORDER BY r.level DESC
+        GROUP BY ur.user_id, r.id ORDER BY r.level DESC
       `).all();
       const userRoles = {};
       roleRows.forEach(r => {

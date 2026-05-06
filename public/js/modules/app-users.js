@@ -302,9 +302,15 @@ _showProfilePopup(profile) {
 
   // Action buttons
   const nickBtnLabel = currentNick ? `✏️ ${t('users.edit_nickname')}` : `🏷️ ${t('users.set_nickname')}`;
+  const canMod = this.user.isAdmin || this._canModerate();
+  const canPromote = this._hasPerm('promote_user');
+  const gearVisible = !isSelf && (canMod || canPromote || this.user.isAdmin);
+  const gearBtnHtml = gearVisible
+    ? `<button class="profile-popup-action-btn profile-gear-btn" title="${this._escapeHtml(t('users.more_actions') || 'Moderation')}">⚙️ ${t('users.more_actions') || 'Moderation'}</button>`
+    : '';
   const actionsHtml = isSelf
     ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ ${t('users.edit_profile')}</button><button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}" title="Notes to self">📝 Notes to self</button>`
-    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}">${nickBtnLabel}</button>`;
+    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}">${nickBtnLabel}</button>${gearBtnHtml}`;
 
   const popup = document.createElement('div');
   popup.id = 'profile-popup';
@@ -393,6 +399,16 @@ _showProfilePopup(profile) {
       const uname = nickBtnEl.dataset.nickUname;
       this._closeProfilePopup();
       this._showNicknameDialog(uid, uname);
+    });
+  }
+
+  // Gear / moderation button — opens the same dropdown as the sidebar gear
+  const gearBtnEl = popup.querySelector('.profile-gear-btn');
+  if (gearBtnEl) {
+    gearBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._closeProfilePopup();
+      this._showUserGearMenu(gearBtnEl, profile.id, profile.username);
     });
   }
 

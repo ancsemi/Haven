@@ -134,6 +134,11 @@
 [data-theme="matrix"] .brand-text { text-shadow: 0 0 8px rgba(0, 255, 65, 0.4); }
 [data-theme="matrix"] .channel-badge { background: #00ff41; color: #000; }
 [data-theme="matrix"] .message-avatar, [data-theme="matrix"] .message-avatar-img { border: 1px solid rgba(0, 255, 65, 0.3); }
+/* Bright green accent → dark text needed for legible contrast */
+[data-theme="matrix"] .btn-primary,
+[data-theme="matrix"] .btn-primary:hover,
+[data-theme="matrix"] .btn-sm.btn-accent,
+[data-theme="matrix"] .btn-sm.btn-accent:hover { color: #000; }
 
 /* ─── THEME: Tron ──────────────────────────────────────── */
 [data-theme="tron"] {
@@ -837,6 +842,11 @@
 [data-theme="fallout"] input, [data-theme="fallout"] textarea { border: 1px solid rgba(20, 254, 23, 0.15) !important; }
 [data-theme="fallout"] .message-input-container { border: 1px solid rgba(20, 254, 23, 0.2); border-radius: 2px; }
 [data-theme="fallout"] ::selection { background: #14fe17; color: #0a0e08; }
+/* Bright green accent → dark text needed for legible contrast */
+[data-theme="fallout"] .btn-primary,
+[data-theme="fallout"] .btn-primary:hover,
+[data-theme="fallout"] .btn-sm.btn-accent,
+[data-theme="fallout"] .btn-sm.btn-accent:hover { color: #0a0e08; }
 
 /* ─── THEME: Scripture (Parchment & Gold) ──────────────── */
 [data-theme="scripture"] {
