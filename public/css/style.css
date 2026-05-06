@@ -15338,6 +15338,82 @@ ul.chat-list { list-style-type: disc; }
   font-weight: 600;
 }
 
+/* Multi-role: each card represents one role at the selected scope. */
+.rac-roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rac-role-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  padding: 8px 10px;
+}
+.rac-role-card.rac-card-dirty {
+  border-color: #e67e22;
+}
+.rac-role-card.rac-card-removed {
+  opacity: 0.6;
+}
+.rac-role-card.rac-card-removed .rac-card-name {
+  text-decoration: line-through;
+}
+.rac-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rac-card-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.rac-card-level {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+.rac-card-locked {
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+.rac-card-editor {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.rac-card-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+.rac-state-badge {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+.rac-state-held {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+.rac-state-added {
+  background: rgba(52, 152, 219, 0.18);
+  color: #3498db;
+}
+.rac-state-removed {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
+}
+.rac-state-edited {
+  background: rgba(230, 126, 34, 0.18);
+  color: #e67e22;
+}
+.rac-add-role-section {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
 /* Footer */
 .rac-footer {
   display: flex;
