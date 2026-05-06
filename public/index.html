@@ -63,6 +63,13 @@
           <label for="reg-confirm" data-i18n="auth.register.confirm_label">Confirm Password</label>
           <input type="password" id="reg-confirm" autocomplete="new-password" required>
         </div>
+        <!-- (#5344) Registration token field — shown by auth.js only when the server requires it -->
+        <div class="form-group" id="reg-token-group" style="display:none">
+          <label for="reg-token">Invite Token</label>
+          <input type="text" id="reg-token" autocomplete="off" maxlength="64"
+                 placeholder="Paste the token your admin shared">
+          <small>Required by this server — ask the admin if you don't have one.</small>
+        </div>
         <button type="submit" class="btn-primary" data-i18n="auth.register.submit">Create Account</button>
       </form>
 

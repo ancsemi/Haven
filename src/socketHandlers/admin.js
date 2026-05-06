@@ -16,7 +16,7 @@ module.exports = function register(socket, ctx) {
   socket.on('get-server-settings', () => {
     const rows = db.prepare('SELECT key, value FROM server_settings').all();
     const settings = {};
-    const sensitiveKeys = ['giphy_api_key', 'server_code'];
+    const sensitiveKeys = ['giphy_api_key', 'server_code', 'registration_token'];
     rows.forEach(r => {
       if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
       settings[r.key] = r.value;
@@ -42,7 +42,8 @@ module.exports = function register(socket, ctx) {
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
-      'session_duration_days', 'max_message_chars'
+      'session_duration_days', 'max_message_chars',
+      'default_join_channels', 'registration_token_enabled' // (#5344, #5345) — registration_token has its own generate/clear handlers
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -106,6 +107,20 @@ module.exports = function register(socket, ctx) {
     if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
     if (key === 'vanity_code') {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
+    }
+    if (key === 'registration_token_enabled') {
+      if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'default_join_channels') {
+      // (#5345) JSON array of channel IDs (integers). Empty string = "all public".
+      if (value !== '') {
+        try {
+          const arr = JSON.parse(value);
+          if (!Array.isArray(arr)) return;
+          if (!arr.every(n => Number.isInteger(n) && n > 0)) return;
+          if (arr.length > 500) return;
+        } catch { return; }
+      }
     }
     if (key === 'permission_thresholds') {
       try {
@@ -213,6 +228,29 @@ module.exports = function register(socket, ctx) {
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', '');
     io.emit('server-setting-changed', { key: 'server_code', value: '' });
     socket.emit('error-msg', 'Server invite code cleared');
+  });
+
+  // ── Registration token (#5344) ──────────────────────────
+  // Independent of the whitelist — admin can use either, both, or
+  // neither. The token is a 16-char hex string the admin shares
+  // out-of-band; new registrants must enter it on the signup form.
+  socket.on('generate-registration-token', () => {
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) {
+      return socket.emit('error-msg', 'Only admins can manage the registration token');
+    }
+    const token = crypto.randomBytes(8).toString('hex');
+    db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', token);
+    io.emit('server-setting-changed', { key: 'registration_token', value: token });
+    socket.emit('error-msg', `Registration token generated: ${token}`);
+  });
+
+  socket.on('clear-registration-token', () => {
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) {
+      return socket.emit('error-msg', 'Only admins can manage the registration token');
+    }
+    db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', '');
+    io.emit('server-setting-changed', { key: 'registration_token', value: '' });
+    socket.emit('error-msg', 'Registration token cleared');
   });
 
   // ── Run cleanup ─────────────────────────────────────────

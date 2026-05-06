@@ -215,6 +215,9 @@ function initDatabase() {
   insertSetting.run('server_icon', '');                // path to uploaded server icon image
   insertSetting.run('permission_thresholds', '{"create_channel":50}');    // JSON: { permission: minLevel } — auto-grant perms at level
   insertSetting.run('server_code', '');                // server-wide invite code (joins all channels)
+  insertSetting.run('default_join_channels', '');       // (#5345) JSON array of channel IDs that server-code/vanity-code joiners get added to (empty = all public)
+  insertSetting.run('registration_token_enabled', 'false'); // (#5344) require a token on the registration form
+  insertSetting.run('registration_token', '');          // (#5344) the token value (admin-generated, rerollable)
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)

@@ -408,6 +408,21 @@ _applyServerSettings() {
     serverCodeEl.style.opacity = code ? '1' : '0.4';
   }
 
+  // (#5344) Registration token — same live-update pattern as server code
+  const tokenEl = document.getElementById('registration-token-value');
+  if (tokenEl) {
+    const tok = this.serverSettings.registration_token;
+    tokenEl.textContent = tok || '—';
+    tokenEl.style.opacity = tok ? '1' : '0.4';
+  }
+  const tokenToggle = document.getElementById('registration-token-enabled');
+  if (tokenToggle) tokenToggle.checked = this.serverSettings.registration_token_enabled === 'true';
+
+  // (#5345) Default join channels — re-render when settings or channel list refresh
+  if (typeof this._renderDefaultJoinChannels === 'function') {
+    try { this._renderDefaultJoinChannels(); } catch { /* non-critical */ }
+  }
+
   // Apply configurable message length limit to message input and edit textareas
   const _maxMsgChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
   const msgInput = document.getElementById('message-input');

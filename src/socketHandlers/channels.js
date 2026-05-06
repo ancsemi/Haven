@@ -184,25 +184,42 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code) return socket.emit('error-msg', 'Invalid channel code');
 
-    // Check if this is a vanity invite code first
-    const vanityRow = db.prepare("SELECT value FROM server_settings WHERE key = 'vanity_code'").get();
-    const isVanity = vanityRow && vanityRow.value && vanityRow.value === code;
+    // (#5345) Helper: figure out which channels a server-code / vanity-code
+    // joiner should be added to. Always EXCLUDES private parents (private
+    // channels were never supposed to be unlocked by an invite code).
+    // If the admin has set `default_join_channels` to a non-empty JSON
+    // array of channel IDs, we restrict the auto-join to that intersection
+    // so admins can curate which public channels new arrivals land in.
+    const _resolveAutoJoinChannels = () => {
+      const allParents = db.prepare(
+        "SELECT id, code, parent_channel_id FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')"
+      ).all();
+      let allowSet = null;
+      try {
+        const djc = db.prepare("SELECT value FROM server_settings WHERE key = 'default_join_channels'").get();
+        if (djc && djc.value) {
+          const parsed = JSON.parse(djc.value);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            allowSet = new Set(parsed.map(n => parseInt(n)).filter(n => Number.isFinite(n)));
+          }
+        }
+      } catch { /* malformed JSON falls through to "all public" */ }
+      const parents = allowSet ? allParents.filter(p => allowSet.has(p.id)) : allParents;
+      return { parents, allowSet };
+    };
 
-    // For vanity codes, resolve to the actual server code
-    if (isVanity) {
-      const serverCodeRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_code'").get();
-      const actualServerCode = serverCodeRow ? serverCodeRow.value : null;
-
-      // Join all channels (same as server code logic)
-      const allParents = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0').all();
+    const _doAutoJoin = () => {
+      const { parents, allowSet } = _resolveAutoJoinChannels();
       const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
       let joinedCount = 0;
-
       const txn = db.transaction(() => {
-        for (const parent of allParents) {
+        for (const parent of parents) {
           insertMember.run(parent.id, socket.user.id);
           socket.join(`channel:${parent.code}`);
           joinedCount++;
+          // Sub-channels: never grant private subs via invite. When a
+          // default-channels allowlist is set, only grant subs whose
+          // parent is on the list (matches admin intent).
           const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
           for (const sub of subs) {
             insertMember.run(sub.id, socket.user.id);
@@ -212,7 +229,16 @@ module.exports = function register(socket, ctx) {
         }
       });
       txn();
+      return joinedCount;
+    };
 
+    // Check if this is a vanity invite code first
+    const vanityRow = db.prepare("SELECT value FROM server_settings WHERE key = 'vanity_code'").get();
+    const isVanity = vanityRow && vanityRow.value && vanityRow.value === code;
+
+    // For vanity codes, resolve to the actual server code
+    if (isVanity) {
+      const joinedCount = _doAutoJoin();
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
       socket.emit('error-msg', `Invite accepted — joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
       return;
@@ -226,25 +252,7 @@ module.exports = function register(socket, ctx) {
     // ── Check if this is a server-wide invite code ─────
     const serverCodeRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_code'").get();
     if (serverCodeRow && serverCodeRow.value && serverCodeRow.value === code) {
-      const allParents = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0').all();
-      const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
-      let joinedCount = 0;
-
-      const txn = db.transaction(() => {
-        for (const parent of allParents) {
-          insertMember.run(parent.id, socket.user.id);
-          socket.join(`channel:${parent.code}`);
-          joinedCount++;
-          const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(parent.id);
-          for (const sub of subs) {
-            insertMember.run(sub.id, socket.user.id);
-            socket.join(`channel:${sub.code}`);
-            joinedCount++;
-          }
-        }
-      });
-      txn();
-
+      const joinedCount = _doAutoJoin();
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
       socket.emit('error-msg', `Server code accepted — joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
       return;

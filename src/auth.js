@@ -175,6 +175,22 @@ function downloadSSOAvatar(url) {
 }
 
 // ── Register ──────────────────────────────────────────────
+
+// (#5344) Public endpoint that tells the registration page which
+// gates the admin has enabled. Only booleans are exposed — the
+// actual token value never leaves the server here.
+router.get('/registration-info', (req, res) => {
+  try {
+    const db = getDb();
+    const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
+    const tokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
+    const requiresToken = !!(tokenEnabledRow && tokenEnabledRow.value === 'true' && tokenRow && tokenRow.value);
+    res.json({ requiresToken });
+  } catch (err) {
+    res.json({ requiresToken: false });
+  }
+});
+
 router.post('/register', authLimiter, async (req, res) => {
   try {
     const username = sanitizeString(req.body.username, 20);
@@ -206,6 +222,22 @@ router.post('/register', authLimiter, async (req, res) => {
     }
 
     const db = getDb();
+
+    // (#5344) Registration token check — admin-controlled gate that can
+    // sit alongside (or instead of) the whitelist. If enabled and a
+    // token is set, the registrant must supply the matching token.
+    const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
+    if (tokenEnabledRow && tokenEnabledRow.value === 'true') {
+      const tokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
+      const expected = tokenRow && typeof tokenRow.value === 'string' ? tokenRow.value.trim() : '';
+      const supplied = typeof req.body.registrationToken === 'string' ? req.body.registrationToken.trim() : '';
+      if (!expected) {
+        return res.status(403).json({ error: 'Registration is restricted. Ask the server admin for an invite.' });
+      }
+      if (supplied !== expected) {
+        return res.status(403).json({ error: 'Invalid or missing registration token.' });
+      }
+    }
 
     // Whitelist check — if enabled, only pre-approved usernames can register
     const wlSetting = db.prepare("SELECT value FROM server_settings WHERE key = 'whitelist_enabled'").get();

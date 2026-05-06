@@ -628,7 +628,11 @@
             password,
             eulaVersion: '2.0',
             ageVerified: true,
-            ssoProfilePicture: profilePicUrl
+            ssoProfilePicture: profilePicUrl,
+            // (#5344) Reuse the same token field the standard form uses;
+            // when the server requires a token the user will have already
+            // typed it in the visible field.
+            registrationToken: (document.getElementById('reg-token')?.value || '').trim()
           })
         });
 
@@ -650,6 +654,23 @@
   }
 
   // ── Register ──────────────────────────────────────────
+  // (#5344) If the server requires a registration token, reveal the
+  // token field. Best-effort fetch — if it fails we just leave the
+  // field hidden and the server will reject without the token.
+  (async () => {
+    try {
+      const r = await fetch('/api/auth/registration-info');
+      if (!r.ok) return;
+      const info = await r.json();
+      if (info && info.requiresToken) {
+        const grp = document.getElementById('reg-token-group');
+        const inp = document.getElementById('reg-token');
+        if (grp) grp.style.display = '';
+        if (inp) inp.required = true;
+      }
+    } catch { /* ignore */ }
+  })();
+
   registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     hideError();
@@ -658,6 +679,8 @@
     const username = document.getElementById('reg-username').value.trim();
     const password = document.getElementById('reg-password').value;
     const confirm = document.getElementById('reg-confirm').value;
+    const tokenInput = document.getElementById('reg-token');
+    const registrationToken = tokenInput ? tokenInput.value.trim() : '';
 
     if (!username || !password || !confirm) return showError(t('auth.errors.fill_all_fields'));
     if (password !== confirm) return showError(t('auth.errors.passwords_no_match'));
@@ -667,7 +690,7 @@
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true })
+        body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true, registrationToken })
       });
 
       const data = await res.json();

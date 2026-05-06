@@ -1841,6 +1841,22 @@
               <p class="muted-text" data-i18n="modals.common.loading">Loading...</p>
             </div>
           </div>
+          <!-- (#5344) Registration token — independent of whitelist; can be used together or alone -->
+          <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
+            <label class="toggle-row">
+              <span>🔑 Require invite token</span>
+              <input type="checkbox" id="registration-token-enabled">
+            </label>
+            <small class="settings-hint">When enabled, anyone registering must enter the token below. Works alongside the whitelist (both checks must pass) or on its own.</small>
+            <div id="registration-token-display" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <code id="registration-token-value" style="font-family:monospace;font-size:1rem;letter-spacing:0.05em;opacity:0.7">—</code>
+              <button class="btn-sm" id="copy-registration-token-btn" title="Copy token">📋</button>
+            </div>
+            <div style="display:flex;gap:4px;margin-top:4px;">
+              <button class="btn-sm btn-accent" id="generate-registration-token-btn">Generate / Reroll</button>
+              <button class="btn-sm" id="clear-registration-token-btn">Clear</button>
+            </div>
+          </div>
         </div>
         <div class="admin-settings" id="section-invite" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🌐 <span data-i18n="settings.admin.invite_title">Server Invite Code</span></h5>
@@ -1864,6 +1880,21 @@
             <div style="display:flex;gap:4px;margin-top:4px">
               <button class="btn-sm btn-accent" id="vanity-code-save-btn">Save</button>
               <button class="btn-sm" id="vanity-code-clear-btn">Clear</button>
+            </div>
+          </div>
+          <!-- (#5345) Default channels for invite-code joiners.
+               Private channels are always excluded; this lets the admin
+               narrow it further to a curated set of public channels. -->
+          <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
+            <h6 style="margin:0 0 4px;font-size:0.85rem;font-weight:600">📋 Default channels for invite joiners</h6>
+            <small class="settings-hint">Pick which public channels people land in when they use the invite code or vanity link. Private channels are <strong>never</strong> auto-joined regardless of selection. Leave everything checked to grant all public channels.</small>
+            <div id="default-join-channels-list" style="margin-top:8px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px">
+              <p class="muted-text" style="margin:4px 0;font-size:0.85rem">Loading channels...</p>
+            </div>
+            <div style="display:flex;gap:4px;margin-top:6px">
+              <button class="btn-sm" id="default-join-channels-all-btn" type="button">Select all</button>
+              <button class="btn-sm" id="default-join-channels-none-btn" type="button">Select none</button>
+              <button class="btn-sm btn-accent" id="default-join-channels-save-btn" type="button">Save</button>
             </div>
           </div>
         </div>

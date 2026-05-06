@@ -3552,6 +3552,78 @@ _setupUI() {
       });
     }
   });
+
+  // ── Registration token (#5344) — independent of whitelist ──
+  document.getElementById('registration-token-enabled')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', {
+      key: 'registration_token_enabled',
+      value: e.target.checked ? 'true' : 'false'
+    });
+  });
+  document.getElementById('generate-registration-token-btn')?.addEventListener('click', () => {
+    this.socket.emit('generate-registration-token');
+  });
+  document.getElementById('clear-registration-token-btn')?.addEventListener('click', () => {
+    if (!confirm('Clear the registration token? People will no longer be able to register with it.')) return;
+    this.socket.emit('clear-registration-token');
+  });
+  document.getElementById('copy-registration-token-btn')?.addEventListener('click', () => {
+    const tok = document.getElementById('registration-token-value')?.textContent;
+    if (tok && tok !== '—') {
+      const onCopied = () => this._showToast?.('Token copied', 'success');
+      (navigator.clipboard?.writeText
+        ? navigator.clipboard.writeText(tok).then(onCopied).catch(() => onCopied())
+        : onCopied());
+    }
+  });
+
+  // ── Default join channels (#5345) ──────────────────
+  const _renderDefaultJoinChannels = () => {
+    const host = document.getElementById('default-join-channels-list');
+    if (!host) return;
+    const all = (this.channels || []).filter(c =>
+      !c.is_dm && !c.parent_channel_id &&
+      !c.is_private && c.code_visibility !== 'private'
+    );
+    if (all.length === 0) {
+      host.innerHTML = '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No public channels yet.</p>';
+      return;
+    }
+    let selected = null; // null = "all"
+    try {
+      const raw = this.serverSettings?.default_join_channels;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) selected = new Set(parsed.map(n => parseInt(n)));
+      }
+    } catch { /* fall back to all */ }
+    host.innerHTML = all.map(ch => {
+      const checked = (selected === null) || selected.has(ch.id);
+      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:0.85rem">
+        <input type="checkbox" class="default-join-channel-cb" data-cid="${ch.id}" ${checked ? 'checked' : ''}>
+        <span>#${this._escapeHtml(ch.name || '')}</span>
+      </label>`;
+    }).join('');
+  };
+  this._renderDefaultJoinChannels = _renderDefaultJoinChannels;
+  document.getElementById('default-join-channels-all-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.default-join-channel-cb').forEach(cb => { cb.checked = true; });
+  });
+  document.getElementById('default-join-channels-none-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.default-join-channel-cb').forEach(cb => { cb.checked = false; });
+  });
+  document.getElementById('default-join-channels-save-btn')?.addEventListener('click', () => {
+    const cbs = Array.from(document.querySelectorAll('.default-join-channel-cb'));
+    const total = cbs.length;
+    const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
+    // "All checked" → store empty string so the default ("all public") logic kicks in
+    const value = (picked.length === total) ? '' : JSON.stringify(picked);
+    this.socket.emit('update-server-setting', { key: 'default_join_channels', value });
+    this._showToast?.(picked.length === total
+      ? 'Invite joiners will land in every public channel'
+      : `Invite joiners will land in ${picked.length} channel${picked.length === 1 ? '' : 's'}`,
+      'success');
+  });
 },
 
 // ═══════════════════════════════════════════════════════
