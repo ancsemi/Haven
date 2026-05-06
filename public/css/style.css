@@ -134,11 +134,31 @@
 [data-theme="matrix"] .brand-text { text-shadow: 0 0 8px rgba(0, 255, 65, 0.4); }
 [data-theme="matrix"] .channel-badge { background: #00ff41; color: #000; }
 [data-theme="matrix"] .message-avatar, [data-theme="matrix"] .message-avatar-img { border: 1px solid rgba(0, 255, 65, 0.3); }
-/* Bright green accent → dark text needed for legible contrast */
+/* Terminal-style button override: all accent-background elements become
+   dark-bg + green-text + green-border for consistent legibility */
 [data-theme="matrix"] .btn-primary,
-[data-theme="matrix"] .btn-primary:hover,
 [data-theme="matrix"] .btn-sm.btn-accent,
-[data-theme="matrix"] .btn-sm.btn-accent:hover { color: #000; }
+[data-theme="matrix"] .btn-send,
+[data-theme="matrix"] .thread-send-btn,
+[data-theme="matrix"] .settings-tab.active,
+[data-theme="matrix"] .settings-nav-item.active,
+[data-theme="matrix"] .auth-tab.active,
+[data-theme="matrix"] .sound-tab.active,
+[data-theme="matrix"] .profile-dm-btn {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 3px solid var(--accent) !important;
+  text-shadow: 0 0 4px rgba(0, 255, 65, 0.4);
+}
+[data-theme="matrix"] .btn-primary:hover,
+[data-theme="matrix"] .btn-sm.btn-accent:hover,
+[data-theme="matrix"] .btn-send:hover,
+[data-theme="matrix"] .thread-send-btn:hover,
+[data-theme="matrix"] .profile-dm-btn:hover {
+  background: var(--bg-active);
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.35);
+  filter: none;
+}
 
 /* ─── THEME: Tron ──────────────────────────────────────── */
 [data-theme="tron"] {
@@ -842,11 +862,31 @@
 [data-theme="fallout"] input, [data-theme="fallout"] textarea { border: 1px solid rgba(20, 254, 23, 0.15) !important; }
 [data-theme="fallout"] .message-input-container { border: 1px solid rgba(20, 254, 23, 0.2); border-radius: 2px; }
 [data-theme="fallout"] ::selection { background: #14fe17; color: #0a0e08; }
-/* Bright green accent → dark text needed for legible contrast */
+/* Terminal-style button override: all accent-background elements become
+   dark-bg + green-text + green-border for consistent legibility */
 [data-theme="fallout"] .btn-primary,
-[data-theme="fallout"] .btn-primary:hover,
 [data-theme="fallout"] .btn-sm.btn-accent,
-[data-theme="fallout"] .btn-sm.btn-accent:hover { color: #0a0e08; }
+[data-theme="fallout"] .btn-send,
+[data-theme="fallout"] .thread-send-btn,
+[data-theme="fallout"] .settings-tab.active,
+[data-theme="fallout"] .settings-nav-item.active,
+[data-theme="fallout"] .auth-tab.active,
+[data-theme="fallout"] .sound-tab.active,
+[data-theme="fallout"] .profile-dm-btn {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 3px solid var(--accent) !important;
+  text-shadow: 0 0 4px rgba(20, 254, 23, 0.4);
+}
+[data-theme="fallout"] .btn-primary:hover,
+[data-theme="fallout"] .btn-sm.btn-accent:hover,
+[data-theme="fallout"] .btn-send:hover,
+[data-theme="fallout"] .thread-send-btn:hover,
+[data-theme="fallout"] .profile-dm-btn:hover {
+  background: var(--bg-active);
+  box-shadow: 0 0 10px rgba(20, 254, 23, 0.35);
+  filter: none;
+}
 
 /* ─── THEME: Scripture (Parchment & Gold) ──────────────── */
 [data-theme="scripture"] {
@@ -5215,6 +5255,14 @@ select.cfn-select.cfn-input {
   border: 1px solid var(--border-light) !important;
 }
 .profile-nick-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.profile-gear-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  margin-top: 6px;
+  border: 1px solid var(--border-light) !important;
+}
+.profile-gear-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 /* ── Edit Profile Modal ──────────────────────────── */
 .edit-profile-modal-box {

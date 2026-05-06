@@ -118,6 +118,7 @@ _showUserGearMenu(anchorEl, userId, username) {
       e.stopPropagation();
       const action = btn.dataset.action;
       this._closeUserGearMenu();
+      this._closeProfilePopup();
       if (action === 'assign-role') {
         this._openRoleAssignCenter(userId);
       } else if (action === 'transfer-admin') {
@@ -402,12 +403,13 @@ _showProfilePopup(profile) {
     });
   }
 
-  // Gear / moderation button — opens the same dropdown as the sidebar gear
+  // Gear / moderation button — opens the same dropdown as the sidebar gear.
+  // Do NOT close the popup first; the anchor element must be in the DOM
+  // so _showUserGearMenu can read its position.
   const gearBtnEl = popup.querySelector('.profile-gear-btn');
   if (gearBtnEl) {
     gearBtnEl.addEventListener('click', (e) => {
       e.stopPropagation();
-      this._closeProfilePopup();
       this._showUserGearMenu(gearBtnEl, profile.id, profile.username);
     });
   }
