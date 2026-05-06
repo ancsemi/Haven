@@ -14534,6 +14534,41 @@ ul.chat-list { list-style-type: disc; }
   padding: 4px 8px;
 }
 
+/* Multi-role checkbox list inside the basic Assign Role modal. */
+.assign-role-checkboxes {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 4px;
+  background: var(--bg-secondary);
+}
+.assign-role-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.assign-role-checkbox-row:hover {
+  background: var(--bg-tertiary);
+}
+.assign-role-checkbox-row .role-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.assign-role-checkbox-name {
+  flex: 1;
+  font-size: 0.88rem;
+}
+.assign-role-checkbox-level {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
 /* ── Settings Group Card ─────────────────────────── */
 .settings-group {
   background: var(--bg-tertiary);

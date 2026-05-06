@@ -3024,15 +3024,52 @@ _initRoleManagement() {
     document.getElementById('assign-role-modal').style.display = 'none';
   });
   document.getElementById('confirm-assign-role-btn')?.addEventListener('click', () => {
-    const roleId = document.getElementById('assign-role-select').value;
-    const userId = document.getElementById('assign-role-modal').dataset.userId;
+    const modal = document.getElementById('assign-role-modal');
+    const userId = parseInt(modal.dataset.userId, 10);
     const scope = document.getElementById('assign-role-scope').value;
-    if (!roleId || !userId) return;
+    if (!userId) return;
     const channelId = scope !== 'server' ? parseInt(scope, 10) : null;
-    this.socket.emit('assign-role', { userId: parseInt(userId, 10), roleId: parseInt(roleId, 10), channelId }, (res) => {
-      if (res.error) { this._showToast(res.error, 'error'); return; }
+
+    // Multi-role: gather every checked role and diff against currently held
+    // roles for this scope. Assign the new ones, revoke the unchecked ones.
+    const checked = new Set(
+      Array.from(document.querySelectorAll('#assign-role-checkboxes .assign-role-checkbox:checked'))
+        .map(el => parseInt(el.value, 10))
+        .filter(id => Number.isInteger(id))
+    );
+    const held = new Set(
+      (this._assignRoleHeldRoles || [])
+        .filter(r => (channelId === null && (r.channel_id === null || r.channel_id === undefined))
+                   || (channelId !== null && r.channel_id === channelId))
+        .map(r => r.id)
+    );
+    const toAssign = [...checked].filter(id => !held.has(id));
+    const toRevoke = [...held].filter(id => !checked.has(id));
+
+    if (toAssign.length === 0 && toRevoke.length === 0) {
+      modal.style.display = 'none';
+      return;
+    }
+
+    let pending = toAssign.length + toRevoke.length;
+    let firstError = null;
+    const finish = () => {
+      if (firstError) { this._showToast(firstError, 'error'); return; }
       this._showToast(t('settings.admin.roles_assigned'), 'success');
-      document.getElementById('assign-role-modal').style.display = 'none';
+      modal.style.display = 'none';
+    };
+
+    toAssign.forEach(roleId => {
+      this.socket.emit('assign-role', { userId, roleId, channelId }, (res) => {
+        if (res && res.error && !firstError) firstError = res.error;
+        if (--pending === 0) finish();
+      });
+    });
+    toRevoke.forEach(roleId => {
+      this.socket.emit('revoke-role', { userId, roleId, channelId }, (res) => {
+        if (res && res.error && !firstError) firstError = res.error;
+        if (--pending === 0) finish();
+      });
     });
   });
 
@@ -3799,11 +3836,28 @@ _openAssignRoleModal(userId, username) {
   modal.dataset.userId = userId;
   document.getElementById('assign-role-user-label').textContent = t('settings.admin.roles_assigning_to', { name: username });
 
-  // Populate role select with color-coded level info
-  const sel = document.getElementById('assign-role-select');
-  sel.innerHTML = `<option value="">${t('settings.admin.roles_select_dropdown')}</option>` + this._allRoles.map(r =>
-    `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
-  ).join('');
+  // Multi-role: render every role as a checkbox. Held roles are pre-checked
+  // when the chosen scope matches the role assignment's channel_id.
+  const container = document.getElementById('assign-role-checkboxes');
+  const renderCheckboxes = (heldRoleIds) => {
+    if (!container) return;
+    if (!this._allRoles.length) {
+      container.innerHTML = `<p class="muted-text">${this._escapeHtml(t('settings.admin.roles_none') || 'No roles defined yet.')}</p>`;
+      return;
+    }
+    container.innerHTML = this._allRoles.map(r => {
+      const checked = heldRoleIds.has(r.id) ? ' checked' : '';
+      const dot = `<span class="role-color-dot" style="background:${this._safeColor ? this._safeColor(r.color, '#888') : (r.color || '#888')}"></span>`;
+      return `
+        <label class="assign-role-checkbox-row">
+          <input type="checkbox" class="assign-role-checkbox" value="${r.id}"${checked}>
+          ${dot}
+          <span class="assign-role-checkbox-name">${this._escapeHtml(r.name)}</span>
+          <span class="assign-role-checkbox-level">Lv.${r.level}</span>
+        </label>
+      `;
+    }).join('');
+  };
 
   // Populate scope with structured parent → sub-channel grouping
   const scopeSel = document.getElementById('assign-role-scope');
@@ -3824,6 +3878,41 @@ _openAssignRoleModal(userId, username) {
     });
   });
   scopeSel.innerHTML = scopeHtml;
+
+  // Fetch this user's currently-held roles so the checkbox state reflects
+  // reality. We listen once (the handler removes itself) for the response.
+  const buildHeldSet = (allRoles, scopeValue) => {
+    const channelId = scopeValue !== 'server' ? parseInt(scopeValue, 10) : null;
+    const set = new Set();
+    (allRoles || []).forEach(r => {
+      const sameScope = (channelId === null && (r.channel_id === null || r.channel_id === undefined))
+        || (channelId !== null && r.channel_id === channelId);
+      if (sameScope) set.add(r.id);
+    });
+    return set;
+  };
+
+  this._assignRoleHeldRoles = [];
+  const onUserRoles = (payload) => {
+    if (!payload || payload.userId !== userId) return;
+    this.socket.off('user-roles', onUserRoles);
+    this._assignRoleHeldRoles = payload.roles || [];
+    renderCheckboxes(buildHeldSet(this._assignRoleHeldRoles, scopeSel.value));
+  };
+  this.socket.on('user-roles', onUserRoles);
+  this.socket.emit('get-user-roles', { userId });
+
+  // Re-render checkboxes whenever scope changes so the pre-checked state
+  // matches the new scope. Replace the listener on each open to avoid leaks.
+  const newScopeSel = scopeSel.cloneNode(true);
+  scopeSel.parentNode.replaceChild(newScopeSel, scopeSel);
+  newScopeSel.addEventListener('change', () => {
+    renderCheckboxes(buildHeldSet(this._assignRoleHeldRoles, newScopeSel.value));
+  });
+
+  // Initial render before server reply: show no pre-checks.
+  renderCheckboxes(new Set());
+
   modal.style.display = 'flex';
   modal.style.zIndex = '100002';
 },

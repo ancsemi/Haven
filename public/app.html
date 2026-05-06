@@ -2265,10 +2265,9 @@
       <h3>👑 <span data-i18n="modals.assign_role.title">Assign Role</span></h3>
       <p id="assign-role-user-label" class="muted-text"></p>
 
-      <label class="assign-role-field-label" data-i18n="modals.assign_role.role_label">Role</label>
-      <select id="assign-role-select" class="settings-select assign-role-select">
-        <option value="" data-i18n="modals.assign_role.select_role">-- Select Role --</option>
-      </select>
+      <label class="assign-role-field-label" data-i18n="modals.assign_role.role_label">Roles</label>
+      <p class="assign-role-hint" data-i18n="modals.assign_role.role_hint_multi">A user may hold multiple roles. Their effective permissions are the union of every role they hold, and their displayed badge color comes from the highest role.</p>
+      <div id="assign-role-checkboxes" class="assign-role-checkboxes" role="group" aria-label="Assignable roles"></div>
 
       <label class="assign-role-field-label" style="margin-top:10px" data-i18n="modals.assign_role.scope_label">Scope</label>
       <p class="assign-role-hint" data-i18n="modals.assign_role.scope_hint">Server-wide applies to all channels. Channel-specific only applies within that channel.</p>
