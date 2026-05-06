@@ -209,14 +209,14 @@ _initMultiRoleNotice() {
       <div style="font-size:36px;margin-bottom:12px;">🎭</div>
       <h3 style="margin:0 0 8px;font-size:18px;font-weight:700;color:var(--text-primary);">Multi-Role Permissions</h3>
       <p style="margin:0 0 16px;font-size:13px;color:var(--text-secondary);line-height:1.6;">
-        Channels can now have <strong style="color:var(--text-primary);">multiple roles assigned at once</strong>.
-        Open any channel's settings and use the Roles tab to stack permissions —
-        members inherit access from all roles assigned to that channel.
+        Users can now hold <strong style="color:var(--text-primary);">multiple roles per channel</strong>.
+        Open a user's Role Assignment Center from the member list and assign as many roles as apply —
+        their permissions in that channel are the combined total of every role they hold.
       </p>
       <p style="margin:0 0 20px;font-size:12px;color:var(--text-muted);">
-        Manage roles per-channel via <strong>Admin → Roles</strong> or the channel context menu.
+        Use the member list gear icon or <strong>Admin → Members</strong> to manage per-channel role assignments.
       </p>
-      <button id="multi-role-notice-ok" style="padding:9px 28px;font-size:14px;font-weight:600;border-radius:var(--radius-sm);cursor:pointer;background:var(--accent);color:#fff;border:none;width:100%;margin-bottom:12px;">Got it</button>
+      <button id="multi-role-notice-ok" class="btn-primary" style="width:100%;margin-bottom:12px;">Got it</button>
       <label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-muted);cursor:pointer;">
         <input type="checkbox" id="multi-role-notice-check" style="accent-color:var(--accent);cursor:pointer;">
         Don't show this again
