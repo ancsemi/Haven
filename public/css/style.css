@@ -149,7 +149,7 @@
 [data-theme="matrix"] .profile-dm-btn {
   background: var(--bg-tertiary);
   color: var(--accent);
-  border: 2px solid var(--accent) !important;
+  border: 1px solid var(--accent) !important;
   text-shadow: 0 0 4px rgba(0, 255, 65, 0.4);
 }
 [data-theme="matrix"] .btn-primary:hover,
@@ -881,7 +881,7 @@
 [data-theme="fallout"] .profile-dm-btn {
   background: var(--bg-tertiary);
   color: var(--accent);
-  border: 2px solid var(--accent) !important;
+  border: 1px solid var(--accent) !important;
   text-shadow: 0 0 4px rgba(20, 254, 23, 0.4);
 }
 [data-theme="fallout"] .btn-primary:hover,
