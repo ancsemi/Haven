@@ -118,6 +118,7 @@ _showUserGearMenu(anchorEl, userId, username) {
       e.stopPropagation();
       const action = btn.dataset.action;
       this._closeUserGearMenu();
+      this._closeProfilePopup();
       if (action === 'assign-role') {
         this._openRoleAssignCenter(userId);
       } else if (action === 'transfer-admin') {
@@ -210,7 +211,7 @@ _renderUserItem(u, scoreLookup) {
   const tooltipRole = u.role ? `<div class="tooltip-role" style="color:${roleColor}">● ${this._escapeHtml(u.role.name)}</div>` : '';
   const tooltipStatus = u.statusText ? `<div class="tooltip-status">${this._escapeHtml(u.statusText)}</div>` : '';
   const tooltipOnline = u.online === false ? `<div class="tooltip-status">${t('app.profile.offline')}</div>` : '';
-  const tooltip = `<div class="user-item-tooltip"><div class="tooltip-username">${this._escapeHtml(u.username)}</div>${tooltipRole}${tooltipStatus}${tooltipOnline}</div>`;
+  // Tooltip removed — the full profile popup (hover/click) provides this info.
 
   const dmBtn = u.id === this.user.id
     ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="Notes to self (DM yourself)">📝</button>`
@@ -236,7 +237,6 @@ _renderUserItem(u, scoreLookup) {
       ${statusTextHtml}
       ${scoreBadge}
       ${modBtns}
-      ${tooltip}
     </div>
   `;
 },
@@ -293,9 +293,15 @@ _showProfilePopup(profile) {
 
   // Action buttons
   const nickBtnLabel = currentNick ? `✏️ ${t('users.edit_nickname')}` : `🏷️ ${t('users.set_nickname')}`;
+  const canMod = this.user.isAdmin || this._canModerate();
+  const canPromote = this._hasPerm('promote_user');
+  const gearVisible = !isSelf && (canMod || canPromote || this.user.isAdmin);
+  const gearBtnHtml = gearVisible
+    ? `<button class="profile-popup-action-btn profile-gear-btn" title="${this._escapeHtml(t('users.more_actions') || 'Moderation')}">⚙️ ${t('users.more_actions') || 'Moderation'}</button>`
+    : '';
   const actionsHtml = isSelf
     ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ ${t('users.edit_profile')}</button><button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}" title="Notes to self">📝 Notes to self</button>`
-    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}">${nickBtnLabel}</button>`;
+    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}">${nickBtnLabel}</button>${gearBtnHtml}`;
 
   const popup = document.createElement('div');
   popup.id = 'profile-popup';
@@ -384,6 +390,17 @@ _showProfilePopup(profile) {
       const uname = nickBtnEl.dataset.nickUname;
       this._closeProfilePopup();
       this._showNicknameDialog(uid, uname);
+    });
+  }
+
+  // Gear / moderation button — opens the same dropdown as the sidebar gear.
+  // Do NOT close the popup first; the anchor element must be in the DOM
+  // so _showUserGearMenu can read its position.
+  const gearBtnEl = popup.querySelector('.profile-gear-btn');
+  if (gearBtnEl) {
+    gearBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._showUserGearMenu(gearBtnEl, profile.id, profile.username);
     });
   }
 

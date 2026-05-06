@@ -194,6 +194,55 @@ _initDesktopAppBanner() {
   });
 },
 
+// ── Multi-Role Per-Channel Admin Notice ──────────────────
+/** One-time notice for admins explaining that multiple roles can now be
+ *  assigned per channel. Shows after login with a "Don't show again" option. */
+_initMultiRoleNotice() {
+  if (!this.user?.isAdmin) return;
+  if (localStorage.getItem('haven_multi_role_notice_v1')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'multi-role-notice-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px);';
+  modal.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius);padding:28px 28px 22px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;">
+      <div style="font-size:36px;margin-bottom:12px;">🎭</div>
+      <h3 style="margin:0 0 8px;font-size:18px;font-weight:700;color:var(--text-primary);">Multi-Role Permissions</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:var(--text-secondary);line-height:1.6;">
+        Users can now hold <strong style="color:var(--text-primary);">multiple roles per channel</strong>.
+        Open a user's Role Assignment Center from the member list and assign as many roles as apply —
+        their permissions in that channel are the combined total of every role they hold.
+      </p>
+      <p style="margin:0 0 20px;font-size:12px;color:var(--text-muted);">
+        Use the member list gear icon or <strong>Admin → Members</strong> to manage per-channel role assignments.
+      </p>
+      <button id="multi-role-notice-ok" class="btn-primary" style="width:100%;margin-bottom:12px;">Got it</button>
+      <label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-muted);cursor:pointer;">
+        <input type="checkbox" id="multi-role-notice-check" style="accent-color:var(--accent);cursor:pointer;">
+        Don't show this again
+      </label>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const dismiss = (permanent) => {
+    if (permanent) localStorage.setItem('haven_multi_role_notice_v1', '1');
+    modal.remove();
+  };
+
+  document.getElementById('multi-role-notice-ok').addEventListener('click', () => {
+    const check = document.getElementById('multi-role-notice-check');
+    dismiss(check?.checked);
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      const check = document.getElementById('multi-role-notice-check');
+      dismiss(check?.checked);
+    }
+  });
+},
+
 // ── Android Beta Banner + Sign-Up Popup ─────────────────
 /** Show the "Android Beta" banner and sign-up popup. Users enter their email
  *  and a prefilled mailto: link sends the opt-in request to the developer. */

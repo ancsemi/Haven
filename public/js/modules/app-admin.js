@@ -3024,15 +3024,52 @@ _initRoleManagement() {
     document.getElementById('assign-role-modal').style.display = 'none';
   });
   document.getElementById('confirm-assign-role-btn')?.addEventListener('click', () => {
-    const roleId = document.getElementById('assign-role-select').value;
-    const userId = document.getElementById('assign-role-modal').dataset.userId;
+    const modal = document.getElementById('assign-role-modal');
+    const userId = parseInt(modal.dataset.userId, 10);
     const scope = document.getElementById('assign-role-scope').value;
-    if (!roleId || !userId) return;
+    if (!userId) return;
     const channelId = scope !== 'server' ? parseInt(scope, 10) : null;
-    this.socket.emit('assign-role', { userId: parseInt(userId, 10), roleId: parseInt(roleId, 10), channelId }, (res) => {
-      if (res.error) { this._showToast(res.error, 'error'); return; }
+
+    // Multi-role: gather every checked role and diff against currently held
+    // roles for this scope. Assign the new ones, revoke the unchecked ones.
+    const checked = new Set(
+      Array.from(document.querySelectorAll('#assign-role-checkboxes .assign-role-checkbox:checked'))
+        .map(el => parseInt(el.value, 10))
+        .filter(id => Number.isInteger(id))
+    );
+    const held = new Set(
+      (this._assignRoleHeldRoles || [])
+        .filter(r => (channelId === null && (r.channel_id === null || r.channel_id === undefined))
+                   || (channelId !== null && r.channel_id === channelId))
+        .map(r => r.id)
+    );
+    const toAssign = [...checked].filter(id => !held.has(id));
+    const toRevoke = [...held].filter(id => !checked.has(id));
+
+    if (toAssign.length === 0 && toRevoke.length === 0) {
+      modal.style.display = 'none';
+      return;
+    }
+
+    let pending = toAssign.length + toRevoke.length;
+    let firstError = null;
+    const finish = () => {
+      if (firstError) { this._showToast(firstError, 'error'); return; }
       this._showToast(t('settings.admin.roles_assigned'), 'success');
-      document.getElementById('assign-role-modal').style.display = 'none';
+      modal.style.display = 'none';
+    };
+
+    toAssign.forEach(roleId => {
+      this.socket.emit('assign-role', { userId, roleId, channelId }, (res) => {
+        if (res && res.error && !firstError) firstError = res.error;
+        if (--pending === 0) finish();
+      });
+    });
+    toRevoke.forEach(roleId => {
+      this.socket.emit('revoke-role', { userId, roleId, channelId }, (res) => {
+        if (res && res.error && !firstError) firstError = res.error;
+        if (--pending === 0) finish();
+      });
     });
   });
 
@@ -3154,7 +3191,7 @@ _renderRoleDetail() {
           <div class="role-channel-access-list" id="role-channel-access-list">
             <p class="muted-text" style="padding:12px;text-align:center;font-size:12px">${t('modals.common.loading')}</p>
           </div>
-          <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
+          <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn" title="${this._escapeHtml(t('settings.admin.role_form.reapply_access_tooltip') || 'Re-runs the channel-access rules above against every user who already holds this role. Useful after editing the Grant/Revoke checkboxes: it brings existing members in line with the current configuration without you having to re-assign the role.')}">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
         </div>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>
@@ -3799,11 +3836,28 @@ _openAssignRoleModal(userId, username) {
   modal.dataset.userId = userId;
   document.getElementById('assign-role-user-label').textContent = t('settings.admin.roles_assigning_to', { name: username });
 
-  // Populate role select with color-coded level info
-  const sel = document.getElementById('assign-role-select');
-  sel.innerHTML = `<option value="">${t('settings.admin.roles_select_dropdown')}</option>` + this._allRoles.map(r =>
-    `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
-  ).join('');
+  // Multi-role: render every role as a checkbox. Held roles are pre-checked
+  // when the chosen scope matches the role assignment's channel_id.
+  const container = document.getElementById('assign-role-checkboxes');
+  const renderCheckboxes = (heldRoleIds) => {
+    if (!container) return;
+    if (!this._allRoles.length) {
+      container.innerHTML = `<p class="muted-text">${this._escapeHtml(t('settings.admin.roles_none') || 'No roles defined yet.')}</p>`;
+      return;
+    }
+    container.innerHTML = this._allRoles.map(r => {
+      const checked = heldRoleIds.has(r.id) ? ' checked' : '';
+      const dot = `<span class="role-color-dot" style="background:${this._safeColor ? this._safeColor(r.color, '#888') : (r.color || '#888')}"></span>`;
+      return `
+        <label class="assign-role-checkbox-row">
+          <input type="checkbox" class="assign-role-checkbox" value="${r.id}"${checked}>
+          ${dot}
+          <span class="assign-role-checkbox-name">${this._escapeHtml(r.name)}</span>
+          <span class="assign-role-checkbox-level">Lv.${r.level}</span>
+        </label>
+      `;
+    }).join('');
+  };
 
   // Populate scope with structured parent → sub-channel grouping
   const scopeSel = document.getElementById('assign-role-scope');
@@ -3824,6 +3878,41 @@ _openAssignRoleModal(userId, username) {
     });
   });
   scopeSel.innerHTML = scopeHtml;
+
+  // Fetch this user's currently-held roles so the checkbox state reflects
+  // reality. We listen once (the handler removes itself) for the response.
+  const buildHeldSet = (allRoles, scopeValue) => {
+    const channelId = scopeValue !== 'server' ? parseInt(scopeValue, 10) : null;
+    const set = new Set();
+    (allRoles || []).forEach(r => {
+      const sameScope = (channelId === null && (r.channel_id === null || r.channel_id === undefined))
+        || (channelId !== null && r.channel_id === channelId);
+      if (sameScope) set.add(r.id);
+    });
+    return set;
+  };
+
+  this._assignRoleHeldRoles = [];
+  const onUserRoles = (payload) => {
+    if (!payload || payload.userId !== userId) return;
+    this.socket.off('user-roles', onUserRoles);
+    this._assignRoleHeldRoles = payload.roles || [];
+    renderCheckboxes(buildHeldSet(this._assignRoleHeldRoles, scopeSel.value));
+  };
+  this.socket.on('user-roles', onUserRoles);
+  this.socket.emit('get-user-roles', { userId });
+
+  // Re-render checkboxes whenever scope changes so the pre-checked state
+  // matches the new scope. Replace the listener on each open to avoid leaks.
+  const newScopeSel = scopeSel.cloneNode(true);
+  scopeSel.parentNode.replaceChild(newScopeSel, scopeSel);
+  newScopeSel.addEventListener('change', () => {
+    renderCheckboxes(buildHeldSet(this._assignRoleHeldRoles, newScopeSel.value));
+  });
+
+  // Initial render before server reply: show no pre-checks.
+  renderCheckboxes(new Set());
+
   modal.style.display = 'flex';
   modal.style.zIndex = '100002';
 },
@@ -3841,7 +3930,7 @@ _openRoleAssignCenter(preSelectUserId = null) {
   this._racData = null;
   this._racSelectedUser = null;
   this._racSelectedChannel = null; // null = server-wide, number = channel id
-  this._racPendingChanges = {}; // key: `${userId}:${channelId||'server'}` → { roleId, level, permissions[] }
+  this._racPendingChanges = {}; // key: `${userId}:${channelId||'server'}` → { assignments: { [roleId]: {level, customPerms, applyToSubs} }, removals: [roleId, ...] }
 
   document.getElementById('rac-user-list').innerHTML = `<p class="rac-placeholder">${t('modals.common.loading')}</p>`;
   document.getElementById('rac-channel-list').innerHTML = `<p class="rac-placeholder">${t('settings.admin.roles_select_user')}</p>`;
@@ -3922,17 +4011,28 @@ _renderRacChannels() {
   const sharedIds = new Set(this._racData.userChannelMap[userId] || []);
   const channels = this._racData.channels;
 
-  // Get current role per scope for this user
-  const getRoleName = (channelId) => {
+  // Get current role names per scope for this user, factoring in pending edits.
+  const getRoleSummary = (channelId) => {
     const key = `${userId}:${channelId || 'server'}`;
-    if (this._racPendingChanges[key]) {
-      const pc = this._racPendingChanges[key];
-      if (pc.action === 'revoke') return t('settings.admin.roles_revoked_badge');
-      const pendingRole = this._racData.roles.find(r => r.id === pc.roleId);
-      return pendingRole ? `${pendingRole.name} ✎` : '';
-    }
-    const match = user.currentRoles.filter(r => channelId ? r.channel_id === channelId : !r.channel_id);
-    return match.map(r => r.name).join(', ') || '';
+    const heldHere = user.currentRoles.filter(r => channelId ? r.channel_id === channelId : !r.channel_id);
+    const pending = this._racPendingChanges[key];
+    if (!pending) return heldHere.map(r => r.name).join(', ');
+
+    const removals = new Set(pending.removals || []);
+    const assignments = pending.assignments || {};
+    const finalIds = new Set();
+    heldHere.forEach(r => { if (!removals.has(r.role_id)) finalIds.add(r.role_id); });
+    Object.keys(assignments).forEach(rid => finalIds.add(parseInt(rid, 10)));
+
+    const names = [];
+    finalIds.forEach(rid => {
+      const heldEntry = heldHere.find(r => r.role_id === rid);
+      const roleObj = this._racData.roles.find(r => r.id === rid);
+      const name = (heldEntry && heldEntry.name) || (roleObj && roleObj.name) || `#${rid}`;
+      names.push(name);
+    });
+    const hasEdits = Object.keys(assignments).length > 0 || removals.size > 0;
+    return names.join(', ') + (hasEdits ? ' ✎' : '');
   };
 
   let html = '';
@@ -3940,7 +4040,7 @@ _renderRacChannels() {
   // Admin: server-wide option
   if (this._racData.callerIsAdmin) {
     const serverActive = this._racSelectedChannel === 'server' ? ' active' : '';
-    const serverRole = getRoleName(null);
+    const serverRole = getRoleSummary(null);
     html += `<div class="rac-channel-item rac-server-wide${serverActive}" data-channel="server">
       <span class="rac-channel-icon">🌐</span>
       <span>${t('settings.admin.roles_server_wide')}</span>
@@ -3959,7 +4059,7 @@ _renderRacChannels() {
   parents.forEach(p => {
     if (!sharedIds.has(p.id) && !this._racData.callerIsAdmin) return;
     const pActive = this._racSelectedChannel === p.id ? ' active' : '';
-    const pRole = getRoleName(p.id);
+    const pRole = getRoleSummary(p.id);
     html += `<div class="rac-channel-item${pActive}" data-channel="${p.id}">
       <span class="rac-channel-icon">#</span>
       <span>${this._escapeHtml(p.name)}</span>
@@ -3970,7 +4070,7 @@ _renderRacChannels() {
     subs.forEach(s => {
       if (!sharedIds.has(s.id) && !this._racData.callerIsAdmin) return;
       const sActive = this._racSelectedChannel === s.id ? ' active' : '';
-      const sRole = getRoleName(s.id);
+      const sRole = getRoleSummary(s.id);
       html += `<div class="rac-channel-item rac-sub${sActive}" data-channel="${s.id}">
         <span class="rac-channel-icon">└</span>
         <span>${this._escapeHtml(s.name)}</span>
@@ -3987,27 +4087,7 @@ _renderRacChannels() {
   list.querySelectorAll('.rac-channel-item').forEach(el => {
     el.addEventListener('click', () => {
       const ch = el.dataset.channel;
-      const prevChannel = this._racSelectedChannel;
       this._racSelectedChannel = ch === 'server' ? 'server' : parseInt(ch);
-
-      // Carry forward pending modifications to the new channel so the user
-      // doesn't have to re-configure the same role/permissions from scratch
-      if (this._racSelectedUser && prevChannel != null && prevChannel !== this._racSelectedChannel) {
-        const prevChId = prevChannel === 'server' ? null : prevChannel;
-        const newChId  = this._racSelectedChannel === 'server' ? null : this._racSelectedChannel;
-        const prevKey  = `${this._racSelectedUser}:${prevChId || 'server'}`;
-        const newKey   = `${this._racSelectedUser}:${newChId || 'server'}`;
-        const prevPending = this._racPendingChanges[prevKey];
-        if (prevPending && !this._racPendingChanges[newKey]) {
-          // Clone the previous config as a starting point for the new channel
-          this._racPendingChanges[newKey] = {
-            ...prevPending,
-            customPerms: prevPending.customPerms ? [...prevPending.customPerms] : [],
-            applyToSubs: false  // reset sub-channel toggle for new scope
-          };
-        }
-      }
-
       this._renderRacChannels();
       this._renderRacConfig();
     });
@@ -4027,294 +4107,425 @@ _renderRacConfig() {
 
   const channelId = this._racSelectedChannel === 'server' ? null : this._racSelectedChannel;
   const key = `${userId}:${channelId || 'server'}`;
+  const pending = this._racPendingChanges[key] || { assignments: {}, removals: [] };
+  const removalsSet = new Set(pending.removals || []);
 
-  // Current assignment (from server data)
+  // Roles the user currently holds at this scope.
   const currentRoles = user.currentRoles.filter(r =>
     channelId ? r.channel_id === channelId : !r.channel_id
   );
-  const currentRole = currentRoles.length > 0 ? currentRoles[0] : null;
+  const heldIds = new Set(currentRoles.map(r => r.role_id));
 
-  // Pending changes (if any)
-  const pending = this._racPendingChanges[key];
-
-  const selectedRoleId = pending
-    ? (pending.action === 'revoke' ? '' : pending.roleId)
-    : (currentRole ? currentRole.role_id : '');
-  const selectedLevel = pending && pending.level !== undefined
-    ? pending.level
-    : (currentRole ? currentRole.level : 0);
-
-  // Available roles (filter to roles below caller's level for non-admins)
-  const availableRoles = this._racData.roles.filter(r =>
+  // Roles the caller is permitted to grant. Held roles always stay visible
+  // (so the caller can at least see them) even if they're above the cap.
+  const grantableRoles = this._racData.roles.filter(r =>
     this._racData.callerIsAdmin || r.level < this._racData.callerLevel
   );
+  const grantableIds = new Set(grantableRoles.map(r => r.id));
 
-  // Current role display
-  let currentHtml = '';
-  if (currentRole) {
-    currentHtml = `<div class="rac-current-role">
-      <span class="rac-role-dot" style="background:${this._safeColor(currentRole.color, '#888')}"></span>
-      ${this._escapeHtml(currentRole.name)} — Lv.${currentRole.level}
-    </div>`;
-  } else {
-    currentHtml = `<div class="rac-current-role" style="opacity:0.5">${t('settings.admin.roles_no_assigned')}</div>`;
-  }
-  if (pending) {
-    currentHtml += `<span class="rac-changed-badge">${t('settings.admin.roles_modified_badge')}</span>`;
-  }
-
-  // Determine which permissions the caller can grant
   const callerPerms = this._racData.callerPerms || [];
   const callerIsAdmin = this._racData.callerIsAdmin;
   const allPerms = ALL_PERMS;
-  // Perms that only admin can grant
   const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
-  // Perms that require the caller to have them to be able to grant
   const permLabels = PERM_LABELS;
-
-  // If a role preset is selected, get its permissions
-  const selectedRoleObj = availableRoles.find(r => r.id === Number(selectedRoleId));
-  const presetPerms = selectedRoleObj ? (selectedRoleObj.permissions || []) : [];
-  const presetLevel = selectedRoleObj ? selectedRoleObj.level : 0;
-
-  // Custom permissions: if pending has custom perms, use those; otherwise start from preset
-  const customPerms = pending && pending.customPerms
-    ? pending.customPerms
-    : [...presetPerms];
-
-  // Custom level: if pending has custom level, use it; otherwise use preset
-  const customLevel = pending && pending.level !== undefined
-    ? pending.level
-    : presetLevel;
-
-  // Max level the caller can assign (own level - 1, or 99 for admin)
   const maxLevel = callerIsAdmin ? 99 : (this._racData.callerLevel - 1);
-
-  // Check if the selected channel is a parent with sub-channels
   const isParentChannel = channelId && this._racData.channels.some(c => c.parentId === channelId);
-  const applyToSubsChecked = pending && pending.applyToSubs ? ' checked' : '';
+
+  // Build the unified role list for this scope: every held role + every
+  // pending assignment that isn't already held. Order: highest level first.
+  const seenRoleIds = new Set();
+  const cards = [];
+  currentRoles.forEach(r => {
+    seenRoleIds.add(r.role_id);
+    const roleObj = this._racData.roles.find(x => x.id === r.role_id) || {};
+    cards.push({
+      roleId: r.role_id,
+      name: r.name || roleObj.name || `#${r.role_id}`,
+      color: r.color || roleObj.color || '#888',
+      defaultLevel: roleObj.level || r.level,
+      defaultPerms: roleObj.permissions || [],
+      heldLevel: r.level,
+      held: true
+    });
+  });
+  Object.keys(pending.assignments || {}).forEach(rid => {
+    const id = parseInt(rid, 10);
+    if (seenRoleIds.has(id)) return;
+    seenRoleIds.add(id);
+    const roleObj = this._racData.roles.find(x => x.id === id);
+    if (!roleObj) return;
+    cards.push({
+      roleId: id, name: roleObj.name, color: roleObj.color,
+      defaultLevel: roleObj.level, defaultPerms: roleObj.permissions || [],
+      heldLevel: null, held: false
+    });
+  });
+  cards.sort((a, b) => (b.defaultLevel || 0) - (a.defaultLevel || 0));
+
+  // Determine the "stays held" set so the channel-summary preview is correct.
+  const finalHeld = new Set();
+  cards.forEach(c => {
+    const isAssigned = pending.assignments && pending.assignments[c.roleId];
+    const isRemoved = removalsSet.has(c.roleId);
+    if (isAssigned) finalHeld.add(c.roleId);
+    else if (c.held && !isRemoved) finalHeld.add(c.roleId);
+  });
+
+  // Roles available to add: grantable, not already in cards.
+  const addableRoles = grantableRoles.filter(r => !seenRoleIds.has(r.id));
+
+  // Inherited roles: server-wide and parent-channel roles visible as
+  // read-only context when the admin is viewing a channel scope.
+  const inheritedRoles = [];
+  if (channelId !== null) {
+    const serverWide = user.currentRoles.filter(r => !r.channel_id);
+    serverWide.forEach(r => inheritedRoles.push({ ...r, _inheritedFrom: t('settings.admin.roles_server_wide') || 'Server-wide' }));
+
+    const thisChannel = this._racData.channels.find(c => c.id === channelId);
+    if (thisChannel && thisChannel.parentId) {
+      const parentRoles = user.currentRoles.filter(r => r.channel_id === thisChannel.parentId);
+      const parentName = this._racData.channels.find(c => c.id === thisChannel.parentId)?.name || `#${thisChannel.parentId}`;
+      parentRoles.forEach(r => inheritedRoles.push({ ...r, _inheritedFrom: `#${this._escapeHtml(parentName)}` }));
+    }
+  }
+
+  // Header
+  const userColor = this._getUserColor(user.username);
+  const scopeLabel = channelId
+    ? (this._racData.channels.find(c => c.id === channelId)?.name || `#${channelId}`)
+    : t('settings.admin.roles_server_wide');
+
+  const renderCard = (card) => {
+    const assignment = pending.assignments && pending.assignments[card.roleId];
+    const removed = removalsSet.has(card.roleId);
+    const dirty = !!assignment || removed;
+
+    // Effective edit state shown in the form:
+    const effectiveLevel = assignment && assignment.level !== undefined
+      ? assignment.level
+      : (card.held ? card.heldLevel : card.defaultLevel);
+    const effectivePerms = assignment && assignment.customPerms
+      ? assignment.customPerms
+      : [...(card.defaultPerms || [])];
+    const expanded = !!assignment;
+    const applyToSubs = !!(assignment && assignment.applyToSubs);
+
+    let stateBadge = '';
+    if (removed) stateBadge = `<span class="rac-state-badge rac-state-removed">${this._escapeHtml(t('settings.admin.roles_pending_remove') || 'Pending remove')}</span>`;
+    else if (assignment && !card.held) stateBadge = `<span class="rac-state-badge rac-state-added">${this._escapeHtml(t('settings.admin.roles_pending_add') || 'Pending add')}</span>`;
+    else if (assignment && card.held) stateBadge = `<span class="rac-state-badge rac-state-edited">${this._escapeHtml(t('settings.admin.roles_pending_edit') || 'Edited')}</span>`;
+    else if (card.held) stateBadge = `<span class="rac-state-badge rac-state-held">${this._escapeHtml(t('settings.admin.roles_held') || 'Held')}</span>`;
+
+    let actionBtn = '';
+    if (removed) {
+      actionBtn = `<button type="button" class="btn-sm rac-card-undo-remove" data-role="${card.roleId}">${this._escapeHtml(t('settings.admin.roles_undo') || 'Undo')}</button>`;
+    } else if (card.held) {
+      actionBtn = `<button type="button" class="btn-sm rac-card-remove" data-role="${card.roleId}">${this._escapeHtml(t('settings.admin.roles_remove') || 'Remove')}</button>`;
+    } else {
+      actionBtn = `<button type="button" class="btn-sm rac-card-discard" data-role="${card.roleId}">${this._escapeHtml(t('settings.admin.roles_discard') || 'Discard')}</button>`;
+    }
+
+    let editToggle = '';
+    if (!removed) {
+      editToggle = `<button type="button" class="btn-sm rac-card-edit" data-role="${card.roleId}">${this._escapeHtml(expanded ? (t('settings.admin.roles_collapse') || 'Collapse') : (t('settings.admin.roles_configure') || 'Configure'))}</button>`;
+    }
+
+    const editorHtml = expanded ? `
+      <div class="rac-card-editor" data-role="${card.roleId}">
+        ${isParentChannel ? `
+          <label class="rac-perm-item" style="padding:6px 0;">
+            <input type="checkbox" class="rac-card-applysubs" data-role="${card.roleId}"${applyToSubs ? ' checked' : ''}>
+            <strong>${this._escapeHtml(t('settings.admin.roles_apply_to_subs'))}</strong>
+          </label>
+        ` : ''}
+        <div class="rac-config-label">${this._escapeHtml(t('settings.admin.roles_level_label'))} <span style="font-weight:400;text-transform:none;letter-spacing:0">${this._escapeHtml(t('settings.admin.roles_level_max_hint', { maxLevel }))}</span></div>
+        <div class="rac-config-row">
+          <input type="number" class="rac-card-level" data-role="${card.roleId}" min="1" max="${maxLevel}" value="${effectiveLevel}" style="width:80px">
+          <span class="rac-level-hint" style="font-size:0.75rem;color:var(--text-muted)">${this._escapeHtml(t('settings.admin.roles_preset_default', { level: card.defaultLevel }))}</span>
+        </div>
+        <div class="rac-config-label">${this._escapeHtml(t('settings.admin.roles_perms_label'))}</div>
+        <div class="rac-perms-grid rac-card-perms" data-role="${card.roleId}">
+          ${allPerms.map(p => {
+            const checked = effectivePerms.includes(p);
+            const callerHasPerm = callerIsAdmin || callerPerms.includes('*') || callerPerms.includes(p);
+            const isAdminOnly = adminOnlyPerms.includes(p) && !callerIsAdmin;
+            const isReadOnly = isAdminOnly || !callerHasPerm;
+            const tooltip = isReadOnly ? (isAdminOnly ? 'Owner only' : "You don't have this permission") : '';
+            return `<label class="rac-perm-item${isReadOnly ? ' disabled' : ''}${checked ? ' checked' : ''}"${tooltip ? ` title="${tooltip}"` : ''}>
+              <input type="checkbox" data-perm="${p}" ${checked ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>
+              ${permLabels[p] || p}
+            </label>`;
+          }).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const lockedNotice = !card.held && !grantableIds.has(card.roleId)
+      ? `<span class="rac-card-locked" title="${this._escapeHtml("You can't grant a role at or above your own level")}">🔒</span>`
+      : '';
+
+    return `
+      <div class="rac-role-card${dirty ? ' rac-card-dirty' : ''}${removed ? ' rac-card-removed' : ''}" data-role="${card.roleId}">
+        <div class="rac-card-head">
+          <span class="rac-role-dot" style="background:${this._safeColor(card.color, '#888')}"></span>
+          <span class="rac-card-name">${this._escapeHtml(card.name)}</span>
+          <span class="rac-card-level">Lv.${effectiveLevel}</span>
+          ${stateBadge}
+          ${lockedNotice}
+          <span style="flex:1"></span>
+          ${editToggle}
+          ${actionBtn}
+        </div>
+        ${editorHtml}
+      </div>
+    `;
+  };
 
   body.innerHTML = `
     <div class="rac-config-section">
-      <div class="rac-config-label">${t('settings.admin.roles_current_label')}</div>
-      ${currentHtml}
+      <div class="rac-config-label">${this._escapeHtml(t('settings.admin.roles_assigning_to', { name: user.displayName }))} — ${this._escapeHtml(scopeLabel)}</div>
+      <p class="rac-card-hint">${this._escapeHtml(t('settings.admin.roles_multi_hint') || 'Users may hold multiple roles per scope. Effective permissions are the union of every held role; the highest role drives display color.')}</p>
     </div>
 
-    <div class="rac-config-section">
-      <div class="rac-config-label">${t('settings.admin.roles_assign_label')}</div>
+    <div class="rac-config-section rac-roles-list">
+      ${cards.length ? cards.map(renderCard).join('') : `<p class="rac-placeholder">${this._escapeHtml(t('settings.admin.roles_no_assigned') || 'No roles assigned at this scope.')}</p>`}
+    </div>
+
+    ${inheritedRoles.length ? `
+    <div class="rac-config-section rac-inherited-section">
+      <div class="rac-config-label" style="opacity:0.7;margin-top:4px">${this._escapeHtml(t('settings.admin.roles_inherited_label') || 'Inherited (read-only)')}</div>
+      ${inheritedRoles.map(r => {
+        const color = this._safeColor(r.color, '#888');
+        return `<div class="rac-role-card rac-role-inherited">
+          <div class="rac-card-head">
+            <span class="rac-role-dot" style="background:${color}"></span>
+            <span class="rac-card-name" style="opacity:0.8">${this._escapeHtml(r.name)}</span>
+            <span class="rac-card-level">Lv.${r.level}</span>
+            <span class="rac-card-locked" title="${this._escapeHtml(t('settings.admin.roles_inherited_title') || 'Inherited — manage at the source scope')}">↑ ${this._escapeHtml(r._inheritedFrom)}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    ` : ''}
+
+    <div class="rac-config-section rac-add-role-section">
+      <div class="rac-config-label">${this._escapeHtml(t('settings.admin.roles_add_label') || 'Add another role')}</div>
       <div class="rac-config-row">
-        <select class="rac-role-select" id="rac-role-dropdown">
-          <option value="">-- No Role --</option>
-          ${availableRoles.map(r =>
-            `<option value="${r.id}" ${r.id === Number(selectedRoleId) ? 'selected' : ''}>● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
-          ).join('')}
+        <select class="rac-role-select" id="rac-add-role-dropdown" ${addableRoles.length ? '' : 'disabled'}>
+          <option value="">${this._escapeHtml(addableRoles.length ? (t('settings.admin.roles_select_to_add') || '-- Select a role to add --') : (t('settings.admin.roles_no_addable') || 'No more roles available'))}</option>
+          ${addableRoles.map(r => `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`).join('')}
         </select>
-      </div>
-    </div>
-
-    ${selectedRoleId ? `
-    <div class="rac-config-section">
-      <div class="rac-config-label">${t('settings.admin.roles_level_label')} <span style="font-weight:400;text-transform:none;letter-spacing:0">${t('settings.admin.roles_level_max_hint', { maxLevel })}</span></div>
-      <div class="rac-config-row">
-        <input type="number" class="rac-level-input" id="rac-level-input" min="1" max="${maxLevel}" value="${customLevel}" style="width:80px">
-        <span class="rac-level-hint" style="font-size:0.75rem;color:var(--text-muted)">${t('settings.admin.roles_preset_default', { level: presetLevel })}</span>
-      </div>
-    </div>
-    ` : ''}
-
-    ${isParentChannel && selectedRoleId ? `
-    <div class="rac-config-section">
-      <label class="rac-perm-item" style="padding:6px 0;">
-        <input type="checkbox" id="rac-apply-subs"${applyToSubsChecked}>
-        <strong>${t('settings.admin.roles_apply_to_subs')}</strong>
-      </label>
-    </div>
-    ` : ''}
-
-    <div class="rac-config-section">
-      <div class="rac-config-label">${t('settings.admin.roles_perms_label')} <span style="font-weight:400;text-transform:none;letter-spacing:0">${t('settings.admin.roles_perms_customize_hint')}</span></div>
-      <div class="rac-perms-grid" id="rac-perms-grid">
-        ${allPerms.map(p => {
-          const checked = customPerms.includes(p);
-          // A perm is read-only if:
-          // 1) Admin-only perm and caller is not admin, OR
-          // 2) Caller doesn't have the perm themselves (can't grant what you don't have), OR
-          // 3) No role is selected
-          const callerHasPerm = callerIsAdmin || callerPerms.includes('*') || callerPerms.includes(p);
-          const isAdminOnly = adminOnlyPerms.includes(p) && !callerIsAdmin;
-          const isReadOnly = !selectedRoleId || isAdminOnly || !callerHasPerm;
-          const tooltip = isReadOnly && selectedRoleId
-            ? (isAdminOnly ? 'Owner only' : 'You don\'t have this permission')
-            : '';
-          return `<label class="rac-perm-item${isReadOnly ? ' disabled' : ''}${checked ? ' checked' : ''}"${tooltip ? ` title="${tooltip}"` : ''}>
-            <input type="checkbox" data-perm="${p}" ${checked ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>
-            ${permLabels[p] || p}
-          </label>`;
-        }).join('')}
       </div>
     </div>
   `;
 
-  // Bind role dropdown change
-  document.getElementById('rac-role-dropdown').addEventListener('change', (e) => {
-    const roleId = e.target.value ? parseInt(e.target.value) : null;
-    // When changing the preset, reset custom perms and level to the new preset's defaults
-    if (roleId) {
-      const roleObj = this._racData.roles.find(r => r.id === roleId);
-      const pendingEntry = this._racPendingChanges[key] || {};
-      this._racPendingChanges[key] = {
-        action: 'assign',
-        roleId: roleId,
-        level: roleObj ? roleObj.level : 0,
-        customPerms: roleObj ? [...(roleObj.permissions || [])] : [],
-        applyToSubs: pendingEntry.applyToSubs || false
-      };
-    } else {
-      this._racUpdatePending(null);
-      return;
-    }
-    const hasChanges = Object.keys(this._racPendingChanges).length > 0;
+  // ── Wire up events ────────────────────────────────────
+  const refreshSaveBtn = () => {
+    const hasChanges = Object.values(this._racPendingChanges).some(p =>
+      (p.assignments && Object.keys(p.assignments).length) ||
+      (p.removals && p.removals.length)
+    );
     document.getElementById('rac-save-btn').disabled = !hasChanges;
-    this._renderRacChannels();
-    this._renderRacConfig();
+  };
+
+  const ensurePending = () => {
+    if (!this._racPendingChanges[key]) this._racPendingChanges[key] = { assignments: {}, removals: [] };
+    return this._racPendingChanges[key];
+  };
+
+  const cleanupPendingIfEmpty = () => {
+    const p = this._racPendingChanges[key];
+    if (!p) return;
+    const empty = (!p.assignments || Object.keys(p.assignments).length === 0) &&
+                  (!p.removals || p.removals.length === 0);
+    if (empty) delete this._racPendingChanges[key];
+  };
+
+  // Add-role dropdown
+  const addDropdown = document.getElementById('rac-add-role-dropdown');
+  if (addDropdown) {
+    addDropdown.addEventListener('change', (e) => {
+      const rid = parseInt(e.target.value, 10);
+      if (!rid) return;
+      const roleObj = this._racData.roles.find(r => r.id === rid);
+      if (!roleObj) return;
+      const p = ensurePending();
+      p.assignments[rid] = {
+        level: roleObj.level,
+        customPerms: [...(roleObj.permissions || [])],
+        applyToSubs: false
+      };
+      refreshSaveBtn();
+      this._renderRacChannels();
+      this._renderRacConfig();
+    });
+  }
+
+  // Per-card buttons
+  body.querySelectorAll('.rac-card-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = parseInt(btn.dataset.role, 10);
+      const p = ensurePending();
+      // If there was a pending edit (assignment) for a held role, drop it.
+      if (p.assignments && p.assignments[rid]) delete p.assignments[rid];
+      if (!p.removals.includes(rid)) p.removals.push(rid);
+      cleanupPendingIfEmpty();
+      refreshSaveBtn();
+      this._renderRacChannels();
+      this._renderRacConfig();
+    });
   });
 
-  // Bind level input change
-  const levelInput = document.getElementById('rac-level-input');
-  if (levelInput) {
-    levelInput.addEventListener('change', () => {
-      let val = parseInt(levelInput.value);
-      if (isNaN(val) || val < 1) val = 1;
-      if (val > maxLevel) val = maxLevel;
-      levelInput.value = val;
-      if (this._racPendingChanges[key]) {
-        this._racPendingChanges[key].level = val;
+  body.querySelectorAll('.rac-card-undo-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = parseInt(btn.dataset.role, 10);
+      const p = this._racPendingChanges[key];
+      if (!p) return;
+      p.removals = (p.removals || []).filter(id => id !== rid);
+      cleanupPendingIfEmpty();
+      refreshSaveBtn();
+      this._renderRacChannels();
+      this._renderRacConfig();
+    });
+  });
+
+  body.querySelectorAll('.rac-card-discard').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = parseInt(btn.dataset.role, 10);
+      const p = this._racPendingChanges[key];
+      if (!p || !p.assignments) return;
+      delete p.assignments[rid];
+      cleanupPendingIfEmpty();
+      refreshSaveBtn();
+      this._renderRacChannels();
+      this._renderRacConfig();
+    });
+  });
+
+  body.querySelectorAll('.rac-card-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = parseInt(btn.dataset.role, 10);
+      const p = ensurePending();
+      const card = cards.find(c => c.roleId === rid);
+      if (!card) return;
+      if (p.assignments && p.assignments[rid]) {
+        // Already expanded — collapse by removing the assignment IF nothing
+        // was changed from the held state. Otherwise keep it.
+        const a = p.assignments[rid];
+        const unchanged = card.held
+          && a.level === card.heldLevel
+          && JSON.stringify((a.customPerms || []).slice().sort()) === JSON.stringify((card.defaultPerms || []).slice().sort())
+          && !a.applyToSubs;
+        if (unchanged) delete p.assignments[rid];
       } else {
-        const roleObj = availableRoles.find(r => r.id === Number(selectedRoleId));
-        this._racPendingChanges[key] = {
-          action: 'assign',
-          roleId: Number(selectedRoleId),
-          level: val,
-          customPerms: [...customPerms]
+        // Expand: seed an assignment from the current held values (or preset).
+        p.assignments[rid] = {
+          level: card.held ? card.heldLevel : card.defaultLevel,
+          customPerms: [...(card.defaultPerms || [])],
+          applyToSubs: false
         };
       }
-      const hasChanges = Object.keys(this._racPendingChanges).length > 0;
-      document.getElementById('rac-save-btn').disabled = !hasChanges;
+      cleanupPendingIfEmpty();
+      refreshSaveBtn();
       this._renderRacChannels();
+      this._renderRacConfig();
     });
-  }
+  });
 
-  // Bind apply-to-subs checkbox
-  const subsCheck = document.getElementById('rac-apply-subs');
-  if (subsCheck) {
-    subsCheck.addEventListener('change', () => {
-      if (this._racPendingChanges[key]) {
-        this._racPendingChanges[key].applyToSubs = subsCheck.checked;
-      }
-    });
-  }
-
-  // Bind permission checkboxes (toggleable ones)
-  document.querySelectorAll('#rac-perms-grid input[type="checkbox"]:not([disabled])').forEach(cb => {
-    cb.addEventListener('change', () => {
-      const perm = cb.dataset.perm;
-      const pendingEntry = this._racPendingChanges[key] || {
-        action: 'assign',
-        roleId: Number(selectedRoleId),
-        level: customLevel,
-        customPerms: [...customPerms]
-      };
-      if (!pendingEntry.customPerms) pendingEntry.customPerms = [...customPerms];
-
-      if (cb.checked) {
-        if (!pendingEntry.customPerms.includes(perm)) pendingEntry.customPerms.push(perm);
-      } else {
-        pendingEntry.customPerms = pendingEntry.customPerms.filter(p => p !== perm);
-      }
-      this._racPendingChanges[key] = pendingEntry;
-      const hasChanges = Object.keys(this._racPendingChanges).length > 0;
-      document.getElementById('rac-save-btn').disabled = !hasChanges;
-      // Update label styling
-      cb.closest('.rac-perm-item').classList.toggle('checked', cb.checked);
+  // Per-card editor controls
+  body.querySelectorAll('.rac-card-level').forEach(input => {
+    input.addEventListener('change', () => {
+      const rid = parseInt(input.dataset.role, 10);
+      let val = parseInt(input.value, 10);
+      if (isNaN(val) || val < 1) val = 1;
+      if (val > maxLevel) val = maxLevel;
+      input.value = val;
+      const p = ensurePending();
+      if (!p.assignments[rid]) p.assignments[rid] = { level: val, customPerms: [], applyToSubs: false };
+      else p.assignments[rid].level = val;
+      refreshSaveBtn();
       this._renderRacChannels();
     });
   });
-},
 
-_racUpdatePending(forceRoleId) {
-  const userId = this._racSelectedUser;
-  const channelId = this._racSelectedChannel === 'server' ? null : this._racSelectedChannel;
-  const key = `${userId}:${channelId || 'server'}`;
+  body.querySelectorAll('.rac-card-applysubs').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const rid = parseInt(cb.dataset.role, 10);
+      const p = ensurePending();
+      if (!p.assignments[rid]) return;
+      p.assignments[rid].applyToSubs = cb.checked;
+      refreshSaveBtn();
+    });
+  });
 
-  const roleId = forceRoleId !== undefined
-    ? forceRoleId
-    : (this._racPendingChanges[key] ? this._racPendingChanges[key].roleId : null);
-
-  if (roleId === null || roleId === '') {
-    // Check if user currently HAS a role at this scope — if so, queue a revocation
-    const user = this._racData.users.find(u => u.id === userId);
-    const currentRoles = user ? user.currentRoles.filter(r =>
-      channelId ? r.channel_id === channelId : !r.channel_id
-    ) : [];
-    if (currentRoles.length > 0) {
-      this._racPendingChanges[key] = {
-        action: 'revoke',
-        revokeRoleIds: currentRoles.map(r => r.role_id)
-      };
-    } else {
-      delete this._racPendingChanges[key];
-    }
-  } else {
-    const roleObj = this._racData.roles.find(r => r.id === Number(roleId));
-    this._racPendingChanges[key] = {
-      action: 'assign',
-      roleId: Number(roleId),
-      level: roleObj ? roleObj.level : 0
-    };
-  }
-
-  const hasChanges = Object.keys(this._racPendingChanges).length > 0;
-  document.getElementById('rac-save-btn').disabled = !hasChanges;
-
-  // Re-render channel list to show updated badges
-  this._renderRacChannels();
-  // Re-render config to update "Modified" badge
-  this._renderRacConfig();
+  body.querySelectorAll('.rac-card-perms input[type="checkbox"]:not([disabled])').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const grid = cb.closest('.rac-card-perms');
+      const rid = parseInt(grid.dataset.role, 10);
+      const perm = cb.dataset.perm;
+      const p = ensurePending();
+      if (!p.assignments[rid]) {
+        const card = cards.find(c => c.roleId === rid);
+        p.assignments[rid] = {
+          level: card ? (card.held ? card.heldLevel : card.defaultLevel) : 1,
+          customPerms: card ? [...(card.defaultPerms || [])] : [],
+          applyToSubs: false
+        };
+      }
+      const a = p.assignments[rid];
+      if (cb.checked) {
+        if (!a.customPerms.includes(perm)) a.customPerms.push(perm);
+      } else {
+        a.customPerms = a.customPerms.filter(x => x !== perm);
+      }
+      cb.closest('.rac-perm-item').classList.toggle('checked', cb.checked);
+      refreshSaveBtn();
+      this._renderRacChannels();
+    });
+  });
 },
 
 _racSaveChanges() {
-  const changes = Object.entries(this._racPendingChanges);
-  if (changes.length === 0) return;
+  const scopeKeys = Object.keys(this._racPendingChanges);
+  if (scopeKeys.length === 0) return;
 
-  // Expand applyToSubs: for any parent channel with applyToSubs, add entries for sub-channels
-  const expandedChanges = [];
-  for (const [key, val] of changes) {
-    expandedChanges.push([key, val]);
-    if (val.applyToSubs && val.action === 'assign') {
-      const [userIdStr, scope] = key.split(':');
-      const channelId = scope === 'server' ? null : parseInt(scope);
-      if (channelId && this._racData) {
+  // Flatten all pending changes into a list of socket calls. Each entry is
+  // either { kind:'assign', userId, channelId, roleId, level, customPerms }
+  // or { kind:'revoke', userId, channelId, roleId }.
+  const ops = [];
+  for (const key of scopeKeys) {
+    const p = this._racPendingChanges[key];
+    const [userIdStr, scope] = key.split(':');
+    const userId = parseInt(userIdStr, 10);
+    const channelId = scope === 'server' ? null : parseInt(scope, 10);
+
+    (p.removals || []).forEach(roleId => {
+      ops.push({ kind: 'revoke', userId, channelId, roleId });
+    });
+    Object.entries(p.assignments || {}).forEach(([rid, a]) => {
+      const roleId = parseInt(rid, 10);
+      ops.push({ kind: 'assign', userId, channelId, roleId, level: a.level, customPerms: a.customPerms || null });
+      // Expand applyToSubs into per-sub-channel assigns.
+      if (a.applyToSubs && channelId && this._racData) {
         const subs = this._racData.channels.filter(c => c.parentId === channelId);
         for (const sub of subs) {
-          const subKey = `${userIdStr}:${sub.id}`;
-          if (!this._racPendingChanges[subKey]) {
-            expandedChanges.push([subKey, { ...val, applyToSubs: false }]);
-          }
+          ops.push({ kind: 'assign', userId, channelId: sub.id, roleId, level: a.level, customPerms: a.customPerms || null });
         }
       }
-    }
+    });
   }
 
+  if (ops.length === 0) return;
+
   let completed = 0;
-  let errors = [];
-  const total = expandedChanges.length;
+  const errors = [];
+  const total = ops.length;
 
   const onDone = () => {
     if (errors.length) {
       this._showToast(t('settings.admin.roles_save_errors', { count: errors.length, error: errors[0] }), 'error');
     } else {
       this._showToast(t(total === 1 ? 'settings.admin.roles_changes_saved_one' : 'settings.admin.roles_changes_saved_other', { count: total }), 'success');
-      // Close modal after successful save
       document.getElementById('role-assign-center-modal').style.display = 'none';
     }
     this._racPendingChanges = {};
@@ -4329,36 +4540,20 @@ _racSaveChanges() {
     });
   };
 
-  expandedChanges.forEach(([key, val]) => {
-    const [userIdStr, scope] = key.split(':');
-    const userId = parseInt(userIdStr);
-    const channelId = scope === 'server' ? null : parseInt(scope);
-
-    if (val.action === 'revoke') {
-      // Revoke each role the user currently has at this scope
-      const toRevoke = val.revokeRoleIds || [];
-      if (toRevoke.length === 0) { completed++; if (completed === total) onDone(); return; }
-      let revokeCount = 0;
-      toRevoke.forEach(roleId => {
-        this.socket.emit('revoke-role', { userId, roleId, channelId }, (res) => {
-          revokeCount++;
-          if (res && res.error) errors.push(res.error);
-          if (revokeCount === toRevoke.length) {
-            completed++;
-            if (completed === total) onDone();
-          }
-        });
+  ops.forEach(op => {
+    if (op.kind === 'revoke') {
+      this.socket.emit('revoke-role', { userId: op.userId, roleId: op.roleId, channelId: op.channelId }, (res) => {
+        completed++;
+        if (res && res.error) errors.push(res.error);
+        if (completed === total) onDone();
       });
     } else {
       this.socket.emit('assign-role', {
-        userId,
-        roleId: val.roleId,
-        channelId,
-        customLevel: val.level,
-        customPerms: val.customPerms || null
+        userId: op.userId, roleId: op.roleId, channelId: op.channelId,
+        customLevel: op.level, customPerms: op.customPerms
       }, (res) => {
         completed++;
-        if (res.error) errors.push(res.error);
+        if (res && res.error) errors.push(res.error);
         if (completed === total) onDone();
       });
     }

@@ -85,7 +85,7 @@
               <div class="input-row">
                 <input type="text" id="channel-code-input"
                        data-i18n-placeholder="app.sidebar.join_placeholder" placeholder="Enter code..." maxlength="8" spellcheck="false">
-                <button id="join-channel-btn" class="btn-sm" data-i18n="app.sidebar.join_btn">Join</button>
+                <button id="join-channel-btn" class="btn-sm btn-accent" data-i18n="app.sidebar.join_btn">Join</button>
               </div>
             </div>
           </div>
@@ -1533,7 +1533,7 @@
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn-sm btn-danger-fill" id="totp-disable-btn" data-i18n="settings.two_factor_section.disable_btn" style="flex:1">Disable 2FA</button>
-            <button class="btn-sm" id="totp-regen-backup-btn" data-i18n="settings.two_factor_section.regen_backup_btn" style="flex:1">Regenerate Backup Codes</button>
+            <button class="btn-sm btn-accent" id="totp-regen-backup-btn" data-i18n="settings.two_factor_section.regen_backup_btn" style="flex:1">Regenerate Backup Codes</button>
           </div>
           <small class="settings-hint" id="totp-manage-status"></small>
         </div>
@@ -1553,7 +1553,7 @@
           <div class="form-group compact">
             <input type="password" id="recovery-gen-password" data-i18n-placeholder="settings.recovery_section.confirm_password_placeholder" placeholder="Confirm your password" maxlength="128" autocomplete="current-password">
           </div>
-          <button class="btn-sm btn-full" id="recovery-generate-btn" data-i18n="settings.recovery_section.generate_btn">Generate Recovery Codes</button>
+          <button class="btn-sm btn-full btn-accent" id="recovery-generate-btn" data-i18n="settings.recovery_section.generate_btn">Generate Recovery Codes</button>
           <small class="settings-hint" id="recovery-gen-status"></small>
         </div>
         <!-- Codes display (shown after generation) -->
@@ -1815,9 +1815,9 @@
             </select>
           </label>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-            <button class="btn-sm" id="view-bans-btn">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
-            <button class="btn-sm" id="view-deleted-users-btn">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
-            <button class="btn-sm" id="view-all-members-btn">👥 <span data-i18n="settings.admin.view_all_members_btn">View All Members</span></button>
+            <button class="btn-sm btn-accent" id="view-bans-btn">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
+            <button class="btn-sm btn-accent" id="view-deleted-users-btn">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
+            <button class="btn-sm btn-accent" id="view-all-members-btn">👥 <span data-i18n="settings.admin.view_all_members_btn">View All Members</span></button>
           </div>
           <label class="toggle-row" style="margin-top:8px">
             <span data-i18n="settings.admin.update_banner_label">Update banner (admins only)</span>
@@ -1883,7 +1883,7 @@
             <input type="number" id="cleanup-max-size" min="0" max="100000" value="0" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.cleanup_size_hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
-          <button class="btn-sm btn-full" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 <span data-i18n="settings.admin.cleanup_run_btn">Run Cleanup Now</span></button>
+          <button class="btn-sm btn-full btn-accent" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 <span data-i18n="settings.admin.cleanup_run_btn">Run Cleanup Now</span></button>
         </div>
         <div class="admin-settings" id="section-backup" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">💾 <span data-i18n="settings.admin.backup_title">Server Backup</span></h5>
@@ -1909,7 +1909,7 @@
             <small class="settings-group-label" data-i18n="settings.admin.backup_restore_label">Restore From Backup</small>
             <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap">
               <input type="file" id="backup-restore-file" accept=".zip" style="flex:1 1 200px;min-width:0;max-width:100%">
-              <button class="btn-sm" id="backup-restore-btn">⬆️ <span data-i18n="settings.admin.backup_restore_btn">Restore</span></button>
+              <button class="btn-sm btn-accent" id="backup-restore-btn">⬆️ <span data-i18n="settings.admin.backup_restore_btn">Restore</span></button>
             </div>
             <small class="settings-hint" style="margin-top:6px;display:block;color:var(--danger,#e84a4a)" data-i18n="settings.admin.backup_restore_warning"><strong>Warning:</strong> Restoring overwrites the current server data. The server will restart automatically — your hosting setup must support auto-restart (Docker, systemd, the Haven installer service, etc.). The previous database is preserved as <code>haven.db.pre-restore</code> for one cycle.</small>
           </div>
@@ -1944,8 +1944,8 @@
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
               <button class="btn-sm btn-accent" id="auto-backup-save-btn" data-i18n="settings.admin.auto_backup_save">Save Schedule</button>
-              <button class="btn-sm" id="auto-backup-run-now-btn" data-i18n="settings.admin.auto_backup_run_now">Run Now</button>
-              <button class="btn-sm" id="auto-backup-refresh-btn" data-i18n="settings.admin.auto_backup_refresh">Refresh List</button>
+              <button class="btn-sm btn-accent" id="auto-backup-run-now-btn" data-i18n="settings.admin.auto_backup_run_now">Run Now</button>
+              <button class="btn-sm btn-accent" id="auto-backup-refresh-btn" data-i18n="settings.admin.auto_backup_refresh">Refresh List</button>
             </div>
             <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.auto_backup_hint">Auto-backups are saved to the server's data directory and pruned to your retention count. They use the same format as manual downloads, so you can restore any of them above.</small>
             <div id="auto-backup-list" style="margin-top:10px;display:flex;flex-direction:column;gap:4px"></div>
@@ -2265,10 +2265,9 @@
       <h3>👑 <span data-i18n="modals.assign_role.title">Assign Role</span></h3>
       <p id="assign-role-user-label" class="muted-text"></p>
 
-      <label class="assign-role-field-label" data-i18n="modals.assign_role.role_label">Role</label>
-      <select id="assign-role-select" class="settings-select assign-role-select">
-        <option value="" data-i18n="modals.assign_role.select_role">-- Select Role --</option>
-      </select>
+      <label class="assign-role-field-label" data-i18n="modals.assign_role.role_label">Roles</label>
+      <p class="assign-role-hint" data-i18n="modals.assign_role.role_hint_multi">A user may hold multiple roles. Their effective permissions are the union of every role they hold, and their displayed badge color comes from the highest role.</p>
+      <div id="assign-role-checkboxes" class="assign-role-checkboxes" role="group" aria-label="Assignable roles"></div>
 
       <label class="assign-role-field-label" style="margin-top:10px" data-i18n="modals.assign_role.scope_label">Scope</label>
       <p class="assign-role-hint" data-i18n="modals.assign_role.scope_hint">Server-wide applies to all channels. Channel-specific only applies within that channel.</p>
@@ -2321,7 +2320,7 @@
       </div>
 
       <div class="modal-actions rac-footer">
-        <button class="btn-sm" id="rac-manage-roles-btn" style="display:none" data-i18n-title="modals.role_assign_center.manage_roles_title" title="Open role management">⚙️ <span data-i18n="modals.role_assign_center.manage_roles_btn">Manage Roles</span></button>
+        <button class="btn-sm btn-accent" id="rac-manage-roles-btn" style="display:none" data-i18n-title="modals.role_assign_center.manage_roles_title" title="Open role management">⚙️ <span data-i18n="modals.role_assign_center.manage_roles_btn">Manage Roles</span></button>
         <div class="rac-footer-right">
           <button class="btn-sm" id="rac-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>
           <button class="btn-sm btn-accent" id="rac-save-btn" data-i18n="modals.role_assign_center.save_btn" disabled>Save Changes</button>
@@ -2499,9 +2498,9 @@
           </select>
           <label class="organize-toolbar-label" data-i18n="modals.audit_log.filter_actor">Actor:</label>
           <input type="text" id="audit-log-filter-actor" placeholder="Username..." maxlength="40" style="width:140px">
-          <button class="btn-sm" id="audit-log-refresh-btn">🔄 <span data-i18n="modals.audit_log.refresh">Refresh</span></button>
+          <button class="btn-sm btn-accent" id="audit-log-refresh-btn">🔄 <span data-i18n="modals.audit_log.refresh">Refresh</span></button>
           <div class="organize-spacer"></div>
-          <button class="btn-sm" id="audit-log-export-btn">📥 <span data-i18n="modals.audit_log.export">Export JSON</span></button>
+          <button class="btn-sm btn-accent" id="audit-log-export-btn">📥 <span data-i18n="modals.audit_log.export">Export JSON</span></button>
         </div>
         <div id="audit-log-list" class="audit-log-list">
           <div class="audit-log-empty" data-i18n="modals.audit_log.loading">Loading...</div>
@@ -2561,8 +2560,8 @@
       </div>
       <div class="modal-actions" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn-sm" id="aml-view-bans-btn" style="display:none">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
-          <button class="btn-sm" id="aml-view-deleted-btn" style="display:none">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
+          <button class="btn-sm btn-accent" id="aml-view-bans-btn" style="display:none">📋 <span data-i18n="settings.admin.view_bans_btn">View Bans</span></button>
+          <button class="btn-sm btn-accent" id="aml-view-deleted-btn" style="display:none">🗑️ <span data-i18n="settings.admin.view_deleted_btn">View Deleted Users</span></button>
         </div>
         <button class="btn-sm" id="close-all-members-btn" data-i18n="modals.common.close">Close</button>
       </div>

@@ -282,7 +282,17 @@ _setupSocketListeners() {
       if (oldEntry) rotatedChannelId = oldEntry.id;
     }
 
+    // Preserve any DM channels that were added client-side (via dm-opened
+    // events). The server only sends server channels in channels-list, so
+    // overwriting would wipe DM entries and break E2E decryption until the
+    // user reopens the DM.
+    const existingDMs = (this.channels || []).filter(c => c.is_dm);
     this.channels = channels;
+    for (const dm of existingDMs) {
+      if (!this.channels.find(c => c.code === dm.code)) {
+        this.channels.push(dm);
+      }
+    }
     // Seed client-side unreadCounts from server-reported values so the
     // desktop badge, tab title, and DM section badge stay in sync.
     // Only import counts for channels we haven't touched yet this session.

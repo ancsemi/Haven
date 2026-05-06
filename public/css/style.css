@@ -134,6 +134,35 @@
 [data-theme="matrix"] .brand-text { text-shadow: 0 0 8px rgba(0, 255, 65, 0.4); }
 [data-theme="matrix"] .channel-badge { background: #00ff41; color: #000; }
 [data-theme="matrix"] .message-avatar, [data-theme="matrix"] .message-avatar-img { border: 1px solid rgba(0, 255, 65, 0.3); }
+/* Terminal-style button override: all accent-background elements become
+   dark-bg + green-text + green-border for consistent legibility */
+[data-theme="matrix"] .btn-primary,
+[data-theme="matrix"] .btn-sm.btn-accent,
+[data-theme="matrix"] .btn-accent,
+[data-theme="matrix"] .btn-admin-save,
+[data-theme="matrix"] .btn-send,
+[data-theme="matrix"] .thread-send-btn,
+[data-theme="matrix"] .settings-tab.active,
+[data-theme="matrix"] .settings-nav-item.active,
+[data-theme="matrix"] .auth-tab.active,
+[data-theme="matrix"] .sound-tab.active,
+[data-theme="matrix"] .profile-dm-btn {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 2px solid var(--accent) !important;
+  text-shadow: 0 0 4px rgba(0, 255, 65, 0.4);
+}
+[data-theme="matrix"] .btn-primary:hover,
+[data-theme="matrix"] .btn-sm.btn-accent:hover,
+[data-theme="matrix"] .btn-accent:hover,
+[data-theme="matrix"] .btn-admin-save:hover,
+[data-theme="matrix"] .btn-send:hover,
+[data-theme="matrix"] .thread-send-btn:hover,
+[data-theme="matrix"] .profile-dm-btn:hover {
+  background: var(--bg-active);
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.35);
+  filter: none;
+}
 
 /* ─── THEME: Tron ──────────────────────────────────────── */
 [data-theme="tron"] {
@@ -837,6 +866,35 @@
 [data-theme="fallout"] input, [data-theme="fallout"] textarea { border: 1px solid rgba(20, 254, 23, 0.15) !important; }
 [data-theme="fallout"] .message-input-container { border: 1px solid rgba(20, 254, 23, 0.2); border-radius: 2px; }
 [data-theme="fallout"] ::selection { background: #14fe17; color: #0a0e08; }
+/* Terminal-style button override: all accent-background elements become
+   dark-bg + green-text + green-border for consistent legibility */
+[data-theme="fallout"] .btn-primary,
+[data-theme="fallout"] .btn-sm.btn-accent,
+[data-theme="fallout"] .btn-accent,
+[data-theme="fallout"] .btn-admin-save,
+[data-theme="fallout"] .btn-send,
+[data-theme="fallout"] .thread-send-btn,
+[data-theme="fallout"] .settings-tab.active,
+[data-theme="fallout"] .settings-nav-item.active,
+[data-theme="fallout"] .auth-tab.active,
+[data-theme="fallout"] .sound-tab.active,
+[data-theme="fallout"] .profile-dm-btn {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 2px solid var(--accent) !important;
+  text-shadow: 0 0 4px rgba(20, 254, 23, 0.4);
+}
+[data-theme="fallout"] .btn-primary:hover,
+[data-theme="fallout"] .btn-sm.btn-accent:hover,
+[data-theme="fallout"] .btn-accent:hover,
+[data-theme="fallout"] .btn-admin-save:hover,
+[data-theme="fallout"] .btn-send:hover,
+[data-theme="fallout"] .thread-send-btn:hover,
+[data-theme="fallout"] .profile-dm-btn:hover {
+  background: var(--bg-active);
+  box-shadow: 0 0 10px rgba(20, 254, 23, 0.35);
+  filter: none;
+}
 
 /* ─── THEME: Scripture (Parchment & Gold) ──────────────── */
 [data-theme="scripture"] {
@@ -3359,11 +3417,11 @@ html.rgb-cycling *::after {
   user-select: none;
 }
 .dm-pip-avatar-wrap {
+  position: relative;
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
   border-radius: 50%;
-  overflow: hidden;
   background: var(--bg-secondary, #2a2a2a);
   display: flex;
   align-items: center;
@@ -3371,15 +3429,42 @@ html.rgb-cycling *::after {
   font-size: 12px;
   font-weight: 700;
   color: #fff;
+  /* Inner avatar imagery is rounded by inheriting the wrap's border-radius
+     on the <img>; we no longer clip the wrap itself so the status dot can
+     bleed slightly outside the circle the same way the sidebar does. */
 }
 .dm-pip-avatar-wrap img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: inherit;
 }
-.dm-pip-avatar-wrap.avatar-square { border-radius: 6px; }
-.dm-pip-avatar-wrap.avatar-rounded { border-radius: 8px; }
+.dm-pip-avatar-wrap.avatar-square,
+.dm-pip-avatar-wrap.avatar-square img { border-radius: 6px; }
+.dm-pip-avatar-wrap.avatar-rounded,
+.dm-pip-avatar-wrap.avatar-rounded img { border-radius: 8px; }
+.dm-pip-avatar-initial {
+  position: relative;
+  z-index: 0;
+}
+/* Online presence dot in the bottom-right of the PiP DM avatar — mirrors
+   the sidebar `.user-status-dot` styling so the colors stay consistent. */
+.dm-pip-status-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2ecc71; /* online (default) */
+  border: 2px solid var(--bg-primary, #1e1e1e);
+  box-sizing: content-box;
+  pointer-events: none;
+}
+.dm-pip-status-dot.away    { background: #95a5a6; }
+.dm-pip-status-dot.dnd     { background: #e74c3c; }
+.dm-pip-status-dot.invisible { background: transparent; border-color: var(--text-muted, #888); }
 .dm-pip-title { font-weight: 600; font-size: 13px; }
 .dm-pip-spacer { flex: 1; }
 .dm-pip-messages {
@@ -3646,6 +3731,8 @@ html.rgb-cycling *::after {
   border-bottom: 1px solid var(--border);
   min-height: 52px;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .channel-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -5176,6 +5263,14 @@ select.cfn-select.cfn-input {
   border: 1px solid var(--border-light) !important;
 }
 .profile-nick-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.profile-gear-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  margin-top: 6px;
+  border: 1px solid var(--border-light) !important;
+}
+.profile-gear-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 /* ── Edit Profile Modal ──────────────────────────── */
 .edit-profile-modal-box {
@@ -12655,6 +12750,14 @@ ul.chat-list { list-style-type: disc; }
   /* Always show in messages */
   display: inline;
 }
+/* Multi-role: small "+N" appended to the badge when the user holds extra
+   roles. Hover the badge to see the full list (native title tooltip). */
+.msg-role-extra-count {
+  font-size: 8px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-left: 2px;
+}
 
 /* ── BOT badge for webhook messages ───────────────── */
 .bot-badge {
@@ -14526,6 +14629,41 @@ ul.chat-list { list-style-type: disc; }
   padding: 4px 8px;
 }
 
+/* Multi-role checkbox list inside the basic Assign Role modal. */
+.assign-role-checkboxes {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 4px;
+  background: var(--bg-secondary);
+}
+.assign-role-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.assign-role-checkbox-row:hover {
+  background: var(--bg-tertiary);
+}
+.assign-role-checkbox-row .role-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.assign-role-checkbox-name {
+  flex: 1;
+  font-size: 0.88rem;
+}
+.assign-role-checkbox-level {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
 /* ── Settings Group Card ─────────────────────────── */
 .settings-group {
   background: var(--bg-tertiary);
@@ -15042,11 +15180,21 @@ ul.chat-list { list-style-type: disc; }
    Centralized Role Assignment — 3-Pane Modal (RAC)
    ═══════════════════════════════════════════════════════════ */
 .role-assign-center-box {
-  max-width: 960px !important;
-  width: 94vw;
-  max-height: 80vh;
+  /* Default size: spacious-but-bounded. The user can drag the bottom-right
+     corner to grow the modal to whatever fits their screen — the previous
+     `max-width: 960px !important` made the corner-resize one-way (shrink
+     only) on large displays. We keep a sensible upper cap (98vw / 92vh)
+     so the modal can never exceed the viewport. */
+  width: min(960px, 82vw);
+  max-width: 98vw;
+  height: 80vh;
+  max-height: 92vh;
+  min-width: 560px;
+  min-height: 420px;
   display: flex;
   flex-direction: column;
+  resize: both;
+  overflow: hidden;
 }
 .role-assign-center-subtitle {
   font-size: 0.82rem;
@@ -15063,7 +15211,6 @@ ul.chat-list { list-style-type: disc; }
   overflow: hidden;
   flex: 1;
   min-height: 340px;
-  max-height: 55vh;
 }
 .rac-pane {
   display: flex;
@@ -15293,6 +15440,91 @@ ul.chat-list { list-style-type: disc; }
   color: #e67e22;
   margin-left: 6px;
   font-weight: 600;
+}
+
+/* Multi-role: each card represents one role at the selected scope. */
+.rac-roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rac-role-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  padding: 8px 10px;
+}
+.rac-role-card.rac-card-dirty {
+  border-color: #e67e22;
+}
+.rac-role-card.rac-card-removed {
+  opacity: 0.6;
+}
+.rac-role-card.rac-card-removed .rac-card-name {
+  text-decoration: line-through;
+}
+.rac-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.rac-card-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rac-card-level {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+.rac-card-locked {
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+.rac-card-editor {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.rac-card-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 6px 4px 12px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  display: block;
+}
+.rac-state-held {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+.rac-state-added {
+  background: rgba(52, 152, 219, 0.18);
+  color: #3498db;
+}
+.rac-state-removed {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
+}
+.rac-state-edited {
+  background: rgba(230, 126, 34, 0.18);
+  color: #e67e22;
+}
+.rac-inherited-section .rac-role-card {
+  opacity: 0.7;
+  border-style: dashed;
+  pointer-events: none;
+}
+.rac-add-role-section {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
 }
 
 /* Footer */
