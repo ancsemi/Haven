@@ -1156,9 +1156,17 @@ _startPerfDiagnostics() {
   let rafId = null;
   let reportTimer = null;
 
-  // Count frames via rAF
+  // Count frames via rAF — skip sampling when the window is hidden/backgrounded
+  // because Chromium throttles rAF to ~1 FPS in background tabs, which would
+  // cause false CRITICAL alerts even when the app is perfectly healthy.
   const countFrame = (now) => {
     rafId = requestAnimationFrame(countFrame);
+    if (document.hidden) {
+      // Reset so the first sample after becoming visible starts clean
+      frameCount = 0;
+      lastSampleTime = now;
+      return;
+    }
     frameCount++;
     const elapsed = now - lastSampleTime;
     if (elapsed >= SAMPLE_INTERVAL) {
