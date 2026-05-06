@@ -399,7 +399,14 @@ function setupSocketHandlers(io, db) {
     const users = room
       ? Array.from(room.values()).map(u => {
           const role = getUserHighestRole(u.id, channelId);
-          return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
+          const roles = getUserAllRoles(u.id, channelId);
+          return {
+            id: u.id, username: u.username,
+            roleColor: role ? role.color : null,
+            roleName: role ? role.name : null,
+            roles,
+            isMuted: u.isMuted || false, isDeafened: u.isDeafened || false
+          };
         })
       : [];
     io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', { channelCode: code, users });

@@ -12655,6 +12655,14 @@ ul.chat-list { list-style-type: disc; }
   /* Always show in messages */
   display: inline;
 }
+/* Multi-role: small "+N" appended to the badge when the user holds extra
+   roles. Hover the badge to see the full list (native title tooltip). */
+.msg-role-extra-count {
+  font-size: 8px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-left: 2px;
+}
 
 /* ── BOT badge for webhook messages ───────────────── */
 .bot-badge {

@@ -739,15 +739,21 @@ _createMessageEl(msg, prevMsg) {
     avatarHtml = `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
   }
 
+  // Multi-role aware: highest role drives the badge color/text, but the
+  // tooltip lists every role the user holds in this channel context.
+  const _allRoles = (onlineUser && Array.isArray(onlineUser.roles)) ? onlineUser.roles : [];
+  const _roleTitle = _allRoles.length > 1
+    ? _allRoles.map(r => r.name).join('\n')
+    : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}">${this._escapeHtml(onlineUser.role.name)}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle)}">${this._escapeHtml(onlineUser.role.name)}${_allRoles.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat
   const showIconChat = this.serverSettings.role_icon_chat === 'true';
   const iconAfterName = this.serverSettings.role_icon_after_name === 'true';
   const msgRoleIcon = showIconChat && onlineUser && onlineUser.role && onlineUser.role.icon
-    ? `<img class="role-icon" src="${this._escapeHtml(onlineUser.role.icon)}" alt="" title="${this._escapeHtml(onlineUser.role.name)}">`
+    ? `<img class="role-icon" src="${this._escapeHtml(onlineUser.role.icon)}" alt="" title="${this._escapeHtml(_roleTitle)}">`
     : '';
   const msgRoleIconBefore = msgRoleIcon && !iconAfterName ? msgRoleIcon : '';
   const msgRoleIconAfter = msgRoleIcon && iconAfterName ? msgRoleIcon : '';
@@ -846,15 +852,20 @@ _promoteCompactToFull(compactEl) {
     ? `<img class="message-avatar message-avatar-img ${shapeClass}" src="${this._escapeHtml(avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
+  // Multi-role aware (compact-to-full path) — mirror of _createMessageEl above.
+  const _allRoles2 = (onlineUser && Array.isArray(onlineUser.roles)) ? onlineUser.roles : [];
+  const _roleTitle2 = _allRoles2.length > 1
+    ? _allRoles2.map(r => r.name).join('\n')
+    : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}">${this._escapeHtml(onlineUser.role.name)}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle2)}">${this._escapeHtml(onlineUser.role.name)}${_allRoles2.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles2.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat (compact-to-full)
   const showIconChat2 = this.serverSettings.role_icon_chat === 'true';
   const iconAfterName2 = this.serverSettings.role_icon_after_name === 'true';
   const msgRoleIcon2 = showIconChat2 && onlineUser && onlineUser.role && onlineUser.role.icon
-    ? `<img class="role-icon" src="${this._escapeHtml(onlineUser.role.icon)}" alt="" title="${this._escapeHtml(onlineUser.role.name)}">`
+    ? `<img class="role-icon" src="${this._escapeHtml(onlineUser.role.icon)}" alt="" title="${this._escapeHtml(_roleTitle2)}">`
     : '';
   const msgRoleIconBefore2 = msgRoleIcon2 && !iconAfterName2 ? msgRoleIcon2 : '';
   const msgRoleIconAfter2 = msgRoleIcon2 && iconAfterName2 ? msgRoleIcon2 : '';
