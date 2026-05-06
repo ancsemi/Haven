@@ -5111,7 +5111,7 @@ _uploadWithProgress(url, formData) {
   });
 },
 
-async _uploadImage(file, targetCode) {
+async _uploadImage(file, targetCode, bundled = false) {
   if (!this.currentChannel && !targetCode) return;
   // Capture the target channel NOW (before any await) so a mid-upload channel
   // switch doesn't send the image to the wrong channel.
@@ -5145,7 +5145,8 @@ async _uploadImage(file, targetCode) {
       this.socket.emit('send-message', {
         code: targetChannel,
         content: encryptedText,
-        encrypted: true
+        encrypted: true,
+        ...(bundled && { bundled: true })
       });
       this.notifications.play('sent');
     } catch (err) {
@@ -5172,7 +5173,8 @@ async _uploadImage(file, targetCode) {
     this.socket.emit('send-message', {
       code: targetChannel,
       content: data.url,
-      isImage: true
+      isImage: true,
+      ...(bundled && { bundled: true })
     });
     this.notifications.play('sent');
   } catch (err) {

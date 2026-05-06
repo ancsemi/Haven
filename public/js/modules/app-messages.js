@@ -215,9 +215,10 @@ async _sendMessage() {
     this.notifications.play('sent');
   }
 
-  // Upload queued images
+  // Upload queued images — mark as bundled when text was also sent so
+  // the server knows not to apply a second slow-mode tick for them (#5342)
   if (hasImages) {
-    this._flushImageQueue();
+    this._flushImageQueue(!!content);
   }
 },
 

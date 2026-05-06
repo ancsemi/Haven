@@ -61,12 +61,12 @@ _clearImageQueue() {
   this._renderImageQueue();
 },
 
-async _flushImageQueue() {
+async _flushImageQueue(bundled = false) {
   if (!this._imageQueue || this._imageQueue.length === 0) return;
   const files = [...this._imageQueue];
   this._clearImageQueue();
   for (const file of files) {
-    await this._uploadImage(file);
+    await this._uploadImage(file, undefined, bundled);
   }
 },
 
@@ -130,7 +130,7 @@ _renderPiPImageQueue() {
   }
 },
 
-async _flushPiPImageQueue() {
+async _flushPiPImageQueue(bundled = false) {
   if (!this._pipImageQueue || this._pipImageQueue.length === 0) return;
   const files = [...this._pipImageQueue];
   const target = this._pipImageQueueTarget;
@@ -138,7 +138,7 @@ async _flushPiPImageQueue() {
   this._pipImageQueueTarget = null;
   this._renderPiPImageQueue();
   for (const file of files) {
-    await this._uploadImage(file, target);
+    await this._uploadImage(file, target, bundled);
   }
 },
 

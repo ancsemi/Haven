@@ -2585,8 +2585,9 @@ _sendDMPiPMessage() {
     }
 
     // Flush any queued images (same as main channel behavior, #5324)
+    // Pass bundled=true when text was also sent so slow mode doesn't double-tick
     if (hasPiPImages) {
-      await this._flushPiPImageQueue?.();
+      await this._flushPiPImageQueue?.(!!content);
     }
   })();
 },

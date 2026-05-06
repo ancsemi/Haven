@@ -378,7 +378,11 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25) {
+    // Bundled media: images/files attached alongside a text message are sent
+    // as a separate socket event by the client. They've already consumed one
+    // slow-mode slot (via the text message). Skip the check so the media
+    // arrives with its parent message instead of being blocked. (#5342)
+    if (channel.slow_mode_interval > 0 && !socket.user.isAdmin && getUserEffectiveLevel(socket.user.id, channel.id) < 25 && !data.bundled) {
       const slowKey = `slow:${socket.user.id}:${channel.id}`;
       const now = Date.now();
       const lastSent = slowModeTracker.get(slowKey) || 0;
