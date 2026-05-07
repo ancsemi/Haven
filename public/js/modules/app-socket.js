@@ -439,6 +439,18 @@ _setupSocketListeners() {
     // E2E: decrypt DM messages before rendering
     await this._decryptMessages(data.messages);
 
+    // Self-healing key fetch: if the partner key was absent during decryption
+    // (e.g. the pre-fetch in _recoverE2EFromBackup timed out before this
+    // message-history arrived), kick off a background request now.
+    // When public-key-result arrives the permanent listener calls
+    // _retryDecryptForUser which re-fetches messages with decryption working.
+    {
+      const _e2eCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+      if (_e2eCh && _e2eCh.is_dm && _e2eCh.dm_target && !this._dmPublicKeys[_e2eCh.dm_target.id]) {
+        this._fetchDMPartnerKey(_e2eCh); // fire-and-forget
+      }
+    }
+
     if (this._historyBefore) {
       // Pagination request — prepend older messages
       this._historyBefore = null;

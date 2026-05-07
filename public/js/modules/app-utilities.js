@@ -125,9 +125,19 @@ _wireBurnMessages(root) {
       label.className = 'burn-pending-label';
       label.title = `Self-destructs ${burnSeconds}s after the recipient views it`;
       label.textContent = '🔥';
-      // Full messages have .message-header; compact messages use .compact-time instead.
-      const header = el.querySelector('.message-header') || el.querySelector('.compact-time');
-      if (header) header.after(label);
+      // Full messages: append INSIDE .message-header so the flame is inline
+      // on the author/timestamp row (right side, after the spacer). Using
+      // header.after() (previous code) inserted it as a SIBLING between the
+      // header and .message-content, making it appear on its own line.
+      // Compact messages have no .message-header; put the flame at the
+      // start of .message-content so it reads as "🔥 message text".
+      const msgHeader = el.querySelector('.message-header');
+      if (msgHeader) {
+        msgHeader.append(label);
+      } else {
+        const msgContent = el.querySelector('.message-content');
+        if (msgContent) msgContent.prepend(label);
+      }
     }
     if (startedAt) {
       this._startBurnCountdown(el, burnSeconds, startedAt);

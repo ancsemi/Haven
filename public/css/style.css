@@ -13889,6 +13889,12 @@ ul.chat-list { list-style-type: disc; }
 .message-burn-pending .message-header .burn-pending-label {
   color: #ff6b35;
 }
+/* Compact messages: flame is prepended inside .message-content, no left margin needed */
+.message-compact.message-burn-pending .message-content .burn-pending-label {
+  color: #ff6b35;
+  margin-left: 0;
+  margin-right: 4px;
+}
 .burn-reveal-btn {
   background: rgba(255, 107, 53, 0.12);
   color: #ff6b35;
