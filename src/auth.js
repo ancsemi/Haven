@@ -984,7 +984,7 @@ router.get('/user-servers', async (req, res) => {
   }
 });
 
-router.put('/user-servers', async (req, res) => {
+router.put('/user-servers', express.json({ limit: '96kb' }), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const decoded = token ? verifyToken(token) : null;
   if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
