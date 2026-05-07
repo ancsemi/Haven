@@ -1379,6 +1379,15 @@ _setupUI() {
     this._requireE2E(() => this._showE2EVerification());
   });
 
+  // E2E recover-from-backup button — re-fetches the server-side encrypted
+  // backup and unwraps it with the user's password. Works even when the
+  // local key is in ghost-state or IndexedDB is stale. Does NOT generate
+  // new keys, so existing encrypted messages remain readable once recovered.
+  document.getElementById('e2e-recover-btn')?.addEventListener('click', () => {
+    document.getElementById('e2e-dropdown').style.display = 'none';
+    this._recoverE2EFromBackup();
+  });
+
   // E2E reset encryption keys button (inside dropdown)
   // Reset does NOT go through _requireE2E — it must work even when E2E
   // can't initialize (e.g. server backup can't be decrypted after password change).

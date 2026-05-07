@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.5] — 2026-05-07
+
+### Security
+- **#5348 — Third parties could join DMs via channel code or message link.** DM channel codes are not exposed in the web or desktop clients, but the Android client's long-press menu surfaced a `Copy Channel Code` option. Anyone with that code (or a `copy DM link` URL from the `...` menu) could call `join-channel` and be inserted as a member. Even though E2E prevents them from reading message content, they could observe metadata (who, when, how often). Fixed in the server's `join-channel` handler: any channel lookup that resolves to an `is_dm` channel now returns the same generic `Invalid channel code` error, indistinguishable from a non-existent code. No client changes required.
+
+### Added
+- **`Recover Keys from Backup` in the E2E dropdown.** The `🔐 Encryption options` menu (visible when in a DM) now has a middle option between `Verify Encryption` and `Reset Encryption Keys`. `🔄 Recover Keys from Backup` re-fetches the server-side encrypted keypair and unwraps it with your password. This is the non-destructive recovery path: existing encrypted messages remain readable after recovery. It's the right tool when a device ends up in ghost-state (e.g. auto-login without a password, or IndexedDB was cleared). If no server backup is found, it tells you to use Reset instead.
+
+---
+
 ## [3.14.4] — 2026-05-07
 
 ### Fixed

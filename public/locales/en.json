@@ -421,6 +421,7 @@
     "pinned_messages": "Pinned messages",
     "encryption_options": "Encryption options",
     "verify_encryption": "Verify Encryption",
+    "recover_encryption": "Recover Keys from Backup",
     "reset_encryption": "Reset Encryption Keys",
     "search_placeholder": "Search... from:user in:#channel has:image",
     "update_text": "Update v{{version}}",

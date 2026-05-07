@@ -263,7 +263,13 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Invalid channel code — double-check it');
     }
 
-    const membership = db.prepare(
+    // (#5348) DMs are private one-to-one channels. Their codes must never be
+    // usable by a third party — even a read-only presence leaks metadata
+    // (who is talking to whom, timing, frequency). Reject silently with the
+    // same generic error so callers can't distinguish "no channel" from "is DM".
+    if (channel.is_dm) {
+      return socket.emit('error-msg', 'Invalid channel code — double-check it');
+    }
       'SELECT * FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
 

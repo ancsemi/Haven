@@ -751,6 +751,64 @@ async _e2eSetupListeners() {
 },
 
 /**
+ * Recover E2E keys from the server-side encrypted backup.
+ * This is the non-destructive option: it re-fetches and unwraps the existing
+ * keypair rather than generating fresh ones, so encrypted messages that were
+ * readable before remain readable after recovery. Use this when a device
+ * ended up in ghost-state (e.g. after auto-login without a password or after
+ * IndexedDB was cleared). Does NOT overwrite the server backup.
+ *
+ * Called from the "Recover Keys from Backup" button in the E2E dropdown.
+ * Like Reset, this bypasses _requireE2E so it works even when E2E is broken.
+ */
+async _recoverE2EFromBackup() {
+  const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
+  if (!wrappingKey) {
+    // Need password first — set a pending action so the modal resolves here.
+    this._e2ePwPendingAction = () => this._recoverE2EFromBackup();
+    this._showE2EPasswordModal();
+    return;
+  }
+
+  // Ensure we have an E2E instance even if init failed.
+  if (!this.e2e) {
+    if (typeof HavenE2E !== 'undefined') {
+      this.e2e = new HavenE2E();
+      await this.e2e._openDB();
+    } else {
+      this._showToast('E2E module not available', 'error');
+      return;
+    }
+  }
+
+  this._showToast('Recovering encryption keys from backup...', 'info');
+
+  const synced = await this.e2e.syncFromServer(this.socket, wrappingKey);
+  if (synced) {
+    await this.e2e.publishKey(this.socket);
+    this._dmPublicKeys = {};
+    this._appendE2ENotice(`\ud83d\udd04 Encryption keys recovered from backup \u2014 ${new Date().toLocaleString()}.`);
+    this._showToast('Encryption keys recovered successfully', 'success');
+
+    // Re-fetch messages if currently in a DM so they attempt decryption again.
+    const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
+    if (ch && ch.is_dm) {
+      this._oldestMsgId = null;
+      this._noMoreHistory = false;
+      this._loadingHistory = false;
+      this._historyBefore = null;
+      this._newestMsgId = null;
+      this._noMoreFuture = true;
+      this._loadingFuture = false;
+      this._historyAfter = null;
+      this.socket.emit('get-messages', { code: this.currentChannel });
+    }
+  } else {
+    this._showToast('Recovery failed \u2014 no server backup found or password mismatch. If you have never logged in with a password on this server, try Reset instead.', 'error');
+  }
+},
+
+/**
  * Sync E2E keys from the server backup (called after password prompt or conflict detection).
  */
 async _syncE2EFromServer() {
