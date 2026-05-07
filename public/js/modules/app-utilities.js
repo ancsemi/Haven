@@ -102,7 +102,17 @@ _bumpPinIndicator(delta) {
 _wireBurnMessages(root) {
   if (!root) root = document.getElementById('messages');
   if (!root) return;
-  const rows = root.querySelectorAll('.message-burn-pending:not([data-burn-wired])');
+  // querySelectorAll only matches descendants - if `root` is itself a
+  // single newly-appended message (the common case from `_appendMessage`),
+  // its own `.message-burn-pending` class is never picked up. That meant
+  // for every burn DM the sender saw no flame indicator and the recipient
+  // never got the click-to-reveal button, so `mark-burning` never fired
+  // and the server sweep never had a `burning_started_at` to count from.
+  // Result: burn messages just sat there forever. Process the root too.
+  const rows = Array.from(root.querySelectorAll('.message-burn-pending:not([data-burn-wired])'));
+  if (root.classList && root.classList.contains('message-burn-pending') && !root.dataset.burnWired) {
+    rows.unshift(root);
+  }
   rows.forEach(el => {
     el.dataset.burnWired = '1';
     const burnSeconds = parseInt(el.dataset.burnSeconds) || 0;

@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.3] — 2026-05-07
+
+### Fixed
+- **#5325: Burn-after-read DMs never burned, and the sender saw no flame indicator on their own message.** `_wireBurnMessages` was being called with the freshly-appended message element as its `root`, then walking it with `querySelectorAll('.message-burn-pending:not([data-burn-wired])')`. `querySelectorAll` only matches *descendants* of the root, so the message element's own `.message-burn-pending` class was never picked up - sender got no flame label, recipient got no click-to-reveal button, and because the recipient never clicked anything, `mark-burning` never fired, `burning_started_at` was never stamped, and the server's burn sweep had nothing to count from. Burn DMs just sat in the channel forever. The wiring now treats the root element as a candidate too. (Note: a separate, deeper E2E key-sync issue can cause some DMs to render as `[Encrypted - unable to decrypt]` on devices that registered a fresh keypair after the message was sent. That is being tracked separately - the burn timer now fires regardless of whether the recipient can decrypt the plaintext.)
+- **#5347 follow-up: voice participant list still didn't refresh until full client reload.** The 3.14.1 fix addressed the rejoin-after-disconnect path, but the underlying roster-update gate was still wrong: `voice-users-update` only re-rendered when the event's `channelCode` matched `this.currentChannel` (the *text* channel currently being viewed). If a user was talking on voice channel B but had clicked over to read text in channel A, every subsequent join/leave on B was discarded by the client. Now also re-renders whenever the user is actually in voice on the channel, independent of which text channel they're viewing.
+
+---
+
 ## [3.14.2] — 2026-05-07
 
 ### Fixed

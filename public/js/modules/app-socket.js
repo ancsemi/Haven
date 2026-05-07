@@ -764,12 +764,22 @@ _setupSocketListeners() {
   });
 
   this.socket.on('voice-users-update', (data) => {
-    // Render voice panel unless the user opted to hide it
-    if (data.channelCode === this.currentChannel && localStorage.getItem('haven_hide_voice_panel') !== 'true') {
+    // (#5347 follow-up) Re-render the voice participant list whenever the
+    // user is either viewing the channel OR currently in voice on it.
+    // Previously the render only fired when `data.channelCode` matched
+    // `this.currentChannel` (the *text* channel being viewed). If you were
+    // talking on channel B but had clicked over to read text channel A,
+    // every subsequent join/leave on B was discarded - so users in the
+    // call literally couldn't see anyone who joined after them until they
+    // hard-refreshed the client. Now we also render when we're actually
+    // in voice on that channel, regardless of which text channel is open.
+    const isViewing = data.channelCode === this.currentChannel;
+    const isInVoice = !!(this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode);
+    if ((isViewing || isInVoice) && localStorage.getItem('haven_hide_voice_panel') !== 'true') {
       this._renderVoiceUsers(data.users);
     }
     // Keep voice bar up to date
-    if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode) {
+    if (isInVoice) {
       this._updateVoiceBar();
     }
   });
