@@ -8486,11 +8486,12 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .message-header .e2e-tag {
   margin-left: auto;
 }
-/* In compact messages, position lock absolutely on the far right */
+/* In compact messages, position lock absolutely on the far right, vertically centred */
 .message-compact > .e2e-tag {
   position: absolute;
   right: 8px;
-  top: 2px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .message-header-spacer {
   flex: 1 1 0;
@@ -13947,13 +13948,9 @@ ul.chat-list { list-style-type: disc; }
   user-select: none;
   line-height: 1;
 }
-/* When both burn flame and e2e lock are present, nudge the lock left so
-   they sit side-by-side instead of stacking on top of each other. */
-.message-compact.message-burn-pending > .e2e-tag {
-  right: 22px;
-  top: 50%;
-  transform: translateY(-50%);
-}
+/* When both burn flame and e2e lock are present the flame is shifted left
+   via inline style in _wireBurnMessages (label.style.right = '24px') so
+   the LOCK stays at right:8px in every row — no horizontal jumping. */
 .burn-reveal-btn {
   background: rgba(255, 107, 53, 0.12);
   color: #ff6b35;

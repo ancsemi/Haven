@@ -136,6 +136,13 @@ _wireBurnMessages(root) {
       } else {
         const msgBody = el.querySelector('.message-body');
         if (msgBody) msgBody.after(label);
+        // The e2e lock (e2e-tag) is always at right:8px. If a lock is
+        // also present, shift the flame left so the lock column stays
+        // consistent across ALL rows — the only thing that should move
+        // is the flame, not the lock.
+        if (el.querySelector('.e2e-tag')) {
+          label.style.right = '24px';
+        }
       }
     }
     if (startedAt) {
