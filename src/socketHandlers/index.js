@@ -302,6 +302,17 @@ function setupSocketHandlers(io, db) {
     }
 
     channels.forEach(ch => {
+      // DM channels route by code internally but the code is a pure implementation
+      // detail. Never expose it as a copyable value — strip all code-related fields
+      // so no client surface can accidentally reveal or share it.
+      if (ch.is_dm) {
+        ch.display_code = null;
+        delete ch.code_visibility;
+        delete ch.code_mode;
+        delete ch.code_rotation_type;
+        delete ch.code_rotation_interval;
+        return;
+      }
       if (isAdmin) {
         ch.display_code = ch.code;
       } else if (ch.code_visibility === 'private' || ch.is_private) {

@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.6] — 2026-05-07
+
+### Changed
+- **DM channel codes are no longer exposed on the client.** DMs are implemented as special channels internally and have always carried a routing code, but that code is a pure implementation detail with no user-facing meaning. The server now strips `display_code`, `code_visibility`, `code_mode`, `code_rotation_type`, and `code_rotation_interval` from every DM channel object before sending it to clients. The `Copy DM Link` option has been removed from the DM right-click context menu, and the copy-link button is no longer rendered in the message toolbar inside DMs. The code still exists in the DB and is used by the server for socket-room routing; clients just no longer have access to a copyable version of it.
+
+---
+
 ## [3.14.5] — 2026-05-07
 
 ### Security

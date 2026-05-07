@@ -516,14 +516,6 @@ _initDmContextMenu() {
     localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
   });
 
-  // Copy DM link
-  document.querySelector('[data-action="dm-copy-link"]')?.addEventListener('click', () => {
-    const code = this._dmCtxMenuCode;
-    if (!code) return;
-    this._closeDmCtxMenu();
-    this._copyChannelLink(code);
-  });
-
   // Delete DM
   document.querySelector('[data-action="dm-delete"]')?.addEventListener('click', async () => {
     const code = this._dmCtxMenuCode;

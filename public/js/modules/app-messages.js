@@ -627,7 +627,8 @@ _createMessageEl(msg, prevMsg) {
     // no entry point. Server-side `send-thread-message` and `get-thread-messages`
     // also reject DM channels as a defence in depth.
     ...(isDmContext ? [] : [{ key: 'thread', html: `<button data-action="thread" title="Thread">${iThread}</button>` }]),
-    { key: 'copy-link', html: `<button data-action="copy-link" title="${t('msg_toolbar.copy_link') || 'Copy link to message'}">${iLink}</button>` }
+    // Message links contain the DM channel code - never expose them in DM context.
+    ...(isDmContext ? [] : [{ key: 'copy-link', html: `<button data-action="copy-link" title="${t('msg_toolbar.copy_link') || 'Copy link to message'}">${iLink}</button>` }])
   ];
   const canPin = this.user.isAdmin || this._canModerate();
   const canArchive = this.user.isAdmin || this._hasPerm('archive_messages');
