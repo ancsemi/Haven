@@ -270,6 +270,8 @@ module.exports = function register(socket, ctx) {
     if (channel.is_dm) {
       return socket.emit('error-msg', 'Invalid channel code — double-check it');
     }
+
+    const membership = db.prepare(
       'SELECT * FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
 
