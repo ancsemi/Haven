@@ -8482,16 +8482,19 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   user-select: none;
   flex-shrink: 0;
 }
-/* In the header row (full messages), push the lock to the far right */
-.message-header .e2e-tag {
-  margin-left: auto;
+.message-inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
 }
-/* In compact messages, position lock absolutely on the far right, vertically centred */
-.message-compact > .e2e-tag {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+.message-header .message-inline-status {
+  margin-left: 0;
+}
+.message-inline-status .e2e-tag {
+  margin-left: 0;
 }
 .message-header-spacer {
   flex: 1 1 0;
@@ -13928,29 +13931,20 @@ ul.chat-list { list-style-type: disc; }
   cursor: default;
   vertical-align: middle;
 }
+.message-inline-status .burn-pending-label {
+  margin-left: 0;
+}
 .message-burn-pending .message-header .burn-pending-label {
   color: #ff6b35;
 }
-/* Compact messages: flame is a direct child of .message-compact, positioned
-   absolutely on the right — mirrors the .e2e-tag pattern exactly. Vertical
-   center via top:50% + transform so it lines up with the message text
-   regardless of font-size, instead of sticking to the top edge. */
-.message-compact > .burn-pending-label {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
+.message-inline-status .burn-pending-label {
   color: #ff6b35;
+  font-size: 12px;
   opacity: 0.85;
-  margin-left: 0;
   cursor: default;
   user-select: none;
   line-height: 1;
 }
-/* When both burn flame and e2e lock are present the flame is shifted left
-   via inline style in _wireBurnMessages (label.style.right = '24px') so
-   the LOCK stays at right:8px in every row — no horizontal jumping. */
 .burn-reveal-btn {
   background: rgba(255, 107, 53, 0.12);
   color: #ff6b35;

@@ -606,6 +606,8 @@ _createMessageEl(msg, prevMsg) {
   const pinnedTag = msg.pinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const archivedTag = msg.is_archived ? `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>` : '';
   const e2eTag = msg._e2e ? `<span class="e2e-tag" title="${t('app.messages.e2e_encrypted')}">🔒</span>` : '';
+  const needsStatusSlot = !!e2eTag || !!(msg.burn_seconds && msg.burn_seconds > 0);
+  const statusSlotHtml = needsStatusSlot ? `<span class="message-inline-status">${e2eTag}</span>` : '';
 
   const iconPair = (emoji, monoSvg) => `<span class="tb-icon tb-icon-emoji" aria-hidden="true">${emoji}</span><span class="tb-icon tb-icon-mono" aria-hidden="true">${monoSvg}</span>`;
   const iReact = iconPair('😀', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-width="1.8"></circle><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke-width="1.8" stroke-linecap="round"></path><circle cx="9.2" cy="10.2" r="1" fill="currentColor" stroke="none"></circle><circle cx="14.8" cy="10.2" r="1" fill="currentColor" stroke="none"></circle></svg>');
@@ -715,12 +717,11 @@ _createMessageEl(msg, prevMsg) {
     el.innerHTML = `
       <span class="compact-time">${new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
       <div class="message-body">
-        <div class="message-content">${pinnedTag}${archivedTag}${this._formatContent(msg.content)}${editedHtml}</div>
+        <div class="message-content">${pinnedTag}${archivedTag}${this._formatContent(msg.content)}${editedHtml}${statusSlotHtml}</div>
         ${pollHtml}
         ${reactionsHtml}
         ${threadHtml}
       </div>
-      ${e2eTag}
       ${toolbarHtml}
       <button class="msg-dots-btn" aria-label="${t('app.actions.message_actions')}">⋯</button>
     `;
@@ -816,8 +817,8 @@ _createMessageEl(msg, prevMsg) {
           <span class="message-time">${this._formatTime(msg.created_at)}</span>
           ${pinnedTag}
           ${archivedTag}
+          ${statusSlotHtml}
           <span class="message-header-spacer"></span>
-          ${e2eTag}
         </div>
         <div class="message-content">${this._formatContent(msg.content)}${editedHtml}</div>
         ${pollHtml}
@@ -851,6 +852,8 @@ _promoteCompactToFull(compactEl) {
   const reactionsHtml = reactionsEl ? reactionsEl.outerHTML : '';
   const pinnedTag = isPinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const e2eTag = compactEl.dataset.e2e === '1' ? `<span class="e2e-tag" title="${t('app.messages.e2e_encrypted')}">🔒</span>` : '';
+  const needsStatusSlot = !!e2eTag || compactEl.classList.contains('message-burn-pending');
+  const statusSlotHtml = needsStatusSlot ? `<span class="message-inline-status">${e2eTag}</span>` : '';
 
   const color = this._getUserColor(username);
   const initial = username.charAt(0).toUpperCase();
@@ -901,8 +904,8 @@ _promoteCompactToFull(compactEl) {
           ${msgRoleBadge}
           <span class="message-time">${this._formatTime(time)}</span>
           ${pinnedTag}
+          ${statusSlotHtml}
           <span class="message-header-spacer"></span>
-          ${e2eTag}
         </div>
         <div class="message-content">${contentHtml}</div>
         ${reactionsHtml}

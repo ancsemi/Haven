@@ -125,23 +125,19 @@ _wireBurnMessages(root) {
       label.className = 'burn-pending-label';
       label.title = `Self-destructs ${burnSeconds}s after the recipient views it`;
       label.textContent = '🔥';
-      // Full messages: append INSIDE .message-header (after the spacer) so
-      // the flame sits inline on the right of the author/timestamp row.
-      // Compact messages have no .message-header — insert label as a direct
-      // child of .message-compact (sibling after .message-body), exactly
-      // like the e2e-tag, so CSS can position it absolutely on the right.
-      const msgHeader = el.querySelector('.message-header');
-      if (msgHeader) {
-        msgHeader.append(label);
+      // Attach burn status to the message's own inline status slot so the
+      // flame stays visually attached to that row instead of forming a
+      // shared gutter down the right side of the chat pane.
+      const statusSlot = el.querySelector('.message-inline-status');
+      if (statusSlot) {
+        statusSlot.append(label);
       } else {
-        const msgBody = el.querySelector('.message-body');
-        if (msgBody) msgBody.after(label);
-        // The e2e lock (e2e-tag) is always at right:8px. If a lock is
-        // also present, shift the flame left so the lock column stays
-        // consistent across ALL rows — the only thing that should move
-        // is the flame, not the lock.
-        if (el.querySelector('.e2e-tag')) {
-          label.style.right = '24px';
+        const msgHeader = el.querySelector('.message-header');
+        if (msgHeader) {
+          msgHeader.append(label);
+        } else {
+          const content = el.querySelector('.message-content');
+          if (content) content.append(label);
         }
       }
     }
