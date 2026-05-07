@@ -125,8 +125,9 @@ _wireBurnMessages(root) {
       label.className = 'burn-pending-label';
       label.title = `Self-destructs ${burnSeconds}s after the recipient views it`;
       label.textContent = '🔥';
-      const header = el.querySelector('.message-header');
-      if (header) header.appendChild(label);
+      // Full messages have .message-header; compact messages use .compact-time instead.
+      const header = el.querySelector('.message-header') || el.querySelector('.compact-time');
+      if (header) header.after(label);
     }
     if (startedAt) {
       this._startBurnCountdown(el, burnSeconds, startedAt);
