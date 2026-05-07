@@ -4792,6 +4792,11 @@ select.cfn-select.cfn-input {
   gap: 8px;
   padding: 12px 20px 16px;
   position: relative;
+  /* Above #fx-layers (z:99990) so theme particles/embers don't float over
+     the textarea, send button, and toolbar. The composer is a critical
+     interaction surface and must stay visually unobstructed. */
+  z-index: 99995;
+  background: var(--bg-secondary);
 }
 
 .message-input-area textarea {
@@ -5337,20 +5342,37 @@ select.cfn-select.cfn-input {
 
 .toast {
   padding: 10px 18px;
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
   color: var(--text-primary);
   font-size: 13px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
   animation: toastIn 0.25s ease, toastOut 0.3s ease 3.5s forwards;
   pointer-events: auto;
   max-width: 360px;
   word-break: break-word;
+  /* Force opaque background even when a translucent theme variable is in use
+     so toasts remain readable against the busy chat backdrop. */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.toast.error { border-color: var(--danger); background: rgba(240,71,71,0.15); }
-.toast.success { border-color: var(--success); background: rgba(67,181,129,0.15); }
+.toast.error {
+  border-color: var(--danger);
+  background: rgba(60, 18, 18, 0.96);
+  color: #ffd9d9;
+}
+.toast.success {
+  border-color: var(--success);
+  background: rgba(20, 50, 32, 0.96);
+  color: #d4ffe1;
+}
+.toast.info {
+  border-color: var(--accent);
+  background: rgba(20, 28, 44, 0.96);
+  color: #e6efff;
+}
 
 .toast-action-btn {
   flex-shrink: 0;
@@ -5536,9 +5558,16 @@ select.cfn-select.cfn-input {
 .manage-servers-modal-inner {
   width: 480px;
   max-width: 90vw;
+  /* Make the inner modal a column flex container so the list can grow
+     to fill the available vertical space when the user resizes the
+     modal taller. Without this the list was capped at max-height:360px
+     and any extra height left a giant empty band below the buttons. */
+  display: flex;
+  flex-direction: column;
 }
 .manage-servers-list {
-  max-height: 360px;
+  flex: 1 1 auto;
+  min-height: 120px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -5774,6 +5803,17 @@ select.cfn-select.cfn-input {
 .modal-flex-body > .organize-list,
 .modal-flex-body > .audit-log-list,
 .modal-flex-body > .modal-grow {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* When a modal uses .modal-flex directly (no .modal-flex-body wrapper),
+   designated child lists should still fill the available vertical space. */
+.modal.modal-flex > .manage-servers-list,
+.modal.modal-flex > .organize-list,
+.modal.modal-flex > .audit-log-list,
+.modal.modal-flex > .modal-grow {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
@@ -13875,14 +13915,15 @@ ul.chat-list { list-style-type: disc; }
 
 /* Burn-after-read message states */
 .message-burn-pending .message-content {
-  border-left: 2px solid rgba(255, 107, 53, 0.5);
-  padding-left: 8px;
+  /* No left border — the flame icon is the indicator. The orange bar
+     looked noisy and inconsistent across full vs compact rows. */
+  padding-left: 0;
 }
 /* Row-level flame label shown on all unstarted burn messages (#5280) */
 .burn-pending-label {
   font-size: 0.78em;
   margin-left: 6px;
-  opacity: 0.75;
+  opacity: 0.85;
   cursor: default;
   vertical-align: middle;
 }
@@ -13890,22 +13931,28 @@ ul.chat-list { list-style-type: disc; }
   color: #ff6b35;
 }
 /* Compact messages: flame is a direct child of .message-compact, positioned
-   absolutely on the right — mirrors the .e2e-tag pattern exactly. */
+   absolutely on the right — mirrors the .e2e-tag pattern exactly. Vertical
+   center via top:50% + transform so it lines up with the message text
+   regardless of font-size, instead of sticking to the top edge. */
 .message-compact > .burn-pending-label {
   position: absolute;
   right: 8px;
-  top: 2px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 12px;
   color: #ff6b35;
-  opacity: 0.75;
+  opacity: 0.85;
   margin-left: 0;
   cursor: default;
   user-select: none;
+  line-height: 1;
 }
 /* When both burn flame and e2e lock are present, nudge the lock left so
    they sit side-by-side instead of stacking on top of each other. */
 .message-compact.message-burn-pending > .e2e-tag {
   right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .burn-reveal-btn {
   background: rgba(255, 107, 53, 0.12);

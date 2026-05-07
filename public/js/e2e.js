@@ -579,33 +579,53 @@ class HavenE2E {
   /**
    * Sync keys from the server backup (clears local keys first).
    * Used when another device changed the key and this device needs to catch up.
+   *
+   * Returns an object: { ok, reason }.
+   *   reason values: 'synced' | 'no-backup' | 'bad-password' | 'network' | 'error'
+   * Legacy callers that did `if (await syncFromServer(...))` still work because
+   * the returned object is truthy; callers that want richer feedback can read .ok.
    */
   async syncFromServer(socket, wrappingKey) {
-    if (!wrappingKey) return false;
+    if (!wrappingKey) return { ok: false, reason: 'bad-password' };
     try {
       await this._openDB();
-      // Clear stale local keys before restoring
-      await this._clearLocal();
-      this._keyPair = null;
-      this._publicKeyJwk = null;
-      this._sharedKeys = {};
 
-      const backup = await this._fetchBackup(socket);
-      if (!backup) {
-        console.warn('[E2E] No server backup to sync from');
-        return false;
+      // Probe state FIRST before clearing local keys — if the server is
+      // unreachable or returns 'unknown', we must NOT wipe a working local
+      // keypair. Old behaviour cleared local first, then tried to fetch,
+      // which left the user keyless on flaky networks.
+      const probe = await this._fetchBackupWithState(socket);
+      if (probe.status === 'unknown') {
+        return { ok: false, reason: 'network' };
+      }
+      if (probe.status === 'none') {
+        return { ok: false, reason: 'no-backup' };
       }
 
-      const jwk = await this._unwrap(wrappingKey, backup.encryptedKey, backup.salt);
+      let jwk;
+      try {
+        jwk = await this._unwrap(wrappingKey, probe.data.encryptedKey, probe.data.salt);
+      } catch (unwrapErr) {
+        // AES-GCM auth tag failure — wrapping key (password-derived) is wrong.
+        // Do NOT clear local keys: the user might still have a usable keypair
+        // from a previous session. The original bug here treated this as
+        // 'no backup' which prompted the user to Reset and lose all DMs.
+        console.warn('[E2E] Unwrap failed — password mismatch:', unwrapErr.message);
+        return { ok: false, reason: 'bad-password' };
+      }
+
+      // Unwrap succeeded — NOW it's safe to swap the local keypair.
+      await this._clearLocal();
+      this._sharedKeys = {};
       this._keyPair = await this._importPair(jwk);
       await this._saveLocal(this._keyPair);
       this._publicKeyJwk = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
       this._ready = true;
       console.log('[E2E] Synced keys from server backup');
-      return true;
+      return { ok: true, reason: 'synced' };
     } catch (err) {
       console.warn('[E2E] Sync from server failed:', err.message);
-      return false;
+      return { ok: false, reason: 'error' };
     }
   }
 

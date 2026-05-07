@@ -669,7 +669,7 @@ async _e2eSetupListeners() {
     const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
     if (wrappingKey) {
       const synced = await this.e2e.syncFromServer(this.socket, wrappingKey);
-      if (synced) {
+      if (synced.ok) {
         // After sync, re-publish: the key now matches the server backup,
         // so the server should accept it. Use force=true to handle the edge case
         // where the public_key column differs from the encrypted backup.
@@ -680,7 +680,7 @@ async _e2eSetupListeners() {
         if (_syncCh && _syncCh.is_dm) await this._fetchDMPartnerKey(_syncCh);
         this._showToast('Encryption keys synced from another device', 'success');
       } else {
-        this._showToast('Could not sync encryption keys — try re-entering your password', 'error');
+        this._showToast(this._e2eSyncErrorMessage(synced.reason), 'error', null, 8000);
       }
     } else {
       // No wrapping key — need password
@@ -726,7 +726,7 @@ async _e2eSetupListeners() {
     const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
     if (wrappingKey && this.e2e) {
       const synced = await this.e2e.syncFromServer(this.socket, wrappingKey);
-      if (synced) {
+      if (synced.ok) {
         await this.e2e.publishKey(this.socket);
         this._dmPublicKeys = {};
         this._showToast('Encryption keys synced', 'success');
@@ -790,7 +790,7 @@ async _recoverE2EFromBackup() {
   this._showToast('Recovering encryption keys from backup...', 'info');
 
   const synced = await this.e2e.syncFromServer(this.socket, wrappingKey);
-  if (synced) {
+  if (synced.ok) {
     await this.e2e.publishKey(this.socket);
     this._dmPublicKeys = {};
     this._appendE2ENotice(`\ud83d\udd04 Encryption keys recovered from backup \u2014 ${new Date().toLocaleString()}.`);
@@ -814,7 +814,27 @@ async _recoverE2EFromBackup() {
       this.socket.emit('get-messages', { code: this.currentChannel });
     }
   } else {
-    this._showToast('Recovery failed \u2014 no server backup found or password mismatch. If you have never logged in with a password on this server, try Reset instead.', 'error');
+    this._showToast(this._e2eSyncErrorMessage(synced.reason), 'error', null, 10000);
+  }
+},
+
+/**
+ * Build a user-facing error message for a syncFromServer failure reason.
+ * Critical: never advise Reset for 'bad-password' or 'network' — that destroys DMs.
+ */
+_e2eSyncErrorMessage(reason) {
+  switch (reason) {
+    case 'no-backup':
+      return 'No encrypted key backup exists on the server for this account yet. If this is a brand-new account, send a DM to create one. Do NOT reset unless you are certain — reset destroys all existing encrypted DMs.';
+    case 'bad-password':
+      return 'Backup could not be decrypted. The server backup was encrypted with a different password than the one in use now. Do NOT reset — that destroys all existing DMs. Try logging out and back in with the original account password, or contact support.';
+    case 'network':
+      return 'Could not reach the server to fetch the encrypted backup. Check your connection and try again.';
+    case 'no_wrapping_key':
+    case 'bad-password-empty':
+      return 'No password available for decryption. Re-enter your password and try again.';
+    default:
+      return 'Recovery failed due to an unexpected error. Check the console for details. Do NOT reset unless you have no encrypted DMs to preserve.';
   }
 },
 
@@ -826,7 +846,7 @@ async _syncE2EFromServer() {
   if (!wrappingKey || !this.e2e) return;
 
   const synced = await this.e2e.syncFromServer(this.socket, wrappingKey);
-  if (synced) {
+  if (synced.ok) {
     await this.e2e.publishKey(this.socket);
     this._dmPublicKeys = {};
     this._showToast('Encryption keys synced from another device', 'success');
@@ -845,7 +865,7 @@ async _syncE2EFromServer() {
       this.socket.emit('get-messages', { code: this.currentChannel });
     }
   } else {
-    this._showToast('Key sync failed — encryption may not work correctly', 'error');
+    this._showToast(this._e2eSyncErrorMessage(synced.reason), 'error', null, 8000);
   }
 },
 

@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.10] — 2026-05-07
+
+- **E2E recovery error messaging overhaul.** `e2e.syncFromServer()` now returns `{ ok, reason }` instead of a bare boolean, distinguishing `no-backup`, `bad-password`, `network`, and `error` cases. The "Recover Keys from Backup" toast now tells the user *exactly* what failed and — critically — **never** advises Reset for `bad-password` or `network` failures (Reset destroys all encrypted DMs). Previously a transient network blip or stale `wrappingKey` would surface as "no server backup found or password mismatch — try Reset instead", luring users into permanent data loss. All four `syncFromServer` callers in `app-platform.js` updated to consume the new structured result.
+- **Recovery toast no longer disappears in 3 seconds.** Error toasts from the recovery flow now stay 8–10 s and use the standard opaque toast background (was 15 % opaque, essentially unreadable against animated theme backgrounds).
+- **Composer no longer hides behind theme particle effects.** `.message-input-area` (input, toolbar, send button) given an explicit `z-index` above the `#fx-layers` overlay so gold-particle / snow / RGB themes don't render *over* the typing area.
+- **Burn-after-read indicator cleanup.** Removed the orange vertical `border-left` line on burn-pending message bodies (it looked like a quote bar). The compact-mode flame icon is now vertically centered (was top-aligned to line 1) so it lines up with single-line messages and stays consistent with full-mode placement.
+- **Manage Servers modal now fills its height when resized.** Added `.modal-flex` to the modal and a CSS rule so `.manage-servers-list` participates in the flex column layout. Dragging the bottom-right resize handle taller no longer leaves a giant empty band below the server rows.
+
+---
+
 ## [3.14.6] — 2026-05-07
 
 ### Changed
