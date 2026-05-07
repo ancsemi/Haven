@@ -130,7 +130,9 @@
       "emoji_btn": "Emoji",
       "gif_btn": "Szukaj GIF-ów",
       "gif_label": "GIF",
-      "poll_btn": "Utwórz ankietę"
+      "poll_btn": "Utwórz ankietę",
+      "burn_btn": "Zniszcz po przeczytaniu (tylko DM)",
+      "burn_btn_armed": "Zniszczenie po przeczytaniu aktywne — następna wiadomość usunie się 30s po obejrzeniu"
     },
     "profile": {
       "login_username": "Twoja nazwa użytkownika",
@@ -193,7 +195,9 @@
     "no_results_for": "Brak wyników dla \"{{query}}\"",
     "loading_more": "Ładowanie więcej…",
     "no_music_playing": "Żadna muzyka nie gra",
-    "record_set": "{{user}} pobił rekord w {{game}}: {{score}}!"
+    "record_set": "{{user}} pobił rekord w {{game}}: {{score}}!",
+    "burn_armed": "🔥 Zniszczenie po przeczytaniu aktywne — następna wiadomość usunie się 30s po obejrzeniu",
+    "burn_disarmed": "Zniszczenie po przeczytaniu wyłączone"
   },
   "utils": {
     "today_at": "Dzisiaj o {{time}}",
@@ -268,6 +272,7 @@
   "channels": {
     "status_none": "Brak",
     "dm_status": "DM: {{name}}",
+    "dm_cleanup_notice": "Wiadomości starsze niż {{days}} dni są automatycznie usuwane.",
     "topic_edit_hint": "Kliknij, aby edytować temat",
     "topic_placeholder": "Kliknij, aby ustawić temat...",
     "topic_modal_title": "Temat kanału",
@@ -386,7 +391,8 @@
     "manage_server": "Zarządzaj serwerem",
     "delete_channel": "Usuń kanały",
     "read_only_override": "Nadpisanie trybu tylko do odczytu",
-    "view_audit_log": "Przeglądaj dziennik serwera"
+    "view_audit_log": "Przeglądaj dziennik serwera",
+    "manage_stickers": "Zarządzaj naklejkami"
   },
   "slowmode": {
     "wait": "Tryb wolny — poczekaj {{seconds}}s przed wysłaniem kolejnej wiadomości",
@@ -639,6 +645,7 @@
       "shortcuts": "Skróty",
       "desktop_app": "Aplikacja desktopowa",
       "admin_group": "Administrator",
+      "server_updates": "Aktualizacje serwera",
       "branding": "Identyfikacja wizualna",
       "members": "Członkowie",
       "whitelist": "Lista dozwolonych",
@@ -1012,7 +1019,10 @@
         "reapply_access": "Ponownie zastosuj dostęp dla wszystkich użytkowników",
         "permissions": "Uprawnienia",
         "delete": "Usuń"
-      }
+      },
+      "stickers_title": "Naklejki",
+      "stickers_hint": "Prześlij obrazy naklejek pogrupowane w zestawy",
+      "manage_stickers_btn": "Zarządzaj naklejkami"
     }
   },
   "modals": {
@@ -1485,6 +1495,14 @@
       "desc": "Wybierz kanał docelowy",
       "move_one": "Przenieś {{n}} wiadomość do:",
       "move_many": "Przenieś {{n}} wiadomości do:"
+    },
+    "sticker_mgmt": {
+      "title": "Zarządzanie naklejkami",
+      "upload_hint": "Prześlij obrazy naklejek (maks. 1 MB, png/gif/webp). Grupuj naklejki w zestawy, nadając tę samą nazwę zestawu. Nazwa naklejki musi być małymi literami, bez spacji.",
+      "name_placeholder": "nazwa_naklejki (opcjonalnie)",
+      "pack_placeholder": "Nazwa zestawu (opcjonalnie)",
+      "upload_btn": "Prześlij",
+      "no_stickers": "Brak przesłanych naklejek"
     }
   },
   "context_menu": {
@@ -1594,7 +1612,11 @@
       "objects": "Przedmioty",
       "symbols": "Symbole",
       "custom": "Niestandardowe"
-    }
+    },
+    "section_emoji": "Emoji",
+    "section_sticker": "Naklejki",
+    "sticker_search_placeholder": "Szukaj naklejek",
+    "no_stickers": "Brak naklejek — administrator może je przesłać z panelu Zarządzaj naklejkami"
   },
   "gifs": {
     "searching": "Wyszukiwanie...",
@@ -1615,5 +1637,9 @@
       "unavailable_title": "Wyszukiwanie GIF-ów niedostępne",
       "unavailable_desc": "Administrator musi skonfigurować klucz API GIPHY, zanim wyszukiwanie GIF-ów będzie działać."
     }
+  },
+  "messages": {
+    "burn_reveal": "Dotknij, aby wyświetlić",
+    "burn_done": "Wiadomość zniszczona"
   }
 }

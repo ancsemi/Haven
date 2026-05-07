@@ -215,6 +215,7 @@ Haven supports multiple languages. Users can switch languages from **Settings �
 | Français | `fr` | 🟡 AI-generated, needs review |
 | Deutsch | `de` | 🟡 AI-generated, needs review |
 | Español | `es` | 🟡 AI-generated, needs review |
+| Polski | `pl` | 🟢 Human-translated |
 | Русский | `ru` | 🟡 AI-generated, needs review |
 | 中文 | `zh` | 🟡 AI-generated, needs review |
 
