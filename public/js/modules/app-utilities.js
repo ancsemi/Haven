@@ -2443,6 +2443,9 @@ _appendDMPiPMessage(msg) {
   if (msg && msg.id && list.querySelector(`[data-msg-id="${msg.id}"]`)) return;
   const ph = list.querySelector('.dm-pip-loading');
   if (ph) ph.remove();
+  // Tag this render so `_createMessageEl` knows to suppress thread UI -
+  // threads are not available in DMs.
+  if (msg) msg._isDmRender = true;
   // Use the previous message in the PiP list as the "prev" reference so
   // grouping into compact messages still works.
   let prevMsg = null;
@@ -2469,6 +2472,7 @@ _renderDMPiPHistory(messages) {
   if (!list) return;
   list.innerHTML = '';
   (messages || []).forEach((m, i) => {
+    if (m) m._isDmRender = true;
     const prev = i > 0 ? messages[i - 1] : null;
     const el = this._createMessageEl(m, prev);
     list.appendChild(el);

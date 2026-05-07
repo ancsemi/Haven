@@ -86,8 +86,18 @@ _showUserGearMenu(anchorEl, userId, username) {
   const canPromote = this._hasPerm('promote_user');
   const isAdmin = this.user.isAdmin;
 
+  // Mirror of the right-click context menu's invite filter: any non-DM,
+  // non-private channel the user can see (admins also see private channels).
+  // Showing the entry only when there's at least one channel available.
+  const inviteChannels = (this.channels || []).filter(ch =>
+    !ch.is_dm && ch.name && !ch.parent_channel_id &&
+    ((!ch.is_private && ch.code_visibility !== 'private') || isAdmin)
+  );
+  const canInvite = inviteChannels.length > 0 && userId !== this.user?.id;
+
   let items = '';
   if (canPromote) items += `<button class="gear-menu-item" data-action="assign-role">👑 ${t('users.gear_menu.assign_role')}</button>`;
+  if (canInvite) items += `<button class="gear-menu-item" data-action="add-to-channel">➕ ${t('users.gear_menu.add_to_channel')}</button>`;
   if (canMod) items += `<button class="gear-menu-item" data-action="kick">👢 ${t('users.gear_menu.kick')}</button>`;
   if (canMod) items += `<button class="gear-menu-item" data-action="mute">🔇 ${t('users.gear_menu.mute')}</button>`;
   if (isAdmin) items += `<button class="gear-menu-item gear-menu-danger" data-action="ban">⛔ ${t('users.gear_menu.ban')}</button>`;
@@ -121,6 +131,8 @@ _showUserGearMenu(anchorEl, userId, username) {
       this._closeProfilePopup();
       if (action === 'assign-role') {
         this._openRoleAssignCenter(userId);
+      } else if (action === 'add-to-channel') {
+        this._openGearMenuChannelPicker(userId, username, inviteChannels);
       } else if (action === 'transfer-admin') {
         this._confirmTransferAdmin(userId, username);
       } else {
@@ -145,6 +157,52 @@ _closeUserGearMenu() {
     document.removeEventListener('click', this._gearMenuOutsideHandler, true);
     this._gearMenuOutsideHandler = null;
   }
+},
+
+// Lightweight channel picker for the user gear menu's "Add to Channel"
+// action. Lists every non-DM, non-private top-level channel the caller can
+// see (admins also see private). Server's `invite-to-channel` handler
+// validates membership/permissions and rejects already-members with a
+// toast, so no need to pre-filter by target's current memberships here.
+_openGearMenuChannelPicker(userId, username, channels) {
+  if (!channels || channels.length === 0) {
+    this._showToast?.('No channels available to invite to', 'info');
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay aml-channel-picker-overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '100002';
+  overlay.innerHTML = `
+    <div class="modal aml-ch-picker">
+      <div class="aml-ch-picker-header">
+        <h4 class="aml-ch-picker-title">Add ${this._escapeHtml(username)} to channel</h4>
+      </div>
+      <div class="aml-channel-list">
+        ${channels.map(c => `
+          <button class="aml-channel-row gm-add-ch-btn" data-cid="${c.id}" data-cname="${this._escapeHtml(c.name)}">
+            <span class="aml-ch-hash">#</span>
+            <span class="aml-ch-name">${this._escapeHtml(c.name)}</span>
+          </button>
+        `).join('')}
+      </div>
+      <div class="modal-actions aml-ch-picker-actions">
+        <button class="btn-sm aml-ch-cancel">${t('modals.common.cancel')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('.aml-ch-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelectorAll('.gm-add-ch-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const channelId = parseInt(btn.dataset.cid);
+      if (!channelId) return;
+      this.socket.emit('invite-to-channel', { targetUserId: userId, channelId });
+      close();
+    });
+  });
 },
 
 _renderUserItem(u, scoreLookup) {

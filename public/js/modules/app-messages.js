@@ -589,6 +589,11 @@ _createMessageEl(msg, prevMsg) {
   const isImage = this._isImageUrl(msg.content);
   const curCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
   const isAnnouncement = curCh && curCh.notification_type === 'announcement';
+  // Threads were intentionally removed from DMs entirely. The PiP appenders
+  // mark their messages with `_isDmRender`; main-pane DM views are caught by
+  // `curCh.is_dm`. Either signal suppresses the thread button + preview so
+  // there is no entry point left in any DM surface.
+  const isDmContext = !!(msg && msg._isDmRender) || !!(curCh && curCh.is_dm);
   const isCompact = prevMsg &&
     prevMsg.user_id === msg.user_id &&
     !msg.reply_to &&
@@ -596,7 +601,7 @@ _createMessageEl(msg, prevMsg) {
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
-  const threadHtml = msg.thread ? this._renderThreadPreview(msg.id, msg.thread) : '';
+  const threadHtml = (msg.thread && !isDmContext) ? this._renderThreadPreview(msg.id, msg.thread) : '';
   const editedHtml = msg.edited_at ? `<span class="edited-tag" title="${t('app.messages.edited_at', { date: new Date(msg.edited_at).toLocaleString() })}">${t('app.messages.edited')}</span>` : '';
   const pinnedTag = msg.pinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const archivedTag = msg.is_archived ? `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>` : '';
@@ -618,7 +623,10 @@ _createMessageEl(msg, prevMsg) {
     { key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` },
     { key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` },
     { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` },
-    { key: 'thread', html: `<button data-action="thread" title="Thread">${iThread}</button>` },
+    // Threads are not available in DMs - omit the button entirely so there is
+    // no entry point. Server-side `send-thread-message` and `get-thread-messages`
+    // also reject DM channels as a defence in depth.
+    ...(isDmContext ? [] : [{ key: 'thread', html: `<button data-action="thread" title="Thread">${iThread}</button>` }]),
     { key: 'copy-link', html: `<button data-action="copy-link" title="${t('msg_toolbar.copy_link') || 'Copy link to message'}">${iLink}</button>` }
   ];
   const canPin = this.user.isAdmin || this._canModerate();

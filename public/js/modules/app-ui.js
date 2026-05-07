@@ -1748,11 +1748,10 @@ _setupUI() {
         } else if (action === 'copy-link') {
           this._copyChannelLink?.(this._activeDMPip, msgId);
         } else if (action === 'thread') {
-          // Threads aren't supported inside the PiP — escalate to full pane.
-          const code = this._activeDMPip;
-          this._closeDMPiP?.();
-          if (code) this.switchChannel(code);
-          this._openThread?.(msgId);
+          // Threads are not available in DMs - swallow the click. The button
+          // should already be filtered out at render time, this is defence
+          // in depth in case an old cached element is still around.
+          this._showToast?.('Threads are not available in DMs', 'info');
         }
         return;
       }
@@ -2103,6 +2102,12 @@ _setupUI() {
     } else if (action === 'reply') {
       this._setReply(msgEl, msgId);
     } else if (action === 'thread') {
+      // Threads are not available in DMs.
+      const curCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+      if (curCh && curCh.is_dm) {
+        this._showToast?.('Threads are not available in DMs', 'info');
+        return;
+      }
       this._openThread(msgId);
     } else if (action === 'quote') {
       this._quoteMessage(msgEl);

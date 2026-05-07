@@ -1306,9 +1306,10 @@ module.exports = function register(socket, ctx) {
     // switches, and a stale currentChannel would silently empty the thread
     // (issue: web users seeing 28 replies but no messages, mobile fine).
     const parentRow = db.prepare(
-      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
+      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code, c.is_dm as is_dm,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
     ).get(parentId);
     if (!parentRow) return;
+    if (parentRow.is_dm) return; // Threads are not available in DMs
     const channel = { id: parentRow.channel_id };
     const parent = parentRow;
 
@@ -1388,6 +1389,7 @@ module.exports = function register(socket, ctx) {
       'SELECT m.id, m.thread_id, m.channel_id, c.code as code, c.is_dm FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
     ).get(parentId);
     if (!parent || parent.thread_id) return; // Can't create sub-threads
+    if (parent.is_dm) return socket.emit('error-msg', 'Threads are not available in DMs');
     const code = parent.code;
     const channel = { id: parent.channel_id, is_dm: parent.is_dm };
 

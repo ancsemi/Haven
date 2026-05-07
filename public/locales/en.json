@@ -558,6 +558,7 @@
     "bio_placeholder": "Tell people about yourself…",
     "gear_menu": {
       "assign_role": "Assign Role",
+      "add_to_channel": "Add to Channel",
       "kick": "Kick",
       "mute": "Mute",
       "ban": "Ban",

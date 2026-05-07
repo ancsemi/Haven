@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.4] — 2026-05-07
+
+### Fixed
+- **Threads were still reachable inside DMs.** A previous attempt at removing them only unhooked the PiP code path (and even that broke - clicking Thread in a PiP DM dumped the user into the fullscreen pane, where the thread button was still wired). Threads are now removed from DMs at every layer: the message toolbar omits the thread button when the surrounding channel is a DM (PiP renders are tagged via `_isDmRender`), the existing thread preview block is suppressed on DM messages, the main-pane click handler bails out with a toast for DM channels, the PiP click handler no longer escalates to fullscreen, and the server's `send-thread-message` and `get-thread-messages` socket handlers reject any message whose channel has `is_dm = 1`. Threads remain available in regular channels and sub-channels exactly as before.
+
+### Added
+- **`Add to Channel` in the user gear menu.** The right-click context menu has had an `Invite to Channel` submenu for a while, but the gear menu (`Assign Role` / `Kick` / `Mute` / `Ban` / `Delete User` / `Transfer Admin`) didn't surface the same action. Added an `➕ Add to Channel` entry that mirrors the context menu's filter (any non-DM, non-private channel the caller can see; admins also see private channels) and opens a lightweight one-click picker. Server-side `invite-to-channel` permission gating is unchanged - the picker is purely an additional surface for an action that was already supported.
+
+---
+
 ## [3.14.3] — 2026-05-07
 
 ### Fixed
