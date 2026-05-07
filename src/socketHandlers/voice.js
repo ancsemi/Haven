@@ -525,22 +525,61 @@ module.exports = function register(socket, ctx) {
     }
 
     if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
+
+    // CRITICAL: if this user already has an entry from a previous (now-stale)
+    // socket, fully clean it up via handleVoiceLeave so other peers in the
+    // room receive `voice-user-left` and tear down their stale
+    // RTCPeerConnection. Without this, the rejoiner's fresh offer is applied
+    // on top of a dead connection on every other client and audio never
+    // recovers — exactly the "rejoined but can't hear each other" pattern
+    // reported in #5347.
+    let preservedMute = false;
+    let preservedDeafen = false;
+    const existingEntry = voiceUsers.get(code).get(socket.user.id);
+    if (existingEntry) {
+      preservedMute = !!existingEntry.isMuted;
+      preservedDeafen = !!existingEntry.isDeafened;
+      if (existingEntry.socketId !== socket.id) {
+        const oldSocket = io.sockets.sockets.get(existingEntry.socketId);
+        if (oldSocket) {
+          handleVoiceLeave(oldSocket, code);
+        } else {
+          // Stale entry — old socket already gone, just drop the map entry
+          // so the broadcasted voice-user-left below can fire.
+          voiceUsers.get(code).delete(socket.user.id);
+          for (const [, u] of voiceUsers.get(code)) {
+            io.to(u.socketId).emit('voice-user-left', {
+              channelCode: code,
+              user: { id: socket.user.id, username: socket.user.displayName }
+            });
+          }
+        }
+        // handleVoiceLeave may have removed the room map entirely (if the
+        // user was the only one in voice). Recreate it so we can re-add.
+        if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
+      }
+    }
+
     socket.join(`voice:${code}`);
 
     voiceUsers.get(code).set(socket.user.id, {
       id: socket.user.id,
       username: socket.user.displayName,
       socketId: socket.id,
-      isMuted: false,
-      isDeafened: false
+      isMuted: preservedMute,
+      isDeafened: preservedDeafen
     });
+
+    voiceLastActivity.set(socket.user.id, Date.now());
 
     const existingUsers = Array.from(voiceUsers.get(code).values())
       .filter(u => u.id !== socket.user.id);
 
+    const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
     socket.emit('voice-existing-users', {
       channelCode: code,
-      users: existingUsers.map(u => ({ id: u.id, username: u.username }))
+      users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+      voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
     });
 
     existingUsers.forEach(u => {

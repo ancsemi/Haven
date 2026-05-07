@@ -125,6 +125,21 @@ class VoiceManager {
       const { from, offer } = data;
 
       let peer = this.peers.get(from.id);
+      // If we have a stale peer (connection failed/closed/disconnected from a
+      // previous session — e.g. the remote user just reconnected), tear it
+      // down so we negotiate a clean RTCPeerConnection. Without this, the
+      // setRemoteDescription below applies the new offer on top of dead ICE
+      // and the audio never recovers — see #5347 ("rejoin doesn't restore
+      // audio until you leave and rejoin again").
+      if (peer) {
+        const cs = peer.connection.connectionState;
+        const ics = peer.connection.iceConnectionState;
+        if (cs === 'failed' || cs === 'closed' ||
+            ics === 'failed' || ics === 'closed') {
+          this._removePeer(from.id);
+          peer = null;
+        }
+      }
       if (!peer) {
         await this._createPeer(from.id, from.username, false);
         peer = this.peers.get(from.id);
@@ -512,16 +527,22 @@ class VoiceManager {
 
     if (leavingChannel) {
       // Use Socket.IO acknowledgment to confirm server received the leave.
-      // If no ack within 2s (socket glitch, transport switch), retry.
+      // If no ack within 2s (socket glitch, transport switch), retry — but
+      // ONLY if the user hasn't already rejoined a voice channel in the
+      // meantime. Without this guard, the retry can fire after a quick
+      // leave→rejoin and silently kick the user out of voice server-side
+      // while their client still believes it's connected (#5347 — the
+      // "Voice Connected" bar with an empty voice panel).
       let acked = false;
       this.socket.emit('voice-leave', { code: leavingChannel }, (response) => {
         acked = true;
       });
       setTimeout(() => {
-        if (!acked && this.socket.connected) {
-          console.warn('[Voice] voice-leave not acked, retrying...');
-          this.socket.emit('voice-leave', { code: leavingChannel });
-        }
+        if (acked) return;
+        if (!this.socket.connected) return;
+        if (this.inVoice || this.currentChannel) return;
+        console.warn('[Voice] voice-leave not acked, retrying...');
+        this.socket.emit('voice-leave', { code: leavingChannel });
       }, 2000);
     }
 
@@ -1051,6 +1072,14 @@ class VoiceManager {
   // ── Private: Peer connection management ─────────────────
 
   async _createPeer(userId, username, createOffer) {
+    // If a peer already exists for this user (e.g. a stale entry from a
+    // previous session that wasn't cleaned up via voice-user-left), close
+    // it before creating a new one. Without this, we'd leak the old
+    // RTCPeerConnection and have two audio elements / analysers running
+    // for the same userId.
+    if (this.peers.has(userId)) {
+      this._removePeer(userId);
+    }
     const connection = new RTCPeerConnection(this.rtcConfig);
 
     // Add our local audio tracks

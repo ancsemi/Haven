@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.1] — 2026-05-07
+
+### Fixed
+- **#5347: Voice rejoin after random disconnects leaves users with broken audio and empty voice panel.** Three independent bugs in the voice rejoin path were combining to produce the reported symptoms (rejoined users invisible to others, audio silent in both directions, voice bar still says "Voice Connected" while the panel shows "No one in voice", needing to leave and rejoin two or three times before voice recovers):
+  - The server-side `voice-rejoin` handler silently overwrote the user's entry in `voiceUsers` without firing `voice-user-left` to the rest of the room. Other clients held on to a stale `RTCPeerConnection` from the previous session and the rejoiner's fresh offer was applied on top of dead ICE, so the audio path never re-established. It now mirrors the cleanup `voice-join` does — kicks the previous socket cleanly, broadcasts the leave, then re-adds the user. As a side effect the rejoin now also preserves `isMuted` / `isDeafened`, refreshes `voiceLastActivity` (so the AFK timer doesn't fire on a rejoiner), and includes the channel's `voiceBitrate` in the response (which `voice-join` already did).
+  - The client `voice-offer` handler accepted the new offer onto an existing peer connection even when its `connectionState` was `failed` / `closed` or its `iceConnectionState` was `failed` / `closed`. The peer is now torn down and rebuilt in those states so the renegotiation starts clean.
+  - The 2-second leave-retry in `VoiceManager.leave()` could fire `voice-leave` for a channel the user had already rejoined in the meantime, silently kicking them out server-side while the client UI still showed them connected — exactly matching the screenshot in the issue (voice bar shows "Voice Connected #ANC" but the voice panel reads "No one in voice"). The retry now bails out if the user has rejoined any voice channel.
+  - Defensive: `_createPeer` now closes any pre-existing peer for the same userId before creating a new one, so an unexpected duplicate can't leak a second `RTCPeerConnection` and audio element.
+
+---
+
 ## [3.14.0] — 2026-05-06
 
 ### Added
