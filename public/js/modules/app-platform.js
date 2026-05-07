@@ -675,6 +675,9 @@ async _e2eSetupListeners() {
         // where the public_key column differs from the encrypted backup.
         await this.e2e.publishKey(this.socket, true);
         this._dmPublicKeys = {};
+        // Re-fetch partner key so any in-view DM messages can decrypt immediately.
+        const _syncCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+        if (_syncCh && _syncCh.is_dm) await this._fetchDMPartnerKey(_syncCh);
         this._showToast('Encryption keys synced from another device', 'success');
       } else {
         this._showToast('Could not sync encryption keys — try re-entering your password', 'error');
@@ -738,6 +741,9 @@ async _e2eSetupListeners() {
           this._noMoreFuture = true;
           this._loadingFuture = false;
           this._historyAfter = null;
+          // Fetch partner key first — otherwise messages land with an empty
+          // _dmPublicKeys and show '[Encrypted — waiting for key...]' forever.
+          await this._fetchDMPartnerKey(ch);
           this.socket.emit('get-messages', { code: this.currentChannel });
         }
         return;
@@ -801,6 +807,10 @@ async _recoverE2EFromBackup() {
       this._noMoreFuture = true;
       this._loadingFuture = false;
       this._historyAfter = null;
+      // Fetch partner key BEFORE requesting messages — _dmPublicKeys was just
+      // cleared, so without this every incoming message decryption misses the
+      // shared key and shows '[Encrypted — waiting for key...]' indefinitely.
+      await this._fetchDMPartnerKey(ch);
       this.socket.emit('get-messages', { code: this.currentChannel });
     }
   } else {
@@ -831,6 +841,7 @@ async _syncE2EFromServer() {
       this._noMoreFuture = true;
       this._loadingFuture = false;
       this._historyAfter = null;
+      await this._fetchDMPartnerKey(ch);
       this.socket.emit('get-messages', { code: this.currentChannel });
     }
   } else {

@@ -91,8 +91,14 @@ async switchChannel(code) {
   // Exit selection mode when switching channels
   if (this._moveSelectionActive) this._exitMoveSelectionMode();
 
-  // Show/hide topic bar
-  this._updateTopicBar(channel?.topic || '');
+  // Show/hide topic bar — DMs don't have topics; showing the placeholder
+  // overlaps the E2E encryption dropdown that lives in the same header.
+  if (isDm) {
+    const bar = document.getElementById('channel-topic-bar');
+    if (bar) bar.style.display = 'none';
+  } else {
+    this._updateTopicBar(channel?.topic || '');
+  }
 
   // DM auto-cleanup notice (#5340) — only visible in DMs when admin has enabled
   // age-based cleanup. Lets users know old messages are pruned, instead of being
