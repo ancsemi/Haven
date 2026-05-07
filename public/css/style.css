@@ -4460,6 +4460,7 @@ select.cfn-select.cfn-input {
   display: flex;
   gap: 12px;
   padding: 4px 8px;
+  position: relative;
 }
 
 .message-avatar {
@@ -8482,16 +8483,28 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   user-select: none;
   flex-shrink: 0;
 }
+.message.message-has-status .message-body,
+.message-compact.message-has-status .message-body {
+  padding-right: 44px;
+}
 .message-inline-status {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-direction: row-reverse;
   gap: 6px;
-  margin-left: 6px;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-.message-header .message-inline-status {
   margin-left: 0;
+  white-space: nowrap;
+  position: absolute;
+  right: 40px;
+  pointer-events: none;
+}
+.message .message-inline-status {
+  top: 8px;
+}
+.message-compact .message-inline-status {
+  top: 50%;
+  transform: translateY(-50%);
 }
 .message-inline-status .e2e-tag {
   margin-left: 0;

@@ -692,7 +692,11 @@ _createMessageEl(msg, prevMsg) {
 
   if (isCompact) {
     const el = document.createElement('div');
-    el.className = 'message-compact' + (msg.pinned ? ' pinned' : '') + (msg.is_archived ? ' archived' : '') + (isAnnouncement ? ' announcement' : '');
+    el.className = 'message-compact'
+      + (needsStatusSlot ? ' message-has-status' : '')
+      + (msg.pinned ? ' pinned' : '')
+      + (msg.is_archived ? ' archived' : '')
+      + (isAnnouncement ? ' announcement' : '');
     el.dataset.userId = msg.user_id;
     el.dataset.username = msg.username;
     el.dataset.time = msg.created_at;
@@ -783,7 +787,14 @@ _createMessageEl(msg, prevMsg) {
     : msg.is_webhook ? '<span class="bot-badge">BOT</span>' : '';
 
   const el = document.createElement('div');
-  el.className = 'message' + (isImage ? ' message-has-image' : '') + (msg.pinned ? ' pinned' : '') + (msg.is_archived ? ' archived' : '') + (msg.is_webhook ? ' webhook-message' : '') + (msg.imported_from ? ' imported-message' : '') + (isAnnouncement ? ' announcement' : '');
+  el.className = 'message'
+    + (needsStatusSlot ? ' message-has-status' : '')
+    + (isImage ? ' message-has-image' : '')
+    + (msg.pinned ? ' pinned' : '')
+    + (msg.is_archived ? ' archived' : '')
+    + (msg.is_webhook ? ' webhook-message' : '')
+    + (msg.imported_from ? ' imported-message' : '')
+    + (isAnnouncement ? ' announcement' : '');
   // Add separator line between different users' message groups
   if (prevMsg && prevMsg.user_id !== msg.user_id) el.classList.add('message-user-sep');
   el.dataset.userId = msg.user_id;
@@ -888,7 +899,10 @@ _promoteCompactToFull(compactEl) {
 
   // Replace the compact element in-place
   const wasAnnouncement = compactEl.classList.contains('announcement');
-  compactEl.className = 'message' + (isPinned ? ' pinned' : '') + (wasAnnouncement ? ' announcement' : '');
+  compactEl.className = 'message'
+    + (needsStatusSlot ? ' message-has-status' : '')
+    + (isPinned ? ' pinned' : '')
+    + (wasAnnouncement ? ' announcement' : '');
   compactEl.dataset.userId = userId;
   compactEl.dataset.time = time;
   compactEl.dataset.msgId = msgId;
