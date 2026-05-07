@@ -701,6 +701,13 @@ _createMessageEl(msg, prevMsg) {
     if (msg.is_archived) el.dataset.archived = '1';
     if (msg._e2e) el.dataset.e2e = '1';
     if (msg.poll && msg.poll.anonymous) el.dataset.pollAnonymous = '1';
+    // (#5280) burn-after-read — compact messages need the same class/data
+    // as full messages so _wireBurnMessages can process them.
+    if (msg.burn_seconds && msg.burn_seconds > 0) {
+      el.classList.add('message-burn-pending');
+      el.dataset.burnSeconds = String(msg.burn_seconds);
+      if (msg.burning_started_at) el.dataset.burnStartedAt = msg.burning_started_at;
+    }
     // Store avatar so _promoteCompactToFull can restore the correct image
     // even when the author is not in the online users list (e.g. offline).
     if (msg.avatar) el.dataset.avatar = msg.avatar;
