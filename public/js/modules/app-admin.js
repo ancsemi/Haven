@@ -4,7 +4,7 @@ const ALL_PERMS = [
   'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user', 'transfer_admin',
+  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log'
 ];
 //Similarly flavored solution to perm labels
@@ -37,7 +37,6 @@ const PERM_LABELS = {
   get manage_soundboard() { return t('permissions.manage_soundboard'); },
   get manage_music_queue() { return t('permissions.manage_music_queue'); },
   get promote_user() { return t('permissions.promote_user'); },
-  get transfer_admin() { return t('permissions.transfer_admin'); },
   get manage_roles() { return t('permissions.manage_roles'); },
   get manage_server() { return t('permissions.manage_server'); },
   get delete_channel() { return t('permissions.delete_channel'); },
@@ -4072,7 +4071,10 @@ _renderRacChannels() {
   });
 
   parents.forEach(p => {
-    if (!sharedIds.has(p.id) && !this._racData.callerIsAdmin) return;
+    // Only surface channels the target user is actually a member of.
+    // Admins previously saw every channel here, which let them assign
+    // channel-specific roles in scopes the user couldn't even access.
+    if (!sharedIds.has(p.id)) return;
     const pActive = this._racSelectedChannel === p.id ? ' active' : '';
     const pRole = getRoleSummary(p.id);
     html += `<div class="rac-channel-item${pActive}" data-channel="${p.id}">
@@ -4083,7 +4085,7 @@ _renderRacChannels() {
 
     const subs = subMap[p.id] || [];
     subs.forEach(s => {
-      if (!sharedIds.has(s.id) && !this._racData.callerIsAdmin) return;
+      if (!sharedIds.has(s.id)) return;
       const sActive = this._racSelectedChannel === s.id ? ' active' : '';
       const sRole = getRoleSummary(s.id);
       html += `<div class="rac-channel-item rac-sub${sActive}" data-channel="${s.id}">
@@ -4097,7 +4099,49 @@ _renderRacChannels() {
   if (!html) {
     html = `<p class="rac-placeholder">${t('settings.admin.roles_no_shared_channels')}</p>`;
   }
+
+  // Admins (or anyone with manage_roles) get an inline picker to add this
+  // user to a channel they aren't yet in, so role assignment can extend to
+  // new scopes without leaving the modal.
+  const canAddToChannel = this._racData.callerIsAdmin
+    || (this._racData.callerPerms || []).includes('*')
+    || (this._racData.callerPerms || []).includes('manage_roles');
+  if (canAddToChannel) {
+    const missingChannels = channels.filter(c => !sharedIds.has(c.id));
+    const opts = missingChannels.map(c => {
+      const parent = c.parentId ? channels.find(x => x.id === c.parentId) : null;
+      const label = parent ? `${parent.name} / ${c.name}` : c.name;
+      return `<option value="${c.id}">${this._escapeHtml(label)}</option>`;
+    }).join('');
+    html += `
+      <div class="rac-add-channel-row" style="padding:8px;border-top:1px solid var(--border-color, rgba(255,255,255,0.08));margin-top:6px">
+        <select id="rac-add-channel-dropdown" class="rac-role-select" style="width:100%" ${missingChannels.length ? '' : 'disabled'}>
+          <option value="">${this._escapeHtml(missingChannels.length ? '+ Add user to channel…' : 'User is in every channel')}</option>
+          ${opts}
+        </select>
+      </div>`;
+  }
   list.innerHTML = html;
+
+  const addChanDropdown = document.getElementById('rac-add-channel-dropdown');
+  if (addChanDropdown) {
+    addChanDropdown.addEventListener('change', (e) => {
+      const cid = parseInt(e.target.value, 10);
+      if (!cid) return;
+      this.socket.emit('invite-to-channel', { targetUserId: this._racSelectedUser, channelId: cid });
+      // Optimistically extend the local map so the channel shows up
+      // immediately after the round-trip.
+      if (!this._racData.userChannelMap[this._racSelectedUser]) {
+        this._racData.userChannelMap[this._racSelectedUser] = [];
+      }
+      if (!this._racData.userChannelMap[this._racSelectedUser].includes(cid)) {
+        this._racData.userChannelMap[this._racSelectedUser].push(cid);
+      }
+      this._racSelectedChannel = cid;
+      this._renderRacChannels();
+      this._renderRacConfig();
+    });
+  }
 
   list.querySelectorAll('.rac-channel-item').forEach(el => {
     el.addEventListener('click', () => {
@@ -4153,12 +4197,18 @@ _renderRacConfig() {
   currentRoles.forEach(r => {
     seenRoleIds.add(r.role_id);
     const roleObj = this._racData.roles.find(x => x.id === r.role_id) || {};
+    // Prefer server-computed effective perms (role defaults +/- per-user
+    // overrides for this scope) so the editor reflects what the user
+    // actually has, not just the role's defaults.
+    const heldPerms = Array.isArray(r.effectivePerms)
+      ? r.effectivePerms
+      : (roleObj.permissions || []);
     cards.push({
       roleId: r.role_id,
       name: r.name || roleObj.name || `#${r.role_id}`,
       color: r.color || roleObj.color || '#888',
       defaultLevel: roleObj.level || r.level,
-      defaultPerms: roleObj.permissions || [],
+      defaultPerms: heldPerms,
       heldLevel: r.level,
       held: true
     });

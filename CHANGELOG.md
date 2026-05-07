@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.2] — 2026-05-07
+
+### Fixed
+- **Role Assignment Center: per-user permission edits silently reverted on reopen.** `get-role-assignment-data` only sent each held role's *default* permissions back to the modal, so the checkbox grid was always seeded from `role_permissions` even after the admin had saved per-user overrides into `user_role_perms`. The save toast was honest — the overrides were persisted — but the next open looked identical to the last, making it appear nothing had stuck. Each `currentRoles` entry now carries an `effectivePerms` array (role defaults +/- the user's overrides for that exact `(role, channel)` scope) and the RAC seeds its checkboxes from that.
+- **Role Assignment Center: assigning one role wiped every other role at the same scope.** `assign-role` ran a blanket `DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?` (or the equivalent for server-wide) before re-inserting the single role being saved, which made the multi-role design the modal advertises ("Users may hold multiple roles per scope") impossible — saving an edit to one role silently revoked every sibling role. The handler now only replaces the row for *this* `(user, role, channel)` tuple.
+- **Role Assignment Center: channel pane showed every channel for admins, even ones the target user couldn't access.** Admins could "assign" a Channel Mod role for a channel the user wasn't a member of, with no visual indication and no actual access being granted. The pane now only lists channels the target user is actually in (parent + subs), and adds an inline `+ Add user to channel…` picker for admins / `manage_roles` holders so the user can be invited into a new channel from inside the modal before being given a role there.
+- **Role Assignment Center: `Transfer Admin` listed as a checkbox permission.** The `transfer-admin` socket handler is gated solely by `socket.user.isAdmin`; the `transfer_admin` permission row had no effect anywhere in the codebase, so it could be granted, look granted, and still do nothing. Removed from the RAC permissions grid entirely. The actual ownership transfer flow (gear menu → Transfer Admin, password-confirmed) is unchanged.
+- **`assign-role`: `customPerms` was not validated against the caller's privileges.** A non-admin user with `promote_user` could craft a socket payload that included `manage_roles`, `manage_server`, `delete_channel`, etc. in `customPerms` and have the server insert a positive `user_role_perms` row for those, escalating the target above the caller. The server now drops admin-only perms unless the caller is an admin, drops anything the caller doesn't currently hold, and preserves any pre-existing override the caller wasn't authorised to touch (so a non-admin promoter can't strip an admin-granted override either).
+
+---
+
 ## [3.14.1] — 2026-05-07
 
 ### Fixed

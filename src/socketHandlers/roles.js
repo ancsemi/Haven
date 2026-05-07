@@ -388,6 +388,32 @@ module.exports = function register(socket, ctx) {
           GROUP BY ur.role_id, COALESCE(ur.channel_id, -1)
         `).all(m.id);
 
+        // Compute effective permissions per (role, channel) so the RAC can
+        // re-display the user's actual saved customisations on reopen
+        // instead of always falling back to the role's defaults.
+        let userOverrides = [];
+        try {
+          userOverrides = db.prepare(
+            'SELECT role_id, channel_id, permission, allowed FROM user_role_perms WHERE user_id = ?'
+          ).all(m.id);
+        } catch { /* table may not exist yet */ }
+
+        for (const cr of currentRoles) {
+          const basePerms = db.prepare(
+            'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
+          ).all(cr.role_id).map(r => r.permission);
+          const effective = new Set(basePerms);
+          for (const ov of userOverrides) {
+            if (ov.role_id !== cr.role_id) continue;
+            const ovChan = ov.channel_id == null ? null : ov.channel_id;
+            const crChan = cr.channel_id == null ? null : cr.channel_id;
+            if (ovChan !== crChan) continue;
+            if (ov.allowed === 1) effective.add(ov.permission);
+            else if (ov.allowed === 0) effective.delete(ov.permission);
+          }
+          cr.effectivePerms = [...effective];
+        }
+
         users.push({
           id: m.id, username: m.username, displayName: m.displayName,
           avatar: m.avatar || null, avatarShape: m.avatar_shape || 'circle',
@@ -462,13 +488,15 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
+      // The RAC supports multiple roles per scope; only replace the row for
+      // *this* (user, role, channel) tuple instead of wiping every role at
+      // the scope (which made it impossible to hold more than one role per
+      // channel/server-wide and silently revoked sibling roles when the
+      // admin saved an edit to one of them).
       if (channelId) {
-        db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?').run(userId, channelId);
+        db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id = ?').run(userId, roleId, channelId);
       } else {
-        db.prepare(
-          `DELETE FROM user_roles WHERE user_id = ? AND channel_id IS NULL
-           AND role_id IN (SELECT id FROM roles WHERE scope = ?)`
-        ).run(userId, role.scope);
+        db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, roleId);
       }
       db.prepare(
         'INSERT INTO user_roles (user_id, role_id, channel_id, granted_by, custom_level) VALUES (?, ?, ?, ?, ?)'
@@ -481,7 +509,28 @@ module.exports = function register(socket, ctx) {
           db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, roleId);
         }
         const rolePerms = db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(roleId).map(r => r.permission);
-        const customPerms = data.customPerms.filter(p => typeof p === 'string');
+        // Sanitize: drop unknown perms, drop admin-only perms unless caller
+        // is admin, and drop any perm the caller doesn't currently hold.
+        // This prevents a non-admin promoter from escalating perms via a
+        // crafted customPerms payload.
+        const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+        const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserPermissions(socket.user.id));
+        const customPerms = data.customPerms.filter(p => {
+          if (typeof p !== 'string') return false;
+          if (!VALID_ROLE_PERMS.includes(p)) return false;
+          if (socket.user.isAdmin) return true;
+          if (adminOnlyPerms.includes(p)) return false;
+          return callerPermsSet.has('*') || callerPermsSet.has(p);
+        });
+        // Inherit any previously-held overrides we are not authorised to touch
+        // (e.g. an admin-only perm previously granted by an admin) so a
+        // non-admin promoter can't strip them.
+        if (!socket.user.isAdmin) {
+          const existingHeld = rolePerms.filter(p => adminOnlyPerms.includes(p) || !callerPermsSet.has(p));
+          for (const p of existingHeld) {
+            if (!customPerms.includes(p)) customPerms.push(p);
+          }
+        }
         const added = customPerms.filter(p => !rolePerms.includes(p));
         const removed = rolePerms.filter(p => !customPerms.includes(p));
         if (added.length > 0 || removed.length > 0) {
