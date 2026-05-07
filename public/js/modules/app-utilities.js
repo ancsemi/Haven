@@ -125,18 +125,17 @@ _wireBurnMessages(root) {
       label.className = 'burn-pending-label';
       label.title = `Self-destructs ${burnSeconds}s after the recipient views it`;
       label.textContent = '🔥';
-      // Full messages: append INSIDE .message-header so the flame is inline
-      // on the author/timestamp row (right side, after the spacer). Using
-      // header.after() (previous code) inserted it as a SIBLING between the
-      // header and .message-content, making it appear on its own line.
-      // Compact messages have no .message-header; put the flame at the
-      // start of .message-content so it reads as "🔥 message text".
+      // Full messages: append INSIDE .message-header (after the spacer) so
+      // the flame sits inline on the right of the author/timestamp row.
+      // Compact messages have no .message-header — insert label as a direct
+      // child of .message-compact (sibling after .message-body), exactly
+      // like the e2e-tag, so CSS can position it absolutely on the right.
       const msgHeader = el.querySelector('.message-header');
       if (msgHeader) {
         msgHeader.append(label);
       } else {
-        const msgContent = el.querySelector('.message-content');
-        if (msgContent) msgContent.prepend(label);
+        const msgBody = el.querySelector('.message-body');
+        if (msgBody) msgBody.after(label);
       }
     }
     if (startedAt) {
@@ -2492,6 +2491,7 @@ _renderDMPiPHistory(messages) {
   try { this._setupVideos?.(list); } catch {}
   try { this._decryptE2EImages?.(list); } catch {}
   try { this._decryptE2EFiles?.(list); } catch {}
+  try { this._wireBurnMessages?.(list); } catch {}
   list.scrollTop = list.scrollHeight;
 },
 

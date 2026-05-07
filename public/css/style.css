@@ -13889,11 +13889,23 @@ ul.chat-list { list-style-type: disc; }
 .message-burn-pending .message-header .burn-pending-label {
   color: #ff6b35;
 }
-/* Compact messages: flame is prepended inside .message-content, no left margin needed */
-.message-compact.message-burn-pending .message-content .burn-pending-label {
+/* Compact messages: flame is a direct child of .message-compact, positioned
+   absolutely on the right — mirrors the .e2e-tag pattern exactly. */
+.message-compact > .burn-pending-label {
+  position: absolute;
+  right: 8px;
+  top: 2px;
+  font-size: 12px;
   color: #ff6b35;
+  opacity: 0.75;
   margin-left: 0;
-  margin-right: 4px;
+  cursor: default;
+  user-select: none;
+}
+/* When both burn flame and e2e lock are present, nudge the lock left so
+   they sit side-by-side instead of stacking on top of each other. */
+.message-compact.message-burn-pending > .e2e-tag {
+  right: 22px;
 }
 .burn-reveal-btn {
   background: rgba(255, 107, 53, 0.12);
