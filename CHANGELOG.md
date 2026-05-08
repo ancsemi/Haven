@@ -11,6 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.14.16] — 2026-05-07
+
+### Fixed
+- **Browser cache force-refreshed after status-icon patch series.** All `?v=` cache-busting strings on script and stylesheet tags bumped so browsers fetch updated files instead of serving stale cached copies from the 3.14.11+ patch set.
+- **Message status icons (E2E lock, burn flame) completely reworked in the message layout.** Icons were rendering in a right-gutter column that misaligned with compact (grouped) messages and collided with message text on narrow layouts. They now occupy a fixed, right-anchored slot: the lock always sits at `right: 8px`, the flame shifts left in JS when both icons are present. Covers full-mode, compact-mode, and DM PiP renders. DM PiP fixed slot tightened to avoid excess whitespace when only one icon (or neither) is shown.
+- **PiP parent message action controls anchored to outer message box.** The reply/react/etc. toolbar that appears on hover for parent messages inside the DM PiP was mispositioned after the inline status icon refactor. Controls are now anchored relative to the outer `.message` container.
+
+---
+
 ## [3.14.10] — 2026-05-07
 
 - **E2E recovery error messaging overhaul.** `e2e.syncFromServer()` now returns `{ ok, reason }` instead of a bare boolean, distinguishing `no-backup`, `bad-password`, `network`, and `error` cases. The "Recover Keys from Backup" toast now tells the user *exactly* what failed and — critically — **never** advises Reset for `bad-password` or `network` failures (Reset destroys all encrypted DMs). Previously a transient network blip or stale `wrappingKey` would surface as "no server backup found or password mismatch — try Reset instead", luring users into permanent data loss. All four `syncFromServer` callers in `app-platform.js` updated to consume the new structured result.
