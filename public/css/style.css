@@ -3518,6 +3518,13 @@ html.rgb-cycling *::after {
   min-width: 0;
   flex: 1;
 }
+.dm-pip-messages .message.message-has-status .message-body,
+.dm-pip-messages .message-compact.message-has-status .message-body {
+  padding-right: 28px;
+}
+.dm-pip-messages .message-inline-status {
+  right: 12px;
+}
 .dm-pip-messages .message-header {
   gap: 6px;
   margin-bottom: 1px;
