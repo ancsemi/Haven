@@ -410,7 +410,7 @@
     "mobile_add_server": "+ Dodaj serwer",
     "channel_code": "Kod kanału",
     "select_messages_to_move": "Wybierz wiadomości do przeniesienia",
-    "voice_active": "Głos aktywny",
+    "voice_active": "Trwa rozmowa",
     "copy_code": "Kopiuj kod",
     "channel_code_settings": "Ustawienia kodu kanału",
     "search_messages": "Szukaj wiadomości (Ctrl+F)",
@@ -443,7 +443,8 @@
       "message_unpinned": "Wiadomość została odpięta",
       "protected_by": "{{name}} chronił wiadomość przed usunięciem",
       "message_unprotected": "Wiadomość nie jest chroniona przed usunięciem"
-    }
+    },
+    "recover_encryption": "Odzyskaj klucze z kopii zapasowej"
   },
   "media": {
     "upload_file_title": "Prześlij plik",
@@ -558,7 +559,8 @@
       "mute": "Wycisz",
       "ban": "Zablokuj",
       "delete_user": "Usuń użytkownika",
-      "transfer_admin": "Przenieś uprawnienia administratora"
+      "transfer_admin": "Przenieś uprawnienia administratora",
+      "add_to_channel": "Dodaj do kanału"
     },
     "voice_menu": {
       "volume": "Głośność",
@@ -1018,11 +1020,26 @@
         "link_channel_access_hint": "Po włączeniu, przypisanie/odebranie tej roli automatycznie przyzna/odbierze przynależność do kanałów.",
         "reapply_access": "Ponownie zastosuj dostęp dla wszystkich użytkowników",
         "permissions": "Uprawnienia",
-        "delete": "Usuń"
+        "delete": "Usuń",
+        "reapply_access_tooltip": "Ponownie uruchamia powyższe reguły dostępu do kanałów dla wszystkich użytkowników posiadających tę rolę. Przydatne po edycji pól wyboru Nadaj/Odbierz — dopasowuje istniejących członków do aktualnej konfiguracji bez konieczności ponownego przypisywania roli."
       },
       "stickers_title": "Naklejki",
       "stickers_hint": "Prześlij obrazy naklejek pogrupowane w zestawy",
-      "manage_stickers_btn": "Zarządzaj naklejkami"
+      "manage_stickers_btn": "Zarządzaj naklejkami",
+      "roles_add_label": "Dodaj kolejną rolę",
+      "roles_collapse": "Zwiń",
+      "roles_configure": "Konfiguruj",
+      "roles_discard": "Odrzuć",
+      "roles_held": "Posiadane",
+      "roles_multi_hint": "Użytkownicy mogą posiadać wiele ról w danym zakresie. Efektywne uprawnienia stanowią sumę wszystkich posiadanych ról; najwyższa rola wyznacza kolor wyświetlania.",
+      "roles_no_addable": "Brak dostępnych ról",
+      "roles_none": "Nie zdefiniowano żadnych ról.",
+      "roles_pending_add": "Oczekuje na dodanie",
+      "roles_pending_edit": "Edytowano",
+      "roles_pending_remove": "Oczekuje na usunięcie",
+      "roles_remove": "Usuń",
+      "roles_select_to_add": "-- Wybierz rolę do dodania --",
+      "roles_undo": "Cofnij"
     }
   },
   "modals": {
