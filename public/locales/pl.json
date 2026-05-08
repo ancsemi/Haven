@@ -124,7 +124,8 @@
       "unprotect_btn": "Usuń ochronę",
       "unknown_user": "Nieznany",
       "placeholder": "Wpisz wiadomość...",
-      "placeholder_short": "Wiadomość..."
+      "placeholder_short": "Wiadomość...",
+      "via_persona": "Wysłano przez {{name}}"
     },
     "input_bar": {
       "emoji_btn": "Emoji",
