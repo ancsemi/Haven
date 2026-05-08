@@ -3505,6 +3505,12 @@ html.rgb-cycling *::after {
      (controlled by the .message / .message-compact padding-left above). */
   padding-left: 0;
   padding-right: 0;
+  /* Full-message hover toolbar / status slot live inside .message-row, while
+     compact-message equivalents live on .message-compact itself. In PiP the
+     outer .message has horizontal padding, so a positioned .message-row makes
+     parent-message controls land a few pixels left of child-message controls.
+     Leave the row unpositioned here so both anchor to the same outer box. */
+  position: static;
 }
 /* Hide per-message avatars — header already shows the partner pfp */
 .dm-pip-messages .message-avatar,
