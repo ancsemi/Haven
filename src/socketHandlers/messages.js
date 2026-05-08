@@ -603,18 +603,21 @@ module.exports = function register(socket, ctx) {
     }
 
     // ── Persona detection (#86, #5349) ────────────────────
-    // Pattern: "PersonaName: actual message body".  Persona names match
-    // against the sender's own user_personas (case-insensitive). When a
-    // match is found we strip the prefix from the stored content and
-    // stamp persona_id / persona_username / persona_avatar so the
-    // outgoing message displays as the persona while the real user_id
-    // (and therefore moderation) remains intact.
+    // Pattern: ">>PersonaName actual message body" (colon optional after the
+    // name). The leading ">>" is a deliberate, unambiguous trigger so a
+    // persona owner can mention their persona's name in plain chat without
+    // accidentally routing the message through the persona. Persona names
+    // match against the sender's own user_personas (case-insensitive). When a
+    // match is found we strip the prefix from the stored content and stamp
+    // persona_id / persona_username / persona_avatar so the outgoing message
+    // displays as the persona while the real user_id (and therefore
+    // moderation) remains intact.
     let personaId = null;
     let personaUsername = null;
     let personaAvatar = null;
     let finalContent = safeContent;
     {
-      const m = safeContent.match(/^([^\n:]{1,32}):\s+([\s\S]+)$/);
+      const m = safeContent.match(/^>>\s*([^\s>:][^\s>:]{0,31}):?\s+([\s\S]+)$/);
       if (m) {
         const candidate = m[1].trim();
         const body = m[2];

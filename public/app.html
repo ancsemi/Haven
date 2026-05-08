@@ -10,8 +10,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=3.14.16">
-  <script src="/js/theme-init.js?v=3.14.14"></script>
+  <link rel="stylesheet" href="/css/style.css?v=3.15.1">
+  <script src="/js/theme-init.js?v=3.15.1"></script>
 </head>
 <body>
 
@@ -515,6 +515,7 @@
             <div id="channel-dropdown" class="mention-dropdown" style="display:none"></div>
             <div id="emoji-dropdown" class="emoji-dropdown" style="display:none"></div>
             <div id="slash-dropdown" class="slash-dropdown" style="display:none"></div>
+            <div id="persona-dropdown" class="mention-dropdown" style="display:none"></div>
             <textarea id="message-input" data-i18n-placeholder="header.message_placeholder_commands" placeholder="Type a message... (/ for commands)"
                       rows="1" maxlength="2000"></textarea>
             <button id="send-btn" class="btn-send" data-i18n-title="media.send_title" title="Send">
@@ -1000,7 +1001,7 @@
           <button type="button" class="btn-sm" id="add-persona-btn" data-i18n="modals.edit_profile.add_persona">+ Add Persona</button>
         </div>
         <p class="muted-text" style="margin:6px 0 8px;font-size:.78rem;line-height:1.35" data-i18n="modals.edit_profile.personas_hint">
-          Type <code>Name: your message</code> in chat to send as that persona. Your real account stays linked for moderation.
+          Type <code>&gt;&gt;Name your message</code> in chat to send as that persona (or pick from the autocomplete that appears when you start a message with <code>&gt;&gt;</code>). Your real account stays linked for moderation.
         </p>
         <div id="personas-list" class="personas-list"></div>
       </div>
@@ -3195,14 +3196,14 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=3.14.14"></script>
-  <script src="/js/notifications.js?v=3.14.14"></script>
-  <script src="/js/servers.js?v=3.14.14"></script>
-  <script src="/js/voice.js?v=3.14.14"></script>
-  <script src="/js/modmode.js?v=3.14.14"></script>
-  <script src="/js/e2e.js?v=3.14.14"></script>
-  <script type="module" src="/js/app.js?v=3.14.14"></script>
-  <script src="/js/plugin-loader.js?v=3.14.14"></script>
-  <script src="/js/modules/stream-debug.js?v=3.14.14"></script>
+  <script src="/js/theme.js?v=3.15.1"></script>
+  <script src="/js/notifications.js?v=3.15.1"></script>
+  <script src="/js/servers.js?v=3.15.1"></script>
+  <script src="/js/voice.js?v=3.15.1"></script>
+  <script src="/js/modmode.js?v=3.15.1"></script>
+  <script src="/js/e2e.js?v=3.15.1"></script>
+  <script type="module" src="/js/app.js?v=3.15.1"></script>
+  <script src="/js/plugin-loader.js?v=3.15.1"></script>
+  <script src="/js/modules/stream-debug.js?v=3.15.1"></script>
 </body>
 </html>
