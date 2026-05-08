@@ -11,6 +11,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.15.1] — 2026-05-08
+
+Polish pass on 3.15.0's Channel Media Gallery and Personas.
+
+### Added
+- **Persona prefix changed to `>>` with autocomplete (#86, #5349).** The persona send prefix is now `>>Name your message` (instead of the colliding `Name:` form, which made it impossible to mention someone else's persona in normal chat). Typing `>>` at the start of a message opens an autocomplete dropdown of your personas; arrow keys / Tab / Enter pick one and insert the full prefix.
+- **`@PersonaName` mentions (#5349).** Persona names now resolve as `@`-mentions and ping the persona's owner. Names are gathered from messages as they render, so any persona that has spoken in the channel becomes mentionable.
+- **Jump-to-message button on photo + video tiles in the gallery (#5350).** Each tile now has an arrow button in the top-right corner that closes the gallery and scrolls to the source message. Hovering or focusing the tile reveals the button.
+- **Click-to-play video lightbox in the gallery (#5350).** Clicking a video tile now opens an inline player overlay with full controls instead of silently closing the gallery. The jump button (above) is preserved for navigating to the source message.
+
+### Fixed
+- **Message grouping bug when sending consecutive messages from different personas (#5349).** Subsequent messages from a different persona were being attributed to the first persona's avatar header because the "compact" grouping check only compared `user_id`. Grouping now also compares `persona_id`, and the message's persona id is persisted in the DOM so newly appended messages correctly start a new group.
+- **Image lightbox appearing underneath the media gallery modal (#5350).** Lightbox `z-index` bumped from `10000` to `100010` so it sits above modal overlays (`z-index: 100001`).
+- **Top-bar header buttons (search, pinned, gallery, copy, etc.) now follow the existing "Colorful Emoji" / "Monochrome" toolbar setting in Appearance.** Previously these were monochrome-only regardless of the user's choice.
+
+### Security / verification
+- Verified `get-channel-media` already enforces channel membership (`SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?`) with admin override, so users only see media from channels they're in.
+- Verified the persona send-message handler already uses `WHERE user_id = ? AND name = ? COLLATE NOCASE`, so only the persona's owner can speak through it.
+
+---
+
 ## [3.15.0] — 2026-05-08
 
 ### Added
