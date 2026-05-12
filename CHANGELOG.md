@@ -11,6 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.15.9] — 2026-05-12
+
+Polish translation update from contributor dvw1xx covering features shipped in 3.15.x.
+
+### Changed
+- **Polish (`pl`) locale updated (#5356, contributed by dvw1xx).** Adds translations for: `via_persona`, `recover_encryption`, `add_to_channel`, all `roles_*` entries (multi-role UI), and `reapply_access_tooltip`. Corrects `voice_active` to "Trwa rozmowa".
+
+---
+
 ## [3.15.8] — 2026-05-12
 
 The one nobody saw coming. The reason all the v3.15.3-3.15.7 voice fixes appeared not to work for users is that **none of the client-side changes since v3.14.14 were actually being delivered to browsers.** The `<script>` cache-bust strings in app.html were pinned at `?v=3.15.2` and the ES-module imports inside app.js (which load app-voice.js, app-socket.js, app-users.js, etc.) were pinned at `?v=3.14.14`. Browsers happily kept serving the cached pre-3.15.4 client JS even on a fully-updated 3.15.7 server. So everything fixed since v3.14.14 was running on the server but missing from the client. The screen-share renegotiation work (3.15.5), the sidebar/voice-panel sync (3.15.4), the `_softLeave` rejoin path (3.15.4), the persona autocomplete fixes (3.15.6) — none of it ever ran in any browser. Apologies for the runaround on this one. (#5347)
