@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.16.2] — 2026-05-13
+
+### Fixed
+- **[Windows] Start Haven.bat crashes CMD past v3.15.1 (#5358).** The SSL cert-generation block was restructured to use `goto` labels instead of a compound `else-if` + `call :subroutine`. On some Windows versions, returning from a `call` subroutine nested inside an `else-if` compound block causes cmd.exe to exit the script rather than return to the caller, closing the CMD window without any error output. The new `goto`-based flow keeps `%OPENSSL_CMD%` as a plain statement (outside any compound block) so it expands correctly at execution time without needing a subroutine at all, preserving the fix from #5351.
+- **Published/custom theme not retained after page refresh (#5359).** Two root causes: (1) `window.havenSocket` was never assigned, so when a user clicked a published file theme button, the `set-preference` socket event was silently dropped and the server never stored the preference. On next load the server sent back an empty theme preference and the client fell through to the server's default theme, overwriting the `file:xxx` value in localStorage. Fixed by assigning `window.havenSocket` in `app.js` after the socket is created. (2) `theme-init.js` only set `data-theme` on early load; for `file:` themes it did not inject the CSS `<link>`, causing a flash of unstyled content on app.html refresh and no theme at all on the login page (where plugin-loader never runs). Fixed by injecting the `<link>` tag in `theme-init.js` when the saved theme is a `file:` theme, using `data-theme="haven"` as a stable base — matching what `applyFileTheme()` does — so the file theme applies immediately on both the app and login pages.
+
+---
+
 ## [3.16.1] — 2026-05-12
 
 ### Fixed
