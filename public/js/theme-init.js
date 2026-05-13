@@ -23,7 +23,23 @@
     window.visualViewport.addEventListener('scroll', resetDocScroll);
   }
   var t = localStorage.getItem('haven_theme');
-  if (t) document.documentElement.setAttribute('data-theme', t);
+  if (t) {
+    if (t.indexOf('file:') === 0) {
+      // File theme: inject the CSS link immediately so the theme applies on
+      // the login page (where plugin-loader doesn't run) and avoids a FOUC
+      // on the app page while waiting for plugin-loader's 500 ms startup
+      // delay. The data-theme is set to 'haven' as a stable layout base,
+      // matching what applyFileTheme() does when the plugin-loader runs. (#5359)
+      var _fl = document.createElement('link');
+      _fl.rel = 'stylesheet';
+      _fl.href = '/themes/' + t.slice(5);
+      _fl.id = 'haven-theme-file-early';
+      document.head.appendChild(_fl);
+      document.documentElement.setAttribute('data-theme', 'haven');
+    } else {
+      document.documentElement.setAttribute('data-theme', t);
+    }
+  }
   // Defensive: if the saved theme is NOT custom/rgb, strip any inline CSS
   // custom properties that may have been left on :root during a prior theme
   // (e.g. switching custom → win95 in a previous session, then a server

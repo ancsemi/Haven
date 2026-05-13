@@ -155,6 +155,9 @@ class HavenApp {
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.4,
     });
+    // Expose socket globally so plugin-loader can emit set-preference
+    // when the user activates a published file theme (#5359)
+    window.havenSocket = this.socket;
     this.voice = new VoiceManager(this.socket);
     if (this.user && this.user.id) this.voice.localUserId = this.user.id;
     
