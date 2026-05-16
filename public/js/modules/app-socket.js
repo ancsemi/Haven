@@ -88,6 +88,7 @@ _setupSocketListeners() {
     this._setLed('status-server-led', 'on');
     document.getElementById('status-server-text').textContent = 'Connected';
     this._lastConnectTime = Date.now();
+    this._authErrorStreak = 0;
     this._startPingMonitor();
     // Re-join channel after reconnect (server lost our room membership)
     this.socket.emit('visibility-change', { visible: !document.hidden });
@@ -262,10 +263,19 @@ _setupSocketListeners() {
     // Don't kick during password change — socket will reconnect with fresh token
     if (this._justChangedPassword) return;
     if (err.message === 'Invalid token' || err.message === 'Authentication required' || err.message === 'Session expired') {
-      localStorage.removeItem('haven_token');
-      localStorage.removeItem('haven_user');
-      localStorage.removeItem('haven_sync_key');
-      window.location.href = '/';
+      // Require multiple consecutive auth errors before nuking the session.
+      // A single transient error during a server restart (DB not yet ready,
+      // middleware racing init) should not log the user out and wipe their
+      // dismissals/sidebar state. The token only gets cleared if the server
+      // consistently rejects it.
+      this._authErrorStreak = (this._authErrorStreak || 0) + 1;
+      if (this._authErrorStreak >= 3) {
+        localStorage.removeItem('haven_token');
+        localStorage.removeItem('haven_user');
+        localStorage.removeItem('haven_sync_key');
+        window.location.href = '/';
+        return;
+      }
     }
     this._setLed('connection-led', 'danger');
     this._setLed('status-server-led', 'danger');
