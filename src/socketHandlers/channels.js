@@ -559,6 +559,37 @@ module.exports = function register(socket, ctx) {
       const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
       membersToAdd.forEach(m => insertMember.run(result.lastInsertRowid, m.user_id));
 
+      // (#5328) Inherit role-channel-access from the parent channel so that
+      // roles configured to grant/revoke access on the parent automatically
+      // apply to newly-created sub-channels. Without this, server owners had
+      // to re-add every role to every new sub-channel manually. Admins can
+      // still customize per-sub-channel access afterwards via the role UI.
+      try {
+        const parentAccess = db.prepare(
+          'SELECT role_id, grant_on_promote, revoke_on_demote FROM role_channel_access WHERE channel_id = ?'
+        ).all(parentChannel.id);
+        if (parentAccess.length) {
+          const insAccess = db.prepare(
+            'INSERT OR IGNORE INTO role_channel_access (role_id, channel_id, grant_on_promote, revoke_on_demote) VALUES (?, ?, ?, ?)'
+          );
+          const insMemberRole = db.prepare(
+            'INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)'
+          );
+          parentAccess.forEach(a => {
+            insAccess.run(a.role_id, result.lastInsertRowid, a.grant_on_promote, a.revoke_on_demote);
+            // Mirror channel membership for current role holders if the role
+            // is configured to grant access on promote. Private sub-channels
+            // also receive role-based members so the role still works there.
+            if (a.grant_on_promote) {
+              const holders = db.prepare('SELECT DISTINCT user_id FROM user_roles WHERE role_id = ?').all(a.role_id);
+              holders.forEach(h => insMemberRole.run(result.lastInsertRowid, h.user_id));
+            }
+          });
+        }
+      } catch (rcaErr) {
+        console.error('Sub-channel role inheritance error:', rcaErr);
+      }
+
       broadcastChannelLists();
     } catch (err) {
       console.error('Create sub-channel error:', err);
