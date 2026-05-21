@@ -1371,6 +1371,50 @@ _setupUI() {
     document.getElementById('pinned-panel').style.display = 'none';
   });
 
+  // Pop pinned messages out to the floating PiP panel
+  const pinnedPopupBtn = document.getElementById('pinned-popup-btn');
+  if (pinnedPopupBtn) pinnedPopupBtn.addEventListener('click', () => {
+    // Hide the sidebar panel first
+    document.getElementById('pinned-panel').style.display = 'none';
+    this._openPinsPiP?.(this._lastPins || []);
+  });
+
+  // Pins PiP: close button
+  const pinsPipClose = document.getElementById('pins-pip-close');
+  if (pinsPipClose) pinsPipClose.addEventListener('click', () => this._closePinsPiP?.());
+
+  // Pins PiP: pop-in button — close PiP and re-open the sidebar panel
+  const pinsPipPopin = document.getElementById('pins-pip-popin');
+  if (pinsPipPopin) pinsPipPopin.addEventListener('click', () => {
+    this._closePinsPiP?.();
+    if (this.currentChannel) this.socket.emit('get-pinned-messages', { code: this.currentChannel });
+  });
+
+  // Pins PiP: delegated click handler for the pin list
+  // - Click on an item   → jump to message (PiP stays open)
+  // - Click on unpin btn → confirm modal + socket emit
+  const pinsPipList = document.getElementById('pins-pip-list');
+  if (pinsPipList) {
+    pinsPipList.addEventListener('click', async (e) => {
+      // Unpin button — handled first; stops propagation so item click doesn't also fire
+      const unpinBtn = e.target.closest('.pinned-unpin-btn');
+      if (unpinBtn) {
+        e.stopPropagation();
+        const msgId = parseInt(unpinBtn.dataset.msgId, 10);
+        if (!msgId) return;
+        const ok = await this._showConfirmModal?.(t('confirm.unpin_message'), '');
+        if (ok) this.socket.emit('unpin-message', { messageId: msgId });
+        return;
+      }
+      // Click anywhere else on a pinned item → jump to that message in the channel
+      const item = e.target.closest('.pinned-item');
+      if (item) {
+        const msgId = parseInt(item.dataset.msgId, 10);
+        if (msgId) this._jumpToMessage?.(msgId);
+      }
+    });
+  }
+
   // ── Channel media gallery (#5350) ──
   const galleryBtn = document.getElementById('gallery-toggle-btn');
   if (galleryBtn) {

@@ -447,6 +447,7 @@
           <div id="pinned-panel" class="pinned-panel" style="display:none">
             <div class="pinned-panel-header">
               <span id="pinned-count">📌 <span data-i18n="header.pinned_count">Pinned Messages</span></span>
+              <button id="pinned-popup-btn" class="icon-btn small" title="Pop out to floating panel">⧉</button>
               <button id="pinned-close" class="icon-btn small">&times;</button>
             </div>
             <div id="pinned-list" class="pinned-list"></div>
@@ -724,6 +725,17 @@
   </div>
 
   <!-- Thread Panel (slides in from right) -->
+  <!-- Pinned Messages PiP floating panel (draggable overlay) -->
+  <div id="pins-pip-panel" class="pins-pip-panel" style="display:none">
+    <div class="pins-pip-header">
+      <span class="pins-pip-icon" aria-hidden="true">📌</span>
+      <span id="pins-pip-title" class="pins-pip-title">Pinned Messages</span>
+      <div class="pins-pip-spacer"></div>
+      <button id="pins-pip-popin" class="icon-btn small" title="Pop back in to sidebar">⧈</button>
+      <button id="pins-pip-close" class="icon-btn small" title="Close">&times;</button>
+    </div>
+    <div id="pins-pip-list" class="pins-pip-list pinned-list"></div>
+  </div>
   <!-- DM PiP floating panel (overlay; doesn't switch the active channel) -->
   <div id="dm-pip-panel" class="dm-pip-panel" style="display:none">
     <div id="dm-pip-banner" class="dm-pip-banner" aria-hidden="true"></div>

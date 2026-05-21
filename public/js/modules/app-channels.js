@@ -81,8 +81,9 @@ async switchChannel(code) {
   document.getElementById('pinned-toggle-btn').style.display = '';
   const _galleryBtn = document.getElementById('gallery-toggle-btn');
   if (_galleryBtn) _galleryBtn.style.display = isDm ? 'none' : '';
-  // Auto-close pinned panel on channel switch so stale pins don't linger
+  // Auto-close pinned panel and Pins PiP on channel switch so stale pins don't linger
   document.getElementById('pinned-panel').style.display = 'none';
+  this._closePinsPiP?.();
 
   // Show "Select messages" button for admins/mods on non-DM channels
   const moveSelectBtn = document.getElementById('move-select-btn');

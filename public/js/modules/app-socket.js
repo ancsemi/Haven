@@ -1485,6 +1485,14 @@ _setupSocketListeners() {
       this._appendSystemMessage(`📌 ${t('header.messages.pinned_by', { name: data.pinnedBy })}`);
       this._markPinUnread?.(data.messageId);
       this._bumpPinIndicator?.(1);
+
+      // If the Pins PiP is open, silently re-fetch the updated pin list so the
+      // new pin appears without requiring the user to reopen anything.
+      const pinsPipPanel = document.getElementById('pins-pip-panel');
+      if (pinsPipPanel && pinsPipPanel.style.display !== 'none' && this._pinsPipChannelCode === this.currentChannel) {
+        this._pinsPipSilentRefresh = true;
+        this.socket.emit('get-pinned-messages', { code: this.currentChannel });
+      }
     }
   });
 
@@ -1500,7 +1508,7 @@ _setupSocketListeners() {
         const unpinBtn = msgEl.querySelector('[data-action="unpin"]');
         if (unpinBtn) { unpinBtn.dataset.action = 'pin'; unpinBtn.title = 'Pin'; }
       }
-      // Remove from pinned panel if it's open
+      // Remove from pinned sidebar panel if it's open
       const pinnedItem = document.querySelector(`#pinned-panel .pinned-item[data-msg-id="${data.messageId}"]`);
       if (pinnedItem) {
         pinnedItem.remove();
@@ -1510,6 +1518,19 @@ _setupSocketListeners() {
         if (remaining === 0) {
           document.getElementById('pinned-list').innerHTML = `<p class="muted-text" style="padding:12px">${t('pinned_panel.no_messages')}</p>`;
         }
+      }
+      // Remove from Pins PiP if it's open — same DOM surgery, no re-fetch needed
+      const pipItem = document.querySelector(`#pins-pip-list .pinned-item[data-msg-id="${data.messageId}"]`);
+      if (pipItem) {
+        pipItem.remove();
+        const pipList = document.getElementById('pins-pip-list');
+        if (pipList && !pipList.querySelector('.pinned-item')) {
+          pipList.innerHTML = `<p class="muted-text" style="padding:12px">${t('pinned_panel.no_messages')}</p>`;
+        }
+      }
+      // Keep the cached _lastPins in sync so a subsequent pop-out isn't stale
+      if (this._lastPins) {
+        this._lastPins = this._lastPins.filter(p => p.id !== data.messageId);
       }
       this._appendSystemMessage(`📌 ${t('header.messages.message_unpinned')}`);
       this._bumpPinIndicator?.(-1);
