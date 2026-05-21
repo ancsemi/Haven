@@ -447,8 +447,11 @@
           <div id="pinned-panel" class="pinned-panel" style="display:none">
             <div class="pinned-panel-header">
               <span id="pinned-count">📌 <span data-i18n="header.pinned_count">Pinned Messages</span></span>
-              <button id="pinned-popup-btn" class="icon-btn small" title="Pop out to floating panel">⧉</button>
-              <button id="pinned-close" class="icon-btn small">&times;</button>
+              <div class="pinned-panel-actions">
+                <button id="pinned-fullscreen-btn" class="icon-btn small" title="Open fullscreen">⤢</button>
+                <button id="pinned-popup-btn" class="icon-btn small" title="Pop out to floating panel">⧉</button>
+                <button id="pinned-close" class="icon-btn small">&times;</button>
+              </div>
             </div>
             <div id="pinned-list" class="pinned-list"></div>
           </div>
@@ -731,6 +734,7 @@
       <span class="pins-pip-icon" aria-hidden="true">📌</span>
       <span id="pins-pip-title" class="pins-pip-title">Pinned Messages</span>
       <div class="pins-pip-spacer"></div>
+      <button id="pins-pip-fullscreen" class="icon-btn small" title="Toggle fullscreen">⤢</button>
       <button id="pins-pip-popin" class="icon-btn small" title="Pop back in to sidebar">⧈</button>
       <button id="pins-pip-close" class="icon-btn small" title="Close">&times;</button>
     </div>

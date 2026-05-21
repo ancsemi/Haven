@@ -1169,6 +1169,7 @@ _bindPinsPiPDrag() {
   let startX = 0, startY = 0, startLeft = 0, startTop = 0, dragging = false;
   header.addEventListener('mousedown', (e) => {
     if (e.target.closest('button, a')) return;
+    if (panel.classList.contains('pins-pip-maximized')) return;
     dragging = true;
     startX = e.clientX; startY = e.clientY;
     const r = panel.getBoundingClientRect();

@@ -3404,6 +3404,9 @@ html.rgb-cycling *::after {
   padding: 4px 0;
   min-height: 0;
 }
+.pins-pip-panel.pins-pip-maximized { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); width: 90vw !important; height: 85vh !important; border-radius: 12px; resize: none; }
+.pins-pip-panel.pins-pip-maximized .pins-pip-header { cursor: default; }
+.pinned-panel-actions { display: flex; align-items: center; gap: 2px; }
 
 /* ── DM Picture-in-Picture floating panel ──────────
    A draggable/resizable overlay that hosts a full-fidelity DM

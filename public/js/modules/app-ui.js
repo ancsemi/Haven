@@ -1371,6 +1371,15 @@ _setupUI() {
     document.getElementById('pinned-panel').style.display = 'none';
   });
 
+  // Open pinned messages in fullscreen (maximized PiP)
+  const pinnedFullscreenBtn = document.getElementById('pinned-fullscreen-btn');
+  if (pinnedFullscreenBtn) pinnedFullscreenBtn.addEventListener('click', () => {
+    document.getElementById('pinned-panel').style.display = 'none';
+    this._openPinsPiP?.(this._lastPins || []);
+    const panel = document.getElementById('pins-pip-panel');
+    if (panel) panel.classList.add('pins-pip-maximized');
+  });
+
   // Pop pinned messages out to the floating PiP panel
   const pinnedPopupBtn = document.getElementById('pinned-popup-btn');
   if (pinnedPopupBtn) pinnedPopupBtn.addEventListener('click', () => {
@@ -1382,6 +1391,13 @@ _setupUI() {
   // Pins PiP: close button
   const pinsPipClose = document.getElementById('pins-pip-close');
   if (pinsPipClose) pinsPipClose.addEventListener('click', () => this._closePinsPiP?.());
+
+  // Pins PiP: fullscreen toggle button
+  const pinsPipFullscreen = document.getElementById('pins-pip-fullscreen');
+  if (pinsPipFullscreen) pinsPipFullscreen.addEventListener('click', () => {
+    const panel = document.getElementById('pins-pip-panel');
+    if (panel) panel.classList.toggle('pins-pip-maximized');
+  });
 
   // Pins PiP: pop-in button — close PiP and re-open the sidebar panel
   const pinsPipPopin = document.getElementById('pins-pip-popin');
