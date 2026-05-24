@@ -1,0 +1,130 @@
+# Automated translations workflow (#5357)
+# ----------------------------------------------------------------------
+# Goal: let community translators submit translation-only PRs and have
+# them merged without a maintainer release-cycle bottleneck.
+#
+# How it works:
+#   1. Trigger on PRs that touch any `public/locales/*.json` file.
+#   2. Detect whether the PR is "translations-only" (changed files set
+#      is fully contained in public/locales/ AND doesn't touch en.json
+#      — en is the master, so changes to it still need a normal review).
+#   3. Run `scripts/validate-locales.js` against the changed files to
+#      check JSON validity, _meta fields, and shape compatibility with
+#      en.json (no type mismatches that would break i18n lookup).
+#   4. If translations-only AND validation passes, label the PR
+#      `translations-only` and enable auto-merge (squash). The PR will
+#      be merged by GitHub once any other required status checks pass.
+#   5. If the repo has no required reviews, the PR merges immediately.
+#      Otherwise it just sits with auto-merge enabled until a reviewer
+#      approves (the label makes them easy to find).
+#
+# Why not also approve automatically?
+#   GitHub deliberately forbids the github-actions bot from approving
+#   PRs (a PR author can't be its own approver, and that token is
+#   considered to be the PR author's account for fork PRs). If you
+#   want fully unattended merging without branch protection approval
+#   requirements, just don't require reviews on PRs touching
+#   public/locales/** — auto-merge does the rest.
+#
+# Security: this workflow runs on `pull_request` (NOT pull_request_target),
+# so PRs from forks cannot read repo secrets. Validation runs in a
+# sandbox. We never execute translation JSON content.
+
+name: Translations auto-validate
+
+on:
+  pull_request:
+    paths:
+      - 'public/locales/**'
+      - 'scripts/validate-locales.js'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: List changed files
+        id: changes
+        run: |
+          # Compare against the PR base — works for both same-repo and fork PRs
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only "$base" "$head")
+          echo "Changed files:"
+          echo "$changed"
+          echo "$changed" > /tmp/changed.txt
+
+          # Translations-only = every changed file is under public/locales/
+          # AND none of them is en.json (the master).
+          translations_only=true
+          touches_en=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              public/locales/*.json) ;;
+              *) translations_only=false ;;
+            esac
+            if [ "$f" = "public/locales/en.json" ]; then touches_en=true; fi
+          done < /tmp/changed.txt
+
+          if [ "$touches_en" = "true" ]; then translations_only=false; fi
+          echo "translations_only=$translations_only" >> "$GITHUB_OUTPUT"
+
+          # Build the list of locale files to validate (only non-en ones)
+          locale_files=$(grep -E '^public/locales/.*\.json$' /tmp/changed.txt | grep -v '^public/locales/en\.json$' || true)
+          echo "$locale_files" > /tmp/locale_files.txt
+          # GitHub Actions multiline output
+          {
+            echo "locale_files<<EOF"
+            cat /tmp/locale_files.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate changed locale files
+        id: validate
+        if: steps.changes.outputs.locale_files != ''
+        run: |
+          # Pass each changed locale file to the validator
+          files=""
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            files="$files $f"
+          done <<< "${{ steps.changes.outputs.locale_files }}"
+          echo "Validating:$files"
+          node scripts/validate-locales.js $files
+
+      - name: Label translations-only PR
+        if: steps.changes.outputs.translations_only == 'true' && success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --add-label "translations-only" || true
+          # The label may not exist yet — create it then retry
+          gh label create "translations-only" --color "0E8A16" --description "Auto-mergeable translation update" 2>/dev/null || true
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --add-label "translations-only"
+
+      - name: Enable auto-merge on translations-only PR
+        if: steps.changes.outputs.translations_only == 'true' && success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # If branch protection allows it, this merges as soon as checks pass.
+          # If reviews are required, the PR sits with auto-merge enabled
+          # until a maintainer approves.
+          gh pr merge "${{ github.event.pull_request.number }}" --auto --squash || \
+            echo "Could not enable auto-merge (likely disabled at repo level — that's fine, label is still set)."
