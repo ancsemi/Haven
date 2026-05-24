@@ -358,32 +358,42 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Helper: run a DELETE/UPDATE only when the target table exists.
+    // Self-hosted instances upgraded from older versions may be missing
+    // newer tables (push_subscriptions, fcm_tokens, eula_acceptances,
+    // user_preferences, high_scores, deleted_users, whitelist, etc.).
+    // Without guards, a missing table aborts the whole transaction and
+    // the user sees "Failed to delete account" with no clue why (#5376).
+    const _runIfTable = (table, sql, ...params) => {
+      updateIfTableExists(table, sql, ...params);
+    };
+
     const purge = db.transaction(() => {
-      db.prepare('DELETE FROM reactions WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM mutes WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM bans WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM read_positions WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM high_scores WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM eula_acceptances WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM user_preferences WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(uid);
-      db.prepare('DELETE FROM fcm_tokens WHERE user_id = ?').run(uid);
-      db.prepare('UPDATE channels SET created_by = NULL WHERE created_by = ?').run(uid);
-      updateIfTableExists('uploads', 'UPDATE uploads SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
-      updateIfTableExists('channel_emojis', 'UPDATE channel_emojis SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
-      db.prepare('UPDATE bans SET banned_by = NULL WHERE banned_by = ?').run(uid);
-      db.prepare('UPDATE mutes SET muted_by = NULL WHERE muted_by = ?').run(uid);
-      db.prepare('UPDATE user_roles SET granted_by = NULL WHERE granted_by = ?').run(uid);
-      updateIfTableExists('webhook_configs', 'UPDATE webhook_configs SET created_by = NULL WHERE created_by = ?', uid);
-      db.prepare('UPDATE whitelist SET added_by = NULL WHERE added_by = ?').run(uid);
-      db.prepare('UPDATE deleted_users SET deleted_by = NULL WHERE deleted_by = ?').run(uid);
-      db.prepare('UPDATE pinned_messages SET pinned_by = NULL WHERE pinned_by = ?').run(uid);
+      _runIfTable('reactions', 'DELETE FROM reactions WHERE user_id = ?', uid);
+      _runIfTable('mutes', 'DELETE FROM mutes WHERE user_id = ?', uid);
+      _runIfTable('bans', 'DELETE FROM bans WHERE user_id = ?', uid);
+      _runIfTable('user_roles', 'DELETE FROM user_roles WHERE user_id = ?', uid);
+      _runIfTable('read_positions', 'DELETE FROM read_positions WHERE user_id = ?', uid);
+      _runIfTable('high_scores', 'DELETE FROM high_scores WHERE user_id = ?', uid);
+      _runIfTable('eula_acceptances', 'DELETE FROM eula_acceptances WHERE user_id = ?', uid);
+      _runIfTable('user_preferences', 'DELETE FROM user_preferences WHERE user_id = ?', uid);
+      _runIfTable('push_subscriptions', 'DELETE FROM push_subscriptions WHERE user_id = ?', uid);
+      _runIfTable('fcm_tokens', 'DELETE FROM fcm_tokens WHERE user_id = ?', uid);
+      _runIfTable('channels', 'UPDATE channels SET created_by = NULL WHERE created_by = ?', uid);
+      _runIfTable('uploads', 'UPDATE uploads SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
+      _runIfTable('channel_emojis', 'UPDATE channel_emojis SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
+      _runIfTable('bans', 'UPDATE bans SET banned_by = NULL WHERE banned_by = ?', uid);
+      _runIfTable('mutes', 'UPDATE mutes SET muted_by = NULL WHERE muted_by = ?', uid);
+      _runIfTable('user_roles', 'UPDATE user_roles SET granted_by = NULL WHERE granted_by = ?', uid);
+      _runIfTable('webhook_configs', 'UPDATE webhook_configs SET created_by = NULL WHERE created_by = ?', uid);
+      _runIfTable('whitelist', 'UPDATE whitelist SET added_by = NULL WHERE added_by = ?', uid);
+      _runIfTable('deleted_users', 'UPDATE deleted_users SET deleted_by = NULL WHERE deleted_by = ?', uid);
+      _runIfTable('pinned_messages', 'UPDATE pinned_messages SET pinned_by = NULL WHERE pinned_by = ?', uid);
 
       if (scrubMessages) {
-        db.prepare('DELETE FROM pinned_messages WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(uid);
-        db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(uid);
-        db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
+        _runIfTable('pinned_messages', 'DELETE FROM pinned_messages WHERE message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)', uid);
+        _runIfTable('messages', 'DELETE FROM messages WHERE user_id = ? AND is_archived = 0', uid);
+        _runIfTable('messages', 'UPDATE messages SET user_id = NULL WHERE user_id = ?', uid);
 
         const dmChannels = db.prepare(`
           SELECT c.id, c.code FROM channels c
@@ -394,12 +404,12 @@ module.exports = function register(socket, ctx) {
           const remaining = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE channel_id = ?').get(dm.id);
           if (remaining.cnt === 0) {
             db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(dm.id);
-            db.prepare('DELETE FROM read_positions WHERE channel_id = ?').run(dm.id);
+            _runIfTable('read_positions', 'DELETE FROM read_positions WHERE channel_id = ?', dm.id);
             db.prepare('DELETE FROM channels WHERE id = ?').run(dm.id);
           }
         }
       } else {
-        db.prepare('UPDATE messages SET user_id = NULL WHERE user_id = ?').run(uid);
+        _runIfTable('messages', 'UPDATE messages SET user_id = NULL WHERE user_id = ?', uid);
       }
 
       db.prepare('DELETE FROM channel_members WHERE user_id = ?').run(uid);
@@ -410,7 +420,11 @@ module.exports = function register(socket, ctx) {
       purge();
     } catch (err) {
       console.error('Self-delete error:', err);
-      return cb({ error: 'Failed to delete account' });
+      // Surface the real SQL error to the client so users (and we) can
+      // actually diagnose schema/FK issues instead of seeing the generic
+      // "Failed to delete account" message (#5376).
+      const detail = err && err.message ? String(err.message).slice(0, 240) : 'Unknown error';
+      return cb({ error: `Failed to delete account: ${detail}` });
     }
 
     console.log(`🗑️  User self-deleted: "${userRow.username}" (id: ${uid}, scrub: ${scrubMessages})`);
