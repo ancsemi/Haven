@@ -1727,6 +1727,14 @@
           <p class="settings-hint" data-i18n="settings.debug_section.listener_only_hint">Join voice channels without requesting microphone access. You'll hear everyone but won't be able to talk. Useful if you don't own a mic, can't grant mic permission right now, or just want to listen in. Haven will also fall back to listener-only automatically if the mic can't be opened for any reason. (#5380)</p>
         </div>
 
+        <div class="desktop-pref-row">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-screen-share-voice-proc">
+            <span class="toggle-label" data-i18n="settings.debug_section.screen_share_voice_proc">Apply voice processing to screen-share audio</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.screen_share_voice_proc_hint">Re-enable echo cancellation, noise suppression, and auto gain control on the audio captured from your screen share. Default off as of 3.17.3 because these filters mangle music and game audio. Turn this on if you're sharing voice content (tutorial narration, a podcast, a meeting) where the cleanup actually helps. Does not affect your microphone, which always gets full voice processing.</p>
+        </div>
+
         <!-- Desktop-only debug setting: shown when running in Haven Desktop -->
         <div class="desktop-pref-row" id="pref-force-sdr-row" style="display:none">
           <label class="toggle-row">

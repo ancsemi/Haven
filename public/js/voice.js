@@ -2,6 +2,23 @@
 // Haven — WebRTC Voice Chat Manager
 // ═══════════════════════════════════════════════════════════
 
+// iOS Safari (and every "browser" on iOS, since they all wrap WebKit) has a
+// long-standing bug where MediaStreamAudioSourceNode produces silence for
+// audio tracks received from an RTCPeerConnection. The track is alive and
+// audible if attached directly to an <audio> element, but routing it
+// through createMediaStreamSource() → ... → destination gives you nothing.
+// Detect iOS so _playAudio / _playScreenAudio can skip the Web Audio graph
+// and use native element playback instead. (#5388-ish, iOS Web fix)
+const _IS_IOS_WEBKIT = (() => {
+  try {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // Treat all iOS browsers as WebKit (they are, by App Store policy).
+    return isIOS;
+  } catch { return false; }
+})();
+
 class VoiceManager {
   constructor(socket) {
     this.socket = socket;
@@ -872,17 +889,20 @@ class VoiceManager {
         audio: true,
       };
 
-      // #5379 — Always request raw screen audio with voice-call processing
-      // disabled. Chromium defaults to applying echoCancellation /
-      // noiseSuppression / autoGainControl to getDisplayMedia audio, which is
-      // tuned for voice and hollows out music and game audio for listeners.
-      // Mic capture (getUserMedia) is a separate stream and still gets full
-      // voice processing — only the captured *screen* audio is left raw.
-      displayMediaOptions.audio = {
-        echoCancellation: false,
-        autoGainControl: false,
-        noiseSuppression: false,
-      };
+      // #5379 — Default to raw screen audio. Chromium normally applies
+      // echoCancellation / noiseSuppression / autoGainControl to
+      // getDisplayMedia audio (tuned for voice), which hollows out music
+      // and game audio for listeners. Power users sharing a tutorial or
+      // talk where they want the captured system audio to be cleaned up
+      // can opt back in via Settings → Debug → "Apply voice processing
+      // to screen-share audio". Mic capture (getUserMedia) is a separate
+      // stream and always gets full voice processing regardless.
+      const applyVoiceProcToScreen = (() => {
+        try { return localStorage.getItem('screen_share_voice_processing') === '1'; } catch { return false; }
+      })();
+      displayMediaOptions.audio = applyVoiceProcToScreen
+        ? true
+        : { echoCancellation: false, autoGainControl: false, noiseSuppression: false };
 
       // These options aren't supported in Electron's Chromium — only add them
       // when running in a regular browser to avoid immediate rejection.
@@ -1701,6 +1721,21 @@ class VoiceManager {
       this.screenGainNodes.delete(userId);
     }
 
+    // iOS Safari / WebKit: skip Web Audio routing for incoming screen audio
+    // — same WebKit bug as _playAudio above. Use native element playback
+    // so the captured system audio actually reaches the user's speaker.
+    if (_IS_IOS_WEBKIT) {
+      const savedVolume = Math.min(1, this._getSavedStreamVolume(userId));
+      if (this.isDeafened) {
+        audioEl.dataset.prevVolume = String(savedVolume);
+        audioEl.volume = 0;
+      } else {
+        audioEl.volume = savedVolume;
+      }
+      audioEl.play().catch(() => {});
+      return;
+    }
+
     try {
       this._ensureAudioCtx();
       const source = this.audioCtx.createMediaStreamSource(stream);
@@ -2106,6 +2141,27 @@ class VoiceManager {
     // for the same user when tracks are added (mic + screen audio).
     if (this.gainNodes.has(userId)) {
       audioEl.volume = 0;
+      return;
+    }
+
+    // iOS Safari / WebKit: createMediaStreamSource() from a remote PC track
+    // is silent (WebKit bug, unfixed for years). Skip the entire Web Audio
+    // routing and let the <audio> element play natively. Trade-off: no
+    // per-user volume boost above 100% and no remote-speaker analyser, but
+    // audio actually plays — which is the whole point. Local mic talk
+    // detection still works because that's getUserMedia-side, not PC-side.
+    if (_IS_IOS_WEBKIT) {
+      const savedVolume = Math.min(1, this._getSavedVolume(userId));
+      if (this.isDeafened) {
+        audioEl.dataset.prevVolume = String(savedVolume);
+        audioEl.volume = 0;
+      } else {
+        audioEl.volume = savedVolume;
+      }
+      // iOS also blocks play() outside a user gesture; ontrack fires after
+      // the join-voice tap so we should be fine, but kick play() anyway
+      // for safety and swallow the rejection if it ever happens.
+      audioEl.play().catch(() => {});
       return;
     }
 

@@ -1749,11 +1749,22 @@ _setupDebugSection() {
     } catch {}
   });
 
-  // #5379 — echo-cancellation-on-screen-share toggle removed in 3.17.x.
-  // Full-fidelity (echoCancellation/autoGainControl/noiseSuppression all off)
-  // is now the unconditional default for getDisplayMedia audio because mic
-  // capture is a separate stream and the screen-audio EC was hollowing out
-  // music and games for listeners. Any old localStorage entry is harmless.
+  // #5379 — opt-in toggle to re-apply voice processing (echoCancellation /
+  // noiseSuppression / autoGainControl) to getDisplayMedia audio. Default
+  // off as of 3.17.3 because those filters hollow out music and game audio
+  // for listeners. Users sharing tutorial narration or meeting audio can
+  // flip this back on. Mic capture is a separate stream and always gets
+  // voice processing regardless of this setting.
+  const sspCb = document.getElementById('pref-debug-screen-share-voice-proc');
+  if (sspCb) {
+    try { sspCb.checked = localStorage.getItem('screen_share_voice_processing') === '1'; } catch {}
+    sspCb.addEventListener('change', () => {
+      try {
+        if (sspCb.checked) localStorage.setItem('screen_share_voice_processing', '1');
+        else localStorage.removeItem('screen_share_voice_processing');
+      } catch {}
+    });
+  }
 
   // #5380 — always join voice muted
   const moCb = document.getElementById('pref-voice-mute-on-join');
