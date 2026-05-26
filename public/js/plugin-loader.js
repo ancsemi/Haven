@@ -477,6 +477,26 @@ window.HavenPluginLoader = (function () {
     document.querySelectorAll('.theme-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.theme === `file:${file}`);
     });
+
+    // Re-inject user-enabled custom CSS tweaks (non-published themes) on top of the new base.
+    // The check below skips the file we just injected since it's already in the DOM.
+    reapplyEnabledThemes();
+  }
+
+  // Re-inject all user-enabled themes that are missing from the DOM.
+  // Called after any theme switch that removes haven-theme-* links.
+  function reapplyEnabledThemes() {
+    const enabledList = getEnabledThemes();
+    for (const file of enabledList) {
+      if (document.getElementById(`haven-theme-${file}`)) continue; // already present
+      const linkEl = document.createElement('link');
+      linkEl.rel = 'stylesheet';
+      linkEl.href = `/themes/${file}?_=${Date.now()}`;
+      linkEl.id = `haven-theme-${file}`;
+      document.head.appendChild(linkEl);
+      const t = loadedThemes.get(file);
+      if (t) { t.enabled = true; t.linkEl = linkEl; }
+    }
   }
 
   // Start when the app is ready
@@ -495,6 +515,7 @@ window.HavenPluginLoader = (function () {
     disableTheme,
     renderPluginUI,
     applyFileTheme,
+    reapplyEnabledThemes,
     refresh: init,
   };
 })();

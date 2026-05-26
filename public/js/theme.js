@@ -1493,6 +1493,8 @@ function initThemeSwitcher(containerId, socket) {
       // Switching to a built-in theme: remove any injected file-theme links
       if (!theme.startsWith('file:')) {
         document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
+        // Re-inject user-enabled custom CSS tweaks that survived the theme switch
+        window.HavenPluginLoader?.reapplyEnabledThemes?.();
       }
 
       document.documentElement.setAttribute('data-theme', theme.startsWith('file:') ? 'haven' : theme);

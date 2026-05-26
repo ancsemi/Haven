@@ -63,6 +63,7 @@ async _joinVoice() {
 
     this.notifications.playDirect('voice_join');
     this._updateVoiceButtons(true);
+    this._syncMuteDeafenButtons();
     this._updateVoiceStatus(true);
     this._updateVoiceBar();
     // Server's broadcastVoiceUsers (fired on our voice-join) prunes stale

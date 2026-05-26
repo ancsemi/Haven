@@ -3785,6 +3785,7 @@ html.rgb-cycling *::after {
   min-width: 0;
   background: var(--bg-primary);
   position: relative;
+  isolation: isolate; /* scope channel-header z-index:1 so it can't bleed above .right-sidebar (#5383) */
 }
 
 .channel-header {
@@ -10342,7 +10343,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .server-bar { width: 0; min-width: 0; overflow: hidden; border: none; padding: 0; }
 
   /* Main area takes full width on mobile */
-  .main { width: 100%; min-width: 0; isolation: isolate; }
+  .main { width: 100%; min-width: 0; }
 
   /* Welcome screen centered properly */
   .welcome-screen { width: 100%; justify-content: center; align-items: center; }
