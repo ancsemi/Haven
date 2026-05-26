@@ -1415,12 +1415,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>&#x2B21; Haven Server &mdash; v3.17.1</h2>
+        <h2>&#x2B21; Haven Server &mdash; v3.17.2</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.17.1.zip" class="btn btn-primary download-main">
-            <span class="icon">&#x2B07;</span> Download v3.17.1 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.17.2.zip" class="btn btn-primary download-main">
+            <span class="icon">&#x2B07;</span> Download v3.17.2 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1436,8 +1436,12 @@
           </button>
           <div class="version-list">
             <div class="version-list-inner">
+                            <div class="version-item">
+                <div><span class="v-name">v3.17.2</span><span class="v-tag latest">Latest</span> &mdash; Mobile fixes: right-side userlist no longer hides behind the message composer between 769&ndash;900px (#5384), and the "Voice / Stage active" indicator now dims the background like the Members button does (#5385). Also: the <code>pin_message</code> role permission now actually shows the Pin/Unpin context menu entry (frontend was checking moderator level instead of the permission). GUIDE.md gains a Reverse Proxy section covering Caddy, nginx, and tunnel + Caddy chains.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.17.2.zip">Download &rarr;</a>
+              </div>
               <div class="version-item">
-                <div><span class="v-name">v3.17.1</span><span class="v-tag latest">Latest</span> &mdash; Critical hotfix: 3.17.0 shipped with a stray non-UTF-8 byte in <code>package.json</code> that caused servers running newer Node and the official Docker image to crash on startup with <code>ERR_INVALID_PACKAGE_CONFIG</code> (#5374). Anyone running 3.17.0 should update immediately. Also: show/hide password toggle on every password field, and expired tokens now redirect to login instead of leaving you stuck on an empty channel list (#5375).</div>
+                <div><span class="v-name">v3.17.1</span> &mdash; Critical hotfix for the 3.17.0 ERR_INVALID_PACKAGE_CONFIG crash (#5374) caused by a stray non-UTF-8 byte in package.json. Show/hide password toggle on every password field. Expired tokens redirect to login instead of leaving you on an empty channel list (#5375).</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.17.1.zip">Download &rarr;</a>
               </div>
               <div class="version-item">
