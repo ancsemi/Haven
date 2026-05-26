@@ -18,6 +18,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.17.2] — 2026-05-25
+
+### Fixed
+- **Right-side userlist hidden behind the message composer on tablet widths (#5384).** Between 769 and 900px the right sidebar slid in over the chat area as designed, but its `z-index: 1100` sat well below the composer's `99995`, so the bottom ~70px of the panel disappeared under the textarea and tapping that band did nothing. The mobile-overlay backdrop had the same bug. Bumped both sidebars (`.sidebar` and `.right-sidebar` on mobile breakpoints) to `100000` and the overlay to `99996` so they clear the composer while still sitting under modals (`100001`). Same fix applied to the ≤768px breakpoint.
+- **Mobile "Voice / Stage active" indicator opened the sidebar without dimming the background (#5385).** Tapping the floating voice indicator slid the right userlist in via the `mobile-right-open` class but skipped the `.mobile-overlay.active` toggle, so the page underneath stayed fully interactive and tap-outside-to-close did nothing. Now mirrors the Members-button flow and activates the overlay too.
+- **`pin_message` role permission did nothing in the message context menu.** The Pin / Unpin item was gated on `_canModerate()` (moderator level 25+) instead of the actual `pin_message` permission, so granting it to a role had no visible effect. The backend already enforced the right permission, only the client-side gating was wrong. Changed to `_hasPerm('pin_message')` so the button shows up exactly when the permission is granted.
+
+### Documented
+- **Reverse Proxy (Caddy / nginx / Traefik) section added to `GUIDE.md`.** Walks through setting `FORCE_HTTP=true` in `.env`, a minimal Caddyfile, an nginx snippet with the WebSocket `Upgrade` headers, and the tunnel + Caddy chain pattern. Common gotchas table covers the "browser still shows the self-signed cert" trap (missing `FORCE_HTTP=true`).
+
+---
+
 ## [3.17.1] — 2026-05-23
 
 ### Added

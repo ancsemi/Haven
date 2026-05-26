@@ -437,7 +437,83 @@ Copy the tunnel URL and send it to your friends. That's it — no port forwardin
 
 ---
 
-## �🔧 Router-Specific Tips
+## 🔁 Reverse Proxy (Caddy, nginx, Traefik)
+
+If you already have a domain and want Haven to live behind a proper reverse proxy (so you get a real Let's Encrypt cert, no browser warnings, and the same `https://chat.example.com` URL every time), set `FORCE_HTTP=true` and let the proxy terminate TLS for you.
+
+### Quick Recipe (Caddy)
+
+1. **Stop Haven** if it's running.
+2. Add the following line to your `.env` file (create one next to `package.json` if it doesn't exist):
+
+   ```env
+   FORCE_HTTP=true
+   ```
+
+   This tells Haven to skip its built-in self-signed cert generation and listen on plain HTTP on port 3000. Caddy will handle the HTTPS leg.
+
+3. **Install Caddy** ([caddyserver.com/download](https://caddyserver.com/download)) and create a `Caddyfile`:
+
+   ```caddy
+   chat.example.com {
+       reverse_proxy localhost:3000
+   }
+   ```
+
+   Replace `chat.example.com` with your real domain. Caddy will auto-fetch a Let's Encrypt cert on first run. Make sure ports **80 and 443** are open / forwarded to the Caddy host.
+
+4. **Start Caddy**, then **start Haven** (`Start Haven.bat` or `npm start`).
+5. Open `https://chat.example.com` in a browser. You should see Haven with a clean padlock and no cert warnings.
+
+### Using a Tunnel + Caddy
+
+If you don't want to port-forward 80/443, point a tunnel (Cloudflare Tunnel, Tailscale Funnel, ngrok, etc.) at the Caddy host. The flow becomes:
+
+```
+Browser → Tunnel (HTTPS) → Caddy (HTTPS) → Haven (HTTP, FORCE_HTTP=true)
+```
+
+Caddy still terminates TLS for the LAN leg, and the tunnel terminates a second TLS layer for the public leg. That's the setup minecraft_bread used successfully (see the support thread for the full step-by-step).
+
+### nginx Snippet
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name chat.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/chat.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/chat.example.com/privkey.pem;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+The `Upgrade` / `Connection` headers are required for Socket.io WebSocket traffic; without them voice chat and live messages will silently break.
+
+### Common Gotchas
+
+| Problem | Fix |
+|---------|-----|
+| Browser shows Haven's self-signed cert warning instead of the Let's Encrypt one | You forgot `FORCE_HTTP=true`. Haven is still serving its own HTTPS on 3000 and Caddy is just proxying that. Add the line, restart Haven. |
+| Voice chat / live updates don't work behind nginx | Add the `Upgrade` and `Connection "upgrade"` headers shown above. Caddy handles WebSockets automatically. |
+| Mixed-content errors in browser console | Make sure the proxy forwards `X-Forwarded-Proto $scheme` so Haven knows it's serving over HTTPS. |
+| "502 Bad Gateway" from Caddy | Haven isn't running, or it's still bound to HTTPS on 3000. Double-check `FORCE_HTTP=true` is in `.env` and you restarted Haven after adding it. |
+
+> 💡 A full Docker Compose example with Traefik + coturn lives in [`docs/examples/haven-traefik-coturn/`](docs/examples/haven-traefik-coturn/) if you'd rather run the whole stack containerised.
+
+---
+
+## 🔧 Router-Specific Tips
 
 ### Xfinity / Comcast (XB7 Gateway)
 
