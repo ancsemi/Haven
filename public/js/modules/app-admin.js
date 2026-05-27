@@ -348,6 +348,10 @@ _applyServerSettings() {
     if (maxEmojiKb) {
       maxEmojiKb.value = this.serverSettings.max_emoji_kb || '256';
     }
+    const maxStickerKb = document.getElementById('max-sticker-kb');
+    if (maxStickerKb) {
+      maxStickerKb.value = this.serverSettings.max_sticker_kb || '1024';
+    }
     const maxPollOpts = document.getElementById('max-poll-options');
     if (maxPollOpts) {
       maxPollOpts.value = this.serverSettings.max_poll_options || '10';
@@ -657,6 +661,7 @@ _snapshotAdminSettings() {
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
+    max_sticker_kb: this.serverSettings.max_sticker_kb || '1024',
     max_poll_options: this.serverSettings.max_poll_options || '10',
     session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
@@ -750,6 +755,12 @@ _saveAdminSettings() {
   const maxEmojiKb = String(Math.max(64, Math.min(1024, parseInt(document.getElementById('max-emoji-kb')?.value) || 256)));
   if (maxEmojiKb !== (snap.max_emoji_kb || '256')) {
     this.socket.emit('update-server-setting', { key: 'max_emoji_kb', value: maxEmojiKb });
+    changed = true;
+  }
+
+  const maxStickerKb = String(Math.max(256, Math.min(10240, parseInt(document.getElementById('max-sticker-kb')?.value) || 1024)));
+  if (maxStickerKb !== (snap.max_sticker_kb || '1024')) {
+    this.socket.emit('update-server-setting', { key: 'max_sticker_kb', value: maxStickerKb });
     changed = true;
   }
 
@@ -860,6 +871,8 @@ _cancelAdminSettings() {
     if (msk) msk.value = snap.max_sound_kb || '1024';
     const mek = document.getElementById('max-emoji-kb');
     if (mek) mek.value = snap.max_emoji_kb || '256';
+    const mstk = document.getElementById('max-sticker-kb');
+    if (mstk) mstk.value = snap.max_sticker_kb || '1024';
     const mpo = document.getElementById('max-poll-options');
     if (mpo) mpo.value = snap.max_poll_options || '10';
     const sdd = document.getElementById('session-duration-days');

@@ -2081,6 +2081,11 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_emoji_hint">Max custom emoji upload size (64–1024 KB, default 256)</small>
           <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_sticker">Max Sticker File Size (KB)</span>
+            <input type="number" id="max-sticker-kb" min="256" max="10240" value="1024" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_sticker_hint">Max sticker upload size (256–10240 KB, default 1024 / 1 MB). Bump this up to allow larger GIF-style stickers.</small>
+          <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_poll_options">Max Poll Options</span>
             <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
           </label>

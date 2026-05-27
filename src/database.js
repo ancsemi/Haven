@@ -261,6 +261,7 @@ function initDatabase() {
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64–1024)
+  insertSetting.run('max_sticker_kb', '1024');            // max sticker file size in KB (256–10240) — #5392
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
   insertSetting.run('session_duration_days', '7');       // login token lifetime (1–365); admins can extend per #5294
