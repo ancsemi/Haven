@@ -894,7 +894,9 @@ _setVoiceVolume(userId, vol) {
   } catch { /* ignore */ }
 },
 
-// ── Nicknames (client-side only) ──────────────────────
+// ── Nicknames ─────────────────────────────────────────────
+// Stored server-side in user_nicknames (synced on session-info).
+// localStorage acts as a fast local cache only.
 
 _getNickname(userId, fallbackUsername) {
   if (userId && this._nicknames[userId]) return this._nicknames[userId];
@@ -908,6 +910,10 @@ _setNickname(userId, nickname) {
     delete this._nicknames[userId];
   }
   localStorage.setItem('haven_nicknames', JSON.stringify(this._nicknames));
+  // Mirror to server so the nickname survives across devices (#5394).
+  if (this.socket) {
+    this.socket.emit('set-nickname', { targetId: userId, nickname: nickname || null });
+  }
 },
 
 _showNicknameDialog(userId, currentUsername) {

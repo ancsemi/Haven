@@ -230,6 +230,18 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: user_nicknames table (#5394) ──────────────
+  // Personal, private nicknames — only visible to the user who set them.
+  // owner_id = the user who assigned the nickname; target_id = the user being renamed.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_nicknames (
+      owner_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      nickname  TEXT NOT NULL,
+      PRIMARY KEY (owner_id, target_id)
+    );
+  `);
+
   // ── Migration: whitelist table ─────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS whitelist (

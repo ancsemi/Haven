@@ -561,4 +561,46 @@ module.exports = function register(socket, ctx) {
       callback({ ok: false, error: 'Server error — try again later.' });
     }
   });
+
+  // ── Nicknames (#5394) ───────────────────────────────────
+  // Nicknames are personal and private — only visible to the user who set them.
+  // set-nickname upserts (or deletes when nickname is blank/null).
+  // set-nicknames-bulk accepts { nicknames: { [targetId]: nickname|null } } for
+  // the one-time migration where the client pushes its localStorage contents.
+  socket.on('set-nickname', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const targetId = parseInt(data.targetId, 10);
+    if (!Number.isFinite(targetId) || targetId <= 0) return;
+    const nickname = (typeof data.nickname === 'string') ? data.nickname.trim().slice(0, 32) : null;
+    try {
+      if (nickname) {
+        db.prepare(
+          'INSERT INTO user_nicknames (owner_id, target_id, nickname) VALUES (?, ?, ?) ON CONFLICT(owner_id, target_id) DO UPDATE SET nickname = excluded.nickname'
+        ).run(socket.user.id, targetId, nickname);
+      } else {
+        db.prepare('DELETE FROM user_nicknames WHERE owner_id = ? AND target_id = ?').run(socket.user.id, targetId);
+      }
+    } catch (err) {
+      console.error('set-nickname error:', err);
+    }
+  });
+
+  socket.on('set-nicknames-bulk', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const map = data.nicknames;
+    if (!map || typeof map !== 'object') return;
+    const entries = Object.entries(map).slice(0, 500); // sanity cap
+    const upsert = db.prepare(
+      'INSERT INTO user_nicknames (owner_id, target_id, nickname) VALUES (?, ?, ?) ON CONFLICT(owner_id, target_id) DO UPDATE SET nickname = excluded.nickname'
+    );
+    const txn = db.transaction(() => {
+      for (const [rawId, nick] of entries) {
+        const targetId = parseInt(rawId, 10);
+        if (!Number.isFinite(targetId) || targetId <= 0) continue;
+        if (typeof nick !== 'string' || !nick.trim()) continue;
+        upsert.run(socket.user.id, targetId, nick.trim().slice(0, 32));
+      }
+    });
+    try { txn(); } catch (err) { console.error('set-nicknames-bulk error:', err); }
+  });
 };

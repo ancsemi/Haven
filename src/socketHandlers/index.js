@@ -1164,6 +1164,13 @@ function setupSocketHandlers(io, db) {
     });
 
     // Push authoritative session info
+    // (#5394) Include server-stored nicknames so they sync across devices.
+    let nicknames = {};
+    try {
+      const rows = db.prepare('SELECT target_id, nickname FROM user_nicknames WHERE owner_id = ?').all(socket.user.id);
+      for (const r of rows) nicknames[r.target_id] = r.nickname;
+    } catch { /* non-critical — table may not exist yet on old installs before migration runs */ }
+
     socket.emit('session-info', {
       id: socket.user.id, username: socket.user.username,
       isAdmin: socket.user.isAdmin,
@@ -1175,7 +1182,8 @@ function setupSocketHandlers(io, db) {
       effectiveLevel: socket.user.effectiveLevel || 0,
       permissions: getUserPermissions(socket.user.id),
       status: socket.user.status || 'online',
-      statusText: socket.user.statusText || ''
+      statusText: socket.user.statusText || '',
+      nicknames
     });
 
     // Send current voice counts for sidebar indicators.

@@ -31,6 +31,21 @@ _setupSocketListeners() {
       }
     }
     localStorage.setItem('haven_user', JSON.stringify(this.user));
+    // (#5394) Merge server-stored nicknames. Server is authoritative for any
+    // key it knows about; localStorage keeps anything the server doesn't have yet.
+    if (data.nicknames && typeof data.nicknames === 'object') {
+      const serverNicks = data.nicknames;
+      const localNicks = this._nicknames || {};
+      // Migrate: push localStorage-only nicknames to the server once.
+      const toSync = {};
+      for (const [id, nick] of Object.entries(localNicks)) {
+        if (nick && !serverNicks[id]) toSync[id] = nick;
+      }
+      if (Object.keys(toSync).length) this.socket.emit('set-nicknames-bulk', { nicknames: toSync });
+      // Server wins on conflict.
+      this._nicknames = { ...localNicks, ...serverNicks };
+      localStorage.setItem('haven_nicknames', JSON.stringify(this._nicknames));
+    }
     // Init E2E encryption AFTER socket is fully connected & server handlers registered
     if (!this._e2eInitDone) {
       this._e2eInitDone = true;
