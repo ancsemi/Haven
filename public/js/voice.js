@@ -204,6 +204,11 @@ class VoiceManager {
 
       try {
         const conn = peer.connection;
+        // An incoming offer supersedes any local offer we were preparing or
+        // waiting to have answered. Clear those flags so the post-answer drain
+        // can safely issue one fresh follow-up offer if local changes are still pending.
+        peer._makingOffer = false;
+        peer._awaitingAnswer = false;
         // Handle renegotiation glare: if we have a pending local offer,
         // roll it back first so we can accept the incoming one.
         if (conn.signalingState !== 'stable') {
@@ -232,6 +237,12 @@ class VoiceManager {
         }
       } catch (err) {
         console.error('Error handling voice offer:', err);
+      } finally {
+        const latestPeer = this.peers.get(from.id);
+        if (latestPeer && latestPeer.connection === peer?.connection && latestPeer.connection.signalingState === 'stable') {
+          latestPeer._awaitingAnswer = false;
+          this._drainQueuedRenegotiation(from.id);
+        }
       }
     });
 
@@ -244,6 +255,7 @@ class VoiceManager {
           // (we may have rolled back our offer due to glare)
           if (peer.connection.signalingState === 'have-local-offer') {
             await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            peer._awaitingAnswer = false;
             // Flush buffered ICE candidates that arrived before the answer
             if (peer._pendingCandidates && peer._pendingCandidates.length) {
               for (const c of peer._pendingCandidates) {
@@ -251,9 +263,19 @@ class VoiceManager {
               }
               peer._pendingCandidates = [];
             }
+          } else if (peer._awaitingAnswer && peer.connection.signalingState === 'stable') {
+            // Stale answer for a local offer we already rolled back after glare.
+            peer._awaitingAnswer = false;
           }
         } catch (err) {
           console.error('Error handling voice answer:', err);
+          if (peer._awaitingAnswer && peer.connection.signalingState === 'stable') {
+            peer._awaitingAnswer = false;
+          }
+        } finally {
+          if (peer.connection.signalingState === 'stable') {
+            this._drainQueuedRenegotiation(data.from.id);
+          }
         }
       }
     });
@@ -1226,7 +1248,45 @@ class VoiceManager {
     } catch (e) { /* setParameters not supported */ }
   }
 
-  async _renegotiate(userId, connection) {
+  async _waitForSignalingStable(connection, timeoutMs = 5000) {
+    if (!connection || connection.signalingState === 'stable') return true;
+    return await new Promise((resolve) => {
+      let settled = false;
+      const onChange = () => {
+        if (settled) return;
+        if (connection.signalingState === 'stable') {
+          settled = true;
+          connection.removeEventListener('signalingstatechange', onChange);
+          resolve(true);
+        }
+      };
+      connection.addEventListener('signalingstatechange', onChange);
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        connection.removeEventListener('signalingstatechange', onChange);
+        resolve(connection.signalingState === 'stable');
+      }, timeoutMs);
+    });
+  }
+
+  _drainQueuedRenegotiation(userId) {
+    const peer = this.peers.get(userId);
+    if (!peer || peer._makingOffer || peer._awaitingAnswer || !peer._renegotiateQueued) return;
+    const wantsIceRestart = !!peer._queuedIceRestart;
+    peer._renegotiateQueued = false;
+    peer._queuedIceRestart = false;
+    this._renegotiate(userId, peer.connection, { iceRestart: wantsIceRestart }).catch(() => {});
+  }
+
+  async _renegotiate(userId, connection, { iceRestart = false } = {}) {
+    const peer = this.peers.get(userId);
+    if (!peer || peer.connection !== connection) return false;
+    if (peer._makingOffer || peer._awaitingAnswer) {
+      peer._renegotiateQueued = true;
+      peer._queuedIceRestart = peer._queuedIceRestart || iceRestart;
+      return false;
+    }
     // Wait for the signaling state to be stable before issuing a fresh
     // offer. RTCPeerConnection.createOffer() throws if called while a
     // previous local-offer or remote-offer is still pending, and the only
@@ -1234,39 +1294,41 @@ class VoiceManager {
     // peer with no video and no retry, which is a leading cause of the
     // "audio works, video tile is black" screen-share bug. Wait up to ~5s
     // for the connection to settle, then proceed. (#5347 v3.15.5)
+    peer._makingOffer = true;
     try {
       if (connection.signalingState !== 'stable') {
-        const ok = await new Promise((resolve) => {
-          let settled = false;
-          const onChange = () => {
-            if (settled) return;
-            if (connection.signalingState === 'stable') {
-              settled = true;
-              connection.removeEventListener('signalingstatechange', onChange);
-              resolve(true);
-            }
-          };
-          connection.addEventListener('signalingstatechange', onChange);
-          setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            connection.removeEventListener('signalingstatechange', onChange);
-            resolve(connection.signalingState === 'stable');
-          }, 5000);
-        });
+        const ok = await this._waitForSignalingStable(connection, 5000);
         if (!ok) {
-          console.warn('[Voice] _renegotiate: signaling stayed', connection.signalingState, 'for peer', userId, '— forcing offer anyway');
+          console.warn('[Voice] _renegotiate: signaling stayed', connection.signalingState, 'for peer', userId, '— queueing retry');
+          peer._renegotiateQueued = true;
+          peer._queuedIceRestart = peer._queuedIceRestart || iceRestart;
+          return false;
         }
       }
-      const offer = await connection.createOffer();
+      const offer = await connection.createOffer(iceRestart ? { iceRestart: true } : undefined);
+      if (connection.signalingState !== 'stable') {
+        // Another incoming offer won the race while createOffer() was in flight.
+        // Leave one queued retry instead of forcing a stale local offer on top.
+        peer._renegotiateQueued = true;
+        peer._queuedIceRestart = peer._queuedIceRestart || iceRestart;
+        return false;
+      }
       await connection.setLocalDescription(offer);
+      peer._awaitingAnswer = true;
       this.socket.emit('voice-offer', {
         code: this.currentChannel,
         targetUserId: userId,
         offer: offer
       });
+      return true;
     } catch (err) {
       console.error('Renegotiation failed for peer', userId, err);
+      return false;
+    } finally {
+      const latestPeer = this.peers.get(userId);
+      if (latestPeer && latestPeer.connection === connection) {
+        latestPeer._makingOffer = false;
+      }
     }
   }
 
@@ -1424,6 +1486,17 @@ class VoiceManager {
       }
     };
 
+    connection.addEventListener('signalingstatechange', () => {
+      const latestPeer = this.peers.get(userId);
+      if (!latestPeer || latestPeer.connection !== connection) return;
+      if (connection.signalingState === 'stable') {
+        if (latestPeer._awaitingAnswer) {
+          latestPeer._awaitingAnswer = false;
+        }
+        this._drainQueuedRenegotiation(userId);
+      }
+    });
+
     connection.onconnectionstatechange = () => {
       const state = connection.connectionState;
       if (state === 'failed') {
@@ -1451,22 +1524,19 @@ class VoiceManager {
       }
     };
 
-    this.peers.set(userId, { connection, stream: remoteAudioStream, username });
+    this.peers.set(userId, {
+      connection,
+      stream: remoteAudioStream,
+      username,
+      _makingOffer: false,
+      _awaitingAnswer: false,
+      _renegotiateQueued: false,
+      _queuedIceRestart: false,
+    });
 
     // If we're the initiator, create and send an offer
     if (createOffer) {
-      try {
-        const offer = await connection.createOffer();
-        await connection.setLocalDescription(offer);
-
-        this.socket.emit('voice-offer', {
-          code: this.currentChannel,
-          targetUserId: userId,
-          offer: offer
-        });
-      } catch (err) {
-        console.error('Error creating voice offer:', err);
-      }
+      await this._renegotiate(userId, connection);
     }
   }
 
@@ -1493,13 +1563,7 @@ class VoiceManager {
 
   async _restartIce(userId, connection) {
     try {
-      const offer = await connection.createOffer({ iceRestart: true });
-      await connection.setLocalDescription(offer);
-      this.socket.emit('voice-offer', {
-        code: this.currentChannel,
-        targetUserId: userId,
-        offer: offer
-      });
+      await this._renegotiate(userId, connection, { iceRestart: true });
     } catch (err) {
       console.error('ICE restart failed for', userId, '— removing peer:', err);
       this._removePeer(userId);
