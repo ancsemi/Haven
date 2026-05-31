@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.18.2] — 2026-05-31
+
+### Fixed
+- **Donors "Thank You" modal** — the Ko-fi donate button could fall below the visible area on shorter screens, forcing users to scroll inside the modal to find it. The modal is now a flex column: the tier lists own the scroll, and the donate button is pinned to the bottom of the modal so it's always visible.
+
+---
+
 ## [3.18.1] — 2026-05-31
 
 ### Fixed

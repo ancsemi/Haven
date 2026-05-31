@@ -13169,7 +13169,13 @@ ul.chat-list { list-style-type: disc; }
   background: var(--bg-secondary, #2b2d31);
   box-shadow: 0 8px 32px rgba(0,0,0,.45);
   animation: donorsSlideIn .3s ease;
-  overflow-y: auto;
+  /* Flex column so the Ko-fi donate button is pinned to the bottom of the
+     modal and the tier section owns the scroll instead of the whole box.
+     Previously the whole modal scrolled, which on shorter screens hid the
+     donate button below the fold until the user thought to scroll. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @keyframes donorsSlideIn {
@@ -13227,6 +13233,16 @@ ul.chat-list { list-style-type: disc; }
   flex-direction: column;
   gap: 20px;
   margin-bottom: 4px;
+  /* Owns the modal's scroll: the rest of the modal (heart, title, sort
+     toggle, note, Ko-fi button) stays put while only the tier lists
+     scroll. min-height:0 lets this child actually shrink inside the flex
+     parent (without it, flex children default to min-content height and
+     this section would push the donate button off-screen). */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.15) transparent;
 }
 
 .donors-tier {
@@ -13303,6 +13319,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 11.5px;
   margin: 14px 0 18px;
   font-style: italic;
+  flex-shrink: 0;
 }
 
 .donors-sort-toggle {
@@ -13343,6 +13360,10 @@ ul.chat-list { list-style-type: disc; }
   text-decoration: none;
   transition: transform .15s, box-shadow .15s;
   box-shadow: 0 3px 12px rgba(226,68,68,.35);
+  /* Pinned to the bottom of the flex column modal — never shrinks, never
+     scrolls out of view. */
+  flex-shrink: 0;
+  align-self: center;
 }
 .donors-kofi-btn:hover {
   transform: translateY(-2px);
