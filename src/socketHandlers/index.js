@@ -1285,13 +1285,18 @@ function setupSocketHandlers(io, db) {
       if (handler) return handler();
 
       // Check for bot-registered slash commands
+      // IMPORTANT: scope by channel_id so the bot in the channel where the
+      // command was issued handles it. Without this filter, /ping registered
+      // on multiple bots in different channels would route to whichever row
+      // SQLite returned first (effectively the most-recently-saved bot's
+      // callback URL), making per-bot callback URLs behave server-wide. (#5398)
       try {
         const botCmd = db.prepare(`
           SELECT bc.command, bc.description, w.id as webhook_id, w.callback_url, w.callback_secret, w.token, w.name as bot_name
           FROM bot_commands bc
           JOIN webhooks w ON bc.webhook_id = w.id
-          WHERE bc.command = ? AND w.is_active = 1 AND w.callback_url IS NOT NULL
-        `).get(cmd);
+          WHERE bc.command = ? AND w.channel_id = ? AND w.is_active = 1 AND w.callback_url IS NOT NULL
+        `).get(cmd, channelId);
         if (botCmd) {
           if (!isSafeCallbackUrl(botCmd.callback_url)) {
             console.error(`Bot command /${cmd}: callback URL blocked by SSRF guard`);
