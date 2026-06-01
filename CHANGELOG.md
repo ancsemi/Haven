@@ -11,7 +11,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [3.21.0] — 2026-05-31
+## [3.22.0] — 2026-06-01
+
+### Added
+- **"Never expire" option for login sessions (#5391 followup).** The `session_duration_days` admin setting now accepts `0` to mean "never expire" — JWTs are signed with no `exp` claim and stay valid until the user logs out or their password changes. The Settings → Uploads & Limits input is now a dropdown (Never / 1 / 7 / 30 / 90 / 365 days) instead of a number entry, and new installs default to **Never**. Existing servers seeded with `7` on older versions keep that value until the admin picks something else, so no behavioral change on upgrade. Was the root cause of #5391 — users kept silently losing their session after the default 7-day expiry, with no obvious cue that re-login was needed. Self-hosters who actually want short-lived tokens can still pick a value; everyone else can stop worrying about it.
+
+### Changed
+- **Unified first-time popup queue.** The desktop-app promo and Android beta promo used to race each other on first visit, with separate "Don't show again" checkboxes that were easy to miss and persisted under inconsistent localStorage keys. They now show one at a time in a single sequenced flow with a small footer bar (`1 of 2`, `Skip all`, `Next` / `Done`), so users can click through or dismiss the whole batch in one go. Dismissal is also now permanently sticky per popup id — any close action marks that id seen forever, regardless of whether a checkbox is ticked. Legacy `haven_desktop_promo_dismissed` / `haven_ab_promo_nodisplay` / `haven_multi_role_notice_v1` keys are migrated into the new `haven_welcome_seen_v1` map on first load, so anyone who already hit "Don't show again" in an earlier version doesn't see those popups again after upgrading. New popups added in future versions still appear (only specific ids the user has actually been shown get persisted as seen — Skip-all does not preemptively dismiss things that don't exist yet).
+
+### Removed
+- **Multi-role-per-channel admin notice.** Long-running admins know about it by now and new admins have known no different; the one-time popup has served its purpose. The `haven_multi_role_notice_v1` key continues to be migrated into the new welcome-seen map for the benefit of anyone whose dismissal needs to survive future popup rework.
+
+### Fixed
+- **Android beta popup silently re-appeared on upgrade.** The `_ab_v3_migrated` block that the v3 release used to wipe stale beta dismissals was still active on every load and would re-show the modal to anyone who'd previously dismissed it. Removed in favor of the new welcome-popup migration path, which only ever sets, never clears.
+
+
 
 ### Added
 - **Server-side per-channel mute (#5399 followup).** Channel mute state has only ever lived in browser localStorage, which meant the server's push helper had no idea who'd muted what and pushed every message to every member regardless. Mobile users in particular reported getting FCM pings for channels they'd muted in the web client weeks earlier; on Android there was no way to silence a noisy channel short of disabling Haven notifications system-wide. A new `user_channel_prefs` table now mirrors the mute set on the server, with `GET /api/user/channel-prefs`, `POST /api/user/channel-prefs/mute` (single-toggle), and `PUT /api/user/channel-prefs/muted` (transactional bulk replace, capped at 500 entries) backing it. `sendPushNotifications` filters muted recipients out of both the web-push subscription loop and the FCM inactive-members list. Existing clients converge automatically on first connect — the renderer unions localStorage with the server set and pushes the merged list back up, so nobody loses their existing mutes.
