@@ -395,10 +395,19 @@ app.get('/api/ice-servers', (req, res) => {
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // STUN_URLS env var: comma-separated list of STUN URIs to override defaults
+  // STUN_URLS env var: comma-separated list of STUN URIs to override defaults.
+  // 3.20.2 (#5399): old defaults (stun.stunprotocol.org + stun.nextcloud.com)
+  // both went offline simultaneously. Mirrors the voice.js client default
+  // pool so any Haven server that hadn't customised STUN_URLS would have
+  // returned dead endpoints to its clients here too.
   const stunUrls = process.env.STUN_URLS
     ? process.env.STUN_URLS.split(',').map(u => u.trim()).filter(Boolean)
-    : ['stun:stun.stunprotocol.org:3478', 'stun:stun.nextcloud.com:3478'];
+    : [
+        'stun:stun.cloudflare.com:3478',
+        'stun:stun.relay.metered.ca:80',
+        'stun:global.stun.twilio.com:3478',
+        'stun:stun.l.google.com:19302',
+      ];
   const iceServers = stunUrls.map(urls => ({ urls }));
 
   const turnUrl = process.env.TURN_URL;
