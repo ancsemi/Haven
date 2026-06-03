@@ -53,7 +53,9 @@ module.exports = function register(socket, ctx) {
 
     const vchSettings = db.prepare('SELECT voice_enabled, voice_user_limit, voice_bitrate FROM channels WHERE code = ?').get(code);
     if (vchSettings && vchSettings.voice_enabled === 0) {
-      return socket.emit('error-msg', 'Voice is disabled in this channel');
+      socket.emit('error-msg', 'Voice is disabled in this channel');
+      socket.emit('voice-channel-gone', { code });
+      return;
     }
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'use_voice', vch.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to use voice chat');
@@ -541,9 +543,13 @@ module.exports = function register(socket, ctx) {
       // voice-existing-users so they (re-)negotiate RTCPeerConnections
       // with anyone who's in the room.
       try {
-        const vch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+        const vch = db.prepare('SELECT id, voice_enabled FROM channels WHERE code = ?').get(code);
         if (!vch) {
           console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — channel ${code} not in DB; signalling client to clean up.`);
+          socket.emit('voice-channel-gone', { code });
+        } else if (vch.voice_enabled === 0) {
+          console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — voice disabled in channel ${code}; signalling client to clean up.`);
+          socket.emit('error-msg', 'Voice is disabled in this channel');
           socket.emit('voice-channel-gone', { code });
         } else {
           const vMember = db.prepare(
@@ -677,11 +683,17 @@ module.exports = function register(socket, ctx) {
       return;
     }
 
-    const vch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const vch = db.prepare('SELECT id, voice_enabled FROM channels WHERE code = ?').get(code);
     if (!vch) {
       console.warn(`[VoiceDiag] voice-rejoin REJECTED — channel ${code} not in DB (user=${socket.user.username}). Telling client channel is gone so it can clean local state.`);
       // Break the infinite watchdog/self-heal loop — tell the client the
       // channel no longer exists so it stops thinking it's in voice.
+      socket.emit('voice-channel-gone', { code });
+      return;
+    }
+    if (vch.voice_enabled === 0) {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED — voice disabled in channel ${code} (user=${socket.user.username}).`);
+      socket.emit('error-msg', 'Voice is disabled in this channel');
       socket.emit('voice-channel-gone', { code });
       return;
     }

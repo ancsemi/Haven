@@ -689,6 +689,18 @@ module.exports = function register(socket, ctx) {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
       if (permission === 'voice' && newVal === 0) {
         db.prepare('UPDATE channels SET streams_enabled = 0, music_enabled = 0 WHERE id = ?').run(channel.id);
+        const room = voiceUsers.get(code);
+        if (room && room.size > 0) {
+          for (const entry of Array.from(room.values())) {
+            const targetSocket = io.sockets.sockets.get(entry.socketId);
+            if (!targetSocket) continue;
+            // Force clients out of voice immediately so they don't keep
+            // reconnecting to a channel that no longer permits voice.
+            targetSocket.emit('voice-channel-gone', { code });
+            handleVoiceLeave(targetSocket, code);
+          }
+          broadcastVoiceUsers(code);
+        }
       }
 
       const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode' };

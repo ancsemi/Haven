@@ -3668,32 +3668,36 @@ function runAutoCleanup() {
     const maxSizeMb = parseInt(getSetting('cleanup_max_size_mb') || '0');
     let totalDeleted = 0;
 
-    // 1. Delete messages older than N days (skip archived/protected messages and exempt channels)
+    // 1. Delete messages older than N days (skip archived/pinned messages
+    // and exempt channels)
     if (maxAgeDays > 0) {
       // Delete reactions for old messages first
       db.prepare(`
         DELETE FROM reactions WHERE message_id IN (
           SELECT id FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0
+          AND id NOT IN (SELECT message_id FROM pinned_messages)
           AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)
         )
       `).run(`-${maxAgeDays} days`);
       const result = db.prepare(
-        "DELETE FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
+        "DELETE FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
       ).run(`-${maxAgeDays} days`);
       totalDeleted += result.changes;
     }
 
-    // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip archived)
+    // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip
+    // archived and pinned)
     if (maxSizeMb > 0) {
       const dbPath = DB_PATH;
       const stats = require('fs').statSync(dbPath);
       const sizeMb = stats.size / (1024 * 1024);
       if (sizeMb > maxSizeMb) {
-        // Delete oldest 10% of non-archived messages to bring size down
-        const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE is_archived = 0 AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)').get().cnt;
+        // Delete oldest 10% of non-archived, non-pinned messages to bring
+        // size down.
+        const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)').get().cnt;
         const deleteCount = Math.max(Math.floor(totalCount * 0.1), 100);
         const oldestIds = db.prepare(
-          'SELECT id FROM messages WHERE is_archived = 0 AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
+          'SELECT id FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
         ).all(deleteCount).map(r => r.id);
         if (oldestIds.length > 0) {
           // Chunk deletes to avoid creating extremely long SQL statements
@@ -3740,6 +3744,22 @@ function runAutoCleanup() {
           ).all();
           const uploadRe = /\/uploads\/([\w\-.]+)/g;
           for (const row of exemptMessages) {
+            let m;
+            while ((m = uploadRe.exec(row.content || '')) !== null) {
+              protectedFiles.add(m[1]);
+            }
+          }
+        } catch { /* skip if query fails */ }
+
+        // Also protect files referenced by pinned messages.
+        try {
+          const pinnedMessages = db.prepare(`
+            SELECT m.content
+            FROM messages m
+            WHERE m.id IN (SELECT message_id FROM pinned_messages)
+          `).all();
+          const uploadRe = /\/uploads\/([\w\-.]+)/g;
+          for (const row of pinnedMessages) {
             let m;
             while ((m = uploadRe.exec(row.content || '')) !== null) {
               protectedFiles.add(m[1]);
@@ -4146,14 +4166,66 @@ const protocol = useSSL ? 'https' : 'http';
 // is not captured (common on systemd-less Pi setups, screen
 // sessions that were closed, etc.).
 const CRASH_LOG = path.join(DATA_DIR, 'crash.log');
+const MAX_CRASH_LOG_BYTES = (() => {
+  const parsed = parseInt(process.env.HAVEN_CRASH_LOG_MAX_MB || '64', 10);
+  const mb = Number.isFinite(parsed) && parsed > 0 ? parsed : 64;
+  return mb * 1024 * 1024;
+})();
+
+let _inLogCrash = false;
+let _consolePipeBroken = false;
+
+function isBrokenPipeError(err) {
+  if (!err) return false;
+  if (err && err.code === 'EPIPE') return true;
+  const msg = String(err.message || err || '');
+  return /\bEPIPE\b/i.test(msg) || /broken pipe/i.test(msg);
+}
+
+function rotateCrashLogIfNeeded() {
+  try {
+    const stat = fs.statSync(CRASH_LOG);
+    if (stat.size < MAX_CRASH_LOG_BYTES) return;
+    const rotated = `${CRASH_LOG}.1`;
+    try { fs.unlinkSync(rotated); } catch {}
+    try {
+      fs.renameSync(CRASH_LOG, rotated);
+    } catch {
+      fs.truncateSync(CRASH_LOG, 0);
+    }
+  } catch {
+    // File may not exist yet.
+  }
+}
 
 function logCrash(label, detail) {
+  if (isBrokenPipeError(detail)) {
+    _consolePipeBroken = true;
+    return;
+  }
+  if (_inLogCrash) return;
+  _inLogCrash = true;
   const ts = new Date().toISOString();
-  const mem = process.memoryUsage();
-  const line = `[${ts}] ${label}: ${detail instanceof Error ? detail.stack : detail}\n` +
-               `  RSS=${Math.round(mem.rss / 1048576)}MB Heap=${Math.round(mem.heapUsed / 1048576)}/${Math.round(mem.heapTotal / 1048576)}MB\n`;
-  console.error(`⚠️  ${label}:`, detail);
-  try { fs.appendFileSync(CRASH_LOG, line); } catch { /* disk full / read-only */ }
+  try {
+    const mem = process.memoryUsage();
+    const line = `[${ts}] ${label}: ${detail instanceof Error ? detail.stack : detail}\n` +
+                 `  RSS=${Math.round(mem.rss / 1048576)}MB Heap=${Math.round(mem.heapUsed / 1048576)}/${Math.round(mem.heapTotal / 1048576)}MB\n`;
+    if (!_consolePipeBroken) {
+      try {
+        console.error(`⚠️  ${label}:`, detail);
+      } catch (e) {
+        if (isBrokenPipeError(e)) _consolePipeBroken = true;
+      }
+    }
+    try {
+      rotateCrashLogIfNeeded();
+      fs.appendFileSync(CRASH_LOG, line);
+    } catch {
+      // disk full / read-only
+    }
+  } finally {
+    _inLogCrash = false;
+  }
 }
 
 // ── Global crash prevention ──────────────────────────────
@@ -4161,9 +4233,17 @@ function logCrash(label, detail) {
 // in a socket handler or background task.  Log the error so it
 // can be debugged, but keep the process alive.
 process.on('uncaughtException', (err) => {
+  if (isBrokenPipeError(err)) {
+    _consolePipeBroken = true;
+    return;
+  }
   logCrash('Uncaught exception (server kept alive)', err);
 });
 process.on('unhandledRejection', (reason) => {
+  if (isBrokenPipeError(reason)) {
+    _consolePipeBroken = true;
+    return;
+  }
   logCrash('Unhandled promise rejection (server kept alive)', reason);
 });
 
@@ -4175,7 +4255,7 @@ process.on('exit', (code) => {
   if (code !== 0) {
     const ts = new Date().toISOString();
     const line = `[${ts}] Process exited with code ${code}\n`;
-    try { fs.appendFileSync(CRASH_LOG, line); } catch {}
+    try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch {}
   }
 });
 
@@ -4252,7 +4332,7 @@ server.listen(PORT, HOST, () => {
 function gracefulShutdown(signal) {
   const ts = new Date().toISOString();
   const line = `[${ts}] Graceful shutdown: ${signal}\n`;
-  try { fs.appendFileSync(CRASH_LOG, line); } catch {}
+  try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch {}
   console.log(`\n${signal} received — shutting down`);
   io.close();
   server.close(() => process.exit(0));
