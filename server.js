@@ -70,7 +70,7 @@ const { initFcm } = require('./src/fcm');
 
 const app = express();
 
-const UPLOAD_PATH_RE = /\/uploads\/((?!deleted-attachments\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
+const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;

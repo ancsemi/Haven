@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 
-const UPLOAD_PATH_RE = /\/uploads\/((?!deleted-attachments\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
-const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!deleted-attachments\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
+const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
+const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;
