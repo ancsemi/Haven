@@ -106,13 +106,6 @@ if [ -f "$HAVEN_DATA/.env" ]; then
     fi
 fi
 
-# ── Kill existing server on configured port ────────────────
-if command -v lsof &> /dev/null && lsof -ti:${HAVEN_PORT} &> /dev/null; then
-    echo "  [!] Killing existing process on port ${HAVEN_PORT}..."
-    lsof -ti:${HAVEN_PORT} | xargs kill -9 2>/dev/null || true
-    sleep 1
-fi
-
 echo "  [*] Data directory: $HAVEN_DATA"
 echo "  [*] Starting Haven server..."
 echo ""
