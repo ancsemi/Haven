@@ -1,12 +1,12 @@
 ﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   HAVEN â€” Multi-Theme Stylesheet
+   HAVEN — Multi-Theme Stylesheet
    Themes: Haven (default), Discord, Matrix, Tron, HALO, LoTR
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 @import url('/css/voice.css?v=1');
 @import url('/css/music.css?v=1');
 
-/* â”€â”€â”€ THEME: Haven (Default) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Haven (Default) ───────────────────────────── */
 :root, [data-theme="haven"] {
   --bg-primary:    #191b28;
   --bg-secondary:  #1e2035;
@@ -47,12 +47,12 @@
   --sidebar-width: 270px;
   --right-width:   260px;
 
-  --theme-logo:    "â¬¡";
+  --theme-logo:    "⬡";
   --msg-glow:      none;
   --scanline:      none;
 }
 
-/* â”€â”€â”€ THEME: Discord â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Discord ───────────────────────────────────── */
 [data-theme="discord"] {
   --bg-primary:    #313338;
   --bg-secondary:  #2b2d31;
@@ -82,10 +82,10 @@
   --led-on:        #23a55a;
   --led-glow:      rgba(35, 165, 90, 0.5);
 
-  --theme-logo:    "ðŸŽ®";
+  --theme-logo:    "🎮";
 }
 
-/* â”€â”€â”€ THEME: Matrix â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Matrix ────────────────────────────────────── */
 [data-theme="matrix"] {
   --bg-primary:    #0a0a0a;
   --bg-secondary:  #0d0d0d;
@@ -119,7 +119,7 @@
   --font-heading:  'Courier New', monospace;
   --font-mono:     'Courier New', monospace;
 
-  --theme-logo:    "â…¯";
+  --theme-logo:    "Ⅿ";
   --msg-glow:      0 0 4px rgba(0, 255, 65, 0.15);
   --scanline:      repeating-linear-gradient(
     0deg,
@@ -130,7 +130,7 @@
   );
 }
 
-/* Matrix accent overrides â€” glitch aesthetic */
+/* Matrix accent overrides — glitch aesthetic */
 [data-theme="matrix"] .brand-text { text-shadow: 0 0 8px rgba(0, 255, 65, 0.4); }
 [data-theme="matrix"] .channel-badge { background: #00ff41; color: #000; }
 [data-theme="matrix"] .message-avatar, [data-theme="matrix"] .message-avatar-img { border: 1px solid rgba(0, 255, 65, 0.3); }
@@ -164,7 +164,7 @@
   filter: none;
 }
 
-/* â”€â”€â”€ THEME: Tron â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Tron ──────────────────────────────────────── */
 [data-theme="tron"] {
   --bg-primary:    #0c141f;
   --bg-secondary:  #0a1018;
@@ -197,18 +197,18 @@
   --font-main:     'Segoe UI', system-ui, sans-serif;
   --font-heading:  'Segoe UI', system-ui, sans-serif;
 
-  --theme-logo:    "â—ˆ";
+  --theme-logo:    "◈";
   --msg-glow:      0 0 4px rgba(111, 236, 255, 0.08);
 }
 
-/* Tron accent overrides â€” identity disc glow */
+/* Tron accent overrides — identity disc glow */
 [data-theme="tron"] .brand-text { text-shadow: 0 0 10px rgba(111, 236, 255, 0.4); color: #6fecff; }
 [data-theme="tron"] .server-icon.home { background: transparent; border: 2px solid #6fecff; box-shadow: 0 0 8px rgba(111, 236, 255, 0.4); }
 [data-theme="tron"] .channel-item.active::before { background: #6fecff; box-shadow: 0 0 6px rgba(111, 236, 255, 0.5); }
 [data-theme="tron"] .btn-send { box-shadow: 0 0 8px rgba(111, 236, 255, 0.3); }
 [data-theme="tron"] .message-avatar, [data-theme="tron"] .message-avatar-img { border: 1px solid rgba(111, 236, 255, 0.25); }
 
-/* â”€â”€â”€ THEME: HALO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: HALO ──────────────────────────────────────── */
 [data-theme="halo"] {
   --bg-primary:    #0d1a0d;
   --bg-secondary:  #0a150a;
@@ -246,7 +246,7 @@
   --msg-glow:      0 0 4px rgba(212, 160, 32, 0.06);
 }
 
-/* HALO accent overrides â€” energy sword blue highlights */
+/* HALO accent overrides — energy sword blue highlights */
 [data-theme="halo"] .channel-item.active::before { background: #4fc3f7; }
 [data-theme="halo"] .btn-send { background: #4fc3f7; }
 [data-theme="halo"] .btn-send:hover { background: #6fd4ff; }
@@ -259,7 +259,7 @@
 [data-theme="halo"] .brand-text { background: linear-gradient(90deg, #4ca64c, #d4a020, #4fc3f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 [data-theme="halo"] .inline-code { color: #4fc3f7; }
 
-/* â”€â”€â”€ THEME: LoTR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: LoTR ──────────────────────────────────────── */
 [data-theme="lotr"] {
   --bg-primary:    #1a1510;
   --bg-secondary:  #1e1812;
@@ -293,7 +293,7 @@
   --font-heading:  'Palatino Linotype', 'Book Antiqua', Georgia, serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âšœ";
+  --theme-logo:    "⚜";
 
   /* Worn parchment scanlines */
   --scanline:      repeating-linear-gradient(
@@ -305,12 +305,12 @@
   );
 }
 
-/* LoTR accent overrides â€” elvish warmth */
+/* LoTR accent overrides — elvish warmth */
 [data-theme="lotr"] .brand-text { font-style: italic; }
 [data-theme="lotr"] .welcome-icon { color: #d4a844; }
 [data-theme="lotr"] .server-icon.home { background: linear-gradient(135deg, #8a6a20, #d4a844); }
 
-/* â”€â”€â”€ THEME: Cyberpunk â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Cyberpunk ─────────────────────────────────── */
 [data-theme="cyberpunk"] {
   --bg-primary:    #0a0a12;
   --bg-secondary:  #0e0e1a;
@@ -344,17 +344,17 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âš¡";
+  --theme-logo:    "⚡";
   --msg-glow:      0 0 4px rgba(255, 45, 111, 0.08);
 }
 
-/* Cyberpunk accent splashes â€” neon contrasts */
+/* Cyberpunk accent splashes — neon contrasts */
 [data-theme="cyberpunk"] .channel-item.active::before { background: #00f0ff; }
 [data-theme="cyberpunk"] .inline-code { color: #00f0ff; }
 [data-theme="cyberpunk"] .brand-text { background: linear-gradient(90deg, #ff2d6f, #00f0ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 [data-theme="cyberpunk"] .server-icon.home { background: linear-gradient(135deg, #ff2d6f, #00f0ff); }
 
-/* â”€â”€â”€ THEME: Nord â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Nord ──────────────────────────────────────── */
 [data-theme="nord"] {
   --bg-primary:    #2e3440;
   --bg-secondary:  #3b4252;
@@ -391,11 +391,11 @@
   --theme-logo:    "â„";
 }
 
-/* Nord accent splashes â€” aurora colors */
+/* Nord accent splashes — aurora colors */
 [data-theme="nord"] .mention { background: rgba(180, 142, 173, 0.2); color: #b48ead; }
 [data-theme="nord"] .brand-text { color: #88c0d0; }
 
-/* â”€â”€â”€ THEME: Dracula â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Dracula ───────────────────────────────────── */
 [data-theme="dracula"] {
   --bg-primary:    #1a1b26;
   --bg-secondary:  #16171f;
@@ -429,7 +429,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ§›";
+  --theme-logo:    "🧛";
   --msg-glow:      0 0 4px rgba(189, 147, 249, 0.06);
 }
 
@@ -438,7 +438,7 @@
 [data-theme="dracula"] .mention { background: rgba(255, 121, 198, 0.15); color: #ff79c6; }
 [data-theme="dracula"] .brand-text { background: linear-gradient(90deg, #bd93f9, #ff79c6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 
-/* â”€â”€â”€ THEME: Bloodborne (Red & Black) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Bloodborne (Red & Black) ──────────────────── */
 [data-theme="bloodborne"] {
   --bg-primary:    #0a0000;
   --bg-secondary:  #110808;
@@ -473,11 +473,11 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ©¸";
+  --theme-logo:    "🩸";
   --msg-glow:      0 0 6px rgba(204, 0, 32, 0.12);
 }
 
-/* Bloodborne accent overrides â€” blood and darkness */
+/* Bloodborne accent overrides — blood and darkness */
 [data-theme="bloodborne"] .brand-text { color: #cc0020; text-shadow: 0 0 12px rgba(204, 0, 32, 0.5); }
 [data-theme="bloodborne"] .server-icon.home { background: linear-gradient(135deg, #660010, #cc0020); box-shadow: 0 0 10px rgba(204, 0, 32, 0.4); }
 [data-theme="bloodborne"] .channel-item.active::before { background: #ff0030; box-shadow: 0 0 8px rgba(255, 0, 48, 0.6); }
@@ -486,7 +486,7 @@
 [data-theme="bloodborne"] .channel-badge { background: #cc0020; color: #fff; }
 [data-theme="bloodborne"] .inline-code { color: #ff4060; }
 
-/* â”€â”€â”€ THEME: Ice (Ice Blue) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Ice (Ice Blue) ────────────────────────────── */
 [data-theme="ice"] {
   --bg-primary:    #0a1520;
   --bg-secondary:  #0c1a28;
@@ -521,11 +521,11 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ§Š";
+  --theme-logo:    "🧊";
   --msg-glow:      0 0 4px rgba(0, 212, 255, 0.08);
 }
 
-/* Ice accent overrides â€” frozen glow */
+/* Ice accent overrides — frozen glow */
 [data-theme="ice"] .brand-text { color: #00d4ff; text-shadow: 0 0 12px rgba(0, 212, 255, 0.5); }
 [data-theme="ice"] .server-icon.home { background: linear-gradient(135deg, #005580, #00d4ff); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
 [data-theme="ice"] .channel-item.active::before { background: #00d4ff; box-shadow: 0 0 8px rgba(0, 212, 255, 0.5); }
@@ -534,7 +534,7 @@
 [data-theme="ice"] .channel-badge { background: #00d4ff; color: #0a1520; }
 [data-theme="ice"] .inline-code { color: #40e0ff; }
 
-/* â”€â”€â”€ THEME: Abyss (Deep Ocean / Navy Blue) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Abyss (Deep Ocean / Navy Blue) ────────────── */
 [data-theme="abyss"] {
   --bg-primary:    #040810;
   --bg-secondary:  #060c18;
@@ -569,11 +569,11 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸŒŠ";
+  --theme-logo:    "🌊";
   --msg-glow:      0 0 4px rgba(26, 90, 255, 0.08);
 }
 
-/* Abyss accent overrides â€” deep ocean pressure */
+/* Abyss accent overrides — deep ocean pressure */
 [data-theme="abyss"] .brand-text { color: #4488ff; text-shadow: 0 0 12px rgba(26, 90, 255, 0.5); }
 [data-theme="abyss"] .server-icon.home { background: linear-gradient(135deg, #0a2060, #1a5aff); box-shadow: 0 0 10px rgba(26, 90, 255, 0.3); }
 [data-theme="abyss"] .channel-item.active::before { background: #1a5aff; box-shadow: 0 0 8px rgba(26, 90, 255, 0.5); }
@@ -582,7 +582,7 @@
 [data-theme="abyss"] .channel-badge { background: #1a5aff; color: #fff; }
 [data-theme="abyss"] .inline-code { color: #4488ff; }
 
-/* â”€â”€â”€ THEME: Dark Souls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Dark Souls ────────────────────────────────── */
 [data-theme="darksouls"] {
   --bg-primary:    #0c0a08;
   --bg-secondary:  #110e0b;
@@ -617,7 +617,7 @@
   --font-heading:  'Palatino Linotype', Georgia, serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ”¥";
+  --theme-logo:    "🔥";
   --msg-glow:      0 0 6px rgba(200, 168, 78, 0.08);
 }
 
@@ -627,7 +627,7 @@
 [data-theme="darksouls"] .inline-code { color: #dcc06a; }
 [data-theme="darksouls"] .message-avatar, [data-theme="darksouls"] .message-avatar-img { border: 1px solid rgba(200, 168, 78, 0.2); }
 
-/* â”€â”€â”€ THEME: Elden Ring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Elden Ring ────────────────────────────────── */
 [data-theme="eldenring"] {
   --bg-primary:    #08080e;
   --bg-secondary:  #0c0c16;
@@ -672,7 +672,7 @@
 [data-theme="eldenring"] .inline-code { color: #80a0d0; }
 [data-theme="eldenring"] .message-avatar, [data-theme="eldenring"] .message-avatar-img { border: 1px solid rgba(212, 168, 50, 0.2); }
 
-/* â”€â”€â”€ THEME: Minecraft â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Minecraft ─────────────────────────────────── */
 [data-theme="minecraft"] {
   --bg-primary:    #1a1a1a;
   --bg-secondary:  #222222;
@@ -718,7 +718,7 @@
 [data-theme="minecraft"] .message-avatar, [data-theme="minecraft"] .message-avatar-img { border: 2px solid #3a3a3a; border-radius: 4px; }
 [data-theme="minecraft"] .channel-badge { background: #55bb55; color: #1a1a1a; }
 
-/* â”€â”€â”€ THEME: Final Fantasy X â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Final Fantasy X ───────────────────────────── */
 [data-theme="ffx"] {
   --bg-primary:    #080e1a;
   --bg-secondary:  #0b1325;
@@ -763,7 +763,7 @@
 [data-theme="ffx"] .inline-code { color: #60c0f0; }
 [data-theme="ffx"] .message-avatar, [data-theme="ffx"] .message-avatar-img { border: 1px solid rgba(64, 168, 224, 0.25); }
 
-/* â”€â”€â”€ THEME: Legend of Zelda â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Legend of Zelda ───────────────────────────── */
 [data-theme="zelda"] {
   --bg-primary:    #0a120a;
   --bg-secondary:  #0e180e;
@@ -809,7 +809,7 @@
 [data-theme="zelda"] .message-avatar, [data-theme="zelda"] .message-avatar-img { border: 1px solid rgba(68, 187, 68, 0.25); }
 [data-theme="zelda"] .channel-badge { background: #44bb44; color: #0a120a; }
 
-/* â”€â”€â”€ THEME: Fallout / PIP-Boy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Fallout / PIP-Boy ─────────────────────────── */
 [data-theme="fallout"] {
   --bg-primary:    #0a0e08;
   --bg-secondary:  #0e1410;
@@ -896,7 +896,7 @@
   filter: none;
 }
 
-/* â”€â”€â”€ THEME: Scripture (Parchment & Gold) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Scripture (Parchment & Gold) ──────────────── */
 [data-theme="scripture"] {
   --bg-primary:    #1a1610;
   --bg-secondary:  #201c14;
@@ -983,7 +983,7 @@
   mix-blend-mode: screen;
 }
 
-/* â”€â”€â”€ THEME: Chapel (Stained Glass) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Chapel (Stained Glass) ────────────────────── */
 [data-theme="chapel"] {
   --bg-primary:    #0e0c18;
   --bg-secondary:  #12101e;
@@ -1018,7 +1018,7 @@
   --font-heading:  'Georgia', 'Times New Roman', serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "â›ª";
+  --theme-logo:    "⛪";
 }
 [data-theme="chapel"] .brand-text { background: linear-gradient(90deg, #8a5cf0, #70b8ff, #e8b840); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 [data-theme="chapel"] .server-icon.home { background: linear-gradient(135deg, #4a2ca0, #8a5cf0); box-shadow: 0 0 10px rgba(138, 92, 240, 0.3); }
@@ -1076,7 +1076,7 @@
   mix-blend-mode: screen;
 }
 
-/* â”€â”€â”€ THEME: Gospel (Light Cream & Ruby) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Gospel (Light Cream & Ruby) ───────────────── */
 [data-theme="gospel"] {
   --bg-primary:    #f5f0e8;
   --bg-secondary:  #ebe4d8;
@@ -1157,7 +1157,7 @@
   animation: gospel-radiance 10s ease-in-out infinite;
 }
 
-/* â”€â”€â”€ THEME: Midnight Purple â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Midnight Purple ────────────────────────────── */
 [data-theme="midnightpurple"] {
   --bg-primary:    #0d0a1a;
   --bg-secondary:  #140f29;
@@ -1191,7 +1191,7 @@
 [data-theme="midnightpurple"] ::-webkit-scrollbar-thumb { background: rgba(138, 92, 246, 0.3) !important; }
 [data-theme="midnightpurple"] ::-webkit-scrollbar-thumb:hover { background: rgba(138, 92, 246, 0.5) !important; }
 
-/* â”€â”€â”€ THEME: CRT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: CRT ───────────────────────────────────────── */
 [data-theme="crt"] {
   --bg-primary:    #080808;
   --bg-secondary:  #0a0a0a;
@@ -1226,7 +1226,7 @@
   --font-heading:  'VT323', 'Courier New', monospace;
   --font-mono:     'VT323', 'Courier New', monospace;
 
-  --theme-logo:    "ðŸ“º";
+  --theme-logo:    "📺";
 }
 [data-theme="crt"] .brand-text { color: #ffb000; text-shadow: 0 0 6px rgba(255, 176, 0, 0.5); letter-spacing: 3px; text-transform: uppercase; }
 [data-theme="crt"] .server-icon.home { background: #111; border: 2px solid #ffb000; box-shadow: 0 0 10px rgba(255, 176, 0, 0.2); color: #ffb000; }
@@ -1243,7 +1243,7 @@
 [data-theme="crt"] .message-input-container { border: 1px solid rgba(255, 176, 0, 0.2); border-radius: 0; }
 [data-theme="crt"] ::selection { background: #ffb000; color: #080808; }
 
-/* â”€â”€â”€ THEME: Windows 95 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Windows 95 ────────────────────────────────── */
 [data-theme="win95"] {
   --bg-primary:    #bfbfbf;
   --bg-secondary:  #bfbfbf;
@@ -1278,7 +1278,7 @@
   --font-heading:  'MS Sans Serif', 'Tahoma', 'Arial', sans-serif;
   --font-mono:     'Fixedsys', 'Courier New', monospace;
 
-  --theme-logo:    "ðŸªŸ";
+  --theme-logo:    "🪟";
   --scanline:      none;
 }
 [data-theme="win95"] .brand-text { color: #fff; font-weight: 700; text-shadow: none; }
@@ -1315,7 +1315,7 @@
 [data-theme="win95"] .btn-sm.btn-danger { background: #bfbfbf; color: #cc0000; border: 3px outset #fff; }
 
 
-/* Win95 icon buttons near username (rename, logout) â€” beveled */
+/* Win95 icon buttons near username (rename, logout) — beveled */
 [data-theme="win95"] .icon-btn {
   background: #bfbfbf; color: #000; border: 2px outset #fff;
   border-radius: 0 !important; padding: 3px 5px;
@@ -1332,10 +1332,10 @@
 [data-theme="win95"] .btn-settings-popout:active { border: 3px inset #808080; }
 [data-theme="win95"] .btn-settings-popout svg { color: #000; }
 
-/* Win95 status picker dot â€” beveled */
+/* Win95 status picker dot — beveled */
 [data-theme="win95"] .status-picker-dot { border: 2px outset #fff; border-radius: 0 !important; }
 
-/* Win95 generic modal buttons â€” always black text on gray */
+/* Win95 generic modal buttons — always black text on gray */
 [data-theme="win95"] .modal button,
 [data-theme="win95"] .modal-overlay button {
   background: #bfbfbf; color: #000; border: 3px outset #fff; border-radius: 0 !important;
@@ -1355,7 +1355,7 @@
 [data-theme="win95"] .modal { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; box-shadow: 2px 2px 0 #000; }
 [data-theme="win95"] .modal h3 { background: linear-gradient(90deg, #000080, #1084d0); color: #fff; margin: -20px -24px 16px -24px; padding: 4px 8px; border-radius: 0; font-weight: 700; font-size: 12px; }
 /* Message group separators were attempted twice (per-row, then group-only)
-   and both produced visually inconsistent results â€” sometimes a line, sometimes
+   and both produced visually inconsistent results — sometimes a line, sometimes
    a half-line, sometimes a doubled line depending on whether the previous
    author's last message was a compact follow-up vs a group-leader.  The Win95
    theme already gives enough vertical separation via avatar bevels and the
@@ -1363,7 +1363,7 @@
    the rule out entirely is the cleanest option. */
 [data-theme="win95"] .message-row:hover { background: #dfdfdf; }
 /* Win95 user-group separator: the global rule paints a 1px line in
-   `var(--border)` which on win95 is #808080 â€” almost black on the
+   `var(--border)` which on win95 is #808080 — almost black on the
    #bfbfbf surface, reading as a thick line and (paired with the avatar's
    3px outset highlight) often appearing doubled.  Override with the
    lighter palette colour and shrink the spacing so it matches the
@@ -1374,7 +1374,7 @@
   padding-top: 2px !important;
 }
 /* And explicitly suppress any phantom border that could land on
-   .message-row itself â€” nothing should ever draw one, but if a stray
+   .message-row itself — nothing should ever draw one, but if a stray
    inherited rule does, this will neutralise it on win95. */
 [data-theme="win95"] .message > .message-row,
 [data-theme="win95"] .message-compact > .message-row {
@@ -1395,7 +1395,7 @@
 [data-theme="win95"] .input-actions-box .btn-gif { border-color: #808080; }
 [data-theme="win95"] input[type="text"], [data-theme="win95"] textarea { background: #fff; border: 3px inset #808080 !important; border-radius: 0 !important; }
 [data-theme="win95"] .right-sidebar { background: #bfbfbf; border-left: 3px outset #fff; }
-/* Bulletproof win95 backgrounds â€” explicitly paint every major surface in
+/* Bulletproof win95 backgrounds — explicitly paint every major surface in
    #bfbfbf so a stale inline custom-theme CSS variable on :root (e.g. left
    over from a prior 'custom' / 'rgb' theme session that wasn't cleared by
    the time the user landed on win95) can't leave the main message area or
@@ -1489,7 +1489,7 @@
     linear-gradient(to top,    #ffffff 0, #ffffff 2px, transparent 2px),
     #bfbfbf !important;
 }
-/* Hide duplicate scrollbar arrows â€” keep only one button at each end.
+/* Hide duplicate scrollbar arrows — keep only one button at each end.
    display:none alone is unreliable in some Chromium builds for scrollbar
    pseudo-elements, so also collapse them to zero size. */
 [data-theme="win95"] ::-webkit-scrollbar-button:vertical:start:increment,
@@ -1510,7 +1510,7 @@
 [data-theme="win95"] .status-bar .status-item { border: 1px inset #808080; border-radius: 0; }
 [data-theme="win95"] * { border-radius: 0 !important; }
 
-/* Win95 sliders â€” rectangular gray boxes with proper 3D bevel */
+/* Win95 sliders — rectangular gray boxes with proper 3D bevel */
 [data-theme="win95"] input[type="range"] {
   -webkit-appearance: none; appearance: none;
   height: 22px; background: transparent;
@@ -1579,7 +1579,7 @@
   width: 22px; height: 12px; margin-top: 0; margin-left: -10px;
 }
 
-/* Win95 text color â€” white text on navy backgrounds (hover/active/selected states) */
+/* Win95 text color — white text on navy backgrounds (hover/active/selected states) */
 [data-theme="win95"] .channel-item:hover *,
 [data-theme="win95"] .channel-item.active *,
 [data-theme="win95"] .user-item:hover .user-item-name,
@@ -1595,13 +1595,13 @@
 [data-theme="win95"] .settings-section .toggle-row:hover,
 [data-theme="win95"] .settings-section .select-row:hover { background: transparent; }
 
-/* Win95 checkboxes â€” square, period-correct */
+/* Win95 checkboxes — square, period-correct */
 [data-theme="win95"] input[type="checkbox"] {
   -webkit-appearance: auto; appearance: auto;
   accent-color: #000080;
 }
 
-/* Win95 settings modal â€” full blue title bar like real Win95 */
+/* Win95 settings modal — full blue title bar like real Win95 */
 [data-theme="win95"] .settings-header {
   background: linear-gradient(90deg, #000080, #1084d0);
   padding: 4px 8px;
@@ -1629,7 +1629,7 @@
 }
 [data-theme="win95"] .settings-close-btn:hover { background: #dfdfdf; }
 
-/* Win95 admin save bar â€” beveled gray box with black text */
+/* Win95 admin save bar — beveled gray box with black text */
 [data-theme="win95"] .admin-save-bar {
   background: #bfbfbf;
   border-top: 3px outset #fff;
@@ -1644,7 +1644,7 @@
 [data-theme="win95"] .btn-admin-save:hover { background: #dfdfdf !important; }
 [data-theme="win95"] .btn-admin-save:active { border: 3px inset #808080; }
 
-/* Win95 number inputs â€” boxy inset, no rounded corners */
+/* Win95 number inputs — boxy inset, no rounded corners */
 [data-theme="win95"] .settings-number-input,
 [data-theme="win95"] input[type="number"] {
   background: #fff;
@@ -1671,14 +1671,14 @@
   font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
 }
 
-/* Win95 settings section titles â€” black text */
+/* Win95 settings section titles — black text */
 [data-theme="win95"] .settings-section-title,
 [data-theme="win95"] .settings-section-subtitle {
   color: #000;
 }
 [data-theme="win95"] .settings-hint { color: #444; }
 
-/* Win95 context menus â€” beveled 3D edges like real Win95 menus */
+/* Win95 context menus — beveled 3D edges like real Win95 menus */
 [data-theme="win95"] .channel-ctx-menu {
   background: #bfbfbf;
   border: 3px outset #fff;
@@ -1708,7 +1708,7 @@
   margin: 2px 0;
 }
 
-/* Win95 emoji picker â€” beveled box */
+/* Win95 emoji picker — beveled box */
 [data-theme="win95"] .emoji-picker {
   background: #bfbfbf;
   border: 3px outset #fff;
@@ -1716,7 +1716,7 @@
   box-shadow: 2px 2px 0 #000;
 }
 
-/* Win95 message toolbar â€” beveled */
+/* Win95 message toolbar — beveled */
 [data-theme="win95"] .msg-toolbar {
   background: #bfbfbf;
   border: 2px outset #fff;
@@ -1724,7 +1724,7 @@
   box-shadow: 1px 1px 0 #000;
 }
 
-/* Win95 toasts â€” beveled */
+/* Win95 toasts — beveled */
 [data-theme="win95"] .toast {
   background: #bfbfbf;
   border: 3px outset #fff;
@@ -1735,7 +1735,7 @@
 [data-theme="win95"] .toast.error { background: #bfbfbf; border-color: #fff; color: #cc0000; }
 [data-theme="win95"] .toast.success { background: #bfbfbf; border-color: #fff; color: #008000; }
 
-/* â”€â”€â”€ THEME: Daylight (Warm Light) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Daylight (Warm Light) ─────────────────────── */
 [data-theme="daylight"] {
   --bg-primary:    #faf8f5;
   --bg-secondary:  #f0ece6;
@@ -1766,10 +1766,10 @@
   --led-off:       #ccc;
   --led-glow:      rgba(61, 139, 61, 0.4);
 
-  --theme-logo:    "â˜€";
+  --theme-logo:    "☀";
   --scanline:      none;
 }
-/* Daylight accent overrides â€” warm amber tones */
+/* Daylight accent overrides — warm amber tones */
 [data-theme="daylight"] .sidebar { background: var(--bg-secondary); }
 [data-theme="daylight"] .right-sidebar { background: var(--bg-secondary); }
 [data-theme="daylight"] .channel-header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
@@ -1787,7 +1787,7 @@
 [data-theme="daylight"] .screen-share-tile { background: #e0dbd3; }
 [data-theme="daylight"] .toast { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); }
 
-/* â”€â”€â”€ THEME: Cloudy (Cool Light) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── THEME: Cloudy (Cool Light) ───────────────────────── */
 [data-theme="cloudy"] {
   --bg-primary:    #f5f7fa;
   --bg-secondary:  #e9ecf2;
@@ -1821,7 +1821,7 @@
   --theme-logo:    "â˜";
   --scanline:      none;
 }
-/* Cloudy accent overrides â€” cool blue-gray tones */
+/* Cloudy accent overrides — cool blue-gray tones */
 [data-theme="cloudy"] .sidebar { background: var(--bg-secondary); }
 [data-theme="cloudy"] .right-sidebar { background: var(--bg-secondary); }
 [data-theme="cloudy"] .channel-header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
@@ -1886,7 +1886,7 @@ button { font-family: inherit; cursor: pointer; border: none; outline: none; }
 input, textarea { font-family: inherit; outline: none; border: none; }
 ::selection { background: var(--accent); color: white; }
 
-/* â”€â”€ Range Input Track (slider background) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Range Input Track (slider background) ──────────────── */
 /* Slider classes set --track-bg / --track-h / --track-r to override
    the defaults below. Themed tracks use --track-bg for colouring.  */
 input[type="range"]:not(.rgb-slider)::-webkit-slider-runnable-track {
@@ -1901,7 +1901,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   border-radius: var(--track-r, 3px);
   border: var(--track-border, 1px solid rgba(255,255,255,0.15));
 }
-/* Range thumb â€” centered on track */
+/* Range thumb — centered on track */
 input[type="range"]:not(.rgb-slider)::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
@@ -1927,9 +1927,9 @@ input[type="range"]:not(.rgb-slider)::-moz-range-thumb {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 
-/* â”€â”€ RGB-cycling performance guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ── RGB-cycling performance guard ──────────────────────────
    When the RGB theme is active, theme.js adds .rgb-cycling to <html>.
-   CSS custom-property updates fire 20Ã—/s which would restart every
+   CSS custom-property updates fire 20×/s which would restart every
    transition that references a variable.  Using the universal selector
    guarantees that NEW elements (modals, voice-user lists, expand buttons,
    etc.) are automatically covered without maintaining a selector list.
@@ -1986,7 +1986,7 @@ html.rgb-cycling *::after {
   50% { opacity: 0.4; }
 }
 
-/* â”€â”€ Status Bar (bottom of app) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Status Bar (bottom of app) ────────────────────────── */
 
 .status-bar {
   display: flex;
@@ -2050,7 +2050,7 @@ html.rgb-cycling *::after {
 [data-hide-statusbar] #haven-desktop-footer { display: none !important; }
 [data-hide-statusbar] .status-bar-toggle-tab { display: flex; }
 
-/* â”€â”€ Status bar toggle tab (shows when bar is hidden) â”€â”€ */
+/* ── Status bar toggle tab (shows when bar is hidden) ── */
 .status-bar-toggle-tab {
   display: none;
   position: fixed;
@@ -2074,10 +2074,10 @@ html.rgb-cycling *::after {
   line-height: 1;
 }
 .status-bar-toggle-tab:hover { opacity: 1; }
-/* Desktop app has its own footer â€” never show the toggle tab */
+/* Desktop app has its own footer — never show the toggle tab */
 [data-desktop-app] .status-bar-toggle-tab { display: none !important; }
 
-/* â”€â”€ Server URL in status bar â”€â”€ */
+/* ── Server URL in status bar ── */
 .status-url-text {
   cursor: pointer;
   opacity: 0.6;
@@ -2285,9 +2285,9 @@ html.rgb-cycling *::after {
   transform: scale(1.1);
 }
 
-/* â”€â”€â”€ Theme Creative Effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Theme Creative Effects ─────────────────────────── */
 
-/* â”€â”€ Fallout: Phosphor glow + vignette burn â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Fallout: Phosphor glow + vignette burn ────────── */
 [data-theme="fallout"] .main {
   position: relative;
   box-shadow: inset 0 0 120px rgba(20, 254, 23, 0.12);
@@ -2297,7 +2297,7 @@ html.rgb-cycling *::after {
   background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 10, 0, 0.55) 100%);
 }
 
-/* â”€â”€ CRT: Component styling (theme-appropriate, no effects) â”€â”€ */
+/* ── CRT: Component styling (theme-appropriate, no effects) ── */
 [data-theme="crt"] .main {
   position: relative;
   overflow: hidden;
@@ -2308,9 +2308,9 @@ html.rgb-cycling *::after {
   100% { opacity: 1; }
 }
 
-/* â”€â”€ Win95: No effects â€” sharp, clean, period-correct â”€ */
+/* ── Win95: No effects — sharp, clean, period-correct ─ */
 
-/* â”€â”€ FFX: Flowing water overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── FFX: Flowing water overlay ────────────────────── */
 [data-theme="ffx"] .sidebar { position: relative; }
 [data-theme="ffx"] .sidebar::after {
   content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
@@ -2346,7 +2346,7 @@ html.rgb-cycling *::after {
   50%      { background-position: 200% 50%; }
 }
 
-/* â”€â”€ Ice: Icicles + frost shimmer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Ice: Icicles + frost shimmer ──────────────────── */
 [data-theme="ice"] .channel-header { position: relative; overflow: visible !important; }
 [data-theme="ice"] .channel-header::after {
   content: '';
@@ -2399,10 +2399,10 @@ html.rgb-cycling *::after {
   50%      { opacity: 0.9; }
 }
 
-/* â”€â”€ Nord: Snowfall now handled by JS canvas â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Nord: Snowfall now handled by JS canvas ──────── */
 [data-theme="nord"] .main { position: relative; }
 
-/* â”€â”€ Dark Souls: Campfire glow (muted, sporadic flicker) â”€â”€ */
+/* ── Dark Souls: Campfire glow (muted, sporadic flicker) ── */
 [data-theme="darksouls"] .sidebar::after {
   content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 55vh;
   pointer-events: none; z-index: 1;
@@ -2473,7 +2473,7 @@ html.rgb-cycling *::after {
   80%      { opacity: 0.5; }
 }
 
-/* â”€â”€ Bloodborne: Blood vignette pulse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Bloodborne: Blood vignette pulse ──────────────── */
 [data-theme="bloodborne"] .main { position: relative; }
 [data-theme="bloodborne"] .main::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
@@ -2485,7 +2485,7 @@ html.rgb-cycling *::after {
   50%      { opacity: 1; }
 }
 
-/* â”€â”€ Matrix: Digital rain shimmer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Matrix: Digital rain shimmer ──────────────────── */
 [data-theme="matrix"] .sidebar { position: relative; overflow: hidden; }
 [data-theme="matrix"] .sidebar::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
@@ -2500,12 +2500,12 @@ html.rgb-cycling *::after {
   100% { transform: translateY(0); }
 }
 
-/* â”€â”€ Cyberpunk: Text-scramble effect on header â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Cyberpunk: Text-scramble effect on header ─────── */
 [data-theme="cyberpunk"] .brand-text {
   text-shadow: 0 0 8px rgba(255,0,100,0.6);
 }
 
-/* â”€â”€ Minecraft: Pixelated border style â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Minecraft: Pixelated border style ─────────────── */
 [data-theme="minecraft"] .message-avatar,
 [data-theme="minecraft"] .message-avatar-img { image-rendering: pixelated; border-radius: 0 !important; }
 [data-theme="minecraft"] .server-icon { border-radius: 2px; image-rendering: pixelated; }
@@ -2513,7 +2513,7 @@ html.rgb-cycling *::after {
 [data-theme="minecraft"] .sidebar { border-right: 3px solid #3a3a2a; }
 [data-theme="minecraft"] .channel-header { border-bottom: 3px solid #3a3a2a; }
 
-/* â”€â”€ LOTR: Warm candlelight glow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── LOTR: Warm candlelight glow ───────────────────── */
 [data-theme="lotr"] .sidebar { position: relative; }
 [data-theme="lotr"] .sidebar::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
@@ -2527,7 +2527,7 @@ html.rgb-cycling *::after {
   75%      { opacity: 0.9; }
 }
 
-/* â”€â”€ Abyss: Deep ocean pressure vignette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Abyss: Deep ocean pressure vignette ───────────── */
 [data-theme="abyss"] .main { position: relative; }
 [data-theme="abyss"] .main::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 99998;
@@ -2579,19 +2579,19 @@ html.rgb-cycling *::after {
   pointer-events: none; z-index: 0;
 }
 
-/* â”€â”€ CRT class on <html> (scanlines + font) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── CRT class on <html> (scanlines + font) ───────────── */
 .fx-crt {
   --scanline: none; /* scanlines moved to dedicated .fx-crt-scanlines overlay */
 }
 
-/* â”€â”€ CRT vignette overlay â€” parabolic CRT glass tube â”€â”€
+/* ── CRT vignette overlay — parabolic CRT glass tube ──
    Simulates a convex fishbowl CRT: bright center fading
    to dark curved edges, phosphor glow, glass reflection,
    and subtle screen flicker.  Darkness controlled by the
    --crt-vignette-opacity CSS variable (slider in UI).     */
 .fx-crt-vignette {
   position: fixed; inset: 0;
-  /* Gradient is set dynamically by JS _applyCrtVignette() â€” this is the
+  /* Gradient is set dynamically by JS _applyCrtVignette() — this is the
      mid-range default so the effect is visible even before the slider fires. */
   background:
     radial-gradient(ellipse 68% 64% at 50% 50%,
@@ -2602,7 +2602,7 @@ html.rgb-cycling *::after {
       rgba(0,0,0,0.42) 82%,
       rgba(0,0,0,0.50) 100%);
   animation: crt-flicker calc(0.08s * var(--fx-mult, 1)) infinite alternate;
-  /* Fishbowl curvature â€” larger radius simulates convex glass */
+  /* Fishbowl curvature — larger radius simulates convex glass */
   border-radius: 22px / 18px;
   box-shadow:
     inset 0 0 120px rgba(0,0,0,0.65),
@@ -2611,7 +2611,7 @@ html.rgb-cycling *::after {
   z-index: 99998;
   pointer-events: none;
 }
-/* Glass reflection glint â€” subtle highlight in upper-left like curved glass */
+/* Glass reflection glint — subtle highlight in upper-left like curved glass */
 .fx-crt-vignette::after {
   content: '';
   position: absolute; inset: 0;
@@ -2624,11 +2624,11 @@ html.rgb-cycling *::after {
   pointer-events: none;
 }
 
-/* â”€â”€ CRT scanline overlay â€” fades toward screen center â”€â”€ */
+/* ── CRT scanline overlay — fades toward screen center ── */
 .fx-crt-scanlines {
   position: fixed; inset: 0;
   opacity: var(--crt-scanline-opacity, 0.45);
-  /* Thin 1px dark lines every 3px â€” mimics phosphor gaps */
+  /* Thin 1px dark lines every 3px — mimics phosphor gaps */
   background: repeating-linear-gradient(
     0deg,
     transparent 0px,
@@ -2645,7 +2645,7 @@ html.rgb-cycling *::after {
   pointer-events: none;
 }
 
-/* â”€â”€ Matrix sidebar bars overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Matrix sidebar bars overlay ──────────────────────── */
 .fx-matrix-bars {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
@@ -2655,13 +2655,13 @@ html.rgb-cycling *::after {
   animation: matrix-rain calc(1.5s * var(--fx-mult, 1)) linear infinite;
 }
 
-/* â”€â”€ Fallout vignette overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Fallout vignette overlay ─────────────────────────── */
 .fx-fallout-vignette {
   position: fixed; inset: 0;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(0,10,0,0.55) 100%);
 }
 
-/* â”€â”€ FFX water (sidebar) overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── FFX water (sidebar) overlay ──────────────────────── */
 .fx-ffx-water {
   position: absolute; inset: 0; z-index: 0;
   pointer-events: none;
@@ -2673,7 +2673,7 @@ html.rgb-cycling *::after {
   animation: ffx-water calc(5s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* â”€â”€ FFX wave bar overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── FFX wave bar overlay ─────────────────────────────── */
 .fx-ffx-wave {
   position: fixed; bottom: 0; left: 0; right: 0; height: 6px;
   background: linear-gradient(90deg,
@@ -2684,7 +2684,7 @@ html.rgb-cycling *::after {
   filter: blur(1px);
 }
 
-/* â”€â”€ Ice shimmer overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Ice shimmer overlay ──────────────────────────────── */
 .fx-ice-shimmer {
   position: fixed; inset: 0;
   background:
@@ -2699,7 +2699,7 @@ html.rgb-cycling *::after {
   animation: ice-shimmer calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* â”€â”€ Ice icicles overlays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Ice icicles overlays ─────────────────────────────── */
 .fx-ice-icicle {
   position: absolute; bottom: -12px; left: 0; right: 0; height: 12px;
   pointer-events: none; z-index: 2;
@@ -2720,9 +2720,9 @@ html.rgb-cycling *::after {
   -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x;
 }
 
-/* â”€â”€ Nord snowfall: now handled by JS canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Nord snowfall: now handled by JS canvas ──────────── */
 
-/* â”€â”€ Dark Souls ember glow (sidebar) overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Dark Souls ember glow (sidebar) overlay ──────────── */
 .fx-ds-ember-glow {
   position: absolute; bottom: 0; left: 0; right: 0; height: 100%;
   pointer-events: none; z-index: 1;
@@ -2732,7 +2732,7 @@ html.rgb-cycling *::after {
   animation: ds-ember calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* â”€â”€ Dark Souls fireline overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Dark Souls fireline overlay ──────────────────────── */
 .fx-ds-fireline {
   position: fixed; bottom: 0; left: 0; right: 0; height: 10px;
   background: linear-gradient(90deg,
@@ -2743,7 +2743,7 @@ html.rgb-cycling *::after {
   animation: ds-fireline calc(3s * var(--fx-mult, 1)) ease-in-out infinite alternate;
 }
 
-/* â”€â”€ Dark Souls ambient glow overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Dark Souls ambient glow overlay ──────────────────── */
 .fx-ds-ambient {
   position: fixed; bottom: 0; left: 0; right: 0; height: 65vh;
   background: radial-gradient(ellipse 50% 80% at 50% 100%,
@@ -2751,14 +2751,14 @@ html.rgb-cycling *::after {
   animation: ds-ambient calc(5s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* â”€â”€ Bloodborne blood vignette overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Bloodborne blood vignette overlay ────────────────── */
 .fx-bb-vignette {
   position: fixed; inset: 0;
   background: radial-gradient(ellipse at center, transparent 40%, rgba(120,10,10,0.35) 100%);
   animation: bb-vignette calc(4s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* â”€â”€ Cyberpunk class on <html> (text-scramble) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Cyberpunk class on <html> (text-scramble) ────────── */
 .fx-cyberpunk .brand-text {
   font-family: 'Courier New', monospace;
   letter-spacing: 0.15em;
@@ -2787,7 +2787,7 @@ html.rgb-cycling *::after {
   transition: text-shadow 0.2s;
 }
 
-/* â”€â”€ LOTR candle (sidebar) overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── LOTR candle (sidebar) overlay ────────────────────── */
 .fx-lotr-candle {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
@@ -2795,13 +2795,13 @@ html.rgb-cycling *::after {
   animation: lotr-candle calc(3s * var(--fx-mult, 1)) ease-in-out infinite;
 }
 
-/* â”€â”€ Abyss ocean vignette overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Abyss ocean vignette overlay ─────────────────────── */
 .fx-abyss-vignette {
   position: fixed; inset: 0;
   background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,40,0.35) 100%);
 }
 
-/* â”€â”€ Scripture cross overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Scripture cross overlay ──────────────────────────── */
 .fx-scripture-cross {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
@@ -2814,7 +2814,7 @@ html.rgb-cycling *::after {
   filter: brightness(var(--fx-religious-intensity, 1));
 }
 
-/* â”€â”€ Chapel stained glass overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Chapel stained glass overlay ─────────────────────── */
 .fx-chapel-glass {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
@@ -2828,7 +2828,7 @@ html.rgb-cycling *::after {
   filter: brightness(var(--fx-religious-intensity, 1));
 }
 
-/* â”€â”€ Gospel radiance overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Gospel radiance overlay ──────────────────────────── */
 .fx-gospel-radiance {
   position: absolute; inset: 0;
   pointer-events: none; z-index: 0;
@@ -2840,11 +2840,11 @@ html.rgb-cycling *::after {
   filter: brightness(var(--fx-religious-intensity, 1));
 }
 
-/* â”€â”€ Ice parent helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Ice parent helpers ───────────────────────────────── */
 .fx-ice-overflow { position: relative !important; overflow: visible !important; }
 
 
-/* â”€â”€â”€ Custom Theme Triangle Picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Custom Theme Triangle Picker ───────────────────── */
 #custom-theme-editor {
   margin-top: 8px;
   padding: 8px;
@@ -2868,7 +2868,7 @@ html.rgb-cycling *::after {
   border-radius: var(--radius-sm);
 }
 
-/* â”€â”€â”€ RGB Theme Editor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── RGB Theme Editor ───────────────────────── */
 .rgb-theme-editor {
   margin-top: 8px;
   padding: 8px 10px;
@@ -3089,7 +3089,7 @@ html.rgb-cycling *::after {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  height: 100dvh; /* dynamic viewport height â€” accounts for mobile browser chrome */
+  height: 100dvh; /* dynamic viewport height — accounts for mobile browser chrome */
   width: 100vw;
   overflow: hidden;
 }
@@ -3100,7 +3100,7 @@ html.rgb-cycling *::after {
   min-height: 0;
 }
 
-/* â”€â”€ Left Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Left Sidebar ──────────────────────────────────────── */
 
 .sidebar {
   width: var(--sidebar-width);
@@ -3255,7 +3255,7 @@ html.rgb-cycling *::after {
 .btn-sm.btn-danger { background: var(--danger, #e74c3c); color: white; font-size: 16px; padding: 7px 10px; line-height: 1; }
 .btn-sm.btn-danger:hover { filter: brightness(1.15); }
 
-/* â”€â”€ Channel List â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Channel List ──────────────────────────────────────── */
 
 .channel-list { flex: 1; overflow-y: auto; padding: 4px 0; }
 
@@ -3311,7 +3311,7 @@ html.rgb-cycling *::after {
   padding: 0 5px;
 }
 
-/* Thread @mention bell badge in sidebar â€” distinct amber/yellow */
+/* Thread @mention bell badge in sidebar — distinct amber/yellow */
 .channel-badge.thread-mention-badge {
   background: #f5a623;
   color: #1a1a1a;
@@ -3320,7 +3320,7 @@ html.rgb-cycling *::after {
   padding: 0 6px;
 }
 
-/* Nested-unread dot â€” small marker on category labels and parent
+/* Nested-unread dot — small marker on category labels and parent
    channels to hint that one of their (uncollapsed) children has
    unread messages. Visually distinct from the count bubble so the
    user can tell it's a "look inside" indicator, not the unread count
@@ -3340,7 +3340,7 @@ html.rgb-cycling *::after {
   background: var(--danger);
 }
 
-/* Header pill: "ðŸ”” N" mentions in threads */
+/* Header pill: "🔔 N" mentions in threads */
 .thread-mentions-pill {
   background: rgba(245, 166, 35, 0.18);
   color: #f5a623;
@@ -3357,7 +3357,7 @@ html.rgb-cycling *::after {
   background: rgba(245, 166, 35, 0.32);
 }
 
-/* â”€â”€ Pinned Messages Picture-in-Picture floating panel â”€â”€â”€â”€â”€
+/* ── Pinned Messages Picture-in-Picture floating panel ─────
    A draggable/resizable overlay showing the current channel's
    pinned messages without blocking the message feed.
    Shares .pinned-item / .pinned-list DOM from the sidebar
@@ -3408,7 +3408,7 @@ html.rgb-cycling *::after {
 .pins-pip-panel.pins-pip-maximized .pins-pip-header { cursor: default; }
 .pinned-panel-actions { display: flex; align-items: center; gap: 2px; }
 
-/* â”€â”€ DM Picture-in-Picture floating panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ── DM Picture-in-Picture floating panel ──────────
    A draggable/resizable overlay that hosts a full-fidelity DM
    without leaving the user's current channel. Reuses the same
    message DOM (.message / .message-compact) as the main pane,
@@ -3429,7 +3429,7 @@ html.rgb-cycling *::after {
   min-width: 320px;
   min-height: 280px;
 }
-/* Banner background â€” rendered behind everything else */
+/* Banner background — rendered behind everything else */
 .dm-pip-banner {
   position: absolute;
   inset: 0;
@@ -3499,7 +3499,7 @@ html.rgb-cycling *::after {
   position: relative;
   z-index: 0;
 }
-/* Online presence dot in the bottom-right of the PiP DM avatar â€” mirrors
+/* Online presence dot in the bottom-right of the PiP DM avatar — mirrors
    the sidebar `.user-status-dot` styling so the colors stay consistent. */
 .dm-pip-status-dot {
   position: absolute;
@@ -3531,7 +3531,7 @@ html.rgb-cycling *::after {
   text-align: center;
   padding: 12px;
 }
-/* â”€â”€ Reuse main message DOM but compact it for PiP â”€â”€ */
+/* ── Reuse main message DOM but compact it for PiP ── */
 .dm-pip-messages .message,
 .dm-pip-messages .message-compact {
   padding: 2px 6px;
@@ -3563,7 +3563,7 @@ html.rgb-cycling *::after {
      Leave the row unpositioned here so both anchor to the same outer box. */
   position: static;
 }
-/* Hide per-message avatars â€” header already shows the partner pfp */
+/* Hide per-message avatars — header already shows the partner pfp */
 .dm-pip-messages .message-avatar,
 .dm-pip-messages .message-avatar-img {
   display: none !important;
@@ -3673,7 +3673,7 @@ html.rgb-cycling *::after {
 }
 .dm-pip-send:hover { filter: brightness(1.1); }
 
-/* Drag handle at the top of PiP input areas â€” drag upward to expand the textarea */
+/* Drag handle at the top of PiP input areas — drag upward to expand the textarea */
 .pip-input-resizer {
   position: absolute;
   top: 0;
@@ -3723,7 +3723,7 @@ html.rgb-cycling *::after {
 .pip-input-emoji-btn .tb-icon-emoji { font-size: 18px; }
 .pip-input-emoji-btn svg { width: 20px; height: 20px; display: block; }
 
-/* â”€â”€ Private channel styling (muted appearance) â”€â”€â”€ */
+/* ── Private channel styling (muted appearance) ─── */
 .channel-item.private-channel .channel-name { opacity: 0.6; }
 .channel-item.private-channel .channel-hash { opacity: 0.6; }
 .channel-item.private-channel:hover .channel-name,
@@ -3731,7 +3731,7 @@ html.rgb-cycling *::after {
 .channel-item.private-channel.active .channel-name,
 .channel-item.private-channel.active .channel-hash { opacity: 1; }
 
-/* â”€â”€ Role channel access panel â”€â”€â”€ */
+/* ── Role channel access panel ─── */
 .role-channel-access-section {
   margin-top: 16px;
   border-top: 1px solid var(--border);
@@ -3776,7 +3776,7 @@ html.rgb-cycling *::after {
   font-size: 12px;
 }
 
-/* â”€â”€ Main Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Main Content ──────────────────────────────────────── */
 
 .main {
   flex: 1;
@@ -3802,7 +3802,7 @@ html.rgb-cycling *::after {
 
 .channel-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
-/* â”€â”€ Header actions box (code/settings | search/pin) â”€â”€ */
+/* ── Header actions box (code/settings | search/pin) ── */
 .header-actions-box {
   display: flex;
   align-items: center;
@@ -3835,7 +3835,7 @@ html.rgb-cycling *::after {
   flex-shrink: 0;
 }
 
-/* â”€â”€ Update Available Banner â”€â”€ */
+/* ── Update Available Banner ── */
 .update-banner {
   display: inline-flex;
   align-items: center;
@@ -3874,7 +3874,7 @@ html.rgb-cycling *::after {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* â”€â”€ Desktop App Banner â”€â”€ */
+/* ── Desktop App Banner ── */
 .desktop-app-banner {
   display: inline-flex;
   align-items: center;
@@ -3919,7 +3919,7 @@ html.rgb-cycling *::after {
   color: #fff;
 }
 
-/* â”€â”€ Android Beta Banner â”€â”€ */
+/* ── Android Beta Banner ── */
 .android-beta-banner {
   display: inline-flex;
   align-items: center;
@@ -3965,7 +3965,7 @@ html.rgb-cycling *::after {
   color: #fff;
 }
 
-/* â”€â”€ Android Beta Promo Popup â”€â”€ */
+/* ── Android Beta Promo Popup ── */
 .android-beta-promo {
   max-width: 460px;
   text-align: center;
@@ -4109,7 +4109,7 @@ html.rgb-cycling *::after {
   cursor: pointer;
 }
 
-/* â”€â”€ Desktop App Promo Popup â”€â”€ */
+/* ── Desktop App Promo Popup ── */
 .desktop-promo {
   max-width: 440px;
   text-align: center;
@@ -4240,7 +4240,7 @@ html.rgb-cycling *::after {
   cursor: pointer;
 }
 
-/* Disabled-feature badge (streams/music not allowed) â€” red diagonal slash overlay */
+/* Disabled-feature badge (streams/music not allowed) — red diagonal slash overlay */
 .ch-disabled-badge {
   position: relative;
   display: inline-flex;
@@ -4267,7 +4267,7 @@ html.rgb-cycling *::after {
 /* Channel context menu (sidebar "..." hover button) */
 .channel-item { position: relative; }
 
-/* â”€â”€ Drag-and-drop channel reordering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Drag-and-drop channel reordering ──────────────────── */
 .ch-dragging { opacity: 0.4; cursor: grabbing !important; }
 .channel-item[draggable="true"],
 .category-label[draggable="true"],
@@ -4337,7 +4337,7 @@ html.rgb-cycling *::after {
   white-space: nowrap;
 }
 
-/* â”€â”€ Channel Functions popout panel â”€â”€ */
+/* ── Channel Functions popout panel ── */
 .channel-functions-panel {
   position: fixed;
   background: var(--bg-secondary);
@@ -4443,7 +4443,7 @@ select.cfn-select.cfn-input {
 
 .channel-code-tag:empty { display: none; }
 
-/* â”€â”€ Welcome Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Welcome Screen ────────────────────────────────────── */
 
 .welcome-screen { flex: 1; display: flex; align-items: center; justify-content: center; }
 
@@ -4460,11 +4460,11 @@ select.cfn-select.cfn-input {
 
 .welcome-content p { font-size: 14px; line-height: 1.6; }
 
-/* â”€â”€ Message Area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Message Area ──────────────────────────────────────── */
 
 .message-area { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 
-/* â”€â”€ Jump to Bottom button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Jump to Bottom button ───────────────────────────── */
 .jump-to-bottom {
   position: absolute;
   bottom: 120px;
@@ -4572,13 +4572,13 @@ select.cfn-select.cfn-input {
   box-sizing: border-box;
 }
 
-/* Away: half-circle (dome) â€” visually distinct from full circle */
+/* Away: half-circle (dome) — visually distinct from full circle */
 .user-status-dot.away {
   background: #faa61a;
   border-radius: 2px 2px 50% 50%;
 }
 
-/* DND: square â€” immediately distinguishable */
+/* DND: square — immediately distinguishable */
 .user-status-dot.dnd {
   background: var(--danger);
   border-radius: 2px;
@@ -4656,7 +4656,7 @@ select.cfn-select.cfn-input {
 .shape-hex      { clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
 .shape-diamond  { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
 
-/* Avatar Shape Classes â€” applied to .message-avatar and .message-avatar-img */
+/* Avatar Shape Classes — applied to .message-avatar and .message-avatar-img */
 .avatar-circle   { border-radius: 50% !important; }
 .avatar-rounded  { border-radius: 6px !important; }
 .avatar-squircle { border-radius: 28% !important; }
@@ -4716,7 +4716,7 @@ select.cfn-select.cfn-input {
 }
 .btn-xs:hover { background: var(--bg-tertiary); }
 
-/* â”€â”€ Sound Manager Popout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Sound Manager Popout ─────────────────────────────────── */
 .sound-modal-tabs {
   display: flex; gap: 4px; margin-bottom: 12px;
   border-bottom: 1px solid var(--border); padding-bottom: 8px;
@@ -4877,7 +4877,7 @@ select.cfn-select.cfn-input {
   align-items: center;
 }
 
-/* â”€â”€ Message Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Message Input ─────────────────────────────────────── */
 
 .message-input-area {
   display: flex;
@@ -4924,7 +4924,7 @@ select.cfn-select.cfn-input {
 
 .btn-send:hover { background: var(--accent-hover); }
 
-/* â”€â”€ Right Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Right Sidebar ─────────────────────────────────────── */
 
 .right-sidebar {
   width: var(--right-width);
@@ -4948,7 +4948,7 @@ select.cfn-select.cfn-input {
   pointer-events: none;
 }
 
-/* Sidebar collapse arrow â€” fixed to the right edge of the viewport.
+/* Sidebar collapse arrow — fixed to the right edge of the viewport.
    Always accessible regardless of sidebar state or scroll position. */
 .sidebar-collapse-btn {
   position: fixed;
@@ -4975,7 +4975,7 @@ select.cfn-select.cfn-input {
   background: var(--bg-tertiary);
 }
 
-/* Users section â€” fills remaining space and scrolls */
+/* Users section — fills remaining space and scrolls */
 .right-sidebar-users {
   flex: 1 1 0;
   overflow-y: auto;
@@ -5124,7 +5124,7 @@ select.cfn-select.cfn-input {
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   animation: profile-popup-hover-in 0.15s ease-out;
   transition: opacity 0.2s ease, transform 0.2s ease;
-  pointer-events: none;  /* can't be interacted with â€” it's a tooltip */
+  pointer-events: none;  /* can't be interacted with — it's a tooltip */
 }
 .profile-popup-hover .profile-popup-banner {
   opacity: 0.7;
@@ -5370,7 +5370,7 @@ select.cfn-select.cfn-input {
 }
 .profile-gear-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
-/* â”€â”€ Edit Profile Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Edit Profile Modal ──────────────────────────── */
 .edit-profile-modal-box {
   width: 380px;
   max-width: 95vw;
@@ -5841,7 +5841,7 @@ select.cfn-select.cfn-input {
 }
 
 /* Hidden modal overlays: use content-visibility so Chromium can skip
-   style computation / layout on the entire subtree (~30 modals Ã— 20+
+   style computation / layout on the entire subtree (~30 modals × 20+
    children each) during the RGB cycling tick.  Only visible overlays
    get recalculated. */
 .modal-overlay[style*="display:none"],
@@ -5865,7 +5865,7 @@ select.cfn-select.cfn-input {
   position: relative;
 }
 
-/* Auto-injected expand/close button group â€” absolutely positioned in
+/* Auto-injected expand/close button group — absolutely positioned in
    the top-right of every modal so it works regardless of inner header
    structure (back button, wrapper divs, etc). */
 .modal-controls {
@@ -5959,9 +5959,9 @@ select.cfn-select.cfn-input {
 /* When the expand button is slotted directly inside a settings-style
    header (next to .settings-close-btn) it needs to match the close
    button's box and lose the floating-group margin so the two stay
-   aligned across viewport sizes â€” including narrow mobile widths
+   aligned across viewport sizes — including narrow mobile widths
    where the absolute .modal-controls wrap was misaligning with the
-   close Ã— in the header. */
+   close × in the header. */
 .modal-expand-btn.modal-expand-btn-inline {
   width: 32px;
   height: 32px;
@@ -6322,7 +6322,7 @@ select.cfn-select.cfn-input {
   max-width: 180px;
   max-height: 180px;
   /* Reserve minimum space before the image loads so the layout doesn't jump
-     from 0Ã—0 to full-size. Without this, each image load causes a large
+     from 0×0 to full-size. Without this, each image load causes a large
      reflow that the scroll-to-bottom handlers react to individually, making
      the chat jump repeatedly. */
   min-width: 60px;
@@ -6449,10 +6449,10 @@ select.cfn-select.cfn-input {
   background: var(--bg-hover, rgba(124,92,252,0.15));
 }
 
-/* â”€â”€ User Context Menu (right-click options) â”€â”€ */
+/* ── User Context Menu (right-click options) ── */
 .user-context-menu {
   position: fixed;
-  /* Same reasoning as .image-context-menu â€” needs to clear the PiP
+  /* Same reasoning as .image-context-menu — needs to clear the PiP
      DM (99999) and image lightbox (100010). */
   z-index: 100020;
   background: var(--bg-secondary, #23263a);
@@ -6544,7 +6544,7 @@ select.cfn-select.cfn-input {
    UPLOAD BUTTON + DRAG-DROP
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* â”€â”€ Input actions box (upload | emoji | gif) â”€â”€ */
+/* ── Input actions box (upload | emoji | gif) ── */
 .input-actions-box {
   display: flex;
   align-items: center;
@@ -6827,8 +6827,8 @@ select.cfn-select.cfn-input {
   transform: scale(1.2);
 }
 
-/* â”€â”€ Stickers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* Inline rendered sticker in messages â€” larger than chat-image, no background. */
+/* ── Stickers ───────────────────────────────────────── */
+/* Inline rendered sticker in messages — larger than chat-image, no background. */
 .sticker-img {
   max-width: 180px;
   max-height: 180px;
@@ -7195,7 +7195,7 @@ select.cfn-select.cfn-input {
   color: var(--text-primary);
 }
 
-/* â”€â”€ Reaction popout (who reacted) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Reaction popout (who reacted) ────────────────────── */
 .reaction-popout {
   position: fixed;
   z-index: 9999;
@@ -7316,7 +7316,7 @@ select.cfn-select.cfn-input {
   background: var(--accent-glow);
 }
 
-/* â”€â”€ Full Reaction Emoji Picker (opened via "...") â”€â”€ */
+/* ── Full Reaction Emoji Picker (opened via "...") ── */
 .reaction-full-picker {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -7462,7 +7462,7 @@ select.cfn-select.cfn-input {
   transition-delay: 0s;
 }
 
-/* Only show toolbar on real mouse hover â€” not on touch-triggered :hover.
+/* Only show toolbar on real mouse hover — not on touch-triggered :hover.
    Require BOTH hover:hover AND pointer:fine so mobile browsers that
    falsely report hover:hover (common on Android Chrome/Brave) don't
    show the toolbar on tap. */
@@ -7803,7 +7803,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-radius: 12px;
   resize: both;
   overflow: hidden;
-  /* Must sit above .message-input-area (z:99995) â€” same reason the docked
+  /* Must sit above .message-input-area (z:99995) — same reason the docked
      thread panel was bumped to 99996. (#5373) */
   z-index: 99999;
 }
@@ -8111,7 +8111,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   flex-wrap: nowrap;
 }
 
-/* â”€â”€ Upload progress bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Upload progress bar ────────────────────────────── */
 .upload-progress-bar {
   display: flex;
   align-items: center;
@@ -8247,7 +8247,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   text-decoration: underline;
 }
 
-/* Pinned-message indicator dot on the ðŸ“Œ toggle button when the active
+/* Pinned-message indicator dot on the 📌 toggle button when the active
    channel has at least one pinned message. */
 #pinned-toggle-btn { position: relative; }
 #pinned-toggle-btn.has-pins::after {
@@ -8545,7 +8545,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   animation: highlightFlash 2s ease;
 }
 
-/* â”€â”€ NEW MESSAGES divider â”€â”€ */
+/* ── NEW MESSAGES divider ── */
 .new-messages-divider {
   display: flex;
   align-items: center;
@@ -8622,7 +8622,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   min-width: 0;
 }
 
-/* â”€â”€ E2E Password Recovery Banner â”€â”€â”€ */
+/* ── E2E Password Recovery Banner ─── */
 #e2e-recovery-banner {
   background: var(--bg-tertiary);
   border-bottom: 2px solid var(--accent);
@@ -8657,7 +8657,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 #e2e-recovery-dismiss:hover { color: var(--text-primary); }
 
-/* â”€â”€ E2E Key Reset Confirmation Modal â”€â”€â”€ */
+/* ── E2E Key Reset Confirmation Modal ─── */
 .e2e-reset-modal {
   max-width: 460px;
   text-align: center;
@@ -8733,7 +8733,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   filter: brightness(1.15);
 }
 
-/* â”€â”€ E2E Lock Menu Dropdown â”€â”€â”€ */
+/* ── E2E Lock Menu Dropdown ─── */
 .e2e-menu-wrapper {
   position: relative;
 }
@@ -8772,7 +8772,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   background: rgba(255, 68, 68, 0.10);
 }
 
-/* â”€â”€ E2E Password Prompt Modal â”€â”€â”€ */
+/* ── E2E Password Prompt Modal ─── */
 .e2e-password-modal {
   max-width: 380px;
   text-align: center;
@@ -8823,7 +8823,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   pointer-events: none;
 }
 
-/* â”€â”€ E2E key-change system notice â”€â”€â”€ */
+/* ── E2E key-change system notice ─── */
 .system-message.e2e-notice {
   color: var(--text-muted);
   font-style: italic;
@@ -8951,7 +8951,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   gap: 10px;
 }
 
-/* Admin save bar â€” fixed at bottom of settings modal */
+/* Admin save bar — fixed at bottom of settings modal */
 .admin-save-bar {
   display: flex;
   flex-direction: column;
@@ -9028,7 +9028,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   background: var(--bg-tertiary);
 }
 
-/* â”€â”€ User gear dropdown menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── User gear dropdown menu ─────────────── */
 .user-gear-menu {
   position: fixed;
   z-index: 10002;
@@ -9070,7 +9070,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .gear-menu-danger:hover { background: rgba(233,69,96,0.12); color: var(--danger); }
 .gear-menu-divider { height: 1px; background: var(--border); margin: 4px 2px; }
 
-/* â”€â”€ Context menu scroll fallback (#5286) â”€â”€
+/* ── Context menu scroll fallback (#5286) ──
    Floating menus (right-click, gear, channel, image, etc.) get capped to the
    viewport with overflow-y: auto so long menus scroll instead of clipping
    or running off-screen. The 16px margin keeps a little breathing room.
@@ -9085,7 +9085,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   overscroll-behavior: contain;
 }
 
-/* â”€â”€ Transfer Admin Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Transfer Admin Modal ────────────────── */
 .transfer-admin-modal {
   max-width: 420px;
   width: 90vw;
@@ -9212,7 +9212,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   color: var(--text-primary);
 }
 
-/* â”€â”€ Settings Layout (Nav + Body) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Settings Layout (Nav + Body) ─────────────────────── */
 .settings-layout {
   display: flex;
   min-height: 0;
@@ -9287,7 +9287,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   resize: both;
 }
 
-/* â”€â”€ Activities / Games Launcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Activities / Games Launcher ──────────────────────── */
 .modal-activities {
   max-width: 520px;
   max-height: 80vh;
@@ -9370,7 +9370,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .flash-install-banner .btn-sm { pointer-events: auto; flex-shrink: 0; }
 
-/* â”€â”€ Iframe Game Overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Iframe Game Overlay ──────────────────────────────── */
 .game-iframe-overlay {
   position: fixed;
   inset: 0;
@@ -9419,7 +9419,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .settings-section:last-child { border-bottom: none; }
 
-/* â”€â”€ Admin section divider â”€â”€ */
+/* ── Admin section divider ── */
 .admin-section-divider {
   display: flex;
   align-items: center;
@@ -9474,7 +9474,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-bottom: 1px solid var(--border);
 }
 
-/* â”€â”€ Plugin & Theme Cards â”€â”€ */
+/* ── Plugin & Theme Cards ── */
 .plugin-list {
   display: flex;
   flex-direction: column;
@@ -9585,7 +9585,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   line-height: 1.45;
 }
 
-/* â”€â”€ Desktop Shortcuts table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Desktop Shortcuts table ──────────────────────────── */
 .shortcut-table { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .shortcut-row {
   display: flex; align-items: center; gap: 10px;
@@ -9608,7 +9608,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 @keyframes shortcut-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 .shortcut-btns { display: flex; gap: 4px; }
 
-/* â”€â”€ Desktop App preference rows â”€â”€â”€ */
+/* ── Desktop App preference rows ─── */
 .desktop-pref-row { margin-bottom: 12px; }
 .desktop-pref-row .toggle-row { justify-content: flex-start; gap: 10px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
 .desktop-pref-row .settings-hint { margin: 2px 0 0 26px; font-size: 11px; }
@@ -9805,7 +9805,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   opacity: 0.7;
 }
 
-/* â”€â”€ Channel Picker (Add/Remove user from channels) â”€â”€ */
+/* ── Channel Picker (Add/Remove user from channels) ── */
 .aml-ch-picker {
   max-width: 420px;
   width: 100%;
@@ -9924,7 +9924,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   gap: 8px;
 }
 
-/* â”€â”€ Member List Action Buttons â”€â”€ */
+/* ── Member List Action Buttons ── */
 .aml-actions {
   display: flex;
   align-items: center;
@@ -9954,7 +9954,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .aml-btn-delete:hover { background: rgba(244, 63, 94, 0.15); }
 .aml-btn-unban:hover { background: rgba(74, 222, 128, 0.15); }
 
-/* â”€â”€ Channel Picker (add/remove) â”€â”€ */
+/* ── Channel Picker (add/remove) ── */
 .aml-channel-row:hover {
   background: var(--bg-hover);
   border-radius: var(--radius-sm);
@@ -10229,7 +10229,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   background: var(--bg-hover);
 }
 
-/* Mobile server dropdown â€” hidden on desktop, shown at â‰¤768px */
+/* Mobile server dropdown — hidden on desktop, shown at ≤768px */
 .mobile-server-dropdown { display: none; position: relative; }
 .mobile-server-btn {
   background: transparent; border: none; color: var(--accent, #7c5cfc);
@@ -10292,7 +10292,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 .mobile-overlay.active { display: block; }
 
-/* â”€â”€ Mobile panel close button (hidden on desktop) â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Mobile panel close button (hidden on desktop) ─────── */
 .mobile-panel-close {
   display: none;
   z-index: 110;
@@ -10325,7 +10325,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   RESPONSIVE â€” Tablet (â‰¤ 900px)
+   RESPONSIVE — Tablet (≤ 900px)
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .mobile-settings-btn { display: none; }
@@ -10360,11 +10360,11 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   RESPONSIVE â€” Small Tablet (â‰¤ 768px)
+   RESPONSIVE — Small Tablet (≤ 768px)
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 @media (max-width: 768px) {
-  /* Safe area insets â€” left/right only on #app; top/bottom applied
+  /* Safe area insets — left/right only on #app; top/bottom applied
      directly to edge elements (channel-header, input area, sidebar)
      so iOS Safari honours them reliably with viewport-fit=cover. */
   #app {
@@ -10395,7 +10395,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .welcome-screen { width: 100%; justify-content: center; align-items: center; }
   .welcome-content { max-width: 90vw; padding: 0 16px; }
 
-  /* Left sidebar â€” slide out as overlay (! overrides theme [data-theme] .sidebar { position: relative }) */
+  /* Left sidebar — slide out as overlay (! overrides theme [data-theme] .sidebar { position: relative }) */
   .sidebar {
     position: fixed !important;
     left: 0;
@@ -10425,7 +10425,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     display: none;
   }
 
-  /* Right sidebar â€” slide in from right as overlay */
+  /* Right sidebar — slide in from right as overlay */
   .right-sidebar {
     display: flex !important;
     position: fixed;
@@ -10448,7 +10448,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     transform: translateX(0);
   }
 
-  /* Channel header adjustments â€” safe-area-inset-top prevents
+  /* Channel header adjustments — safe-area-inset-top prevents
      underlapping the iOS status bar / Dynamic Island */
   .channel-header {
     padding: calc(8px + constant(safe-area-inset-top)) 12px 8px; /* iOS 11.0-11.1 */
@@ -10460,7 +10460,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .channel-info h3 { font-size: 14px; }
   .channel-code-tag { font-size: 10px; padding: 1px 6px; }
 
-  /* Hide header clutter â€” search/pin/delete tucked into long-press or sidebar */
+  /* Hide header clutter — search/pin/delete tucked into long-press or sidebar */
   #delete-channel-btn,
   #search-toggle-btn,
   #pinned-toggle-btn,
@@ -10480,26 +10480,26 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .reply-banner { max-width: 100%; flex-wrap: wrap; }
   .reply-preview { white-space: normal; word-break: break-word; }
 
-  /* GIF picker â€” constrained on tablet */
+  /* GIF picker — constrained on tablet */
   .gif-picker { max-width: 360px; }
 
-  /* Screen share â€” constrained */
+  /* Screen share — constrained */
   .screen-share-container { max-height: 40vh; }
-  /* Webcam â€” constrained */
+  /* Webcam — constrained */
   .webcam-container { max-height: 160px; }
   .webcam-tile { width: 120px; height: 90px; }
 
-  /* Status bar â€” condense on small tablets but keep visible */
+  /* Status bar — condense on small tablets but keep visible */
   .status-bar .status-item:nth-child(n+5) { display: none; }
 
-  /* Server banner â€” smaller on mobile */
+  /* Server banner — smaller on mobile */
   .server-banner-display { height: 120px; }
   .server-banner-display::after { height: 50px; }
 }
 
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   RESPONSIVE â€” Phone (â‰¤ 480px)
+   RESPONSIVE — Phone (≤ 480px)
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 @media (max-width: 480px) {
@@ -10511,7 +10511,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
   .right-sidebar { width: 85vw; min-width: 85vw; }
 
-  /* Channel header â€” tight, prevent overflow, safe-area top */
+  /* Channel header — tight, prevent overflow, safe-area top */
   .channel-header {
     padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 6px;
     min-height: calc(44px + env(safe-area-inset-top, 0px));
@@ -10527,14 +10527,14 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .channel-info h3 { font-size: 13px; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .channel-code-tag { display: none !important; }
 
-  /* Android beta banner â€” hide on phone, it eats header space */
+  /* Android beta banner — hide on phone, it eats header space */
   .android-beta-banner { display: none !important; }
 
-  /* Update banner â€” compact on phone */
+  /* Update banner — compact on phone */
   .update-banner { padding: 3px 8px; font-size: 11px; }
   .update-pulse { width: 6px; height: 6px; }
 
-  /* Desktop app banner â€” hide on mobile (they have Haven-Android) */
+  /* Desktop app banner — hide on mobile (they have Haven-Android) */
   .desktop-app-banner { display: none !important; }
 
   @keyframes slideUpSheet {
@@ -10556,16 +10556,16 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .message-compact { padding-left: 46px; }
   .message-header { flex-wrap: wrap; }
 
-  /* Reply banners â€” allow wrapping on mobile */
+  /* Reply banners — allow wrapping on mobile */
   .reply-banner { max-width: 100%; flex-wrap: wrap; }
   .reply-preview { white-space: normal; word-break: break-word; }
 
-  /* Chat images â€” scale down for mobile, preserve aspect ratio */
+  /* Chat images — scale down for mobile, preserve aspect ratio */
   .chat-image { display: block; max-width: min(80%, 280px); max-height: 300px; object-fit: contain; width: auto; height: auto; }
   .image-mode-full .chat-image { max-width: 100%; max-height: 280px; }
   .message-compact .chat-image { margin-top: 4px; }
 
-  /* Input area â€” single-row inline layout */
+  /* Input area — single-row inline layout */
   .message-input-area {
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
     gap: 4px;
@@ -10573,7 +10573,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     align-items: flex-end;
   }
 
-  /* Media buttons â€” compact inline, not a separate row */
+  /* Media buttons — compact inline, not a separate row */
   .input-actions-box {
     border-radius: 16px;
     padding: 2px 2px;
@@ -10583,7 +10583,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     border: none;
     background: none;
   }
-  /* Hide dividers on phone â€” too cramped */
+  /* Hide dividers on phone — too cramped */
   .input-actions-box .input-actions-divider { display: none; }
   .input-actions-box .btn-upload,
   .input-actions-box .btn-emoji,
@@ -10627,7 +10627,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     order: 2;
   }
 
-  /* GIF picker â€” full width on phone */
+  /* GIF picker — full width on phone */
   .gif-picker {
     left: 4px;
     right: 4px;
@@ -10639,7 +10639,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
   .gif-picker-grid { max-height: 40vh; }
 
-  /* Emoji picker â€” fixed positioning on phone so it doesn't push layout */
+  /* Emoji picker — fixed positioning on phone so it doesn't push layout */
   .emoji-picker {
     position: fixed;
     left: 4px;
@@ -10655,7 +10655,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .emoji-grid { max-height: min(200px, 30vh); }
   .emoji-item { width: 40px; height: 40px; font-size: 22px; }
 
-  /* Mention dropdown â€” wider */
+  /* Mention dropdown — wider */
   .mention-dropdown {
     left: 8px;
     right: 8px;
@@ -10670,7 +10670,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .reply-banner { padding: 4px 8px; font-size: 0.75em; max-width: 100%; flex-wrap: wrap; }
   .reply-preview { white-space: normal; word-break: break-word; }
 
-  /* Reaction badges â€” touch-friendly */
+  /* Reaction badges — touch-friendly */
   .reaction-badge { padding: 4px 10px; font-size: 14px; }
   .reaction-picker { gap: 4px; padding: 6px 8px; }
   .reaction-pick-btn { width: 38px; height: 38px; font-size: 20px; }
@@ -10678,13 +10678,13 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
   /* Toolbar touch overrides are in the (hover: none) query below */
 
-  /* Screen share â€” smaller on phone */
+  /* Screen share — smaller on phone */
   .screen-share-container { max-height: 35vh; min-height: 120px; }
-  /* Webcam â€” smaller on phone */
+  /* Webcam — smaller on phone */
   .webcam-container { max-height: 130px; }
   .webcam-tile { width: 100px; height: 75px; }
 
-  /* Status bar â€” condense on phones */
+  /* Status bar — condense on phones */
   .status-bar .status-item:nth-child(n+3) { display: none; }
 
   /* Welcome screen */
@@ -10692,16 +10692,16 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .welcome-content h2 { font-size: 18px; }
   .welcome-content p { font-size: 13px; }
 
-  /* Modal â€” wider on phone */
+  /* Modal — wider on phone */
   .modal { padding: 20px; width: 95%; max-height: 85vh; overflow-y: auto; }
   .modal h3 { font-size: 18px; }
 
-  /* Settings modal â€” scrollable on phone, hide nav */
+  /* Settings modal — scrollable on phone, hide nav */
   .modal-settings { max-height: 80vh; }
   .settings-nav { display: none; }
   .settings-body { overflow-y: auto; }
 
-  /* Toasts â€” full width */
+  /* Toasts — full width */
   #toast-container { left: 50%; right: auto; top: calc(8px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }
   .toast { max-width: none; }
 
@@ -10712,14 +10712,14 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   .search-container { flex: 1; }
   .search-input { font-size: 14px; }
 
-  /* Stream audio controls â€” always visible on touch */
+  /* Stream audio controls — always visible on touch */
   .stream-audio-controls { opacity: 1; }
   .stream-vol-slider { width: 50px; }
 }
 
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   RESPONSIVE â€” Tiny Phone (â‰¤ 360px)
+   RESPONSIVE — Tiny Phone (≤ 360px)
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 @media (max-width: 360px) {
@@ -10801,7 +10801,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     padding-top: calc(8px + var(--safe-top, env(safe-area-inset-top, 0px))) !important;
   }
 
-  /* Message input â€” bottom safe area */
+  /* Message input — bottom safe area */
   body.is-ios .message-input-area,
   body.is-android .message-input-area {
     padding-bottom: calc(8px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
@@ -10854,7 +10854,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
     touch-action: manipulation;
   }
 
-  /* Disable hover effects on touch â€” prevents iOS "sticky hover" requiring
+  /* Disable hover effects on touch — prevents iOS "sticky hover" requiring
      double-tap (first tap activates :hover, second fires click) */
   .channel-item:hover { background: transparent; }
   .channel-item:hover .channel-name { color: var(--text-secondary); }
@@ -10863,7 +10863,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
   .status-option:hover { background: transparent; }
 
   /* Prevent browser text-selection / callout on long-press of messages;
-     our JS handles the â‹¯ button â†’ toolbar instead. */
+     our JS handles the ⋯ button → toolbar instead. */
   .message, .message-compact {
     -webkit-user-select: none;
     user-select: none;
@@ -10875,7 +10875,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
     user-select: text;
   }
 
-  /* Touch devices â€” larger tap targets */
+  /* Touch devices — larger tap targets */
   .channel-item { padding: 12px 16px; min-height: 44px; }
   .btn-sm { min-height: 44px; padding: 10px 14px; }
   .icon-btn { min-width: 40px; min-height: 40px; font-size: 18px; }
@@ -10886,12 +10886,12 @@ body.is-ios.ios-keyboard-open .message-input-area {
   .message:hover, .message-compact:hover { background: transparent; }
   .message-compact:hover .compact-time { display: none !important; }
 
-  /* Kill the hover-triggered toolbar â€” belt-and-suspenders in case
+  /* Kill the hover-triggered toolbar — belt-and-suspenders in case
      the browser still reports (hover: hover) for the base guard. */
   .message:hover .msg-toolbar,
   .message-compact:hover .msg-toolbar { display: none !important; }
 
-  /* Toolbar: hidden by default, shown only via JS â‹¯ button (.msg-selected).
+  /* Toolbar: hidden by default, shown only via JS ⋯ button (.msg-selected).
      Stays position:absolute from the base rule so it floats over
      content instead of pushing layout around. Anchored to top-right
      of the message, same as desktop hover. */
@@ -10918,7 +10918,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
     font-size: 16px;
   }
 
-  /* Compact timestamp â€” always hidden on touch (no real hover exists) */
+  /* Compact timestamp — always hidden on touch (no real hover exists) */
   .message-compact .compact-time { display: none !important; }
 
   /* Smoother scrolling on touch */
@@ -10934,7 +10934,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
 
 /* Extra safety: hide hover toolbar on any coarse-pointer device even if
    the browser claims (hover: hover).  Toolbar is shown via .msg-selected
-   from the JS â‹¯ button handler instead. */
+   from the JS ⋯ button handler instead. */
 @media (pointer: coarse) {
   .message:hover .msg-toolbar,
   .message-compact:hover .msg-toolbar { display: none !important; }
@@ -11260,7 +11260,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
 }
 .webcam-tile.webcam-popped-out video { display: none; }
 .webcam-tile.webcam-popped-out::after {
-  content: 'â§‰ Popped out'; display: flex; align-items: center; justify-content: center;
+  content: '⧉ Popped out'; display: flex; align-items: center; justify-content: center;
   height: 100%; font-size: 11px; color: var(--text-muted);
 }
 
@@ -11464,7 +11464,7 @@ video:-webkit-full-screen {
   pointer-events: none;
 }
 
-/* â”€â”€ Stream Audio Controls (per-tile overlay) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Stream Audio Controls (per-tile overlay) ──────────── */
 
 .stream-audio-controls {
   position: absolute;
@@ -11574,15 +11574,15 @@ video:-webkit-full-screen {
   opacity: 0.85;
 }
 
-/* â”€â”€ Audio-mode variants for the streamer's own tile.
+/* ── Audio-mode variants for the streamer's own tile.
    Subtle color cue so the streamer can tell at a glance which audio path
-   their share is using. Only visible on their own tile. â”€â”€ */
+   their share is using. Only visible on their own tile. ── */
 .stream-audio-badge.mode-app          { color: #7cfc7c; }                /* green: clean per-app capture */
 .stream-audio-badge.mode-system-clean { color: #7cb8fc; }                /* blue:  system minus Haven */
 .stream-audio-badge.mode-fallback     { color: #fcc77c; }                /* amber: fell back from per-app */
 .stream-audio-badge.mode-loopback     { color: #fc7c7c; }                /* red:   raw loopback (voice-loop risk) */
 
-/* â”€â”€ Stream Viewer Badge (eye icon + count on tiles) â”€â”€ */
+/* ── Stream Viewer Badge (eye icon + count on tiles) ── */
 
 .stream-viewer-badge {
   position: absolute;
@@ -11604,7 +11604,7 @@ video:-webkit-full-screen {
   font-size: 12px;
 }
 
-/* â”€â”€ Stream Focus Mode (double-click to expand) â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Stream Focus Mode (double-click to expand) ──────── */
 
 .stream-focus-mode {
   max-height: none !important;
@@ -11638,7 +11638,7 @@ video:-webkit-full-screen {
   object-fit: contain;
 }
 
-/* â”€â”€ Stream Pop-out Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Stream Pop-out Button ──────────────────────────── */
 
 .stream-popout-btn {
   position: absolute;
@@ -11659,7 +11659,7 @@ video:-webkit-full-screen {
 .screen-share-tile:hover .stream-popout-btn { opacity: 1; }
 .stream-popout-btn:hover { background: rgba(255,255,255,0.2); }
 
-/* â”€â”€ Stream Fullscreen Button (beside pop-out, top-left) â”€â”€ */
+/* ── Stream Fullscreen Button (beside pop-out, top-left) ── */
 
 .stream-fullscreen-btn {
   position: absolute;
@@ -11680,7 +11680,7 @@ video:-webkit-full-screen {
 .screen-share-tile:hover .stream-fullscreen-btn { opacity: 1; }
 .stream-fullscreen-btn:hover { background: rgba(255,255,255,0.2); }
 
-/* â”€â”€ Stream Minimize Button (top-right, keeps audio) â”€â”€â”€â”€â”€ */
+/* ── Stream Minimize Button (top-right, keeps audio) ───── */
 
 .stream-minimize-btn {
   position: absolute;
@@ -11701,7 +11701,7 @@ video:-webkit-full-screen {
 .screen-share-tile:hover .stream-minimize-btn { opacity: 1; }
 .stream-minimize-btn:hover { background: rgba(255,255,255,0.2); }
 
-/* â”€â”€ Stream Close Button (top-right corner, mutes audio) â”€ */
+/* ── Stream Close Button (top-right corner, mutes audio) ─ */
 
 .stream-close-btn {
   position: absolute;
@@ -11722,7 +11722,7 @@ video:-webkit-full-screen {
 .screen-share-tile:hover .stream-close-btn { opacity: 1; }
 .stream-close-btn:hover { background: rgba(220,53,69,0.7); }
 
-/* Collapse tile when popped out â€” free up Haven space */
+/* Collapse tile when popped out — free up Haven space */
 .screen-share-tile.stream-popped-out {
   height: 28px !important;
   min-height: 0 !important;
@@ -11732,7 +11732,7 @@ video:-webkit-full-screen {
 .screen-share-tile.stream-popped-out video { display: none; }
 .screen-share-tile.stream-popped-out .stream-controls { display: none; }
 .screen-share-tile.stream-popped-out::after {
-  content: 'â§‰ Popped out â€” click to restore';
+  content: '⧉ Popped out — click to restore';
   position: relative;
   display: flex;
   align-items: center;
@@ -11755,7 +11755,7 @@ video:-webkit-full-screen {
   max-height: none !important;
 }
 
-/* â”€â”€ Stream PiP Overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Stream PiP Overlay ─────────────────────────────────── */
 .stream-pip-overlay {
   width: 480px;
   min-height: 320px;
@@ -11781,7 +11781,7 @@ video:-webkit-full-screen {
   }
 }
 
-/* â”€â”€ Soundboard PiP Overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Soundboard PiP Overlay ─────────────────────────────── */
 .sb-pip-overlay {
   position: fixed;
   bottom: 24px;
@@ -12114,7 +12114,7 @@ video:-webkit-full-screen {
   max-width: fit-content;
 }
 
-/* â”€â”€ Markdown tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Markdown tables ────────────────────────────────── */
 .chat-table-wrap {
   margin: 4px 0;
   overflow-x: auto;
@@ -12158,7 +12158,7 @@ video:-webkit-full-screen {
   line-height: 1.35;
 }
 
-/* â”€â”€ Chat Markdown: Highlight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Chat Markdown: Highlight ──────────────────────────── */
 .chat-highlight {
   background: rgba(250, 200, 50, 0.25);
   color: inherit;
@@ -12166,7 +12166,7 @@ video:-webkit-full-screen {
   border-radius: 3px;
 }
 
-/* â”€â”€ Chat Markdown: Headings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Chat Markdown: Headings ───────────────────────────── */
 .chat-heading {
   font-weight: 700;
   margin: 4px 0 2px;
@@ -12177,14 +12177,14 @@ video:-webkit-full-screen {
 .chat-h2 { font-size: 1.25em; }
 .chat-h3 { font-size: 1.1em; }
 
-/* â”€â”€ Chat Markdown: Horizontal Rules â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Chat Markdown: Horizontal Rules ───────────────────── */
 .chat-hr {
   border: none;
   border-top: 1px solid var(--border-color);
   margin: 6px 0;
 }
 
-/* â”€â”€ Chat Markdown: Lists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Chat Markdown: Lists ──────────────────────────────── */
 .chat-list {
   margin: 4px 0;
   padding-left: 22px;
@@ -12262,7 +12262,7 @@ ul.chat-list { list-style-type: disc; }
   overflow: hidden;
 }
 
-/* â”€â”€ Multi-image gallery embed (2Ã—2 grid, Discord-style) â”€ */
+/* ── Multi-image gallery embed (2×2 grid, Discord-style) ─ */
 .link-preview--gallery {
   flex-direction: column;
   max-width: 400px;
@@ -12291,7 +12291,7 @@ ul.chat-list { list-style-type: disc; }
   aspect-ratio: 2 / 1;
 }
 
-/* â”€â”€ Inline YouTube embed in chat messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Inline YouTube embed in chat messages ────────────── */
 .link-preview-yt {
   margin-top: 6px;
   max-width: 480px;
@@ -12351,7 +12351,7 @@ ul.chat-list { list-style-type: disc; }
    User Status Dots
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* DND: square â€” distinct shape */
+/* DND: square — distinct shape */
 .user-dot.dnd {
   background-color: var(--danger) !important;
   box-shadow: 0 0 4px var(--danger);
@@ -12499,7 +12499,7 @@ ul.chat-list { list-style-type: disc; }
   color: var(--accent);
 }
 
-/* â”€â”€ DM Category Headers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── DM Category Headers ──────────────────────────────── */
 .dm-category-header {
   display: flex;
   align-items: center;
@@ -12627,7 +12627,7 @@ ul.chat-list { list-style-type: disc; }
   color: var(--error, #e74c3c);
 }
 
-/* â”€â”€ Risky download warning modal â”€â”€ */
+/* ── Risky download warning modal ── */
 .risky-download-overlay {
   position: fixed;
   inset: 0;
@@ -12711,7 +12711,7 @@ ul.chat-list { list-style-type: disc; }
    THEMED SLIDER EFFECTS
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* Bloodborne / Dark Souls â€” health bar red glow */
+/* Bloodborne / Dark Souls — health bar red glow */
 [data-theme="bloodborne"] .slider-sm,
 [data-theme="bloodborne"] .ns-slider {
   --track-bg: #1a0c0c;
@@ -12730,7 +12730,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 8px rgba(200, 168, 78, 0.5);
 }
 
-/* Elden Ring â€” golden estus glow */
+/* Elden Ring — golden estus glow */
 [data-theme="eldenring"] .slider-sm,
 [data-theme="eldenring"] .ns-slider {
   --track-bg: #14141e;
@@ -12740,7 +12740,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 10px rgba(212, 168, 50, 0.6);
 }
 
-/* Minecraft â€” blocky green bar */
+/* Minecraft — blocky green bar */
 [data-theme="minecraft"] .slider-sm,
 [data-theme="minecraft"] .ns-slider {
   --track-bg: #2e2e2e;
@@ -12761,7 +12761,7 @@ ul.chat-list { list-style-type: disc; }
   border-radius: 2px;
 }
 
-/* Final Fantasy X â€” blue mana bar */
+/* Final Fantasy X — blue mana bar */
 [data-theme="ffx"] .slider-sm,
 [data-theme="ffx"] .ns-slider {
   --track-bg: #101a30;
@@ -12773,7 +12773,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 8px rgba(64, 168, 224, 0.5);
 }
 
-/* Zelda â€” green heart / stamina bar */
+/* Zelda — green heart / stamina bar */
 [data-theme="zelda"] .slider-sm,
 [data-theme="zelda"] .ns-slider {
   --track-bg: #142014;
@@ -12785,7 +12785,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 8px rgba(68, 187, 68, 0.5);
 }
 
-/* Matrix â€” green terminal glow */
+/* Matrix — green terminal glow */
 [data-theme="matrix"] .slider-sm,
 [data-theme="matrix"] .ns-slider {
   --track-bg: #0a0a0a;
@@ -12795,7 +12795,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
 }
 
-/* Tron â€” neon blue trail */
+/* Tron — neon blue trail */
 [data-theme="tron"] .slider-sm,
 [data-theme="tron"] .ns-slider {
   --track-bg: #0c141f;
@@ -12805,7 +12805,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 10px rgba(111, 236, 255, 0.6);
 }
 
-/* Cyberpunk â€” neon pink */
+/* Cyberpunk — neon pink */
 [data-theme="cyberpunk"] .slider-sm,
 [data-theme="cyberpunk"] .ns-slider {
   --track-bg: #0a0a12;
@@ -12815,7 +12815,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 8px rgba(255, 45, 111, 0.5);
 }
 
-/* Halo â€” UNSC blue-green */
+/* Halo — UNSC blue-green */
 [data-theme="halo"] .slider-sm,
 [data-theme="halo"] .ns-slider {
   --track-bg: #0d1a0d;
@@ -12825,7 +12825,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 8px rgba(79, 195, 247, 0.5);
 }
 
-/* Ice â€” frozen blue */
+/* Ice — frozen blue */
 [data-theme="ice"] .slider-sm,
 [data-theme="ice"] .ns-slider {
   --track-bg: #102030;
@@ -12835,7 +12835,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
 }
 
-/* LoTR â€” golden warmth */
+/* LoTR — golden warmth */
 [data-theme="lotr"] .slider-sm,
 [data-theme="lotr"] .ns-slider {
   --track-bg: #2a221a;
@@ -12845,7 +12845,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 6px rgba(212, 168, 68, 0.5);
 }
 
-/* Dracula â€” purple accent */
+/* Dracula — purple accent */
 [data-theme="dracula"] .slider-sm,
 [data-theme="dracula"] .ns-slider {
   --track-bg: #22232e;
@@ -12855,7 +12855,7 @@ ul.chat-list { list-style-type: disc; }
   box-shadow: 0 0 8px rgba(189, 147, 249, 0.5);
 }
 
-/* â”€â”€ Sub-channel styling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Sub-channel styling ─────────────────────────────── */
 .sub-channel-item {
   padding: 3px 16px 3px 38px !important;
 }
@@ -12868,7 +12868,7 @@ ul.chat-list { list-style-type: disc; }
   opacity: 0.8;
 }
 
-/* â”€â”€ Private sub-channel styling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Private sub-channel styling ─────────────────────── */
 .private-channel .channel-name {
   opacity: 0.65;
   font-style: italic;
@@ -12877,7 +12877,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 12px;
 }
 
-/* â”€â”€ Sub-channel Subscriptions Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Sub-channel Subscriptions Panel ─────────────────── */
 .sub-panel-parent-section {
   margin-bottom: 16px;
 }
@@ -12966,7 +12966,7 @@ ul.chat-list { list-style-type: disc; }
   text-align: center;
 }
 
-/* â”€â”€ Role badge (user list & messages) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Role badge (user list & messages) ───────────────── */
 .user-role-badge {
   font-size: 10px;
   font-weight: 600;
@@ -12978,7 +12978,7 @@ ul.chat-list { list-style-type: disc; }
   margin-left: 4px;
   white-space: nowrap;
   flex-shrink: 0;
-  /* Hidden in sidebar user list â€” role shown via dot + tooltip instead */
+  /* Hidden in sidebar user list — role shown via dot + tooltip instead */
   display: none;
 }
 .msg-role-badge {
@@ -12997,7 +12997,7 @@ ul.chat-list { list-style-type: disc; }
   margin-left: 2px;
 }
 
-/* â”€â”€ BOT badge for webhook messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── BOT badge for webhook messages ───────────────── */
 .bot-badge {
   display: inline-block;
   font-size: 9px;
@@ -13014,7 +13014,7 @@ ul.chat-list { list-style-type: disc; }
   border: 2px solid var(--accent-color, #5865f2);
 }
 
-/* â”€â”€ Webhook management items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Webhook management items ──────────────────────────── */
 .webhook-item {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -13091,7 +13091,7 @@ ul.chat-list { list-style-type: disc; }
 [data-theme="win95"] .btn-xs:hover { background: #dfdfdf; }
 [data-theme="win95"] .btn-xs:active { border: 2px inset #808080; }
 
-/* â”€â”€ Collapsible sub-channel toggle arrow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Collapsible sub-channel toggle arrow ────────────── */
 .channel-collapse-arrow {
   display: flex;
   align-items: center;
@@ -13116,7 +13116,7 @@ ul.chat-list { list-style-type: disc; }
   transform: translateY(-50%) rotate(-90deg);
 }
 
-/* â”€â”€ Category collapse arrow â”€â”€â”€â”€ */
+/* ── Category collapse arrow ──── */
 .cat-collapse-arrow {
   display: inline-flex;
   align-items: center;
@@ -13132,7 +13132,7 @@ ul.chat-list { list-style-type: disc; }
   transform: rotate(-90deg);
 }
 
-/* â”€â”€ Role management modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Role management modal ───────────────────────────── */
 /* Make the role-modal flex its body so the sidebar/detail panes grow with the
    modal and the Close button pins to the bottom-right at any resize size. */
 .role-management-modal {
@@ -13228,7 +13228,7 @@ ul.chat-list { list-style-type: disc; }
   background: color-mix(in srgb, var(--accent, #6b4fdb) 12%, transparent);
 }
 
-/* â”€â”€ Role preview in admin settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Role preview in admin settings ──────────────────── */
 .role-preview-item {
   display: flex;
   align-items: center;
@@ -13365,7 +13365,7 @@ ul.chat-list { list-style-type: disc; }
   text-transform: uppercase;
   /* Space below title, above the card */
   margin: 0 0 10px;
-  /* Never shrink â€” stays above the scroll box */
+  /* Never shrink — stays above the scroll box */
   flex-shrink: 0;
 }
 .donors-tier-title::before,
@@ -13463,7 +13463,7 @@ ul.chat-list { list-style-type: disc; }
   text-decoration: none;
   transition: transform .15s, box-shadow .15s;
   box-shadow: 0 3px 12px rgba(226,68,68,.35);
-  /* Pinned to the bottom of the flex column modal â€” never shrinks, never
+  /* Pinned to the bottom of the flex column modal — never shrinks, never
      scrolls out of view. */
   flex-shrink: 0;
   align-self: center;
@@ -13510,7 +13510,7 @@ ul.chat-list { list-style-type: disc; }
 .density-icon { font-size: 18px; }
 .density-label { font-weight: 600; }
 
-/* â”€â”€ Compact density â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Compact density ─────────────────────────────────── */
 [data-density="compact"] .message-row {
   padding: 2px 8px;
   gap: 8px;
@@ -13537,7 +13537,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 10px;
 }
 
-/* â”€â”€ Spacious density â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Spacious density ────────────────────────────────── */
 [data-density="spacious"] .message-row {
   padding: 8px 12px;
   gap: 14px;
@@ -13566,7 +13566,7 @@ ul.chat-list { list-style-type: disc; }
   padding: 8px 0;
 }
 
-/* Small â€” 11 px base (noticeably smaller) */
+/* Small — 11 px base (noticeably smaller) */
 [data-fontsize="small"] .message-content     { font-size: 11px; line-height: 1.35; }
 [data-fontsize="small"] .message-author      { font-size: 11px; }
 [data-fontsize="small"] .message-time        { font-size: 8.5px; }
@@ -13591,12 +13591,12 @@ ul.chat-list { list-style-type: disc; }
 [data-fontsize="small"] .inline-code,
 [data-fontsize="small"] code                  { font-size: 10.5px; }
 [data-fontsize="small"] .compact-time         { font-size: 8px; }
-/* .message-compact .message-content intentionally not overridden â€” inherits same size
+/* .message-compact .message-content intentionally not overridden — inherits same size
    as full messages so all message text stays uniform across grouped and root messages. */
 
-/* Normal â€” 14 px base (default, no overrides needed) */
+/* Normal — 14 px base (default, no overrides needed) */
 
-/* Large â€” 18 px base (clearly bigger) */
+/* Large — 18 px base (clearly bigger) */
 [data-fontsize="large"] .message-content     { font-size: 18px; line-height: 1.55; }
 [data-fontsize="large"] .message-author      { font-size: 16px; }
 [data-fontsize="large"] .message-time        { font-size: 12.5px; }
@@ -13624,7 +13624,7 @@ ul.chat-list { list-style-type: disc; }
 [data-fontsize="large"] .compact-time         { font-size: 11px; }
 
 
-/* X-Large â€” 22 px base (very large, high visibility) */
+/* X-Large — 22 px base (very large, high visibility) */
 [data-fontsize="x-large"] .message-content     { font-size: 22px; line-height: 1.6; }
 [data-fontsize="x-large"] .message-author      { font-size: 19px; }
 [data-fontsize="x-large"] .message-time        { font-size: 14px; }
@@ -13652,7 +13652,7 @@ ul.chat-list { list-style-type: disc; }
 [data-fontsize="x-large"] .compact-time         { font-size: 12.5px; }
 
 
-/* â”€â”€ Font Size: Settings / Sub-menus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Font Size: Settings / Sub-menus ─────────────────────── */
 
 /* Small */
 [data-fontsize="small"] .settings-hint          { font-size: 8.5px; }
@@ -13829,7 +13829,7 @@ ul.chat-list { list-style-type: disc; }
 .online-overlay-status-dot.offline { background: #72767d; }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   MOD MODE â€” Layout customisation drag & drop
+   MOD MODE — Layout customisation drag & drop
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .sidebar-mod-container {
@@ -13971,7 +13971,7 @@ ul.chat-list { list-style-type: disc; }
 #app-body .main { order: 2; }
 #app-body .right-sidebar { order: 3; }
 
-/* Right sidebar â€” snapped left */
+/* Right sidebar — snapped left */
 #app-body .right-sidebar[data-panel-pos="left"] {
   order: 1;
   border-left: none;
@@ -13983,7 +13983,7 @@ ul.chat-list { list-style-type: disc; }
 }
 #app-body .right-sidebar[data-panel-pos="right"] { order: 3; }
 
-/* Floating panel (center) â€” any panel */
+/* Floating panel (center) — any panel */
 .mod-float {
   position: fixed !important;
   z-index: 500;
@@ -14021,7 +14021,7 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   SIDEBAR SPLIT â€” channels + DM panes with drag divider
+   SIDEBAR SPLIT — channels + DM panes with drag divider
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .sidebar-split {
@@ -14072,7 +14072,7 @@ ul.chat-list { list-style-type: disc; }
   transform: rotate(-90deg);
 }
 
-/* Drag handle between channels & DMs â€” blends with natural section border */
+/* Drag handle between channels & DMs — blends with natural section border */
 .sidebar-split-handle {
   height: 0;
   cursor: row-resize;
@@ -14134,7 +14134,7 @@ ul.chat-list { list-style-type: disc; }
 
 /* Burn-after-read message states */
 .message-burn-pending .message-content {
-  /* No left border â€” the flame icon is the indicator. The orange bar
+  /* No left border — the flame icon is the indicator. The orange bar
      looked noisy and inconsistent across full vs compact rows. */
   padding-left: 0;
 }
@@ -14341,11 +14341,11 @@ ul.chat-list { list-style-type: disc; }
   padding: 4px 0;
 }
 
-/* â”€â”€â”€ Collapse arrow positioning override â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Collapse arrow positioning override ─────────────── */
 /* (moved to main .channel-collapse-arrow block above) */
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   ORGANIZE MODAL â€” styled
+   ORGANIZE MODAL — styled
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .organize-toolbar {
@@ -14527,7 +14527,7 @@ ul.chat-list { list-style-type: disc; }
   margin-right: 4px;
 }
 
-/* â”€â”€ Audit Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Audit Log ────────────────────────────────────────── */
 .audit-log-toolbar {
   display: flex;
   align-items: center;
@@ -14608,7 +14608,7 @@ ul.chat-list { list-style-type: disc; }
   margin: 8px auto;
 }
 
-/* â”€â”€ Channel Roles Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Channel Roles Modal ─────────────────────── */
 .channel-roles-layout {
   display: flex;
   gap: 16px;
@@ -14768,7 +14768,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 0.88rem;
 }
 
-/* â”€â”€ Channel Roles: Right panel (role config) â”€â”€â”€ */
+/* ── Channel Roles: Right panel (role config) ─── */
 .channel-roles-role-list {
   display: flex;
   flex-direction: column;
@@ -14860,7 +14860,7 @@ ul.chat-list { list-style-type: disc; }
   margin-top: 6px;
 }
 
-/* â”€â”€ Channel Roles responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Channel Roles responsive ─────────────────── */
 @media (max-width: 640px) {
   .channel-roles-layout {
     flex-direction: column;
@@ -14874,7 +14874,7 @@ ul.chat-list { list-style-type: disc; }
   }
 }
 
-/* â”€â”€ Assign Role Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Assign Role Modal ───────────────────────────── */
 .assign-role-field-label {
   display: block;
   font-size: 0.72rem;
@@ -14935,7 +14935,7 @@ ul.chat-list { list-style-type: disc; }
   opacity: 0.7;
 }
 
-/* â”€â”€ Settings Group Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Settings Group Card ─────────────────────────── */
 .settings-group {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -14952,7 +14952,7 @@ ul.chat-list { list-style-type: disc; }
   margin-bottom: 8px;
 }
 
-/* â”€â”€ Server Icon Upload (admin settings) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Server Icon Upload (admin settings) ─────────── */
 .server-icon-upload-area {
   display: flex;
   align-items: flex-start;
@@ -14995,7 +14995,7 @@ ul.chat-list { list-style-type: disc; }
   object-fit: cover;
 }
 
-/* â”€â”€ Server Banner Upload (admin settings) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Server Banner Upload (admin settings) ─────────── */
 .server-banner-upload-area {
   display: flex;
   align-items: flex-start;
@@ -15023,7 +15023,7 @@ ul.chat-list { list-style-type: disc; }
   flex: 1 1 auto;
 }
 
-/* â”€â”€ Server Banner Display (always behind all content) â”€â”€â”€ */
+/* ── Server Banner Display (always behind all content) ─── */
 .server-banner-display {
   position: absolute;
   top: 0;
@@ -15054,14 +15054,14 @@ ul.chat-list { list-style-type: disc; }
   pointer-events: none;
 }
 
-/* Banner visible â€” base: header & topic above banner */
+/* Banner visible — base: header & topic above banner */
 .main.has-banner .channel-header,
 .main.has-banner .channel-topic-bar {
   position: relative;
   z-index: 1;
 }
 
-/* â”€â”€ Full Header (default): opaque backgrounds â”€â”€â”€ */
+/* ── Full Header (default): opaque backgrounds ─── */
 .main.has-banner .channel-header {
   background: var(--bg-primary);
 }
@@ -15069,7 +15069,7 @@ ul.chat-list { list-style-type: disc; }
   background: var(--bg-secondary);
 }
 
-/* â”€â”€ Shaded Header: translucent dark tint â”€â”€â”€ */
+/* ── Shaded Header: translucent dark tint ─── */
 .main.banner-mode-shaded .channel-header {
   background: rgba(0,0,0,0.45) !important;
   border-bottom-color: transparent !important;
@@ -15089,7 +15089,7 @@ ul.chat-list { list-style-type: disc; }
   -webkit-backdrop-filter: blur(6px);
 }
 
-/* â”€â”€ Minimal Header: transparent bar, pill backgrounds on elements â”€â”€â”€ */
+/* ── Minimal Header: transparent bar, pill backgrounds on elements ─── */
 .main.banner-mode-minimal .channel-header {
   background: transparent !important;
   border-bottom-color: transparent !important;
@@ -15135,7 +15135,7 @@ ul.chat-list { list-style-type: disc; }
   width: auto;
 }
 
-/* â”€â”€ Transparent Header: fully clear, no shading â”€â”€â”€ */
+/* ── Transparent Header: fully clear, no shading ─── */
 .main.banner-mode-transparent .channel-header {
   background: transparent !important;
   border-bottom-color: transparent !important;
@@ -15153,7 +15153,7 @@ ul.chat-list { list-style-type: disc; }
   border-color: transparent;
 }
 
-/* â”€â”€ Shared overlay-mode overrides (shaded/minimal/transparent) â”€â”€â”€ */
+/* ── Shared overlay-mode overrides (shaded/minimal/transparent) ─── */
 .main.banner-mode-shaded .channel-code-tag,
 .main.banner-mode-minimal .channel-code-tag,
 .main.banner-mode-transparent .channel-code-tag {
@@ -15171,7 +15171,7 @@ ul.chat-list { list-style-type: disc; }
   text-shadow: none;
 }
 
-/* â”€â”€ Role Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Role Icons ────────────────────────────────────── */
 .role-icon {
   width: 16px;
   height: 16px;
@@ -15195,7 +15195,7 @@ ul.chat-list { list-style-type: disc; }
   margin-top: 8px;
 }
 
-/* â”€â”€ Discord Import â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Discord Import ────────────────────────────────── */
 .import-format-info {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -15448,11 +15448,11 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   Centralized Role Assignment â€” 3-Pane Modal (RAC)
+   Centralized Role Assignment — 3-Pane Modal (RAC)
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .role-assign-center-box {
   /* Default size: spacious-but-bounded. The user can drag the bottom-right
-     corner to grow the modal to whatever fits their screen â€” the previous
+     corner to grow the modal to whatever fits their screen — the previous
      `max-width: 960px !important` made the corner-resize one-way (shrink
      only) on large displays. We keep a sensible upper cap (98vw / 92vh)
      so the modal can never exceed the viewport. */
@@ -15830,7 +15830,7 @@ ul.chat-list { list-style-type: disc; }
    Consolidated fixes for cramped / overflowing mobile UIs
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* â”€â”€ Fix: Members modal â€” use horizontal space, not purely vertical â”€â”€ */
+/* ── Fix: Members modal — use horizontal space, not purely vertical ── */
 @media (max-width: 600px) {
   /* The modal itself should be near full-width */
   #all-members-modal .modal {
@@ -15878,7 +15878,7 @@ ul.chat-list { list-style-type: disc; }
   }
 }
 
-/* â”€â”€ Fix: RAC (Role Assignment) modal â€” less claustrophobic on mobile â”€â”€ */
+/* ── Fix: RAC (Role Assignment) modal — less claustrophobic on mobile ── */
 @media (max-width: 600px) {
   .role-assign-center-box {
     width: 97vw !important;
@@ -15908,7 +15908,7 @@ ul.chat-list { list-style-type: disc; }
   .rac-role-select { font-size: 0.78rem; }
 }
 
-/* â”€â”€ Fix: Reaction picker overflow â€” keep within viewport â”€â”€ */
+/* ── Fix: Reaction picker overflow — keep within viewport ── */
 @media (max-width: 480px) {
   .reaction-picker {
     position: fixed !important;
@@ -15944,7 +15944,7 @@ ul.chat-list { list-style-type: disc; }
   }
 }
 
-/* â”€â”€ Fix: Wasted space under CHANNELS when collapsed (desktop AND mobile) â”€â”€ */
+/* ── Fix: Wasted space under CHANNELS when collapsed (desktop AND mobile) ── */
 .sidebar-section.channel-section {
   transition: padding 0.2s ease;
 }
@@ -15962,7 +15962,7 @@ ul.chat-list { list-style-type: disc; }
   margin-bottom: 0 !important;
 }
 
-/* When collapsed, the channel-list is display:none â€” section label no gap */
+/* When collapsed, the channel-list is display:none — section label no gap */
 #channels-pane .section-label {
   margin-bottom: 4px;
 }
@@ -15972,7 +15972,7 @@ ul.chat-list { list-style-type: disc; }
   margin-bottom: 0;
 }
 
-/* â”€â”€ Fix: Mobile servers section â€” compact circular icon instead of dropdown â”€â”€ */
+/* ── Fix: Mobile servers section — compact circular icon instead of dropdown ── */
 @media (max-width: 768px) {
   /* Tighten the mobile servers section */
   .mobile-servers-section {
@@ -16022,10 +16022,10 @@ ul.chat-list { list-style-type: disc; }
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MOBILE ROUND-2 FIXES
    Right sidebar overlap, close-button position, safe-area,
-   tap-to-reveal "â‹¯" toolbar fallback
+   tap-to-reveal "⋯" toolbar fallback
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* â”€â”€ Right sidebar: push content below close button on mobile â”€â”€ */
+/* ── Right sidebar: push content below close button on mobile ── */
 @media (max-width: 768px) {
   .right-sidebar {
     padding-top: calc(48px + env(safe-area-inset-top, 0px)); /* room for close button + iOS status bar */
@@ -16037,7 +16037,7 @@ ul.chat-list { list-style-type: disc; }
   }
 }
 
-/* â”€â”€ Modals: safe area padding for Android nav bar â”€â”€ */
+/* ── Modals: safe area padding for Android nav bar ── */
 @media (max-width: 600px) {
   .modal {
     padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px) !important;
@@ -16047,12 +16047,12 @@ ul.chat-list { list-style-type: disc; }
   }
 }
 
-/* â”€â”€ Legacy floating "â‹¯" button (hidden, replaced by per-message .msg-dots-btn) â”€â”€ */
+/* ── Legacy floating "⋯" button (hidden, replaced by per-message .msg-dots-btn) ── */
 #msg-more-btn {
   display: none !important;
 }
 
-/* â”€â”€ Per-message "â‹¯" button (visible on touch devices only) â”€â”€ */
+/* ── Per-message "⋯" button (visible on touch devices only) ── */
 .msg-dots-btn {
   display: none;            /* hidden on desktop by default */
   position: absolute;
@@ -16090,14 +16090,14 @@ ul.chat-list { list-style-type: disc; }
   .message, .message-compact {
     position: relative;
   }
-  /* Ensure compact messages are tall enough that the â‹¯ button (28 px)
+  /* Ensure compact messages are tall enough that the ⋯ button (28 px)
      doesn't overflow into adjacent rows and cause visual overlap. */
   .message-compact {
     min-height: 32px;
     display: flex;
     align-items: flex-start;
   }
-  /* Give message rows right padding so text doesn't flow under the â‹¯ button */
+  /* Give message rows right padding so text doesn't flow under the ⋯ button */
   .message .message-row,
   .message-compact {
     padding-right: 38px;
@@ -16108,9 +16108,9 @@ ul.chat-list { list-style-type: disc; }
   }
 }
 
-/* â”€â”€ Touch-device selected-message toolbar & timestamp overrides â”€â”€ */
+/* ── Touch-device selected-message toolbar & timestamp overrides ── */
 @media (pointer: coarse) {
-  /* â”€â”€ Selected message: show toolbar inside the message, top-right â”€â”€
+  /* ── Selected message: show toolbar inside the message, top-right ──
      Using top: 4px instead of a negative offset keeps the toolbar within
      the .messages scroll container so it is never clipped. */
   .msg-selected .msg-toolbar {
@@ -16681,7 +16681,7 @@ ul.chat-list { list-style-type: disc; }
   font-weight: 500;
   letter-spacing: .01em;
 }
-.persona-msg-badge::before { content: "ðŸŽ­"; font-size: 0.7rem; }
+.persona-msg-badge::before { content: "🎭"; font-size: 0.7rem; }
 .persona-msg-realname {
   font-size: 0.68rem;
   color: var(--text-muted);

@@ -1,6 +1,6 @@
 ﻿export default {
 
-// â”€â”€ Image Queue (paste/drop â†’ preview â†’ send on Enter) â”€â”€
+// ── Image Queue (paste/drop → preview → send on Enter) ──
 
 _queueImage(file) {
   if (!file || !file.type.startsWith('image/')) return;
@@ -37,7 +37,7 @@ _renderImageQueue() {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'image-queue-remove';
     removeBtn.title = 'Remove';
-    removeBtn.textContent = 'Ã—';
+    removeBtn.textContent = '×';
     removeBtn.addEventListener('click', () => {
       this._imageQueue.splice(idx, 1);
       this._renderImageQueue();
@@ -70,7 +70,7 @@ async _flushImageQueue(bundled = false, personaPrefix = '') {
   }
 },
 
-// â”€â”€ PiP DM Image Queue (#5324) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PiP DM Image Queue (#5324) ──────────────────────────
 
 _queueImageForPiP(file, targetCode) {
   if (!file || !file.type.startsWith('image/')) return;
@@ -109,7 +109,7 @@ _renderPiPImageQueue() {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'image-queue-remove';
     removeBtn.title = 'Remove';
-    removeBtn.textContent = 'Ã—';
+    removeBtn.textContent = '×';
     removeBtn.addEventListener('click', () => {
       this._pipImageQueue.splice(idx, 1);
       this._renderPiPImageQueue();
@@ -163,7 +163,7 @@ _setupAvatarUpload() {
   if (this._avatarDelegationActive) return;
   this._avatarDelegationActive = true;
 
-  // Pending state â€” nothing is saved until the user clicks Save
+  // Pending state — nothing is saved until the user clicks Save
   this._pendingAvatarFile = null;       // raw File object from <input>
   this._pendingAvatarPreviewUrl = null; // local preview data URL (display only)
   this._pendingAvatarRemoved = false;   // user clicked Clear
@@ -179,7 +179,7 @@ _setupAvatarUpload() {
     });
   }
 
-  // â”€â”€ Delegated click handler â”€â”€
+  // ── Delegated click handler ──
   document.addEventListener('click', (e) => {
     // Shape buttons
     const shapeBtn = e.target.closest('.avatar-shape-btn');
@@ -193,7 +193,7 @@ _setupAvatarUpload() {
       return;
     }
 
-    // Upload button â†’ trigger file picker
+    // Upload button → trigger file picker
     if (e.target.closest('#avatar-upload-btn')) {
       e.preventDefault();
       e.stopPropagation();
@@ -226,7 +226,7 @@ _setupAvatarUpload() {
     }
   });
 
-  // File input change â†’ stage the file, show local preview
+  // File input change → stage the file, show local preview
   document.addEventListener('change', (e) => {
     if (e.target && e.target.id === 'avatar-file-input') {
       const file = e.target.files[0];
@@ -339,7 +339,7 @@ async _commitAvatarSettings() {
       if (this.socket) this.socket.emit('set-avatar-shape', { shape: this._pendingAvatarShape });
     }
 
-    if (status) { status.textContent = 'âœ… Saved!'; status.style.color = 'var(--success, #6f6)'; }
+    if (status) { status.textContent = '✅ Saved!'; status.style.color = 'var(--success, #6f6)'; }
     this._showToast('Avatar settings saved!', 'success');
     setTimeout(() => { if (status) status.textContent = ''; }, 3000);
 
@@ -356,7 +356,7 @@ _applyAvatarShape() {
 },
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// SOUND MANAGER (Full Popout â€” Admin + User)
+// SOUND MANAGER (Full Popout — Admin + User)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 _setupSoundManagement() {
@@ -768,7 +768,7 @@ _updateSoundSelects(sounds) {
 
     if (customs.length > 0) {
       const customGroup = document.createElement('optgroup');
-      customGroup.label = `ðŸŽµ ${t('modals.sound_manager.group_custom')}`;
+      customGroup.label = `🎵 ${t('modals.sound_manager.group_custom')}`;
       customGroup.dataset.customGroup = '1';
       customs.forEach(s => {
         const opt = document.createElement('option');
@@ -803,8 +803,8 @@ _renderSoundList(sounds) {
     ${builtins.map(s => `
       <div class="custom-sound-item" data-name="${this._escapeHtml(s.name)}">
         <span class="custom-sound-name">${this._escapeHtml(s.name)}</span>
-        <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">â–¶</button>
-        <span class="muted-text" style="font-size:0.75em;margin-left:4px" title="${t('modals.sound_manager.builtin_locked_title')}">ðŸ”’</span>
+        <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">▶</button>
+        <span class="muted-text" style="font-size:0.75em;margin-left:4px" title="${t('modals.sound_manager.builtin_locked_title')}">🔒</span>
       </div>
     `).join('')}
   `;
@@ -814,7 +814,7 @@ _renderSoundList(sounds) {
     ${custom.map(s => `
       <div class="custom-sound-item" data-name="${this._escapeHtml(s.name)}">
         <span class="custom-sound-name">${this._escapeHtml(s.name)}</span>
-        <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">â–¶</button>
+        <button class="btn-xs sound-preview-btn" data-url="${this._escapeHtml(s.url)}" title="${t('modals.sound_manager.preview_btn')}">▶</button>
         <button class="btn-xs sound-rename-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.rename_btn')}">âœï¸</button>
         <button class="btn-xs sound-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('modals.sound_manager.delete_btn')}">ðŸ—‘ï¸</button>
       </div>
@@ -917,7 +917,7 @@ _renderSoundList(sounds) {
   });
 },
 
-// â”€â”€ Soundboard Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Soundboard Tab ─────────────────────────────────────
 
 _renderSoundboard(filter = '') {
   // Render into both the modal grid and the PiP grid if it's open
@@ -933,7 +933,7 @@ _renderSoundboard(filter = '') {
     (!this._soundPrefs[s.name]?.hidden || this._showHiddenSounds)
   );
 
-  // Reverse lookup: soundName â†’ hotkey
+  // Reverse lookup: soundName → hotkey
   const hotkeyMap = {};
   Object.entries(this._soundHotkeys).forEach(([hk, name]) => { hotkeyMap[name] = hk; });
 
@@ -980,7 +980,7 @@ _renderSoundboard(filter = '') {
       });
     });
 
-    // "Ã—" remove hotkey button
+    // "×" remove hotkey button
     grid.querySelectorAll('.sb-hotkey-clear').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1028,7 +1028,7 @@ _renderSoundboard(filter = '') {
   });
 },
 
-// â”€â”€ Assign to Events Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Assign to Events Tab ───────────────────────────────
 
 _renderAssignTab() {
   const builtinSounds = [
@@ -1059,7 +1059,7 @@ _renderAssignTab() {
     // Build options
     sel.innerHTML = '';
     const builtinGroup = document.createElement('optgroup');
-    builtinGroup.label = 'ðŸ”Š Built-in';
+    builtinGroup.label = '🔊 Built-in';
     builtinSounds.forEach(s => {
       const opt = document.createElement('option');
       opt.value = s.value;
@@ -1083,7 +1083,7 @@ _renderAssignTab() {
 
     if (userCustoms.length > 0) {
       const customGroup = document.createElement('optgroup');
-      customGroup.label = 'ðŸŽµ Custom';
+      customGroup.label = '🎵 Custom';
       userCustoms.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.value;
@@ -1194,7 +1194,7 @@ _setupEmojiManagement() {
     }
   });
 
-  // Bulk emoji upload â€” select multiple files, auto-named from filenames
+  // Bulk emoji upload — select multiple files, auto-named from filenames
   const bulkInput = document.getElementById('emoji-bulk-input');
   if (bulkInput) {
     bulkInput.addEventListener('change', async () => {
@@ -1260,7 +1260,7 @@ _setupEmojiCropperEvents() {
     this._renderEmojiCropFrame();
   });
 
-  // Mouse wheel â†’ zoom
+  // Mouse wheel → zoom
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     if (!this._cropState) return;
@@ -1685,7 +1685,7 @@ _renderBotSidebar(webhooks) {
   sidebar.innerHTML = webhooks.map(wh => {
     const avatarHtml = wh.avatar_url
       ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0">`
-      : `<span style="width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;color:#fff">ðŸ¤–</span>`;
+      : `<span style="width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;color:#fff">🤖</span>`;
     const activeClass = this._selectedBotId === wh.id ? ' active' : '';
     return `<div class="role-sidebar-item${activeClass}" data-bot-id="${wh.id}">${avatarHtml}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(wh.name)}</span></div>`;
   }).join('');
@@ -1708,7 +1708,7 @@ _showBotDetail(botId) {
   const panel = document.getElementById('bot-detail-panel');
   const baseUrl = window.location.origin;
   const webhookUrl = `${baseUrl}/api/webhooks/${wh.token}`;
-  const maskedToken = wh.token.slice(0, 12) + 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢';
+  const maskedToken = wh.token.slice(0, 12) + '••••••••••••';
   const channelOptions = this._getBotChannelOptions(wh.channel_id);
 
   panel.innerHTML = `
@@ -1716,10 +1716,10 @@ _showBotDetail(botId) {
       <label class="settings-label">${t('modals.bot_mgmt.avatar_label')}</label>
       <div class="bot-avatar-row" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
         <div class="bot-avatar-preview" style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid var(--border);background:var(--bg-tertiary);flex-shrink:0;display:flex;align-items:center;justify-content:center">
-          ${wh.avatar_url ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:24px">ðŸ¤–</span>'}
+          ${wh.avatar_url ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:24px">🤖</span>'}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <button class="btn-xs btn-accent" id="bot-upload-avatar-btn">ðŸ“· ${t('modals.bot_mgmt.upload_avatar_btn')}</button>
+          <button class="btn-xs btn-accent" id="bot-upload-avatar-btn">📷 ${t('modals.bot_mgmt.upload_avatar_btn')}</button>
           <button class="btn-xs" id="bot-remove-avatar-btn" ${wh.avatar_url ? '' : 'disabled'}>${t('modals.bot_mgmt.remove_avatar_btn')}</button>
         </div>
         <input type="file" id="bot-avatar-file-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
@@ -1733,33 +1733,33 @@ _showBotDetail(botId) {
 
       <label class="settings-label">${t('modals.bot_mgmt.status_label')}</label>
       <label class="toggle-row" style="margin-bottom:8px">
-        <span>${wh.is_active ? `ðŸŸ¢ ${t('modals.bot_mgmt.status_active')}` : `ðŸ”´ ${t('modals.bot_mgmt.status_disabled')}`}</span>
+        <span>${wh.is_active ? `🟢 ${t('modals.bot_mgmt.status_active')}` : `🔴 ${t('modals.bot_mgmt.status_disabled')}`}</span>
         <button class="btn-xs" id="bot-detail-toggle">${wh.is_active ? t('modals.bot_mgmt.disable_btn') : t('modals.bot_mgmt.enable_btn')}</button>
       </label>
 
       <label class="settings-label">${t('modals.bot_mgmt.webhook_url_label')}</label>
       <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
         <code style="flex:1;font-size:11px;padding:6px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(webhookUrl)}</code>
-        <button class="btn-xs" id="bot-detail-copy-url" title="${t('modals.bot_mgmt.copy_url_title')}">ðŸ“‹</button>
+        <button class="btn-xs" id="bot-detail-copy-url" title="${t('modals.bot_mgmt.copy_url_title')}">📋</button>
       </div>
 
       <label class="settings-label">${t('modals.bot_mgmt.token_label')}</label>
       <div style="font-size:11px;font-family:monospace;padding:4px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-muted);margin-bottom:12px">${maskedToken}</div>
 
-      <label class="settings-label">ðŸ“¡ Callback URL <span style="font-size:10px;color:var(--text-muted)">(optional â€” Haven will POST messages to this URL)</span></label>
+      <label class="settings-label">📡 Callback URL <span style="font-size:10px;color:var(--text-muted)">(optional — Haven will POST messages to this URL)</span></label>
       <input type="url" id="bot-detail-callback-url" value="${this._escapeHtml(wh.callback_url || '')}" placeholder="https://mybot.example.com/haven-events" class="settings-text-input" style="width:100%;margin-bottom:8px">
 
-      <label class="settings-label">ðŸ”‘ Callback Secret <span style="font-size:10px;color:var(--text-muted)">(optional â€” used to sign payloads via X-Haven-Signature)</span></label>
+      <label class="settings-label">🔑 Callback Secret <span style="font-size:10px;color:var(--text-muted)">(optional — used to sign payloads via X-Haven-Signature)</span></label>
       <input type="text" id="bot-detail-callback-secret" value="${this._escapeHtml(wh.callback_secret || '')}" placeholder="my-secret-key" class="settings-text-input" style="width:100%;margin-bottom:12px">
 
-      <label class="settings-label">ðŸ›¡ï¸ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only â€” let this bot kick / ban / mute users via REST API)</span></label>
+      <label class="settings-label">ðŸ›¡ï¸ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
       <label class="toggle-row" style="margin-bottom:12px">
         <input type="checkbox" id="bot-detail-can-moderate" ${wh.can_moderate ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
         <span>Allow this bot to perform moderation actions</span>
       </label>
 
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn-sm btn-accent" id="bot-detail-save" style="flex:1">ðŸ’¾ ${t('modals.bot_mgmt.save_btn')}</button>
+        <button class="btn-sm btn-accent" id="bot-detail-save" style="flex:1">💾 ${t('modals.bot_mgmt.save_btn')}</button>
         <button class="btn-sm btn-danger" id="bot-detail-delete">ðŸ—‘ï¸ ${t('modals.bot_mgmt.delete_btn')}</button>
       </div>
     </div>
@@ -1793,10 +1793,10 @@ _showBotDetail(botId) {
   });
   panel.querySelector('#bot-detail-copy-url').addEventListener('click', () => {
     const markCopied = () => {
-      panel.querySelector('#bot-detail-copy-url').textContent = 'âœ…';
+      panel.querySelector('#bot-detail-copy-url').textContent = '✅';
       setTimeout(() => {
         const btn = panel.querySelector('#bot-detail-copy-url');
-        if (btn) btn.textContent = 'ðŸ“‹';
+        if (btn) btn.textContent = '📋';
       }, 1500);
     };
     navigator.clipboard.writeText(webhookUrl).then(markCopied).catch(() => {
@@ -1836,7 +1836,7 @@ _getBotChannelOptions(selectedId) {
     const subs = subMap[p.id] || [];
     for (const s of subs) {
       const sSel = s.id === selectedId ? ' selected' : '';
-      html += `<option value="${s.id}"${sSel}>&nbsp;&nbsp;&nbsp;&nbsp;â†³ ${this._escapeHtml(s.name)}</option>`;
+      html += `<option value="${s.id}"${sSel}>&nbsp;&nbsp;&nbsp;&nbsp;↳ ${this._escapeHtml(s.name)}</option>`;
     }
   }
   return html;
@@ -1890,7 +1890,7 @@ _setupDensityPicker() {
   });
 },
 
-// â”€â”€ Font Size Picker â”€â”€
+// ── Font Size Picker ──
 
 _setupFontSizePicker() {
   const picker = document.getElementById('font-size-picker');
@@ -1913,7 +1913,7 @@ _setupFontSizePicker() {
   });
 },
 
-// â”€â”€ Emoji Reaction Size Picker â”€â”€
+// ── Emoji Reaction Size Picker ──
 
 _setupEmojiSizePicker() {
   const picker = document.getElementById('emoji-size-picker');
@@ -1936,7 +1936,7 @@ _setupEmojiSizePicker() {
   });
 },
 
-// â”€â”€ Debug Section â”€â”€
+// ── Debug Section ──
 
 _setupDebugSection() {
   const cb = document.getElementById('pref-debug-local-talk-indicator');
@@ -1949,7 +1949,7 @@ _setupDebugSection() {
     } catch {}
   });
 
-  // #5379 â€” opt-in toggle to re-apply voice processing (echoCancellation /
+  // #5379 — opt-in toggle to re-apply voice processing (echoCancellation /
   // noiseSuppression / autoGainControl) to getDisplayMedia audio. Default
   // off as of 3.17.3 because those filters hollow out music and game audio
   // for listeners. Users sharing tutorial narration or meeting audio can
@@ -1966,7 +1966,7 @@ _setupDebugSection() {
     });
   }
 
-  // #5380 â€” always join voice muted
+  // #5380 — always join voice muted
   const moCb = document.getElementById('pref-voice-mute-on-join');
   if (moCb) {
     try { moCb.checked = localStorage.getItem('haven_mute_on_join') === '1'; } catch {}
@@ -1978,7 +1978,7 @@ _setupDebugSection() {
     });
   }
 
-  // #5380 â€” listener-only (skip mic) voice mode
+  // #5380 — listener-only (skip mic) voice mode
   const loCb = document.getElementById('pref-voice-listener-only');
   if (loCb) {
     try { loCb.checked = localStorage.getItem('haven_listener_only') === '1'; } catch {}
@@ -1991,7 +1991,7 @@ _setupDebugSection() {
   }
 },
 
-// â”€â”€ Image Display Mode Picker â”€â”€
+// ── Image Display Mode Picker ──
 
 _setupImageModePicker() {
   const picker = document.getElementById('image-mode-picker');
@@ -2019,7 +2019,7 @@ _applyImageMode(mode) {
   document.body.classList.toggle('image-mode-full', mode === 'full');
 },
 
-// â”€â”€ Role Display Picker â”€â”€
+// ── Role Display Picker ──
 
 _setupRoleDisplayPicker() {
   const picker = document.getElementById('role-display-picker');
@@ -2044,7 +2044,7 @@ _setupRoleDisplayPicker() {
   });
 },
 
-// â”€â”€ Toolbar Icon Style Picker â”€â”€
+// ── Toolbar Icon Style Picker ──
 
 _setupToolbarIconPicker() {
   const picker = document.getElementById('toolbar-icon-picker');
@@ -2116,8 +2116,8 @@ _setupToolbarIconPicker() {
       row.innerHTML = `
         <span class="toolbar-order-item-label">${actionLabels[key] || key}</span>
         <div class="toolbar-order-item-controls">
-          <button type="button" class="toolbar-order-move" data-dir="up" data-key="${key}" ${index === 0 ? 'disabled' : ''} title="Move up">â–²</button>
-          <button type="button" class="toolbar-order-move" data-dir="down" data-key="${key}" ${index === currentOrder.length - 1 ? 'disabled' : ''} title="Move down">â–¼</button>
+          <button type="button" class="toolbar-order-move" data-dir="up" data-key="${key}" ${index === 0 ? 'disabled' : ''} title="Move up">▲</button>
+          <button type="button" class="toolbar-order-move" data-dir="down" data-key="${key}" ${index === currentOrder.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
         </div>
       `;
       orderList.appendChild(row);
@@ -2178,7 +2178,7 @@ _setupToolbarIconPicker() {
   }
 },
 
-// â”€â”€ Image Lightbox â”€â”€
+// ── Image Lightbox ──
 
 _setupLightbox() {
   const lb = document.getElementById('image-lightbox');
@@ -2262,7 +2262,7 @@ _closeLightbox() {
   this._hideImageContextMenu();
 },
 
-/* â”€â”€ Modal Expand / Maximize â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Modal Expand / Maximize ────────────────────────── */
 
 _setupModalExpand() {
   // Global guard: track mousedown origin so overlay click-to-close doesn't fire
@@ -2275,7 +2275,7 @@ _setupModalExpand() {
         _overlayMouseDownTarget && _overlayMouseDownTarget !== e.target) {
       e.stopImmediatePropagation();
     }
-  }, true); // capturing phase â€” fires before individual handlers
+  }, true); // capturing phase — fires before individual handlers
 
   // Auto-inject expand/maximize + close buttons into every modal.
   // Buttons live in an absolutely positioned .modal-controls group at the
@@ -2284,16 +2284,16 @@ _setupModalExpand() {
   const _injectModalControls = () => {
     document.querySelectorAll('.modal').forEach(modal => {
       // Skip promo/centered popups and the media gallery (which has its own
-      // header close button) â€” they're not regular modals (#5352)
+      // header close button) — they're not regular modals (#5352)
       if (modal.classList.contains('android-beta-promo') ||
           modal.classList.contains('desktop-promo') ||
           modal.classList.contains('donors-modal-box') ||
           modal.classList.contains('media-gallery-modal')) return;
-      // Idempotent â€” skip already-injected
+      // Idempotent — skip already-injected
       if (modal.dataset.modalControlsInjected === '1') return;
       modal.dataset.modalControlsInjected = '1';
 
-      // Settings/activities headers have their own close button â€” keep it
+      // Settings/activities headers have their own close button — keep it
       // but inject the expand toggle next to it.
       const settingsClose = modal.querySelector('.settings-close-btn');
 
@@ -2301,11 +2301,11 @@ _setupModalExpand() {
       expandBtn.type = 'button';
       expandBtn.className = 'modal-expand-btn';
       expandBtn.title = 'Expand / Restore';
-      expandBtn.textContent = 'â›¶';
+      expandBtn.textContent = '⛶';
       expandBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isMax = modal.classList.toggle('modal-maximized');
-        expandBtn.textContent = isMax ? 'âŠ–' : 'â›¶';
+        expandBtn.textContent = isMax ? '⊖' : '⛶';
         expandBtn.title = isMax ? 'Restore size' : 'Expand';
       });
 
@@ -2325,14 +2325,14 @@ _setupModalExpand() {
         closeBtn.type = 'button';
         closeBtn.className = 'modal-expand-btn';
         closeBtn.title = 'Close';
-        closeBtn.textContent = 'âœ•';
+        closeBtn.textContent = '✕';
         closeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           const overlay = modal.closest('.modal-overlay');
           if (overlay) overlay.style.display = 'none';
           if (modal.classList.contains('modal-maximized')) {
             modal.classList.remove('modal-maximized');
-            expandBtn.textContent = 'â›¶';
+            expandBtn.textContent = '⛶';
             expandBtn.title = 'Expand / Restore';
           }
         });
@@ -2353,9 +2353,9 @@ _showImageContextMenu(e, src) {
   menu.id = 'image-context-menu';
   menu.className = 'image-context-menu';
   menu.innerHTML = `
-    <button data-action="save">ðŸ’¾ Save Image</button>
-    <button data-action="copy">ðŸ“‹ Copy Image</button>
-    <button data-action="open">ðŸ”— Open in New Tab</button>
+    <button data-action="save">💾 Save Image</button>
+    <button data-action="copy">📋 Copy Image</button>
+    <button data-action="open">🔗 Open in New Tab</button>
   `;
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
@@ -2402,7 +2402,7 @@ _showImageContextMenu(e, src) {
           r.readAsDataURL(blob);
         });
 
-        // Strategy 1: Electron desktop IPC (most reliable â€” main process
+        // Strategy 1: Electron desktop IPC (most reliable — main process
         // clipboard has no user-gesture requirement).
         if (window.havenDesktop?.clipboardWriteImage) {
           try {
