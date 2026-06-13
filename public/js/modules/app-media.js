@@ -368,6 +368,7 @@ _setupSoundManagement() {
   this._soundPrefs = {}; // { soundName: { hidden, customOrder } }
   this._showHiddenSounds = false;
   this._soundboardSidebarMode = localStorage.getItem('haven_soundboard_sidebar_mode') === 'true';
+  this._soundboardListMode = localStorage.getItem('haven_soundboard_list_mode') === 'true';
   this._loadUserSoundPrefs();
 
   // Open from admin "Manage Sounds" button
@@ -389,19 +390,11 @@ _setupSoundManagement() {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
 
-  // Close soundboard sidebar panel
-  document.getElementById('sb-sidebar-close')?.addEventListener('click', () => {
-    const p = document.getElementById('sb-sidebar-panel');
-    if (p) p.style.display = 'none';
-  });
+  // Close soundboard sidebar panel (no longer needed — toggle btn handles this)
 
-  // Collapse/expand soundboard sidebar body
-  document.getElementById('sb-sidebar-collapse-btn')?.addEventListener('click', () => {
-    const p = document.getElementById('sb-sidebar-panel');
-    if (!p) return;
-    const collapsed = !p.classList.contains('sb-collapsed');
-    p.classList.toggle('sb-collapsed', collapsed);
-    localStorage.setItem('haven_sb_sidebar_collapsed', collapsed ? '1' : '0');
+  // Soundboard sidebar toggle button
+  document.getElementById('sb-sidebar-toggle-btn')?.addEventListener('click', () => {
+    this._toggleSoundboardSidebar();
   });
 
   // Soundboard sidebar resize handle
@@ -435,6 +428,7 @@ _setupSoundManagement() {
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         localStorage.setItem('haven_sb_sidebar_width', parseInt(sbPanel.style.width));
+        window._updateSbToggleRight?.();
       });
     }
   }
@@ -503,40 +497,85 @@ _setupSoundManagement() {
     });
   }
 
-  // Sidebar layout toggle — shared handler for all three checkboxes
-  // (modal checkbox, settings page checkbox, and panel inline checkbox)
+  // List view mode toggle (popup/pip grid layout — separate from sidebar mode)
+  const listModeCheckbox = document.getElementById('soundboard-list-mode');
+  if (listModeCheckbox) {
+    listModeCheckbox.checked = this._soundboardListMode;
+    listModeCheckbox.addEventListener('change', (e) => {
+      this._soundboardListMode = e.target.checked;
+      localStorage.setItem('haven_soundboard_list_mode', this._soundboardListMode ? 'true' : 'false');
+      this._renderSoundboard(
+        this._soundboardPip
+          ? (document.getElementById('sb-pip-search')?.value?.trim() || '')
+          : (document.getElementById('soundboard-search')?.value?.trim() || '')
+      );
+    });
+  }
+
+  // Sidebar layout toggle — closes the popup and opens the sidebar panel
   const _applySoundboardSidebarMode = (val) => {
     this._soundboardSidebarMode = val;
     localStorage.setItem('haven_soundboard_sidebar_mode', val ? 'true' : 'false');
-    ['soundboard-sidebar-mode', 'soundboard-sidebar-mode-settings', 'soundboard-sidebar-mode-panel'].forEach(id => {
+    // Sync all sidebar mode checkboxes (popup + settings page)
+    ['soundboard-sidebar-mode', 'soundboard-sidebar-mode-settings'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.checked = val;
     });
-    // Close sidebar panel when switching back to popup mode
-    if (!val) {
-      const panel = document.getElementById('sb-sidebar-panel');
-      if (panel) panel.style.display = 'none';
-    }
-    this._renderSoundboard(
-      this._soundboardPip
-        ? (document.getElementById('sb-pip-search')?.value?.trim() || '')
-        : (document.getElementById('soundboard-search')?.value?.trim() || '')
-    );
-    const grids = [document.getElementById('soundboard-grid'), document.getElementById('sb-pip-grid')];
-    grids.forEach(g => {
-      if (g) {
-        if (val) g.classList.add('sidebar-mode');
-        else g.classList.remove('sidebar-mode');
+    const panel = document.getElementById('sb-sidebar-panel');
+    const toggleBtn = document.getElementById('sb-sidebar-toggle-btn');
+    if (val) {
+      // Close modal/pip, open sidebar panel
+      document.getElementById('sound-modal').style.display = 'none';
+      if (panel) {
+        panel.classList.remove('sb-hidden');
+        this._renderSoundboardSidebar();
+        const search = document.getElementById('sb-sidebar-search');
+        if (search && !search._sbListenerAttached) {
+          search._sbListenerAttached = true;
+          search.addEventListener('input', () => this._renderSoundboardSidebar(search.value.trim()));
+        }
       }
-    });
+      if (toggleBtn) { toggleBtn.style.display = ''; toggleBtn.textContent = '\u276E'; }
+      window._updateSbToggleRight?.();
+    } else {
+      // Hide sidebar panel and toggle button
+      if (panel) panel.classList.add('sb-hidden');
+      if (toggleBtn) toggleBtn.style.display = 'none';
+      window._updateSbToggleRight?.();
+    }
   };
-  ['soundboard-sidebar-mode', 'soundboard-sidebar-mode-settings', 'soundboard-sidebar-mode-panel'].forEach(id => {
+  // Bind sidebar mode checkboxes
+  ['soundboard-sidebar-mode', 'soundboard-sidebar-mode-settings'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.checked = this._soundboardSidebarMode;
       el.addEventListener('change', (e) => _applySoundboardSidebarMode(e.target.checked));
     }
   });
+
+  // Init: restore sidebar panel state if sidebar mode was ON
+  {
+    const panel = document.getElementById('sb-sidebar-panel');
+    const toggleBtn = document.getElementById('sb-sidebar-toggle-btn');
+    if (this._soundboardSidebarMode && panel) {
+      const wasHidden = localStorage.getItem('haven_sb_sidebar_hidden') === '1';
+      if (!wasHidden) {
+        panel.classList.remove('sb-hidden');
+        if (toggleBtn) { toggleBtn.style.display = ''; toggleBtn.textContent = '\u276E'; }
+      } else {
+        if (toggleBtn) { toggleBtn.style.display = ''; toggleBtn.textContent = '\u276F'; }
+      }
+    }
+    // Define the helper now (app-ui and app-admin will also call it)
+    window._updateSbToggleRight = () => {
+      const btn = document.getElementById('sb-sidebar-toggle-btn');
+      if (!btn) return;
+      const rs = document.getElementById('right-sidebar');
+      const rw = rs ? (rs.classList.contains('collapsed') ? 0 : (parseInt(rs.style.width) || 260)) : 260;
+      btn.style.right = rw + 'px';
+    };
+    window._updateSbToggleRight();
+  }
 
 
   // Soundboard search
@@ -641,25 +680,21 @@ _openSoundModal(tab = 'soundboard') {
 
 _toggleSoundboardSidebar() {
   const panel = document.getElementById('sb-sidebar-panel');
+  const btn = document.getElementById('sb-sidebar-toggle-btn');
   if (!panel) return;
-  if (panel.style.display !== 'none') {
-    panel.style.display = 'none';
-    return;
+  const isNowHidden = !panel.classList.contains('sb-hidden');
+  panel.classList.toggle('sb-hidden', isNowHidden);
+  localStorage.setItem('haven_sb_sidebar_hidden', isNowHidden ? '1' : '0');
+  if (btn) btn.textContent = isNowHidden ? '\u276F' : '\u276E';
+  if (!isNowHidden) {
+    this._renderSoundboardSidebar();
+    const search = document.getElementById('sb-sidebar-search');
+    if (search && !search._sbListenerAttached) {
+      search._sbListenerAttached = true;
+      search.addEventListener('input', () => this._renderSoundboardSidebar(search.value.trim()));
+    }
   }
-  // Restore collapsed state and width
-  panel.classList.toggle('sb-collapsed', localStorage.getItem('haven_sb_sidebar_collapsed') === '1');
-  const savedWidth = localStorage.getItem('haven_sb_sidebar_width');
-  if (savedWidth) panel.style.width = savedWidth + 'px';
-  // Sync the inline panel checkbox
-  const panelCb = document.getElementById('soundboard-sidebar-mode-panel');
-  if (panelCb) panelCb.checked = this._soundboardSidebarMode;
-  panel.style.display = 'flex';
-  this._renderSoundboardSidebar();
-  const search = document.getElementById('sb-sidebar-search');
-  if (search && !search._sbListenerAttached) {
-    search._sbListenerAttached = true;
-    search.addEventListener('input', () => this._renderSoundboardSidebar(search.value.trim()));
-  }
+  window._updateSbToggleRight?.();
 },
 
 _renderSoundboardSidebar(filter = '') {
@@ -763,9 +798,9 @@ async _loadCustomSounds() {
       this._renderSoundboard();
       this._renderAssignTab();
     }
-    // Re-render sidebar panel if it's open
+    // Re-render sidebar panel if it's visible
     const sbPanel = document.getElementById('sb-sidebar-panel');
-    if (sbPanel && sbPanel.style.display !== 'none') {
+    if (sbPanel && !sbPanel.classList.contains('sb-hidden')) {
       this._renderSoundboardSidebar(document.getElementById('sb-sidebar-search')?.value?.trim() || '');
     }
   } catch { /* ignore */ }
@@ -1020,9 +1055,9 @@ _renderSoundboard(filter = '') {
     grid.innerHTML = html;
     if (sounds.length === 0) return;
 
-    // Apply sidebar mode class
-    if (this._soundboardSidebarMode) grid.classList.add('sidebar-mode');
-    else grid.classList.remove('sidebar-mode');
+    // Apply list mode class to popup/pip grids
+    if (this._soundboardListMode) grid.classList.add('list-mode');
+    else grid.classList.remove('list-mode');
 
     // Click the main button area to play
     grid.querySelectorAll('.soundboard-btn').forEach(btn => {

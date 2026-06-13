@@ -533,6 +533,19 @@
         </div>
       </main>
 
+      <!-- Soundboard sidebar toggle arrow — sits between soundboard and voice/users panel -->
+      <button id="sb-sidebar-toggle-btn" class="sb-sidebar-toggle-btn" style="display:none" title="Toggle soundboard panel">&#x276F;</button>
+
+      <!-- ─── Soundboard Sidebar (in-flow, sits left of right sidebar) ─── -->
+      <aside id="sb-sidebar-panel" class="sb-sidebar-panel sb-hidden">
+        <div id="sb-sidebar-resize-handle" class="sb-sidebar-resize-handle"></div>
+        <div class="sb-sidebar-header">&#x1F3B5; Soundboard</div>
+        <div class="sb-sidebar-body">
+          <input type="text" id="sb-sidebar-search" placeholder="Search sounds..." class="settings-text-input" style="width:100%;box-sizing:border-box;font-size:12px">
+          <div id="sb-sidebar-grid" class="soundboard-grid sidebar-mode"></div>
+        </div>
+      </aside>
+
       <!-- Sidebar collapse arrow — fixed to the right edge of the viewport -->
       <button id="sidebar-toggle-btn" class="sidebar-collapse-btn" data-i18n-title="app.actions.toggle_members_panel" data-i18n-aria-label="app.actions.toggle_members_panel" title="Toggle members panel" aria-label="Toggle members panel">&#x276F;</button>
 
@@ -2564,7 +2577,8 @@
           <input type="text" id="soundboard-search" data-i18n-placeholder="modals.sound_manager.search_placeholder" placeholder="Search sounds..." class="settings-text-input" style="flex:1">
           <button id="soundboard-popout-btn" class="icon-btn small" title="Pop out soundboard">⧉</button>
                 <div style="display:flex;gap:8px;margin-bottom:8px;font-size:12px">
-                  <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="soundboard-show-hidden" style="cursor:pointer"> Show hidden sounds</label>
+                  <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="soundboard-show-hidden" style="cursor:pointer"> Show hidden</label>
+                  <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="soundboard-list-mode" style="cursor:pointer"> List view</label>
                   <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="soundboard-sidebar-mode" style="cursor:pointer"> Sidebar mode</label>
                 </div>
         </div>
@@ -2619,22 +2633,7 @@
     </div>
   </div>
 
-  <!-- Soundboard Sidebar Panel -->
-  <div id="sb-sidebar-panel" class="sb-sidebar-panel" style="display:none">
-    <div id="sb-sidebar-resize-handle" class="sb-sidebar-resize-handle"></div>
-    <div class="sb-sidebar-header">
-      <button id="sb-sidebar-collapse-btn" class="sb-sidebar-collapse-btn" title="Collapse">&#x276E;</button>
-      <span>🎵 Soundboard</span>
-      <button id="sb-sidebar-close" class="sb-sidebar-close-btn" title="Close">&times;</button>
-    </div>
-    <div class="sb-sidebar-body">
-      <label class="sb-sidebar-mode-row">
-        <input type="checkbox" id="soundboard-sidebar-mode-panel" style="cursor:pointer"> Sidebar mode
-      </label>
-      <input type="text" id="sb-sidebar-search" placeholder="Search sounds..." class="settings-text-input" style="width:100%;box-sizing:border-box;font-size:12px">
-      <div id="sb-sidebar-grid" class="soundboard-grid sidebar-mode"></div>
-    </div>
-  </div>
+  <!-- (soundboard sidebar panel is now in-flow before #right-sidebar) -->
 
   <!-- Emoji Management Modal -->
   <div class="modal-overlay" id="emoji-modal" style="display:none">

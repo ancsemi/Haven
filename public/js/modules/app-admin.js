@@ -2488,6 +2488,7 @@ _setupResizableSidebars() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       localStorage.setItem('haven_right_sidebar_width', parseInt(rightSidebar.style.width));
+      window._updateSbToggleRight?.();
     });
   }
 

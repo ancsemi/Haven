@@ -4767,7 +4767,7 @@ select.cfn-select.cfn-input {
 .sound-assign-list { display: flex; flex-direction: column; gap: 4px; }
 .sound-assign-select { min-width: 140px; }
 
-/*/* Sidebar layout mode for soundboard */
+/*/* Sidebar layout mode for soundboard (used by the sidebar panel grid only) */
 .soundboard-grid.sidebar-mode {
   display: flex !important; 
   flex-direction: column;
@@ -4782,6 +4782,24 @@ select.cfn-select.cfn-input {
   padding: 6px 8px;
 }
 .soundboard-grid.sidebar-mode .soundboard-btn .sb-name {
+  text-align: left;
+  flex: 1;
+  font-size: 13px;
+}
+/* List view mode for popup/pip soundboard (separate from sidebar-mode) */
+.soundboard-grid.list-mode {
+  display: flex !important;
+  flex-direction: column;
+  gap: 4px;
+  grid-template-columns: auto;
+}
+.soundboard-grid.list-mode .soundboard-btn {
+  min-height: 32px;
+  justify-content: space-between;
+  flex-direction: row;
+  padding: 6px 8px;
+}
+.soundboard-grid.list-mode .soundboard-btn .sb-name {
   text-align: left;
   flex: 1;
   font-size: 13px;
@@ -11839,20 +11857,26 @@ video:-webkit-full-screen {
   }
 }
 
-/* Soundboard Sidebar Panel */
+/* ── Soundboard Sidebar (in-flow flex child, sits left of voice/users sidebar) ── */
 .sb-sidebar-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
   width: 220px;
-  z-index: 200;
+  min-width: 220px;
+  max-width: 420px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: -4px 0 16px rgba(0,0,0,0.25);
+  position: relative;
+  flex-shrink: 0;
+  transition: width 0.25s ease, min-width 0.25s ease, border-left-width 0.25s ease, opacity 0.2s ease;
+}
+.sb-sidebar-panel.sb-hidden {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-left-width: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 /* Resize handle on the left edge */
 .sb-sidebar-resize-handle {
@@ -11872,44 +11896,17 @@ video:-webkit-full-screen {
   opacity: 0.5;
 }
 .sb-sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  gap: 6px;
-}
-.sb-sidebar-close-btn {
-  background: none;
-  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
   color: var(--text-muted);
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 2px;
-  transition: color 0.15s;
-}
-.sb-sidebar-close-btn:hover { color: var(--text-primary); }
-/* Collapse/expand arrow button in the header */
-.sb-sidebar-collapse-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 0 2px;
-  transition: color 0.15s, transform 0.2s;
   flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.sb-sidebar-collapse-btn:hover { color: var(--text-primary); }
-/* Collapsed state — shrink to header only, flip the arrow */
-.sb-sidebar-panel.sb-collapsed { bottom: auto; }
-.sb-sidebar-panel.sb-collapsed .sb-sidebar-body { display: none; }
-.sb-sidebar-panel.sb-collapsed .sb-sidebar-collapse-btn { transform: rotate(180deg); }
 .sb-sidebar-body {
   flex: 1;
   overflow: hidden;
@@ -11924,17 +11921,31 @@ video:-webkit-full-screen {
   max-height: none;
   overflow-y: auto;
 }
-/* Sidebar mode toggle row inside the panel */
-.sb-sidebar-mode-row {
+/* Soundboard sidebar toggle button — fixed, tracks left edge of right sidebar */
+.sb-sidebar-toggle-btn {
+  position: fixed;
+  right: 260px; /* overridden by JS via style.right */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 36px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  justify-content: center;
+  font-size: 11px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
   color: var(--text-muted);
   cursor: pointer;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
+  padding: 0;
+  z-index: 100;
+  transition: color 0.15s, background 0.15s;
+}
+.sb-sidebar-toggle-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

@@ -1653,6 +1653,7 @@ _setupUI() {
     rightSidebar.classList.toggle('collapsed', collapsed);
     sidebarToggle.classList.toggle('is-collapsed', collapsed);
     sidebarToggle.textContent = collapsed ? '\u276E' : '\u276F'; // ❮ or ❯
+    window._updateSbToggleRight?.();
   }
 
   // Default is expanded; only collapse if explicitly saved as '1'
