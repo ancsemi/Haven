@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.25.1] — 2026-06-18
+
+### Fixed
+- **Haven Desktop stuck on "Loading Haven…" / CSP-blocked i18n init.** `app.html` had a single inline `<script>i18n.init();</script>` tag that the page CSP (no `'unsafe-inline'` in `script-src`) was refusing to execute on strict clients, leaving the locale layer uninitialized and the desktop preload hanging on the splash. Moved the bootstrap call into `i18n.js` itself (`I18n.init()` at the bottom of the module) and removed the inline tag from `app.html`. `init()` is idempotent so the `auth.js` `await window.i18n.init()` call still resolves against the same shared promise.
+
+---
+
 ## [3.25.0] — 2026-06-17
 
 ### Added
