@@ -692,6 +692,23 @@ _openSoundModal(tab = 'soundboard') {
   this._renderAssignTab();
 },
 
+_closeSoundboardForVoiceLeave() {
+  // Called from _leaveVoice. The soundboard is gated to voice-only use,
+  // so when the user leaves voice we close any open soundboard surface:
+  // sidebar panel, modal, or popped-out PiP.
+  const panel = document.getElementById('sb-sidebar-panel');
+  if (panel && !panel.classList.contains('sb-hidden')) {
+    this._toggleSoundboardSidebar();
+  }
+  const modal = document.getElementById('sound-modal');
+  if (modal && modal.style.display && modal.style.display !== 'none') {
+    modal.style.display = 'none';
+  }
+  if (this._soundboardPip) {
+    this._popInSoundboard(false);
+  }
+},
+
 _toggleSoundboardSidebar() {
   const panel = document.getElementById('sb-sidebar-panel');
   const btn = document.getElementById('sb-sidebar-toggle-btn');
@@ -898,7 +915,7 @@ _updateSoundSelects(sounds) {
 
     if (builtins.length > 0) {
       const builtinGroup = document.createElement('optgroup');
-      builtinGroup.label = `ðŸŽ™ï¸ ${t('modals.sound_manager.group_builtin')}`;
+      builtinGroup.label = `🎙️ ${t('modals.sound_manager.group_builtin')}`;
       builtinGroup.dataset.customGroup = '1';
       builtins.forEach(s => {
         const opt = document.createElement('option');
@@ -1221,7 +1238,7 @@ _renderAssignTab() {
 
     if (fileBuiltins.length > 0) {
       const fbGroup = document.createElement('optgroup');
-      fbGroup.label = 'ðŸŽ™ï¸ Sounds';
+      fbGroup.label = '🎙️ Sounds';
       fileBuiltins.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.value;
@@ -1903,7 +1920,7 @@ _showBotDetail(botId) {
       <label class="settings-label">🔑 Callback Secret <span style="font-size:10px;color:var(--text-muted)">(optional — used to sign payloads via X-Haven-Signature)</span></label>
       <input type="text" id="bot-detail-callback-secret" value="${this._escapeHtml(wh.callback_secret || '')}" placeholder="my-secret-key" class="settings-text-input" style="width:100%;margin-bottom:12px">
 
-      <label class="settings-label">ðŸ›¡ï¸ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
+      <label class="settings-label">🛡️ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
       <label class="toggle-row" style="margin-bottom:12px">
         <input type="checkbox" id="bot-detail-can-moderate" ${wh.can_moderate ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
         <span>Allow this bot to perform moderation actions</span>

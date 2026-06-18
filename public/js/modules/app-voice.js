@@ -128,6 +128,9 @@ _leaveVoice() {
     this._updateChannelVoiceIndicators();
   }
   this._showToast(t('voice.left'), 'info');
+  // Close the soundboard panel/popup/modal — sounds can't route to VC
+  // anymore, and the panel doubles as a 'you're in voice' affordance.
+  this._closeSoundboardForVoiceLeave?.();
 },
 
 _toggleMute() {
