@@ -1658,4 +1658,9 @@ _initMoveMessages() {
 
   // Close modal on overlay click
   const modal = document.getElementById('move-msg-modal');
-  if (modal) moda
+  if (modal) modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  });
+},
+
+};
