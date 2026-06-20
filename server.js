@@ -3920,9 +3920,48 @@ function runAutoCleanup() {
     const maxSizeMb = parseInt(getSetting('cleanup_max_size_mb') || '0');
     let totalDeleted = 0;
 
+    // Pull every /uploads/ attachment path out of a message body. Reuses the
+    // shared UPLOAD_PATH_RE (global regex — reset lastIndex before each use).
+    const extractUploadRelPaths = (content) => {
+      const out = [];
+      if (typeof content !== 'string' || !content) return out;
+      UPLOAD_PATH_RE.lastIndex = 0;
+      let m;
+      while ((m = UPLOAD_PATH_RE.exec(content)) !== null) {
+        if (isSafeUploadRelPath(m[1])) out.push(m[1]);
+      }
+      return out;
+    };
+
+    // Relocate the given attachment paths into deleted-attachments, but only
+    // if no surviving message still references them (a file can be linked from
+    // more than one message via copy/paste). This is the ONLY way auto-cleanup
+    // removes files: it follows the messages it deletes. It never scans the
+    // uploads/ directory directly, so avatars, persona avatars, custom emojis,
+    // soundboard sounds, stickers, and the server icon are never at risk (#5423).
+    const relocateOrphanAttachments = (relPaths) => {
+      for (const rel of relPaths) {
+        try {
+          const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
+          const still = db.prepare(
+            "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
+          ).get(like);
+          if (!still) moveUploadToDeleted(rel, UPLOADS_DIR);
+        } catch { /* best-effort */ }
+      }
+    };
+
     // 1. Delete messages older than N days (skip archived/pinned messages
     // and exempt channels)
     if (maxAgeDays > 0) {
+      // Capture the attachments of the messages we're about to delete first,
+      // so their files can follow them into deleted-attachments afterward.
+      const doomed = db.prepare(
+        "SELECT content FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
+      ).all(`-${maxAgeDays} days`);
+      const doomedAttachments = new Set();
+      for (const row of doomed) for (const p of extractUploadRelPaths(row.content)) doomedAttachments.add(p);
+
       // Delete reactions for old messages first
       db.prepare(`
         DELETE FROM reactions WHERE message_id IN (
@@ -3935,6 +3974,8 @@ function runAutoCleanup() {
         "DELETE FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
       ).run(`-${maxAgeDays} days`);
       totalDeleted += result.changes;
+
+      relocateOrphanAttachments(doomedAttachments);
     }
 
     // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip
@@ -3948,9 +3989,12 @@ function runAutoCleanup() {
         // size down.
         const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)').get().cnt;
         const deleteCount = Math.max(Math.floor(totalCount * 0.1), 100);
-        const oldestIds = db.prepare(
-          'SELECT id FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
-        ).all(deleteCount).map(r => r.id);
+        const oldestRows = db.prepare(
+          'SELECT id, content FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
+        ).all(deleteCount);
+        const oldestIds = oldestRows.map(r => r.id);
+        const trimmedAttachments = new Set();
+        for (const row of oldestRows) for (const p of extractUploadRelPaths(row.content)) trimmedAttachments.add(p);
         if (oldestIds.length > 0) {
           // Chunk deletes to avoid creating extremely long SQL statements
           const CHUNK_SIZE = 1000;
@@ -3961,115 +4005,39 @@ function runAutoCleanup() {
             db.prepare(`DELETE FROM messages WHERE id IN (${placeholders})`).run(...chunk);
           }
           totalDeleted += oldestIds.length;
+          relocateOrphanAttachments(trimmedAttachments);
         }
       }
     }
 
-    // Also clean up old uploaded files if age cleanup is set
+    // Purge old files from deleted-attachments only. These are former message
+    // attachments that were relocated here when their message was deleted (by
+    // the steps above, by single-message deletes, or by the orphan-DM sweep).
+    //
+    // We deliberately do NOT scan the main uploads/ directory. That directory
+    // also holds user avatars, persona avatars, custom emojis, soundboard
+    // sounds, and the server icon — none of which are posted media. The old
+    // "delete everything in uploads/ that isn't on a protect-list" approach
+    // kept silently eating any file type nobody remembered to allow-list
+    // (persona avatars in #5423, stickers/emojis before that). Auto-cleanup is
+    // scoped to posts and messages and their attachments — nothing else.
     if (maxAgeDays > 0) {
-      const uploadsDir = UPLOADS_DIR;
-      if (require('fs').existsSync(uploadsDir)) {
-        // Build a set of protected filenames (server icon, avatars, emojis, sounds)
-        const protectedFiles = new Set();
-        const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
-        if (iconRow?.value) protectedFiles.add(path.basename(iconRow.value));
-        db.prepare("SELECT avatar FROM users WHERE avatar IS NOT NULL AND avatar != ''").all()
-          .forEach(r => protectedFiles.add(path.basename(r.avatar)));
-        try {
-          db.prepare("SELECT filename FROM custom_emojis").all()
-            .forEach(r => protectedFiles.add(path.basename(r.filename)));
-        } catch { /* table may not exist */ }
-        try {
-          db.prepare("SELECT filename FROM custom_sounds").all()
-            .forEach(r => protectedFiles.add(path.basename(r.filename)));
-        } catch { /* table may not exist */ }
-        // Webhook/bot avatars
-        try {
-          db.prepare("SELECT avatar_url FROM webhooks WHERE avatar_url IS NOT NULL AND avatar_url != ''").all()
-            .forEach(r => protectedFiles.add(path.basename(r.avatar_url)));
-        } catch { /* table may not exist */ }
-
-        // Protect files referenced by messages in cleanup-exempt (protected) channels
-        try {
-          const exemptMessages = db.prepare(
-            "SELECT content FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
-          ).all();
-          const uploadRe = UPLOAD_PATH_RE;
-          for (const row of exemptMessages) {
-            uploadRe.lastIndex = 0;
-            let m;
-            while ((m = uploadRe.exec(row.content || '')) !== null) {
-              if (isSafeUploadRelPath(m[1])) protectedFiles.add(m[1]);
-            }
-          }
-        } catch { /* skip if query fails */ }
-
-        // Also protect files referenced by pinned messages.
-        try {
-          const pinnedMessages = db.prepare(`
-            SELECT m.content
-            FROM messages m
-            WHERE m.id IN (SELECT message_id FROM pinned_messages)
-          `).all();
-          const uploadRe = UPLOAD_PATH_RE;
-          for (const row of pinnedMessages) {
-            uploadRe.lastIndex = 0;
-            let m;
-            while ((m = uploadRe.exec(row.content || '')) !== null) {
-              if (isSafeUploadRelPath(m[1])) protectedFiles.add(m[1]);
-            }
-          }
-        } catch { /* skip if query fails */ }
-
-        // Also protect files referenced by archived messages
-        try {
-          const archivedMessages = db.prepare(
-            "SELECT content FROM messages WHERE is_archived = 1"
-          ).all();
-          const uploadRe = UPLOAD_PATH_RE;
-          for (const row of archivedMessages) {
-            uploadRe.lastIndex = 0;
-            let m;
-            while ((m = uploadRe.exec(row.content || '')) !== null) {
-              if (isSafeUploadRelPath(m[1])) protectedFiles.add(m[1]);
-            }
-          }
-        } catch { /* skip if query fails */ }
-
-        const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
-        const files = require('fs').readdirSync(uploadsDir);
-        let filesDeleted = 0;
-        files.forEach(f => {
-          if (protectedFiles.has(f)) return; // never delete critical files
+      const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
+      const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
+      if (require('fs').existsSync(deletedDir)) {
+        let daDeleted = 0;
+        for (const f of require('fs').readdirSync(deletedDir)) {
           try {
-            const fpath = require('path').join(uploadsDir, f);
-            const stat = require('fs').statSync(fpath);
-            if (stat.mtimeMs < cutoff) {
-              require('fs').unlinkSync(fpath);
-              filesDeleted++;
+            const fp = require('path').join(deletedDir, f);
+            const st = require('fs').statSync(fp);
+            if (st.isFile() && st.mtimeMs < cutoff) {
+              require('fs').unlinkSync(fp);
+              daDeleted++;
             }
           } catch { /* skip */ }
-        });
-        if (filesDeleted > 0) {
-          console.log(`ðŸ—‘ï¸  Auto-cleanup: removed ${filesDeleted} old uploaded files`);
         }
-
-        // Clean up deleted-attachments folder (files moved here when messages were deleted)
-        const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-        if (require('fs').existsSync(deletedDir)) {
-          let daDeleted = 0;
-          for (const f of require('fs').readdirSync(deletedDir)) {
-            try {
-              const fp = require('path').join(deletedDir, f);
-              if (require('fs').statSync(fp).mtimeMs < cutoff) {
-                require('fs').unlinkSync(fp);
-                daDeleted++;
-              }
-            } catch { /* skip */ }
-          }
-          if (daDeleted > 0) {
-            console.log(`ðŸ—‘ï¸  Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
-          }
+        if (daDeleted > 0) {
+          console.log(`Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
         }
       }
     }
