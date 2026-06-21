@@ -1025,7 +1025,17 @@ _playSoundFile(url) {
   try {
     const vol = Math.max(0, Math.min(1, this.notifications.volume * this.notifications.volume));
     // If in voice chat, route through VC so other users hear the sound too
-    if (this.voice && this.voice.playSoundToVC(url, vol)) return;
+    if (this.voice && this.voice.inVoice) {
+      // Respect the per-channel soundboard toggle for the voice channel the
+      // user is currently in. When an admin turns the soundboard off there,
+      // sounds can't be played into that VC by anyone.
+      const vcCode = this.voice.currentChannel;
+      const vcCh = vcCode && Array.isArray(this.channels) ? this.channels.find(c => c.code === vcCode) : null;
+      if (vcCh && vcCh.soundboard_enabled === 0) {
+        return this._showToast(t('media.soundboard_disabled'), 'error');
+      }
+      if (this.voice.playSoundToVC(url, vol)) return;
+    }
     // Fallback: play locally only
     const audio = new Audio(url);
     audio.volume = vol;

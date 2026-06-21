@@ -424,6 +424,10 @@ _setupUI() {
       const newVal = ch && ch.media_enabled === 0 ? 1 : 0;
       optimistic({ media_enabled: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'media' });
+    } else if (fn === 'soundboard') {
+      const newVal = ch && ch.soundboard_enabled === 0 ? 1 : 0;
+      optimistic({ soundboard_enabled: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'soundboard' });
     } else if (fn === 'read-only') {
       const newVal = ch && ch.read_only ? 0 : 1;
       optimistic({ read_only: newVal });

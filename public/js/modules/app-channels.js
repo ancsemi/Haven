@@ -488,6 +488,7 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('streams', ch.streams_enabled !== 0, ch.streams_enabled !== 0 ? 'ON' : 'OFF');
   this._setCfnBadge('music', ch.music_enabled !== 0, ch.music_enabled !== 0 ? 'ON' : 'OFF');
   this._setCfnBadge('media', ch.media_enabled !== 0, ch.media_enabled !== 0 ? 'ON' : 'OFF');
+  this._setCfnBadge('soundboard', ch.soundboard_enabled !== 0, ch.soundboard_enabled !== 0 ? 'ON' : 'OFF');
   // Read-only toggle
   const isReadOnly = ch.read_only === 1;
   this._setCfnBadge('read-only', isReadOnly, isReadOnly ? 'ON' : 'OFF');

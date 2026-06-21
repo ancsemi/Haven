@@ -514,6 +514,7 @@
     "music_pip_minimize": "Minimize (back to panel)",
     "select_channel_first": "Select a channel first",
     "uploads_disabled": "Media uploads are disabled in this channel",
+    "soundboard_disabled": "The soundboard is turned off for this channel",
     "file_too_large": "File too large (max {{maxMb}} MB)"
   },
   "right_sidebar": {
@@ -1571,6 +1572,8 @@
     "music_hint": "Allow Listen Together / music playback (requires voice)",
     "media": "Media",
     "media_hint": "Allow image, video, and file uploads in this channel",
+    "soundboard": "Soundboard",
+    "soundboard_hint": "Allow the soundboard in this channel's voice chat",
     "slow_mode": "Slow Mode",
     "slow_mode_hint": "Require a cooldown between messages (0 = off)",
     "cleanup_guard": "Cleanup Guard",

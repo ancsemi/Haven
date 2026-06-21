@@ -709,13 +709,13 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
     const permission = typeof data.permission === 'string' ? data.permission.trim() : '';
-    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only'];
+    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard'];
     if (!validPerms.includes(permission)) return socket.emit('error-msg', 'Invalid permission');
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
 
-    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only' };
+    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled' };
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
@@ -742,7 +742,7 @@ module.exports = function register(socket, ctx) {
         }
       }
 
-      const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode' };
+      const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode', soundboard: 'Soundboard' };
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('channel-permission-updated', { code, permission, enabled: !!newVal });
       socket.emit('toast', { message: `${labelMap[permission]} ${newVal ? 'enabled' : 'disabled'} for this channel`, type: 'success' });

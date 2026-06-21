@@ -776,6 +776,7 @@ function initDatabase() {
     { name: 'notification_type',  sql: "ALTER TABLE channels ADD COLUMN notification_type TEXT DEFAULT 'default'" },
     { name: 'voice_enabled',     sql: "ALTER TABLE channels ADD COLUMN voice_enabled INTEGER DEFAULT 1" },
     { name: 'text_enabled',      sql: "ALTER TABLE channels ADD COLUMN text_enabled INTEGER DEFAULT 1" },
+    { name: 'soundboard_enabled', sql: "ALTER TABLE channels ADD COLUMN soundboard_enabled INTEGER DEFAULT 1" },
     // #5390 — extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,
