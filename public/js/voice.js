@@ -555,7 +555,14 @@ class VoiceManager {
     // Late joiner: server tells us about active screen sharers
     this.socket.on('active-screen-sharers', (data) => {
       if (data && data.sharers) {
-        data.sharers.forEach(s => this.screenSharers.add(s.id));
+        data.sharers.forEach(s => {
+          this.screenSharers.add(s.id);
+          // Late joiners never receive 'screen-share-started', so they never
+          // armed the silent-failure recovery watchdog. Arm it here so a
+          // dropped or late late-join renegotiation self-heals instead of
+          // stranding the viewer with a LIVE badge and no video.
+          this._watchForScreenStream(s.id);
+        });
         if (this.onWebcamStatusChange) this.onWebcamStatusChange();
       }
     });
@@ -616,6 +623,36 @@ class VoiceManager {
   }
 
   // ── Public API ──────────────────────────────────────────
+
+  // Ask the server to forward a renegotiate-screen to `sharerId` so they
+  // (re)send their screen to us. Used by the late-joiner watchdog below and
+  // by the UI when a viewer can see a stream is LIVE but has no tile yet.
+  requestScreenStream(sharerId) {
+    if (!this.inVoice || !this.currentChannel) return;
+    this.socket.emit('request-screen-renegotiate', {
+      code: this.currentChannel,
+      sharerId
+    });
+  }
+
+  // Watchdog for the late-joiner path: if no live video track has arrived
+  // from `sharerId` after a short delay, ask for a renegotiation. Retries a
+  // few times because a late joiner's peer connection to the sharer may still
+  // be completing its offer/answer when the first check runs. (late-join heal)
+  _watchForScreenStream(sharerId, attemptsLeft = 3) {
+    setTimeout(() => {
+      if (!this.screenSharers.has(sharerId)) return; // sharer stopped
+      if (!this.inVoice || !this.currentChannel) return;
+      const peer = this.peers.get(sharerId);
+      const hasVideo = peer && peer.connection.getReceivers().some(r =>
+        r.track && r.track.kind === 'video' && r.track.readyState === 'live'
+      );
+      if (hasVideo) return; // already receiving — nothing to do
+      console.warn('[Voice] No video from screen sharer', sharerId, '— requesting renegotiate (late-join heal)');
+      this.requestScreenStream(sharerId);
+      if (attemptsLeft > 1) this._watchForScreenStream(sharerId, attemptsLeft - 1);
+    }, 3500);
+  }
 
   async join(channelCode) {
     try {

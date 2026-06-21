@@ -225,6 +225,7 @@
     "pinned_by": "Przypięte przez {{user}}"
   },
   "voice": {
+    "requesting_stream": "Żądanie transmisji…",
     "join": "🎤 Dołącz do rozmowy",
     "join_ctx": "Dołącz do rozmowy",
     "leave": "Opuść czat głosowy",

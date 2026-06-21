@@ -229,6 +229,7 @@
     "pinned_by": "Pinned by {{user}}"
   },
   "voice": {
+    "requesting_stream": "Requesting stream…",
     "join": "🎤 Join Voice",
     "join_ctx": "Join Voice",
     "leave": "Leave Voice",

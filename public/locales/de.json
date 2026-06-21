@@ -214,6 +214,7 @@
     "pinned_by": "Angeheftet von {{user}}"
   },
   "voice": {
+    "requesting_stream": "Stream wird angefordert…",
     "join": "🎤 Sprachchat beitreten",
     "join_ctx": "Sprachchat beitreten",
     "leave": "Sprachchat verlassen",

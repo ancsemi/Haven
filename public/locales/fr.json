@@ -214,6 +214,7 @@
     "pinned_by": "Épinglé par {{user}}"
   },
   "voice": {
+    "requesting_stream": "Demande du flux…",
     "join": "🎤 Rejoindre le vocal",
     "join_ctx": "Rejoindre le vocal",
     "leave": "Quitter le vocal",

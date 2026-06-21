@@ -214,6 +214,7 @@
     "pinned_by": "由 {{user}} 置顶"
   },
   "voice": {
+    "requesting_stream": "正在请求直播…",
     "join": "🎤 加入语音",
     "join_ctx": "加入语音",
     "leave": "离开语音",

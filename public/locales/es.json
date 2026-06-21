@@ -214,6 +214,7 @@
     "pinned_by": "Fijado por {{user}}"
   },
   "voice": {
+    "requesting_stream": "Solicitando transmisión…",
     "join": "🎤 Unirse al chat de voz",
     "join_ctx": "Unirse al chat de voz",
     "leave": "Salir del chat de voz",
