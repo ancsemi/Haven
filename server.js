@@ -1349,6 +1349,15 @@ const BUILTIN_SOUNDS = [
   { name: 'AOL - Files Done',      url: '/sounds/aol_filesdone.mp3',   builtin: true },
 ];
 
+// (#5426) Custom sounds, emojis and stickers are uploaded/deleted over HTTP,
+// so other connected clients never heard about the change and only saw it
+// after a full app restart. Broadcast a lightweight signal so every client
+// re-fetches the relevant library live. `io` is created later in the file, so
+// resolve it at request time via app.set('io', io).
+function broadcastLibraryUpdate(req, kind) {
+  try { req.app.get('io')?.emit('library-updated', { kind }); } catch {}
+}
+
 // ── Sound upload (admin only, wav/mp3/ogg, configurable max size) ────
 function createSoundUpload() {
   const { getDb } = require('./src/database');
@@ -1382,6 +1391,7 @@ app.post('/api/upload-sound', uploadLimiter, (req, res) => {
       getDb().prepare(
         'INSERT OR REPLACE INTO custom_sounds (name, filename, uploaded_by) VALUES (?, ?, ?)'
       ).run(name, req.file.filename, user.id);
+      broadcastLibraryUpdate(req, 'sounds');
       res.json({ name, url: `/uploads/${req.file.filename}` });
     } catch { res.status(500).json({ error: 'Failed to save sound' }); }
   });
@@ -1413,6 +1423,7 @@ app.delete('/api/sounds/:name', (req, res) => {
     // Built-in sounds are disabled by adding them to a blocklist (they can't be physically deleted)
     if (BUILTIN_SOUNDS.some(s => s.name === name)) {
       getDb().prepare('INSERT OR IGNORE INTO disabled_builtin_sounds (name) VALUES (?)').run(name);
+      broadcastLibraryUpdate(req, 'sounds');
       return res.json({ ok: true });
     }
     const row = getDb().prepare('SELECT filename FROM custom_sounds WHERE name = ?').get(name);
@@ -1420,6 +1431,7 @@ app.delete('/api/sounds/:name', (req, res) => {
       try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
       getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
     }
+    broadcastLibraryUpdate(req, 'sounds');
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Failed to delete sound' }); }
 });
@@ -1440,6 +1452,7 @@ app.patch('/api/sounds/:name', (req, res) => {
     const existing = getDb().prepare('SELECT id FROM custom_sounds WHERE name = ? AND name != ?').get(newName, oldName);
     if (existing) return res.status(409).json({ error: 'Name already taken' });
     getDb().prepare('UPDATE custom_sounds SET name = ? WHERE name = ?').run(newName, oldName);
+    broadcastLibraryUpdate(req, 'sounds');
     res.json({ ok: true, name: newName });
   } catch { res.status(500).json({ error: 'Failed to rename sound' }); }
 });
@@ -1507,6 +1520,7 @@ app.post('/api/upload-emoji', uploadLimiter, (req, res) => {
       getDb().prepare(
         'INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)'
       ).run(name, req.file.filename, user.id);
+      broadcastLibraryUpdate(req, 'emojis');
       res.json({ name, url: `/uploads/${req.file.filename}` });
     } catch { res.status(500).json({ error: 'Failed to save emoji' }); }
   });
@@ -1541,6 +1555,7 @@ app.post('/api/upload-emojis', uploadLimiter, (req, res) => {
         errors.push({ name, error: e.message });
       }
     }
+    if (results.length) broadcastLibraryUpdate(req, 'emojis');
     res.json({ uploaded: results, errors });
   });
 });
@@ -1569,6 +1584,7 @@ app.delete('/api/emojis/:name', (req, res) => {
       try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
       getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
     }
+    broadcastLibraryUpdate(req, 'emojis');
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Failed to delete emoji' }); }
 });
@@ -1662,6 +1678,7 @@ app.post('/api/upload-sticker', uploadLimiter, (req, res) => {
       getDb().prepare(
         'INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)'
       ).run(name, pack, req.file.filename, user.id);
+      broadcastLibraryUpdate(req, 'stickers');
       res.json({ name, pack_name: pack, url: `/uploads/stickers/${req.file.filename}` });
     } catch { res.status(500).json({ error: 'Failed to save sticker' }); }
   });
@@ -1699,6 +1716,7 @@ app.post('/api/upload-stickers', uploadLimiter, (req, res) => {
       }
     }
 
+    if (results.length) broadcastLibraryUpdate(req, 'stickers');
     res.json({ uploaded: results, errors });
   });
 });
@@ -1727,6 +1745,7 @@ app.delete('/api/stickers/:name', (req, res) => {
       try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch {}
       getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
     }
+    broadcastLibraryUpdate(req, 'stickers');
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
 });

@@ -98,6 +98,16 @@ _setupSocketListeners() {
     }
   });
 
+  // (#5426) A custom sound/emoji/sticker was added or removed by an admin.
+  // Re-fetch the affected library so the change shows up live for everyone
+  // instead of only after an app restart.
+  this.socket.on('library-updated', (data) => {
+    const kind = data && data.kind;
+    if (kind === 'sounds') this._loadCustomSounds?.();
+    else if (kind === 'emojis') this._loadCustomEmojis?.();
+    else if (kind === 'stickers') this._loadStickers?.();
+  });
+
   this.socket.on('connect', () => {
     this._setLed('connection-led', 'on');
     this._setLed('status-server-led', 'on');
