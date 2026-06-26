@@ -953,13 +953,13 @@
           <span class="discord-feat">🖥️ Windows &amp; Linux</span>
         </div>
         <div style="margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.22/Haven-Setup-1.4.22.exe" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
+          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.24/Haven-Setup-1.4.24.exe" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
             <span class="icon">🪟</span> Windows Installer
           </a>
-          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.22/Haven-1.4.22.AppImage" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
+          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.24/Haven-1.4.24.AppImage" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
             <span class="icon">🐧</span> Linux AppImage
           </a>
-          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.22/haven-desktop_1.4.22_amd64.deb" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
+          <a href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.24/haven-desktop_1.4.24_amd64.deb" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">
             <span class="icon">📦</span> Linux .deb
           </a>
         </div>
@@ -1415,12 +1415,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>&#x2B21; Haven Server &mdash; v3.24.0</h2>
+        <h2>&#x2B21; Haven Server &mdash; v3.27.0</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.24.0.zip" class="btn btn-primary download-main">
-            <span class="icon">&#x2B07;</span> Download v3.24.0 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.27.0.zip" class="btn btn-primary download-main">
+            <span class="icon">&#x2B07;</span> Download v3.27.0 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1437,7 +1437,27 @@
           <div class="version-list">
             <div class="version-list-inner">
                             <div class="version-item">
-                <div><span class="v-name">v3.24.0</span><span class="v-tag latest">Latest</span> &mdash; <strong>Bulk sticker upload (#5406), a new Desktop mute/PTT cue toggle (Haven-Desktop #37), and two safety fixes from main.</strong> Sticker management can now batch-upload multiple files with filename-based names and an optional shared pack. Desktop users can now turn off mute / deafen / push-to-talk cue beeps without muting all Haven sounds. This release also includes the already-on-main fixes for DM deletion moving sticker library files into <code>deleted-attachments/</code> (#5411) and for private channel message links leaking a joinable channel code (#5408).</div>
+                <div><span class="v-name">v3.27.0</span><span class="v-tag latest">Latest</span> &mdash; <strong>Admin-configurable STUN/TURN voice servers, plus a screen-share close-button fix.</strong> Server admins can now point voice and screen share at their own STUN/TURN servers from Settings &rarr; Voice &amp; Connectivity, with no env vars or redeploy, and clients now show a clear warning when no STUN server is reachable instead of silently hanging on &ldquo;ICE: Connecting&hellip;&rdquo; (#5399). The stream viewer&#39;s header close (&#x2715;) button no longer stops your own broadcast or breaks streams when closing &mdash; it now hides them the same restorable way the per-tile &#x2715; button does.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.27.0.zip">Download &rarr;</a>
+              </div>
+                            <div class="version-item">
+                <div><span class="v-name">v3.26.0</span> &mdash; <strong>Per-channel soundboard toggle, plus a batch of moderation, upload, and screen-share fixes.</strong> Admins can now switch the soundboard on or off per channel from the Channel Functions menu, right next to Voice, Text, Streams, Music, and Media &mdash; when it&#39;s off, nobody can play sounds into that channel&#39;s voice chat. Also: auto-cleanup no longer deletes persona avatars or other non-post files (#5423); sub-channel Rename and Organize now follow the <code>rename_sub_channel</code> / <code>manage_sub_channels</code> permissions instead of ignoring them (#5424); non-image attachments queued on their own now actually send (#5425); late joiners and tile-less viewers can reopen an active screen share; and screen-share audio no longer plays twice (#5426).</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.26.0.zip">Download &rarr;</a>
+              </div>
+                            <div class="version-item">
+                <div><span class="v-name">v3.25.2</span> &mdash; <strong>Hotfix: app loaded completely blank &mdash; no servers, channels, users, or DMs, and nothing clickable.</strong> Three front-end modules (<code>app-messages.js</code>, <code>app-media.js</code>, <code>app-ui.js</code>) had been silently truncated mid-file in an earlier commit. Because the app bundles these modules together at startup, a single unterminated file is a fatal parse error that halts the whole interface &mdash; so the page connected to the server but rendered nothing and ignored every click. All three files were restored to their complete form. If you were stuck on a blank Haven screen, update and hard-refresh (Ctrl+Shift+R) and it loads normally again.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.25.2.zip">Download &rarr;</a>
+              </div>
+                            <div class="version-item">
+                <div><span class="v-name">v3.25.1</span> &mdash; <strong>Hotfix: Haven Desktop stuck on &ldquo;Loading Haven&hellip;&rdquo; on strict CSP clients.</strong> <code>app.html</code> had a single inline <code>&lt;script&gt;i18n.init();&lt;/script&gt;</code> tag that the page Content Security Policy (no <code>&#39;unsafe-inline&#39;</code> in <code>script-src</code>) was refusing to execute on strict clients (notably the Haven Desktop preload), which left the locale layer uninitialized and the splash hanging. Moved the bootstrap call into <code>i18n.js</code> itself and removed the inline tag from <code>app.html</code>. <code>init()</code> is idempotent so existing <code>await window.i18n.init()</code> callers still resolve against the same shared promise.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.25.1.zip">Download &rarr;</a>
+              </div>
+                            <div class="version-item">
+                <div><span class="v-name">v3.25.0</span> &mdash; <strong>Soundboard sidebar mode, non-image file upload queue (#5417), and a sweep of fixes for the post-3.24.0 soundboard rework.</strong> The soundboard now pins as a non-blocking side panel with grouped categories, search, and per-sound visibility / hide controls. Non-image files (PDFs, audio, video) now queue as removable chips before sending instead of uploading on selection. The Sound Manager &ldquo;Assign to Events&rdquo; dropdown was rewritten to stay inside the modal (was overflowing the window on long sound lists). Three reported issues fixed: #5417 (instant non-image upload), #5418 (multiple menu button icons broken + dropdown overflow), #5419 (popout blocking Sound Manager access). About 15 mojibake&#39;d theme logos and UI icons that survived the v3.17.0-era cp1252 round-trip damage were also restored. Also: Bluesky link previews (#5412), a link preview size picker, and the Auto-heal-on-zero-membership safety net.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.25.0.zip">Download &rarr;</a>
+              </div>
+                            <div class="version-item">
+                <div><span class="v-name">v3.24.0</span> &mdash; <strong>Bulk sticker upload (#5406), a new Desktop mute/PTT cue toggle (Haven-Desktop #37), and two safety fixes from main.</strong> Sticker management can now batch-upload multiple files with filename-based names and an optional shared pack. Desktop users can now turn off mute / deafen / push-to-talk cue beeps without muting all Haven sounds. This release also includes the already-on-main fixes for DM deletion moving sticker library files into <code>deleted-attachments/</code> (#5411) and for private channel message links leaking a joinable channel code (#5408).</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.24.0.zip">Download &rarr;</a>
               </div>
               <div class="version-item">

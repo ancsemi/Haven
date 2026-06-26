@@ -20,38 +20,75 @@ _queueImage(file) {
 _renderImageQueue() {
   const bar = document.getElementById('image-queue-bar');
   if (!bar) return;
-  if (!this._imageQueue || this._imageQueue.length === 0) {
+  const hasImages = this._imageQueue && this._imageQueue.length > 0;
+  const hasFiles  = this._fileQueue  && this._fileQueue.length  > 0;
+  if (!hasImages && !hasFiles) {
     bar.style.display = 'none';
     bar.innerHTML = '';
     return;
   }
   bar.style.display = 'flex';
   bar.innerHTML = '';
-  this._imageQueue.forEach((file, idx) => {
-    const thumb = document.createElement('div');
-    thumb.className = 'image-queue-thumb';
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(file);
-    img.alt = file.name;
-    img.onload = () => URL.revokeObjectURL(img.src);
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'image-queue-remove';
-    removeBtn.title = 'Remove';
-    removeBtn.textContent = '×';
-    removeBtn.addEventListener('click', () => {
-      this._imageQueue.splice(idx, 1);
-      this._renderImageQueue();
+  if (hasImages) {
+    this._imageQueue.forEach((file, idx) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'image-queue-thumb';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.alt = file.name;
+      img.onload = () => URL.revokeObjectURL(img.src);
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'image-queue-remove';
+      removeBtn.title = 'Remove';
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        this._imageQueue.splice(idx, 1);
+        this._renderImageQueue();
+      });
+      thumb.appendChild(img);
+      thumb.appendChild(removeBtn);
+      bar.appendChild(thumb);
     });
-    thumb.appendChild(img);
-    thumb.appendChild(removeBtn);
-    bar.appendChild(thumb);
-  });
-  // Add a "clear all" button if multiple
-  if (this._imageQueue.length > 1) {
+  }
+  if (hasFiles) {
+    this._fileQueue.forEach((file, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'file-queue-chip';
+      chip.title = file.name + ' — ' + this._formatFileSize(file.size);
+      const icon = document.createElement('span');
+      icon.className = 'file-queue-chip-icon';
+      icon.textContent = '📎';
+      const name = document.createElement('span');
+      name.className = 'file-queue-chip-name';
+      name.textContent = file.name;
+      const size = document.createElement('span');
+      size.className = 'file-queue-chip-size';
+      size.textContent = this._formatFileSize(file.size);
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'image-queue-remove';
+      removeBtn.title = 'Remove';
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        this._fileQueue.splice(idx, 1);
+        this._renderImageQueue();
+      });
+      chip.appendChild(icon);
+      chip.appendChild(name);
+      chip.appendChild(size);
+      chip.appendChild(removeBtn);
+      bar.appendChild(chip);
+    });
+  }
+  // Add a "clear all" button if there's more than one queued attachment in total
+  const totalQueued = (hasImages ? this._imageQueue.length : 0) + (hasFiles ? this._fileQueue.length : 0);
+  if (totalQueued > 1) {
     const clearAll = document.createElement('button');
     clearAll.className = 'image-queue-clear-all';
     clearAll.textContent = 'Clear All';
-    clearAll.addEventListener('click', () => this._clearImageQueue());
+    clearAll.addEventListener('click', () => {
+      this._clearImageQueue();
+      this._clearFileQueue();
+    });
     bar.appendChild(clearAll);
   }
 },
@@ -67,6 +104,44 @@ async _flushImageQueue(bundled = false, personaPrefix = '') {
   this._clearImageQueue();
   for (const file of files) {
     await this._uploadImage(file, undefined, bundled, personaPrefix);
+  }
+},
+
+// ── General file queue (non-image attachments) — (#5417) ──
+// Mirrors _imageQueue so non-image attachments get a remove-able preview
+// chip in the same bar instead of uploading instantly on selection.
+_queueGeneralFile(file) {
+  if (!file) return;
+  const code = this.currentChannel;
+  if (!code) return this._showToast(t('media.select_channel_first'), 'error');
+  const _ch = this.channels.find(c => c.code === code);
+  if (_ch && _ch.media_enabled === 0) {
+    return this._showToast(t('media.uploads_disabled'), 'error');
+  }
+  const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  if (file.size > maxMb * 1024 * 1024) {
+    return this._showToast(t('media.file_too_large', { maxMb }), 'error');
+  }
+  if (!this._fileQueue) this._fileQueue = [];
+  if (this._fileQueue.length >= 5) {
+    return this._showToast('Max 5 files at once', 'error');
+  }
+  this._fileQueue.push(file);
+  this._renderImageQueue();
+  document.getElementById('message-input')?.focus();
+},
+
+_clearFileQueue() {
+  this._fileQueue = [];
+  this._renderImageQueue();
+},
+
+async _flushFileQueue() {
+  if (!this._fileQueue || this._fileQueue.length === 0) return;
+  const files = [...this._fileQueue];
+  this._clearFileQueue();
+  for (const file of files) {
+    this._uploadGeneralFile(file);
   }
 },
 
@@ -345,7 +420,7 @@ async _commitAvatarSettings() {
 
   } catch (err) {
     console.error('[Avatar] Save failed:', err);
-    if (status) { status.textContent = 'âŒ ' + err.message; status.style.color = 'var(--danger, red)'; }
+    if (status) { status.textContent = '❌ ' + err.message; status.style.color = 'var(--danger, red)'; }
     this._showToast('Failed to save: ' + err.message, 'error');
   }
 },
@@ -571,17 +646,32 @@ _setupSoundManagement() {
     }
     // Clear any stale hidden state
     localStorage.removeItem('haven_sb_sidebar_hidden');
-    // Define the helper now (app-ui and app-admin will also call it)
-    // Soundboard is now the RIGHTMOST panel. The soundboard toggle btn stays at
-    // CSS right:0 always. When the soundboard panel is open, the voice/users
-    // collapse btn needs to shift left so it sits on the left edge of the
-    // soundboard panel (= the right edge of the voice/users panel).
+    // Define the helper now (app-ui and app-admin will also call it).
+    // Layout is: ... | main | sb-panel | right-sidebar (voice/users)
+    // - Voice/users toggle btn sits at the LEFT edge of right-sidebar (right:width-of-voice when open, right:0 when collapsed).
+    // - Soundboard toggle btn sits at the LEFT edge of sb-panel, which is also offset by voice width.
+    // Both buttons are staggered vertically in CSS so they never visually collide when both end up at right:0.
     window._updateSbToggleRight = () => {
-      const panel = document.getElementById('sb-sidebar-panel');
-      const isOpen = panel && !panel.classList.contains('sb-hidden');
-      const sbWidth = isOpen ? (parseInt(panel.style.width) || 220) : 0;
-      const voiceBtn = document.getElementById('sidebar-toggle-btn');
-      if (voiceBtn) voiceBtn.style.right = sbWidth + 'px';
+      const sbPanel    = document.getElementById('sb-sidebar-panel');
+      const rightSb    = document.getElementById('right-sidebar');
+      const voiceBtn   = document.getElementById('sidebar-toggle-btn');
+      const sbBtn      = document.getElementById('sb-sidebar-toggle-btn');
+      const sbOpen     = sbPanel && !sbPanel.classList.contains('sb-hidden');
+      const voiceOpen  = rightSb && !rightSb.classList.contains('collapsed');
+      const sbWidth    = sbOpen ? (parseInt(sbPanel.style.width) || sbPanel.offsetWidth || 220) : 0;
+      const voiceWidth = voiceOpen ? (parseInt(rightSb.style.width) || rightSb.offsetWidth || 240) : 0;
+      if (voiceBtn) voiceBtn.style.right = voiceWidth + 'px';
+      if (sbBtn) {
+        sbBtn.style.right = (voiceWidth + sbWidth) + 'px';
+        // When the sb panel is OPEN, the toggle button sits at the panel's
+        // left edge — a horizontal position the voice/users toggle never
+        // occupies. Align it with the voice header (top: 72px) so it stops
+        // visually crowding the first content row, which under the prior
+        // 114px stagger looked like an overlap with the top of the sound
+        // list. When the panel is CLOSED, both toggles can end up at
+        // right:0, so restore the 114px stagger to keep them from stacking.
+        sbBtn.style.top = sbOpen ? '72px' : '114px';
+      }
     };
     window._updateSbToggleRight();
   }
@@ -658,8 +748,13 @@ _buildHotkeyString(e) {
 _openSoundModal(tab = 'soundboard') {
   const modal = document.getElementById('sound-modal');
   if (!modal) return;
-  // If soundboard is already popped out, bring it into focus rather than reopening the modal
-  if (this._soundboardPip) {
+  // If the soundboard is already popped out AND the caller wants the soundboard
+  // tab, bring the PiP into focus instead of reopening the modal. For 'assign'
+  // and 'manage' tabs we still open the modal — the popout only holds the
+  // soundboard view, so other tabs would otherwise be unreachable while
+  // popped out (#5419, including the admin Custom Sounds button which goes
+  // through this path with tab='manage').
+  if (this._soundboardPip && tab === 'soundboard') {
     this._soundboardPip.style.zIndex = '10001';
     setTimeout(() => { if (this._soundboardPip) this._soundboardPip.style.zIndex = '10000'; }, 400);
     return;
@@ -687,6 +782,126 @@ _openSoundModal(tab = 'soundboard') {
   this._renderAssignTab();
 },
 
+// ── Custom dropdown wrapper for native <select> elements (#5418) ──
+// Native <select> popups render outside the Haven window and can't be
+// constrained or styled. This wraps a select with a custom display + panel
+// that lives inside the modal, scrolls when long, and stays inside bounds.
+_enhanceSelectAsCustom(selectEl) {
+  if (!selectEl) return;
+  // Re-entry path: rebuild options from the underlying <select>.
+  if (selectEl.dataset.customEnhanced === '1') {
+    const wrap = selectEl.parentElement;
+    if (wrap && wrap._csRebuild) wrap._csRebuild();
+    return;
+  }
+  selectEl.dataset.customEnhanced = '1';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'custom-select-wrap ' + (selectEl.className || '');
+  wrap.style.position = 'relative';
+  selectEl.parentNode.insertBefore(wrap, selectEl);
+  wrap.appendChild(selectEl);
+  selectEl.style.display = 'none';
+
+  const display = document.createElement('button');
+  display.type = 'button';
+  display.className = 'custom-select-display';
+  display.innerHTML = '<span class="custom-select-label"></span><span class="custom-select-caret">▾</span>';
+  wrap.appendChild(display);
+
+  const panel = document.createElement('div');
+  panel.className = 'custom-select-panel';
+  panel.style.display = 'none';
+  wrap.appendChild(panel);
+
+  const labelEl = display.querySelector('.custom-select-label');
+
+  const buildPanel = () => {
+    panel.innerHTML = '';
+    const addOption = (opt) => {
+      const item = document.createElement('div');
+      item.className = 'custom-select-option';
+      item.textContent = opt.textContent;
+      item.dataset.value = opt.value;
+      if (opt.value === selectEl.value) item.classList.add('selected');
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectEl.value = opt.value;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        syncLabel();
+        panel.style.display = 'none';
+      });
+      panel.appendChild(item);
+    };
+    Array.from(selectEl.children).forEach(child => {
+      if (child.tagName === 'OPTGROUP') {
+        const grp = document.createElement('div');
+        grp.className = 'custom-select-group-label';
+        grp.textContent = child.label;
+        panel.appendChild(grp);
+        Array.from(child.children).forEach(addOption);
+      } else if (child.tagName === 'OPTION') {
+        addOption(child);
+      }
+    });
+  };
+
+  const syncLabel = () => {
+    const opt = Array.from(selectEl.querySelectorAll('option')).find(o => o.value === selectEl.value);
+    labelEl.textContent = opt ? opt.textContent : '';
+  };
+
+  const openPanel = () => {
+    buildPanel();
+    panel.style.display = 'block';
+    // Position: prefer below; flip to above if not enough room.
+    const rect = display.getBoundingClientRect();
+    const modalContent = display.closest('.modal-content') || display.closest('.modal') || document.body;
+    const mc = modalContent.getBoundingClientRect();
+    const below = mc.bottom - rect.bottom;
+    const above = rect.top - mc.top;
+    const room = Math.max(120, Math.min(280, Math.max(below, above) - 16));
+    panel.style.maxHeight = room + 'px';
+    if (below < 160 && above > below) {
+      panel.classList.add('flip-up');
+    } else {
+      panel.classList.remove('flip-up');
+    }
+  };
+
+  display.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (panel.style.display === 'none') openPanel();
+    else panel.style.display = 'none';
+  });
+
+  const docClick = (e) => {
+    if (!wrap.contains(e.target)) panel.style.display = 'none';
+  };
+  document.addEventListener('click', docClick);
+
+  selectEl.addEventListener('change', syncLabel);
+  wrap._csRebuild = buildPanel;
+  syncLabel();
+},
+
+_closeSoundboardForVoiceLeave() {
+  // Called from _leaveVoice. The soundboard is gated to voice-only use,
+  // so when the user leaves voice we close any open soundboard surface:
+  // sidebar panel, modal, or popped-out PiP.
+  const panel = document.getElementById('sb-sidebar-panel');
+  if (panel && !panel.classList.contains('sb-hidden')) {
+    this._toggleSoundboardSidebar();
+  }
+  const modal = document.getElementById('sound-modal');
+  if (modal && modal.style.display && modal.style.display !== 'none') {
+    modal.style.display = 'none';
+  }
+  if (this._soundboardPip) {
+    this._popInSoundboard(false);
+  }
+},
+
 _toggleSoundboardSidebar() {
   const panel = document.getElementById('sb-sidebar-panel');
   const btn = document.getElementById('sb-sidebar-toggle-btn');
@@ -709,22 +924,54 @@ _toggleSoundboardSidebar() {
 _renderSoundboardSidebar(filter = '') {
   const grid = document.getElementById('sb-sidebar-grid');
   if (!grid) return;
-  let sounds = (this.customSounds || []).filter(s =>
+  const all = (this.customSounds || []).filter(s =>
     (!filter || s.name.toLowerCase().includes(filter.toLowerCase())) &&
     (!this._soundPrefs[s.name]?.hidden || this._showHiddenSounds)
   );
   const hotkeyMap = {};
   Object.entries(this._soundHotkeys).forEach(([hk, name]) => { hotkeyMap[name] = hk; });
-  const html = sounds.length === 0
-    ? `<p class="muted-text">${filter ? 'No matching sounds' : 'No sounds available'}</p>`
-    : sounds.map(s => {
-        const hk = hotkeyMap[s.name];
-        const hotkeyHtml = hk ? `<span class="sb-hotkey">${this._escapeHtml(hk)}</span>` : '';
-        return `<button class="soundboard-btn${this._soundPrefs[s.name]?.hidden ? ' hidden-sound' : ''}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-name">${this._escapeHtml(s.name)}</span>${hotkeyHtml}</button>`;
-      }).join('');
-  grid.innerHTML = html;
+
+  if (all.length === 0) {
+    grid.innerHTML = `<p class="muted-text">${filter ? 'No matching sounds' : 'No sounds available'}</p>`;
+    return;
+  }
+
+  // Split into custom (user-uploaded) and built-in groups. Custom always shows first.
+  const customSounds  = all.filter(s => !s.builtin);
+  const builtinSounds = all.filter(s =>  s.builtin);
+
+  const renderBtn = (s) => {
+    const hk = hotkeyMap[s.name];
+    const hotkeyHtml = hk ? `<span class="sb-hotkey">${this._escapeHtml(hk)}</span>` : '';
+    return `<button class="soundboard-btn${this._soundPrefs[s.name]?.hidden ? ' hidden-sound' : ''}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-name">${this._escapeHtml(s.name)}</span>${hotkeyHtml}</button>`;
+  };
+
+  // Persisted open/closed state for each group (default: both open).
+  const customOpen  = localStorage.getItem('haven_sb_sidebar_custom_open')  !== '0';
+  const builtinOpen = localStorage.getItem('haven_sb_sidebar_builtin_open') !== '0';
+
+  const renderGroup = (label, sounds, openKey, isOpen) => {
+    if (sounds.length === 0) return '';
+    return `
+      <details class="sb-sidebar-group" data-open-key="${openKey}"${isOpen ? ' open' : ''}>
+        <summary class="sb-sidebar-group-label">${label} <span class="sb-sidebar-group-count">${sounds.length}</span></summary>
+        <div class="sb-sidebar-group-body">${sounds.map(renderBtn).join('')}</div>
+      </details>
+    `;
+  };
+
+  grid.innerHTML =
+    renderGroup('Custom',  customSounds,  'haven_sb_sidebar_custom_open',  customOpen) +
+    renderGroup('Built-in', builtinSounds, 'haven_sb_sidebar_builtin_open', builtinOpen);
+
   grid.querySelectorAll('.soundboard-btn').forEach(btn => {
     btn.addEventListener('click', () => this._playSoundFile(btn.dataset.url));
+  });
+  // Persist open/closed state of each category.
+  grid.querySelectorAll('details.sb-sidebar-group').forEach(d => {
+    d.addEventListener('toggle', () => {
+      localStorage.setItem(d.dataset.openKey, d.open ? '1' : '0');
+    });
   });
 },
 
@@ -778,7 +1025,17 @@ _playSoundFile(url) {
   try {
     const vol = Math.max(0, Math.min(1, this.notifications.volume * this.notifications.volume));
     // If in voice chat, route through VC so other users hear the sound too
-    if (this.voice && this.voice.playSoundToVC(url, vol)) return;
+    if (this.voice && this.voice.inVoice) {
+      // Respect the per-channel soundboard toggle for the voice channel the
+      // user is currently in. When an admin turns the soundboard off there,
+      // sounds can't be played into that VC by anyone.
+      const vcCode = this.voice.currentChannel;
+      const vcCh = vcCode && Array.isArray(this.channels) ? this.channels.find(c => c.code === vcCode) : null;
+      if (vcCh && vcCh.soundboard_enabled === 0) {
+        return this._showToast(t('media.soundboard_disabled'), 'error');
+      }
+      if (this.voice.playSoundToVC(url, vol)) return;
+    }
     // Fallback: play locally only
     const audio = new Audio(url);
     audio.volume = vol;
@@ -861,7 +1118,7 @@ _updateSoundSelects(sounds) {
 
     if (builtins.length > 0) {
       const builtinGroup = document.createElement('optgroup');
-      builtinGroup.label = `ðŸŽ™ï¸ ${t('modals.sound_manager.group_builtin')}`;
+      builtinGroup.label = `🎙️ ${t('modals.sound_manager.group_builtin')}`;
       builtinGroup.dataset.customGroup = '1';
       builtins.forEach(s => {
         const opt = document.createElement('option');
@@ -1184,7 +1441,7 @@ _renderAssignTab() {
 
     if (fileBuiltins.length > 0) {
       const fbGroup = document.createElement('optgroup');
-      fbGroup.label = 'ðŸŽ™ï¸ Sounds';
+      fbGroup.label = '🎙️ Sounds';
       fileBuiltins.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.value;
@@ -1210,6 +1467,10 @@ _renderAssignTab() {
 
     // Sync with current notification setting
     sel.value = this.notifications.sounds[event] || 'none';
+    // Replace the native dropdown with a custom one constrained to the modal,
+    // so long sound lists don't render a native popup that overflows the
+    // Haven window (#5418 follow-up). Idempotent — re-renders sync the label.
+    this._enhanceSelectAsCustom?.(sel);
 
     // On change, update the main notification select + play preview
     sel.addEventListener('change', () => {
@@ -1866,7 +2127,7 @@ _showBotDetail(botId) {
       <label class="settings-label">🔑 Callback Secret <span style="font-size:10px;color:var(--text-muted)">(optional — used to sign payloads via X-Haven-Signature)</span></label>
       <input type="text" id="bot-detail-callback-secret" value="${this._escapeHtml(wh.callback_secret || '')}" placeholder="my-secret-key" class="settings-text-input" style="width:100%;margin-bottom:12px">
 
-      <label class="settings-label">ðŸ›¡ï¸ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
+      <label class="settings-label">🛡️ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
       <label class="toggle-row" style="margin-bottom:12px">
         <input type="checkbox" id="bot-detail-can-moderate" ${wh.can_moderate ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
         <span>Allow this bot to perform moderation actions</span>
@@ -2077,6 +2338,27 @@ _setupDebugSection() {
         if (sspCb.checked) localStorage.setItem('screen_share_voice_processing', '1');
         else localStorage.removeItem('screen_share_voice_processing');
       } catch {}
+    });
+  }
+
+  // #5426 — screen-share audio now plays straight through the <audio> element
+  // by default (NetEq stays in charge, so it stays in sync over a TURN relay).
+  // This opt-in toggle instead routes it through the Web Audio mixer, which
+  // unlocks the >100% per-stream volume boost but can stutter / desync over a
+  // relay — the same createMediaStreamSource-vs-jitter-buffer fight as before,
+  // just no longer the default.
+  const sadCb = document.getElementById('pref-debug-screen-audio-direct');
+  if (sadCb) {
+    try { sadCb.checked = localStorage.getItem('screen_audio_webaudio') === '1'; } catch {}
+    sadCb.addEventListener('change', () => {
+      try {
+        if (sadCb.checked) localStorage.setItem('screen_audio_webaudio', '1');
+        else localStorage.removeItem('screen_audio_webaudio');
+      } catch {}
+      // Apply immediately to any screen audio that's already playing.
+      if (this.voice && typeof this.voice.reapplyScreenAudioRouting === 'function') {
+        this.voice.reapplyScreenAudioRouting();
+      }
     });
   }
 

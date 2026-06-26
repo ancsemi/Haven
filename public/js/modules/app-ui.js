@@ -355,6 +355,13 @@ _setupUI() {
       }
     });
   });
+  // Hide channel (admin declutter — local only, channel stays accessible) (#5409)
+  document.querySelector('[data-action="hide-channel"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this._hideChannel(code);
+  });
   // Disconnect from voice via context menu
   document.querySelector('[data-action="leave-voice"]')?.addEventListener('click', () => {
     this._closeChannelCtxMenu();
@@ -424,6 +431,10 @@ _setupUI() {
       const newVal = ch && ch.media_enabled === 0 ? 1 : 0;
       optimistic({ media_enabled: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'media' });
+    } else if (fn === 'soundboard') {
+      const newVal = ch && ch.soundboard_enabled === 0 ? 1 : 0;
+      optimistic({ soundboard_enabled: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'soundboard' });
     } else if (fn === 'read-only') {
       const newVal = ch && ch.read_only ? 0 : 1;
       optimistic({ read_only: newVal });
@@ -1382,6 +1393,12 @@ _setupUI() {
   // Re-render voice user list when webcam status changes
   this.voice.onWebcamStatusChange = () => {
     if (this._lastVoiceUsers) this._renderVoiceUsers(this._lastVoiceUsers);
+  };
+
+  // Surface a STUN/connectivity failure so external-network users aren't left
+  // staring at "ICE: Connecting..." with no clue why (#5399).
+  this.voice.onConnectivityWarning = (msg) => {
+    this._showToast(msg, 'error', null, 12000);
   };
 
   // Wire up talking indicator
@@ -4909,12 +4926,13 @@ _setupImageUpload() {
     if (file.type.startsWith('image/')) {
       this._queueImage(file);
     } else {
-      this._uploadGeneralFile(file);
+      this._queueGeneralFile(file);
     }
     fileInput.value = '';
   });
 
-  // Paste from clipboard — images (incl. SVG) get queued for preview; other files go to general upload
+  // Paste from clipboard — images (incl. SVG) get queued for preview; non-image
+  // files now also queue (#5417) rather than uploading on paste.
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -4927,7 +4945,7 @@ _setupImageUpload() {
       if (item.kind === 'file') {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) this._uploadGeneralFile(file);
+        if (file) this._queueGeneralFile(file);
         return;
       }
     }
@@ -4951,7 +4969,7 @@ _setupImageUpload() {
     if (file.type.startsWith('image/')) {
       this._queueImage(file);
     } else {
-      this._uploadGeneralFile(file);
+      this._queueGeneralFile(file);
     }
   });
 },

@@ -188,7 +188,8 @@
     "no_results_for": "Aucun résultat pour \"{{query}}\"",
     "loading_more": "Chargement…",
     "no_music_playing": "Aucune musique en cours",
-    "record_set": "{{user}} a établi un nouveau record sur {{game}} : {{score}} !"
+    "record_set": "{{user}} a établi un nouveau record sur {{game}} : {{score}} !",
+    "channel_hidden": "Channel \"{{name}}\" hidden"
   },
   "utils": {
     "today_at": "Aujourd'hui à {{time}}",
@@ -214,6 +215,7 @@
     "pinned_by": "Épinglé par {{user}}"
   },
   "voice": {
+    "requesting_stream": "Demande du flux…",
     "join": "🎤 Rejoindre le vocal",
     "join_ctx": "Rejoindre le vocal",
     "leave": "Quitter le vocal",
@@ -319,7 +321,12 @@
     "expand_collapse": "Développer/réduire les sous-salons",
     "channel_options": "Options du salon",
     "unknown_user": "Inconnu",
-    "more_options": "Plus d'options"
+    "more_options": "Plus d'options",
+    "hidden_channels_count": "{{count}} hidden channels",
+    "hidden_channels_restore_title": "Show hidden channels",
+    "no_hidden_channels": "No hidden channels",
+    "show_all_hidden": "Show all",
+    "unhide_channel": "Unhide"
   },
   "channel": {
     "server_joined": "Code accepté — {{count}} salon(s) rejoint(s)",
@@ -1468,6 +1475,10 @@
       "desc": "Sélectionner un salon de destination",
       "move_one": "Déplacer {{n}} message vers :",
       "move_many": "Déplacer {{n}} messages vers :"
+    },
+    "hidden_channels": {
+      "title": "Hidden Channels",
+      "desc": "Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back."
     }
   },
   "context_menu": {
@@ -1485,7 +1496,8 @@
       "functions": "Fonctions du salon",
       "roles": "Rôles",
       "webhooks": "Webhooks",
-      "delete": "Supprimer le salon"
+      "delete": "Supprimer le salon",
+      "hide": "Hide Channel"
     },
     "dm": {
       "mute": "Mettre en sourdine",

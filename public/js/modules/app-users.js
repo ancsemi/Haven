@@ -764,8 +764,24 @@ _renderVoiceUsers(users, channelCode) {
       e.stopPropagation();
       const userId = parseInt(badge.closest('.voice-user-item')?.dataset.userId);
       if (isNaN(userId)) return;
-      const tile = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
-      if (tile) this._showStreamTile(`screen-tile-${userId}`, userId);
+      const hiddenTile = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
+      if (hiddenTile) {
+        this._showStreamTile(`screen-tile-${userId}`, userId);
+      } else if (!document.getElementById(`screen-tile-${userId}`)) {
+        // No tile at all (e.g. we joined after they went live and their stream
+        // never reached us, or we closed our view and the sharer's tile was
+        // since torn down) — actively ask the sharer to (re)send. Arm the
+        // retry watchdog too: a single renegotiate request often loses the
+        // race (the sharer may be mid-signaling-change), which left the viewer
+        // stuck on "Requesting stream…" forever with no second attempt. The
+        // watchdog re-requests a few times until a live video track arrives.
+        // (#5426)
+        if (this.voice) {
+          this.voice.requestScreenStream(userId);
+          this.voice._watchForScreenStream(userId);
+        }
+        this._showToast?.(t('voice.requesting_stream'), 'info');
+      }
     });
   });
 },
@@ -780,8 +796,14 @@ _showVoiceUserMenu(anchorEl, userId, username) {
   const canKick = this._hasPerm('kick_user');
   // Check if user is streaming and has a hidden tile we can restore
   const streams = this._streamInfo || [];
-  const isStreaming = streams.some(s => s.sharerId === userId);
+  const isStreaming = streams.some(s => s.sharerId === userId)
+    || !!(this.voice && this.voice.screenSharers && this.voice.screenSharers.has(userId));
   const hiddenTile = isStreaming ? document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`) : null;
+  // Offer "Watch stream" whenever they're live and we don't already have a
+  // visible tile — this both restores a hidden tile and requests a stream we
+  // never received (late joiner).
+  const visibleTile = document.querySelector(`#screen-tile-${userId}:not([data-hidden="true"])`);
+  const canWatchStream = isStreaming && !visibleTile;
   const menu = document.createElement('div');
   menu.className = 'voice-user-menu';
   menu.innerHTML = `
@@ -792,7 +814,7 @@ _showVoiceUserMenu(anchorEl, userId, username) {
       <span class="voice-user-vol-value">${savedVol}%</span>
     </div>
     <div class="voice-user-menu-actions">
-      ${hiddenTile ? `<button class="voice-user-menu-action" data-action="watch-stream">🖥 ${t('users.voice_menu.watch_stream')}</button>` : ''}
+      ${canWatchStream ? `<button class="voice-user-menu-action" data-action="watch-stream">🖥 ${t('users.voice_menu.watch_stream')}</button>` : ''}
       <button class="voice-user-menu-action" data-action="mute-user">${isMuted ? `🔊 ${t('users.voice_menu.unmute')}` : `🔇 ${t('users.voice_menu.mute')}`}</button>
       <button class="voice-user-menu-action ${isDeafened ? 'active' : ''}" data-action="deafen-user">${isDeafened ? `🔊 ${t('users.voice_menu.undeafen')}` : `🔇 ${t('users.voice_menu.deafen')}`}</button>
       ${canKick ? `<button class="voice-user-menu-action danger" data-action="voice-kick" title="${t('users.voice_menu.voice_kick_title')}">🚪 ${t('users.voice_menu.voice_kick')}</button>` : ''}
@@ -831,8 +853,17 @@ _showVoiceUserMenu(anchorEl, userId, username) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btn.dataset.action === 'watch-stream') {
-        // Restore the hidden stream tile
-        this._showStreamTile(`screen-tile-${userId}`, userId);
+        const hidden = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
+        if (hidden) {
+          this._showStreamTile(`screen-tile-${userId}`, userId);
+        } else if (this.voice) {
+          // No tile yet — ask the sharer to (re)send their stream, and arm the
+          // retry watchdog so a single dropped renegotiate doesn't strand the
+          // viewer on "Requesting stream…" with no follow-up attempt. (#5426)
+          this.voice.requestScreenStream(userId);
+          this.voice._watchForScreenStream(userId);
+          this._showToast?.(t('voice.requesting_stream'), 'info');
+        }
         this._closeVoiceUserMenu();
       } else if (btn.dataset.action === 'mute-user') {
         // Mute: toggle their volume to 0 so YOU can't hear THEM

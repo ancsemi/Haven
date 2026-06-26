@@ -57,7 +57,7 @@ async switchChannel(code) {
     this._updateVoiceButtons(true);
     // If viewing a different channel from the one we're in voice in, show "Join Voice" instead of "Voice Active"
     if (this.voice.currentChannel !== code) {
-      const _canVoice = this.user?.isAdmin || this._hasPerm('use_voice');
+      const _canVoice = this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice');
       const indic = document.getElementById('voice-active-indicator');
       if (indic) indic.style.display = 'none';
       const _scJoinBtn = document.getElementById('voice-join-btn');
@@ -71,7 +71,7 @@ async switchChannel(code) {
   } else {
     // Show just the join button (not the indicator), but hide it for text-only channels or users without voice permission
     const _scJoinBtn = document.getElementById('voice-join-btn');
-    const _canVoice = this.user?.isAdmin || this._hasPerm('use_voice');
+    const _canVoice = this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice');
     if (_scJoinBtn) _scJoinBtn.style.display = (channel && channel.voice_enabled === 0) || !_canVoice ? 'none' : 'inline-flex';
     const indic = document.getElementById('voice-active-indicator');
     if (indic) indic.style.display = 'none';
@@ -398,14 +398,31 @@ _openChannelCtxMenu(code, btnEl) {
     const canCreateSub = isMod || this._hasPerm('manage_sub_channels') || this._hasPerm('create_channel');
     createSubBtn.style.display = (canCreateSub && ch && !ch.parent_channel_id) ? '' : 'none';
   }
+  // (#5424) The Rename action was only shown to moderators (effective level
+  // >= 25), so granting rename_channel / rename_sub_channel had no effect in
+  // the UI even though the server enforces exactly those permissions. Show it
+  // whenever the user actually holds the matching rename permission.
+  const renameCtxBtn = menu.querySelector('[data-action="rename-channel"]');
+  if (renameCtxBtn && ch) {
+    const renamePerm = ch.parent_channel_id ? 'rename_sub_channel' : 'rename_channel';
+    const canRename = isMod || this._hasPerm(renamePerm);
+    renameCtxBtn.style.display = canRename ? '' : 'none';
+  }
   // Hide "Leave Channel" for admins (always in all channels)
   const leaveBtn = menu.querySelector('[data-action="leave-channel"]');
   if (leaveBtn) leaveBtn.style.display = isAdmin ? 'none' : '';
+  // (#5409) Admins can't leave channels (they need access to all of them), so
+  // give them a local-only "Hide Channel" to declutter their sidebar instead.
+  const hideBtn = menu.querySelector('[data-action="hide-channel"]');
+  if (hideBtn) hideBtn.style.display = isAdmin ? '' : 'none';
   // Show "Organize" only for parent channels that have sub-channels
   const organizeBtn = menu.querySelector('[data-action="organize"]');
   if (organizeBtn) {
     const hasSubs = ch && !ch.parent_channel_id && this.channels.some(c => c.parent_channel_id === ch.id);
-    organizeBtn.style.display = (canManageChannels && hasSubs) ? '' : 'none';
+    // (#5424) Sub-channel managers can organize a parent's sub-channels, not
+    // just users with the server-wide create_channel permission.
+    const canOrganize = canManageChannels || this._hasPerm('manage_sub_channels');
+    organizeBtn.style.display = (canOrganize && hasSubs) ? '' : 'none';
   }
   // Show "Move to…" for channels that can become sub-channels (no children of their own)
   const moveToBtn = menu.querySelector('[data-action="move-to-parent"]');
@@ -431,7 +448,7 @@ _openChannelCtxMenu(code, btnEl) {
   const inVoice = this.voice && this.voice.inVoice;
   const inThisChannel = inVoice && this.voice.currentChannel === code;
   const isVoiceOff = ch && ch.voice_enabled === 0;
-  const _noVP = !this.user?.isAdmin && !this._hasPerm('use_voice');
+  const _noVP = !this.user?.isAdmin && !this.user?.isGuest && !this._hasPerm('use_voice');
   if (joinVoiceBtn) joinVoiceBtn.style.display = (inThisChannel || isVoiceOff || _noVP) ? 'none' : '';
   if (leaveVoiceBtn) leaveVoiceBtn.style.display = inVoice ? '' : 'none';
   // Position near the button
@@ -445,6 +462,99 @@ _openChannelCtxMenu(code, btnEl) {
     const mr = menu.getBoundingClientRect();
     if (mr.right > window.innerWidth) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
     if (mr.bottom > window.innerHeight) menu.style.top = (rect.top - mr.height - 4) + 'px';
+  });
+},
+
+/* ── Hidden channels (admin declutter, local-only — #5409) ─────────────
+   Admins can't leave channels because they need access to every one, so
+   instead they can hide a channel from their own sidebar. This is purely a
+   per-device view preference (localStorage), like mute — it never changes
+   membership or affects anyone else, and the channel stays fully accessible
+   via the "N hidden channels" restore bar. */
+_getHiddenChannels() {
+  try { return JSON.parse(localStorage.getItem('haven_hidden_channels') || '[]'); }
+  catch { return []; }
+},
+_setHiddenChannels(list) {
+  localStorage.setItem('haven_hidden_channels', JSON.stringify([...new Set(list)]));
+},
+_hideChannel(code) {
+  const hidden = this._getHiddenChannels();
+  if (!hidden.includes(code)) hidden.push(code);
+  this._setHiddenChannels(hidden);
+  const ch = this.channels.find(c => c.code === code);
+  const name = ch ? ch.name : code;
+  // If we're currently viewing the channel we're hiding, jump to the first
+  // remaining visible channel so we're not left staring at a hidden one.
+  if (this.currentChannel === code) {
+    const remaining = this.channels.filter(c => !c.is_dm && c.code !== code && !hidden.includes(c.code));
+    if (remaining.length) this.switchChannel(remaining[0].code);
+  }
+  this._renderChannels();
+  this._showToast(t('toasts.channel_hidden', { name }), 'success');
+},
+_unhideChannel(code) {
+  this._setHiddenChannels(this._getHiddenChannels().filter(c => c !== code));
+  this._renderChannels();
+},
+_unhideAllChannels() {
+  this._setHiddenChannels([]);
+  this._renderChannels();
+},
+_openHiddenChannelsModal() {
+  const modal = document.getElementById('hidden-channels-modal');
+  if (!modal) return;
+  this._renderHiddenChannelsModal();
+  modal.style.display = 'flex';
+  const closeBtn = document.getElementById('hidden-channels-close-btn');
+  const closeHandler = () => {
+    modal.style.display = 'none';
+    closeBtn?.removeEventListener('click', closeHandler);
+    modal.removeEventListener('click', overlayHandler);
+  };
+  const overlayHandler = (e) => { if (e.target === modal) closeHandler(); };
+  closeBtn?.addEventListener('click', closeHandler);
+  modal.addEventListener('click', overlayHandler);
+},
+_renderHiddenChannelsModal() {
+  const container = document.getElementById('hidden-channels-content');
+  if (!container) return;
+  container.innerHTML = '';
+  const items = this._getHiddenChannels()
+    .map(code => this.channels.find(c => c.code === code))
+    .filter(Boolean);
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.style.cssText = 'opacity:0.6;font-size:0.85rem;text-align:center;padding:16px';
+    empty.textContent = t('channels.no_hidden_channels');
+    container.appendChild(empty);
+    return;
+  }
+  const showAll = document.createElement('button');
+  showAll.className = 'btn-sm';
+  showAll.style.cssText = 'margin-bottom:10px';
+  showAll.textContent = t('channels.show_all_hidden');
+  showAll.addEventListener('click', () => {
+    this._unhideAllChannels();
+    document.getElementById('hidden-channels-modal').style.display = 'none';
+  });
+  container.appendChild(showAll);
+  items.forEach(ch => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08))';
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    nameSpan.textContent = (ch.is_private ? '🔒 ' : '# ') + ch.name;
+    const btn = document.createElement('button');
+    btn.className = 'btn-sm';
+    btn.textContent = t('channels.unhide_channel');
+    btn.addEventListener('click', () => {
+      this._unhideChannel(ch.code);
+      this._renderHiddenChannelsModal();
+    });
+    row.appendChild(nameSpan);
+    row.appendChild(btn);
+    container.appendChild(row);
   });
 },
 
@@ -475,6 +585,7 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('streams', ch.streams_enabled !== 0, ch.streams_enabled !== 0 ? 'ON' : 'OFF');
   this._setCfnBadge('music', ch.music_enabled !== 0, ch.music_enabled !== 0 ? 'ON' : 'OFF');
   this._setCfnBadge('media', ch.media_enabled !== 0, ch.media_enabled !== 0 ? 'ON' : 'OFF');
+  this._setCfnBadge('soundboard', ch.soundboard_enabled !== 0, ch.soundboard_enabled !== 0 ? 'ON' : 'OFF');
   // Read-only toggle
   const isReadOnly = ch.read_only === 1;
   this._setCfnBadge('read-only', isReadOnly, isReadOnly ? 'ON' : 'OFF');
@@ -1499,7 +1610,13 @@ _renderChannels() {
   const list = document.getElementById('channel-list');
   list.innerHTML = '';
 
-  const regularChannels = this.channels.filter(c => !c.is_dm);
+  // (#5409) Admin-hidden channels are dropped from the sidebar, except the one
+  // we're actively viewing (so a freshly-hidden current channel doesn't vanish
+  // out from under us until we navigate away). Hiding a parent hides its
+  // sub-channels too, since they're orphaned once the parent isn't rendered.
+  const _hiddenChannels = this._getHiddenChannels();
+  const regularChannels = this.channels.filter(c =>
+    !c.is_dm && (!_hiddenChannels.includes(c.code) || c.code === this.currentChannel));
   const dmChannels = this.channels.filter(c => c.is_dm);
 
   // Build parent → sub-channel tree
@@ -1733,7 +1850,7 @@ _renderChannels() {
     el.addEventListener('dblclick', () => {
       const _dblCh = this.channels.find(c => c.code === ch.code);
       if (_dblCh && _dblCh.voice_enabled === 0) return;
-      if (!this.user?.isAdmin && !this._hasPerm('use_voice')) return;
+      if (!this.user?.isAdmin && !this.user?.isGuest && !this._hasPerm('use_voice')) return;
       this.switchChannel(ch.code);
       setTimeout(() => this._joinVoice(), 300);
     });
@@ -1990,6 +2107,21 @@ _renderChannels() {
       }
     });
     list.appendChild(tempBtn);
+  }
+
+  // ── Hidden channels restore bar (#5409) ──
+  // Only counts hidden channels that still exist and aren't the one currently
+  // being viewed (a hidden current channel is still shown in the list).
+  const _hiddenExisting = this._getHiddenChannels()
+    .filter(code => code !== this.currentChannel && this.channels.some(c => c.code === code));
+  if (_hiddenExisting.length) {
+    const hiddenBar = document.createElement('div');
+    hiddenBar.className = 'channel-item hidden-channels-bar';
+    hiddenBar.style.cssText = 'opacity:0.5;cursor:pointer;padding:4px 12px;font-size:0.8rem;display:flex;align-items:center;gap:6px';
+    hiddenBar.innerHTML = `<span style="font-size:0.9rem">🙈</span><span>${t('channels.hidden_channels_count', { count: _hiddenExisting.length })}</span>`;
+    hiddenBar.title = t('channels.hidden_channels_restore_title');
+    hiddenBar.addEventListener('click', () => this._openHiddenChannelsModal());
+    list.appendChild(hiddenBar);
   }
 
   // ── DM section (separate pane) ──

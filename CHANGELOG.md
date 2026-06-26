@@ -11,6 +11,73 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.27.0] — 2026-06-23
+
+### Added
+- **Admin-configurable STUN/TURN voice servers (#5399).** A new **Settings → Voice & Connectivity** section lets server admins point voice and screen share at their own STUN servers (one `stun:` URI per line, or comma-separated) and an optional TURN server with static credentials — without setting environment variables or redeploying. `/api/ice-servers` now resolves in the order admin setting → `STUN_URLS` / `TURN_URL` env → built-in STUN pool, so a server can be fixed live from the admin panel. The TURN password is stored as an admin-only sensitive setting and every value is scheme/length validated before it's saved. Clients that can't reach any STUN server now show a one-time warning toast explaining that calls may only work on the local network until an admin configures STUN/TURN, instead of silently hanging on "ICE: Connecting…".
+
+### Fixed
+- **The stream viewer's "close" (✕) button broke screen sharing.** The viewer header has two different ✕ buttons: the per-tile ✕ safely hides a single stream (restorable), but the header ✕ stopped your own broadcast *and* fully tore down every stream tile. Destroying a tile dropped the only reference to a sharer's still-live video, so the stream couldn't be reopened and even a fresh reshare wouldn't reattach without a full hard-refresh — it also closed streams you were only watching and removed the restore button. The header ✕ now closes streams the same restorable way the per-tile ✕ does (hide + mute, recoverable from the hidden-streams bar or the LIVE badge) and never stops your own share.
+
+## [3.26.0] — 2026-06-21
+
+### Added
+- **Per-channel Soundboard toggle.** The Channel Functions menu (the ⚙️ panel, admins / `create_channel`) now has a **Soundboard** ON/OFF switch alongside Voice, Text, Streams, Music, and Media. Turning it off for a channel stops anyone from playing soundboard sounds into that channel's voice chat: `_playSoundFile` checks the voice channel's `soundboard_enabled` before routing audio into the VC mix and shows a notice instead. New `soundboard_enabled` column on `channels` (defaults to on), wired through the existing `toggle-channel-permission` handler and `getEnrichedChannels`.
+
+### Fixed
+- **Auto-cleanup was deleting persona avatars and other non-post files (#5423).** The file sweep deleted everything in `uploads/` that wasn't on a hand-maintained allow-list (server icon, user avatars, custom emojis/sounds, webhook avatars, referenced attachments), so any file type nobody remembered to protect got wiped — persona avatars now, server stickers/emojis before that. Cleanup is now inverted: it follows the messages it deletes, relocating their attachments to `deleted-attachments/` (only when no surviving message still references them) and purging that folder by age. The main `uploads/` directory is never scanned, so avatars, persona avatars, emojis, sounds, stickers, and the server icon are safe by default — including future file types.
+- **Sub-channel Rename and Organize ignored the permissions named for them (#5424).** Rename only appeared for moderators (effective level ≥ 25) and Organize (reorder / move / reparent / set category) was gated on the server-wide `create_channel` permission on both the client button and every server handler — so granting `rename_sub_channel` or `manage_sub_channels` did nothing for those actions, while Set Topic and Create Sub-channel worked because they were already tied to their own permissions. Rename and Organize now follow the matching permissions; organizing a parent's sub-channels accepts `manage_sub_channels` scoped to that parent, while top-level / server-structure changes still require `create_channel`.
+- **Non-image attachments queued on their own never sent (#5425).** The non-image upload queue (#5417) only flushed inside `if (hasImages)`, and the empty-send guard only checked for queued images, so a queued PDF/audio/video/etc. with no image alongside it never uploaded — with message text the text sent and the file stayed stuck in the queue; with no text the send returned early and did nothing. The send path now tracks `hasFiles`, lets a file-only message through, and flushes the image and file queues independently.
+- **Late joiners and tile-less viewers couldn't (re)open an active screen share.** Users who joined a voice channel after a screen share had already started, or who had dismissed the stream tile, had no way back into the live stream. They can now reopen any active screen share in the channel.
+- **Screen-share audio could play twice (#5426).** Stream audio was being routed through both a Web Audio gain node and the underlying media element at the same time, doubling it. It now plays through a single path.
+
+### Changed
+- **Haven Desktop download links bumped to v1.4.24** on the landing pages (#5422 hotfix).
+- **Refreshed donor and sponsor credits** from the latest contribution list.
+
+## [3.25.2] — 2026-06-18
+
+### Fixed
+- **App loaded completely blank — no servers, channels, users, or DMs, and nothing was clickable (regression in 3.25.x).** Three of the front-end JavaScript modules (`app-messages.js`, `app-media.js`, and `app-ui.js`) had been silently truncated mid-file in an earlier commit, cutting off the end of each file. Because the app bundles these modules together at startup, a single unterminated file is a fatal parse error that stops the entire interface from initializing — so the page connected to the server but rendered nothing and ignored every click. All three files have been restored to their complete form. If you were stuck on a blank Haven screen, update and hard-refresh (Ctrl+Shift+R) and it will load normally again.
+
+## [3.25.1] — 2026-06-18
+
+### Fixed
+- **Haven Desktop stuck on "Loading Haven…" / CSP-blocked i18n init.** `app.html` had a single inline `<script>i18n.init();</script>` tag that the page CSP (no `'unsafe-inline'` in `script-src`) was refusing to execute on strict clients, leaving the locale layer uninitialized and the desktop preload hanging on the splash. Moved the bootstrap call into `i18n.js` itself (`I18n.init()` at the bottom of the module) and removed the inline tag from `app.html`. `init()` is idempotent so the `auth.js` `await window.i18n.init()` call still resolves against the same shared promise.
+
+---
+
+## [3.25.0] — 2026-06-17
+
+### Added
+- **Soundboard sidebar mode.** New non-blocking side panel that pins the soundboard alongside chat instead of opening it as a modal popup. Toggle from Settings → Sounds → Sidebar Mode, or from the popup checkbox. Includes a resizable handle, collapsible category groups (Custom / Built-in), a search input, and a fixed-position arrow toggle that slides with the panel. The panel and the popup share the same backing list, so hotkeys keep working in either mode. Auto-closes when you leave voice (the panel doubles as a "you're in voice" affordance).
+- **Custom sound management.** Settings → Sounds → Manage now lets you hide individual sounds from the soundboard (visibility toggle per row) and reorder them with drag-and-drop. Hidden sounds stay available for hotkey playback and Assign-to-Events but are pruned from the visible grid. Order is persisted per-user.
+- **Bluesky link previews (#5412).** `/api/link-preview` now resolves Bluesky post URLs (`bsky.app/profile/.../post/...`) into the same preview-card format used for other social platforms, including avatar, display name, post text, and timestamp.
+- **Link preview size picker.** Settings → Layout now has an Off / Normal / Large picker for link preview cards, matching the existing image display picker. "Off" hides all link previews; "Large" widens the card to 600px with a bigger thumbnail.
+- **File upload queue for non-image attachments (#5417).** Non-image files (PDFs, audio, video, archives, etc.) now queue as a removable chip in the same bar as image previews and only upload when you hit Send. Works for the upload button, paste, and drag-drop in the main composer. Replaces the old "instant upload on selection" behavior. PiP DM and threads still use the immediate-upload path.
+
+### Changed
+- **Soundboard popout no longer blocks Assign / Manage (#5419).** Opening the Sound Manager while the soundboard is popped out now still lets you reach the Assign-to-Events and Manage tabs. Previously the modal-opener early-returned for *any* tab if the PiP was active, which made the admin Custom Sounds button silently do nothing. Now only the Soundboard tab refocuses the PiP; other tabs open the modal as expected.
+- **Sound Manager dropdown is now a custom component (#5418).** The Assign-to-Events `<select>` lists were replaced with a div-based dropdown that stays inside the modal, flips above when there's not enough room below, and scrolls when the option list is long. Native `<select>` popups render outside the Haven window and couldn't be constrained.
+- **better-sqlite3 upgraded to v12.10.0.** Adds prebuilt binaries for Node 22 through 26.
+- **`start.sh` no longer kills processes on the configured port (#5415).** The `lsof -ti:$PORT | xargs kill -9` block could collateral-kill unrelated processes on shared hosts. The script now fails fast with EADDRINUSE if the port is busy, which is the correct behavior. Contributed by @MutantRabbit767.
+
+### Fixed
+- **Soundboard sidebar rendered at the far LEFT of the window instead of next to voice/users.** `#app-body` uses CSS flex `order` for layout (server-bar=0, sidebar=1, main=2, right-sidebar=3) and the new `.sb-sidebar-panel` had no explicit order, so it inherited 0 and landed at the leftmost position. Added `order: 3` for the soundboard panel and bumped the right-sidebar to `order: 4`.
+- **Soundboard collapse arrows snapped instead of sliding.** Both the voice and soundboard collapse buttons have their `right` position set imperatively in JS when the sidebars open/close, but the CSS `transition` only animated color/background. Added `right` (and `top` for the soundboard variant) to the transition list so the buttons slide with the panels.
+- **Sidebar toggle arrow visually crowded the first sound row.** With the panel open and the toggle staggered at top:114px (the closed-state stagger), the arrow ended up at the same vertical position as the top of the sound list. When the panel is open, the toggle now sits at top:72px (aligned with the header) — the voice toggle's position is never reused horizontally while the panel is open, so the stagger isn't needed there. Closed-state still uses 114px to prevent stacking with the voice toggle at right:0.
+- **Sound manager dropdown overflowed the Haven window.** See the dropdown rewrite above (#5418).
+- **Residual UTF-8 mojibake across the UI (#5418).** A previous repair pass missed several spots. Restored theme logos (`eldenring 💍`, `zelda 🗡️`, `gospel 🕊️`, `halo ⌁`, `nord ❄`, `minecraft ⛏️`, `ffx ⚔️`, `fallout ☢️`, `scripture ✝️`, `cloudy ☁`), the Sound Manager built-in group label (`🎙️ Sounds`), the bot detail Moderation label (`🛡️`), the avatar-save error indicator (`❌`), three em-dashes and the `⚖️` balance scale on the TOS page in `public/index.html`. All visible icon corruption from the v3.17.0-era cp1252 round-trip should now be gone.
+- **Soundboard surfaces stayed open after leaving voice.** The sidebar panel, the popout PiP, and the sound modal all now close automatically when you leave a voice chat. Routing sound effects through the VC requires being in voice, and the panel doubles as a "you're in voice" affordance.
+- **Shared stickers no longer moved to `deleted-attachments/` on message/DM delete (#5413).** Sticker URLs live under `/uploads/stickers/` and were being incorrectly matched by the per-message attachment cleanup regex. Added `stickers/` to the negative lookahead in all five definitions of `UPLOAD_PATH_RE` / `UPLOAD_PATH_EXACT_RE`. Contributed by @Amnibro.
+- **Slash subcommand picker follow-up for #5403.** Subcommands now show up correctly in the autocomplete list when typing slash commands, with their per-subcommand description.
+- **Chat scroll-jumping when images/media load.** Two root causes: `.chat-image` had no placeholder dimensions before load (every image jumped from 0×0 to up to 180×180), and each `<img>`'s `onload` fired an instant hard-snap to bottom. Added minimum dimensions to reserve space, and switched the per-image scroll callbacks to a 50 ms-debounced version so a batch of images loading at different speeds collapses into a single scroll.
+- **Auto-heal users with zero channel memberships on bootstrap.** Legacy accounts that somehow ended up in `users` with no rows in `channel_members` (typically from interrupted server-list-sync runs in pre-3.20 builds) now get auto-joined to the configured default channels — or, if no defaults are set, to every public non-DM channel — when the socket connects. Restores visibility without a manual "join by code" step.
+- **Sound migration parsing.** Edge-case where the migration step that converts old per-user sound prefs to the new schema would skip a row if it had a stray empty media line.
+- **Missing sound pref functions / broken template literal in app-media.js.** A previous commit introduced a syntax error in the persona-prefix handling block; restored.
+
+---
+
 ## [3.24.0] — 2026-06-07
 
 ### Added
@@ -2435,128 +2502,4 @@ Haven is now ready for public use. This release includes all features from the a
 - **Reply button** — hover any message and click ↩️ to reply.
 - **Reply bar** — preview bar appears above the input showing who/what you're replying to.
 - **Cancel reply** — click ✕ on the reply bar to clear.
-- **Reply context** — replied messages show a colored banner above them linking back to the original.
-- **Threaded feel** — replies group visually with the parent message's author color.
-- **Persistent** — `reply_to` column in messages table; reply context survives reloads.
-
-### Changed — Database
-- Added `reply_to` column to `messages` table (auto-migrated on existing databases).
-- New `reactions` table with unique constraint per (message, user, emoji).
-- Safe migration: existing databases are upgraded without data loss.
-
-### Changed — Backend
-- `get-messages` now returns reactions and reply context for each message.
-- `send-message` accepts optional `replyTo` field.
-- New socket events: `add-reaction`, `remove-reaction`, `get-channel-members`.
-- `reactions-updated` broadcast to all channel members on any reaction change.
-- `channel-members` event returns member list for @mention autocomplete.
-- Emoji validation: only actual emoji characters accepted (regex unicode property check).
-
----
-
-## [0.5.0-alpha] — 2026-02-10
-
-### Added — Multi-Server Sidebar
-- **Server bar** (far left) — Discord-style vertical strip showing all your Haven servers.
-- **Live status lights** — Green (online), grey (offline), yellow (checking) status dots on each server icon.
-- **Add/remove servers** — Modal dialog to add friends' Haven servers by name + URL.
-- **Health check API** — `GET /api/health` returns server name, status, and version. CORS-enabled for cross-server pings.
-- **One-click connect** — Click any server icon to open it in a new tab.
-- **`ServerManager` class** (`servers.js`) — Client-side server list stored in `localStorage` with 30-second polling.
-
-### Added — Image Sharing
-- **Image upload** — Upload button in message input area. Max 5 MB (jpg, png, gif, webp).
-- **Clipboard paste** — Paste images directly from clipboard into chat.
-- **Drag & drop** — Drag image files onto the chat area to upload.
-- **Inline rendering** — Uploaded images and image URLs render as clickable inline images in chat.
-- **Server-side handling** — Multer middleware with random filenames, MIME type validation, size limits.
-- **Upload authentication** — JWT token required for uploads.
-
-### Added — Voice Volume Control
-- **Per-user volume sliders** — Range inputs (0–200%) below each voice user in the panel.
-- **Persistent settings** — Volume preferences saved in `localStorage` per user ID.
-- **Auto-applied** — Saved volumes automatically applied when peers connect.
-- **"you" tag** — Your own entry in voice shows a label instead of a slider.
-
-### Added — Notification Tones
-- **Web Audio API engine** — Zero-dependency synthesized notification sounds.
-- **5 built-in tones** — Ping, Chime, Blip, Bell, Drop.
-- **Configurable** — Choose which sound plays for messages (right sidebar panel).
-- **Enable/disable toggle** — Master on/off switch for all notifications.
-- **Volume slider** — Independent notification volume control.
-- **Event triggers** — Sounds on new message (from others) and user join.
-
-### Added — Cross-Platform Support
-- **`start.sh`** — Linux/macOS launcher with: Node.js detection, auto dependency install, auto SSL cert generation, process management, clean shutdown on Ctrl+C, browser auto-open.
-- **`.env.example`** — Template configuration file with full documentation.
-- **`SERVER_NAME`** — New `.env` variable for naming your Haven instance.
-
-### Fixed — Security
-- **JWT timing bug** — `JWT_SECRET` auto-generation now runs *before* `auth.js` is loaded, fixing a race condition where the first boot used a different secret than subsequent boots.
-- **JWT fallback removed** — `auth.js` no longer has a hardcoded fallback secret. If `JWT_SECRET` is missing, the server exits with a clear error.
-- **Channel membership enforcement** — `enter-channel` and `voice-join` now verify the user is actually a member before granting access.
-- **Atomic channel deletion** — `delete-channel` now wrapped in a SQLite transaction for data integrity.
-
-### Changed
-- **`server.js`** — Restructured require order (JWT auto-gen before auth load), added multer, health endpoint, upload endpoint, SERVER_NAME in banner.
-- **`package.json`** — Version bumped to 0.5.0, added multer dependency.
-- **`public/app.html`** — Added server bar, image upload button, file input, notification settings panel, add-server modal.
-- **`public/js/app.js`** — Full rewrite with ServerManager, NotificationManager, image upload/paste/drag-drop, volume sliders, server bar rendering.
-- **`public/js/voice.js`** — Added `setVolume()`, `_getSavedVolume()` methods, auto-apply saved volume on stream play.
-- **`public/css/style.css`** — Added 7 new CSS sections: server bar, modal, chat images, upload button, volume sliders, notification settings, drag-over state.
-- **`.gitignore`** — Added `public/uploads/*`, `haven.db-shm`, `haven.db-wal`.
-- **`Start Haven.bat`** — Made generic (no hardcoded IP), increased startup timeout.
-- **`README.md`** — Full rewrite with updated features, cross-platform install, expanded roadmap.
-
----
-
-## [0.4.0-alpha] — 2026-02-10
-
-### Added — Security Hardening
-- **Helmet security headers** — CSP, X-Content-Type-Options, X-Frame-Options, HSTS, no X-Powered-By.
-- **API rate limiting** — 20 requests per 15 minutes per IP on auth endpoints.
-- **Socket connection rate limiting** — Max 15 connections per minute per IP.
-- **Socket event flood protection** — Per-connection: max 60 events/10s, max 10 messages/10s.
-- **Input validation on all socket events** — Type checks, string length bounds, regex for channel codes, integer checks.
-- **Body size limits** — Express JSON parsing capped at 16KB.
-- **Static file hardening** — `dotfiles: 'deny'`.
-- **CORS lockdown** — Socket.IO CORS set to `origin: false`.
-- **Auto-generated JWT secret** — 48-byte random secret on first run.
-- **Safe URL regex (client)** — Tightened URL matching, `nofollow`, URL constructor validation.
-- **User Guide** — `GUIDE.md` created.
-
----
-
-## [0.3.0-alpha] — 2026-02-10
-
-### Added
-- **HTTPS / SSL support** — Self-signed certificate, auto-detection from `.env`.
-- **HTTP → HTTPS redirect** — Secondary listener on port 3001.
-
----
-
-## [0.2.0-alpha] — 2026-02-10
-
-### Added
-- **6 UI themes** — Haven, Discord, Matrix, Tron, HALO, Lord of the Rings.
-- **Status bar** — LEDs, ping, channel name, online count, clock.
-- **`Start Haven.bat`** — Windows one-click launcher.
-- **Unread badges** — Channel list badges.
-- **Message grouping** — Compact mode for consecutive messages.
-
-### Fixed
-- **App crash** — `initThemeSwitcher()` extracted to shared `theme.js`.
-
----
-
-## [0.1.0-alpha] — 2026-02-10
-
-### Added
-- Core server (Express + Socket.IO).
-- User authentication (bcrypt + JWT).
-- Secret channels with invite codes.
-- Real-time text chat with history.
-- Voice chat (WebRTC).
-- Admin controls.
-- SQLite database.
-- `.env` configuration.
+- **R

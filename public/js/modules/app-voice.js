@@ -128,6 +128,9 @@ _leaveVoice() {
     this._updateChannelVoiceIndicators();
   }
   this._showToast(t('voice.left'), 'info');
+  // Close the soundboard panel/popup/modal — sounds can't route to VC
+  // anymore, and the panel doubles as a 'you're in voice' affordance.
+  this._closeSoundboardForVoiceLeave?.();
 },
 
 _toggleMute() {
@@ -1439,34 +1442,37 @@ _updateHiddenStreamsBar() {
 },
 
 _closeScreenShare() {
-  // If user is actively sharing, stop that stream
-  if (this.voice && this.voice.screenStream) {
-    this._toggleScreenShare(); // stops sharing
-  }
-  const container = document.getElementById('screen-share-container');
+  // "Close" the stream viewer by closing each visible tile the same way the
+  // per-tile ✕ does: hide it and mute its audio, but KEEP the tile (and its
+  // live track reference) in the DOM so it stays restorable from the
+  // hidden-streams bar or the LIVE badge.
+  //
+  // This deliberately does NOT:
+  //   • stop the local user's own outgoing share — that's the job of the
+  //     screen-share toggle button. Closing the *viewer* must never kill your
+  //     *broadcast* (this used to call _toggleScreenShare()).
+  //   • remove tiles or null their <video> srcObject — destroying the only
+  //     reference to a sharer's still-live track leaves no ontrack/onunmute
+  //     event to rebuild from, so the stream could never be reopened and a
+  //     reshare wouldn't reattach without a full reload. That was the root
+  //     cause of the "one X breaks everything" report.
   const grid = document.getElementById('screen-share-grid');
-  const tiles = grid ? grid.querySelectorAll('.screen-share-tile') : [];
-
-  // Mute all remote stream audio and fully remove tiles
-  tiles.forEach(t => {
-    const uid = t.id.replace('screen-tile-', '');
-    this.voice.setStreamVolume(uid, 0);
-    const audioEl = document.getElementById(`voice-audio-screen-${uid}`);
-    if (audioEl) { audioEl.volume = 0; try { audioEl.pause(); } catch {} }
-    // Notify server we stopped watching
-    if (this.voice && this.voice.inVoice && uid !== String(this.user.id)) {
-      this.socket.emit('stream-unwatch', { code: this.voice.currentChannel, sharerId: parseInt(uid) || uid });
-    }
-    const vid = t.querySelector('video');
-    if (vid) vid.srcObject = null;
-    t.remove();
+  if (!grid) return;
+  // Snapshot first — _hideStreamTile flips data-hidden as it goes, which would
+  // otherwise mutate a live NodeList mid-iteration.
+  const visibleTiles = Array.from(
+    grid.querySelectorAll('.screen-share-tile:not([data-hidden="true"])')
+  );
+  visibleTiles.forEach(tile => {
+    const raw = tile.id.replace('screen-tile-', '');
+    // Use a numeric id where possible so the stream-unwatch emitted by
+    // _hideStreamTile passes the server's isInt(sharerId) check (a string id
+    // would be silently dropped, leaving a stale viewer count).
+    const uid = /^\d+$/.test(raw) ? parseInt(raw, 10) : raw;
+    this._hideStreamTile(tile, uid, null, true);
   });
-
-  container.style.display = 'none';
-  container.classList.remove('stream-focus-mode');
-  this._screenShareMinimized = false;
-  this._removeScreenShareIndicator();
-  document.getElementById('hidden-streams-bar')?.remove();
+  // _hideStreamTile already refreshes the hidden-streams bar and collapses the
+  // container via _updateScreenShareVisibility, so there's nothing else to do.
 },
 
 // ── Screen Share Audio ──────────────────────────────

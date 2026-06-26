@@ -242,7 +242,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âŒ";
+  --theme-logo:    "⌁";
   --msg-glow:      0 0 4px rgba(212, 160, 32, 0.06);
 }
 
@@ -388,7 +388,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "â„";
+  --theme-logo:    "❄";
 }
 
 /* Nord accent splashes — aurora colors */
@@ -662,7 +662,7 @@
   --font-heading:  'Palatino Linotype', Georgia, serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ’";
+  --theme-logo:    "💍";
   --msg-glow:      0 0 4px rgba(212, 168, 50, 0.06);
 }
 
@@ -707,7 +707,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "â›ï¸";
+  --theme-logo:    "⛏️";
 }
 
 [data-theme="minecraft"] .brand-text { color: #55bb55; text-shadow: 2px 2px 0 #2a5a2a; }
@@ -753,7 +753,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âš”ï¸";
+  --theme-logo:    "⚔️";
   --msg-glow:      0 0 4px rgba(64, 168, 224, 0.06);
 }
 
@@ -798,7 +798,7 @@
   --font-heading:  'Segoe UI', system-ui, sans-serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ—¡ï¸";
+  --theme-logo:    "🗡️";
 }
 
 [data-theme="zelda"] .brand-text { background: linear-gradient(90deg, #44bb44, #e8c030); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
@@ -844,7 +844,7 @@
   --font-heading:  'Share Tech Mono', 'Courier New', monospace;
   --font-mono:     'Share Tech Mono', 'Courier New', monospace;
 
-  --theme-logo:    "â˜¢ï¸";
+  --theme-logo:    "☢️";
   --scanline:      repeating-linear-gradient(
     0deg,
     transparent,
@@ -931,7 +931,7 @@
   --font-heading:  'Georgia', 'Times New Roman', serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "âœï¸";
+  --theme-logo:    "✝️";
 }
 [data-theme="scripture"] .brand-text { color: #c8a84c; text-shadow: 0 0 10px rgba(200, 168, 76, 0.3); font-style: italic; }
 [data-theme="scripture"] .server-icon.home { background: linear-gradient(135deg, #2a2010, #c8a84c); box-shadow: 0 0 8px rgba(200, 168, 76, 0.2); }
@@ -1111,7 +1111,7 @@
   --font-heading:  'Georgia', 'Times New Roman', serif;
   --font-mono:     'Consolas', monospace;
 
-  --theme-logo:    "ðŸ•Šï¸";
+  --theme-logo:    "🕊️";
 }
 [data-theme="gospel"] .brand-text { color: #8b2032; font-style: italic; }
 [data-theme="gospel"] .server-icon.home { background: linear-gradient(135deg, #8b2032, #c8a84c); color: #fff; }
@@ -1818,7 +1818,7 @@
   --led-off:       #c8c8c8;
   --led-glow:      rgba(47, 138, 94, 0.4);
 
-  --theme-logo:    "â˜";
+  --theme-logo:    "☁";
   --scanline:      none;
 }
 /* Cloudy accent overrides — cool blue-gray tones */
@@ -4767,7 +4767,7 @@ select.cfn-select.cfn-input {
 .sound-assign-list { display: flex; flex-direction: column; gap: 4px; }
 .sound-assign-select { min-width: 140px; }
 
-/*/* Sidebar layout mode for soundboard (used by the sidebar panel grid only) */
+/* Sidebar layout mode for soundboard (used by the sidebar panel grid only) */
 .soundboard-grid.sidebar-mode {
   display: flex !important; 
   flex-direction: column;
@@ -4805,15 +4805,34 @@ select.cfn-select.cfn-input {
   font-size: 13px;
 }
 .soundboard-btn.hidden-sound { opacity: 0.4; }
+/* Eye (hide/unhide) toggle on each tile. Always rendered with a reserved
+   width and at low opacity so it never shifts the tile contents on hover. */
 .soundboard-btn .sb-hide-btn {
-  font-size: 11px; color: var(--text-muted); cursor: pointer;
-  padding: 2px 4px; border-radius: 2px;
-  visibility: hidden; /* always takes space, no layout shift */
-  transition: color 0.15s; margin-left: auto; flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 2px;
+  width: 18px;
+  height: 18px;
+  line-height: 14px;
+  text-align: center;
+  opacity: 0.35;
+  transition: opacity 0.15s, color 0.15s;
+  margin-left: auto;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
-.soundboard-btn:hover .sb-hide-btn { visibility: visible; }
-.soundboard-btn .sb-hide-btn:hover { color: var(--danger); }
- Hotkey recording visual */
+.soundboard-btn:hover .sb-hide-btn { opacity: 1; }
+.soundboard-btn .sb-hide-btn:hover { color: var(--danger); opacity: 1; }
+/* Hidden tile: the eye icon is the only way back in, so keep it fully visible. */
+.soundboard-btn.hidden-sound .sb-hide-btn { opacity: 1; }
+/* In tile layout the eye sits at the top-right corner without affecting flex flow */
+.soundboard-grid:not(.list-mode):not(.sidebar-mode) .soundboard-btn { position: relative; }
+.soundboard-grid:not(.list-mode):not(.sidebar-mode) .soundboard-btn .sb-hide-btn {
+  position: absolute; top: 4px; right: 4px; margin: 0;
+}
+/* Hotkey recording visual */
 .hotkey-recording { animation: hotkey-pulse 0.6s ease infinite alternate; }
 @keyframes hotkey-pulse { from { box-shadow: 0 0 0 2px var(--accent-glow); } to { box-shadow: 0 0 8px 4px var(--accent-glow); } }
 
@@ -5014,7 +5033,9 @@ details.sound-section:not([open]) .sound-section-label::before {
   cursor: pointer;
   padding: 0;
   z-index: 100;
-  transition: color 0.15s, background 0.15s;
+  /* `right` is set imperatively in JS when sidebars open/close — animate it
+     so the button slides with the panel rather than popping into place. */
+  transition: right 0.25s ease, color 0.15s, background 0.15s;
 }
 .sidebar-collapse-btn:hover {
   color: var(--text-primary);
@@ -8243,12 +8264,130 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   transition: opacity 0.15s;
 }
 
-.image-queue-thumb:hover .image-queue-remove {
+.image-queue-thumb:hover .image-queue-remove,
+.file-queue-chip:hover .image-queue-remove {
   opacity: 1;
 }
 
 .image-queue-remove:hover {
   background: var(--danger);
+}
+
+/* Custom dropdown wrapper for native <select> (#5418).
+   Replaces the native popup so the dropdown stays inside the Haven window
+   and scrolls when the option list is long. */
+.custom-select-wrap {
+  display: inline-block;
+  vertical-align: middle;
+  min-width: 140px;
+}
+.custom-select-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-input, var(--bg-secondary));
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.custom-select-display:hover { border-color: var(--accent); }
+.custom-select-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-select-caret {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+.custom-select-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  overflow-y: auto;
+  z-index: 1100;
+  padding: 4px;
+}
+.custom-select-panel.flip-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.custom-select-group-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  padding: 6px 8px 2px;
+}
+.custom-select-option {
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.custom-select-option:hover { background: var(--bg-tertiary); }
+.custom-select-option.selected {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* File queue chip — non-image attachments queued before send (#5417) */
+.file-queue-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 36px;
+  padding: 0 28px 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-size: 0.78rem;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+.file-queue-chip:hover {
+  border-color: var(--accent);
+}
+.file-queue-chip-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.file-queue-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+.file-queue-chip-size {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+.file-queue-chip .image-queue-remove {
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
 }
 
 .image-queue-clear-all {
@@ -11884,7 +12023,7 @@ video:-webkit-full-screen {
   }
 }
 
-/* ── Soundboard Sidebar (in-flow flex child, sits left of voice/users sidebar) ── */
+/* ── Soundboard Sidebar (twin panel, sits directly LEFT of voice/users sidebar) ── */
 .sb-sidebar-panel {
   width: 220px;
   min-width: 220px;
@@ -11905,6 +12044,8 @@ video:-webkit-full-screen {
   opacity: 0;
   pointer-events: none;
 }
+/* When the soundboard panel is open it shares an edge with the voice/users
+   panel's existing border-left, so no extra border-right is required. */
 /* Resize handle on the left edge */
 .sb-sidebar-resize-handle {
   position: absolute;
@@ -11948,11 +12089,50 @@ video:-webkit-full-screen {
   max-height: none;
   overflow-y: auto;
 }
-/* Soundboard sidebar toggle button — fixed, always at the far right edge */
+/* Collapsible category groups inside the soundboard sidebar */
+.sb-sidebar-group { margin-bottom: 6px; }
+.sb-sidebar-group-label {
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  padding: 4px 2px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sb-sidebar-group-label::-webkit-details-marker { display: none; }
+.sb-sidebar-group-label::before {
+  content: '\25BE'; /* small down triangle */
+  font-size: 9px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.sb-sidebar-group:not([open]) > .sb-sidebar-group-label::before {
+  transform: rotate(-90deg);
+}
+.sb-sidebar-group-count {
+  margin-left: auto;
+  font-size: 0.85em;
+  opacity: 0.7;
+  font-weight: 600;
+}
+.sb-sidebar-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+/* Soundboard sidebar toggle button — fixed; sits at the LEFT edge of the
+   soundboard panel (which is directly LEFT of the voice/users panel).
+   JS keeps `right` synced with the combined width of voice + soundboard. */
 .sb-sidebar-toggle-btn {
   position: fixed;
-  right: 0;           /* stays at right:0; panel is rightmost so this is always correct */
-  top: 114px;         /* just below the voice/users collapse btn at 72px */
+  right: 0;           /* JS recalculates on mount + resize/collapse events */
+  top: 114px;         /* staggered below the voice/users collapse btn at 72px */
   transform: none;
   width: 20px;
   height: 36px;
@@ -11968,7 +12148,12 @@ video:-webkit-full-screen {
   cursor: pointer;
   padding: 0;
   z-index: 100;
-  transition: color 0.15s, background 0.15s;
+  /* `right` and `top` are set imperatively in JS when sidebars open/close
+     — animate them so the button slides with the panel rather than popping
+     into place. `top` animates because the open-state position (72px,
+     aligned with header) and the closed-state position (114px, staggered
+     below the voice toggle) differ. */
+  transition: right 0.25s ease, top 0.25s ease, color 0.15s, background 0.15s;
 }
 .sb-sidebar-toggle-btn:hover {
   color: var(--text-primary);
@@ -14069,7 +14254,11 @@ ul.chat-list { list-style-type: disc; }
 #app-body .server-bar[data-panel-pos="left"] { order: 0; }
 #app-body .sidebar[data-panel-pos="left"] { order: 1; }
 #app-body .main { order: 2; }
-#app-body .right-sidebar { order: 3; }
+/* Soundboard sidebar twins the voice/users panel — sits directly LEFT of it.
+   Default flex order with no explicit value is 0, which puts it at the far
+   LEFT of #app-body. Force it between main (2) and right-sidebar (4). */
+#app-body .sb-sidebar-panel { order: 3; }
+#app-body .right-sidebar { order: 4; }
 
 /* Right sidebar — snapped left */
 #app-body .right-sidebar[data-panel-pos="left"] {
@@ -14081,7 +14270,7 @@ ul.chat-list { list-style-type: disc; }
   left: auto; right: -3px;
   cursor: col-resize;
 }
-#app-body .right-sidebar[data-panel-pos="right"] { order: 3; }
+#app-body .right-sidebar[data-panel-pos="right"] { order: 4; }
 
 /* Floating panel (center) — any panel */
 .mod-float {
@@ -16763,97 +16952,4 @@ ul.chat-list { list-style-type: disc; }
   flex-wrap: wrap;
   align-items: center;
 }
-.persona-edit-row input[type=text] {
-  flex: 1 1 140px;
-  min-width: 140px;
-}
-/* Persona badge on rendered messages */
-.persona-msg-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  background: var(--bg-tertiary, var(--bg-secondary));
-  color: var(--text-muted);
-  font-size: 0.66rem;
-  padding: 1px 6px;
-  border-radius: 8px;
-  margin-left: 6px;
-  font-weight: 500;
-  letter-spacing: .01em;
-}
-.persona-msg-badge::before { content: "🎭"; font-size: 0.7rem; }
-.persona-msg-realname {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  margin-left: 4px;
-  opacity: .65;
-}
-
-/* Jump button overlaid on photo/video gallery tiles (#5350 follow-up) */
-.media-grid-item .media-grid-jump {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.78rem;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity .12s, background .12s;
-  z-index: 2;
-}
-.media-grid-item:hover .media-grid-jump,
-.media-grid-item:focus-within .media-grid-jump { opacity: 1; }
-.media-grid-item .media-grid-jump:hover { background: rgba(0, 0, 0, 0.85); }
-
-/* Video lightbox player (sits above modals like the image lightbox does) */
-#video-lightbox .lightbox-video {
-  max-width: 92vw;
-  max-height: 92vh;
-  border-radius: 6px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
-  background: #000;
-  outline: none;
-}
-
-/* -- Header icon-button monochrome / colorful sync (#5350 follow-up) --
-   The "Colorful Emoji" / "Monochrome" toolbar setting controls message
-   action bar icons via data-toolbaricons. Apply the same setting to the
-   emoji-bearing top-bar buttons (search, pinned, gallery, copy, etc.) so
-   the user's choice covers every set of icon buttons in the app. */
-:root[data-toolbaricons="mono"] .header-actions-box .icon-btn,
-html[data-toolbaricons="mono"] .header-actions-box .icon-btn,
-:root:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .header-actions-box .icon-btn,
-html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .header-actions-box .icon-btn {
-  filter: grayscale(1);
-}
-:root[data-toolbaricons="emoji"] .header-actions-box .icon-btn,
-html[data-toolbaricons="emoji"] .header-actions-box .icon-btn,
-:root[data-toolbaricons="color"] .header-actions-box .icon-btn,
-html[data-toolbaricons="color"] .header-actions-box .icon-btn {
-  filter: none;
-}
-
-/* Persona dropdown avatar (>>name autocomplete) */
-.persona-dd-avatar {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-right: 6px;
-  vertical-align: middle;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  background: var(--bg-tertiary, var(--bg-secondary));
-  color: var(--text-muted);
-  overflow: hidden;
-}
+.persona-edit-row input[type=tex

@@ -188,7 +188,8 @@
     "no_results_for": "未找到 \"{{query}}\" 的结果",
     "loading_more": "加载更多…",
     "no_music_playing": "当前没有音乐播放",
-    "record_set": "{{user}} 创下了新的 {{game}} 记录：{{score}}！"
+    "record_set": "{{user}} 创下了新的 {{game}} 记录：{{score}}！",
+    "channel_hidden": "Channel \"{{name}}\" hidden"
   },
   "utils": {
     "today_at": "今天 {{time}}",
@@ -214,6 +215,7 @@
     "pinned_by": "由 {{user}} 置顶"
   },
   "voice": {
+    "requesting_stream": "正在请求直播…",
     "join": "🎤 加入语音",
     "join_ctx": "加入语音",
     "leave": "离开语音",
@@ -319,7 +321,12 @@
     "expand_collapse": "展开/折叠子频道",
     "channel_options": "频道选项",
     "unknown_user": "未知用户",
-    "more_options": "更多选项"
+    "more_options": "更多选项",
+    "hidden_channels_count": "{{count}} hidden channels",
+    "hidden_channels_restore_title": "Show hidden channels",
+    "no_hidden_channels": "No hidden channels",
+    "show_all_hidden": "Show all",
+    "unhide_channel": "Unhide"
   },
   "channel": {
     "server_joined": "服务器码已接受 — 已加入 {{count}} 个频道",
@@ -1468,6 +1475,10 @@
       "desc": "选择目标频道",
       "move_one": "将 {{n}} 条消息移动到：",
       "move_many": "将 {{n}} 条消息移动到："
+    },
+    "hidden_channels": {
+      "title": "Hidden Channels",
+      "desc": "Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back."
     }
   },
   "context_menu": {
@@ -1485,7 +1496,8 @@
       "functions": "频道功能",
       "roles": "角色",
       "webhooks": "Webhook",
-      "delete": "删除频道"
+      "delete": "删除频道",
+      "hide": "Hide Channel"
     },
     "dm": {
       "mute": "静音私信",

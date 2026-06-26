@@ -188,7 +188,8 @@
     "no_results_for": "Sin resultados para \"{{query}}\"",
     "loading_more": "Cargando más…",
     "no_music_playing": "No hay música reproduciéndose",
-    "record_set": "¡{{user}} estableció un nuevo récord en {{game}}: {{score}}!"
+    "record_set": "¡{{user}} estableció un nuevo récord en {{game}}: {{score}}!",
+    "channel_hidden": "Channel \"{{name}}\" hidden"
   },
   "utils": {
     "today_at": "Hoy a las {{time}}",
@@ -214,6 +215,7 @@
     "pinned_by": "Fijado por {{user}}"
   },
   "voice": {
+    "requesting_stream": "Solicitando transmisión…",
     "join": "🎤 Unirse al chat de voz",
     "join_ctx": "Unirse al chat de voz",
     "leave": "Salir del chat de voz",
@@ -319,7 +321,12 @@
     "expand_collapse": "Expandir/colapsar subcanales",
     "channel_options": "Opciones del canal",
     "unknown_user": "Desconocido",
-    "more_options": "Más opciones"
+    "more_options": "Más opciones",
+    "hidden_channels_count": "{{count}} hidden channels",
+    "hidden_channels_restore_title": "Show hidden channels",
+    "no_hidden_channels": "No hidden channels",
+    "show_all_hidden": "Show all",
+    "unhide_channel": "Unhide"
   },
   "channel": {
     "server_joined": "Código de servidor aceptado — unido a {{count}} canal(es)",
@@ -1468,6 +1475,10 @@
       "desc": "Seleccionar un canal de destino",
       "move_one": "Mover {{n}} mensaje a:",
       "move_many": "Mover {{n}} mensajes a:"
+    },
+    "hidden_channels": {
+      "title": "Hidden Channels",
+      "desc": "Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back."
     }
   },
   "context_menu": {
@@ -1485,7 +1496,8 @@
       "functions": "Funciones del canal",
       "roles": "Roles",
       "webhooks": "Webhooks",
-      "delete": "Eliminar canal"
+      "delete": "Eliminar canal",
+      "hide": "Hide Channel"
     },
     "dm": {
       "mute": "Silenciar DM",

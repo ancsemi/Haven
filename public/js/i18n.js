@@ -161,3 +161,11 @@ window.i18n = I18n;
 
 /** Shorthand: t('key') or t('key', { param: value }) */
 window.t = (key, params) => I18n.t(key, params);
+
+// Kick off init from the module itself so app.html doesn't need an inline
+// <script>i18n.init()</script> call. The page CSP forbids inline scripts
+// (no 'unsafe-inline' in script-src), and the inline tag was being refused on
+// strict clients (e.g. Haven Desktop preload), leaving the page stuck on
+// "Loading Haven…". init() is idempotent — auth.js's await still resolves
+// against the same shared promise.
+I18n.init();

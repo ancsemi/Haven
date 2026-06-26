@@ -11,7 +11,8 @@ async _sendMessage() {
   // before E2E encryption further down. (#5297)
   let content = input.value.trim();
   const hasImages = this._imageQueue && this._imageQueue.length > 0;
-  if (!content && !hasImages) return;
+  const hasFiles  = this._fileQueue  && this._fileQueue.length  > 0; // (#5425)
+  if (!content && !hasImages && !hasFiles) return;
   if (!this.currentChannel) return;
   if (!this.socket.connected) {
     this._showToast("Not connected — message not sent", 'error');
@@ -22,7 +23,7 @@ async _sendMessage() {
   // (whitespace-trimmed) and that name matches an uploaded sticker, route
   // it through _sendStickerMessage so it goes out as a standalone sticker
   // image instead of a literal `:name:` text message.
-  if (!hasImages && /^:[a-zA-Z0-9_-]+:$/.test(content)) {
+  if (!hasImages && !hasFiles && /^:[a-zA-Z0-9_-]+:$/.test(content)) {
     const stickerName = content.slice(1, -1).toLowerCase();
     const stickers = Array.isArray(this.stickers) ? this.stickers : [];
     const sticker = stickers.find(s => (s.name || '').toLowerCase() === stickerName);
@@ -216,7 +217,7 @@ async _sendMessage() {
   // the server knows not to apply a second slow-mode tick for them (#5342).
   // If the text message used a persona prefix (::Name ...), pass it along so
   // the bundled images are attributed to the same persona.
-  if (hasImages) {
+  if (hasImages || hasFiles) {
     let personaPrefix = '';
     if (content && content.startsWith('::') && Array.isArray(this._personas)) {
       const lower = content.toLowerCase();
@@ -230,7 +231,11 @@ async _sendMessage() {
         }
       }
     }
-    this._flushImageQueue(!!content, personaPrefix);
+    // (#5425) These were both inside `if (hasImages)`, so a non-image file
+    // queued on its own (no image) never flushed and the attachment was stuck
+    // in the queue forever. Flush each queue based on its own contents.
+    if (hasImages) this._flushImageQueue(!!content, personaPrefix);
+    if (hasFiles) this._flushFileQueue?.();
   }
 },
 

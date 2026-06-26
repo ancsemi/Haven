@@ -16,7 +16,7 @@ module.exports = function register(socket, ctx) {
   socket.on('get-server-settings', () => {
     const rows = db.prepare('SELECT key, value FROM server_settings').all();
     const settings = {};
-    const sensitiveKeys = ['giphy_api_key', 'server_code', 'registration_token'];
+    const sensitiveKeys = ['giphy_api_key', 'server_code', 'registration_token', 'turn_password'];
     rows.forEach(r => {
       if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
       settings[r.key] = r.value;
@@ -45,7 +45,8 @@ module.exports = function register(socket, ctx) {
       'session_duration_days', 'max_message_chars',
       'default_join_channels', 'registration_token_enabled', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
-      'guests_enabled', 'guest_channels' // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
+      'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
+      'stun_urls', 'turn_url', 'turn_username', 'turn_password' // (#5399) voice connectivity (STUN/TURN)
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -132,6 +133,22 @@ module.exports = function register(socket, ctx) {
         if (parts.length > 500) return;
       }
     }
+    if (key === 'stun_urls') {
+      // (#5399) Newline- or comma-separated stun:/stuns: URIs. Empty = built-in
+      // defaults. Reject anything that isn't a STUN scheme so a typo can't
+      // silently kill ICE for everyone.
+      if (value !== '') {
+        const urls = value.split(/[\n,]/).map(u => u.trim()).filter(Boolean);
+        if (urls.length > 20) return;
+        if (!urls.every(u => /^stuns?:[^\s]+$/i.test(u) && u.length <= 200)) return;
+      }
+    }
+    if (key === 'turn_url') {
+      // Optional. Single turn:/turns: URI. Empty disables admin TURN.
+      if (value !== '' && !(/^turns?:[^\s]+$/i.test(value) && value.length <= 200)) return;
+    }
+    if (key === 'turn_username') { if (value.length > 200) return; }
+    if (key === 'turn_password') { if (value.length > 200) return; }
     if (key === 'default_join_channels') {
       // (#5345) JSON array of channel IDs (integers). Empty string = "all public".
       if (value !== '') {

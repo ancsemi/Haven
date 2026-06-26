@@ -376,6 +376,16 @@ _applyServerSettings() {
       adminPwReset.checked = this.serverSettings.admin_password_reset_enabled === 'true';
     }
 
+    // ── Voice & Connectivity (STUN/TURN) — #5399 ───
+    const stunUrls = document.getElementById('stun-urls-input');
+    if (stunUrls) stunUrls.value = this.serverSettings.stun_urls || '';
+    const turnUrl = document.getElementById('turn-url-input');
+    if (turnUrl) turnUrl.value = this.serverSettings.turn_url || '';
+    const turnUser = document.getElementById('turn-username-input');
+    if (turnUser) turnUser.value = this.serverSettings.turn_username || '';
+    const turnPass = document.getElementById('turn-password-input');
+    if (turnPass) turnPass.value = this.serverSettings.turn_password || '';
+
     // ── Auto-backup form ───
     const abEnabled = document.getElementById('auto-backup-enabled');
     if (abEnabled) abEnabled.checked = this.serverSettings.auto_backup_enabled === 'true';
@@ -681,7 +691,11 @@ _snapshotAdminSettings() {
     custom_tos: this.serverSettings.custom_tos || '',
     role_icon_sidebar: this.serverSettings.role_icon_sidebar || 'true',
     role_icon_chat: this.serverSettings.role_icon_chat || 'false',
-    role_icon_after_name: this.serverSettings.role_icon_after_name || 'false'
+    role_icon_after_name: this.serverSettings.role_icon_after_name || 'false',
+    stun_urls: this.serverSettings.stun_urls || '',
+    turn_url: this.serverSettings.turn_url || '',
+    turn_username: this.serverSettings.turn_username || '',
+    turn_password: this.serverSettings.turn_password || ''
   };
   const tosEl = document.getElementById('custom-tos-input');
   if (tosEl) tosEl.value = this._adminSnapshot.custom_tos;
@@ -846,6 +860,28 @@ _saveAdminSettings() {
   const roleIconAfterName = document.getElementById('role-icon-after-name')?.checked ? 'true' : 'false';
   if (roleIconAfterName !== (snap.role_icon_after_name || 'false')) {
     this.socket.emit('update-server-setting', { key: 'role_icon_after_name', value: roleIconAfterName });
+    changed = true;
+  }
+
+  // ── Voice & Connectivity (STUN/TURN) — #5399 ───
+  const stunUrlsVal = document.getElementById('stun-urls-input')?.value.trim() || '';
+  if (stunUrlsVal !== (snap.stun_urls || '')) {
+    this.socket.emit('update-server-setting', { key: 'stun_urls', value: stunUrlsVal });
+    changed = true;
+  }
+  const turnUrlVal = document.getElementById('turn-url-input')?.value.trim() || '';
+  if (turnUrlVal !== (snap.turn_url || '')) {
+    this.socket.emit('update-server-setting', { key: 'turn_url', value: turnUrlVal });
+    changed = true;
+  }
+  const turnUserVal = document.getElementById('turn-username-input')?.value.trim() || '';
+  if (turnUserVal !== (snap.turn_username || '')) {
+    this.socket.emit('update-server-setting', { key: 'turn_username', value: turnUserVal });
+    changed = true;
+  }
+  const turnPassVal = document.getElementById('turn-password-input')?.value || '';
+  if (turnPassVal !== (snap.turn_password || '')) {
+    this.socket.emit('update-server-setting', { key: 'turn_password', value: turnPassVal });
     changed = true;
   }
 
@@ -2480,6 +2516,7 @@ _setupResizableSidebars() {
       let w = startW + (e.clientX - startX) * factor;
       w = Math.max(200, Math.min(400, w));
       rightSidebar.style.width = w + 'px';
+      window._updateSbToggleRight?.(); // keep both collapse btns aligned during drag
     });
     document.addEventListener('mouseup', () => {
       if (!dragging) return;

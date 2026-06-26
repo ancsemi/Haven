@@ -51,6 +51,8 @@ class VoiceManager {
     this.analysers = new Map();     // userId → { analyser, dataArray, interval }
     this.onScreenShareStarted = null; // callback(userId, username) — someone started streaming
     this.onWebcamStatusChange = null; // callback() — webcam started/stopped, re-render user list
+    this.onConnectivityWarning = null; // (#5399) callback(message) — fired when no STUN server responds
+    this._connectivityWarned = false;  // only warn once per session to avoid toast spam
     this.deafenedUsers = new Set();   // userIds we've muted our audio towards
     this._localTalkInterval = null;
     this._noiseGateInterval = null;
@@ -240,6 +242,13 @@ class VoiceManager {
         // via host candidates and at least one server might come back up
         // mid-call.
         console.error('[Voice] All known STUN servers failed probe — external WebRTC will be impaired until an admin configures TURN.');
+        // Surface this to the user instead of leaving them stuck on
+        // "ICE: Connecting..." with no explanation (#5399). LAN calls still
+        // work, so keep it a warning, not a hard error.
+        if (!this._connectivityWarned && typeof this.onConnectivityWarning === 'function') {
+          this._connectivityWarned = true;
+          this.onConnectivityWarning('Voice connection servers (STUN) are unreachable. Calls may only work on your local network until an admin sets STUN/TURN in Settings → Voice & Connectivity.');
+        }
       }
     } catch (err) {
       console.warn('[Voice] STUN probe failed:', err && err.message);
@@ -555,7 +564,14 @@ class VoiceManager {
     // Late joiner: server tells us about active screen sharers
     this.socket.on('active-screen-sharers', (data) => {
       if (data && data.sharers) {
-        data.sharers.forEach(s => this.screenSharers.add(s.id));
+        data.sharers.forEach(s => {
+          this.screenSharers.add(s.id);
+          // Late joiners never receive 'screen-share-started', so they never
+          // armed the silent-failure recovery watchdog. Arm it here so a
+          // dropped or late late-join renegotiation self-heals instead of
+          // stranding the viewer with a LIVE badge and no video.
+          this._watchForScreenStream(s.id);
+        });
         if (this.onWebcamStatusChange) this.onWebcamStatusChange();
       }
     });
@@ -616,6 +632,36 @@ class VoiceManager {
   }
 
   // ── Public API ──────────────────────────────────────────
+
+  // Ask the server to forward a renegotiate-screen to `sharerId` so they
+  // (re)send their screen to us. Used by the late-joiner watchdog below and
+  // by the UI when a viewer can see a stream is LIVE but has no tile yet.
+  requestScreenStream(sharerId) {
+    if (!this.inVoice || !this.currentChannel) return;
+    this.socket.emit('request-screen-renegotiate', {
+      code: this.currentChannel,
+      sharerId
+    });
+  }
+
+  // Watchdog for the late-joiner path: if no live video track has arrived
+  // from `sharerId` after a short delay, ask for a renegotiation. Retries a
+  // few times because a late joiner's peer connection to the sharer may still
+  // be completing its offer/answer when the first check runs. (late-join heal)
+  _watchForScreenStream(sharerId, attemptsLeft = 3) {
+    setTimeout(() => {
+      if (!this.screenSharers.has(sharerId)) return; // sharer stopped
+      if (!this.inVoice || !this.currentChannel) return;
+      const peer = this.peers.get(sharerId);
+      const hasVideo = peer && peer.connection.getReceivers().some(r =>
+        r.track && r.track.kind === 'video' && r.track.readyState === 'live'
+      );
+      if (hasVideo) return; // already receiving — nothing to do
+      console.warn('[Voice] No video from screen sharer', sharerId, '— requesting renegotiate (late-join heal)');
+      this.requestScreenStream(sharerId);
+      if (attemptsLeft > 1) this._watchForScreenStream(sharerId, attemptsLeft - 1);
+    }, 3500);
+  }
 
   async join(channelCode) {
     try {
@@ -1706,6 +1752,49 @@ class VoiceManager {
     }
   }
 
+  // (#5427) Proactive recovery sweep, called after a socket reconnect while
+  // still in voice.
+  //
+  // The first cut of this only ICE-restarted peers whose connection reported
+  // 'failed'/'disconnected'. That turned out to be a no-op for the exact
+  // population that hit the bug: web clients on Firefox/Edge, where after a
+  // brief socket flap the RTCPeerConnection to a now-dead relayed path keeps
+  // reporting 'connected'/'completed' even though no media is flowing. The
+  // server's fast-path rejoin keeps everyone's existing peer connections (no
+  // voice-user-left / -joined churn), so the *other* peers also never rebuild
+  // their side — leaving the rejoiner audible to some people and silent to
+  // others, with nothing on either end self-correcting. That's the
+  // "voice activity shows server-side but some people can't hear me" report.
+  //
+  // We can't trust connectionState here, so don't try to be clever: ICE-restart
+  // *every* peer. A single RTCPeerConnection carries both directions, so a
+  // restart initiated from the rejoiner repairs the media path both ways for
+  // that pair (the remote handles our iceRestart offer in 'voice-offer'). On a
+  // genuinely-healthy connection an ICE restart is cheap and near-seamless —
+  // media keeps flowing on the old candidate pair until the new one validates —
+  // so over-restarting is far better than leaving a dead path silent. This only
+  // runs in response to an actual socket reconnect, not routinely, so the cost
+  // is bounded to the rare flap that triggered it. Stagger the restarts so we
+  // don't fire a burst of simultaneous offers through signaling.
+  _healPeerConnections() {
+    if (!this.inVoice) return;
+    let i = 0;
+    for (const [userId, peer] of this.peers) {
+      const conn = peer && peer.connection;
+      if (!conn || conn.connectionState === 'closed') continue;
+      const delay = (i++) * 200;
+      setTimeout(() => {
+        const current = this.peers.get(userId);
+        // Bail if the peer was torn down/replaced while we were waiting.
+        if (!this.inVoice || !current || current.connection !== conn) return;
+        if (conn.connectionState === 'closed') return;
+        console.warn('[Voice] post-reconnect heal: ICE-restarting peer', userId,
+          `(conn=${conn.connectionState}, ice=${conn.iceConnectionState})`);
+        this._restartIce(userId, conn);
+      }, delay);
+    }
+  }
+
   // ── Volume Control ──────────────────────────────────────
 
   setVolume(userId, volume) {
@@ -1942,10 +2031,23 @@ class VoiceManager {
       this.screenGainNodes.delete(userId);
     }
 
-    // iOS Safari / WebKit: skip Web Audio routing for incoming screen audio
-    // — same WebKit bug as _playAudio above. Use native element playback
-    // so the captured system audio actually reaches the user's speaker.
-    if (_IS_IOS_WEBKIT) {
+    // Native element playout is the DEFAULT for incoming screen-share audio.
+    // Routing a relayed remote stream through createMediaStreamSource → gain →
+    // destination fights WebRTC's adaptive jitter buffer (NetEq): the AudioCtx
+    // pulls at its own fixed clock while NetEq is busy adapting to relay jitter,
+    // so the two clocks drift apart. Over a TURN relay this builds up over a
+    // minute or two and then stutters/desyncs from the video continuously (LAN
+    // is jitter-free so it never shows there) — exactly the #5426 report. Native
+    // <audio> playout keeps NetEq in charge end to end, so it stays in sync.
+    //
+    // This used to be an opt-in Debug toggle that defaulted to the broken Web
+    // Audio path; it's now inverted. The Web Audio mixer is only needed for the
+    // >100% per-stream volume boost, so it's strictly opt-in via Settings →
+    // Debug ("Web Audio mixing for screen-share audio"). iOS/WebKit always uses
+    // native playout (createMediaStreamSource yields silence there).
+    let _useWebAudioScreen = false;
+    try { _useWebAudioScreen = localStorage.getItem('screen_audio_webaudio') === '1'; } catch {}
+    if (_IS_IOS_WEBKIT || !_useWebAudioScreen) {
       const savedVolume = Math.min(1, this._getSavedStreamVolume(userId));
       if (this.isDeafened) {
         audioEl.dataset.prevVolume = String(savedVolume);
@@ -1954,6 +2056,10 @@ class VoiceManager {
         audioEl.volume = savedVolume;
       }
       audioEl.play().catch(() => {});
+      // Native playout is now the default path, so still announce that this
+      // share has audio — this is what reveals the 🔊 badge and the per-stream
+      // volume controls on the tile. (#5426)
+      if (this.onScreenAudio) this.onScreenAudio(userId);
       return;
     }
 
@@ -1978,6 +2084,21 @@ class VoiceManager {
     if (this.onScreenAudio) this.onScreenAudio(userId);
   }
 
+  // Re-route every screen-share audio stream that's currently playing to match
+  // the current "Web Audio mixing for screen-share audio" debug setting, so
+  // flipping the toggle takes effect immediately instead of on the next
+  // reshare. _playScreenAudio tears down any existing gain node and rebuilds
+  // the correct path for the new setting. (#5426)
+  reapplyScreenAudioRouting() {
+    document.querySelectorAll('audio[id^="voice-audio-screen-"]').forEach(el => {
+      const stream = el.srcObject;
+      if (!stream) return;
+      const raw = el.id.replace('voice-audio-screen-', '');
+      const userId = /^\d+$/.test(raw) ? parseInt(raw, 10) : raw;
+      this._playScreenAudio(userId, stream);
+    });
+  }
+
   setStreamVolume(userId, volume) {
     // Map keys may be number or string depending on caller — try both
     const gainNode = this.screenGainNodes.get(userId)
@@ -1985,12 +2106,21 @@ class VoiceManager {
       || this.screenGainNodes.get(Number(userId));
     const clampedGain = Math.max(0, Math.min(2, volume));
     const clampedVol  = Math.max(0, Math.min(1, volume));
-    if (gainNode) {
-      gainNode.gain.value = clampedGain;
-    }
-    // Always sync the underlying <audio> element too (belt-and-suspenders)
     const audioEl = document.getElementById(`voice-audio-screen-${userId}`);
-    if (audioEl) audioEl.volume = clampedVol;
+    if (gainNode) {
+      // The Web Audio graph is the active output for this stream. Drive volume
+      // through the gain node and keep the <audio> element muted — if we let the
+      // element play too, the screen audio comes out of BOTH the gain node and
+      // the element at once, which is the "screen audio duplicates" report. The
+      // old "belt-and-suspenders" element sync was the cause, not a safety net.
+      // (#5426)
+      gainNode.gain.value = clampedGain;
+      if (audioEl) audioEl.volume = 0;
+    } else if (audioEl) {
+      // No gain node (iOS / Web-Audio fallback path) — the element itself is
+      // the output, so volume rides on the element.
+      audioEl.volume = clampedVol;
+    }
   }
 
   _getSavedStreamVolume(userId) {

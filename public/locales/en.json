@@ -198,7 +198,8 @@
     "no_music_playing": "No music playing",
     "record_set": "{{user}} set a new {{game}} record: {{score}}!",
     "burn_armed": "🔥 Burn-after-read armed — next message will self-destruct 30s after viewing",
-    "burn_disarmed": "Burn-after-read disabled"
+    "burn_disarmed": "Burn-after-read disabled",
+    "channel_hidden": "Channel \"{{name}}\" hidden"
   },
   "messages": {
     "burn_reveal": "Tap to view",
@@ -229,6 +230,7 @@
     "pinned_by": "Pinned by {{user}}"
   },
   "voice": {
+    "requesting_stream": "Requesting stream…",
     "join": "🎤 Join Voice",
     "join_ctx": "Join Voice",
     "leave": "Leave Voice",
@@ -340,7 +342,12 @@
     "expand_collapse": "Expand/collapse sub-channels",
     "channel_options": "Channel options",
     "unknown_user": "Unknown",
-    "more_options": "More options"
+    "more_options": "More options",
+    "hidden_channels_count": "{{count}} hidden channels",
+    "hidden_channels_restore_title": "Show hidden channels",
+    "no_hidden_channels": "No hidden channels",
+    "show_all_hidden": "Show all",
+    "unhide_channel": "Unhide"
   },
   "channel": {
     "server_joined": "Server code accepted — joined {{count}} channel(s)",
@@ -514,6 +521,7 @@
     "music_pip_minimize": "Minimize (back to panel)",
     "select_channel_first": "Select a channel first",
     "uploads_disabled": "Media uploads are disabled in this channel",
+    "soundboard_disabled": "The soundboard is turned off for this channel",
     "file_too_large": "File too large (max {{maxMb}} MB)"
   },
   "right_sidebar": {
@@ -911,6 +919,14 @@
       "max_emoji_hint": "Max custom emoji upload size (64–1024 KB, default 256)",
       "max_poll_hint": "Maximum answer choices per poll (2–25, default 10)",
       "max_message_chars_hint": "Maximum characters per message, post, or DM (200–100000, default 2000)",
+      "connectivity_title": "Voice & Connectivity",
+      "connectivity_hint": "STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on \"ICE: Connecting...\", set your own servers here.",
+      "stun_urls": "STUN servers",
+      "stun_urls_hint": "One stun: URI per line (or comma separated). Blank = built-in defaults.",
+      "turn_url": "TURN server (optional)",
+      "turn_username": "TURN username",
+      "turn_password": "TURN password",
+      "turn_hint": "A TURN server relays traffic for users behind strict NATs that STUN alone can't connect. Only needed if some users still can't connect after setting STUN. Username/password apply to static-credential TURN servers.",
       "sounds_hint": "Upload audio files for custom notification sounds",
       "emojis_hint": "Upload images for custom server emojis",
       "emojis_upload_hint": "Upload images for custom server emojis (max 256 KB, png/gif/webp). Name must be lowercase, no spaces.",
@@ -1533,6 +1549,10 @@
       "desc": "Select a destination channel",
       "move_one": "Move {{n}} message to:",
       "move_many": "Move {{n}} messages to:"
+    },
+    "hidden_channels": {
+      "title": "Hidden Channels",
+      "desc": "Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back."
     }
   },
   "context_menu": {
@@ -1551,7 +1571,8 @@
       "functions": "Channel Functions",
       "roles": "Roles",
       "webhooks": "Webhooks",
-      "delete": "Delete Channel"
+      "delete": "Delete Channel",
+      "hide": "Hide Channel"
     },
     "dm": {
       "mute": "Mute DM",
@@ -1571,6 +1592,8 @@
     "music_hint": "Allow Listen Together / music playback (requires voice)",
     "media": "Media",
     "media_hint": "Allow image, video, and file uploads in this channel",
+    "soundboard": "Soundboard",
+    "soundboard_hint": "Allow the soundboard in this channel's voice chat",
     "slow_mode": "Slow Mode",
     "slow_mode_hint": "Require a cooldown between messages (0 = off)",
     "cleanup_guard": "Cleanup Guard",

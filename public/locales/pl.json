@@ -198,7 +198,8 @@
     "no_music_playing": "Żadna muzyka nie gra",
     "record_set": "{{user}} pobił rekord w {{game}}: {{score}}!",
     "burn_armed": "🔥 Zniszczenie po przeczytaniu aktywne — następna wiadomość usunie się 30s po obejrzeniu",
-    "burn_disarmed": "Zniszczenie po przeczytaniu wyłączone"
+    "burn_disarmed": "Zniszczenie po przeczytaniu wyłączone",
+    "channel_hidden": "Channel \"{{name}}\" hidden"
   },
   "utils": {
     "today_at": "Dzisiaj o {{time}}",
@@ -225,6 +226,7 @@
     "pinned_by": "Przypięte przez {{user}}"
   },
   "voice": {
+    "requesting_stream": "Żądanie transmisji…",
     "join": "🎤 Dołącz do rozmowy",
     "join_ctx": "Dołącz do rozmowy",
     "leave": "Opuść czat głosowy",
@@ -336,7 +338,12 @@
     "expand_collapse": "Rozwiń/zwiń podkanały",
     "channel_options": "Opcje kanału",
     "unknown_user": "Nieznany",
-    "more_options": "Więcej opcji"
+    "more_options": "Więcej opcji",
+    "hidden_channels_count": "{{count}} hidden channels",
+    "hidden_channels_restore_title": "Show hidden channels",
+    "no_hidden_channels": "No hidden channels",
+    "show_all_hidden": "Show all",
+    "unhide_channel": "Unhide"
   },
   "channel": {
     "server_joined": "Kod serwera zaakceptowany — dołączono do {{count}} kanału/kanałów",
@@ -1525,6 +1532,10 @@
       "pack_placeholder": "Nazwa zestawu (opcjonalnie)",
       "upload_btn": "Prześlij",
       "no_stickers": "Brak przesłanych naklejek"
+    },
+    "hidden_channels": {
+      "title": "Hidden Channels",
+      "desc": "Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back."
     }
   },
   "context_menu": {
@@ -1543,7 +1554,8 @@
       "functions": "Funkcje kanału",
       "roles": "Role",
       "webhooks": "Webhooks",
-      "delete": "Usuń kanał"
+      "delete": "Usuń kanał",
+      "hide": "Hide Channel"
     },
     "dm": {
       "mute": "Wycisz wiadomość prywatną",

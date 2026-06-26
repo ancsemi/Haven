@@ -500,21 +500,45 @@ app.get('/api/ice-servers', (req, res) => {
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // STUN_URLS env var: comma-separated list of STUN URIs to override defaults.
+  // Admin-configured STUN/TURN (#5399) live in server_settings and take
+  // precedence over env vars, which in turn override the built-in pool.
+  // Admins can now point at their own servers from Settings → Voice &
+  // Connectivity without touching env vars or redeploying.
+  let dbSettings = {};
+  try {
+    const { getDb } = require('./src/database');
+    const rows = getDb().prepare(
+      "SELECT key, value FROM server_settings WHERE key IN ('stun_urls','turn_url','turn_username','turn_password')"
+    ).all();
+    rows.forEach(r => { dbSettings[r.key] = r.value; });
+  } catch { /* DB not ready — fall back to env/defaults below */ }
+
+  // STUN precedence: admin setting → STUN_URLS env → built-in defaults.
   // 3.20.2 (#5399): old defaults (stun.stunprotocol.org + stun.nextcloud.com)
   // both went offline simultaneously. Mirrors the voice.js client default
-  // pool so any Haven server that hadn't customised STUN_URLS would have
+  // pool so any Haven server that hadn't customised STUN would have
   // returned dead endpoints to its clients here too.
-  const stunUrls = process.env.STUN_URLS
-    ? process.env.STUN_URLS.split(',').map(u => u.trim()).filter(Boolean)
-    : [
-        'stun:stun.cloudflare.com:3478',
-        'stun:stun.relay.metered.ca:80',
-        'stun:global.stun.twilio.com:3478',
-        'stun:stun.l.google.com:19302',
-      ];
+  const adminStun = (dbSettings.stun_urls || '').trim();
+  const stunUrls = adminStun
+    ? adminStun.split(/[\n,]/).map(u => u.trim()).filter(Boolean)
+    : process.env.STUN_URLS
+      ? process.env.STUN_URLS.split(',').map(u => u.trim()).filter(Boolean)
+      : [
+          'stun:stun.cloudflare.com:3478',
+          'stun:stun.relay.metered.ca:80',
+          'stun:global.stun.twilio.com:3478',
+          'stun:stun.l.google.com:19302',
+        ];
   const iceServers = stunUrls.map(urls => ({ urls }));
 
+  // TURN precedence: admin setting (static creds) → env (supports HMAC secret).
+  const adminTurn = (dbSettings.turn_url || '').trim();
+  if (adminTurn) {
+    const u = (dbSettings.turn_username || '').trim();
+    const p = (dbSettings.turn_password || '').trim();
+    if (u && p) iceServers.push({ urls: adminTurn, username: u, credential: p });
+    else iceServers.push({ urls: adminTurn });
+  } else {
   const turnUrl = process.env.TURN_URL;
   if (turnUrl) {
     const turnSecret = process.env.TURN_SECRET;
@@ -535,6 +559,7 @@ app.get('/api/ice-servers', (req, res) => {
       // TURN URL with no auth (uncommon but possible)
       iceServers.push({ urls: turnUrl });
     }
+  }
   }
 
   res.json({ iceServers });
@@ -1324,6 +1349,15 @@ const BUILTIN_SOUNDS = [
   { name: 'AOL - Files Done',      url: '/sounds/aol_filesdone.mp3',   builtin: true },
 ];
 
+// (#5426) Custom sounds, emojis and stickers are uploaded/deleted over HTTP,
+// so other connected clients never heard about the change and only saw it
+// after a full app restart. Broadcast a lightweight signal so every client
+// re-fetches the relevant library live. `io` is created later in the file, so
+// resolve it at request time via app.set('io', io).
+function broadcastLibraryUpdate(req, kind) {
+  try { req.app.get('io')?.emit('library-updated', { kind }); } catch {}
+}
+
 // ── Sound upload (admin only, wav/mp3/ogg, configurable max size) ────
 function createSoundUpload() {
   const { getDb } = require('./src/database');
@@ -1357,6 +1391,7 @@ app.post('/api/upload-sound', uploadLimiter, (req, res) => {
       getDb().prepare(
         'INSERT OR REPLACE INTO custom_sounds (name, filename, uploaded_by) VALUES (?, ?, ?)'
       ).run(name, req.file.filename, user.id);
+      broadcastLibraryUpdate(req, 'sounds');
       res.json({ name, url: `/uploads/${req.file.filename}` });
     } catch { res.status(500).json({ error: 'Failed to save sound' }); }
   });
@@ -1388,6 +1423,7 @@ app.delete('/api/sounds/:name', (req, res) => {
     // Built-in sounds are disabled by adding them to a blocklist (they can't be physically deleted)
     if (BUILTIN_SOUNDS.some(s => s.name === name)) {
       getDb().prepare('INSERT OR IGNORE INTO disabled_builtin_sounds (name) VALUES (?)').run(name);
+      broadcastLibraryUpdate(req, 'sounds');
       return res.json({ ok: true });
     }
     const row = getDb().prepare('SELECT filename FROM custom_sounds WHERE name = ?').get(name);
@@ -1395,6 +1431,7 @@ app.delete('/api/sounds/:name', (req, res) => {
       try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
       getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
     }
+    broadcastLibraryUpdate(req, 'sounds');
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Failed to delete sound' }); }
 });
@@ -1415,6 +1452,7 @@ app.patch('/api/sounds/:name', (req, res) => {
     const existing = getDb().prepare('SELECT id FROM custom_sounds WHERE name = ? AND name != ?').get(newName, oldName);
     if (existing) return res.status(409).json({ error: 'Name already taken' });
     getDb().prepare('UPDATE custom_sounds SET name = ? WHERE name = ?').run(newName, oldName);
+    broadcastLibraryUpdate(req, 'sounds');
     res.json({ ok: true, name: newName });
   } catch { res.status(500).json({ error: 'Failed to rename sound' }); }
 });
@@ -1482,6 +1520,7 @@ app.post('/api/upload-emoji', uploadLimiter, (req, res) => {
       getDb().prepare(
         'INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)'
       ).run(name, req.file.filename, user.id);
+      broadcastLibraryUpdate(req, 'emojis');
       res.json({ name, url: `/uploads/${req.file.filename}` });
     } catch { res.status(500).json({ error: 'Failed to save emoji' }); }
   });
@@ -1516,6 +1555,7 @@ app.post('/api/upload-emojis', uploadLimiter, (req, res) => {
         errors.push({ name, error: e.message });
       }
     }
+    if (results.length) broadcastLibraryUpdate(req, 'emojis');
     res.json({ uploaded: results, errors });
   });
 });
@@ -1544,6 +1584,7 @@ app.delete('/api/emojis/:name', (req, res) => {
       try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
       getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
     }
+    broadcastLibraryUpdate(req, 'emojis');
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Failed to delete emoji' }); }
 });
@@ -1637,6 +1678,7 @@ app.post('/api/upload-sticker', uploadLimiter, (req, res) => {
       getDb().prepare(
         'INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)'
       ).run(name, pack, req.file.filename, user.id);
+      broadcastLibraryUpdate(req, 'stickers');
       res.json({ name, pack_name: pack, url: `/uploads/stickers/${req.file.filename}` });
     } catch { res.status(500).json({ error: 'Failed to save sticker' }); }
   });
@@ -1674,6 +1716,7 @@ app.post('/api/upload-stickers', uploadLimiter, (req, res) => {
       }
     }
 
+    if (results.length) broadcastLibraryUpdate(req, 'stickers');
     res.json({ uploaded: results, errors });
   });
 });
@@ -1702,6 +1745,7 @@ app.delete('/api/stickers/:name', (req, res) => {
       try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch {}
       getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
     }
+    broadcastLibraryUpdate(req, 'stickers');
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
 });
@@ -3920,9 +3964,48 @@ function runAutoCleanup() {
     const maxSizeMb = parseInt(getSetting('cleanup_max_size_mb') || '0');
     let totalDeleted = 0;
 
+    // Pull every /uploads/ attachment path out of a message body. Reuses the
+    // shared UPLOAD_PATH_RE (global regex — reset lastIndex before each use).
+    const extractUploadRelPaths = (content) => {
+      const out = [];
+      if (typeof content !== 'string' || !content) return out;
+      UPLOAD_PATH_RE.lastIndex = 0;
+      let m;
+      while ((m = UPLOAD_PATH_RE.exec(content)) !== null) {
+        if (isSafeUploadRelPath(m[1])) out.push(m[1]);
+      }
+      return out;
+    };
+
+    // Relocate the given attachment paths into deleted-attachments, but only
+    // if no surviving message still references them (a file can be linked from
+    // more than one message via copy/paste). This is the ONLY way auto-cleanup
+    // removes files: it follows the messages it deletes. It never scans the
+    // uploads/ directory directly, so avatars, persona avatars, custom emojis,
+    // soundboard sounds, stickers, and the server icon are never at risk (#5423).
+    const relocateOrphanAttachments = (relPaths) => {
+      for (const rel of relPaths) {
+        try {
+          const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
+          const still = db.prepare(
+            "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
+          ).get(like);
+          if (!still) moveUploadToDeleted(rel, UPLOADS_DIR);
+        } catch { /* best-effort */ }
+      }
+    };
+
     // 1. Delete messages older than N days (skip archived/pinned messages
     // and exempt channels)
     if (maxAgeDays > 0) {
+      // Capture the attachments of the messages we're about to delete first,
+      // so their files can follow them into deleted-attachments afterward.
+      const doomed = db.prepare(
+        "SELECT content FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
+      ).all(`-${maxAgeDays} days`);
+      const doomedAttachments = new Set();
+      for (const row of doomed) for (const p of extractUploadRelPaths(row.content)) doomedAttachments.add(p);
+
       // Delete reactions for old messages first
       db.prepare(`
         DELETE FROM reactions WHERE message_id IN (
@@ -3935,6 +4018,8 @@ function runAutoCleanup() {
         "DELETE FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
       ).run(`-${maxAgeDays} days`);
       totalDeleted += result.changes;
+
+      relocateOrphanAttachments(doomedAttachments);
     }
 
     // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip
@@ -3948,9 +4033,12 @@ function runAutoCleanup() {
         // size down.
         const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)').get().cnt;
         const deleteCount = Math.max(Math.floor(totalCount * 0.1), 100);
-        const oldestIds = db.prepare(
-          'SELECT id FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
-        ).all(deleteCount).map(r => r.id);
+        const oldestRows = db.prepare(
+          'SELECT id, content FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
+        ).all(deleteCount);
+        const oldestIds = oldestRows.map(r => r.id);
+        const trimmedAttachments = new Set();
+        for (const row of oldestRows) for (const p of extractUploadRelPaths(row.content)) trimmedAttachments.add(p);
         if (oldestIds.length > 0) {
           // Chunk deletes to avoid creating extremely long SQL statements
           const CHUNK_SIZE = 1000;
@@ -3961,115 +4049,39 @@ function runAutoCleanup() {
             db.prepare(`DELETE FROM messages WHERE id IN (${placeholders})`).run(...chunk);
           }
           totalDeleted += oldestIds.length;
+          relocateOrphanAttachments(trimmedAttachments);
         }
       }
     }
 
-    // Also clean up old uploaded files if age cleanup is set
+    // Purge old files from deleted-attachments only. These are former message
+    // attachments that were relocated here when their message was deleted (by
+    // the steps above, by single-message deletes, or by the orphan-DM sweep).
+    //
+    // We deliberately do NOT scan the main uploads/ directory. That directory
+    // also holds user avatars, persona avatars, custom emojis, soundboard
+    // sounds, and the server icon — none of which are posted media. The old
+    // "delete everything in uploads/ that isn't on a protect-list" approach
+    // kept silently eating any file type nobody remembered to allow-list
+    // (persona avatars in #5423, stickers/emojis before that). Auto-cleanup is
+    // scoped to posts and messages and their attachments — nothing else.
     if (maxAgeDays > 0) {
-      const uploadsDir = UPLOADS_DIR;
-      if (require('fs').existsSync(uploadsDir)) {
-        // Build a set of protected filenames (server icon, avatars, emojis, sounds)
-        const protectedFiles = new Set();
-        const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
-        if (iconRow?.value) protectedFiles.add(path.basename(iconRow.value));
-        db.prepare("SELECT avatar FROM users WHERE avatar IS NOT NULL AND avatar != ''").all()
-          .forEach(r => protectedFiles.add(path.basename(r.avatar)));
-        try {
-          db.prepare("SELECT filename FROM custom_emojis").all()
-            .forEach(r => protectedFiles.add(path.basename(r.filename)));
-        } catch { /* table may not exist */ }
-        try {
-          db.prepare("SELECT filename FROM custom_sounds").all()
-            .forEach(r => protectedFiles.add(path.basename(r.filename)));
-        } catch { /* table may not exist */ }
-        // Webhook/bot avatars
-        try {
-          db.prepare("SELECT avatar_url FROM webhooks WHERE avatar_url IS NOT NULL AND avatar_url != ''").all()
-            .forEach(r => protectedFiles.add(path.basename(r.avatar_url)));
-        } catch { /* table may not exist */ }
-
-        // Protect files referenced by messages in cleanup-exempt (protected) channels
-        try {
-          const exemptMessages = db.prepare(
-            "SELECT content FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
-          ).all();
-          const uploadRe = UPLOAD_PATH_RE;
-          for (const row of exemptMessages) {
-            uploadRe.lastIndex = 0;
-            let m;
-            while ((m = uploadRe.exec(row.content || '')) !== null) {
-              if (isSafeUploadRelPath(m[1])) protectedFiles.add(m[1]);
-            }
-          }
-        } catch { /* skip if query fails */ }
-
-        // Also protect files referenced by pinned messages.
-        try {
-          const pinnedMessages = db.prepare(`
-            SELECT m.content
-            FROM messages m
-            WHERE m.id IN (SELECT message_id FROM pinned_messages)
-          `).all();
-          const uploadRe = UPLOAD_PATH_RE;
-          for (const row of pinnedMessages) {
-            uploadRe.lastIndex = 0;
-            let m;
-            while ((m = uploadRe.exec(row.content || '')) !== null) {
-              if (isSafeUploadRelPath(m[1])) protectedFiles.add(m[1]);
-            }
-          }
-        } catch { /* skip if query fails */ }
-
-        // Also protect files referenced by archived messages
-        try {
-          const archivedMessages = db.prepare(
-            "SELECT content FROM messages WHERE is_archived = 1"
-          ).all();
-          const uploadRe = UPLOAD_PATH_RE;
-          for (const row of archivedMessages) {
-            uploadRe.lastIndex = 0;
-            let m;
-            while ((m = uploadRe.exec(row.content || '')) !== null) {
-              if (isSafeUploadRelPath(m[1])) protectedFiles.add(m[1]);
-            }
-          }
-        } catch { /* skip if query fails */ }
-
-        const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
-        const files = require('fs').readdirSync(uploadsDir);
-        let filesDeleted = 0;
-        files.forEach(f => {
-          if (protectedFiles.has(f)) return; // never delete critical files
+      const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
+      const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
+      if (require('fs').existsSync(deletedDir)) {
+        let daDeleted = 0;
+        for (const f of require('fs').readdirSync(deletedDir)) {
           try {
-            const fpath = require('path').join(uploadsDir, f);
-            const stat = require('fs').statSync(fpath);
-            if (stat.mtimeMs < cutoff) {
-              require('fs').unlinkSync(fpath);
-              filesDeleted++;
+            const fp = require('path').join(deletedDir, f);
+            const st = require('fs').statSync(fp);
+            if (st.isFile() && st.mtimeMs < cutoff) {
+              require('fs').unlinkSync(fp);
+              daDeleted++;
             }
           } catch { /* skip */ }
-        });
-        if (filesDeleted > 0) {
-          console.log(`ðŸ—‘ï¸  Auto-cleanup: removed ${filesDeleted} old uploaded files`);
         }
-
-        // Clean up deleted-attachments folder (files moved here when messages were deleted)
-        const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-        if (require('fs').existsSync(deletedDir)) {
-          let daDeleted = 0;
-          for (const f of require('fs').readdirSync(deletedDir)) {
-            try {
-              const fp = require('path').join(deletedDir, f);
-              if (require('fs').statSync(fp).mtimeMs < cutoff) {
-                require('fs').unlinkSync(fp);
-                daDeleted++;
-              }
-            } catch { /* skip */ }
-          }
-          if (daDeleted > 0) {
-            console.log(`ðŸ—‘ï¸  Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
-          }
+        if (daDeleted > 0) {
+          console.log(`Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
         }
       }
     }

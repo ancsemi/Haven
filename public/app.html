@@ -533,7 +533,19 @@
         </div>
       </main>
 
-      <!-- Voice/users sidebar collapse arrow — fixed, near top of right edge -->
+      <!-- ─── Soundboard Sidebar (twin to voice/users — sits directly LEFT of right-sidebar) ─── -->
+      <!-- Soundboard toggle arrow — fixed, sits at left edge of soundboard panel -->
+      <button id="sb-sidebar-toggle-btn" class="sb-sidebar-toggle-btn" style="display:none" title="Toggle soundboard panel">&#x276F;</button>
+      <aside id="sb-sidebar-panel" class="sb-sidebar-panel sb-hidden">
+        <div id="sb-sidebar-resize-handle" class="sb-sidebar-resize-handle"></div>
+        <div class="sb-sidebar-header">&#x1F3B5; Soundboard</div>
+        <div class="sb-sidebar-body">
+          <input type="text" id="sb-sidebar-search" placeholder="Search sounds..." class="settings-text-input" style="width:100%;box-sizing:border-box;font-size:12px">
+          <div id="sb-sidebar-grid" class="soundboard-grid sidebar-mode"></div>
+        </div>
+      </aside>
+
+      <!-- Voice/users sidebar collapse arrow — fixed, sits at left edge of voice/users panel -->
       <button id="sidebar-toggle-btn" class="sidebar-collapse-btn" data-i18n-title="app.actions.toggle_members_panel" data-i18n-aria-label="app.actions.toggle_members_panel" title="Toggle members panel" aria-label="Toggle members panel">&#x276F;</button>
 
       <!-- ─── Right Sidebar ───────────────────────────── -->
@@ -645,18 +657,6 @@
             </svg>
             <span data-i18n="app.actions.settings">Settings</span>
           </button>
-        </div>
-      </aside>
-
-      <!-- ─── Soundboard Sidebar (in-flow, rightmost panel) ─── -->
-      <!-- Soundboard toggle arrow — fixed to far right edge of viewport -->
-      <button id="sb-sidebar-toggle-btn" class="sb-sidebar-toggle-btn" style="display:none" title="Toggle soundboard panel">&#x276F;</button>
-      <aside id="sb-sidebar-panel" class="sb-sidebar-panel sb-hidden">
-        <div id="sb-sidebar-resize-handle" class="sb-sidebar-resize-handle"></div>
-        <div class="sb-sidebar-header">&#x1F3B5; Soundboard</div>
-        <div class="sb-sidebar-body">
-          <input type="text" id="sb-sidebar-search" placeholder="Search sounds..." class="settings-text-input" style="width:100%;box-sizing:border-box;font-size:12px">
-          <div id="sb-sidebar-grid" class="soundboard-grid sidebar-mode"></div>
         </div>
       </aside>
 
@@ -1788,6 +1788,14 @@
           <p class="settings-hint" data-i18n="settings.debug_section.screen_share_voice_proc_hint">Re-enable echo cancellation, noise suppression, and auto gain control on the audio captured from your screen share. Default off as of 3.17.3 because these filters mangle music and game audio. Turn this on if you're sharing voice content (tutorial narration, a podcast, a meeting) where the cleanup actually helps. Does not affect your microphone, which always gets full voice processing.</p>
         </div>
 
+        <div class="desktop-pref-row">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-screen-audio-direct">
+            <span class="toggle-label" data-i18n="settings.debug_section.screen_audio_webaudio">Web Audio mixing for screen-share audio</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.screen_audio_webaudio_hint">By default Haven plays incoming screen-share audio straight through the audio element, which keeps it in sync with the video over a TURN/relay connection. Turn this on to route it through Haven's Web Audio mixer instead, which unlocks the per-stream volume boost above 100% but can cause audio stutter and audio/video desync over a relay (it's fine on a local network). Leave it off if a screen share's audio stutters or drifts out of sync. (#5426)</p>
+        </div>
+
         <!-- Desktop-only debug setting: shown when running in Haven Desktop -->
         <div class="desktop-pref-row" id="pref-force-sdr-row" style="display:none">
           <label class="toggle-row">
@@ -2194,6 +2202,28 @@
             </select>
           </label>
           <small class="settings-hint" data-i18n="settings.admin.session_duration_hint">How long a login token stays valid before users must sign in again. "Never expire" keeps users logged in until they hit Logout or change their password. Applies to new logins only; existing tokens keep their original expiry until they expire or rotate.</small>
+        </div>
+        <div class="admin-settings" id="section-connectivity" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">📡 <span data-i18n="settings.admin.connectivity_title">Voice &amp; Connectivity</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.connectivity_hint">STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on "ICE: Connecting...", set your own servers here.</small>
+          <label class="select-row" style="margin-top:8px; align-items:flex-start">
+            <span data-i18n="settings.admin.stun_urls">STUN servers</span>
+            <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:stun.l.google.com:19302" style="flex:1; resize:vertical; font-family:monospace; font-size:12px"></textarea>
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.stun_urls_hint">One stun: URI per line (or comma separated). Blank = built-in defaults.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.turn_url">TURN server (optional)</span>
+            <input type="text" id="turn-url-input" class="settings-text-input" placeholder="turn:turn.example.com:3478" style="flex:1">
+          </label>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.turn_username">TURN username</span>
+            <input type="text" id="turn-username-input" class="settings-text-input" autocomplete="off" style="flex:1">
+          </label>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.turn_password">TURN password</span>
+            <input type="password" id="turn-password-input" class="settings-text-input" autocomplete="new-password" style="flex:1">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.turn_hint">A TURN server relays traffic for users behind strict NATs that STUN alone can't connect. Only needed if some users still can't connect after setting STUN. Username/password apply to static-credential TURN servers.</small>
         </div>
         <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔊 <span data-i18n="settings.admin.sounds_title">Custom Sounds</span></h5>
@@ -2884,6 +2914,7 @@
     <button class="channel-ctx-item" data-action="leave-voice" style="display:none">📴 <span data-i18n="context_menu.channel.disconnect_voice">Disconnect Voice</span></button>
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item" data-action="leave-channel">🚪 <span data-i18n="context_menu.channel.leave">Leave Channel</span></button>
+    <button class="channel-ctx-item" data-action="hide-channel" style="display:none">🙈 <span data-i18n="context_menu.channel.hide">Hide Channel</span></button>
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item mod-only" data-action="rename-channel">✏️ <span data-i18n="context_menu.channel.rename">Rename Channel</span></button>
     <button class="channel-ctx-item mod-only" data-action="create-sub-channel">📁 <span data-i18n="context_menu.channel.create_sub">Create Sub-channel</span></button>
@@ -2907,6 +2938,10 @@
       </div>
       <div class="cfn-row" data-fn="music" data-i18n-title="channel_functions.music_hint" title="Allow Listen Together / music playback (requires voice)">
         <span class="cfn-label">🎵 <span data-i18n="channel_functions.music">Music</span></span>
+        <span class="cfn-badge cfn-on" data-i18n="channel_functions.on">ON</span>
+      </div>
+      <div class="cfn-row" data-fn="soundboard" data-i18n-title="channel_functions.soundboard_hint" title="Allow the soundboard in this channel's voice chat">
+        <span class="cfn-label">🔊 <span data-i18n="channel_functions.soundboard">Soundboard</span></span>
         <span class="cfn-badge cfn-on" data-i18n="channel_functions.on">ON</span>
       </div>
       <div class="cfn-row" data-fn="media" data-i18n-title="channel_functions.media_hint" title="Allow image, video, and file uploads in this channel">
@@ -3188,6 +3223,18 @@
     </div>
   </div>
 
+  <!-- Hidden Channels Modal (admin declutter via "Hide Channel") -->
+  <div class="modal-overlay" id="hidden-channels-modal" style="display:none">
+    <div class="modal" style="width:460px;max-height:80vh;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <h3 style="margin:0;flex:1">🙈 <span data-i18n="modals.hidden_channels.title">Hidden Channels</span></h3>
+        <button class="btn-sm" id="hidden-channels-close-btn" data-i18n="modals.common.close" style="font-size:1rem;padding:4px 10px">&times;</button>
+      </div>
+      <p class="modal-desc" style="margin:0 0 12px;font-size:0.8rem;opacity:0.6" data-i18n="modals.hidden_channels.desc">Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back.</p>
+      <div id="hidden-channels-content" style="overflow-y:auto;flex:1;min-height:0"></div>
+    </div>
+  </div>
+
   <!-- Create Sub-channel Modal -->
   <div class="modal-overlay" id="create-sub-modal" style="display:none">
     <div class="modal" style="max-width:380px">
@@ -3363,7 +3410,6 @@
   </div>
 
   <script src="/js/i18n.js"></script>
-  <script>i18n.init();</script>
   <script src="/socket.io/socket.io.js"></script>
 
   <!-- Image Lightbox Overlay -->
@@ -3418,10 +3464,10 @@
   <script src="/js/theme.js?v=3.16.15"></script>
   <script src="/js/notifications.js?v=3.16.15"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=3.16.15"></script>
+  <script src="/js/voice.js?v=3.25.4"></script>
   <script src="/js/modmode.js?v=3.16.15"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
-  <script type="module" src="/js/app.js?v=3.16.15"></script>
+  <script type="module" src="/js/app.js?v=3.25.3"></script>
   <script src="/js/plugin-loader.js?v=3.16.15"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
