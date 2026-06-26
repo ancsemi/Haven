@@ -268,6 +268,159 @@ module.exports = function register(socket, ctx) {
     socket.emit('error-msg', 'Server invite code cleared');
   });
 
+  // ── Managed invite links (multi-code menu) ──────────────
+  const _canManageInvites = () =>
+    socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_server');
+
+  // True if `code` already names a channel, the server code, the legacy vanity
+  // code, or another invite link — anything join-channel could ambiguously
+  // resolve. Invite codes are checked first at join time, so a collision would
+  // silently shadow a real channel; reject up front instead.
+  const _inviteCodeTaken = (code, excludeId = null) => {
+    if (db.prepare('SELECT 1 FROM channels WHERE code = ?').get(code)) return true;
+    const ss = db.prepare("SELECT value FROM server_settings WHERE key IN ('server_code', 'vanity_code')").all();
+    if (ss.some(r => r.value && r.value === code)) return true;
+    const dup = db.prepare('SELECT id FROM invite_codes WHERE code = ?').get(code);
+    return !!(dup && dup.id !== excludeId);
+  };
+
+  // Normalise an admin-supplied channel list into a JSON string of positive
+  // ints (capped). Returns '' for "all public", or null if the input is invalid.
+  const _normaliseInviteChannels = (channels) => {
+    if (channels == null) return '';
+    if (!Array.isArray(channels)) return null;
+    const ids = [...new Set(channels.map(n => parseInt(n)).filter(n => Number.isInteger(n) && n > 0))];
+    if (ids.length > 500) return null;
+    return ids.length ? JSON.stringify(ids) : '';
+  };
+
+  // hours <= 0 / falsy → never expires (null). Stored as a UTC string that
+  // sorts identically to SQLite's CURRENT_TIMESTAMP for the expiry comparison.
+  const _inviteExpiryStamp = (hours) => {
+    const h = Number(hours);
+    if (!Number.isFinite(h) || h <= 0) return null;
+    return new Date(Date.now() + h * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+  };
+
+  const _emitInviteCodes = (target = socket) => {
+    const rows = db.prepare(`
+      SELECT ic.*,
+        (SELECT COUNT(*) FROM invite_code_uses u WHERE u.invite_code_id = ic.id) AS use_count,
+        (ic.expires_at IS NOT NULL AND ic.expires_at <= CURRENT_TIMESTAMP) AS is_expired
+      FROM invite_codes ic ORDER BY ic.created_at DESC
+    `).all();
+    rows.forEach(r => {
+      r.created_at = utcStamp(r.created_at);
+      if (r.expires_at) r.expires_at = utcStamp(r.expires_at);
+      r.enabled = !!r.enabled;
+      r.is_expired = !!r.is_expired;
+      let ch = [];
+      try { const p = JSON.parse(r.channels || '[]'); if (Array.isArray(p)) ch = p; } catch { /* keep [] */ }
+      r.channels = ch;
+    });
+    target.emit('invite-codes-list', rows);
+  };
+
+  socket.on('get-invite-codes', () => {
+    if (!_canManageInvites()) return;
+    _emitInviteCodes();
+  });
+
+  socket.on('create-invite-code', (data) => {
+    if (!_canManageInvites()) return socket.emit('error-msg', 'Only admins can manage invite links');
+    if (!data || typeof data !== 'object') return;
+
+    const label = typeof data.label === 'string' ? data.label.trim().slice(0, 60) : '';
+    const channels = _normaliseInviteChannels(data.channels);
+    if (channels === null) return socket.emit('error-msg', 'Invalid channel selection');
+    const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
+    const expiresAt = _inviteExpiryStamp(data.expiresInHours);
+
+    // Custom slug (optional) or an auto-generated 8-char hex code.
+    let code;
+    if (typeof data.code === 'string' && data.code.trim()) {
+      code = data.code.trim();
+      if (!/^[a-zA-Z0-9_-]{3,32}$/.test(code)) {
+        return socket.emit('error-msg', 'Custom code must be 3-32 chars (letters, numbers, - and _)');
+      }
+      if (_inviteCodeTaken(code)) {
+        return socket.emit('error-msg', 'That code is already in use — pick another.');
+      }
+    } else {
+      do { code = generateChannelCode(); } while (_inviteCodeTaken(code));
+    }
+
+    const info = db.prepare(
+      'INSERT INTO invite_codes (code, label, channels, enabled, max_uses, expires_at, created_by) VALUES (?, ?, ?, 1, ?, ?, ?)'
+    ).run(code, label, channels, maxUses, expiresAt, socket.user.id);
+
+    if (typeof logAudit === 'function') {
+      logAudit({
+        actor: socket.user, action: 'invite_code_create',
+        target_type: 'invite_code', target_name: code,
+        details: { label, maxUses, expiresAt, channels: channels || 'all' }
+      });
+    }
+    socket.emit('error-msg', `Invite link created: ${code}`);
+    _emitInviteCodes();
+  });
+
+  socket.on('update-invite-code', (data) => {
+    if (!_canManageInvites()) return socket.emit('error-msg', 'Only admins can manage invite links');
+    if (!data || typeof data !== 'object') return;
+    const id = parseInt(data.id);
+    if (!Number.isInteger(id)) return;
+    const row = db.prepare('SELECT * FROM invite_codes WHERE id = ?').get(id);
+    if (!row) return socket.emit('error-msg', 'Invite link not found');
+
+    const sets = [];
+    const vals = [];
+    if (typeof data.label === 'string') { sets.push('label = ?'); vals.push(data.label.trim().slice(0, 60)); }
+    if ('channels' in data) {
+      const channels = _normaliseInviteChannels(data.channels);
+      if (channels === null) return socket.emit('error-msg', 'Invalid channel selection');
+      sets.push('channels = ?'); vals.push(channels);
+    }
+    if ('maxUses' in data) {
+      const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
+      sets.push('max_uses = ?'); vals.push(maxUses);
+    }
+    if ('expiresInHours' in data) {
+      sets.push('expires_at = ?'); vals.push(_inviteExpiryStamp(data.expiresInHours));
+    }
+    if ('enabled' in data) { sets.push('enabled = ?'); vals.push(data.enabled ? 1 : 0); }
+    if (sets.length === 0) return;
+
+    vals.push(id);
+    db.prepare(`UPDATE invite_codes SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+    if (typeof logAudit === 'function') {
+      logAudit({
+        actor: socket.user, action: 'invite_code_update',
+        target_type: 'invite_code', target_name: row.code,
+        details: { fields: sets.map(s => s.split(' ')[0]) }
+      });
+    }
+    _emitInviteCodes();
+  });
+
+  socket.on('delete-invite-code', (data) => {
+    if (!_canManageInvites()) return socket.emit('error-msg', 'Only admins can manage invite links');
+    if (!data || typeof data !== 'object') return;
+    const id = parseInt(data.id);
+    if (!Number.isInteger(id)) return;
+    const row = db.prepare('SELECT code FROM invite_codes WHERE id = ?').get(id);
+    if (!row) return;
+    db.prepare('DELETE FROM invite_codes WHERE id = ?').run(id);
+    if (typeof logAudit === 'function') {
+      logAudit({
+        actor: socket.user, action: 'invite_code_delete',
+        target_type: 'invite_code', target_name: row.code, details: {}
+      });
+    }
+    socket.emit('error-msg', `Invite link ${row.code} deleted`);
+    _emitInviteCodes();
+  });
+
   // ── Registration token (#5344) ──────────────────────────
   // Independent of the whitelist — admin can use either, both, or
   // neither. The token is a 16-char hex string the admin shares

@@ -4077,6 +4077,174 @@ _setupUI() {
       : `Guests can now access ${picked.length} channel${picked.length === 1 ? '' : 's'}`,
       'success');
   });
+
+  // ── Managed invite links (multi-code menu) ─────────
+  const _invitePublicChannels = () => (this.channels || []).filter(c =>
+    !c.is_dm && !c.parent_channel_id && !c.is_private && c.code_visibility !== 'private');
+
+  // Build a list of public-channel checkboxes. selectedSet === null → all checked
+  // ("grant all public"); otherwise only the ids in the set are checked.
+  const _inviteChannelChecks = (cls, selectedSet) => {
+    const all = _invitePublicChannels();
+    if (!all.length) return '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No public channels yet.</p>';
+    return all.map(ch => {
+      const checked = (selectedSet === null) || selectedSet.has(ch.id);
+      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:0.85rem">
+        <input type="checkbox" class="${cls}" data-cid="${ch.id}" ${checked ? 'checked' : ''}>
+        <span>#${this._escapeHtml(ch.name || '')}</span></label>`;
+    }).join('');
+  };
+
+  const _renderInviteCreateChannels = (force) => {
+    const host = document.getElementById('invite-new-channels');
+    if (!host) return;
+    // Don't clobber an in-progress selection on routine settings refreshes.
+    if (!force && host.querySelector('.invite-new-channel-cb')) return;
+    host.innerHTML = _inviteChannelChecks('invite-new-channel-cb', null);
+  };
+  this._renderInviteCreateChannels = _renderInviteCreateChannels;
+
+  const _renderInviteCodes = (list) => {
+    this._inviteCodes = Array.isArray(list) ? list : [];
+    const host = document.getElementById('invite-codes-list');
+    if (!host) return;
+    if (!this._inviteCodes.length) {
+      host.innerHTML = '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No invite links yet. Create one below.</p>';
+      return;
+    }
+    const origin = window.location.origin;
+    host.innerHTML = this._inviteCodes.map(ic => {
+      const status = !ic.enabled
+        ? '<span style="color:var(--text-muted)">● Disabled</span>'
+        : ic.is_expired
+          ? '<span style="color:var(--danger,#e84a4a)">● Expired</span>'
+          : '<span style="color:var(--green,#43b581)">● Active</span>';
+      const link = `${origin}/?invite=${encodeURIComponent(ic.code)}`;
+      const chCount = (ic.channels && ic.channels.length)
+        ? `${ic.channels.length} channel${ic.channels.length === 1 ? '' : 's'}`
+        : 'all public channels';
+      const uses = ic.max_uses > 0 ? `${ic.use_count} / ${ic.max_uses}` : `${ic.use_count}`;
+      const expiry = ic.expires_at ? new Date(ic.expires_at).toLocaleString() : 'never';
+      const label = ic.label ? this._escapeHtml(ic.label) : '<em style="opacity:.6">(no label)</em>';
+      const editorChannels = _inviteChannelChecks('invite-edit-channel-cb',
+        (ic.channels && ic.channels.length) ? new Set(ic.channels) : null);
+      return `<div class="invite-code-card" data-id="${ic.id}" style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="font-weight:600">${label} &nbsp;<code style="font-size:.85rem">${this._escapeHtml(ic.code)}</code></div>
+          <div style="font-size:.8rem">${status}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <input type="text" readonly value="${this._escapeHtml(link)}" class="settings-text-input" style="flex:1;min-width:0;font-size:.8rem" data-role="invite-link">
+          <button class="btn-sm" data-act="copy" title="Copy link">📋</button>
+        </div>
+        <div style="font-size:.8rem;opacity:.8;margin-top:6px;display:flex;gap:12px;flex-wrap:wrap">
+          <span>Grants: ${chCount}</span><span>Uses: ${uses}</span><span>Expires: ${this._escapeHtml(expiry)}</span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn-sm" data-act="toggle">${ic.enabled ? 'Disable' : 'Enable'}</button>
+          <button class="btn-sm" data-act="edit">Edit</button>
+          <button class="btn-sm" data-act="delete">Delete</button>
+        </div>
+        <div class="invite-code-editor" style="display:none;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
+          <h6 style="margin:0 0 4px;font-size:.8rem;font-weight:600">Channels this link grants</h6>
+          <div class="invite-edit-channels" style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px">${editorChannels}</div>
+          <div style="display:flex;gap:4px;margin-top:4px">
+            <button class="btn-sm" data-act="edit-all">Select all</button>
+            <button class="btn-sm" data-act="edit-none">Select none</button>
+          </div>
+          <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="0" max="100000" value="${ic.max_uses || 0}" class="settings-number-input" data-role="edit-maxuses"></label>
+          <label class="select-row" style="margin-top:4px"><span>Reset expiry</span>
+            <select class="settings-number-input" data-role="edit-expiry">
+              <option value="-1" selected>Keep current</option>
+              <option value="0">Never</option>
+              <option value="1">After 1 hour</option>
+              <option value="24">After 1 day</option>
+              <option value="168">After 7 days</option>
+              <option value="720">After 30 days</option>
+            </select>
+          </label>
+          <div style="display:flex;gap:4px;margin-top:8px">
+            <button class="btn-sm btn-accent" data-act="save">Save changes</button>
+            <button class="btn-sm" data-act="cancel">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  };
+  this._renderInviteCodes = _renderInviteCodes;
+
+  this.socket.on('invite-codes-list', (list) => { _renderInviteCodes(list); });
+
+  // Create form: select all / none + create
+  document.getElementById('invite-new-channels-all')?.addEventListener('click', () => {
+    document.querySelectorAll('.invite-new-channel-cb').forEach(cb => { cb.checked = true; });
+  });
+  document.getElementById('invite-new-channels-none')?.addEventListener('click', () => {
+    document.querySelectorAll('.invite-new-channel-cb').forEach(cb => { cb.checked = false; });
+  });
+  document.getElementById('invite-create-btn')?.addEventListener('click', () => {
+    const label = document.getElementById('invite-new-label')?.value.trim() || '';
+    const cbs = Array.from(document.querySelectorAll('.invite-new-channel-cb'));
+    const total = cbs.length;
+    const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
+    // All checked → [] = "grant all public" (future-proof as new channels appear).
+    const channels = (total > 0 && picked.length === total) ? [] : picked;
+    const maxUses = parseInt(document.getElementById('invite-new-maxuses')?.value) || 0;
+    const expiresInHours = parseInt(document.getElementById('invite-new-expiry')?.value) || 0;
+    const slug = document.getElementById('invite-new-slug')?.value.trim() || '';
+    const payload = { label, channels, maxUses, expiresInHours };
+    if (slug) payload.code = slug;
+    this.socket.emit('create-invite-code', payload);
+    // Reset the form fields (channel checks reset on the next list render).
+    const lblEl = document.getElementById('invite-new-label'); if (lblEl) lblEl.value = '';
+    const slugEl = document.getElementById('invite-new-slug'); if (slugEl) slugEl.value = '';
+    const muEl = document.getElementById('invite-new-maxuses'); if (muEl) muEl.value = '0';
+    const expEl = document.getElementById('invite-new-expiry'); if (expEl) expEl.value = '0';
+  });
+
+  // One delegated handler for all per-card actions (the list re-renders often).
+  document.getElementById('invite-codes-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const card = e.target.closest('.invite-code-card');
+    if (!card) return;
+    const id = parseInt(card.dataset.id);
+    const act = btn.dataset.act;
+    const ic = (this._inviteCodes || []).find(x => x.id === id);
+    if (act === 'copy') {
+      const val = card.querySelector('[data-role="invite-link"]')?.value || '';
+      if (!val) return;
+      const done = () => this._showToast?.('Invite link copied', 'success');
+      (navigator.clipboard?.writeText ? navigator.clipboard.writeText(val).then(done).catch(done) : done());
+    } else if (act === 'toggle') {
+      this.socket.emit('update-invite-code', { id, enabled: ic ? !ic.enabled : true });
+    } else if (act === 'delete') {
+      if (confirm(`Delete invite link "${ic?.code || id}"? Anyone holding the old link won't be able to use it.`)) {
+        this.socket.emit('delete-invite-code', { id });
+      }
+    } else if (act === 'edit') {
+      const ed = card.querySelector('.invite-code-editor');
+      if (ed) ed.style.display = ed.style.display === 'none' ? '' : 'none';
+    } else if (act === 'cancel') {
+      const ed = card.querySelector('.invite-code-editor');
+      if (ed) ed.style.display = 'none';
+    } else if (act === 'edit-all') {
+      card.querySelectorAll('.invite-edit-channel-cb').forEach(cb => { cb.checked = true; });
+    } else if (act === 'edit-none') {
+      card.querySelectorAll('.invite-edit-channel-cb').forEach(cb => { cb.checked = false; });
+    } else if (act === 'save') {
+      const cbs = Array.from(card.querySelectorAll('.invite-edit-channel-cb'));
+      const total = cbs.length;
+      const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
+      const channels = (total > 0 && picked.length === total) ? [] : picked;
+      const maxUses = parseInt(card.querySelector('[data-role="edit-maxuses"]')?.value) || 0;
+      const payload = { id, channels, maxUses };
+      const exp = parseInt(card.querySelector('[data-role="edit-expiry"]')?.value);
+      if (Number.isFinite(exp) && exp >= 0) payload.expiresInHours = exp;
+      this.socket.emit('update-invite-code', payload);
+      this._showToast?.('Invite link updated', 'success');
+    }
+  });
 },
 
 // ═══════════════════════════════════════════════════════

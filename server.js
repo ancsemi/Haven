@@ -973,11 +973,17 @@ app.get('/invite/:vanityCode', (req, res) => {
     return res.status(400).send('Invalid invite link');
   }
   const { getDb } = require('./src/database');
-  const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'vanity_code'").get();
-  if (!row || row.value !== vanityCode) {
+  const db = getDb();
+  // Accept either the legacy single vanity_code setting or any managed invite
+  // code (from the invite-link menu). The frontend auto-joins from ?invite=;
+  // enabled/expiry/use-limit are enforced server-side when join-channel fires.
+  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'vanity_code'").get();
+  const isLegacyVanity = row && row.value === vanityCode;
+  const managed = isLegacyVanity ? null : db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(vanityCode);
+  if (!isLegacyVanity && !managed) {
     return res.status(404).send('Invite link not found or expired');
   }
-  // Redirect to /app with the vanity code as a query param — the frontend will auto-join
+  // Redirect to /app with the code as a query param — the frontend will auto-join
   res.redirect(`/app?invite=${encodeURIComponent(vanityCode)}`);
 });
 

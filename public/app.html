@@ -2051,6 +2051,59 @@
               <button class="btn-sm btn-accent" id="default-join-channels-save-btn" type="button">Save</button>
             </div>
           </div>
+
+          <!-- Managed invite links — multiple codes, each with its own channel
+               grant, on/off switch, and optional expiry by time / use count. -->
+          <div style="margin-top:18px; padding-top:10px; border-top:1px dashed var(--border);">
+            <h6 style="margin:0 0 4px;font-size:0.85rem;font-weight:600">🔗 Invite Links</h6>
+            <small class="settings-hint">Create shareable links that drop people straight into the channels you pick — no code to type. Each link can be turned off, limited to a number of people, or set to expire. Share <code>https://your-server/?invite=CODE</code> or <code>/invite/CODE</code>.</small>
+
+            <div id="invite-codes-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+              <p class="muted-text" style="margin:4px 0;font-size:0.85rem">Loading invite links…</p>
+            </div>
+
+            <details id="invite-code-create" style="margin-top:12px;border:1px solid var(--border);border-radius:8px;padding:10px">
+              <summary style="cursor:pointer;font-weight:600;font-size:0.9rem">➕ Create a new invite link</summary>
+              <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
+                <label class="select-row" style="align-items:center">
+                  <span>Label <small class="settings-hint" style="display:block">For your reference, e.g. "Reddit promo"</small></span>
+                  <input type="text" id="invite-new-label" maxlength="60" class="settings-text-input" style="max-width:200px" placeholder="Optional name">
+                </label>
+                <div>
+                  <h6 style="margin:0 0 4px;font-size:0.82rem;font-weight:600">Channels this link grants</h6>
+                  <small class="settings-hint">Leave all checked to grant every public channel. Private channels are never granted by a link.</small>
+                  <div id="invite-new-channels" style="margin-top:6px;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px">
+                    <p class="muted-text" style="margin:4px 0;font-size:0.85rem">Loading channels…</p>
+                  </div>
+                  <div style="display:flex;gap:4px;margin-top:4px">
+                    <button class="btn-sm" id="invite-new-channels-all" type="button">Select all</button>
+                    <button class="btn-sm" id="invite-new-channels-none" type="button">Select none</button>
+                  </div>
+                </div>
+                <label class="select-row" style="align-items:center">
+                  <span>Max uses <small class="settings-hint" style="display:block">0 = unlimited. Counts distinct people.</small></span>
+                  <input type="number" id="invite-new-maxuses" min="0" max="100000" value="0" class="settings-number-input">
+                </label>
+                <label class="select-row" style="align-items:center">
+                  <span>Expires</span>
+                  <select id="invite-new-expiry" class="settings-number-input">
+                    <option value="0" selected>Never</option>
+                    <option value="1">After 1 hour</option>
+                    <option value="24">After 1 day</option>
+                    <option value="168">After 7 days</option>
+                    <option value="720">After 30 days</option>
+                  </select>
+                </label>
+                <label class="select-row" style="align-items:center">
+                  <span>Custom code <small class="settings-hint" style="display:block">Optional. 3-32 chars. Blank = random.</small></span>
+                  <input type="text" id="invite-new-slug" maxlength="32" class="settings-text-input" style="max-width:160px" placeholder="e.g. summer2026">
+                </label>
+                <div>
+                  <button class="btn-sm btn-accent" id="invite-create-btn" type="button">Create invite link</button>
+                </div>
+              </div>
+            </details>
+          </div>
         </div>
         <!-- (#5381) Guest mode — password-less drop-in access scoped to a whitelist of channels -->
         <div class="admin-settings" id="section-guests" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">

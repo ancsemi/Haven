@@ -252,26 +252,36 @@ module.exports = function register(socket, ctx) {
     // If the admin has set `default_join_channels` to a non-empty JSON
     // array of channel IDs, we restrict the auto-join to that intersection
     // so admins can curate which public channels new arrivals land in.
-    const _resolveAutoJoinChannels = () => {
+    // When `explicitChannelIds` is passed (a managed invite link's own channel
+    // grant), it overrides the global default_join_channels setting. An empty
+    // array means "all public" — same as leaving the global default unset.
+    const _resolveAutoJoinChannels = (explicitChannelIds) => {
       const allParents = db.prepare(
         "SELECT id, code, parent_channel_id FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')"
       ).all();
       let allowSet = null;
-      try {
-        const djc = db.prepare("SELECT value FROM server_settings WHERE key = 'default_join_channels'").get();
-        if (djc && djc.value) {
-          const parsed = JSON.parse(djc.value);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            allowSet = new Set(parsed.map(n => parseInt(n)).filter(n => Number.isFinite(n)));
-          }
+      if (Array.isArray(explicitChannelIds)) {
+        if (explicitChannelIds.length > 0) {
+          allowSet = new Set(explicitChannelIds.map(n => parseInt(n)).filter(n => Number.isFinite(n)));
         }
-      } catch { /* malformed JSON falls through to "all public" */ }
+        // empty array → allowSet stays null → "all public"
+      } else {
+        try {
+          const djc = db.prepare("SELECT value FROM server_settings WHERE key = 'default_join_channels'").get();
+          if (djc && djc.value) {
+            const parsed = JSON.parse(djc.value);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              allowSet = new Set(parsed.map(n => parseInt(n)).filter(n => Number.isFinite(n)));
+            }
+          }
+        } catch { /* malformed JSON falls through to "all public" */ }
+      }
       const parents = allowSet ? allParents.filter(p => allowSet.has(p.id)) : allParents;
       return { parents, allowSet };
     };
 
-    const _doAutoJoin = () => {
-      const { parents, allowSet } = _resolveAutoJoinChannels();
+    const _doAutoJoin = (explicitChannelIds) => {
+      const { parents, allowSet } = _resolveAutoJoinChannels(explicitChannelIds);
       const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
       const joinedChannelIds = [];
       let joinedCount = 0;
@@ -298,6 +308,47 @@ module.exports = function register(socket, ctx) {
       for (const chId of joinedChannelIds) _applyChannelDefaultRole(chId, socket.user.id);
       return joinedCount;
     };
+
+    // ── Managed invite link (multi-code menu) ──────────
+    // Checked before the legacy vanity/server codes and before the hex-format
+    // gate, since a managed code can be a custom slug. Each carries its own
+    // channel grant, on/off switch, and optional expiry by time / distinct-user
+    // count. A user who already redeemed a code can re-enter it freely (e.g. to
+    // refresh) without burning another use against the limit.
+    const inviteRow = db.prepare(
+      "SELECT *, (expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP) AS is_expired FROM invite_codes WHERE code = ?"
+    ).get(code);
+    if (inviteRow) {
+      if (!inviteRow.enabled) {
+        return socket.emit('error-msg', 'This invite link has been disabled.');
+      }
+      if (inviteRow.is_expired) {
+        return socket.emit('error-msg', 'This invite link has expired.');
+      }
+      const alreadyUsed = db.prepare(
+        'SELECT 1 FROM invite_code_uses WHERE invite_code_id = ? AND user_id = ?'
+      ).get(inviteRow.id, socket.user.id);
+      if (!alreadyUsed && inviteRow.max_uses > 0) {
+        const used = db.prepare(
+          'SELECT COUNT(*) AS n FROM invite_code_uses WHERE invite_code_id = ?'
+        ).get(inviteRow.id).n;
+        if (used >= inviteRow.max_uses) {
+          return socket.emit('error-msg', 'This invite link has reached its use limit.');
+        }
+      }
+      let chList = [];
+      try {
+        const parsed = JSON.parse(inviteRow.channels || '[]');
+        if (Array.isArray(parsed)) chList = parsed;
+      } catch { /* malformed → empty array → all public */ }
+      const joinedCount = _doAutoJoin(chList);
+      db.prepare(
+        'INSERT OR IGNORE INTO invite_code_uses (invite_code_id, user_id) VALUES (?, ?)'
+      ).run(inviteRow.id, socket.user.id);
+      socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
+      socket.emit('error-msg', `Invite accepted — joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
+      return;
+    }
 
     // Check if this is a vanity invite code first
     const vanityRow = db.prepare("SELECT value FROM server_settings WHERE key = 'vanity_code'").get();

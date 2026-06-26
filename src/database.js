@@ -159,6 +159,31 @@ function initDatabase() {
       UNIQUE(user_id, version)
     );
 
+    -- Managed invite links. Unlike the single server_code/vanity_code settings,
+    -- each row is its own code with its own channel grant, on/off switch, and
+    -- optional expiry (by time and/or distinct-user count). channels is a JSON
+    -- array of channel IDs; '' or '[]' means "all public channels".
+    CREATE TABLE IF NOT EXISTS invite_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      label TEXT DEFAULT '',
+      channels TEXT DEFAULT '',
+      enabled INTEGER DEFAULT 1,
+      max_uses INTEGER DEFAULT 0,
+      expires_at DATETIME DEFAULT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- One row per distinct user who redeemed a code, so re-entering a code a
+    -- user already used never burns an extra "use" against max_uses.
+    CREATE TABLE IF NOT EXISTS invite_code_uses (
+      invite_code_id INTEGER NOT NULL REFERENCES invite_codes(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (invite_code_id, user_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_channel
       ON messages(channel_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_channel_code

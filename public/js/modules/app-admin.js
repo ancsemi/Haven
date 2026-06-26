@@ -452,6 +452,15 @@ _applyServerSettings() {
     try { this._renderGuestChannels(); } catch { /* non-critical */ }
   }
 
+  // Managed invite links — paint the create-form channel list and pull the
+  // current set of codes from the server (list arrives via 'invite-codes-list').
+  if (typeof this._renderInviteCreateChannels === 'function') {
+    try { this._renderInviteCreateChannels(); } catch { /* non-critical */ }
+  }
+  if (this.socket?.connected) {
+    try { this.socket.emit('get-invite-codes'); } catch { /* non-critical */ }
+  }
+
   // Apply configurable message length limit to message input and edit textareas
   const _maxMsgChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
   const msgInput = document.getElementById('message-input');
