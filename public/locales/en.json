@@ -125,7 +125,13 @@
       "unknown_user": "Unknown",
       "placeholder": "Type a message...",
       "placeholder_short": "Message...",
-      "via_persona": "Sent via {{name}}"
+      "via_persona": "Sent via {{name}}",
+      "spoiler": "Spoiler",
+      "mark_spoiler": "Mark as spoiler",
+      "spoiler_on": "Spoiler on — click to send normally",
+      "hide_image": "Hide Image",
+      "image_hidden": "Image hidden",
+      "click_to_show": "click to show"
     },
     "input_bar": {
       "emoji_btn": "Emoji",

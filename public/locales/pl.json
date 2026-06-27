@@ -125,7 +125,13 @@
       "unknown_user": "Nieznany",
       "placeholder": "Wpisz wiadomość...",
       "placeholder_short": "Wiadomość...",
-      "via_persona": "Wysłano przez {{name}}"
+      "via_persona": "Wysłano przez {{name}}",
+      "spoiler": "Spoiler",
+      "mark_spoiler": "Oznacz jako spoiler",
+      "spoiler_on": "Spoiler włączony - kliknij, aby wysłać normalnie",
+      "hide_image": "Ukryj obraz",
+      "image_hidden": "Obraz ukryty",
+      "click_to_show": "kliknij, aby pokazać"
     },
     "input_bar": {
       "emoji_btn": "Emoji",

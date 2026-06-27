@@ -1856,11 +1856,14 @@ _setupUI() {
 
   // Image click — open lightbox overlay (CSP-safe — no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
+    // Concealed media (hidden image / unrevealed spoiler) intercepts the click
+    // before the lightbox opens.
+    if (this._maybeRevealConcealed(e)) return;
     if (e.target.classList.contains('chat-image')) {
       this._lightboxContainer = document.getElementById('messages');
       this._openLightbox(e.target.src);
     }
-    // Spoiler reveal toggle
+    // Spoiler reveal toggle (text spoilers)
     if (e.target.closest('.spoiler')) {
       e.target.closest('.spoiler').classList.toggle('revealed');
     }
@@ -1871,6 +1874,11 @@ _setupUI() {
     const el = document.getElementById(containerId);
     if (el) {
       el.addEventListener('click', (e) => {
+        if (this._maybeRevealConcealed(e)) return;
+        if (e.target.closest('.spoiler')) {
+          e.target.closest('.spoiler').classList.toggle('revealed');
+          return;
+        }
         if (e.target.classList.contains('chat-image')) {
           this._lightboxContainer = el;
           this._openLightbox(e.target.src);
@@ -5922,8 +5930,25 @@ _uploadWithProgress(url, formData) {
   });
 },
 
-async _uploadImage(file, targetCode, bundled = false, personaPrefix = '') {
+// Intercept clicks on concealed media. Returns true when the click was
+// consumed (so the caller skips opening the lightbox):
+//  - a "hidden image" placeholder → reveal the image in place
+//  - an unrevealed spoiler image → reveal it (next click opens the lightbox)
+_maybeRevealConcealed(e) {
+  const ph = e.target.closest && e.target.closest('.hidden-image');
+  if (ph) { this._revealHiddenImage(ph); return true; }
+  const sp = e.target.closest && e.target.closest('.spoiler-media');
+  if (sp && !sp.classList.contains('revealed')) {
+    sp.classList.add('revealed');
+    return true;
+  }
+  return false;
+},
+
+async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false) {
   if (!this.currentChannel && !targetCode) return;
+  // The queue stores the per-image spoiler choice on the File object itself.
+  if (!spoiler && file && file._spoiler) spoiler = true;
   // Capture the target channel NOW (before any await) so a mid-upload channel
   // switch doesn't send the image to the wrong channel.
   const targetChannel = targetCode || this.currentChannel;
@@ -5951,7 +5976,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '') {
       formData.append('file', blob, 'e2e-image.enc');
       const data = await this._uploadWithProgress('/api/upload-file', formData);
       const mime = file.type || 'image/png';
-      const marker = `e2e-img:${mime}:${data.url}`;
+      const marker = `${spoiler ? 'spoiler-img:' : ''}e2e-img:${mime}:${data.url}`;
       const encryptedText = await this.e2e.encrypt(marker, partner.userId, partner.publicKeyJwk);
       this.socket.emit('send-message', {
         code: targetChannel,
@@ -5985,7 +6010,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '') {
     // Prepend persona prefix if this image is bundled with a persona text message.
     this.socket.emit('send-message', {
       code: targetChannel,
-      content: personaPrefix + data.url,
+      content: personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url,
       isImage: true,
       ...(bundled && { bundled: true })
     });

@@ -258,6 +258,9 @@ _replaceBurnedMessage(el) {
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
+  // Spoiler-wrapped image (sender marked it as a spoiler) — unwrap and test
+  // the payload so the message still gets image layout treatment.
+  if (trimmed.startsWith('spoiler-img:')) return this._isImageUrl(trimmed.slice(12));
   if (trimmed.startsWith('e2e-img:')) return true;
   if (/^\/uploads\/(stickers\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
   if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
@@ -354,6 +357,21 @@ _isEmojiOnly(str) {
 },
 
 _formatContent(str) {
+  // Spoiler image: spoiler-img:<payload> where payload is an /uploads URL or
+  // an e2e-img: marker. The sender marked this image as a spoiler, so render
+  // it blurred behind a "Spoiler" overlay; a click reveals it (handled by the
+  // delegated reveal listener). Only treat as a spoiler when the payload is
+  // actually media so a plain text message that happens to start with the
+  // marker isn't blurred unexpectedly.
+  if (typeof str === 'string' && str.startsWith('spoiler-img:')) {
+    const rest = str.slice('spoiler-img:'.length);
+    if (this._isImageUrl(rest) || /^\/uploads\//i.test(rest) || rest.startsWith('e2e-img:')) {
+      const inner = this._formatContent(rest);
+      const label = this._escapeHtml((typeof t === 'function' && t('app.messages.spoiler')) || 'Spoiler');
+      return `<div class="spoiler-media" role="button" tabindex="0" title="${label}"><span class="spoiler-media-tag">\u{1F441}️ ${label}</span>${inner}</div>`;
+    }
+  }
+
   // E2E encrypted image: e2e-img:<mime>:<url>
   const e2eImgMatch = str.match(/^e2e-img:(image\/(?:jpeg|png|gif|webp|svg\+xml)):(\/uploads\/[\w\-.]+)$/i);
   if (e2eImgMatch) {
@@ -450,7 +468,9 @@ _formatContent(str) {
   // rendering; lazy loading on top creates 0→real-height jumps when scrolling history.
   // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
   if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
-    return `<img src="${this._escapeHtml(str.trim())}" class="chat-image" alt="image">`;
+    const u = str.trim();
+    if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
+    return `<img src="${this._escapeHtml(u)}" class="chat-image" alt="image">`;
   }
 
   // ── Extract fenced code blocks before escaping ──
@@ -470,7 +490,9 @@ _formatContent(str) {
     try { new URL(url); } catch { return full; }
     const safeUrl = url.replace(/['"<>]/g, '');
     const idx = mdLinks.length;
-    mdLinks.push(`<img src="${safeUrl}" class="chat-image" alt="${alt || 'image'}">`);
+    mdLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
+      ? this._hiddenImagePlaceholder(safeUrl)
+      : `<img src="${safeUrl}" class="chat-image" alt="${alt || 'image'}">`);
     return `\x00MDLINK_${idx}\x00`;
   });
   // [text](url)
@@ -493,7 +515,9 @@ _formatContent(str) {
       const idx = autoLinks.length;
       if (/\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(safeUrl) ||
           /^https:\/\/media\d*\.giphy\.com\//i.test(safeUrl)) {
-        autoLinks.push(`<img src="${safeUrl}" class="chat-image" alt="image" loading="lazy">`);
+        autoLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
+          ? this._hiddenImagePlaceholder(safeUrl)
+          : `<img src="${safeUrl}" class="chat-image" alt="image" loading="lazy">`);
       } else {
         autoLinks.push(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer nofollow">${safeUrl}</a>`);
       }
