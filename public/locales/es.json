@@ -122,7 +122,13 @@
       "unprotect_btn": "Quitar protección",
       "unknown_user": "Desconocido",
       "placeholder": "Escribe un mensaje...",
-      "placeholder_short": "Mensaje..."
+      "placeholder_short": "Mensaje...",
+      "spoiler": "Spoiler",
+      "mark_spoiler": "Marcar como spoiler",
+      "spoiler_on": "Spoiler activado - haz clic para enviar normal",
+      "hide_image": "Ocultar imagen",
+      "image_hidden": "Imagen oculta",
+      "click_to_show": "haz clic para mostrar"
     },
     "input_bar": {
       "emoji_btn": "Emoji",

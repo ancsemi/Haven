@@ -122,7 +122,13 @@
       "unprotect_btn": "取消保护",
       "unknown_user": "未知用户",
       "placeholder": "输入消息...",
-      "placeholder_short": "消息..."
+      "placeholder_short": "消息...",
+      "spoiler": "剧透",
+      "mark_spoiler": "标记为剧透",
+      "spoiler_on": "已开启剧透 - 点击可正常发送",
+      "hide_image": "隐藏图片",
+      "image_hidden": "图片已隐藏",
+      "click_to_show": "点击显示"
     },
     "input_bar": {
       "emoji_btn": "表情",

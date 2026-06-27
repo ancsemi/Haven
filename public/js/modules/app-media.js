@@ -32,7 +32,7 @@ _renderImageQueue() {
   if (hasImages) {
     this._imageQueue.forEach((file, idx) => {
       const thumb = document.createElement('div');
-      thumb.className = 'image-queue-thumb';
+      thumb.className = 'image-queue-thumb' + (file._spoiler ? ' is-spoiler' : '');
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.alt = file.name;
@@ -46,6 +46,7 @@ _renderImageQueue() {
         this._renderImageQueue();
       });
       thumb.appendChild(img);
+      thumb.appendChild(this._makeSpoilerToggle(file));
       thumb.appendChild(removeBtn);
       bar.appendChild(thumb);
     });
@@ -96,6 +97,32 @@ _renderImageQueue() {
 _clearImageQueue() {
   this._imageQueue = [];
   this._renderImageQueue();
+},
+
+// Build the little eye toggle that lets the sender mark a queued image as a
+// spoiler. The choice rides along on the File object (`_spoiler`) so the flush
+// loop can read it without threading extra state through the queue arrays.
+_makeSpoilerToggle(file, isPip = false) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'image-queue-spoiler';
+  const sync = () => {
+    const on = !!file._spoiler;
+    btn.textContent = on ? '\u{1F441}️' : '\u{1F648}';
+    btn.title = on
+      ? ((typeof t === 'function' && t('app.messages.spoiler_on')) || 'Spoiler on — click to send normally')
+      : ((typeof t === 'function' && t('app.messages.mark_spoiler')) || 'Mark as spoiler');
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  };
+  sync();
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    file._spoiler = !file._spoiler;
+    const thumb = btn.closest('.image-queue-thumb');
+    if (thumb) thumb.classList.toggle('is-spoiler', !!file._spoiler);
+    sync();
+  });
+  return btn;
 },
 
 async _flushImageQueue(bundled = false, personaPrefix = '') {
@@ -176,7 +203,7 @@ _renderPiPImageQueue() {
   bar.innerHTML = '';
   this._pipImageQueue.forEach((file, idx) => {
     const thumb = document.createElement('div');
-    thumb.className = 'image-queue-thumb';
+    thumb.className = 'image-queue-thumb' + (file._spoiler ? ' is-spoiler' : '');
     const img = document.createElement('img');
     img.src = URL.createObjectURL(file);
     img.alt = file.name;
@@ -190,6 +217,7 @@ _renderPiPImageQueue() {
       this._renderPiPImageQueue();
     });
     thumb.appendChild(img);
+    thumb.appendChild(this._makeSpoilerToggle(file, true));
     thumb.appendChild(removeBtn);
     bar.appendChild(thumb);
   });
@@ -2772,6 +2800,64 @@ _setupModalExpand() {
 },
 
 /** Show a custom image context menu (Save / Copy / Open in tab) */
+// ── Hide Image (viewer-side) ──────────────────────────────
+// A per-device way to collapse any chat image you don't want to see. Stored
+// by normalized absolute URL in localStorage so it persists across reloads
+// and re-renders. Distinct from the sender-side "Mark as spoiler" feature:
+// spoilers blur for everyone, hiding is a private comfort toggle.
+
+_normalizeImgSrc(u) {
+  try { return new URL(u, window.location.origin).href; } catch { return String(u || ''); }
+},
+
+_loadHiddenImages() {
+  if (this._hiddenImageSet) return this._hiddenImageSet;
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem('haven_hidden_images') || '[]'); } catch {}
+  this._hiddenImageSet = new Set(Array.isArray(arr) ? arr : []);
+  return this._hiddenImageSet;
+},
+
+_saveHiddenImages() {
+  try {
+    localStorage.setItem('haven_hidden_images', JSON.stringify([...this._loadHiddenImages()]));
+  } catch {}
+},
+
+_isImageHidden(u) {
+  return this._loadHiddenImages().has(this._normalizeImgSrc(u));
+},
+
+_hideImage(u) {
+  this._loadHiddenImages().add(this._normalizeImgSrc(u));
+  this._saveHiddenImages();
+},
+
+_unhideImage(u) {
+  this._loadHiddenImages().delete(this._normalizeImgSrc(u));
+  this._saveHiddenImages();
+},
+
+_hiddenImagePlaceholder(u) {
+  const abs = this._escapeHtml(this._normalizeImgSrc(u));
+  const label = (typeof t === 'function' && t('app.messages.image_hidden')) || 'Image hidden';
+  const hint = (typeof t === 'function' && t('app.messages.click_to_show')) || 'click to show';
+  return `<span class="hidden-image" role="button" tabindex="0" data-hidden-src="${abs}" title="${hint}">\u{1F648} ${this._escapeHtml(label)} — ${this._escapeHtml(hint)}</span>`;
+},
+
+// Swap a clicked "hidden image" placeholder back to a live image element.
+_revealHiddenImage(ph) {
+  if (!ph) return;
+  const src = ph.dataset.hiddenSrc;
+  if (!src) return;
+  this._unhideImage(src);
+  const img = document.createElement('img');
+  img.src = src;
+  img.className = 'chat-image';
+  img.alt = 'image';
+  ph.replaceWith(img);
+},
+
 _showImageContextMenu(e, src) {
   this._hideImageContextMenu();
   const menu = document.createElement('div');
@@ -2781,6 +2867,7 @@ _showImageContextMenu(e, src) {
     <button data-action="save">💾 Save Image</button>
     <button data-action="copy">📋 Copy Image</button>
     <button data-action="open">🔗 Open in New Tab</button>
+    <button data-action="hide">🙈 ${this._escapeHtml((typeof t === 'function' && t('app.messages.hide_image')) || 'Hide Image')}</button>
   `;
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
@@ -2871,6 +2958,19 @@ _showImageContextMenu(e, src) {
       return;
     } else if (action === 'open') {
       window.open(src, '_blank', 'noopener,noreferrer');
+    } else if (action === 'hide') {
+      this._hideImage(src);
+      // Collapse every live copy of this image to a placeholder right away.
+      const abs = this._normalizeImgSrc(src);
+      document.querySelectorAll('img.chat-image').forEach(img => {
+        if (this._normalizeImgSrc(img.getAttribute('src')) === abs) {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = this._hiddenImagePlaceholder(abs);
+          img.replaceWith(tmp.firstElementChild);
+        }
+      });
+      // If hidden from the lightbox, close it too.
+      this._closeLightbox?.();
     }
     this._hideImageContextMenu();
   });

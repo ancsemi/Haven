@@ -682,14 +682,14 @@ module.exports = function register(socket, ctx) {
     }
 
     if (channel.text_enabled === 0) {
-      const isMedia = /^\/uploads\b/i.test(content.trim()) || /^\[file:[^\]]+\]\(/i.test(content.trim());
+      const isMedia = /^(?:spoiler-img:)?\/uploads\b/i.test(content.trim()) || /^\[file:[^\]]+\]\(/i.test(content.trim());
       if (!isMedia || channel.media_enabled === 0) {
         return socket.emit('error-msg', 'Text messages are disabled in this channel');
       }
     }
 
     if (channel.media_enabled === 0 && !socket.user.isAdmin) {
-      const isMediaContent = /^\/uploads\b/i.test(content.trim()) || /^\[file:[^\]]+\]\(/i.test(content.trim());
+      const isMediaContent = /^(?:spoiler-img:)?\/uploads\b/i.test(content.trim()) || /^\[file:[^\]]+\]\(/i.test(content.trim());
       if (isMediaContent) {
         return socket.emit('error-msg', 'Media uploads are disabled in this channel');
       }
