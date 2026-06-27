@@ -2450,28 +2450,33 @@ _applyImageMode(mode) {
 _setupEmbedSizePicker() {
   const picker = document.getElementById('embed-size-picker');
   if (!picker) return;
-
-  const saved = localStorage.getItem('haven-embed-size') || 'normal';
-  this._applyEmbedSize(saved);
-  picker.querySelectorAll('[data-embed-size]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.embedSize === saved);
-  });
-
+  this._applyEmbedSize(this._embedSize());
   picker.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-embed-size]');
-    if (!btn) return;
-    const mode = btn.dataset.embedSize;
-    this._applyEmbedSize(mode);
-    localStorage.setItem('haven-embed-size', mode);
-    picker.querySelectorAll('[data-embed-size]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    if (btn) this._applyEmbedSize(btn.dataset.embedSize);
   });
 },
 
+// Embed size is the single source of truth shared by the Settings picker and
+// the per-embed ⤢ toggle (see app-messages.js). Legacy values are migrated.
+_normalizeEmbedSize(mode) {
+  mode = ({ normal: 'medium', large: 'full' })[mode] || mode;
+  return ['full', 'medium', 'small', 'off'].includes(mode) ? mode : 'medium';
+},
+
+_embedSize() {
+  return this._normalizeEmbedSize(localStorage.getItem('haven-embed-size'));
+},
+
 _applyEmbedSize(mode) {
-  document.body.classList.remove('embed-size-off', 'embed-size-large');
-  if (mode === 'off') document.body.classList.add('embed-size-off');
-  if (mode === 'large') document.body.classList.add('embed-size-large');
+  mode = this._normalizeEmbedSize(mode);
+  localStorage.setItem('haven-embed-size', mode);
+  document.body.classList.remove('embed-size-off', 'embed-size-small', 'embed-size-medium', 'embed-size-full');
+  document.body.classList.add(`embed-size-${mode}`);
+  const label = `⤢ ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+  document.querySelectorAll('.lp-size').forEach(b => { b.textContent = label; });
+  const picker = document.getElementById('embed-size-picker');
+  if (picker) picker.querySelectorAll('[data-embed-size]').forEach(b => b.classList.toggle('active', b.dataset.embedSize === mode));
 },
 
 // ── Role Display Picker ──

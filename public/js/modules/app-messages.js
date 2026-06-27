@@ -1387,6 +1387,8 @@ _fetchLinkPreviews(containerEl) {
   // - this._linkPreviewInflight: url -> Promise<data>  (dedupe concurrent fetches)
   if (!this._linkPreviewCache) this._linkPreviewCache = new Map();
   if (!this._linkPreviewInflight) this._linkPreviewInflight = new Map();
+  if (!this._collapsedEmbeds) this._collapsedEmbeds = new Set();
+  if (!/\bembed-size-/.test(document.body.className)) this._applyEmbedSize(this._embedSize());
   const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
 
   const links = containerEl.querySelectorAll('.message-content a[href]');
@@ -1400,16 +1402,21 @@ _fetchLinkPreviews(containerEl) {
     if (/^https:\/\/media\d*\.giphy\.com\//i.test(url)) return;
     if (url.startsWith(window.location.origin)) return;
 
-    // ── Inline YouTube embed ────────────────────────────
+    // ── Inline YouTube embed (wrapped in the shared embed chrome) ──
     const ytVideoId = this._extractYouTubeVideoId(url);
     if (ytVideoId) {
       const msgContent = link.closest('.message-content');
       if (!msgContent) return;
-      if (msgContent.querySelector(`.link-preview-yt[data-url="${CSS.escape(url)}"]`)) return;
+      if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
+      const ytCollapsed = this._collapsedEmbeds.has(url);
       const wrapper = document.createElement('div');
-      wrapper.className = 'link-preview-yt';
+      wrapper.className = 'link-preview link-preview--yt' + (ytCollapsed ? ' lp-collapsed' : '');
       wrapper.dataset.url = url;
-      wrapper.innerHTML = `<iframe src="https://www.youtube.com/embed/${this._escapeHtml(ytVideoId)}?rel=0" width="100%" height="270" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+      wrapper.style.setProperty('--lp-accent', '#ff0000');
+      wrapper.innerHTML =
+        this._embedHeaderHtml('YouTube', ytCollapsed) +
+        `<div class="lp-content"><div class="link-preview-yt"><iframe src="https://www.youtube.com/embed/${this._escapeHtml(ytVideoId)}?rel=0" width="100%" height="270" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div></div>`;
+      this._wireEmbedControls(wrapper, url);
       msgContent.appendChild(wrapper);
       if (this._coupledToBottom) this._scrollToBottom(true);
       return; // skip generic link preview for YouTube
@@ -1444,57 +1451,77 @@ _fetchLinkPreviews(containerEl) {
 
     dataPromise
       .then(data => {
-        if (!data || (!data.title && !data.description)) return;
+        if (!data || (!data.title && !data.description && !data.text)) return;
         const msgContent = link.closest('.message-content');
         if (!msgContent) return;
 
         // Don't add duplicate previews
         if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
 
-        // ── Inline video embed (og:video MP4/WebM) ──
-        if (data.video && (data.videoType || /\.(mp4|webm|ogg)(\?[^#]*)?$/i.test(data.video))) {
-          const videoCard = document.createElement('div');
-          videoCard.className = 'link-preview link-preview--video';
-          videoCard.dataset.url = url;
-          let vInner = '<video controls preload="metadata" playsinline style="max-width:100%;max-height:400px;border-radius:8px;display:block"';
-          if (data.image) vInner += ` poster="${this._escapeHtml(data.image)}"`;
-          vInner += `><source src="${this._escapeHtml(data.video)}" type="${this._escapeHtml(data.videoType || 'video/mp4')}"></video>`;
-          vInner += '<div class="link-preview-text">';
-          if (data.siteName) vInner += `<span class="link-preview-site">${this._escapeHtml(data.siteName)}</span>`;
-          if (data.title) vInner += `<a class="link-preview-title" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow">${this._escapeHtml(data.title)}</a>`;
-          vInner += '</div>';
-          videoCard.innerHTML = vInner;
-          const wasAtBottom = this._coupledToBottom;
-          msgContent.appendChild(videoCard);
-          if (wasAtBottom) this._scrollToBottom(true);
-          return;
-        }
-
-        const card = document.createElement('a');
+        // Unified rich embed card — social posts (Bluesky / X) gain an author
+        // row, avatar and engagement stats; everything else renders the same
+        // chrome (accent header, size toggle, collapse) with title/text/media.
+        const collapsed = this._collapsedEmbeds.has(url);
+        const accent = (typeof data.accentColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(data.accentColor)) ? data.accentColor : null;
+        const isSocial = !!(data.author || data.handle);
         const hasGallery = Array.isArray(data.images) && data.images.length >= 2;
-        card.className = hasGallery ? 'link-preview link-preview--gallery' : 'link-preview';
-        card.href = url;
-        card.target = '_blank';
-        card.rel = 'noopener noreferrer nofollow';
-        card.dataset.url = url;
+        const isInlineVideo = data.video && (data.videoType || /\.(mp4|webm|ogg)(\?[^#]*)?$/i.test(data.video));
 
-        let inner = '';
+        const card = document.createElement('div');
+        card.className = 'link-preview link-preview--rich'
+          + (isSocial ? ' link-preview--social' : '')
+          + (hasGallery ? ' link-preview--gallery' : '')
+          + (collapsed ? ' lp-collapsed' : '');
+        card.dataset.url = url;
+        if (accent) card.style.setProperty('--lp-accent', accent);
+
+        // Author row (social) or title (generic) + post text
+        let meta = '';
+        if (isSocial) {
+          meta += '<div class="lp-author">';
+          if (data.avatar) meta += `<img class="lp-avatar" src="${this._escapeHtml(data.avatar)}" alt="" loading="lazy">`;
+          if (data.author) meta += `<span class="lp-author-name">${this._escapeHtml(data.author)}</span>`;
+          if (data.handle) meta += `<span class="lp-handle">${this._escapeHtml(data.handle)}</span>`;
+          meta += '</div>';
+        } else if (data.title) {
+          meta += `<span class="link-preview-title">${this._escapeHtml(data.title)}</span>`;
+        }
+        const textContent = data.text || data.description;
+        if (textContent) meta += `<span class="lp-text">${this._escapeHtml(textContent)}</span>`;
+
+        // Media — gallery grid, inline player, or image (with play badge if a
+        // non-inline video is linked, e.g. a Bluesky video post).
+        let media = '';
         if (hasGallery) {
           const count = Math.min(data.images.length, 4);
-          inner += `<div class="link-preview-gallery" data-count="${count}">`;
+          media += `<div class="link-preview-gallery" data-count="${count}">`;
           data.images.slice(0, 4).forEach(imgUrl => {
-            inner += `<img class="link-preview-gallery-img" src="${this._escapeHtml(imgUrl)}" alt="">`;
+            media += `<img class="link-preview-gallery-img" src="${this._escapeHtml(imgUrl)}" alt="" loading="lazy">`;
           });
-          inner += '</div>';
+          media += '</div>';
+        } else if (isInlineVideo) {
+          media += `<video class="lp-video" controls preload="metadata" playsinline${data.image ? ` poster="${this._escapeHtml(data.image)}"` : ''}><source src="${this._escapeHtml(data.video)}" type="${this._escapeHtml(data.videoType || 'video/mp4')}"></video>`;
         } else if (data.image) {
-          inner += `<img class="link-preview-image" src="${this._escapeHtml(data.image)}" alt="">`;
+          media += `<a class="lp-media" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow"><img class="lp-image" src="${this._escapeHtml(data.image)}" alt="" loading="lazy">${data.video ? '<span class="lp-play"></span>' : ''}</a>`;
         }
-        inner += '<div class="link-preview-text">';
-        if (data.siteName) inner += `<span class="link-preview-site">${this._escapeHtml(data.siteName)}</span>`;
-        if (data.title) inner += `<span class="link-preview-title">${this._escapeHtml(data.title)}</span>`;
-        if (data.description) inner += `<span class="link-preview-desc">${this._escapeHtml(data.description).slice(0, 200)}</span>`;
-        inner += '</div>';
-        card.innerHTML = inner;
+
+        // Engagement stats (Bluesky / X) — skip any the source didn't provide.
+        let stats = '';
+        if (data.stats) {
+          const parts = [['💬', data.stats.replies], ['🔁', data.stats.reposts], ['❤️', data.stats.likes], ['👁', data.stats.views]]
+            .map(([icon, v]) => { const c = this._cnt(v); return c == null ? null : `<span>${icon} ${c}</span>`; })
+            .filter(Boolean);
+          if (parts.length) stats = `<div class="lp-stats">${parts.join('')}</div>`;
+        }
+
+        card.innerHTML =
+          this._embedHeaderHtml(data.siteName, collapsed) +
+          '<div class="lp-content">' +
+            (meta ? `<a class="lp-meta" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow">${meta}</a>` : '') +
+            media +
+            stats +
+          '</div>';
+        this._wireEmbedControls(card, url);
 
         const wasAtBottom = this._coupledToBottom;
         msgContent.appendChild(card);
@@ -1505,6 +1532,51 @@ _fetchLinkPreviews(containerEl) {
       })
       .catch(() => {});
   });
+},
+
+// ── Shared embed chrome (size toggle + per-message collapse) ──────────
+// Mirrors the Haven mobile app's embed controls. The global Full/Medium/Small/Off
+// size preference is the shared one driven by the Settings picker (_embedSize /
+// _applyEmbedSize live in app-media.js); the per-card ⤢ button is a quick cycle
+// through Full→Medium→Small (Off stays Settings-only so the button can't hide
+// itself), and the ▾/▸ caret collapses a single embed for this session.
+
+/** Header row markup: site name (accent), size cycle button, collapse caret. */
+_embedHeaderHtml(siteName, collapsed) {
+  const size = this._embedSize();
+  const label = size.charAt(0).toUpperCase() + size.slice(1);
+  return '<div class="lp-header">'
+    + `<span class="lp-site">${this._escapeHtml(siteName || 'Link')}</span>`
+    + `<button type="button" class="lp-size" title="Embed size (Settings ▸ Link Previews for Off)">⤢ ${label}</button>`
+    + `<button type="button" class="lp-collapse" title="Collapse">${collapsed ? '▸' : '▾'}</button>`
+    + '</div>';
+},
+
+/** Wire the size + collapse buttons on a freshly-built embed card. */
+_wireEmbedControls(card, url) {
+  const sizeBtn = card.querySelector('.lp-size');
+  if (sizeBtn) sizeBtn.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const order = ['full', 'medium', 'small'];
+    this._applyEmbedSize(order[(order.indexOf(this._embedSize()) + 1) % order.length]);
+  });
+  const colBtn = card.querySelector('.lp-collapse');
+  if (colBtn) colBtn.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isCol = card.classList.toggle('lp-collapsed');
+    isCol ? this._collapsedEmbeds.add(url) : this._collapsedEmbeds.delete(url);
+    colBtn.textContent = isCol ? '▸' : '▾';
+  });
+},
+
+/** Compact engagement count (1.2K / 3.4M); null for missing/negative values. */
+_cnt(n) {
+  if (n == null || n < 0) return null;
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
 },
 
 /**
