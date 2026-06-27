@@ -4941,6 +4941,28 @@ details.sound-section:not([open]) .sound-section-label::before {
   align-items: center;
 }
 
+/* ── Group DM Styles ──────────────────────────────────── */
+.group-dm-user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.group-dm-user-row:hover {
+  background: var(--hover-bg, rgba(255,255,255,0.05));
+}
+.group-dm-user-row input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+#group-dm-create-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Message Input ─────────────────────────────────────── */
 
 .message-input-area {
@@ -10219,6 +10241,28 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   align-items: center;
 }
 
+/* ── Group DM Styles ──────────────────────────────────── */
+.group-dm-user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.group-dm-user-row:hover {
+  background: var(--hover-bg, rgba(255,255,255,0.05));
+}
+.group-dm-user-row input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+#group-dm-create-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .btn-delete-user {
   flex-shrink: 0;
   background: var(--danger) !important;
@@ -14565,6 +14609,28 @@ ul.chat-list { list-style-type: disc; }
   gap: 6px;
   align-items: center;
 }
+
+/* ── Group DM Styles ──────────────────────────────────── */
+.group-dm-user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.group-dm-user-row:hover {
+  background: var(--hover-bg, rgba(255,255,255,0.05));
+}
+.group-dm-user-row input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+#group-dm-create-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .poll-option-row .poll-option-input {
   flex: 1;
   padding: 6px 10px;
@@ -14763,6 +14829,28 @@ ul.chat-list { list-style-type: disc; }
   display: flex;
   gap: 5px;
   align-items: center;
+}
+
+/* ── Group DM Styles ──────────────────────────────────── */
+.group-dm-user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.group-dm-user-row:hover {
+  background: var(--hover-bg, rgba(255,255,255,0.05));
+}
+.group-dm-user-row input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+#group-dm-create-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .organize-tag-input {
   width: 110px;
@@ -16951,5 +17039,27 @@ ul.chat-list { list-style-type: disc; }
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* ── Group DM Styles ──────────────────────────────────── */
+.group-dm-user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.group-dm-user-row:hover {
+  background: var(--hover-bg, rgba(255,255,255,0.05));
+}
+.group-dm-user-row input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+#group-dm-create-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .persona-edit-row input[type=tex

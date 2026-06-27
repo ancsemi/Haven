@@ -1419,6 +1419,150 @@ module.exports = function register(socket, ctx) {
     socket.emit('error-msg', `Removed ${targetUser.username} from #${channel.name}`);
   });
 
+  // ── Group DM (3+ participants) ──────────────────────────
+  socket.on('start-group-dm', (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.user.isGuest) {
+      return socket.emit('error-msg', 'Guests cannot create group conversations');
+    }
+    let userIds = [];
+    if (Array.isArray(data.userIds)) {
+      userIds = [...new Set(data.userIds.map(n => isInt(n) ? n : null).filter(Boolean))];
+      userIds = userIds.filter(id => id !== socket.user.id);
+    }
+    if (userIds.length < 2) {
+      return socket.emit('error-msg', 'Group DMs require at least 3 participants (you + 2 others)');
+    }
+    const placeholders = userIds.map(() => '?').join(',');
+    const validUsers = db.prepare(
+      `SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u
+       LEFT JOIN bans b ON u.id = b.user_id
+       WHERE u.id IN (${placeholders}) AND b.id IS NULL`
+    ).all(...userIds);
+    if (validUsers.length !== userIds.length) {
+      return socket.emit('error-msg', 'One or more users not found');
+    }
+    const allMembers = [socket.user, ...validUsers];
+    const code = generateChannelCode();
+    try {
+      const result = db.prepare(
+        "INSERT INTO channels (name, code, created_by, is_dm) VALUES ('Group', ?, ?, 1)"
+      ).run(code, socket.user.id);
+      const channelId = result.lastInsertRowid;
+      const insertMember = db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+      insertMember.run(channelId, socket.user.id);
+      for (const uid of userIds) insertMember.run(channelId, uid);
+      socket.join(`channel:${code}`);
+      // Build dm_members list for the initiator
+      const dmMembers = allMembers.map(u => ({ id: u.id, username: u.username }));
+      socket.emit('dm-opened', {
+        id: channelId, code, name: 'Group', is_dm: 1,
+        dm_members: dmMembers, is_group_dm: 1
+      });
+      // Notify other online participants
+      for (const [, s] of io.of('/').sockets) {
+        if (s.user && userIds.includes(s.user.id)) {
+          s.join(`channel:${code}`);
+          const others = allMembers.filter(m => m.id !== s.user.id).map(u => ({ id: u.id, username: u.username }));
+          s.emit('dm-opened', {
+            id: channelId, code, name: 'Group', is_dm: 1,
+            dm_members: others, is_group_dm: 1
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Start group DM error:', err);
+      socket.emit('error-msg', 'Failed to create group conversation');
+    }
+  });
+
+  // ── Add member to group DM ──────────────────────────────
+  socket.on('add-dm-member', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const channelId = isInt(data.channelId) ? data.channelId : null;
+    const targetUserId = isInt(data.targetUserId) ? data.targetUserId : null;
+    if (!channelId || !targetUserId) return;
+    const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND is_dm = 1').get(channelId);
+    if (!channel) return socket.emit('error-msg', 'DM not found');
+    const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id);
+    if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'You are not a member of this conversation');
+    const target = db.prepare(
+      'SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id = ? AND b.id IS NULL'
+    ).get(targetUserId);
+    if (!target) return socket.emit('error-msg', 'User not found');
+    const alreadyMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, targetUserId);
+    if (alreadyMember) return socket.emit('error-msg', 'User is already in this conversation');
+    try {
+      db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, targetUserId);
+      const rows = db.prepare(
+        "SELECT u.id, COALESCE(u.display_name, u.username) as username FROM channel_members cm JOIN users u ON cm.user_id = u.id WHERE cm.channel_id = ?"
+      ).all(channelId);
+      const dmMembers = rows.map(r => ({ id: r.id, username: r.username }));
+      for (const [, s] of io.of('/').sockets) {
+        if (s.user && s.user.id === targetUserId) {
+          s.join(`channel:${channel.code}`);
+          const others = rows.filter(r => r.id !== targetUserId).map(r => ({ id: r.id, username: r.username }));
+          s.emit('dm-opened', {
+            id: channelId, code: channel.code, name: channel.name, is_dm: 1,
+            dm_members: others, is_group_dm: 1
+          });
+        } else if (s.user && rows.some(r => r.id === s.user.id) && s.user.id !== targetUserId) {
+          s.emit('dm-members-updated', {
+            channelId, channelCode: channel.code, dm_members: dmMembers
+          });
+        }
+      }
+      socket.emit('error-msg', `Added ${target.username} to the conversation`);
+    } catch (err) {
+      console.error('Add DM member error:', err);
+      socket.emit('error-msg', 'Failed to add member');
+    }
+  });
+
+  // ── Remove/leave member from group DM ───────────────────
+  socket.on('remove-dm-member', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const channelId = isInt(data.channelId) ? data.channelId : null;
+    const targetUserId = isInt(data.targetUserId) ? data.targetUserId : null;
+    if (!channelId || !targetUserId) return;
+    const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND is_dm = 1').get(channelId);
+    if (!channel) return socket.emit('error-msg', 'DM not found');
+    const isTargetSelf = targetUserId === socket.user.id;
+    const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, socket.user.id);
+    if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
+    const targetUser = db.prepare('SELECT username FROM users WHERE id = ?').get(targetUserId);
+    db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channelId, targetUserId);
+    for (const [, s] of io.of('/').sockets) {
+      if (s.user && s.user.id === targetUserId) {
+        s.leave(`channel:${channel.code}`);
+        s.emit('dm-left', { channelId, channelCode: channel.code });
+      }
+    }
+    // Check remaining members count
+    const remaining = db.prepare('SELECT COUNT(*) as cnt FROM channel_members WHERE channel_id = ?').get(channelId);
+    if (remaining.cnt === 0) {
+      // Last member left — delete the DM channel
+      db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
+      db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channelId);
+      db.prepare('DELETE FROM channels WHERE id = ?').run(channelId);
+    } else {
+      const rows = db.prepare(
+        "SELECT u.id, COALESCE(u.display_name, u.username) as username FROM channel_members cm JOIN users u ON cm.user_id = u.id WHERE cm.channel_id = ?"
+      ).all(channelId);
+      for (const [, s] of io.of('/').sockets) {
+        if (s.user && rows.some(r => r.id === s.user.id)) {
+          s.emit('dm-members-updated', {
+            channelId, channelCode: channel.code,
+            dm_members: rows.map(r => ({ id: r.id, username: r.username }))
+          });
+        }
+      }
+    }
+    if (!isTargetSelf) {
+      socket.emit('error-msg', `Removed ${targetUser ? targetUser.username : 'user'} from the conversation`);
+    }
+  });
+
   // ── Direct Messages ─────────────────────────────────────
   socket.on('start-dm', (data) => {
     if (!data || typeof data !== 'object') return;
