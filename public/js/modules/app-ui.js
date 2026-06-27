@@ -4040,27 +4040,53 @@ _setupUI() {
   const _renderGuestChannels = () => {
     const host = document.getElementById('guest-channels-list');
     if (!host) return;
-    const all = (this.channels || []).filter(c =>
-      !c.is_dm && !c.parent_channel_id
-    );
-    if (all.length === 0) {
+    const chans = (this.channels || []).filter(c => !c.is_dm);
+    if (chans.length === 0) {
       host.innerHTML = '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No channels yet.</p>';
       return;
     }
     // CSV of channel ids. Empty string = no channels (guests can log in but have nowhere to go).
+    // (#5401) Sub-channels and voice rooms are listed individually so admins
+    // grant guests exactly the channels they intend — no implicit cascade.
     const raw = this.serverSettings?.guest_channels || '';
     const selected = new Set(
       raw.split(',').map(s => s.trim()).filter(Boolean).map(s => parseInt(s)).filter(Number.isFinite)
     );
-    host.innerHTML = all.map(ch => {
+
+    const parents = chans.filter(c => !c.parent_channel_id)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    const subsByParent = new Map();
+    chans.filter(c => c.parent_channel_id).forEach(c => {
+      if (!subsByParent.has(c.parent_channel_id)) subsByParent.set(c.parent_channel_id, []);
+      subsByParent.get(c.parent_channel_id).push(c);
+    });
+    for (const list of subsByParent.values()) {
+      list.sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    }
+
+    const tagsFor = (ch) => {
+      const tags = [];
+      if (ch.is_private || ch.code_visibility === 'private') tags.push('private');
+      if (ch.text_enabled === 0 && ch.voice_enabled) tags.push('voice');
+      return tags.length
+        ? ` <small style="color:var(--text-muted)">(${tags.join(', ')})</small>` : '';
+    };
+    const row = (ch, isSub) => {
       const checked = selected.has(ch.id);
-      const lockTag = (ch.is_private || ch.code_visibility === 'private')
-        ? ' <small style="color:var(--text-muted)">(private)</small>' : '';
-      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:0.85rem">
-        <input type="checkbox" class="guest-channel-cb" data-cid="${ch.id}" ${checked ? 'checked' : ''}>
-        <span>#${this._escapeHtml(ch.name || '')}${lockTag}</span>
+      const prefix = isSub ? '↳ ' : '#';
+      const parentAttr = isSub ? ` data-parent="${ch.parent_channel_id}"` : '';
+      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:0.85rem${isSub ? ';margin-left:18px' : ''}">
+        <input type="checkbox" class="guest-channel-cb" data-cid="${ch.id}"${parentAttr} ${checked ? 'checked' : ''}>
+        <span>${prefix}${this._escapeHtml(ch.name || '')}${tagsFor(ch)}</span>
       </label>`;
-    }).join('');
+    };
+
+    let html = '';
+    for (const p of parents) {
+      html += row(p, false);
+      for (const sub of (subsByParent.get(p.id) || [])) html += row(sub, true);
+    }
+    host.innerHTML = html;
     const toggle = document.getElementById('guests-enabled');
     if (toggle) toggle.checked = (this.serverSettings?.guests_enabled === 'true');
   };
@@ -4074,6 +4100,21 @@ _setupUI() {
   });
   document.getElementById('guest-channels-none-btn')?.addEventListener('click', () => {
     document.querySelectorAll('.guest-channel-cb').forEach(cb => { cb.checked = false; });
+  });
+  // A sub-channel only appears in the sidebar nested under its parent, so a
+  // guest needs the parent too. Keep the checkboxes consistent: ticking a sub
+  // ticks its parent; unticking a parent unticks its sub-channels. (#5401)
+  document.getElementById('guest-channels-list')?.addEventListener('change', (e) => {
+    const cb = e.target.closest?.('.guest-channel-cb');
+    if (!cb) return;
+    if (cb.checked && cb.dataset.parent) {
+      const parent = document.querySelector(`.guest-channel-cb[data-cid="${cb.dataset.parent}"]`);
+      if (parent) parent.checked = true;
+    }
+    if (!cb.checked && !cb.dataset.parent) {
+      document.querySelectorAll(`.guest-channel-cb[data-parent="${cb.dataset.cid}"]`)
+        .forEach(sub => { sub.checked = false; });
+    }
   });
   document.getElementById('guest-channels-save-btn')?.addEventListener('click', () => {
     const cbs = Array.from(document.querySelectorAll('.guest-channel-cb'));
