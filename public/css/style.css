@@ -8001,6 +8001,28 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-radius: var(--radius-sm);
   transition: background var(--transition), box-shadow var(--transition);
 }
+/* Compact thread reply — grouped under the previous reply from the same
+   author. Avatar/author header are dropped; a timestamp shows in the avatar
+   gutter on hover, like the main channel's compact rows. */
+.thread-message.thread-compact {
+  margin-bottom: 2px;
+}
+.thread-msg-compact-spacer {
+  background: transparent !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.thread-compact-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--transition);
+  white-space: nowrap;
+}
+.thread-message.thread-compact:hover .thread-compact-time {
+  opacity: 1;
+}
 .thread-message:hover {
   background: rgba(255,255,255,0.02);
   box-shadow: var(--msg-glow);

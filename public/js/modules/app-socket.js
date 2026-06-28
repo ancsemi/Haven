@@ -1701,6 +1701,12 @@ _setupSocketListeners() {
         const next = msgEl.nextElementSibling;
         if (next && next.classList.contains('message-compact')) {
           try { this._promoteCompactToFull(next); } catch (e) { /* don't let promotion failure block removal */ }
+        } else if (next && next.classList.contains('thread-compact')
+                   && !msgEl.classList.contains('thread-compact')) {
+          // Deleting the head of a thread group (a full row): promote the next
+          // compact reply so it keeps an author header. Deleting a middle
+          // compact row needs no promotion — the head above it still stands.
+          try { this._promoteThreadCompactToFull(next); } catch (e) { /* non-fatal */ }
         }
         msgEl.remove();
       });

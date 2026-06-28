@@ -2243,7 +2243,9 @@ _setThreadParentHeader(meta = {}) {
 },
 
 _setThreadReply(msgEl, msgId) {
-  const author = msgEl.querySelector('.thread-msg-author')?.textContent || 'someone';
+  const author = msgEl.querySelector('.thread-msg-author')?.textContent
+    || this._getNickname?.(parseInt(msgEl.dataset.userId, 10), msgEl.dataset.username)
+    || msgEl.dataset.username || 'someone';
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
   const preview = rawContent.length > 70 ? rawContent.substring(0, 70) + '…' : rawContent;
   this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
@@ -2266,7 +2268,9 @@ _clearThreadReply() {
 
 _quoteThreadMessage(msgEl) {
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
-  const author = msgEl.querySelector('.thread-msg-author')?.textContent || 'someone';
+  const author = msgEl.querySelector('.thread-msg-author')?.textContent
+    || this._getNickname?.(parseInt(msgEl.dataset.userId, 10), msgEl.dataset.username)
+    || msgEl.dataset.username || 'someone';
   const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
   const quoteText = `> @${author} wrote:\n${quotedLines}\n`;
 
@@ -2596,8 +2600,16 @@ _appendDMPiPMessage(msg) {
   let prevMsg = null;
   const lastEl = list.lastElementChild;
   if (lastEl && lastEl.dataset && lastEl.dataset.userId && lastEl.dataset.msgId) {
+    // Rebuild enough of the previous message for `_createMessageEl`'s grouping
+    // check. It compares username and persona too, so a prev that only carried
+    // user_id + time never matched and every message rendered ungrouped. (the
+    // dataset already stores these from when the element was created.)
     prevMsg = {
       user_id: parseInt(lastEl.dataset.userId, 10),
+      username: lastEl.dataset.username || null,
+      persona_id: lastEl.dataset.personaId ? parseInt(lastEl.dataset.personaId, 10) : null,
+      persona_username: lastEl.dataset.personaUsername || null,
+      break_chain: lastEl.dataset.breakChain === '1' ? 1 : 0,
       created_at: lastEl.dataset.time
     };
   }
@@ -2926,34 +2938,119 @@ _appendThreadMessage(msg) {
     ? `<div class="thread-msg-more"><button class="thread-msg-more-btn" type="button" aria-label="More actions">${iMore}</button><div class="thread-msg-overflow">${threadOverflowToolbarBtns}</div></div>`
     : '';
 
+  // Group consecutive replies from the same author (within 5 min, no reply
+  // banner) into compact rows, the same way the main channel does — drop the
+  // avatar and author header, keep the content and the hover toolbar. The
+  // thread's parent message lives in a separate preview element, not in this
+  // container, so we only ever group reply-against-reply.
+  let threadCompact = false;
+  const prevEl = container.lastElementChild;
+  if (prevEl && prevEl.classList?.contains('thread-message') && !msg.reply_to) {
+    const samePerson = parseInt(prevEl.dataset.userId, 10) === msg.user_id
+      && (prevEl.dataset.personaId || '') === (msg.persona_id ? String(msg.persona_id) : '');
+    const prevTime = prevEl.dataset.time ? new Date(prevEl.dataset.time).getTime() : 0;
+    const within = prevTime && (new Date(msg.created_at).getTime() - prevTime) < 5 * 60 * 1000;
+    threadCompact = samePerson && within;
+  }
+
   const el = document.createElement('div');
-  el.className = 'thread-message';
+  el.className = 'thread-message' + (threadCompact ? ' thread-compact' : '');
   el.dataset.msgId = msg.id;
   el.dataset.rawContent = msg.content;
-  el.innerHTML = `
-    <div class="thread-msg-row">
-      ${avatarHtml}
-      <div class="thread-msg-body">
-        <div class="thread-msg-header">
-          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-          <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
-          <span class="thread-msg-header-spacer"></span>
+  el.dataset.userId = msg.user_id;
+  el.dataset.time = msg.created_at;
+  // Stash the raw username + avatar so a compact row can be promoted back to a
+  // full row (with the header restored) if the group head above it is deleted,
+  // and so reply/quote can resolve the author on compact rows that have no
+  // `.thread-msg-author` element.
+  el.dataset.username = msg.username || '';
+  if (msg.avatar) el.dataset.avatar = msg.avatar;
+  if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
+  if (threadCompact) {
+    const shortTime = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    el.innerHTML = `
+      <div class="thread-msg-row">
+        <div class="thread-msg-avatar thread-msg-compact-spacer"><span class="thread-compact-time">${this._escapeHtml(shortTime)}</span></div>
+        <div class="thread-msg-body">
           <div class="thread-msg-toolbar">
             <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
             ${threadOverflowHtml}
           </div>
+          <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
+          ${reactionsHtml}
         </div>
-        ${replyHtml}
-        <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-        ${reactionsHtml}
       </div>
-    </div>
-  `;
+    `;
+  } else {
+    el.innerHTML = `
+      <div class="thread-msg-row">
+        ${avatarHtml}
+        <div class="thread-msg-body">
+          <div class="thread-msg-header">
+            <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
+            <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
+            <span class="thread-msg-header-spacer"></span>
+            <div class="thread-msg-toolbar">
+              <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
+              ${threadOverflowHtml}
+            </div>
+          </div>
+          ${replyHtml}
+          <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
+          ${reactionsHtml}
+        </div>
+      </div>
+    `;
+  }
   container.appendChild(el);
   try { this._decryptE2EImages?.(el); } catch {}
   try { this._decryptE2EFiles?.(el); } catch {}
   try { this._setupVideos?.(el); } catch {}
   container.scrollTop = container.scrollHeight;
+},
+
+// Promote a compact thread reply back to a full row (avatar + author header
+// restored), keeping its existing content/toolbar/reactions. Called when the
+// group head above it is deleted, so the new head still shows who sent it —
+// the thread mirror of `_promoteCompactToFull`.
+_promoteThreadCompactToFull(compactEl) {
+  if (!compactEl) return;
+  const userId = parseInt(compactEl.dataset.userId, 10);
+  const rawUsername = compactEl.dataset.username || t('app.messages.unknown_user');
+  const displayName = this._getNickname?.(userId, rawUsername) || rawUsername;
+  const time = compactEl.dataset.time;
+  const color = this._getUserColor(rawUsername);
+  const initial = (displayName || '?').charAt(0).toUpperCase();
+
+  // Preserve the already-rendered content, toolbar, and reactions.
+  const contentHtml = compactEl.querySelector('.thread-msg-content')?.innerHTML || '';
+  const toolbarHtml = compactEl.querySelector('.thread-msg-toolbar')?.outerHTML || '';
+  const reactionsHtml = compactEl.querySelector('.reactions-row')?.outerHTML || '';
+
+  // Avatar: stored at render time, else the online/member list, else initial.
+  const _pool = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
+  const onlineUser = _pool.find(u => u.id === userId) || null;
+  const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
+  const avatarHtml = avatar
+    ? `<img class="thread-msg-avatar" src="${this._escapeHtml(avatar)}" alt="${initial}">`
+    : `<div class="thread-msg-avatar thread-msg-avatar-initial" style="background:${color}">${initial}</div>`;
+
+  compactEl.classList.remove('thread-compact');
+  compactEl.innerHTML = `
+    <div class="thread-msg-row">
+      ${avatarHtml}
+      <div class="thread-msg-body">
+        <div class="thread-msg-header">
+          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
+          <span class="thread-msg-time">${this._formatTime(time)}</span>
+          <span class="thread-msg-header-spacer"></span>
+          ${toolbarHtml}
+        </div>
+        <div class="thread-msg-content">${contentHtml}</div>
+        ${reactionsHtml}
+      </div>
+    </div>
+  `;
 },
 
 _updateThreadPreview(parentId, thread) {
