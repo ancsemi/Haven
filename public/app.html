@@ -129,7 +129,7 @@
           </div>
           <div class="sidebar-split-handle" id="sidebar-split-handle" data-i18n-title="app.actions.drag_to_resize" title="Drag to resize"></div>
           <div class="sidebar-section dm-section-pane" id="dm-pane">
-            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
+            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="create-group-dm-btn" title="Create Group DM" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">👥</button><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
             <div class="dm-list-scroll" id="dm-list"></div>
           </div>
         </div>
@@ -3066,7 +3066,28 @@
     <button class="channel-ctx-item" data-action="dm-mark-read">✅ <span data-i18n="context_menu.dm.mark_read">Mark as Read</span></button>
     <button class="channel-ctx-item" data-action="dm-mute">🔔 <span data-i18n="context_menu.dm.mute">Mute DM</span></button>
     <hr class="channel-ctx-sep">
+    <button class="channel-ctx-item" data-action="dm-add-people" style="display:none">👤 <span>Add People</span></button>
+    <!-- Group DM rename: emits rename-dm event, updates name in DB + all members' UIs -->
+    <button class="channel-ctx-item" data-action="dm-rename-group" style="display:none">✏️ <span>Rename Group</span></button>
+    <button class="channel-ctx-item" data-action="dm-leave-group" style="display:none">🚪 <span>Leave Group</span></button>
+    <hr class="channel-ctx-sep">
     <button class="channel-ctx-item danger" data-action="dm-delete">🗑️ <span data-i18n="context_menu.dm.delete">Delete DM</span></button>
+  </div>
+
+  <!-- Create Group DM Modal -->
+  <div class="modal-overlay" id="create-group-dm-modal" style="display:none">
+    <div class="modal" style="width:450px">
+      <h3>Create Group Conversation</h3>
+      <div style="margin:12px 0">
+        <input type="text" id="group-dm-search" placeholder="Search users..." style="width:100%;padding:8px;box-sizing:border-box">
+      </div>
+      <div id="group-dm-user-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--border-color);border-radius:6px;padding:4px">
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn-sm" id="group-dm-cancel-btn">Cancel</button>
+        <button class="btn-sm btn-accent" id="group-dm-create-btn" disabled>Create Group</button>
+      </div>
+    </div>
   </div>
 
   <!-- Organize Sub-channels Modal -->

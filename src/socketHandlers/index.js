@@ -328,6 +328,34 @@ function setupSocketHandlers(io, db, opts = {}) {
         }
 
         if (ch.is_dm) {
+          // Check if this is a group DM (3+ members)
+          const memberCount = db.prepare(
+            'SELECT COUNT(*) as cnt FROM channel_members WHERE channel_id = ?'
+          ).get(ch.id);
+          const totalMembers = memberCount ? memberCount.cnt : 0;
+
+          if (totalMembers > 2) {
+            // Group DM: populate dm_members with all other participants
+            ch.is_group_dm = 1;
+            const members = db.prepare(`
+              SELECT u.id, COALESCE(u.display_name, u.username) as username
+              FROM users u
+              JOIN channel_members cm ON u.id = cm.user_id
+              WHERE cm.channel_id = ?
+            `).all(ch.id);
+            ch.dm_members = members.map(r => ({ id: r.id, username: r.username }));
+            // Only auto-generate name if it hasn't been custom-set by user.
+            // Without this guard, broadcastChannelLists() in rename-dm would
+            // overwrite the custom name with the auto-generated member list on
+            // every channel list refresh.
+            if (ch.name === 'Group' || !ch.name) {
+              const others = members.filter(m => m.id !== userId);
+              ch.name = others.slice(0, 3).map(m => m.username).join(', ')
+                + (others.length > 3 ? ` +${others.length - 3}` : '');
+            }
+            return; // skip the 1-on-1 DM logic below
+          }
+
           const otherUser = db.prepare(`
             SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u
             JOIN channel_members cm ON u.id = cm.user_id

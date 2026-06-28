@@ -18,9 +18,14 @@ async switchChannel(code) {
   if (jumpBtn) jumpBtn.classList.remove('visible');
   const channel = this.channels.find(c => c.code === code);
   const isDm = channel && channel.is_dm;
-  const displayName = isDm && channel.dm_target
-    ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
-    : channel ? `# ${channel.name}` : code;
+  // Group DMs (3+ participants) show name with 👥 icon instead of @user or #channel.
+  // Uses channel.name (custom or auto-generated from member list), falls back to 'Group'.
+  const isGroupDm = isDm && channel && channel.is_group_dm;
+  const displayName = isGroupDm
+    ? `👥 ${channel.name || 'Group'}`
+    : isDm && channel.dm_target
+      ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
+      : channel ? `# ${channel.name}` : code;
 
   document.getElementById('channel-header-name').textContent = displayName;
   // Clear scramble cache so the effect picks up the new channel name
@@ -745,6 +750,55 @@ _initDmContextMenu() {
     this.socket.emit('delete-dm', { code, attachments });
   });
 
+  // ── Create Group DM button ─────────────────────────
+  document.getElementById('create-group-dm-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    this._addPeopleTargetDm = null;
+    this._openGroupDmModal();
+  });
+
+  // ── Add People to Group DM ─────────────────────────
+  document.querySelector('[data-action="dm-add-people"]')?.addEventListener('click', () => {
+    const code = this._dmCtxMenuCode;
+    if (!code) return;
+    this._closeDmCtxMenu();
+    this._addPeopleTargetDm = code;
+    this._openGroupDmModal();
+  });
+
+  // ── Leave Group DM ─────────────────────────────────
+  document.querySelector('[data-action="dm-leave-group"]')?.addEventListener('click', async () => {
+    const code = this._dmCtxMenuCode;
+    if (!code) return;
+    this._closeDmCtxMenu();
+    const ch = this.channels.find(c => c.code === code);
+    const name = ch ? ch.name : 'this group';
+    const ok = await this._showConfirmModal('🚪 Leave ' + name + '?', 'You will no longer see messages in this group conversation.', { danger: true, confirmLabel: 'Leave' });
+    if (!ok) return;
+    this.socket.emit('remove-dm-member', {
+      channelId: ch ? ch.id : null,
+      targetUserId: this.user.id
+    });
+  });
+
+  // ── Rename Group DM ──────────────────────────────
+  // Right-click → Rename Group on a group DM prompts for a new name and
+  // emits rename-dm to the server, which persists it + broadcasts to all members.
+  document.querySelector('[data-action="dm-rename-group"]')?.addEventListener('click', async () => {
+    const code = this._dmCtxMenuCode;
+    if (!code) return;
+    this._closeDmCtxMenu();
+    const ch = this.channels.find(c => c.code === code);
+    const currentName = ch ? ch.name : '';
+    const newName = prompt('Rename group conversation:', currentName);
+    if (newName && newName.trim()) {
+      this.socket.emit('rename-dm', { code, name: newName.trim() });
+    }
+  });
+
+  // ── Initialize group DM modal ──────────────────────
+  document.getElementById('create-group-dm-modal') && this._initGroupDmModal();
+
   // Close on outside click
   document.addEventListener('click', (e) => {
     if (this._dmCtxMenuEl && !this._dmCtxMenuEl.contains(e.target) && !e.target.closest('.dm-more-btn')) {
@@ -757,6 +811,17 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   this._dmCtxMenuCode = code;
   const menu = this._dmCtxMenuEl;
   if (!menu) return;
+
+  // Show/hide group DM options (Add People, Rename Group, Leave Group)
+  // based on whether this is a group DM (3+ participants) vs a 1-on-1 DM.
+  const ch = this.channels.find(c => c.code === code);
+  const isGroup = ch && ch.is_group_dm;
+  const addPeopleBtn = menu.querySelector('[data-action="dm-add-people"]');
+  const renameGroupBtn = menu.querySelector('[data-action="dm-rename-group"]');
+  const leaveGroupBtn = menu.querySelector('[data-action="dm-leave-group"]');
+  if (addPeopleBtn) addPeopleBtn.style.display = isGroup ? '' : 'none';
+  if (renameGroupBtn) renameGroupBtn.style.display = isGroup ? '' : 'none';
+  if (leaveGroupBtn) leaveGroupBtn.style.display = isGroup ? '' : 'none';
 
   // Update mute label
   const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
@@ -789,6 +854,97 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
 _closeDmCtxMenu() {
   if (this._dmCtxMenuEl) this._dmCtxMenuEl.style.display = 'none';
   this._dmCtxMenuCode = null;
+},
+
+// ── Open/init group DM creation modal ─────────────────
+_openGroupDmModal() {
+  const modal = document.getElementById('create-group-dm-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  // Fetch all members from the server
+  this.socket.emit('get-all-members', {}, (res) => {
+    if (res && res.members) {
+      this._renderGroupDmUserList(res.members);
+    }
+  });
+},
+
+_initGroupDmModal() {
+  const modal = document.getElementById('create-group-dm-modal');
+
+  // Cancel button
+  document.getElementById('group-dm-cancel-btn')?.addEventListener('click', () => {
+    modal.style.display = 'none';
+    this._addPeopleTargetDm = null;
+  });
+
+  // Click overlay to close
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.style.display = 'none';
+      this._addPeopleTargetDm = null;
+    }
+  });
+
+  // Create button
+  document.getElementById('group-dm-create-btn')?.addEventListener('click', () => {
+    const checkboxes = modal.querySelectorAll('.group-dm-user-check:checked');
+    const userIds = Array.from(checkboxes).map(cb => parseInt(cb.value)).filter(id => !isNaN(id));
+    if (this._addPeopleTargetDm) {
+      // Adding people to existing group DM
+      for (const uid of userIds) {
+        this.socket.emit('add-dm-member', {
+          channelId: this.channels.find(c => c.code === this._addPeopleTargetDm)?.id,
+          targetUserId: uid
+        });
+      }
+    } else {
+      this.socket.emit('start-group-dm', { userIds });
+    }
+    modal.style.display = 'none';
+    this._addPeopleTargetDm = null;
+  });
+
+  // Search filter
+  document.getElementById('group-dm-search')?.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase().trim();
+    modal.querySelectorAll('.group-dm-user-row').forEach(row => {
+      const name = (row.dataset.name || '').toLowerCase();
+      row.style.display = name.includes(q) ? '' : 'none';
+    });
+  });
+},
+
+_renderGroupDmUserList(members) {
+  const list = document.getElementById('group-dm-user-list');
+  if (!list) return;
+
+  // If adding to existing group, exclude current members
+  const targetCh = this._addPeopleTargetDm
+    ? this.channels.find(c => c.code === this._addPeopleTargetDm)
+    : null;
+  const memberIds = targetCh ? (targetCh.dm_members || []).map(m => m.id) : [];
+
+  const available = members.filter(m =>
+    !m.banned && m.id !== this.user.id && !memberIds.includes(m.id)
+  );
+
+  list.innerHTML = available.map(m => `
+    <label class="group-dm-user-row" data-name="${this._escapeHtml(m.displayName || m.username)}">
+      <input type="checkbox" class="group-dm-user-check" value="${m.id}">
+      <span>${this._escapeHtml(m.displayName || m.username)}</span>
+      <span style="opacity:0.5;font-size:0.8rem">@${this._escapeHtml(m.username)}</span>
+    </label>
+  `).join('');
+
+  // Enable/disable create button based on selection count
+  list.querySelectorAll('.group-dm-user-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = list.querySelectorAll('.group-dm-user-check:checked').length;
+      const min = this._addPeopleTargetDm ? 1 : 2;
+      document.getElementById('group-dm-create-btn').disabled = checked < min;
+    });
+  });
 },
 
 /* ── Sub-channel Subscriptions Panel ──────────────────── */
@@ -1489,7 +1645,10 @@ _renderDmOrganizeList() {
   const allTags = [...new Set(displayList.map(c => assignments[c.code]).filter(Boolean))].sort();
   const hasTags = allTags.length > 0;
 
-  const getDmName = (ch) => ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+  const getDmName = (ch) => {
+    if (ch.is_group_dm && ch.dm_members) return ch.name;
+    return ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+  };
 
   const sortGroup = (arr, mode) => {
     if (mode === 'alpha') {
@@ -2186,7 +2345,10 @@ _renderChannels() {
     const dmSortMode = localStorage.getItem('haven_dm_sort_mode') || 'manual';
     const dmOrder = JSON.parse(localStorage.getItem('haven_dm_order') || '[]');
 
-    const getDmName = (ch) => ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+    const getDmName = (ch) => {
+      if (ch.is_group_dm && ch.dm_members) return ch.name;
+      return ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
+    };
 
     // Sort DMs by saved order first, then append any new ones
     let sortedDms = [];
@@ -2215,9 +2377,11 @@ _renderChannels() {
       el.className = 'channel-item dm-item' + (ch.code === this.currentChannel ? ' active' : '');
       el.dataset.code = ch.code;
       const dmName = getDmName(ch);
+      const isGroup = ch && ch.is_group_dm;
       el.innerHTML = `
-        <span class="channel-hash">@</span>
+        <span class="channel-hash">${isGroup ? '👥' : '@'}</span>
         <span class="channel-name">${this._escapeHtml(dmName)}</span>
+        ${isGroup ? `<span class="dm-member-count" style="font-size:0.7rem;opacity:0.5;margin-left:4px">${ch.dm_members ? ch.dm_members.length : ''}</span>` : ''}
       `;
       const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
       if (count > 0) {

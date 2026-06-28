@@ -2397,10 +2397,18 @@ _openDMPiP(code) {
   }
   panel.style.display = 'flex';
   panel.dataset.code = code;
-  // Title: partner name
-  const partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
+  // Title: partner name for 1-on-1 DMs (@ username), or group DM name (👥 name).
+  // Group DMs use ch.name (custom or auto-generated) instead of dm_target.
+  let titlePrefix = '@ ';
+  let partnerName;
+  if (ch.is_group_dm) {
+    partnerName = ch.name || 'Group';
+    titlePrefix = '👥 ';
+  } else {
+    partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
+  }
   const titleEl = document.getElementById('dm-pip-title');
-  if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${partnerName} (you)` : `@ ${partnerName}`;
+  if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${partnerName} (you)` : titlePrefix + partnerName;
 
   // Header avatar — pulled from the partner's online presence (best effort)
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');

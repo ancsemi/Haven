@@ -629,14 +629,20 @@ _setupSocketListeners() {
     }
   });
 
-  // Channel renamed — update header if we're in that channel
+  // Channel renamed — update header + sidebar name for all open windows.
+  // For regular channels shows '# name', for DMs/group DMs shows bare name (no # prefix).
   this.socket.on('channel-renamed', (data) => {
+    const ch = this.channels.find(c => c.code === data.code);
+    if (ch) {
+      ch.name = data.name;
+      this._renderChannels();
+    }
     if (data.code === this.currentChannel) {
       const el = document.getElementById('channel-header-name');
-      el.textContent = '# ' + data.name;
+      if (el) el.textContent = (ch && ch.is_dm) ? data.name : '# ' + data.name;
       // Clear scramble cache so the effect picks up the renamed channel
-      delete el.dataset.originalText;
-      el._scrambling = false;
+      delete el?.dataset?.originalText;
+      if (el) el._scrambling = false;
     }
   });
 
@@ -1387,11 +1393,18 @@ _setupSocketListeners() {
   // ── DM opened ───────────────────────────────────
   this.socket.on('dm-opened', (data) => {
     if (!this.channels.find(c => c.code === data.code)) {
+      // For group DMs, auto-generate name from members if not set
+      if (data.is_group_dm && data.dm_members) {
+        const others = data.dm_members.filter(m => m.id !== this.user.id);
+        data.name = others.slice(0, 3).map(m => m.username).join(', ')
+          + (others.length > 3 ? ` +${others.length - 3}` : '');
+      }
       this.channels.push(data);
       this._renderChannels();
     }
     // E2E: pre-fetch partner's public key for new DMs
-    if (data.is_dm && data.dm_target) {
+    // Skip E2E for group DMs — ECDH doesn't scale to multi-party
+    if (data.is_dm && data.dm_target && !data.is_group_dm) {
       this._fetchDMPartnerKey(data);
     }
     // Auto-expand DM section when a DM opens
@@ -1411,6 +1424,37 @@ _setupSocketListeners() {
     if (dmEl) dmEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     // Re-enable any disabled DM buttons
     document.querySelectorAll('.user-dm-btn[disabled]').forEach(b => { b.disabled = false; b.style.opacity = ''; });
+  });
+
+  // ── DM members updated (add/remove in group) ─────────
+  this.socket.on('dm-members-updated', (data) => {
+    const ch = this.channels.find(c => c.code === data.channelCode);
+    if (ch) {
+      ch.dm_members = data.dm_members;
+      const others = data.dm_members.filter(m => m.id !== this.user.id);
+      ch.name = others.slice(0, 3).map(m => m.username).join(', ')
+        + (others.length > 3 ? ` +${others.length - 3}` : '');
+      ch.is_group_dm = 1;
+      this._renderChannels();
+      // If currently viewing this DM, update the header
+      if (this.currentChannel === data.channelCode) {
+        const headerEl = document.getElementById('channel-header-name');
+        if (headerEl) headerEl.textContent = ch.name || 'Group';
+      }
+    }
+  });
+
+  // ── Removed from group DM ────────────────────────────
+  this.socket.on('dm-left', (data) => {
+    const idx = this.channels.findIndex(c => c.code === data.channelCode);
+    if (idx !== -1) {
+      this.channels.splice(idx, 1);
+      // If we were viewing this DM, close the PiP
+      if (this.currentChannel === data.channelCode) {
+        this._closeDMPiP?.();
+      }
+      this._renderChannels();
+    }
   });
 
   // ── Channel code rotated (dynamic codes) ────────
