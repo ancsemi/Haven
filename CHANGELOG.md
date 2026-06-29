@@ -11,6 +11,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.29.0] — 2026-06-29
+
+### Added
+- **Spoiler images and a per-viewer Hide Image option.** When sending an image you can now mark it as a spoiler — an eye toggle on each queued image — and it renders blurred behind a "Spoiler" label for everyone, revealing on click. Works for normal uploads, encrypted DM images, and persona/bundled sends. Separately, you can right-click any image already in chat and choose "Hide Image" to collapse it to a placeholder in your own view only; it's stored per-device, and clicking the placeholder restores the image.
+- **Invite link management.** Admins can now create and manage multiple invite links from a dedicated menu, each with its own per-link channel grants, optional expiry, and use limits. Copying a link is reliable with a clear success toast and a dedicated popout, and the landing site can auto-join the community from an `?invite=` link instead of manual code entry.
+
+### Fixed
+- **Guests couldn't reach sub-channels or voice rooms in their allowed area (#5401).** The guest access picker only listed top-level channels and auto-joined just the public sub-channels under a whitelisted parent, so private sub-channels were unreachable and voice rooms a guest wasn't a member of failed with "not a member of this channel" (the server already allowed guests to use voice once they were in the room). The picker now lists every channel individually — parents, sub-channels, and voice rooms, each tagged so you can see what's private or voice — and guests are joined to exactly the rooms you select (ticking a sub-channel includes its parent so it appears in the sidebar). The server still enforces membership and per-channel settings, so nothing is widened beyond what you grant.
+- **Back-to-back messages from one person showed as separate blocks in pop-out DMs and threads.** Consecutive messages from the same sender within a few minutes now group together — no repeated name/avatar header — the way the main channel already does, in both the DM pop-out and in threads. In threads, deleting the first message of a group now promotes the next reply so it keeps its author header.
+
+### Changed
+- **Haven Desktop download links bumped to v1.4.25** on the landing pages.
+
 ## [3.28.0] — 2026-06-26
 
 ### Added
