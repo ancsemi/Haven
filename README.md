@@ -2,7 +2,7 @@
 
 > **Your server. Your rules. No cloud. No accounts with Big Tech. No one reading your messages.**
 
-![Version](https://img.shields.io/badge/version-2.9.4-blue)
+![Version](https://img.shields.io/github/v/release/ancsemi/Haven?label=version&color=blue)
 ![License](https://img.shields.io/badge/license-MIT--NC-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
@@ -183,6 +183,8 @@ Or manually: `npm install && node server.js`
 | **Formatting** | **Bold**, *italic*, ~~strikethrough~~, `code`, \|\|spoilers\|\|, auto-linked URLs, fenced code blocks with language labels, blockquotes |
 | **Link Previews** | Automatic OG metadata previews for shared URLs with title, description, and thumbnail |
 | **GIF Search** | GIPHY-powered GIF picker — search and send GIFs inline (admin-configurable API key) |
+| **Custom Stickers** | Upload your own sticker packs (single or bulk), send from the picker or with `:stickername:` shortcodes — fresh installs ship with a starter pack |
+| **Personas** | Send messages as alternate characters — type `::Name your message` with autocomplete, per-persona avatars, and `@PersonaName` mentions |
 | **Direct Messages** | Private 1-on-1 conversations — click 💬 on any user in the member list |
 | **User Status** | Online, Away, Do Not Disturb, Invisible — with custom status text and auto-away after 5 min idle |
 | **File Sharing** | Upload and share PDFs, documents, audio, video, archives (up to 25 MB) with inline players |
@@ -197,7 +199,7 @@ Or manually: `npm install && node server.js`
 | **E2E Encryption** | ECDH P-256 + AES-256-GCM encrypted DMs — private keys never leave the browser |
 | **Discord Import** | Import your entire Discord server history — channels, threads, forums, reactions, pins, avatars — directly from Haven's UI or via file upload |
 | **Game** | Shippy Container — Drew's shipment got hung up. Server-wide leaderboard. |
-| **Translations** | 6 languages out of the box (English, French, German, Spanish, Russian, Chinese). Community-contributed. |
+| **Translations** | 7 languages out of the box (English, French, German, Spanish, Polish, Russian, Chinese). Community-contributed. |
 
 
 <img width="1917" height="911" alt="Screenshot 2026-02-16 013038" src="https://github.com/user-attachments/assets/79b62980-0822-4e9d-b346-c5a93de95862" />
@@ -216,7 +218,7 @@ Haven supports multiple languages. Users can switch languages from **Settings �
 | Deutsch | `de` | 🟡 AI-generated, needs review |
 | Español | `es` | 🟡 AI-generated, needs review |
 | Polski | `pl` | 🟢 Human-translated |
-| Русский | `ru` | 🟡 AI-generated, needs review |
+| Русский | `ru` | 🟢 Human-translated |
 | 中文 | `zh` | 🟡 AI-generated, needs review |
 
 ### ⚠️ Translation Quality
@@ -433,6 +435,7 @@ Haven **automatically generates self-signed SSL certificates** on first launch �
 | `@` | @mention autocomplete |
 | `:` | Emoji autocomplete (type 2+ chars) |
 | `/` | Slash command autocomplete |
+| `::` | Persona autocomplete (send as one of your personas) |
 | `Tab` | Select autocomplete suggestion |
 
 ---
@@ -453,6 +456,14 @@ Inside you'll find:
 - **`uploads/`** — uploaded images
 
 Copy the entire folder somewhere safe to back up everything. The Haven code directory contains no personal data.
+
+### Built-In Backups
+
+You don't have to copy files by hand — Haven has backup tools built into the Admin panel (**Settings → Admin → Backup**):
+
+- **One-click backup export** — download a backup archive with checkboxes for what to include (channels/roles, users, server settings, messages, uploaded files, and optionally DMs)
+- **Scheduled auto-backups** — configure automatic backups on a schedule (daily, weekly, etc.)
+- **Restore from backup** — upload a backup file to restore a server; the previous database and uploads are kept as `.pre-restore` copies for one cycle as a safety net
 
 ---
 
@@ -497,11 +508,11 @@ Planned features — roughly in priority order:
 | **Avatar system** | ✅ Done | Profile picture uploads with selectable avatar shapes (circle, square, hexagon, diamond) |
 | **Effect system** | ✅ Done | 15+ stackable visual effects with configurable intensity/frequency |
 | **Webhook / Bot support** | ✅ Done | Incoming webhooks and a lightweight bot API for external integrations |
-| **Thread replies** | 📋 Planned | Threaded conversations that branch off a message |
+| **Thread replies** | ✅ Done | Threaded conversations that branch off a message |
 | **End-to-end encryption** | ✅ Done | ECDH P-256 + AES-256-GCM encryption for DMs — private keys stay in the browser |
-| **Multi-factor authentication** | 📋 Planned | U2F/FIDO key and TOTP support, with optional admin MFA requirement |
-| **Session invalidation on password change** | 📋 Planned | All active sessions are forcibly logged out when a user changes their password |
-| **Recovery-key password reset** | 📋 Planned | Generate a 24-word recovery phrase from settings — used to reset your password without losing E2E DM history. Existing users get a one-time prompt to generate theirs. No admin involvement, no email required. |
+| **Multi-factor authentication** | ✅ Done | TOTP authenticator app support (Google Authenticator, Authy, etc.) with backup codes |
+| **Session invalidation on password change** | ✅ Done | All active sessions are forcibly logged out when a user changes their password |
+| **Recovery-key password reset** | ✅ Done | Generate one-time recovery codes from Settings (🔑 Recovery) — reset your password from the login screen with no admin involvement and no email required |
 | **Android App** | ✅ Released! | [Get it on Google Play](https://play.google.com/store/apps/details?id=com.havenapp.mobile&gl=US) |
 | **Desktop App** | ✅ Beta! | https://github.com/ancsemi/Haven-Desktop |
 
