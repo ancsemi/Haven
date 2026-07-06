@@ -169,6 +169,9 @@ async switchChannel(code) {
   this._historyAfter = null;
 
   this.socket.emit('enter-channel', { code });
+  // E2E: fetch DM partner's public key BEFORE requesting messages
+  if (isDm && channel) await this._fetchDMPartnerKey(channel);
+  this.socket.emit('get-messages', { code });
   // Belt-and-braces mark-read: if the server already told us the latest
   // message id for this channel (channels-list snapshot), fire a
   // mark-read IMMEDIATELY (not via the debounced _markRead path) so that
@@ -182,6 +185,12 @@ async switchChannel(code) {
   // newer real id from the in-channel scroll handler.  Also mirror the
   // unread count locally so the badge clears immediately and doesn't
   // bounce back to "1" on the next channels-list snapshot.
+  //
+  // (#5432) This emit MUST come after the get-messages emit above.
+  // Socket events are processed in order, so emitting mark-read first
+  // updated read_positions before the history query ran — the history
+  // response then reported the user as fully caught up, and the
+  // "NEW MESSAGES" divider + auto-scroll from #5259 never appeared.
   if (channel && channel.latestMessageId) {
     try { this.socket.emit('mark-read', { code, messageId: channel.latestMessageId }); } catch {}
     if (this.unreadCounts && this.unreadCounts[code]) {
@@ -192,9 +201,6 @@ async switchChannel(code) {
       try { this._updateDesktopBadge?.(); } catch {}
     }
   }
-  // E2E: fetch DM partner's public key BEFORE requesting messages
-  if (isDm && channel) await this._fetchDMPartnerKey(channel);
-  this.socket.emit('get-messages', { code });
   this.socket.emit('get-channel-members', { code });
   this.socket.emit('request-voice-users', { code });
   // Safety net (#post-sleep-channel-desync round 2): if message-history
