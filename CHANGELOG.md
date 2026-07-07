@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.30.1] — 2026-07-06
+
+### Fixed
+- **Flags emoji category showed bare country codes on Windows.** Windows browsers don't render Unicode regional-indicator flags and fall back to the two-letter code ("US", "GB", "DE", …), so the new Flags category looked like a list of letters there. Every country flag is now a bundled SVG image, so flags render the same on every platform — in the picker, in messages, and in reactions.
+
 ## [3.30.0] — 2026-07-06
 
 ### Added
