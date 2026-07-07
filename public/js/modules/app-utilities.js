@@ -1244,7 +1244,7 @@ _toggleEmojiPicker(anchorEl) {
   // Category tabs
   const tabRow = document.createElement('div');
   tabRow.className = 'emoji-tab-row';
-  const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Custom':'⭐' };
+  const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Flags':'🚩', 'Custom':'⭐' };
   for (const cat of Object.keys(allCategories)) {
     const tab = document.createElement('button');
     tab.className = 'emoji-tab' + (cat === this._emojiActiveCategory ? ' active' : '');

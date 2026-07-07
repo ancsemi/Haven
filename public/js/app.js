@@ -12,8 +12,8 @@ import ChannelMethods  from './modules/app-channels.js?v=3.16.12';
 import MessageMethods  from './modules/app-messages.js?v=3.16.12';
 import UserMethods     from './modules/app-users.js?v=3.25.3';
 import VoiceMethods    from './modules/app-voice.js?v=3.25.3';
-import UtilityMethods  from './modules/app-utilities.js?v=3.30.0';
-import AdminMethods    from './modules/app-admin.js?v=3.30.0';
+import UtilityMethods  from './modules/app-utilities.js?v=3.30.1';
+import AdminMethods    from './modules/app-admin.js?v=3.30.1';
 import PlatformMethods from './modules/app-platform.js?v=3.16.12';
 
 class HavenApp {
@@ -107,7 +107,7 @@ class HavenApp {
       'Travel':   ['🚗','🚕','🚀','✈️','🚁','🛸','🚢','🏠','🏢','🏰','🗼','🗽','⛩️','🌋','🏔️','🌊','🌅','🌄','🌉','🎡','🎢','🗺️','🧭','🏖️','🏕️','🌍','🌎','🌏','🛳️','⛵','🚂','🚇','🏎️','🏍️','🛵','🛶'],
       'Objects':  ['⌚','📱','💻','⌨️','🖥️','💾','📷','🔭','🔬','💡','🔦','📚','📝','✏️','📎','📌','🔑','🔒','🔓','🛡️','⚔️','🔧','💰','💎','📦','🎁','✉️','🔔','🪙','💸','🏷️','🔨','🪛','🧲','🧪','🧫','💊','🩺','🩹','🧬','💬','💭','🗨️','🗯️','📣','📢','🔊','🔇','📰','🗞️','📋','📁','📂','🗂️','📅','📆','🗓️','🖊️','🖋️','✒️','📏','📐','🗑️','👑','💍','👒','🎩','🧢','👓','🕶️','🧳','🌂','☂️'],
       'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','✨','⭐','🌟','💫','🔥','💯','✅','❌','❗','❓','❕','❔','‼️','⁉️','!','?',',','.','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲','♾️','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔺','🔻','💠','🔘','🏳️‍🌈','🏴‍☠️','⚡','☀️','🌙','🌈','☁️','❄️','💨','🌪️','☮️','✝️','☪️','🕉️','☯️','✡️','🔯','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','⛎','🆔','⚛️','🈶','🈚','🈸','🈺','🈷️','🆚','🉐','🈹','🈲','🉑','🈴','🈳','㊗️','㊙️','🈵','🔅','🔆','🔱','📛','♻️','🔰','⭕','✳️','❇️','🔟','🔠','🔡','🔢','🔣','🔤','🆎','🆑','🆒','🆓','ℹ️','🆕','🆖','🅾️','🆗','🅿️','🆘','🆙','🆚','🈁','🈂️','💱','💲','#️⃣','*️⃣','0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟','©️','®️','™️'],
-      'Flags':    ['🇺🇸',':us_betsy_ross:',':gadsden:','🇬🇧','🇨🇦','🇦🇺','🇳🇿','🇮🇪','🇫🇷','🇩🇪','🇮🇹','🇪🇸','🇵🇹','🇳🇱','🇧🇪','🇱🇺','🇨🇭','🇦🇹','🇩🇰','🇳🇴','🇸🇪','🇫🇮','🇮🇸','🇵🇱','🇪🇪','🇱🇻','🇱🇹','🇨🇿','🇸🇰','🇭🇺','🇷🇴','🇧🇬','🇸🇮','🇭🇷','🇬🇷','🇦🇱','🇲🇪','🇲🇰','🇺🇦','🇹🇷','🇯🇵','🇰🇷','🇹🇼','🇵🇭','🇹🇭','🇸🇬','🇮🇳','🇮🇩','🇲🇾','🇻🇳','🇲🇳','🇧🇩','🇱🇰','🇳🇵','🇮🇱','🇸🇦','🇦🇪','🇶🇦','🇧🇭','🇰🇼','🇴🇲','🇯🇴','🇪🇬','🇲🇦','🇹🇳','🇲🇽','🇧🇷','🇦🇷','🇨🇱','🇨🇴','🇵🇪','🇺🇾','🇪🇨','🇨🇷','🇵🇦','🇬🇹','🇩🇴','🇯🇲','🇧🇸','🇹🇹','🇿🇦','🇰🇪','🇳🇬','🇬🇭','🇸🇳','🇷🇼','🇧🇼','🇨🇮','🇹🇿']
+      'Flags':    [':flag_us:',':us_betsy_ross:',':gadsden:',':flag_gb:',':flag_ca:',':flag_au:',':flag_nz:',':flag_ie:',':flag_fr:',':flag_de:',':flag_it:',':flag_es:',':flag_pt:',':flag_nl:',':flag_be:',':flag_lu:',':flag_ch:',':flag_at:',':flag_dk:',':flag_no:',':flag_se:',':flag_fi:',':flag_is:',':flag_pl:',':flag_ee:',':flag_lv:',':flag_lt:',':flag_cz:',':flag_sk:',':flag_hu:',':flag_ro:',':flag_bg:',':flag_si:',':flag_hr:',':flag_gr:',':flag_al:',':flag_me:',':flag_mk:',':flag_ua:',':flag_tr:',':flag_jp:',':flag_kr:',':flag_tw:',':flag_ph:',':flag_th:',':flag_sg:',':flag_in:',':flag_id:',':flag_my:',':flag_vn:',':flag_mn:',':flag_bd:',':flag_lk:',':flag_np:',':flag_il:',':flag_sa:',':flag_ae:',':flag_qa:',':flag_bh:',':flag_kw:',':flag_om:',':flag_jo:',':flag_eg:',':flag_ma:',':flag_tn:',':flag_mx:',':flag_br:',':flag_ar:',':flag_cl:',':flag_co:',':flag_pe:',':flag_uy:',':flag_ec:',':flag_cr:',':flag_pa:',':flag_gt:',':flag_do:',':flag_jm:',':flag_bs:',':flag_tt:',':flag_za:',':flag_ke:',':flag_ng:',':flag_gh:',':flag_sn:',':flag_rw:',':flag_bw:',':flag_ci:',':flag_tz:']
     };
 
     // Flat list for quick access (used by search)
@@ -124,8 +124,7 @@ class HavenApp {
       '❤️':'red heart love','🧡':'orange heart','💛':'yellow heart','💚':'green heart','💙':'blue heart','💜':'purple heart','🖤':'black heart','🤍':'white heart','💔':'broken heart','✨':'sparkles stars','⭐':'star','🔥':'fire hot lit','💯':'hundred perfect','✅':'check mark yes','❌':'cross mark no wrong','❗':'exclamation mark bang','❓':'question mark','❕':'white exclamation','❔':'white question','‼️':'double exclamation bangbang','⁉️':'exclamation question interrobang','!':'exclamation punctuation bang','?':'question punctuation mark',',':'comma punctuation','.':'period punctuation dot','💤':'sleep zzz','⚠️':'warning caution','⚡':'lightning bolt zap','☀️':'sun sunny','🌙':'moon crescent night','❄️':'snowflake cold winter','🌪️':'tornado','🔴':'red circle','🔵':'blue circle','🟢':'green circle','🟡':'yellow circle','🟠':'orange circle','🟣':'purple circle','⚫':'black circle','⚪':'white circle','©️':'copyright','®️':'registered','™️':'trademark','#️⃣':'hash number sign','*️⃣':'asterisk star keycap',
       '🙈':'see no evil monkey','🙉':'hear no evil monkey','🙊':'speak no evil monkey',
       '👀':'eyes looking','👅':'tongue','👄':'mouth lips','💋':'kiss lips','🧠':'brain smart','🦷':'tooth','🦴':'bone','💀':'skull dead','☠️':'skull crossbones','👽':'alien','🤖':'robot','🎃':'jack o lantern pumpkin halloween',
-      '📱':'phone mobile','💻':'laptop computer','📷':'camera photo','📚':'books reading','📝':'memo note write','🔑':'key','🔒':'lock locked','💎':'gem diamond jewel','🎁':'gift present','🔔':'bell notification','💰':'money bag rich','🔨':'hammer tool','💬':'speech bubble chat','💭':'thought bubble thinking','🗨️':'speech balloon','🗯️':'anger bubble','📣':'megaphone announcement','📢':'loudspeaker','👑':'crown king queen royal','💍':'ring diamond wedding','🕶️':'sunglasses cool',
-      '🇺🇸':'united states america usa flag','🇬🇧':'united kingdom britain uk british england flag','🇨🇦':'canada canadian flag','🇦🇺':'australia australian flag','🇳🇿':'new zealand flag','🇮🇪':'ireland irish flag','🇫🇷':'france french flag','🇩🇪':'germany german flag','🇮🇹':'italy italian flag','🇪🇸':'spain spanish flag','🇵🇹':'portugal portuguese flag','🇳🇱':'netherlands dutch holland flag','🇧🇪':'belgium belgian flag','🇱🇺':'luxembourg flag','🇨🇭':'switzerland swiss flag','🇦🇹':'austria austrian flag','🇩🇰':'denmark danish flag','🇳🇴':'norway norwegian flag','🇸🇪':'sweden swedish flag','🇫🇮':'finland finnish flag','🇮🇸':'iceland flag','🇵🇱':'poland polish flag','🇪🇪':'estonia flag','🇱🇻':'latvia flag','🇱🇹':'lithuania flag','🇨🇿':'czech czechia republic flag','🇸🇰':'slovakia flag','🇭🇺':'hungary flag','🇷🇴':'romania flag','🇧🇬':'bulgaria flag','🇸🇮':'slovenia flag','🇭🇷':'croatia flag','🇬🇷':'greece greek flag','🇦🇱':'albania flag','🇲🇪':'montenegro flag','🇲🇰':'north macedonia flag','🇺🇦':'ukraine ukrainian flag','🇹🇷':'turkey turkish flag','🇯🇵':'japan japanese flag','🇰🇷':'south korea korean flag','🇹🇼':'taiwan flag','🇵🇭':'philippines filipino flag','🇹🇭':'thailand thai flag','🇸🇬':'singapore flag','🇮🇳':'india indian flag','🇮🇩':'indonesia flag','🇲🇾':'malaysia flag','🇻🇳':'vietnam flag','🇲🇳':'mongolia flag','🇧🇩':'bangladesh flag','🇱🇰':'sri lanka flag','🇳🇵':'nepal flag','🇮🇱':'israel israeli flag','🇸🇦':'saudi arabia flag','🇦🇪':'united arab emirates uae flag','🇶🇦':'qatar flag','🇧🇭':'bahrain flag','🇰🇼':'kuwait flag','🇴🇲':'oman flag','🇯🇴':'jordan flag','🇪🇬':'egypt egyptian flag','🇲🇦':'morocco flag','🇹🇳':'tunisia flag','🇲🇽':'mexico mexican flag','🇧🇷':'brazil brazilian flag','🇦🇷':'argentina flag','🇨🇱':'chile flag','🇨🇴':'colombia flag','🇵🇪':'peru flag','🇺🇾':'uruguay flag','🇪🇨':'ecuador flag','🇨🇷':'costa rica flag','🇵🇦':'panama flag','🇬🇹':'guatemala flag','🇩🇴':'dominican republic flag','🇯🇲':'jamaica flag','🇧🇸':'bahamas flag','🇹🇹':'trinidad tobago flag','🇿🇦':'south africa flag','🇰🇪':'kenya flag','🇳🇬':'nigeria flag','🇬🇭':'ghana flag','🇸🇳':'senegal flag','🇷🇼':'rwanda flag','🇧🇼':'botswana flag','🇨🇮':'ivory coast cote divoire flag','🇹🇿':'tanzania flag'
+      '📱':'phone mobile','💻':'laptop computer','📷':'camera photo','📚':'books reading','📝':'memo note write','🔑':'key','🔒':'lock locked','💎':'gem diamond jewel','🎁':'gift present','🔔':'bell notification','💰':'money bag rich','🔨':'hammer tool','💬':'speech bubble chat','💭':'thought bubble thinking','🗨️':'speech balloon','🗯️':'anger bubble','📣':'megaphone announcement','📢':'loudspeaker','👑':'crown king queen royal','💍':'ring diamond wedding','🕶️':'sunglasses cool'
     };
 
     if (!this.token || !this.user) {
@@ -144,7 +143,98 @@ class HavenApp {
     this.customEmojis = []; // [{name, url}] — loaded from server
     // Bundled image emoji shipped with Haven (rendered like custom emoji but
     // built into the app, so every client on this version resolves them).
+    // Country flags are image-based on purpose: Windows browsers refuse to
+    // render Unicode regional-indicator flags and fall back to the bare
+    // two-letter code ("US", "GB", ...), so SVGs keep them consistent
+    // everywhere. Flag artwork: flag-icons (MIT). See emoji/flags/ATTRIBUTION.txt.
     this.builtinEmojis = [
+      { name: 'flag_us', url: '/emoji/flags/us.svg', keywords: 'united states america usa flag' },
+      { name: 'flag_gb', url: '/emoji/flags/gb.svg', keywords: 'united kingdom britain uk british england flag' },
+      { name: 'flag_ca', url: '/emoji/flags/ca.svg', keywords: 'canada canadian flag' },
+      { name: 'flag_au', url: '/emoji/flags/au.svg', keywords: 'australia australian flag' },
+      { name: 'flag_nz', url: '/emoji/flags/nz.svg', keywords: 'new zealand flag' },
+      { name: 'flag_ie', url: '/emoji/flags/ie.svg', keywords: 'ireland irish flag' },
+      { name: 'flag_fr', url: '/emoji/flags/fr.svg', keywords: 'france french flag' },
+      { name: 'flag_de', url: '/emoji/flags/de.svg', keywords: 'germany german flag' },
+      { name: 'flag_it', url: '/emoji/flags/it.svg', keywords: 'italy italian flag' },
+      { name: 'flag_es', url: '/emoji/flags/es.svg', keywords: 'spain spanish flag' },
+      { name: 'flag_pt', url: '/emoji/flags/pt.svg', keywords: 'portugal portuguese flag' },
+      { name: 'flag_nl', url: '/emoji/flags/nl.svg', keywords: 'netherlands dutch holland flag' },
+      { name: 'flag_be', url: '/emoji/flags/be.svg', keywords: 'belgium belgian flag' },
+      { name: 'flag_lu', url: '/emoji/flags/lu.svg', keywords: 'luxembourg flag' },
+      { name: 'flag_ch', url: '/emoji/flags/ch.svg', keywords: 'switzerland swiss flag' },
+      { name: 'flag_at', url: '/emoji/flags/at.svg', keywords: 'austria austrian flag' },
+      { name: 'flag_dk', url: '/emoji/flags/dk.svg', keywords: 'denmark danish flag' },
+      { name: 'flag_no', url: '/emoji/flags/no.svg', keywords: 'norway norwegian flag' },
+      { name: 'flag_se', url: '/emoji/flags/se.svg', keywords: 'sweden swedish flag' },
+      { name: 'flag_fi', url: '/emoji/flags/fi.svg', keywords: 'finland finnish flag' },
+      { name: 'flag_is', url: '/emoji/flags/is.svg', keywords: 'iceland flag' },
+      { name: 'flag_pl', url: '/emoji/flags/pl.svg', keywords: 'poland polish flag' },
+      { name: 'flag_ee', url: '/emoji/flags/ee.svg', keywords: 'estonia flag' },
+      { name: 'flag_lv', url: '/emoji/flags/lv.svg', keywords: 'latvia flag' },
+      { name: 'flag_lt', url: '/emoji/flags/lt.svg', keywords: 'lithuania flag' },
+      { name: 'flag_cz', url: '/emoji/flags/cz.svg', keywords: 'czech czechia republic flag' },
+      { name: 'flag_sk', url: '/emoji/flags/sk.svg', keywords: 'slovakia flag' },
+      { name: 'flag_hu', url: '/emoji/flags/hu.svg', keywords: 'hungary flag' },
+      { name: 'flag_ro', url: '/emoji/flags/ro.svg', keywords: 'romania flag' },
+      { name: 'flag_bg', url: '/emoji/flags/bg.svg', keywords: 'bulgaria flag' },
+      { name: 'flag_si', url: '/emoji/flags/si.svg', keywords: 'slovenia flag' },
+      { name: 'flag_hr', url: '/emoji/flags/hr.svg', keywords: 'croatia flag' },
+      { name: 'flag_gr', url: '/emoji/flags/gr.svg', keywords: 'greece greek flag' },
+      { name: 'flag_al', url: '/emoji/flags/al.svg', keywords: 'albania flag' },
+      { name: 'flag_me', url: '/emoji/flags/me.svg', keywords: 'montenegro flag' },
+      { name: 'flag_mk', url: '/emoji/flags/mk.svg', keywords: 'north macedonia flag' },
+      { name: 'flag_ua', url: '/emoji/flags/ua.svg', keywords: 'ukraine ukrainian flag' },
+      { name: 'flag_tr', url: '/emoji/flags/tr.svg', keywords: 'turkey turkish flag' },
+      { name: 'flag_jp', url: '/emoji/flags/jp.svg', keywords: 'japan japanese flag' },
+      { name: 'flag_kr', url: '/emoji/flags/kr.svg', keywords: 'south korea korean flag' },
+      { name: 'flag_tw', url: '/emoji/flags/tw.svg', keywords: 'taiwan flag' },
+      { name: 'flag_ph', url: '/emoji/flags/ph.svg', keywords: 'philippines filipino flag' },
+      { name: 'flag_th', url: '/emoji/flags/th.svg', keywords: 'thailand thai flag' },
+      { name: 'flag_sg', url: '/emoji/flags/sg.svg', keywords: 'singapore flag' },
+      { name: 'flag_in', url: '/emoji/flags/in.svg', keywords: 'india indian flag' },
+      { name: 'flag_id', url: '/emoji/flags/id.svg', keywords: 'indonesia flag' },
+      { name: 'flag_my', url: '/emoji/flags/my.svg', keywords: 'malaysia flag' },
+      { name: 'flag_vn', url: '/emoji/flags/vn.svg', keywords: 'vietnam flag' },
+      { name: 'flag_mn', url: '/emoji/flags/mn.svg', keywords: 'mongolia flag' },
+      { name: 'flag_bd', url: '/emoji/flags/bd.svg', keywords: 'bangladesh flag' },
+      { name: 'flag_lk', url: '/emoji/flags/lk.svg', keywords: 'sri lanka flag' },
+      { name: 'flag_np', url: '/emoji/flags/np.svg', keywords: 'nepal flag' },
+      { name: 'flag_il', url: '/emoji/flags/il.svg', keywords: 'israel israeli flag' },
+      { name: 'flag_sa', url: '/emoji/flags/sa.svg', keywords: 'saudi arabia flag' },
+      { name: 'flag_ae', url: '/emoji/flags/ae.svg', keywords: 'united arab emirates uae flag' },
+      { name: 'flag_qa', url: '/emoji/flags/qa.svg', keywords: 'qatar flag' },
+      { name: 'flag_bh', url: '/emoji/flags/bh.svg', keywords: 'bahrain flag' },
+      { name: 'flag_kw', url: '/emoji/flags/kw.svg', keywords: 'kuwait flag' },
+      { name: 'flag_om', url: '/emoji/flags/om.svg', keywords: 'oman flag' },
+      { name: 'flag_jo', url: '/emoji/flags/jo.svg', keywords: 'jordan flag' },
+      { name: 'flag_eg', url: '/emoji/flags/eg.svg', keywords: 'egypt egyptian flag' },
+      { name: 'flag_ma', url: '/emoji/flags/ma.svg', keywords: 'morocco flag' },
+      { name: 'flag_tn', url: '/emoji/flags/tn.svg', keywords: 'tunisia flag' },
+      { name: 'flag_mx', url: '/emoji/flags/mx.svg', keywords: 'mexico mexican flag' },
+      { name: 'flag_br', url: '/emoji/flags/br.svg', keywords: 'brazil brazilian flag' },
+      { name: 'flag_ar', url: '/emoji/flags/ar.svg', keywords: 'argentina flag' },
+      { name: 'flag_cl', url: '/emoji/flags/cl.svg', keywords: 'chile flag' },
+      { name: 'flag_co', url: '/emoji/flags/co.svg', keywords: 'colombia flag' },
+      { name: 'flag_pe', url: '/emoji/flags/pe.svg', keywords: 'peru flag' },
+      { name: 'flag_uy', url: '/emoji/flags/uy.svg', keywords: 'uruguay flag' },
+      { name: 'flag_ec', url: '/emoji/flags/ec.svg', keywords: 'ecuador flag' },
+      { name: 'flag_cr', url: '/emoji/flags/cr.svg', keywords: 'costa rica flag' },
+      { name: 'flag_pa', url: '/emoji/flags/pa.svg', keywords: 'panama flag' },
+      { name: 'flag_gt', url: '/emoji/flags/gt.svg', keywords: 'guatemala flag' },
+      { name: 'flag_do', url: '/emoji/flags/do.svg', keywords: 'dominican republic flag' },
+      { name: 'flag_jm', url: '/emoji/flags/jm.svg', keywords: 'jamaica flag' },
+      { name: 'flag_bs', url: '/emoji/flags/bs.svg', keywords: 'bahamas flag' },
+      { name: 'flag_tt', url: '/emoji/flags/tt.svg', keywords: 'trinidad tobago flag' },
+      { name: 'flag_za', url: '/emoji/flags/za.svg', keywords: 'south africa flag' },
+      { name: 'flag_ke', url: '/emoji/flags/ke.svg', keywords: 'kenya flag' },
+      { name: 'flag_ng', url: '/emoji/flags/ng.svg', keywords: 'nigeria flag' },
+      { name: 'flag_gh', url: '/emoji/flags/gh.svg', keywords: 'ghana flag' },
+      { name: 'flag_sn', url: '/emoji/flags/sn.svg', keywords: 'senegal flag' },
+      { name: 'flag_rw', url: '/emoji/flags/rw.svg', keywords: 'rwanda flag' },
+      { name: 'flag_bw', url: '/emoji/flags/bw.svg', keywords: 'botswana flag' },
+      { name: 'flag_ci', url: '/emoji/flags/ci.svg', keywords: 'ivory coast cote divoire flag' },
+      { name: 'flag_tz', url: '/emoji/flags/tz.svg', keywords: 'tanzania flag' },
       { name: 'us_betsy_ross', url: '/emoji/us-betsy-ross.svg', keywords: 'betsy ross flag united states america usa stars stripes colonies historical patriotic' },
       { name: 'gadsden', url: '/emoji/us-gadsden.svg', keywords: 'gadsden dont tread on me snake rattlesnake flag united states america usa liberty patriotic' },
     ];
