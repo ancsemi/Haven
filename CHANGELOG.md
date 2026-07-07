@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.30.2] — 2026-07-06
+
+### Fixed
+- **Betsy Ross and Gadsden flags didn't match the aspect ratio of the other Flags emoji.** They were noticeably flatter/wider than the rest of the set, since their source artwork wasn't 4:3 like the bundled country flags. Both are now cropped to the same 4:3 frame (canton preserved in full on Betsy Ross; snake and lettering preserved in full on Gadsden), so they sit consistently alongside every other flag.
+
 ## [3.30.1] — 2026-07-06
 
 ### Fixed
