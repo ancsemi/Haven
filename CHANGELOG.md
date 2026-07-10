@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.31.0] — 2026-07-10
+
+### Added
+- **Rich link preview cards for Bluesky and X/Twitter posts (#5429).** Social links now render as full embed cards with the author's avatar and name, the post text, sized media (a play badge marks videos), and engagement counts (replies / reposts / likes / views), bringing the desktop and web client in line with the mobile app's embeds. Embed size is now a single Off / Small / Medium / Full preference shared by the Settings ▸ Link Previews picker and a new per-embed ⤢ toggle, with a per-embed caret to collapse a single preview. Generic links and YouTube use the same card chrome. Older size values (Normal / Large) migrate automatically. Contributed by Amnibro.
+
+### Fixed
+- **Backups that include files no longer crash the server (#5434).** Server backups built the entire zip in memory before writing it out, so once the uploads folder grew large (reported around 30GB) the process ran out of memory and went down, while a structure-only backup stayed tiny and worked fine. Backups now stream straight to disk as they build, so memory stays flat no matter how much is stored, for both manual downloads and scheduled auto-backups. The archive format is unchanged, so existing backups still restore.
+
+### Changed
+- Refined the Russian wording on the password recovery screen (#5420). Contributed by CUBEEEK.
+
 ## [3.30.3] — 2026-07-07
 
 ### Fixed
