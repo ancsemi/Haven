@@ -2317,32 +2317,47 @@ app.get('/api/link-preview', async (req, res) => {
   try {
     let data = null;
 
-    // ── Site-specific oEmbed handlers ────────────────────
+    // ── Site-specific handlers ───────────────────────────
     // Native twitter.com / x.com — their HTML requires JS rendering so the generic
-    // scraper gets blank OG tags. The oEmbed API returns structured data directly.
-    // NOTE: fxtwitter / vxtwitter / fixupx are proxy sites that deliberately serve
-    // their own OG-enriched HTML — they must NOT be routed here; they fall through
-    // to the generic OG scraper below which picks up their tags directly.
-    const twitterMatch = url.match(/^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/\w+\/status\/\d+/i);
+    // scraper gets blank OG tags. The fxtwitter public JSON API returns structured
+    // post data (author, avatar, text, media, engagement counts) with no auth, so
+    // the client can render a rich social card matching the mobile app's embeds.
+    // NOTE: fxtwitter / vxtwitter / fixupx proxy URLs are NOT matched here; they
+    // serve their own OG-enriched HTML and fall through to the generic scraper.
+    const twitterMatch = url.match(/^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i);
     if (twitterMatch) {
       try {
-        const oembed = await fetch(
-          `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true`,
+        const fxApi = await fetch(
+          `https://api.fxtwitter.com/${twitterMatch[1]}/status/${twitterMatch[2]}`,
           { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
         );
-        if (oembed.ok) {
-          const oj = await oembed.json();
-          // Strip HTML tags from the embedded HTML to extract text
-          const text = (oj.html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          data = {
-            title: oj.author_name ? `${oj.author_name} on ${oj.provider_name || 'X'}` : (oj.provider_name || 'X'),
-            description: text.slice(0, 280) || null,
-            image: null, // Twitter oEmbed doesn't return images, OG scrape below may add one
-            siteName: oj.provider_name || 'X',
-            url: oj.url || url
-          };
+        if (fxApi.ok) {
+          const tw = (await fxApi.json())?.tweet;
+          if (tw) {
+            const a = tw.author || {};
+            const photos = (tw.media?.photos || []).map(p => p.url).filter(Boolean);
+            const vid = tw.media?.videos?.[0] || null;
+            const text = tw.text || '';
+            data = {
+              kind: 'twitter',
+              siteName: 'X / Twitter',
+              accentColor: '#1d9bf0',
+              author: a.name || null,
+              handle: a.screen_name ? `@${a.screen_name}` : null,
+              avatar: a.avatar_url || null,
+              title: a.name ? `${a.name} on X` : 'X / Twitter',
+              text: text || null,
+              description: text.slice(0, 280) || null,
+              image: vid?.thumbnail_url || photos[0] || null,
+              images: photos.length >= 2 ? photos.slice(0, 4) : undefined,
+              video: vid?.url || null,
+              videoType: vid?.url ? 'video/mp4' : undefined,
+              stats: { replies: tw.replies ?? -1, reposts: tw.retweets ?? -1, likes: tw.likes ?? -1, views: tw.views ?? -1 },
+              url
+            };
+          }
         }
-      } catch { /* fall through to generic scrape */ }
+      } catch { /* fall through to fxtwitter OG scrape / generic */ }
     }
 
     // ── fxtwitter / vxtwitter / fixupx fallback for native Twitter/X links ──
@@ -2484,12 +2499,21 @@ app.get('/api/link-preview', async (req, res) => {
               } else if (mType.startsWith('app.bsky.embed.external')) {
                 image = media.external?.thumb || null;
               }
+              const text = post.record?.text || '';
               data = {
+                kind: 'bsky',
+                siteName: 'Bluesky',
+                accentColor: '#0085ff',
+                author: name,
+                handle: author.handle ? `@${author.handle}` : null,
+                avatar: author.avatar || null,
                 title: `${name} on Bluesky`,
-                description: (post.record?.text || '').slice(0, 280) || null,
+                text: text || null,
+                description: text.slice(0, 280) || null,
                 image,
                 images,
-                siteName: 'Bluesky',
+                video: mType.startsWith('app.bsky.embed.video') ? url : null,
+                stats: { replies: post.replyCount ?? -1, reposts: post.repostCount ?? -1, likes: post.likeCount ?? -1, views: -1 },
                 url
               };
             }
