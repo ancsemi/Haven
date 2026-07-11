@@ -1415,12 +1415,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>&#x2B21; Haven Server &mdash; v3.31.0</h2>
+        <h2>&#x2B21; Haven Server &mdash; v3.31.1</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.31.0.zip" class="btn btn-primary download-main">
-            <span class="icon">&#x2B07;</span> Download v3.31.0 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.31.1.zip" class="btn btn-primary download-main">
+            <span class="icon">&#x2B07;</span> Download v3.31.1 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1437,7 +1437,11 @@
           <div class="version-list">
             <div class="version-list-inner">
                             <div class="version-item">
-                <div><span class="v-name">v3.31.0</span><span class="v-tag latest">Latest</span> &mdash; <strong>Rich link preview cards for Bluesky and X posts, plus a fix for backups that include files.</strong> Social links now embed as full cards with the author&#39;s avatar, the post text, sized media, and engagement counts, matching the mobile app, and embed size is a single Off / Small / Medium / Full preference shared by Settings and a per-embed toggle (#5429, contributed by Amnibro). Backups that include files no longer crash the server: they used to build the whole archive in memory and run out of RAM once the uploads folder got large (around 30GB), and now stream straight to disk instead (#5434).</div>
+                <div><span class="v-name">v3.31.1</span><span class="v-tag latest">Latest</span> &mdash; <strong>Restoring a large backup works again.</strong> Restoring a full backup that included files used to fail after about 30 seconds with a &ldquo;failed to fetch&rdquo; error, because the server cut off long uploads, capped the upload at 4GB, and read the whole archive into memory at once. Restores now allow long uploads, accept large files, and stream straight to disk, so a 15GB or larger backup restores without crashing (#5436). The backup screen also now notes that only full backups, ones that include both Messages and Uploaded files, can be restored in place (#5435).</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.31.1.zip">Download &rarr;</a>
+              </div>
+                            <div class="version-item">
+                <div><span class="v-name">v3.31.0</span> &mdash; <strong>Rich link preview cards for Bluesky and X posts, plus a fix for backups that include files.</strong> Social links now embed as full cards with the author&#39;s avatar, the post text, sized media, and engagement counts, matching the mobile app, and embed size is a single Off / Small / Medium / Full preference shared by Settings and a per-embed toggle (#5429, contributed by Amnibro). Backups that include files no longer crash the server: they used to build the whole archive in memory and run out of RAM once the uploads folder got large (around 30GB), and now stream straight to disk instead (#5434).</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.31.0.zip">Download &rarr;</a>
               </div>
                             <div class="version-item">

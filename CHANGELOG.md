@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.31.1] — 2026-07-10
+
+### Fixed
+- **Restoring a large backup no longer fails with "failed to fetch" (#5436).** Restoring a full backup that included files broke on three separate limits: the server aborted any request that took longer than 30 seconds (which is the ~30s "failed to fetch" people saw), the upload itself was capped at 4GB, and the restore read the entire uploaded zip into memory the way the old backup path did, so a large archive ran the server out of memory. Restores now allow long uploads, accept large files, and stream the archive straight to disk, so a 15GB or larger backup restores without crashing. Slow-header (slowloris) protection is unchanged.
+
+### Changed
+- **The backup screen now spells out that only full backups can be restored in place (#5435).** A backup has to include both Messages and Uploaded files to be restorable from the Restore box; smaller channels/users/settings backups are meant to be re-imported by hand. That was always the case but wasn't stated, so a partial backup failing to restore looked like a bug.
+
 ## [3.31.0] — 2026-07-10
 
 ### Added
