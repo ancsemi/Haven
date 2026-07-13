@@ -11,6 +11,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.32.0] — 2026-07-13
+
+### Added
+- **Restore progress bar (#5438).** Restoring a backup now shows a real upload percentage as the file transfers, then a server-side extraction bar as the archive is unzipped to disk, so a large restore no longer sits with no feedback for many minutes.
+- **Notification pop-up cooldown.** Settings → Sounds has a new "Limit pop-up notifications" option (off by default) that throttles how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection cannot keep popping the app up. Notification sounds and unread badges are unaffected.
+
+### Changed
+- **The status bar hides the server address by default every session.** It now starts hidden and is only shown after you click the eye toggle, and that choice is no longer remembered between sessions.
+
+### Fixed
+- **linux/arm64 Docker image restored (#5439).** Starting with 3.31.1 the published multi-arch image silently lost its arm64 variant, because the untagged per-arch child manifests from the push-by-digest build were being pruned from GHCR, forcing Apple Silicon Macs onto slow amd64 emulation. Each architecture is now published as its own persistent tag and merged into the multi-arch manifest, so both arches ship and survive, and the workflow now fails loudly if either is missing.
+- **Sidebar collapse arrows no longer leave a gap.** On narrow windows the voice/users panel can shrink below its requested width; the collapse arrows now snap to the panel's actual edge once its width settles instead of hovering to its left.
+
 ## [3.31.2] — 2026-07-11
 
 ### Fixed
