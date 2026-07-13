@@ -2129,6 +2129,10 @@
               <input type="file" id="backup-restore-file" accept=".zip" style="flex:1 1 200px;min-width:0;max-width:100%">
               <button class="btn-sm btn-accent" id="backup-restore-btn">⬆️ <span data-i18n="settings.admin.backup_restore_btn">Restore</span></button>
             </div>
+            <div id="restore-progress" class="restore-progress" style="display:none">
+              <div class="restore-progress-track"><div class="restore-progress-fill" id="restore-progress-fill"></div></div>
+              <small class="settings-hint restore-progress-label" id="restore-progress-label">Uploading…</small>
+            </div>
             <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_restore_full_note">Only full backups can be restored here, which means the backup must have had both Messages and Uploaded files checked when it was made. Smaller channels/users/settings backups have to be re-imported by hand.</small>
             <small class="settings-hint" style="margin-top:6px;display:block;color:var(--danger,#e84a4a)" data-i18n="settings.admin.backup_restore_warning"><strong>Warning:</strong> Restoring overwrites the current server data. The server will restart automatically — your hosting setup must support auto-restart (Docker, systemd, the Haven installer service, etc.). The previous database is preserved as <code>haven.db.pre-restore</code> for one cycle.</small>
           </div>

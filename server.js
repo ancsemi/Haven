@@ -2060,7 +2060,7 @@ const restoreUpload = multer({
 // or crashes the server (#5436). Resolves with the parsed manifest. Rejects with
 // an Error whose .status is 400 for a bad/partial backup, or a generic error
 // (treated as 500) for IO problems.
-function extractFullBackup(zipPath, stagedDb, stagedUploads) {
+function extractFullBackup(zipPath, stagedDb, stagedUploads, onProgress) {
   const yauzl = require('yauzl');
   const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
 
@@ -2103,13 +2103,32 @@ function extractFullBackup(zipPath, stagedDb, stagedUploads) {
           const dbEntry = find('haven.db');
           if (!dbEntry) throw bad('Invalid full backup: missing haven.db');
 
+          // Progress accounting: total = the DB clone + every upload file
+          // (uncompressed bytes). Emitted (throttled to ~400ms) via onProgress
+          // so the admin's restore UI can show a real extraction bar instead of
+          // an opaque multi-minute wait on large backups (#5438).
+          const uploadEntries = entries.filter(e => e.fileName.startsWith('uploads/') && !e.fileName.endsWith('/'));
+          const bytesTotal = (dbEntry.uncompressedSize || 0) +
+            uploadEntries.reduce((sum, e) => sum + (e.uncompressedSize || 0), 0);
+          let bytesDone = 0;
+          let lastEmit = 0;
+          const emitProgress = (force) => {
+            if (typeof onProgress !== 'function') return;
+            const now = Date.now();
+            if (!force && now - lastEmit < 400) return;
+            lastEmit = now;
+            try { onProgress({ phase: 'extract', bytesDone, bytesTotal }); } catch {}
+          };
+          emitProgress(true);
+
           // Stage the DB clone (streamed from the zip to disk).
           await streamEntryToFile(zipfile, dbEntry, stagedDb);
+          bytesDone += dbEntry.uncompressedSize || 0;
+          emitProgress(true);
 
           // Stage uploads, one entry at a time, with a path-traversal guard so a
           // crafted entry name can't write outside the staging directory.
           if (fs.existsSync(stagedUploads)) fs.rmSync(stagedUploads, { recursive: true, force: true });
-          const uploadEntries = entries.filter(e => e.fileName.startsWith('uploads/') && !e.fileName.endsWith('/'));
           if (uploadEntries.length) {
             fs.mkdirSync(stagedUploads, { recursive: true });
             const root = path.resolve(stagedUploads);
@@ -2120,8 +2139,11 @@ function extractFullBackup(zipPath, stagedDb, stagedUploads) {
               if (dest !== root && !dest.startsWith(root + path.sep)) continue; // reject ../ escapes
               fs.mkdirSync(path.dirname(dest), { recursive: true });
               await streamEntryToFile(zipfile, ue, dest);
+              bytesDone += ue.uncompressedSize || 0;
+              emitProgress(false);
             }
           }
+          emitProgress(true);
           zipfile.close();
           resolve(manifest);
         } catch (e) {
@@ -2157,9 +2179,18 @@ app.post('/api/admin/restore', (req, res) => {
     const stagedDb = DB_PATH + '.restore';
     const stagedUploads = UPLOADS_DIR + '.restore';
 
+    // Push extraction progress to the requesting admin's live socket(s) so the
+    // restore UI can show a real "extracting" bar during the long staging step.
+    const sendRestoreProgress = (p) => {
+      if (!io) return;
+      for (const [, s] of io.sockets.sockets) {
+        if (s.user && s.user.id === user.id) { try { s.emit('restore-progress', p); } catch {} }
+      }
+    };
+
     let manifest;
     try {
-      manifest = await extractFullBackup(req.file.path, stagedDb, stagedUploads);
+      manifest = await extractFullBackup(req.file.path, stagedDb, stagedUploads, sendRestoreProgress);
     } catch (e) {
       cleanupTmp();
       try { fs.unlinkSync(stagedDb); } catch {}

@@ -3672,6 +3672,20 @@ _setupUI() {
 
   const restoreBtn = document.getElementById('backup-restore-btn');
   if (restoreBtn) {
+    const progWrap  = document.getElementById('restore-progress');
+    const progFill  = document.getElementById('restore-progress-fill');
+    const progLabel = document.getElementById('restore-progress-label');
+    const fmtBytesR = (n) => {
+      if (n < 1024) return n + ' B';
+      if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+      if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+      return (n / 1073741824).toFixed(2) + ' GB';
+    };
+    const setBar = (pct, indeterminate) => {
+      if (progWrap) progWrap.classList.toggle('indeterminate', !!indeterminate);
+      if (progFill) progFill.style.width = indeterminate ? '40%' : Math.max(0, Math.min(100, pct)) + '%';
+    };
+
     restoreBtn.addEventListener('click', async () => {
       const fileInput = document.getElementById('backup-restore-file');
       const file = fileInput?.files?.[0];
@@ -3679,22 +3693,71 @@ _setupUI() {
       if (!confirm(t('confirm.backup_restore') || 'Restore this backup? It will OVERWRITE the current server data and restart the server. This cannot be undone (except via the haven.db.pre-restore copy on the host machine).')) return;
       const token = localStorage.getItem('haven_token');
       if (!token) return this._showToast(t('toasts.not_logged_in') || 'Not logged in', 'error');
-      const fd = new FormData();
-      fd.append('backup', file);
+
       restoreBtn.disabled = true;
       const origText = restoreBtn.innerHTML;
+
+      // The server streams the uploaded zip to disk after the upload lands and
+      // emits `restore-progress` over the socket so we can show a real
+      // extraction bar instead of an opaque wait on large backups (#5438).
+      const onExtractProgress = (p) => {
+        if (!p || p.phase !== 'extract') return;
+        if (p.bytesTotal) {
+          const pct = Math.round((p.bytesDone / p.bytesTotal) * 100);
+          setBar(pct, false);
+          if (progLabel) progLabel.textContent = `Extracting on server… ${pct}% (${fmtBytesR(p.bytesDone)} / ${fmtBytesR(p.bytesTotal)})`;
+        } else {
+          setBar(0, true);
+          if (progLabel) progLabel.textContent = 'Extracting on server…';
+        }
+      };
+      this.socket?.on('restore-progress', onExtractProgress);
+      const cleanup = () => { try { this.socket?.off('restore-progress', onExtractProgress); } catch {} };
+
+      if (progWrap) progWrap.style.display = 'block';
+      setBar(0, false);
+      if (progLabel) progLabel.textContent = 'Uploading… 0%';
       restoreBtn.innerHTML = '⏳ Uploading…';
+
       try {
-        const res = await fetch('/api/admin/restore', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: fd,
+        const data = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/admin/restore');
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.timeout = 0; // multi-GB uploads can run for many minutes
+          xhr.upload.onprogress = (e) => {
+            if (!e.lengthComputable) return;
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setBar(pct, false);
+            if (progLabel) progLabel.textContent = `Uploading… ${pct}% (${fmtBytesR(e.loaded)} / ${fmtBytesR(e.total)})`;
+          };
+          xhr.upload.onload = () => {
+            // Upload finished — server now stages the zip to disk. Flip to the
+            // extraction phase; socket events refine this if/when they arrive.
+            setBar(0, true);
+            if (progLabel) progLabel.textContent = 'Upload complete — extracting on server…';
+            restoreBtn.innerHTML = '⏳ Extracting…';
+          };
+          xhr.onload = () => {
+            let d = {};
+            try { d = JSON.parse(xhr.responseText); } catch {}
+            if (xhr.status >= 200 && xhr.status < 300) resolve(d);
+            else reject(new Error(d.error || `HTTP ${xhr.status}`));
+          };
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.ontimeout = () => reject(new Error('Upload timed out'));
+          const fd = new FormData();
+          fd.append('backup', file);
+          xhr.send(fd);
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        cleanup();
+        setBar(100, false);
+        if (progLabel) progLabel.textContent = 'Done — server is restarting…';
         this._showToast(data.message || 'Restore staged. Server restarting…', 'success');
         restoreBtn.innerHTML = '✓ Restarting…';
       } catch (err) {
+        cleanup();
+        if (progWrap) progWrap.style.display = 'none';
         this._showToast((t('toasts.backup_restore_failed') || 'Restore failed: ') + err.message, 'error');
         restoreBtn.disabled = false;
         restoreBtn.innerHTML = origText;
