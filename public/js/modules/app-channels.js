@@ -169,8 +169,19 @@ async switchChannel(code) {
   this._historyAfter = null;
 
   this.socket.emit('enter-channel', { code });
-  // E2E: fetch DM partner's public key BEFORE requesting messages
-  if (isDm && channel) await this._fetchDMPartnerKey(channel);
+  // E2E: fetch DM partner's public key BEFORE requesting messages.
+  // Must not be allowed to reject: the channel UI is already fully swapped in
+  // by this point, so a thrown key fetch would abandon every emit below it —
+  // get-messages, mark-read, get-channel-members — leaving you sitting in a DM
+  // with the *previous* channel's member list and @mentions quietly dead.
+  // A missing partner key only costs E2E, which the encrypt path handles.
+  if (isDm && channel) {
+    try {
+      await this._fetchDMPartnerKey(channel);
+    } catch (err) {
+      console.warn('[Haven] DM partner key fetch failed, continuing unencrypted:', err);
+    }
+  }
   this.socket.emit('get-messages', { code });
   // Belt-and-braces mark-read: if the server already told us the latest
   // message id for this channel (channels-list snapshot), fire a

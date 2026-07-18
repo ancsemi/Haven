@@ -1722,7 +1722,24 @@ _showMentionDropdown() {
   const host = (this._mentionInput && this._mentionInput.parentElement) || null;
   if (host && dropdown.parentElement !== host) host.appendChild(dropdown);
   const query = this.mentionQuery;
-  const filtered = this.channelMembers.filter(m => {
+
+  // channelMembers is written in exactly one place — the 'channel-members'
+  // socket handler — and that handler drops the payload if it arrives while
+  // currentChannel has moved on. Any path that leaves it empty (a dropped
+  // payload, a switchChannel that threw before its emit, a server-side
+  // membership miss) used to surface as "@ silently does nothing", which is
+  // impossible to diagnose from the user's side. Re-request instead, throttled
+  // so a channel that genuinely has no other members doesn't spam the socket.
+  if (!Array.isArray(this.channelMembers) || this.channelMembers.length === 0) {
+    const now = Date.now();
+    if (this.currentChannel && this.socket?.connected && now - (this._lastMemberRefetch || 0) > 3000) {
+      this._lastMemberRefetch = now;
+      console.warn('[Haven] @mention: channelMembers empty, re-requesting for', this.currentChannel);
+      try { this.socket.emit('get-channel-members', { code: this.currentChannel }); } catch {}
+    }
+  }
+
+  const filtered = (this.channelMembers || []).filter(m => {
     const dn = (m.username || '').toLowerCase();
     const ln = (m.loginName || '').toLowerCase();
     const nk = (m.id && this._nicknames && this._nicknames[m.id] || '').toLowerCase();

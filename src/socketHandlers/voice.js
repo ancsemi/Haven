@@ -913,7 +913,14 @@ module.exports = function register(socket, ctx) {
     const member = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
-    if (!member) return;
+    // enter-channel auto-joins admins to non-DM channels they aren't members
+    // of; mirror that here. Without it an admin who reached a channel that way
+    // gets no reply at all, the client keeps its stale member list, and
+    // @mention autocomplete comes up empty with nothing logged anywhere.
+    if (!member) {
+      const chRow = db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channel.id);
+      if (!(socket.user.isAdmin && chRow && !chRow.is_dm)) return;
+    }
 
     const members = db.prepare(`
       SELECT u.id, COALESCE(u.display_name, u.username) as username, u.username as loginName FROM users u
