@@ -11,6 +11,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.33.0] — 2026-07-18
+
+### Added
+- **Rich presence — see what people are playing and listening to.** The member list shows one activity per person (games take precedence, so the sidebar stays scannable) and the profile card shows a line for each, so someone doing both gets both. Four sources: Haven's own voice-channel music player (works immediately, no setup), **Last.fm**, **Steam**, and **Spotify**.
+- **Last.fm is the recommended music source.** Linking is just your username — no sign-in redirect, nothing stored — and because Spotify, Apple Music, YouTube Music, Navidrome and Plex all scrobble to Last.fm, one connection covers whatever you actually listen with. Note that scrobbling has to be switched on in Last.fm's own settings first; the setup panel explains how for each service.
+- **Activity privacy controls** in Settings → Activity. Games and music can be hidden separately or sharing turned off entirely, and nothing is ever shared while your status is Invisible. Activity is never written to the database, so no listening history is kept.
+- **Admins can paste API keys directly into Settings** instead of editing `.env` by hand, with step-by-step instructions for each service. Keys apply immediately — no server restart.
+- **Settings navigation is grouped** into Appearance, Chat, Privacy & Presence, Account & Security and Advanced. Nine sections that previously had no nav entry are now one click away, and the highlighted entry follows what you are actually looking at as you scroll.
+- **The settings panel can be resized.** It still opens at its usual size, but the drag handle now works — previously it was capped at exactly the width it opened at.
+
+### Fixed
+- **`.mov` videos (and more audio formats) now play inline** instead of showing a download card. Also covers `.m4v`, `.ogv`, `.m4a`, `.aac`, `.flac` and `.opus`. If a file genuinely cannot be decoded by the browser, the attachment falls back to a download link rather than leaving a dead player.
+- **`@` mentions sometimes did nothing.** Three separate causes, all of which left the member list empty with no error anywhere. Typing `@` with an empty list now re-fetches it automatically.
+- **Copying an image from the viewer** could fail with "Write permission denied", and reported the wrong error when it did.
+- **The status bar could be shown once and then never hidden again** — the checkbox appeared to do nothing.
+- **The emoji customise panel covered the row of slots** you needed to click, if the full emoji picker was already open.
+- **Language selector showed "GB", "RU" and "ES"** instead of flags on Windows.
+- **Image Display settings section had no working nav link** (duplicate element id).
+
+---
+
 ## [3.32.0] — 2026-07-13
 
 ### Added
