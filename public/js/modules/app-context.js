@@ -464,6 +464,50 @@ _setupNotifications() {
     });
   }
 
+  // ── Activity sharing (rich presence) ──
+  // All three are server-side preferences because other people's clients need
+  // to honour them. The master switch is opt-in; the sub-toggles default on
+  // but do nothing until the master is enabled, so the UI hides them until
+  // then rather than showing controls that have no effect.
+  const shareActivityToggle = document.getElementById('share-activity');
+  const shareGameToggle     = document.getElementById('share-game-activity');
+  const shareMusicToggle    = document.getElementById('share-music-activity');
+  const activitySubOptions  = document.getElementById('activity-suboptions');
+
+  const syncActivityUI = () => {
+    const prefs = this._userPrefs || {};
+    // Mirrors the server's read in activity.js prefsFor(): absent = on.
+    const master = prefs.share_activity !== 'false';
+    if (shareActivityToggle) shareActivityToggle.checked = master;
+    // Absent sub-preference means "on" — matches the server's read of it.
+    if (shareGameToggle)  shareGameToggle.checked  = prefs.share_game_activity  !== 'false';
+    if (shareMusicToggle) shareMusicToggle.checked = prefs.share_music_activity !== 'false';
+    if (activitySubOptions) activitySubOptions.style.display = master ? '' : 'none';
+  };
+  this._syncActivityUI = syncActivityUI;
+  syncActivityUI();
+
+  const bindActivityToggle = (el, key) => {
+    if (!el) return;
+    el.addEventListener('change', () => {
+      const v = String(el.checked);
+      if (this._userPrefs) this._userPrefs[key] = v;
+      this.socket?.emit('set-preference', { key, value: v });
+      syncActivityUI();
+    });
+  };
+  bindActivityToggle(shareActivityToggle, 'share_activity');
+  bindActivityToggle(shareGameToggle,     'share_game_activity');
+  bindActivityToggle(shareMusicToggle,    'share_music_activity');
+
+  // Ask for the linked-account list whenever settings are wired up; the
+  // response also tells us which providers this server actually has
+  // credentials for, so we don't offer a button that can only fail.
+  this.socket?.emit('get-connections');
+
+  // Coming back from a Steam/Spotify redirect? Report the outcome once.
+  this._handleConnectRedirect?.();
+
   // ── Server URL in status bar (copyable, privacy toggle) ──
   const statusUrlEl = document.getElementById('status-url-text');
   const statusUrlToggle = document.getElementById('status-url-toggle');

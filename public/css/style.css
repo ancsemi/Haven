@@ -9603,8 +9603,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 
 .settings-nav {
-  width: 150px;
-  min-width: 150px;
+  width: 172px;
+  min-width: 172px;
   padding: 8px 0 8px 8px;
   overflow-y: auto;
   border-right: 1px solid var(--border);
@@ -13213,6 +13213,357 @@ ul.chat-list { list-style-type: disc; }
    File Attachments
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
+/* ── Rich presence ─────────────────────────────────────── */
+/* Sidebar: one compact line, truncated. Deliberately quiet — it sits next to
+   every name in the member list, so it must never out-shout the username. */
+.user-activity {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Profile card: one row per activity, with cover art when the source gave us
+   any. Rows only exist when there's something to show. */
+.profile-popup-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.profile-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.profile-activity-art {
+  width: 38px;
+  height: 38px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+}
+
+.profile-activity-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.profile-activity-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.profile-activity-verb {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.profile-activity-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-activity-details {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Settings → Connections */
+.connection-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg-tertiary);
+}
+
+.connection-row .connection-icon { font-size: 20px; flex-shrink: 0; }
+/* Name and status must stack, not flow inline. As plain inline spans they
+   wrapped as one paragraph, so "Not set up yet" ran on from the provider name
+   and the wrapped remainder started underneath the icon. */
+.connection-row .connection-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.connection-row .connection-name { font-size: 13px; font-weight: 600; }
+.connection-row .connection-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  /* Setup hints name env vars and URLs — let them wrap rather than truncating
+     the one piece of information the admin actually needs. */
+  white-space: normal;
+  line-height: 1.4;
+}
+.connection-row .connection-sub code {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.connection-row.is-unavailable { opacity: 0.55; }
+
+/* Link / Unlink / Set up.
+   .btn-sm's default background is var(--bg-tertiary) — the exact colour of
+   the row these sit on, so they rendered as plain text with no affordance.
+   Give them their own surface plus a border. The accent override also resets
+   .btn-sm.btn-accent's 16px font, which is sized for icon glyphs, not words. */
+.connection-row .btn-sm {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 6px 14px;
+  flex-shrink: 0;
+}
+.connection-row .btn-sm:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+.connection-row .btn-sm.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 14px;
+  line-height: normal;
+}
+.connection-row .btn-sm.btn-accent:hover { background: var(--accent-hover); }
+
+/* Same treatment inside the setup form so Save/Cancel read as buttons too. */
+.connection-setup-actions .btn-sm {
+  border: 1px solid var(--border-light);
+  font-size: 12px;
+  padding: 6px 14px;
+  line-height: normal;
+}
+.connection-setup-actions .btn-sm.btn-accent {
+  border-color: var(--accent);
+  color: #fff;
+}
+.connection-block { margin-bottom: 8px; }
+.connection-block .connection-row { margin-bottom: 0; }
+
+/* Inline credential entry (admins only, collapsed by default) */
+.connection-setup-form {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: var(--bg-secondary);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.connection-setup-form[hidden] { display: none; }
+
+/* Username link form (Last.fm) — same shell as the admin setup form. */
+.connection-username-form {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: var(--bg-secondary);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.connection-username-form[hidden] { display: none; }
+
+/* "Other options" — keeps the harder, more limited providers out of the way
+   without hiding them outright. */
+.connection-advanced { margin-top: 4px; }
+.connection-advanced > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 2px;
+  list-style: revert;
+  user-select: none;
+}
+.connection-advanced > summary:hover { color: var(--text-secondary); }
+.connection-advanced[open] > summary { margin-bottom: 6px; }
+
+/* The Last.fm blurb is a real sentence, not a status line — let it breathe. */
+.connection-row .connection-sub { line-height: 1.45; }
+.connection-username-form input { font-family: inherit; font-size: 12px; }
+/* The scrobbling note is multi-line with bullets, not a one-liner hint. */
+.connection-username-form .settings-hint { line-height: 1.7; }
+
+.connection-help {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.connection-help:hover { text-decoration: underline; }
+
+.connection-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.connection-field input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  width: 100%;
+}
+.connection-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.connection-setup-actions { display: flex; gap: 6px; }
+
+.connection-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.connection-steps li { margin-bottom: 3px; }
+.connection-steps code {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* The redirect URI is long and must be copied character-for-character. Inline
+   it wrapped mid-string and read as a broken fragment, so give it its own
+   full-width block under the instruction that introduces it. */
+.connection-steps code.setup-uri {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+/* ── Language picker ───────────────────────────────────── */
+/* Custom control because a native <option> cannot contain an <img>, and
+   Windows renders Unicode flag emoji as bare letter pairs ("GB", "RU"). */
+.lang-select-hidden { display: none !important; }
+
+.lang-picker { position: relative; min-width: 190px; }
+
+.lang-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.lang-picker-btn:hover { border-color: var(--accent); }
+.lang-caret { margin-left: auto; opacity: 0.6; font-size: 10px; }
+
+.lang-picker-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  padding: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.lang-picker-list[hidden] { display: none; }
+
+.lang-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.lang-picker-item:hover { background: var(--bg-tertiary); }
+
+.lang-flag {
+  width: 20px;
+  height: 15px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+}
+/* Fallback for a locale with no bundled artwork. */
+.lang-flag-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
 .file-attachment {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -13489,81 +13840,6 @@ ul.chat-list { list-style-type: disc; }
 [data-theme="halo"] .ns-slider {
   --track-bg: #0d1a0d;
 }
-/* ── Language picker ───────────────────────────────────── */
-/* Custom control because a native <option> cannot contain an <img>, and
-   Windows renders Unicode flag emoji as bare letter pairs ("GB", "RU"). */
-.lang-select-hidden { display: none !important; }
-
-.lang-picker { position: relative; min-width: 190px; }
-
-.lang-picker-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 10px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  text-align: left;
-}
-.lang-picker-btn:hover { border-color: var(--accent); }
-.lang-caret { margin-left: auto; opacity: 0.6; font-size: 10px; }
-
-.lang-picker-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 60;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-  padding: 4px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-.lang-picker-list[hidden] { display: none; }
-
-.lang-picker-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  text-align: left;
-}
-.lang-picker-item:hover { background: var(--bg-tertiary); }
-
-.lang-flag {
-  width: 20px;
-  height: 15px;
-  object-fit: cover;
-  border-radius: 2px;
-  flex-shrink: 0;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
-}
-/* Fallback for a locale with no bundled artwork. */
-.lang-flag-text {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-}
-
 [data-theme="halo"] .slider-sm::-webkit-slider-thumb,
 [data-theme="halo"] .ns-slider::-webkit-slider-thumb {
   box-shadow: 0 0 8px rgba(79, 195, 247, 0.5);

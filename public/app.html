@@ -1417,6 +1417,33 @@
         <small class="settings-hint" style="display:block;margin-bottom:6px">Other users (and you) won't see your 🚢 badge anywhere on this server, including the leaderboard.</small>
       </div>
 
+      <!-- Activity / Rich Presence -->
+      <div class="settings-section" id="section-activity" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🎮 Activity</h5>
+        <label class="toggle-row">
+          <span>Share my activity</span>
+          <input type="checkbox" id="share-activity">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px">Others can see what you're playing or listening to. Games and music only appear once you link an account below. Nothing is ever shared while your status is Invisible.</small>
+
+        <div id="activity-suboptions" style="display:none;padding-left:10px;border-left:2px solid var(--border-light);margin-bottom:10px">
+          <label class="toggle-row">
+            <span>Show games</span>
+            <input type="checkbox" id="share-game-activity">
+          </label>
+          <label class="toggle-row">
+            <span>Show music</span>
+            <input type="checkbox" id="share-music-activity">
+          </label>
+        </div>
+
+        <h5 class="settings-section-title" style="margin-top:12px">🔗 Connections</h5>
+        <div id="connections-list">
+          <small class="settings-hint">Loading…</small>
+        </div>
+        <small class="settings-hint" style="display:block;margin-top:6px">Haven's own music player needs no connection — it shares automatically while you're listening in a voice channel.</small>
+      </div>
+
       <!-- Sounds Section -->
       <div class="settings-section" id="section-sounds">
         <h5 class="settings-section-title">🔔 <span data-i18n="settings.sounds_section.title">Sounds</span></h5>

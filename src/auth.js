@@ -1204,6 +1204,17 @@ function generateToken(payload) {
   return jwt.sign(payload, JWT_SECRET, _sessionSignOptions());
 }
 
+/**
+ * Short-lived token for the account-linking redirects (Steam OpenID, Spotify
+ * OAuth). These travel in a URL, which means they can land in browser history,
+ * proxy logs, and Referer headers — so they expire in five minutes and carry a
+ * 'connect' scope that the session middleware will not accept. Never issue a
+ * full session token for a redirect flow.
+ */
+function generateConnectToken(userId, provider) {
+  return jwt.sign({ id: userId, scope: 'connect', provider }, JWT_SECRET, { expiresIn: '5m' });
+}
+
 function generateChannelCode() {
   return crypto.randomBytes(4).toString('hex'); // 8-char hex string
 }
@@ -1598,4 +1609,4 @@ router.options('/SSO/authenticate', (req, res) => {
   res.sendStatus(204);
 });
 
-module.exports = { router, verifyToken, generateChannelCode, generateToken, authLimiter };
+module.exports = { router, verifyToken, generateChannelCode, generateToken, generateConnectToken, authLimiter };

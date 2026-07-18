@@ -14,6 +14,8 @@ const { sanitizeText, utcStamp, isString, isInt, isValidUploadPath, VALID_ROLE_P
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
 
+const { createActivity } = require('../activity');
+
 const registerChannels   = require('./channels');
 const registerMessages   = require('./messages');
 const registerVoice      = require('./voice');
@@ -56,6 +58,58 @@ function setupSocketHandlers(io, db, opts = {}) {
     activeScreenSharers, activeWebcamUsers, streamViewers,
     slowModeTracker, pendingTempDelete, pendingVoiceLeave
   };
+
+  // ── Rich presence ───────────────────────────────────────
+  // Owns the in-memory "what is this user doing" map and the Steam/Spotify
+  // pollers. Only polls for users who are connected right now, which is why
+  // it needs a live view of the socket set rather than a DB query.
+  const activity = createActivity({
+    db,
+    getOnlineUserIds: () => {
+      const ids = new Set();
+      for (const [, s] of io.of('/').sockets) if (s.user) ids.add(s.user.id);
+      return Array.from(ids);
+    },
+    // A user's activity changed → re-broadcast presence for whatever channel
+    // they're in, so watchers see it without waiting for an organic update.
+    onChange: (userId) => {
+      try {
+        for (const [, s] of io.of('/').sockets) {
+          if (s.user && s.user.id === userId && s.currentChannel) {
+            emitOnlineUsers(s.currentChannel);
+            break;
+          }
+        }
+      } catch { /* presence is best-effort */ }
+    },
+    // Linked accounts changed. Push to EVERY socket this user has open, not
+    // just the one that started the flow — the OAuth callback frequently
+    // completes somewhere else entirely (Steam's QR sign-in hands off to
+    // whatever browser is default), so the app that's actually open has no
+    // other way to learn the link succeeded.
+    onConnectionsChanged: (userId) => {
+      try {
+        const payload = {
+          connections: activity.listConnections(userId),
+          available: {
+            steam: activity.isSteamConfigured(),
+            spotify: activity.isSpotifyConfigured(),
+            // Omitting a provider here reads client-side as "not configured",
+            // so this list must stay in step with the ones in users.js. Missing
+            // lastfm made a successful link immediately revert the row to
+            // "Set up" — the success toast and the regression arrived in the
+            // same push.
+            lastfm: activity.isLastfmConfigured(),
+          },
+        };
+        for (const [, s] of io.of('/').sockets) {
+          if (s.user && s.user.id === userId) s.emit('connections', payload);
+        }
+      } catch { /* best-effort */ }
+    },
+  });
+  activity.start();
+  state.activity = activity;
 
   // Transfer-admin mutex (shared across all connections to prevent race conditions)
   const transferAdminRef = { value: false };
@@ -153,7 +207,34 @@ function setupSocketHandlers(io, db, opts = {}) {
       : { isPlaying: true, positionSeconds: 0, durationSeconds: null, updatedAt: Date.now() };
     const music = { ...entry, playbackState };
     activeMusic.set(code, music);
+    syncMusicActivity(code);
     return music;
+  }
+
+  /**
+   * Push Haven's own player into rich presence for everyone currently in the
+   * voice room — not just whoever queued the track, since they're all actually
+   * listening to it. Called whenever the track changes or the room membership
+   * changes; the activity engine ignores no-op updates, so calling it often is
+   * cheap and calling it too rarely is what causes stale "listening to" lines.
+   */
+  function syncMusicActivity(code) {
+    if (!state.activity) return;
+    const room = voiceUsers.get(code);
+    const listeners = room ? Array.from(room.keys()) : [];
+    const music = activeMusic.get(code);
+
+    if (!music || music.playbackState?.isPlaying === false) {
+      state.activity.clearHavenMusic(listeners);
+      return;
+    }
+    let channelName = code;
+    try {
+      const ch = db.prepare('SELECT name FROM channels WHERE code = ?').get(code);
+      if (ch?.name) channelName = ch.name;
+    } catch { /* fall back to the code */ }
+
+    state.activity.setHavenMusic(listeners, { title: music.title, channelName });
   }
 
   function emitMusicSharedToRoom(code, music) {
@@ -438,6 +519,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (room.size === 0) {
       voiceUsers.delete(code);
       activeMusic.delete(code);
+      syncMusicActivity(code);
       musicQueues.delete(code);
       try {
         const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
@@ -470,6 +552,9 @@ function setupSocketHandlers(io, db, opts = {}) {
   // ── broadcastVoiceUsers ─────────────────────────────────
   function broadcastVoiceUsers(code) {
     pruneStaleVoiceUsers(code);
+    // Room membership just changed, so who is "listening to" the active track
+    // changed with it — someone who joined mid-song should pick it up.
+    syncMusicActivity(code);
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     const channelId = channel ? channel.id : null;
     const room = voiceUsers.get(code);
@@ -551,7 +636,10 @@ function setupSocketHandlers(io, db, opts = {}) {
         avatar: statusMap[m.id]?.avatar || null,
         avatarShape: statusMap[m.id]?.avatarShape || 'circle',
         isGuest: statusMap[m.id]?.isGuest || false,
-        role: getUserHighestRole(m.id, channel ? channel.id : null)
+        role: getUserHighestRole(m.id, channel ? channel.id : null),
+        // null unless the user opted in; getPublicActivity applies their
+        // privacy prefs, so nothing filtered here can leak downstream.
+        activity: globalOnlineIds.has(m.id) ? activity.getPublicActivity(m.id) : null
       }));
     } else {
       const onlineMap = new Map();
@@ -565,7 +653,8 @@ function setupSocketHandlers(io, db, opts = {}) {
             avatar: statusMap[s.user.id]?.avatar || s.user.avatar || null,
             avatarShape: statusMap[s.user.id]?.avatarShape || s.user.avatar_shape || 'circle',
             isGuest: statusMap[s.user.id]?.isGuest || !!s.user.isGuest,
-            role: getUserHighestRole(s.user.id, channel ? channel.id : null)
+            role: getUserHighestRole(s.user.id, channel ? channel.id : null),
+            activity: activity.getPublicActivity(s.user.id)
           });
         }
       }
@@ -634,6 +723,12 @@ function setupSocketHandlers(io, db, opts = {}) {
     const entry = voiceRoom.get(socket.user.id);
     if (!entry) return;
 
+    // Leaving voice ends any Haven-sourced "listening to" for this user.
+    // syncMusicActivity only touches people still in the room, so the leaver
+    // has to be cleared explicitly or their activity would freeze on the last
+    // track they heard.
+    if (state.activity) state.activity.clearHavenMusic([socket.user.id]);
+
     // If the stored entry belongs to a different socket (e.g. the user joined
     // from a second client which kicked this one), don't touch the map — just
     // remove this stale socket from the room and return.
@@ -671,6 +766,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     broadcastStreamInfo(code);
     if (voiceRoom.size === 0) {
       activeMusic.delete(code);
+      syncMusicActivity(code);
       musicQueues.delete(code);
 
       const doDeleteTempChannel = () => {
@@ -1008,6 +1104,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           channelUsers.delete(ch.code);
           voiceUsers.delete(ch.code);
           activeMusic.delete(ch.code);
+      syncMusicActivity(ch.code);
           musicQueues.delete(ch.code);
           console.log(`[Temporary] Channel "${ch.code}" expired and was deleted`);
         }
@@ -1052,6 +1149,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         channelUsers.delete(ch.code);
         voiceUsers.delete(ch.code);
         activeMusic.delete(ch.code);
+      syncMusicActivity(ch.code);
         musicQueues.delete(ch.code);
         console.log(`[Temporary] Empty temp voice channel "${ch.code}" pruned by safety-net sweep`);
       }
@@ -1576,6 +1674,10 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
     });
   });
+
+  // Handed back so server.js can mount the account-linking HTTP routes against
+  // the same engine instance the socket layer is using.
+  return { activity };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText };

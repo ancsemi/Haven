@@ -1113,6 +1113,31 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
   `);
 
+  // ── Rich presence: linked external accounts ─────────────
+  // One row per (user, provider). access_token / refresh_token are stored
+  // AES-256-GCM encrypted (see src/activity.js) — never in plaintext, because
+  // a Spotify refresh token is a long-lived credential to someone's account
+  // and the SQLite file travels with backups.
+  //
+  // Activity itself is deliberately NOT stored here. It's ephemeral,
+  // high-churn, and lives in memory only (activity.js), so a restart forgets
+  // what everyone was doing rather than persisting a play history nobody
+  // asked for.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_connections (
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider      TEXT    NOT NULL,
+      external_id   TEXT,
+      display_name  TEXT,
+      access_token  TEXT,
+      refresh_token TEXT,
+      expires_at    INTEGER DEFAULT 0,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, provider)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_connections_provider ON user_connections(provider);
+  `);
+
   return db;
 }
 

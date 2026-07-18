@@ -1924,6 +1924,47 @@ _setupSocketListeners() {
       const ownToggle = document.getElementById('hide-own-score');
       if (ownToggle) ownToggle.checked = prefs.hide_score_badge === 'true';
     }
+    // Activity toggles live entirely server-side (other clients must honour
+    // them), so the UI can only be correct once prefs land.
+    this._syncActivityUI?.();
+  });
+
+  // ── Rich presence: linked accounts ─────────────────
+  this.socket.on('connections', (data) => {
+    const prev = new Set((this._connections?.connections || []).map(c => c.provider));
+    this._connections = data || { connections: [], available: {} };
+    this._renderConnections?.();
+    // The link may have completed in a different browser window entirely, so
+    // this push is often the first the app hears of it — announce anything
+    // newly linked rather than letting the row change silently.
+    for (const c of (this._connections.connections || [])) {
+      if (!prev.has(c.provider)) {
+        const label = c.provider.charAt(0).toUpperCase() + c.provider.slice(1);
+        this._showToast(`${label} linked`, 'success');
+      }
+    }
+  });
+
+  // Server issued a short-lived link token — hand off to the provider in a
+  // SEPARATE window.
+  //
+  // This used to navigate the current page. In the desktop app that meant the
+  // Haven window itself became Steam's sign-in page, and once the flow
+  // finished somewhere else (Steam's QR sign-in hands off to the default
+  // browser) the app was stranded on a provider page with no way back.
+  //
+  // The popup owns the whole round-trip and closes itself at the end; the app
+  // window never moves. If the link succeeds, the server pushes a 'connections'
+  // update to every socket this user has open, so the UI refreshes regardless
+  // of which browser actually completed the flow.
+  this.socket.on('connect-token', (data) => {
+    if (!data || !data.provider || !data.token) return;
+    const url = `/connect/${encodeURIComponent(data.provider)}?token=${encodeURIComponent(data.token)}`;
+    const win = window.open(url, 'haven-connect', 'width=820,height=760,menubar=no,toolbar=no');
+    if (!win) {
+      // Popup blocked — tell the user rather than silently doing nothing.
+      this._showToast('Allow pop-ups for this site to link an account', 'error');
+    }
   });
 
   // ── Burn-after-read DM events (#5280) ──────────────

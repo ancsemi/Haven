@@ -369,6 +369,14 @@ const fileUpload = multer({
 // 50+ concurrent users joining a stream event don't trip the limiter. (#5323)
 app.use('/api/auth', authRoutes);
 
+// ── Rich presence: account linking (Steam / Spotify) ─────
+// Mounted here, ahead of static + SPA handling, so /connect/* is never
+// swallowed by a catch-all. The activity engine is built later inside
+// setupSocketHandlers, hence the getter — see activityRef below.
+const activityRef = { engine: null };
+const { createConnectRoutes } = require('./src/connectRoutes');
+app.use('/connect', createConnectRoutes(() => activityRef.engine));
+
 // ── Push notification VAPID public key endpoint ──────────
 app.get('/api/push/vapid-key', (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
@@ -4111,7 +4119,7 @@ if (process.env.ADMIN_RESET_PASSWORD) {
 
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
-setupSocketHandlers(io, db, { invalidateIpBanCache });
+activityRef.engine = setupSocketHandlers(io, db, { invalidateIpBanCache }).activity;
 registerProcessCleanup();
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────

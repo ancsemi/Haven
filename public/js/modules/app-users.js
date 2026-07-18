@@ -235,6 +235,10 @@ _renderUserItem(u, scoreLookup) {
     ? `<span class="user-status-text" title="${this._escapeHtml(u.statusText)}">${this._escapeHtml(u.statusText)}</span>`
     : '';
 
+  // Rich presence — sidebar shows at most ONE activity to keep the list
+  // scannable; a game outranks music. The profile card is where both show.
+  const activityHtml = this._sidebarActivityHtml(u.activity);
+
   // Avatar: image or letter fallback
   const color = this._getUserColor(u.username);
   const initial = u.username.charAt(0).toUpperCase();
@@ -305,10 +309,365 @@ _renderUserItem(u, scoreLookup) {
       ${roleBadge}
       ${guestBadge}
       ${statusTextHtml}
+      ${activityHtml}
       ${scoreBadge}
       ${modBtns}
     </div>
   `;
+},
+
+// ── Rich presence: Settings → Connections ─────────────
+
+/**
+ * Render the linked-account rows. Providers the server has no credentials for
+ * are shown greyed out with the reason, rather than hidden — otherwise a user
+ * whose admin hasn't set up Spotify just sees an unexplained gap and files a
+ * bug about the missing button.
+ */
+_renderConnections() {
+  const host = document.getElementById('connections-list');
+  if (!host) return;
+
+  const data = this._connections || { connections: [], available: {} };
+  const linked = new Map((data.connections || []).map(c => [c.provider, c]));
+  const available = data.available || {};
+
+  // Steam and Spotify both require per-deployment credentials that cannot ship
+  // with Haven — a Steam key is tied to one person's Steam account, and a
+  // bundled Spotify client secret would be extractable by anyone who downloads
+  // the source. So "not configured" is the correct default state, and the admin
+  // needs to know exactly which env vars fix it rather than just seeing a dead row.
+  const PROVIDERS = [
+    // Last.fm first: it's the recommended music source. No OAuth, no user cap,
+    // and it reports whatever the person actually listens with.
+    { id: 'lastfm', icon: '🎵', name: 'Last.fm',
+      // Most people have never heard of Last.fm, so the row has to explain
+      // what it is before asking them to link it.
+      blurb: 'A free service that tracks what you listen to. Connect it to Spotify, YouTube Music, Apple Music, Navidrome and more — then Haven can show your music.',
+      linkType: 'username',
+      usernameLabel: 'Your Last.fm username',
+      // People reliably assume linking the username is the whole job. It isn't:
+      // Last.fm only knows what something sends it ("scrobbling"), and that is
+      // set up on Last.fm's side, not here. Spell out both paths.
+      note: 'First time? Sign up free at <b>last.fm</b>, then turn on <b>scrobbling</b> so it knows what you play:'
+          + '<br>• <b>Spotify</b> — last.fm → Settings → Applications → connect Spotify. No install.'
+          + '<br>• <b>YouTube Music, Apple Music, Tidal</b> — install the free <b>Web Scrobbler</b> browser extension.'
+          + '<br>• <b>Navidrome, Plex, Jellyfin</b> — enable Last.fm scrobbling in that server\'s own settings.'
+          + '<br>Without scrobbling set up, Haven will show nothing.',
+      help: 'https://www.last.fm/api/account/create',
+      helpLabel: 'Get a Last.fm API key',
+      steps: [
+        'Sign in with a Last.fm account and fill in the short form (name it "Haven"; the other fields can be anything).',
+        'Copy the <b>API key</b> it shows you and paste it below. Ignore the shared secret — Haven does not need it.',
+      ],
+      fields: [{ key: 'LASTFM_API_KEY', label: 'API Key' }] },
+    { id: 'steam', icon: '🎮', name: 'Steam', blurb: 'Show the game you\'re playing',
+      help: 'https://steamcommunity.com/dev/apikey',
+      helpLabel: 'Open the Steam key page',
+      steps: [
+        'Sign in with your Steam account.',
+        'Where it asks for a domain, any value works — Steam does not check it. Put <code>localhost</code>.',
+        'Copy the key it gives you and paste it below.',
+      ],
+      fields: [{ key: 'STEAM_API_KEY', label: 'API Key' }] },
+    // Spotify is collapsed behind a disclosure. It needs a registered developer
+    // app and its development-mode user allowlist caps it at roughly 25 people,
+    // so steering everyone here by default sends them down the hardest path for
+    // a worse result than Last.fm.
+    { id: 'spotify', icon: '🎧', name: 'Spotify', advanced: true,
+      blurb: 'Direct connection. Harder to set up and limited to ~25 users — prefer Last.fm above.',
+      help: 'https://developer.spotify.com/dashboard',
+      helpLabel: 'Open the Spotify developer dashboard',
+      // Two things trip people up here, both worth stating outright:
+      //  1. developer.spotify.com is a SEPARATE site from Spotify account
+      //     settings. "Manage apps" under your account lists apps you've
+      //     authorised and has no Create button — it is the wrong page, and
+      //     it's the one people find first when they go looking themselves.
+      //  2. "Create an app" sounds like software development. It isn't; it's
+      //     registering a name so Spotify knows who is asking.
+      steps: [
+        'Use the link above — it goes to <b>developer.spotify.com</b>.',
+        'Sign in with your normal Spotify account (free works). Accept the developer terms if it asks.',
+        'Click <b>Create app</b>. You are not building software — this just registers a name. Call it "Haven".',
+        'Paste this into <b>Redirect URI</b>:<code class="setup-uri">' + location.origin + '/connect/spotify/callback</code>',
+        'Tick <b>Web API</b>, save, then open <b>Settings</b> on the app you just made.',
+        'Copy <b>Client ID</b>, then click <b>View client secret</b> and copy that too.',
+      ],
+      fields: [
+        { key: 'SPOTIFY_CLIENT_ID',     label: 'Client ID' },
+        { key: 'SPOTIFY_CLIENT_SECRET', label: 'Client Secret' },
+      ] },
+  ];
+
+  const isAdmin = !!this.user?.isAdmin;
+
+  // Placeholder is a hint, not a default — derive it from the viewer's own
+  // Haven name. It was hardcoded to a real username, which meant every user on
+  // every Haven server was shown one specific person's handle as the example.
+  const placeholderName = this._escapeHtml(
+    (this.user?.username || this.user?.displayName || 'your-username')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .slice(0, 15) || 'your-username'
+  );
+
+  // Advanced providers stay collapsed unless already linked/configured —
+  // no point hiding something the user is actively using.
+  const isAdvancedHidden = (p) => p.advanced && !linked.has(p.id) && !available[p.id];
+
+  const renderProvider = (p) => {
+    const conn = linked.get(p.id);
+    const configured = !!available[p.id];
+
+    let sub, btn;
+    if (!configured) {
+      // Admins get an inline setup form — most self-hosters have no idea where
+      // .env lives, and telling them to "edit .env and restart" is a dead end.
+      // Everyone else just learns the provider is off.
+      sub = isAdmin ? 'Not set up yet' : 'Not enabled on this server — ask an admin';
+      btn = isAdmin
+        ? `<button class="btn-sm connection-setup" data-provider="${p.id}">Set up</button>`
+        : '';
+    } else if (conn) {
+      sub = conn.displayName ? `Linked as ${this._escapeHtml(conn.displayName)}` : 'Linked';
+      btn = `<button class="btn-sm connection-unlink" data-provider="${p.id}">Unlink</button>`;
+    } else if (p.linkType === 'username') {
+      // No OAuth for this provider — the whole link flow is one text field.
+      sub = p.blurb;
+      btn = `<button class="btn-sm btn-accent connection-username-toggle" data-provider="${p.id}">Connect</button>`;
+    } else {
+      sub = p.blurb;
+      btn = `<button class="btn-sm btn-accent connection-link" data-provider="${p.id}">Link</button>`;
+    }
+
+    // Collapsed until "Set up" is clicked, so the common case (already
+    // configured, or a non-admin) stays a single tidy row.
+    const setupForm = (!configured && isAdmin) ? `
+      <div class="connection-setup-form" data-provider="${p.id}" hidden>
+        <a class="connection-help" href="${p.help}" target="_blank" rel="noopener noreferrer">${p.helpLabel} ↗</a>
+        <ol class="connection-steps">${p.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+        ${p.fields.map(f => `
+          <label class="connection-field">
+            <span>${f.label}</span>
+            <input type="password" autocomplete="off" spellcheck="false"
+                   data-env-key="${f.key}" placeholder="32 hex characters">
+          </label>`).join('')}
+        <div class="connection-setup-actions">
+          <button class="btn-sm btn-accent connection-save" data-provider="${p.id}">Save</button>
+          <button class="btn-sm connection-cancel" data-provider="${p.id}">Cancel</button>
+        </div>
+        <small class="settings-hint">Saved to the server's .env automatically. No restart needed.</small>
+      </div>` : '';
+
+    // Username link form (Last.fm). Collapsed until "Connect" is pressed.
+    const usernameForm = (configured && !conn && p.linkType === 'username') ? `
+      <div class="connection-username-form" data-provider="${p.id}" hidden>
+        <label class="connection-field">
+          <span>${p.usernameLabel}</span>
+          <input type="text" autocomplete="off" spellcheck="false"
+                 data-username-for="${p.id}" placeholder="${placeholderName}">
+        </label>
+        <div class="connection-setup-actions">
+          <button class="btn-sm btn-accent connection-username-save" data-provider="${p.id}">Connect</button>
+          <button class="btn-sm connection-username-cancel" data-provider="${p.id}">Cancel</button>
+        </div>
+        ${p.note ? `<small class="settings-hint">${p.note}</small>` : ''}
+      </div>` : '';
+
+    return `
+      <div class="connection-block">
+        <div class="connection-row${configured ? '' : ' is-unavailable'}">
+          <span class="connection-icon">${p.icon}</span>
+          <span class="connection-info">
+            <span class="connection-name">${p.name}</span>
+            <span class="connection-sub">${sub}</span>
+          </span>
+          ${btn}
+        </div>
+        ${setupForm}
+        ${usernameForm}
+      </div>`;
+  };
+
+  const primary  = PROVIDERS.filter(p => !isAdvancedHidden(p));
+  const advanced = PROVIDERS.filter(p => isAdvancedHidden(p));
+
+  host.innerHTML = primary.map(renderProvider).join('')
+    + (advanced.length ? `
+      <details class="connection-advanced">
+        <summary>Other options</summary>
+        ${advanced.map(renderProvider).join('')}
+      </details>` : '');
+
+  const userFormFor = (provider) => host.querySelector(`.connection-username-form[data-provider="${provider}"]`);
+
+  host.querySelectorAll('.connection-username-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = userFormFor(btn.dataset.provider);
+      if (form) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector('input')?.focus();
+      }
+    });
+  });
+  host.querySelectorAll('.connection-username-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = userFormFor(btn.dataset.provider);
+      if (form) { form.querySelector('input').value = ''; form.hidden = true; }
+    });
+  });
+  host.querySelectorAll('.connection-username-save').forEach(btn => {
+    const submit = () => {
+      const form = userFormFor(btn.dataset.provider);
+      const input = form?.querySelector('input');
+      const value = input?.value.trim();
+      if (!value) return this._showToast('Enter your Last.fm username', 'error');
+      // Server verifies the name against the API and pushes a refreshed
+      // connections payload, which re-renders this list.
+      this.socket?.emit('link-lastfm', { username: value });
+      input.value = '';
+      form.hidden = true;
+    };
+    btn.addEventListener('click', submit);
+    userFormFor(btn.dataset.provider)?.querySelector('input')
+      ?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  });
+
+  const formFor = (provider) => host.querySelector(`.connection-setup-form[data-provider="${provider}"]`);
+
+  host.querySelectorAll('.connection-setup').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = formFor(btn.dataset.provider);
+      if (form) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector('input')?.focus();
+      }
+    });
+  });
+  host.querySelectorAll('.connection-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = formFor(btn.dataset.provider);
+      if (form) {
+        form.querySelectorAll('input').forEach(i => { i.value = ''; });
+        form.hidden = true;
+      }
+    });
+  });
+  host.querySelectorAll('.connection-save').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = formFor(btn.dataset.provider);
+      if (!form) return;
+      const inputs = [...form.querySelectorAll('input[data-env-key]')];
+      if (inputs.some(i => !i.value.trim())) {
+        this._showToast('Fill in every field first', 'error');
+        return;
+      }
+      // Each key is saved independently; the server validates format and
+      // replies with a refreshed 'connections' payload. Clear the fields
+      // immediately — these are secrets and shouldn't linger in the DOM.
+      inputs.forEach(i => {
+        this.socket?.emit('set-integration-key', { key: i.dataset.envKey, value: i.value.trim() });
+        i.value = '';
+      });
+      form.hidden = true;
+    });
+  });
+
+  host.querySelectorAll('.connection-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // The server replies with 'connect-token', which triggers the redirect.
+      this.socket?.emit('get-connect-token', { provider: btn.dataset.provider });
+    });
+  });
+  host.querySelectorAll('.connection-unlink').forEach(btn => {
+    btn.addEventListener('click', () => {
+      this.socket?.emit('unlink-connection', { provider: btn.dataset.provider });
+    });
+  });
+},
+
+/**
+ * The OAuth callback bounces back to /app.html#connect=<provider>:<ok|error>.
+ * Read it once on load, tell the user how it went, then strip the fragment so
+ * a refresh doesn't replay the toast.
+ */
+_handleConnectRedirect() {
+  const m = (window.location.hash || '').match(/^#connect=([a-z]+):(ok|error)$/);
+  if (!m) return;
+  const [, provider, status] = m;
+  const label = provider.charAt(0).toUpperCase() + provider.slice(1);
+  if (status === 'ok') {
+    this._showToast(`${label} linked`, 'success');
+    this.socket?.emit('get-connections');
+  } else {
+    this._showToast(`Couldn't link ${label} — please try again`, 'error');
+  }
+  try {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  } catch { /* fragment stays; harmless */ }
+},
+
+// ── Rich presence rendering ───────────────────────────
+// The server has already applied the user's privacy preferences before this
+// object leaves it, so anything present here is meant to be visible. These
+// helpers only decide *how much* to show, never *whether*.
+
+/** Icon + verb for an activity slot. */
+_activityMeta(act) {
+  if (!act) return null;
+  const isGame = act.type === 'playing';
+  return {
+    icon: isGame ? '🎮' : '🎵',
+    verb: isGame ? 'Playing' : 'Listening to',
+    // "Track — Artist" reads better than two separate fields in one line.
+    label: act.details ? `${act.name} — ${act.details}` : act.name,
+  };
+},
+
+/**
+ * Single-line form for the member list. Games win over music when a user is
+ * doing both, so the sidebar never grows a second line per person.
+ */
+_sidebarActivityHtml(activity) {
+  if (!activity) return '';
+  const act = activity.playing || activity.listening;
+  const meta = this._activityMeta(act);
+  if (!meta) return '';
+  const full = `${meta.verb} ${meta.label}`;
+  return `<span class="user-activity" title="${this._escapeHtml(full)}">${meta.icon} ${this._escapeHtml(meta.label)}</span>`;
+},
+
+/**
+ * Profile-card form: one row per activity that's actually present, game first.
+ * A user doing both gets both; a user doing neither (or sharing nothing) gets
+ * no section at all rather than an empty heading.
+ */
+_profileActivityHtml(activity) {
+  if (!activity) return '';
+  const rows = [activity.playing, activity.listening]
+    .map(act => {
+      const meta = this._activityMeta(act);
+      if (!meta) return '';
+      const art = act.image
+        ? `<img class="profile-activity-art" src="${this._escapeHtml(act.image)}" alt="" loading="lazy">`
+        : `<span class="profile-activity-icon">${meta.icon}</span>`;
+      const details = act.details
+        ? `<span class="profile-activity-details">${this._escapeHtml(act.details)}</span>`
+        : '';
+      return `
+        <div class="profile-activity-row">
+          ${art}
+          <span class="profile-activity-text">
+            <span class="profile-activity-verb">${meta.verb}</span>
+            <span class="profile-activity-name">${this._escapeHtml(act.name)}</span>
+            ${details}
+          </span>
+        </div>`;
+    })
+    .filter(Boolean);
+
+  if (rows.length === 0) return '';
+  return `<div class="profile-popup-section-label">Activity</div>
+          <div class="profile-popup-activity">${rows.join('')}</div>`;
 },
 
 // ── Profile Popup (Discord-style mini profile) ────────
@@ -393,6 +752,7 @@ _showProfilePopup(profile) {
       ${statusTextHtml}
       ${bioHtml}
       <div class="profile-popup-divider"></div>
+      ${this._profileActivityHtml(profile.activity)}
       ${rolesHtml ? `<div class="profile-popup-section-label">${t('users.profile_roles_label')}</div><div class="profile-popup-roles">${rolesHtml}</div>` : ''}
       ${joinDate ? `<div class="profile-popup-section-label">${t('users.member_since_label')}</div><div class="profile-popup-join-date">${joinDate}</div>` : ''}
       <div class="profile-popup-actions">${actionsHtml}</div>

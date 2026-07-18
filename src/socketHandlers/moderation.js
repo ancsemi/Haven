@@ -307,6 +307,8 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM high_scores WHERE user_id = ?').run(uid);
       db.prepare('DELETE FROM eula_acceptances WHERE user_id = ?').run(uid);
       db.prepare('DELETE FROM user_preferences WHERE user_id = ?').run(uid);
+      updateIfTableExists('user_connections', 'DELETE FROM user_connections WHERE user_id = ?', uid);
+      try { ctx.state?.activity?.clearUser(uid); } catch { /* presence is best-effort */ }
       db.prepare('UPDATE channels SET created_by = NULL WHERE created_by = ?').run(uid);
       updateIfTableExists('uploads', 'UPDATE uploads SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
       updateIfTableExists('channel_emojis', 'UPDATE channel_emojis SET uploaded_by = NULL WHERE uploaded_by = ?', uid);
@@ -413,6 +415,11 @@ module.exports = function register(socket, ctx) {
       _runIfTable('high_scores', 'DELETE FROM high_scores WHERE user_id = ?', uid);
       _runIfTable('eula_acceptances', 'DELETE FROM eula_acceptances WHERE user_id = ?', uid);
       _runIfTable('user_preferences', 'DELETE FROM user_preferences WHERE user_id = ?', uid);
+      // Linked Steam/Spotify accounts carry encrypted OAuth tokens. The FK
+      // cascade would take these anyway, but a deleted account's credentials
+      // are exactly the thing worth removing explicitly rather than trusting
+      // a pragma that a future migration could turn off.
+      _runIfTable('user_connections', 'DELETE FROM user_connections WHERE user_id = ?', uid);
       _runIfTable('push_subscriptions', 'DELETE FROM push_subscriptions WHERE user_id = ?', uid);
       _runIfTable('fcm_tokens', 'DELETE FROM fcm_tokens WHERE user_id = ?', uid);
       _runIfTable('channels', 'UPDATE channels SET created_by = NULL WHERE created_by = ?', uid);

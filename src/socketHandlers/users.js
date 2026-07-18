@@ -3,6 +3,8 @@
 const path = require('path');
 const fs   = require('fs');
 const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath } = require('./helpers');
+const { generateConnectToken } = require('../auth');
+const { setEnvValue, isWritableKey } = require('../envStore');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission,
@@ -251,7 +253,12 @@ module.exports = function register(socket, ctx) {
         bio: row.bio || '',
         roles: roles,
         online: isOnline,
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        // Profile card shows game AND music on separate lines; the sidebar
+        // collapses to one. Both read the same privacy-filtered object.
+        activity: isOnline && ctx.state?.activity
+          ? ctx.state.activity.getPublicActivity(data.userId)
+          : null
       });
     } catch (err) {
       console.error('Get user profile error:', err);
@@ -456,7 +463,13 @@ module.exports = function register(socket, ctx) {
     const key = typeof data.key === 'string' ? data.key.trim() : '';
     const value = typeof data.value === 'string' ? data.value.trim() : '';
 
-    const allowedKeys = ['theme', 'hide_score_badge'];
+    const allowedKeys = [
+      'theme', 'hide_score_badge',
+      // Rich presence. share_activity is the master switch and defaults to
+      // OFF (absent row = not sharing); the two sub-toggles default ON but
+      // only matter once the master is enabled.
+      'share_activity', 'share_game_activity', 'share_music_activity',
+    ];
     if (!allowedKeys.includes(key) || !value || value.length > 50) return;
 
     db.prepare(
@@ -468,9 +481,138 @@ module.exports = function register(socket, ctx) {
     // When the score-badge visibility changes, re-broadcast the online-users
     // list for the user's current channel so every connected client immediately
     // sees (or stops seeing) the badge without waiting for the next organic update.
-    if (key === 'hide_score_badge' && socket.currentChannel) {
+    // Activity toggles need the same treatment: flipping sharing off must take
+    // effect for other viewers immediately, not on the next poll tick.
+    const ACTIVITY_KEYS = ['share_activity', 'share_game_activity', 'share_music_activity'];
+    if ((key === 'hide_score_badge' || ACTIVITY_KEYS.includes(key)) && socket.currentChannel) {
       emitOnlineUsers(socket.currentChannel);
     }
+  });
+
+  // ── Rich presence: linked accounts ──────────────────────
+  const activity = ctx.state?.activity || null;
+
+  socket.on('get-connections', () => {
+    if (!activity) return;
+    socket.emit('connections', {
+      connections: activity.listConnections(socket.user.id),
+      available: {
+        steam: activity.isSteamConfigured(),
+        spotify: activity.isSpotifyConfigured(),
+        lastfm: activity.isLastfmConfigured(),
+      },
+    });
+  });
+
+  /**
+   * OAuth/OpenID linking is a top-level browser redirect, so it can't carry the
+   * normal Authorization header. The client asks here for a short-lived,
+   * single-purpose token and puts it in the URL instead; server.js verifies it
+   * and refuses anything that isn't scoped to 'connect'.
+   */
+  socket.on('get-connect-token', (data) => {
+    if (!activity) return;
+    const provider = typeof data?.provider === 'string' ? data.provider : '';
+    if (!['steam', 'spotify', 'lastfm'].includes(provider)) return;
+    if (provider === 'steam' && !activity.isSteamConfigured()) {
+      return socket.emit('error-msg', 'Steam integration is not configured on this server');
+    }
+    if (provider === 'spotify' && !activity.isSpotifyConfigured()) {
+      return socket.emit('error-msg', 'Spotify integration is not configured on this server');
+    }
+    socket.emit('connect-token', { provider, token: generateConnectToken(socket.user.id, provider) });
+  });
+
+  /**
+   * Admin-only: save integration credentials into .env from Settings, so an
+   * admin who has never opened a terminal can turn Steam/Spotify on. Writing
+   * also updates process.env, and activity.js reads config per-call, so the
+   * pollers pick it up on the next tick without a restart.
+   *
+   * The keys are secrets: they are never echoed back to any client, and the
+   * response is only "is this provider configured now". Validation lives in
+   * envStore.setEnvValue, which allow-lists the writable keys — a text field
+   * that could write arbitrary .env entries would be a server takeover.
+   */
+  socket.on('set-integration-key', (data) => {
+    if (!activity) return;
+    if (!socket.user.isAdmin) return socket.emit('error-msg', 'Admin only');
+    if (!data || typeof data !== 'object') return;
+
+    const key = typeof data.key === 'string' ? data.key.trim() : '';
+    const value = typeof data.value === 'string' ? data.value : '';
+    if (!isWritableKey(key)) return socket.emit('error-msg', 'Unknown setting');
+
+    const result = setEnvValue(key, value);
+    if (!result.ok) return socket.emit('error-msg', result.reason || 'Could not save');
+
+    _audit({
+      actor: socket.user,
+      action: 'integration_key_set',
+      target_type: 'server',
+      target_name: key,
+      // Deliberately records only which key changed, never the value — the
+      // audit log is readable in Settings and is not a place to store secrets.
+      details: { key },
+    });
+
+    socket.emit('toast', { message: `${key} saved`, type: 'success' });
+    socket.emit('connections', {
+      connections: activity.listConnections(socket.user.id),
+      available: {
+        steam: activity.isSteamConfigured(),
+        spotify: activity.isSpotifyConfigured(),
+        lastfm: activity.isLastfmConfigured(),
+      },
+    });
+  });
+
+  /**
+   * Last.fm linking — a username, not an OAuth round-trip.
+   *
+   * getRecentTracks is a public read, so there is no redirect, no popup, no
+   * token to store, and no callback URI to register. The username is verified
+   * against the API before saving so a typo fails here rather than silently
+   * never reporting anything.
+   */
+  socket.on('link-lastfm', async (data) => {
+    if (!activity) return;
+    const username = typeof data?.username === 'string' ? data.username.trim() : '';
+    if (!username) return socket.emit('error-msg', 'Enter your Last.fm username');
+
+    const check = await activity.verifyLastfmUser(username);
+    if (!check.ok) return socket.emit('error-msg', check.reason || 'Could not verify that username');
+
+    activity.saveConnection(socket.user.id, 'lastfm', {
+      externalId: check.name,
+      displayName: check.name,
+      accessToken: null,   // public API — nothing secret to keep
+      refreshToken: null,
+      expiresAt: 0,
+    });
+
+    // Populate straight away rather than waiting up to 30s for the next tick.
+    activity.pollLastfmUser(socket.user.id).catch(() => {});
+    if (socket.currentChannel) emitOnlineUsers(socket.currentChannel);
+  });
+
+  socket.on('unlink-connection', (data) => {
+    if (!activity) return;
+    const provider = typeof data?.provider === 'string' ? data.provider : '';
+    // lastfm belongs here too — without it a Last.fm account could be linked
+    // but never removed.
+    if (!['steam', 'spotify', 'lastfm'].includes(provider)) return;
+    activity.removeConnection(socket.user.id, provider);
+    socket.emit('connections', {
+      connections: activity.listConnections(socket.user.id),
+      available: {
+        steam: activity.isSteamConfigured(),
+        spotify: activity.isSpotifyConfigured(),
+        lastfm: activity.isLastfmConfigured(),
+      },
+    });
+    socket.emit('toast', { message: `Unlinked ${provider}`, type: 'success' });
+    if (socket.currentChannel) emitOnlineUsers(socket.currentChannel);
   });
 
   // ── High Scores ─────────────────────────────────────────
