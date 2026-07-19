@@ -1569,6 +1569,13 @@
     "remove": "Supprimer"
   },
   "gifs": {
+    "tab_search": "Recherche",
+    "tab_favorites": "★ Favoris",
+    "search_favorites": "Rechercher dans les favoris…",
+    "no_favorites": "Aucun GIF favori pour l'instant — touchez l'☆ d'un GIF pour l'enregistrer ici",
+    "no_favorite_matches": "Aucun favori ne correspond à cette recherche",
+    "favorite": "Ajouter aux favoris",
+    "unfavorite": "Retirer des favoris",
     "searching": "Recherche en cours...",
     "no_results": "Aucun GIF trouvé",
     "search_failed": "Échec de la recherche",

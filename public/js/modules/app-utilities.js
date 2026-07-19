@@ -1,3 +1,9 @@
+// GIF favorites live entirely client-side: starring a GIF just keeps its
+// GIPHY URLs in localStorage, so the Favorites tab keeps working even when
+// the server has no GIPHY key configured.
+const GIF_FAVORITES_KEY = 'haven_gif_favorites';
+const GIF_FAVORITES_MAX = 200;
+
 export default {
 
 // ── Utilities ─────────────────────────────────────────
@@ -1394,6 +1400,7 @@ _setupGifPicker() {
   if (!btn || !picker) return;
 
   this._gifDebounce = null;
+  this._gifTab = 'search';
 
   btn.addEventListener('click', () => {
     if (picker.style.display === 'flex') {
@@ -1405,7 +1412,12 @@ _setupGifPicker() {
     picker.style.display = 'flex';
     searchInput.value = '';
     searchInput.focus();
-    this._loadTrendingGifs();
+    // Re-open on whichever tab was last used this session
+    this._switchGifTab(this._gifTab);
+  });
+
+  picker.querySelectorAll('.gif-tab').forEach(tab => {
+    tab.addEventListener('click', () => this._switchGifTab(tab.dataset.gifTab));
   });
 
   // Close when clicking outside
@@ -1416,10 +1428,15 @@ _setupGifPicker() {
     }
   });
 
-  // Search on typing with debounce
+  // Search on typing with debounce — on the Favorites tab the same box
+  // filters the saved list locally instead of hitting GIPHY.
   searchInput.addEventListener('input', () => {
     clearTimeout(this._gifDebounce);
     const q = searchInput.value.trim();
+    if (this._gifTab === 'favorites') {
+      this._renderGifFavorites(q);
+      return;
+    }
     if (!q) {
       this._loadTrendingGifs();
       return;
@@ -1427,13 +1444,47 @@ _setupGifPicker() {
     this._gifDebounce = setTimeout(() => this._searchGifs(q), 350);
   });
 
-  // Click on a GIF to send it
+  // Star toggles favorite; clicking the GIF itself sends it
   grid.addEventListener('click', (e) => {
+    const star = e.target.closest('.gif-fav-btn');
+    if (star) {
+      const favorited = this._toggleGifFavorite({
+        full: star.dataset.full,
+        tiny: star.dataset.tiny,
+        title: star.dataset.title,
+      });
+      // On the Favorites tab an un-starred GIF should leave the grid
+      if (this._gifTab === 'favorites') this._renderGifFavorites(searchInput.value.trim());
+      else this._paintGifStar(star, favorited);
+      return;
+    }
     const img = e.target.closest('img');
     if (!img || !img.dataset.full) return;
     this._sendGifMessage(img.dataset.full);
     picker.style.display = 'none';
   });
+},
+
+_switchGifTab(tab) {
+  const picker = document.getElementById('gif-picker');
+  const searchInput = document.getElementById('gif-search-input');
+  if (!picker || !searchInput) return;
+
+  this._gifTab = tab === 'favorites' ? 'favorites' : 'search';
+  picker.querySelectorAll('.gif-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.gifTab === this._gifTab);
+  });
+  clearTimeout(this._gifDebounce);
+
+  const q = searchInput.value.trim();
+  if (this._gifTab === 'favorites') {
+    searchInput.placeholder = t('gifs.search_favorites');
+    this._renderGifFavorites(q);
+  } else {
+    searchInput.placeholder = t('header.gif_search_placeholder');
+    if (q) this._searchGifs(q);
+    else this._loadTrendingGifs();
+  }
 },
 
 _loadTrendingGifs() {
@@ -1444,6 +1495,7 @@ _loadTrendingGifs() {
   })
     .then(r => r.json())
     .then(data => {
+      if (this._gifTab === 'favorites') return; // tab switched mid-flight
       if (data.error === 'gif_not_configured') {
         this._showGifSetupGuide(grid);
         return;
@@ -1455,6 +1507,7 @@ _loadTrendingGifs() {
       this._renderGifGrid(data.results || []);
     })
     .catch(() => {
+      if (this._gifTab === 'favorites') return;
       grid.innerHTML = '<div class="gif-picker-empty">Failed to load GIFs</div>';
     });
 },
@@ -1467,6 +1520,7 @@ _searchGifs(query) {
   })
     .then(r => r.json())
     .then(data => {
+      if (this._gifTab === 'favorites') return; // tab switched mid-flight
       if (data.error === 'gif_not_configured') {
         this._showGifSetupGuide(grid);
         return;
@@ -1483,6 +1537,7 @@ _searchGifs(query) {
       this._renderGifGrid(results);
     })
     .catch(() => {
+      if (this._gifTab === 'favorites') return;
       grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.search_failed')}</div>`;
     });
 },
@@ -1533,13 +1588,88 @@ _renderGifGrid(results) {
   grid.innerHTML = '';
   results.forEach(gif => {
     if (!gif.tiny) return;
+    const full = gif.full || gif.tiny;
+    const item = document.createElement('div');
+    item.className = 'gif-item';
+
     const img = document.createElement('img');
     img.src = gif.tiny;
     img.alt = gif.title || 'GIF';
     img.loading = 'lazy';
-    img.dataset.full = gif.full || gif.tiny;
-    grid.appendChild(img);
+    img.dataset.full = full;
+
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'gif-fav-btn';
+    star.dataset.full = full;
+    star.dataset.tiny = gif.tiny;
+    star.dataset.title = gif.title || '';
+    this._paintGifStar(star, this._isGifFavorited(full));
+
+    item.append(img, star);
+    grid.appendChild(item);
   });
+},
+
+/** Sync a star button's glyph, state class and tooltip to `favorited`. */
+_paintGifStar(star, favorited) {
+  star.classList.toggle('favorited', favorited);
+  star.textContent = favorited ? '★' : '☆';
+  star.title = favorited ? t('gifs.unfavorite') : t('gifs.favorite');
+  star.setAttribute('aria-label', star.title);
+  star.setAttribute('aria-pressed', String(favorited));
+},
+
+_renderGifFavorites(query = '') {
+  const grid = document.getElementById('gif-grid');
+  const q = query.trim().toLowerCase();
+  let favs = this._getGifFavorites();
+  if (q) favs = favs.filter(g => (g.title || '').toLowerCase().includes(q));
+  if (!favs.length) {
+    grid.innerHTML = `<div class="gif-picker-empty">${q ? t('gifs.no_favorite_matches') : t('gifs.no_favorites')}</div>`;
+    return;
+  }
+  this._renderGifGrid(favs);
+},
+
+_getGifFavorites() {
+  if (this._gifFavorites) return this._gifFavorites;
+  try {
+    const raw = JSON.parse(localStorage.getItem(GIF_FAVORITES_KEY) || '[]');
+    this._gifFavorites = Array.isArray(raw)
+      ? raw.filter(g => g && typeof g.full === 'string' && typeof g.tiny === 'string')
+      : [];
+  } catch {
+    this._gifFavorites = [];
+  }
+  return this._gifFavorites;
+},
+
+_isGifFavorited(full) {
+  return this._getGifFavorites().some(g => g.full === full);
+},
+
+/** Toggle a GIF in the favorites list. Returns its new favorited state. */
+_toggleGifFavorite(gif) {
+  if (!gif || !gif.full || !gif.tiny) return false;
+  const favs = this._getGifFavorites();
+  const idx = favs.findIndex(g => g.full === gif.full);
+  if (idx !== -1) {
+    favs.splice(idx, 1);
+    this._saveGifFavorites();
+    return false;
+  }
+  // Newest first, oldest trimmed once the cap is hit
+  favs.unshift({ full: gif.full, tiny: gif.tiny, title: gif.title || '' });
+  if (favs.length > GIF_FAVORITES_MAX) favs.length = GIF_FAVORITES_MAX;
+  this._saveGifFavorites();
+  return true;
+},
+
+_saveGifFavorites() {
+  try {
+    localStorage.setItem(GIF_FAVORITES_KEY, JSON.stringify(this._gifFavorites || []));
+  } catch { /* quota exceeded — favorites are best-effort */ }
 },
 
 _sendGifMessage(url) {

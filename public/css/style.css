@@ -7135,6 +7135,33 @@ details.sound-section:not([open]) .sound-section-label::before {
   overflow: hidden;
 }
 
+.gif-picker-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px 0;
+  flex-shrink: 0;
+}
+
+.gif-tab {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.gif-tab:hover { color: var(--text-primary); }
+
+.gif-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .gif-picker-header {
   padding: 10px;
   border-bottom: 1px solid var(--border);
@@ -7178,6 +7205,47 @@ details.sound-section:not([open]) .sound-section-label::before {
 .gif-picker-grid img:hover {
   transform: scale(1.03);
   opacity: 0.85;
+}
+
+.gif-item {
+  position: relative;
+}
+
+/* Favorite star — revealed on hover, always visible once starred */
+.gif-fav-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, transform 0.1s;
+}
+
+.gif-item:hover .gif-fav-btn,
+.gif-fav-btn:focus-visible,
+.gif-fav-btn.favorited {
+  opacity: 1;
+}
+
+.gif-fav-btn:hover { transform: scale(1.15); }
+
+.gif-fav-btn.favorited { color: #ffc93c; }
+
+/* Touch devices never hover — keep the star reachable */
+@media (hover: none) {
+  .gif-fav-btn { opacity: 1; }
 }
 
 .gif-picker-footer {

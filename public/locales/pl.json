@@ -1660,6 +1660,13 @@
     "no_stickers": "Brak naklejek — administrator może je przesłać z panelu Zarządzaj naklejkami"
   },
   "gifs": {
+    "tab_search": "Szukaj",
+    "tab_favorites": "★ Ulubione",
+    "search_favorites": "Szukaj w ulubionych…",
+    "no_favorites": "Brak ulubionych GIF-ów — kliknij ☆ na GIF-ie, aby go tu zapisać",
+    "no_favorite_matches": "Żaden ulubiony nie pasuje do wyszukiwania",
+    "favorite": "Dodaj do ulubionych",
+    "unfavorite": "Usuń z ulubionych",
     "searching": "Wyszukiwanie...",
     "no_results": "Nie znaleziono GIF-ów",
     "search_failed": "Wyszukiwanie nie powiodło się",

@@ -1680,6 +1680,13 @@
     }
   },
   "gifs": {
+    "tab_search": "Search",
+    "tab_favorites": "★ Favorites",
+    "search_favorites": "Search favorites…",
+    "no_favorites": "No favorite GIFs yet — tap the ☆ on a GIF to save it here",
+    "no_favorite_matches": "No favorites match that search",
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites",
     "searching": "Searching...",
     "no_results": "No GIFs found",
     "search_failed": "Search failed",

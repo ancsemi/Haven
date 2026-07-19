@@ -1597,6 +1597,13 @@
     }
   },
   "gifs": {
+    "tab_search": "搜索",
+    "tab_favorites": "★ 收藏",
+    "search_favorites": "搜索收藏…",
+    "no_favorites": "还没有收藏的GIF — 点击GIF上的☆即可保存到这里",
+    "no_favorite_matches": "没有匹配该搜索的收藏",
+    "favorite": "添加到收藏",
+    "unfavorite": "从收藏中移除",
     "searching": "搜索中...",
     "no_results": "未找到GIF",
     "search_failed": "搜索失败",
