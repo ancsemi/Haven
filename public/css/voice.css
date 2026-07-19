@@ -254,7 +254,13 @@
    VOICE VOLUME SLIDERS
    ═══════════════════════════════════════════════════════════ */
 
-.voice-user-item { display: flex; align-items: center; flex-wrap: wrap; }
+/* nowrap, not wrap: a wrapping flex line pushes whole items to a second row
+   rather than shrinking them, so as soon as a user picked up a badge (LIVE,
+   📹, 👁) the status icons dropped onto a row of their own — and because they
+   carry margin-left:auto they sat at the far right of it, reading as an empty
+   second row. The name already ellipsises (flex:1 + min-width:0 in
+   style.css), so keeping one line just truncates the name instead. */
+.voice-user-item { display: flex; align-items: center; flex-wrap: nowrap; min-width: 0; }
 .voice-status-icons { display: flex; gap: 2px; margin-left: auto; align-items: center; flex-shrink: 0; }
 .voice-status-icon { font-size: 12px; position: relative; display: inline-block; opacity: 0.25; line-height: 1; }
 .voice-status-icon.is-muted,
@@ -317,6 +323,7 @@
   white-space: nowrap;
   line-height: 1.2;
   vertical-align: middle;
+  flex-shrink: 0;
 }
 .voice-stream-badge.live {
   background: rgba(255,0,0,0.18);
