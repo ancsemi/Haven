@@ -418,30 +418,43 @@ _renderConnections() {
     const conn = linked.get(p.id);
     const configured = !!available[p.id];
 
-    let sub, btn;
+    let sub, btn = '';
     if (!configured) {
       // Admins get an inline setup form — most self-hosters have no idea where
       // .env lives, and telling them to "edit .env and restart" is a dead end.
       // Everyone else just learns the provider is off.
       sub = isAdmin ? 'Not set up yet' : 'Not enabled on this server — ask an admin';
-      btn = isAdmin
-        ? `<button class="btn-sm connection-setup" data-provider="${p.id}">Set up</button>`
-        : '';
+      if (isAdmin) {
+        btn += `<button class="btn-sm connection-setup" data-provider="${p.id}">Set up</button>`;
+      }
     } else if (conn) {
       sub = conn.displayName ? `Linked as ${this._escapeHtml(conn.displayName)}` : 'Linked';
-      btn = `<button class="btn-sm connection-unlink" data-provider="${p.id}">Unlink</button>`;
+      btn += `<button class="btn-sm connection-unlink" data-provider="${p.id}">Unlink</button>`;
+      // A working key can still need rotating (it leaked, or Steam revoked it).
+      // Surface a way to paste a fresh one without hand-editing .env.
+      if (isAdmin) {
+        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+      }
     } else if (p.linkType === 'username') {
       // No OAuth for this provider — the whole link flow is one text field.
       sub = p.blurb;
-      btn = `<button class="btn-sm btn-accent connection-username-toggle" data-provider="${p.id}">Connect</button>`;
+      btn += `<button class="btn-sm btn-accent connection-username-toggle" data-provider="${p.id}">Connect</button>`;
+      if (isAdmin) {
+        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+      }
     } else {
       sub = p.blurb;
-      btn = `<button class="btn-sm btn-accent connection-link" data-provider="${p.id}">Link</button>`;
+      btn += `<button class="btn-sm btn-accent connection-link" data-provider="${p.id}">Link</button>`;
+      if (isAdmin) {
+        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+      }
     }
 
-    // Collapsed until "Set up" is clicked, so the common case (already
-    // configured, or a non-admin) stays a single tidy row.
-    const setupForm = (!configured && isAdmin) ? `
+    // Rendered whenever an admin is looking, whether or not the provider is
+    // already configured — so an existing key can be rotated from here instead
+    // of by editing .env by hand. Hidden until "Set up" (unconfigured) or
+    // "Change key" (configured) reveals it. Non-admins never see it.
+    const setupForm = isAdmin ? `
       <div class="connection-setup-form" data-provider="${p.id}" hidden>
         <a class="connection-help" href="${p.help}" target="_blank" rel="noopener noreferrer">${p.helpLabel} ↗</a>
         <ol class="connection-steps">${p.steps.map(s => `<li>${s}</li>`).join('')}</ol>
@@ -455,7 +468,7 @@ _renderConnections() {
           <button class="btn-sm btn-accent connection-save" data-provider="${p.id}">Save</button>
           <button class="btn-sm connection-cancel" data-provider="${p.id}">Cancel</button>
         </div>
-        <small class="settings-hint">Saved to the server's .env automatically. No restart needed.</small>
+        <small class="settings-hint">Saved to the server's .env automatically${configured ? ' — this replaces the current key' : ''}. No restart needed.</small>
       </div>` : '';
 
     // Username link form (Last.fm). Collapsed until "Connect" is pressed.
@@ -535,6 +548,17 @@ _renderConnections() {
   const formFor = (provider) => host.querySelector(`.connection-setup-form[data-provider="${provider}"]`);
 
   host.querySelectorAll('.connection-setup').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = formFor(btn.dataset.provider);
+      if (form) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector('input')?.focus();
+      }
+    });
+  });
+  // Identical reveal behaviour for the "Change key" button that appears on
+  // already-configured providers, so an admin can rotate an existing key.
+  host.querySelectorAll('.connection-rekey').forEach(btn => {
     btn.addEventListener('click', () => {
       const form = formFor(btn.dataset.provider);
       if (form) {

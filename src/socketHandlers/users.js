@@ -546,6 +546,13 @@ module.exports = function register(socket, ctx) {
     const result = setEnvValue(key, value);
     if (!result.ok) return socket.emit('error-msg', result.reason || 'Could not save');
 
+    // Steam's presence poll is driven by a single server-wide key, so refresh
+    // it now rather than waiting up to STEAM_POLL_MS for the next tick to pick
+    // up the rotated key. Non-fatal: a failure here just means the old cadence.
+    if (key === 'STEAM_API_KEY') {
+      try { activity.pollSteam().catch(() => {}); } catch { /* ignore */ }
+    }
+
     _audit({
       actor: socket.user,
       action: 'integration_key_set',
