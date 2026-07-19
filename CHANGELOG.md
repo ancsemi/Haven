@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.34.0] — 2026-07-19
+
+### Added
+- **Favorite GIFs.** The GIF picker now has two tabs: **Search** and **★ Favorites**. Hover any GIF and a star appears in its corner — click it to keep that GIF, click it again to drop it. The search box doubles as a filter on the Favorites tab, so a big collection stays usable. Favorites are stored in your own browser, so they never leave your machine, they are per-device, and the Favorites tab keeps working even on a server that has no GIPHY key set up.
+
+### Fixed
+- **The ping reading in the status bar was mostly fiction.** Two different places sent latency probes but both measured against one shared timestamp, so a probe's reply could be timed against an entirely different probe's send time. The result was a random number between 0 and 15 seconds — which is why even a server running on the same machine could report multi-second ping. Probes are now queued and paired with their own reply, and outstanding probes are discarded on disconnect instead of reporting the length of the outage as latency.
+- **"Everyone can see me in voice except me."** If the local in-voice flag got out of step with the actual call, the voice panel filtered you out of your own channel and nothing ever put you back. Haven now checks the live peer connections before trusting that flag, and a watchdog repairs the voice UI if it drifts — so you no longer end up staring at a "Join Voice" button while you are already in the call.
+- **Voice user rows no longer sprout a blank second line.** As soon as someone picked up a LIVE, camera or viewer badge, the status icons wrapped onto a row of their own and sat at the far right of it, looking like an empty row. Long names now truncate instead of wrapping.
+
+---
+
 ## [3.33.0] — 2026-07-18
 
 ### Added
