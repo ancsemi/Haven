@@ -419,7 +419,10 @@ _setupSocketListeners() {
     let acked = false;
     const ackHandler = () => { acked = true; };
     this.socket.once('pong-check', ackHandler);
-    try { this.socket.emit('ping-check'); } catch {}
+    // Route through _pingSend so this probe's send time is queued too. It is a
+    // real round trip and should show up as one; emitting 'ping-check' directly
+    // here is what desynced the queue-less reading.
+    try { this._pingSend(); } catch {}
     setTimeout(() => {
       this.socket?.off('pong-check', ackHandler);
       if (!acked) {
@@ -434,6 +437,9 @@ _setupSocketListeners() {
     this._setLed('status-server-led', 'danger pulse');
     document.getElementById('status-server-text').textContent = 'Disconnected';
     document.getElementById('status-ping').textContent = '--';
+    // Drop outstanding probes — pairing one with a pong from after the
+    // reconnect would report the length of the outage as latency.
+    this._pingQueue = [];
     // (#self-absent-voice-panel — Desktop "lost myself in voice" follow-up)
     // Previously we _softLeave()'d the voice session immediately on every
     // disconnect. Socket.io aggressively reconnects within a few hundred ms
@@ -1219,10 +1225,12 @@ _setupSocketListeners() {
   });
 
   this.socket.on('pong-check', () => {
-    if (this._pingStart) {
-      const latency = Date.now() - this._pingStart;
-      document.getElementById('status-ping').textContent = latency;
-    }
+    // Pair with the oldest outstanding probe (see _pingSend). If the queue is
+    // empty this pong belongs to a probe sent before a reconnect — ignore it
+    // rather than inventing a number.
+    const sentAt = this._pingQueue && this._pingQueue.shift();
+    if (sentAt == null) return;
+    document.getElementById('status-ping').textContent = Date.now() - sentAt;
   });
 
   // ── Reactions ──────────────────────────────────────

@@ -1188,14 +1188,35 @@ _updateClock() {
   document.getElementById('status-clock').textContent = `${h}:${m}:${s}`;
 },
 
+/**
+ * Emit a latency probe, recording when it went out.
+ *
+ * Timestamps go in a FIFO rather than a single `_pingStart` field because
+ * more than one place emits 'ping-check' — the 15 s monitor below and the
+ * window-focus zombie-socket probe in app-socket.js. The server replies with
+ * a bare 'pong-check' carrying no correlation id, so a shared field meant the
+ * focus probe's pong was measured against the *previous scheduled ping's*
+ * timestamp. That reported "time since the last 15 s tick" as latency: a
+ * uniformly random 0–15000 ms, which is where multi-second readings on a
+ * localhost server came from. Socket.IO preserves ordering, so pongs come
+ * back in send order and the queue pairs them up correctly.
+ */
+_pingSend() {
+  if (!this.socket || !this.socket.connected) return;
+  if (!this._pingQueue) this._pingQueue = [];
+  // If pongs stop coming back, don't accumulate — a stale head would later be
+  // paired with an unrelated pong and produce exactly the bogus reading this
+  // is meant to prevent.
+  if (this._pingQueue.length >= 4) this._pingQueue.shift();
+  this._pingQueue.push(Date.now());
+  this.socket.emit('ping-check');
+},
+
 _startPingMonitor() {
   if (this.pingInterval) clearInterval(this.pingInterval);
 
   this.pingInterval = setInterval(() => {
-    if (this.socket && this.socket.connected) {
-      this._pingStart = Date.now();
-      this.socket.emit('ping-check');
-    }
+    this._pingSend();
   }, 15000);
 
   // Periodic member list + voice refresh every 30s to keep sidebar in sync
@@ -1207,8 +1228,7 @@ _startPingMonitor() {
     }
   }, 30000);
 
-  this._pingStart = Date.now();
-  this.socket.emit('ping-check');
+  this._pingSend();
 },
 
 _setLed(id, state) {
