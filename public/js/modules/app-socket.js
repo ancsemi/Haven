@@ -1035,6 +1035,11 @@ _setupSocketListeners() {
     // (#5347 follow-up) Re-render the voice participant list whenever the
     // user is either viewing the channel OR currently in voice on it.
     const isViewing = data.channelCode === this.currentChannel;
+    // Repair the local flags from the live peer connections before reading
+    // them. Without this, a stale `inVoice === false` makes the filter below
+    // delete us from our own voice panel — the "everyone sees me in voice
+    // except me" report — and nothing ever undoes it.
+    try { this.voice?.reassertSessionIfLive(); } catch {}
     const isInVoice = !!(this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode);
     // (#5347 v3.16.1) Defensively filter ourselves out of the user list
     // when we're NOT in voice on this channel. Guards against an in-flight

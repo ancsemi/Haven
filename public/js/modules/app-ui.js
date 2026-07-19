@@ -1412,6 +1412,11 @@ _setupUI() {
     if (userId === 'self' && isTalking) this._resetIdle?.();
   };
 
+  // Watch for the voice UI drifting out of step with the actual session
+  // (see _reconcileVoiceUi) and repair it instead of stranding the user on a
+  // "Join Voice" button while they're still in the call.
+  this._startVoiceUiReconciler?.();
+
   // ── File video fullscreen: redirect to wrapper for proper controls ──
   // When a .file-video triggers fullscreen (via native controls), intercept and
   // fullscreen the .file-video-wrap parent instead so controls stay visible.

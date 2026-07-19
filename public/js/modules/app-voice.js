@@ -192,6 +192,65 @@ _toggleDeafen() {
   this._updateVoiceBar();
 },
 
+// ── Voice UI reconciler ──────────────────────────────────
+//
+// The voice UI is written imperatively by _updateVoiceButtons/_updateVoiceStatus/
+// _updateVoiceBar from several unrelated call sites, and nothing ever recomputes
+// it. If it is torn down while the session is actually alive — which is what
+// produced "Haven shows Join Voice but I can still hear and talk to everyone" —
+// the only way back is for the user to click Join Voice, which is a needless
+// renegotiation of a session that never broke.
+//
+// Note that _updateVoiceButtons(false) also empties #screen-share-grid outright,
+// which is why the stream vanished with no entry in the hidden-streams bar: the
+// tiles were destroyed, not hidden. The audio elements live in #audio-container
+// and are untouched, which is exactly why the stream's sound kept playing.
+//
+// This runs on a timer and on focus/resize and repairs whichever side is stale.
+_reconcileVoiceUi() {
+  if (!this.voice) return;
+
+  // Fix the bookkeeping first if the media session says we're still in voice.
+  const repaired = this.voice.reassertSessionIfLive();
+
+  const inVoice = !!(this.voice.inVoice && this.voice.currentChannel);
+  const bar = document.getElementById('voice-bar');
+  const uiShowsVoice = !!bar && bar.style.display !== 'none';
+
+  // Already consistent — the overwhelmingly common case, so stay cheap.
+  if (!repaired && inVoice === uiShowsVoice) return;
+
+  console.warn('[Voice] UI/session desync — reconciling', { inVoice, uiShowsVoice, repaired });
+
+  this._updateVoiceButtons(inVoice);
+  this._updateVoiceStatus(inVoice);
+  this._updateVoiceBar();
+
+  if (inVoice) {
+    this._syncMuteDeafenButtons();
+    // Our roster entry may have been filtered out locally while the flags were
+    // wrong; ask for an authoritative copy.
+    try { this.socket.emit('request-voice-users', { code: this.voice.currentChannel }); } catch {}
+    // _updateVoiceButtons(false) wiped the stream tiles on the way down. Put
+    // back anything still being received.
+    const restored = this.voice.reassertScreenStreams();
+    if (restored) console.warn('[Voice] Restored', restored, 'stream tile(s) after UI desync');
+  }
+},
+
+_startVoiceUiReconciler() {
+  if (this._voiceUiReconcilerBound) return;
+  this._voiceUiReconcilerBound = true;
+  const run = () => { try { this._reconcileVoiceUi(); } catch (e) { console.warn('[Voice] reconcile failed:', e); } };
+  // Window focus and resize are when this has actually been observed to break
+  // (maximising the desktop window), so check immediately on both rather than
+  // waiting up to a full interval.
+  window.addEventListener('focus', run);
+  window.addEventListener('resize', run);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) run(); });
+  this._voiceUiReconcilerTimer = setInterval(run, 5000);
+},
+
 /** Update all mute/deafen button instances (sidebar + header) to reflect current state */
 _syncMuteDeafenButtons() {
   const isMuted = this.voice.isMuted;
@@ -1057,6 +1116,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       }
     };
     setTimeout(_retryPlay, 600);
+    this._startStreamStallWatchdog(tileId, userId);
     this._screenShareMinimized = false;
     this._removeScreenShareIndicator();
     // Apply saved stream size so it doesn't start at default/cut-off height
@@ -1077,6 +1137,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
   } else {
     // Stream ended — remove this tile
     const tileId = `screen-tile-${userId || 'self'}`;
+    this._stopStreamStallWatchdog(tileId);
     const tile = document.getElementById(tileId);
     if (tile) {
       const vid = tile.querySelector('video');
@@ -1099,6 +1160,96 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     }
     this._updateHiddenStreamsBar();
     this._updateScreenShareVisibility();
+  }
+},
+
+// ── Stream Frame-Progress Watchdog ───────────────────────
+//
+// `videoWidth > 0` only proves that metadata arrived once. On a reshare the
+// element keeps the dimensions of the stream it was previously showing, so a
+// tile can sit on a frozen or black frame indefinitely while videoWidth reads
+// as healthy — and _retryPlay, which bails the moment videoWidth is non-zero,
+// never runs. That is the "black screen until I dragged the resize slider"
+// case: the slider forced a reflow, which nudged the decoder, which is not a
+// recovery path anyone should have to discover.
+//
+// Watch the decoded-frame counter instead. It is the only signal that says
+// frames are actually arriving *now*.
+_startStreamStallWatchdog(tileId, userId) {
+  if (!this._streamStallTimers) this._streamStallTimers = {};
+  this._stopStreamStallWatchdog(tileId);
+
+  const readFrames = (videoEl) => {
+    try {
+      const q = videoEl.getVideoPlaybackQuality && videoEl.getVideoPlaybackQuality();
+      if (q && typeof q.totalVideoFrames === 'number') return q.totalVideoFrames;
+    } catch {}
+    return typeof videoEl.webkitDecodedFrameCount === 'number'
+      ? videoEl.webkitDecodedFrameCount
+      : -1;
+  };
+
+  let lastFrames = -1;
+  let stalls = 0;
+
+  this._streamStallTimers[tileId] = setInterval(() => {
+    const tile = document.getElementById(tileId);
+    const videoEl = tile && tile.querySelector('video');
+    if (!tile || !videoEl || !videoEl.srcObject) {
+      this._stopStreamStallWatchdog(tileId);
+      return;
+    }
+    // A hidden tile or a backgrounded window legitimately stops decoding.
+    // Treating that as a stall would spam the sharer with renegotiate
+    // requests every time someone minimises a stream.
+    if (tile.dataset.hidden === 'true' || document.hidden) { stalls = 0; return; }
+
+    const track = videoEl.srcObject.getVideoTracks
+      ? videoEl.srcObject.getVideoTracks()[0]
+      : null;
+    // Nothing is meant to be flowing — not a stall.
+    if (!track || track.readyState !== 'live' || track.muted) { stalls = 0; return; }
+
+    const frames = readFrames(videoEl);
+    if (frames < 0) { this._stopStreamStallWatchdog(tileId); return; } // unsupported
+
+    if (frames > lastFrames) {
+      lastFrames = frames;
+      stalls = 0;
+      return;
+    }
+
+    stalls++;
+    if (stalls === 2) {
+      // ~3s without a new frame. Re-attach the stream: a fresh srcObject
+      // assignment rebuilds the element's decode pipeline, which is what the
+      // accidental resize was really doing.
+      console.warn('[Stream] No frames for', tileId, '— re-attaching srcObject');
+      const s = videoEl.srcObject;
+      videoEl.srcObject = null;
+      videoEl.srcObject = s;
+      videoEl.play().catch(() => {});
+    } else if (stalls === 4 && userId && userId !== this.user.id &&
+               this.voice && this.voice.inVoice) {
+      // ~6s. Re-attaching didn't help, so the problem is upstream of us.
+      console.warn('[Stream] Still no frames for', tileId, '— requesting renegotiate');
+      this.socket.emit('request-screen-renegotiate', {
+        code: this.voice.currentChannel,
+        sharerId: userId
+      });
+    } else if (stalls >= 12) {
+      // ~18s of nothing after both recovery attempts. Stop burning a timer;
+      // a fresh share or rejoin will re-arm this.
+      console.warn('[Stream] Giving up frame watchdog for', tileId);
+      this._stopStreamStallWatchdog(tileId);
+    }
+  }, 1500);
+},
+
+_stopStreamStallWatchdog(tileId) {
+  if (this._streamStallTimers && this._streamStallTimers[tileId]) {
+    clearInterval(this._streamStallTimers[tileId]);
+    delete this._streamStallTimers[tileId];
   }
 },
 

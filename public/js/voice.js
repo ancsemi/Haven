@@ -45,6 +45,11 @@ class VoiceManager {
     this.onTalkingChange = null;    // callback(userId, isTalking)
     this.screenSharers = new Set();  // userIds currently sharing
     this.webcamUsers = new Set();    // userIds currently broadcasting webcam
+    // userIds whose current screen share we have actually handed to the UI.
+    // Reset on every screen-share-started so a *re*share has to prove itself
+    // again — see _watchForScreenStream for why "a live receiver exists" is
+    // not the same thing as "the viewer is seeing the stream".
+    this._screenDelivered = new Set();
     this.screenGainNodes = new Map(); // userId → GainNode for screen share audio
     this.onScreenAudio = null;       // callback(userId) — screen share audio available
     this.talkingState = new Map();  // userId → boolean
@@ -255,6 +260,94 @@ class VoiceManager {
     }
   }
 
+  // ── Session truth & self-repair ─────────────────────────
+  //
+  // `inVoice` / `currentChannel` are local bookkeeping, and the whole UI is
+  // driven off them by fire-and-forget calls scattered across half a dozen
+  // call sites. When they get out of step with reality there is nothing that
+  // ever puts them back — the user is stranded looking at a "Join Voice"
+  // button while still talking to their friends. The peer connections are the
+  // real source of truth: if any of them is still connected, we are in voice,
+  // whatever the flags say.
+
+  liveVoicePeerCount() {
+    let n = 0;
+    for (const [, peer] of this.peers) {
+      const cs = peer && peer.connection && peer.connection.connectionState;
+      // Only 'connected' counts. 'new'/'connecting' would also match a peer
+      // that is on its way out, and we must not resurrect a session the user
+      // genuinely left.
+      if (cs === 'connected') n++;
+    }
+    return n;
+  }
+
+  /**
+   * Repair the "UI says I left but the media session is alive" desync.
+   * Returns true if state was actually repaired.
+   */
+  reassertSessionIfLive() {
+    if (this.inVoice && this.currentChannel) return false; // flags already agree
+    const live = this.liveVoicePeerCount();
+    if (live === 0) return false;                          // genuinely not in voice
+    let code = this.currentChannel;
+    if (!code) {
+      try { code = localStorage.getItem('haven_voice_channel'); } catch { /* ignore */ }
+    }
+    if (!code) return false; // live peers but no idea which channel — leave it alone
+    console.warn('[Voice] Local state said not-in-voice but', live,
+      'peer connection(s) are still connected — restoring session state for', code);
+    this.currentChannel = code;
+    this.inVoice = true;
+    try { localStorage.setItem('haven_voice_channel', code); } catch { /* ignore */ }
+    // Our socket may have been rebound while we thought we were out; rejoin so
+    // the server roster and our peers agree with us again. Throttled so a
+    // repeatedly-failing repair can't spam signalling.
+    const now = Date.now();
+    if (this.socket && this.socket.connected && now - (this._lastReassertAt || 0) > 3000) {
+      this._lastReassertAt = now;
+      this.socket.emit('voice-rejoin', { code });
+    }
+    return true;
+  }
+
+  /**
+   * Re-deliver every active sharer's screen to the UI. Used after the tiles
+   * were torn down while the media session stayed alive — the packets never
+   * stopped arriving, so in the common case this restores the picture without
+   * any signalling at all.
+   */
+  reassertScreenStreams() {
+    let restored = 0;
+    for (const sharerId of this.screenSharers) {
+      if (sharerId === this.localUserId) continue;
+      this._screenDelivered.delete(sharerId);
+      if (this._deliverScreenFromReceivers(sharerId)) restored++;
+      else this.requestScreenStream(sharerId);
+    }
+    return restored;
+  }
+
+  // ── Perfect negotiation: glare tie-break ────────────────
+  //
+  // Exactly one side of each pair must be "polite" (yields to an incoming
+  // offer) and the other "impolite" (ignores it and lets its own offer win).
+  // Comparing user ids gives both ends the same verdict without extra
+  // signalling. If we somehow don't know our own id yet, be polite —
+  // yielding is always safe, whereas two impolite peers would deadlock.
+  _isPolite(remoteUserId) {
+    const mine = this.localUserId;
+    if (mine == null || remoteUserId == null) return true;
+    return Number(mine) < Number(remoteUserId);
+  }
+
+  // True when an incoming offer arrives while we have an offer of our own in
+  // flight — the only situation where politeness matters.
+  _isCollision(peer, connection) {
+    return !!(peer && (peer._makingOffer || peer._awaitingAnswer ||
+      connection.signalingState !== 'stable'));
+  }
+
   // ── Socket event listeners ──────────────────────────────
 
   _setupSocketListeners() {
@@ -329,16 +422,48 @@ class VoiceManager {
 
       try {
         const conn = peer.connection;
-        // An incoming offer supersedes any local offer we were preparing or
-        // waiting to have answered. Clear those flags so the post-answer drain
-        // can safely issue one fresh follow-up offer if local changes are still pending.
+
+        // ── Glare handling (perfect negotiation) ──────────────
+        //
+        // Both sides of a Haven peer connection can initiate a renegotiation
+        // (screen share start/stop, webcam, ICE restart, the server's
+        // renegotiate-screen nudge to a late joiner…), so simultaneous offers
+        // are routine. Until now BOTH sides rolled back their own offer and
+        // answered the other's. That looks symmetric but is actually broken:
+        // each peer ends up having applied the *other's* offer and its own
+        // answer, and neither peer's answer is ever applied by the other. The
+        // two halves describe different negotiations, so the ICE/DTLS
+        // parameters don't line up and media dies in both directions — while
+        // signalingState sits happily at 'stable' so nothing self-heals.
+        //
+        // This is the "rejoined voice and can't hear one specific person"
+        // report: the joiner's fresh offer collided with the renegotiate-screen
+        // offer the server asks active sharers to send to new joiners, so it
+        // only ever hit whoever happened to be streaming.
+        //
+        // Perfect negotiation needs exactly one polite peer. Tie-break on user
+        // id — deterministic and both sides compute the same answer.
+        if (this._isCollision(peer, conn) && !this._isPolite(from.id)) {
+          // Impolite peer: ignore the incoming offer. The polite side will roll
+          // its own offer back and answer ours, so we still converge — with one
+          // negotiation instead of two conflicting ones.
+          console.warn('[Voice] offer glare with', from.id, '— ignoring their offer (we are impolite)');
+          return;
+        }
+
+        // Polite peer: our offer yields. Clear the in-flight flags so the
+        // post-answer drain can re-issue one fresh follow-up offer afterwards
+        // if we still have local changes to publish.
+        const hadPendingLocalChanges = peer._makingOffer || peer._awaitingAnswer;
         peer._makingOffer = false;
         peer._awaitingAnswer = false;
-        // Handle renegotiation glare: if we have a pending local offer,
-        // roll it back first so we can accept the incoming one.
         if (conn.signalingState !== 'stable') {
           await conn.setLocalDescription({ type: 'rollback' });
         }
+        // Anything we were trying to publish (added screen tracks, an ICE
+        // restart) was just discarded with the rollback. Queue it so the drain
+        // after this answer re-offers it, rather than silently losing it.
+        if (hadPendingLocalChanges) peer._renegotiateQueued = true;
         await conn.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await conn.createAnswer();
         await conn.setLocalDescription(answer);
@@ -458,6 +583,7 @@ class VoiceManager {
       this._stopAnalyser(data.user.id);
       this._removePeer(data.user.id);
       // If they were screen sharing, clean up
+      this._screenDelivered.delete(data.user.id);
       if (this.screenSharers.has(data.user.id)) {
         this.screenSharers.delete(data.user.id);
         if (this.onScreenStream) this.onScreenStream(data.user.id, null);
@@ -501,6 +627,8 @@ class VoiceManager {
     // Someone started screen sharing
     this.socket.on('screen-share-started', (data) => {
       this.screenSharers.add(data.userId);
+      // New share — the previous one's delivery says nothing about this one.
+      this._screenDelivered.delete(data.userId);
       // Play stream start notification sound
       if (this.onScreenShareStarted) {
         this.onScreenShareStarted(data.userId, data.username);
@@ -515,35 +643,18 @@ class VoiceManager {
       // refreshed the list (e.g. start sharing themselves).
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
 
-      // Safety net: if screen-share-started fires but the renegotiation
-      // offer carrying the video track never reaches us (dropped event,
-      // sharer's _renegotiate failed silently because of a non-stable
-      // signaling state, etc.), the receiver gets no tile at all. Check
-      // ~3s later whether the peer connection has any video receiver from
-      // the sharer; if not, ask the server to forward a renegotiate-screen
-      // back to the sharer. This is the silent-failure recovery path for
-      // the long-standing \"sharer goes live but nothing appears on my
-      // end\" bug. (#5347 v3.15.5)
-      setTimeout(() => {
-        if (!this.screenSharers.has(data.userId)) return;
-        const peer = this.peers.get(data.userId);
-        if (!peer) return;
-        const hasVideoReceiver = peer.connection.getReceivers().some(r =>
-          r.track && r.track.kind === 'video' && r.track.readyState === 'live'
-        );
-        if (!hasVideoReceiver && this.inVoice && this.currentChannel) {
-          console.warn('[Voice] No video track from screen sharer', data.userId, 'after 3s, requesting renegotiate');
-          this.socket.emit('request-screen-renegotiate', {
-            code: this.currentChannel,
-            sharerId: data.userId
-          });
-        }
-      }, 3000);
+      // Safety net: if screen-share-started fires but the video never reaches
+      // our UI — the renegotiation offer was dropped, the sharer's
+      // _renegotiate bailed on a non-stable signaling state, or the reshare
+      // coalesced so no track event fired — recover instead of leaving the
+      // viewer with a LIVE badge and an empty grid. (#5347 v3.15.5)
+      this._watchForScreenStream(data.userId);
     });
 
     // Someone stopped screen sharing
     this.socket.on('screen-share-stopped', (data) => {
       this.screenSharers.delete(data.userId);
+      this._screenDelivered.delete(data.userId);
       if (this.onScreenStream) this.onScreenStream(data.userId, null);
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
     });
@@ -644,20 +755,66 @@ class VoiceManager {
     });
   }
 
-  // Watchdog for the late-joiner path: if no live video track has arrived
-  // from `sharerId` after a short delay, ask for a renegotiation. Retries a
-  // few times because a late joiner's peer connection to the sharer may still
-  // be completing its offer/answer when the first check runs. (late-join heal)
+  // Hand the UI a screen stream built directly from this peer's video
+  // receivers, bypassing ontrack. Returns true if a stream was delivered.
+  //
+  // This exists because ontrack is not a reliable signal for a *re*share. The
+  // browser only fires a track event when a transceiver's direction changes
+  // into receiving. When a sharer stops and immediately restarts (stop a
+  // screen, start an application), addTrack reuses the transceiver the removed
+  // track left behind — and if the stop and start renegotiations coalesce into
+  // one SDP exchange, which they do whenever the first one is still waiting on
+  // an answer, the viewer's transceiver goes sendonly → sendonly. Only the msid
+  // changed, so no track event fires. Video packets arrive and decode into a
+  // receiver nobody is rendering: the sharer shows LIVE, the viewer gets
+  // nothing, and there is no error anywhere to notice.
+  _deliverScreenFromReceivers(sharerId) {
+    const peer = this.peers.get(sharerId);
+    if (!peer || !this.screenSharers.has(sharerId)) return false;
+    // A peer can be sending webcam and screen at once. We can't tell the two
+    // apart from the receiver alone, so exclude whichever track ontrack
+    // previously classified as their webcam.
+    const camTrackId = peer._webcamTrackId || null;
+    const candidates = peer.connection.getReceivers()
+      .map(r => r.track)
+      .filter(t => t && t.kind === 'video' && t.readyState === 'live' &&
+                   !t.muted && t.id !== camTrackId);
+    if (!candidates.length) return false;
+    // Prefer the track we already believe is their screen; otherwise the most
+    // recently negotiated one.
+    const track = candidates.find(t => t.id === peer._screenTrackId) ||
+                  candidates[candidates.length - 1];
+    peer._screenTrackId = track.id;
+    this._screenDelivered.add(sharerId);
+    if (this.onScreenStream) this.onScreenStream(sharerId, new MediaStream([track]));
+    return true;
+  }
+
+  // Watchdog for both the late-joiner path and the reshare path: if this
+  // sharer's current share hasn't reached the UI after a short delay, recover.
+  // Retries a few times because a late joiner's peer connection to the sharer
+  // may still be completing its offer/answer when the first check runs.
+  //
+  // The check is deliberately "did we deliver a stream for *this* share",
+  // not "does a live video receiver exist". The old receiver-based check was
+  // the reason the reshare failure above went unrecovered for so long: a
+  // reused transceiver's receiver track stays readyState 'live' across the
+  // whole stop/start cycle (it only ends when the transceiver is stopped), so
+  // the watchdog saw a healthy live video track and concluded all was well
+  // while the viewer stared at an empty grid.
   _watchForScreenStream(sharerId, attemptsLeft = 3) {
     setTimeout(() => {
       if (!this.screenSharers.has(sharerId)) return; // sharer stopped
       if (!this.inVoice || !this.currentChannel) return;
-      const peer = this.peers.get(sharerId);
-      const hasVideo = peer && peer.connection.getReceivers().some(r =>
-        r.track && r.track.kind === 'video' && r.track.readyState === 'live'
-      );
-      if (hasVideo) return; // already receiving — nothing to do
-      console.warn('[Voice] No video from screen sharer', sharerId, '— requesting renegotiate (late-join heal)');
+      if (this._screenDelivered.has(sharerId)) return; // viewer has it
+      // Media may already be flowing into an unrendered receiver — adopt it
+      // rather than paying for a round of signalling we don't need.
+      if (this._deliverScreenFromReceivers(sharerId)) {
+        console.warn('[Voice] Adopted screen stream from existing receiver for', sharerId,
+          '— no track event fired for this share');
+        return;
+      }
+      console.warn('[Voice] No video from screen sharer', sharerId, '— requesting renegotiate');
       this.requestScreenStream(sharerId);
       if (attemptsLeft > 1) this._watchForScreenStream(sharerId, attemptsLeft - 1);
     }, 3500);
@@ -884,6 +1041,7 @@ class VoiceManager {
     this.isDeafened = false;
     this.audioBitrate = 0;
     this.screenSharers.clear();
+    this._screenDelivered.clear();
     this.screenGainNodes.clear();
     this.webcamUsers.clear();
     this._vcDest = null;
@@ -960,6 +1118,7 @@ class VoiceManager {
     this.isMuted = false;
     this.isDeafened = false;
     this.screenSharers.clear();
+    this._screenDelivered.clear();
     this.screenGainNodes.clear();
     this.webcamUsers.clear();
     this._vcDest = null;
@@ -1576,7 +1735,11 @@ class VoiceManager {
         const isWebcamTrack = !settings.displaySurface && this.webcamUsers.has(userId);
 
         if (isWebcamTrack && !isScreenTrack) {
-          // Route to webcam callback
+          // Route to webcam callback. Remember the track id so
+          // _deliverScreenFromReceivers can exclude it when this peer is
+          // sending webcam and screen at the same time.
+          const p = this.peers.get(userId);
+          if (p) p._webcamTrackId = track.id;
           const camStream = sourceStream || new MediaStream([track]);
           if (this.onWebcamStream) this.onWebcamStream(userId, camStream);
           track.onunmute = () => {
@@ -1591,11 +1754,15 @@ class VoiceManager {
         } else {
           // Screen share video
           if (sourceStream) knownScreenStreamIds.add(sourceStream.id);
+          const p = this.peers.get(userId);
+          if (p) p._screenTrackId = track.id;
           const videoStream = sourceStream || new MediaStream([track]);
+          this._screenDelivered.add(userId);
           if (this.onScreenStream) this.onScreenStream(userId, videoStream);
           track.onunmute = () => {
             setTimeout(() => {
               const freshStream = new MediaStream([track]);
+              this._screenDelivered.add(userId);
               if (this.onScreenStream) this.onScreenStream(userId, freshStream);
             }, 150);
           };
@@ -1611,6 +1778,10 @@ class VoiceManager {
             // is fine in theory but masked the stuck-transceiver bug for
             // months by making it look like "the new share never arrived".
             // Only clear when the server has actually told us they stopped.
+            // Either way this track is no longer showing them anything, so
+            // drop the delivered flag and let the watchdog re-adopt whatever
+            // the next share negotiates.
+            this._screenDelivered.delete(userId);
             if (!this.screenSharers.has(userId)) {
               if (this.onScreenStream) this.onScreenStream(userId, null);
             }
@@ -1732,6 +1903,7 @@ class VoiceManager {
       if (screenAudioEl) screenAudioEl.remove();
       this.screenGainNodes.delete(userId);
       this.gainNodes.delete(userId);
+      this._screenDelivered.delete(userId);
       this.peers.delete(userId);
       // Always stop the analyser here too, not just in voice-user-left.
       // _restartIce failure calls _removePeer directly (without _stopAnalyser),
