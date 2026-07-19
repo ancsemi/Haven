@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.35.0] — 2026-07-19
+
+### Added
+- **`PUBLIC_URL` for OAuth and OpenID callbacks (#5443).** When Haven runs behind Docker port mapping (8080→3000), a reverse proxy that strips the port out of the Host header, or a Cloudflare Tunnel, the server could not reliably work out its own public-facing address, so Steam and Spotify callback URLs came out wrong and linking failed. Setting `PUBLIC_URL` in `.env` makes `baseUrl()` use that value verbatim for every callback it builds (Steam OpenID `return_to` and `realm`, and the Spotify OAuth `redirect_uri`). Left unset, behaviour is exactly as before. It is deliberately *not* writable from the admin UI — a UI-settable callback base would be a redirect-hijack vector. Contributed by KevonLin.
+- **Integration keys can be replaced from Settings (#5442).** The key setup form only rendered while a provider was still unconfigured, so once `STEAM_API_KEY` (or the Spotify / Last.fm keys) had been set there was no way to swap a leaked or revoked key without hand-editing `.env` and restarting. Every configured integration now shows an admin-only "Change key" button that reveals the same form, with the hint reworded to make clear it replaces the current key. Saving a new `STEAM_API_KEY` also triggers a presence poll straight away, so a rotated key takes effect immediately instead of on the next 60-second tick. Contributed by KevonLin.
+
+---
+
 ## [3.34.0] — 2026-07-19
 
 ### Added
