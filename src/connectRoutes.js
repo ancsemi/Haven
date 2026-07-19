@@ -33,6 +33,14 @@ const { verifyToken } = require('./auth');
 const SPOTIFY_SCOPES = 'user-read-currently-playing user-read-playback-state';
 
 function baseUrl(req) {
+  // PUBLIC_URL is the canonical answer when the server can't guess its own
+  // external address — e.g. Docker port mapping (8080→3000), reverse proxy
+  // that strips the port from the Host header, or Cloudflare Tunnels.
+  // Set it in .env and both Steam and Spotify callbacks will use exactly that.
+  // Example: PUBLIC_URL=https://haven.example.com:8443
+  const override = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  if (override) return override;
+
   // Honours X-Forwarded-Proto/Host when the app has 'trust proxy' set, which
   // matters because Haven is usually behind Traefik/nginx terminating TLS.
   return `${req.protocol}://${req.get('host')}`;
