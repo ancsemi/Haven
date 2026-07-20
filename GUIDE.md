@@ -186,7 +186,7 @@ Use private sub-channels for admin-only discussions, sensitive topics, or small 
 
 ---
 
-## � Importing from Discord
+## 📥 Importing from Discord
 
 Haven can import your entire Discord server's message history — directly from the app. No external tools required.
 
@@ -225,7 +225,7 @@ If you prefer, export your Discord data with [DiscordChatExporter](https://githu
 
 ---
 
-## �🔑 Join Code Settings (Admin)
+## 🔑 Join Code Settings (Admin)
 
 Each channel's invite code can be configured by admins. Click the **⚙️ gear icon** next to the channel code in the header.
 
@@ -366,7 +366,7 @@ https://YOUR_PUBLIC_IP:3000
 
 ---
 
-## � Cloudflare Tunnel (No Port Forwarding)
+## ☁️ Cloudflare Tunnel (No Port Forwarding)
 
 If you don't want to mess with port forwarding or expose your home IP, you can use a **Cloudflare Tunnel** to securely share your Haven server over the internet. Cloudflare gives your server a public URL and handles all the networking — no router config needed.
 
