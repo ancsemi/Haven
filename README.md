@@ -182,11 +182,12 @@ Or manually: `npm install && node server.js`
 | **Avatars** | Upload profile pictures (including animated GIFs!), choose avatar shape (circle/square/hexagon/diamond), per-user shapes visible to everyone |
 | **Formatting** | **Bold**, *italic*, ~~strikethrough~~, `code`, \|\|spoilers\|\|, auto-linked URLs, fenced code blocks with language labels, blockquotes |
 | **Link Previews** | Automatic OG metadata previews for shared URLs with title, description, and thumbnail |
-| **GIF Search** | GIPHY-powered GIF picker — search and send GIFs inline (admin-configurable API key) |
+| **GIF Search** | GIPHY-powered GIF picker — search and send GIFs inline (admin-configurable API key), plus a ★ Favorites tab that keeps the GIFs you actually use, stored in your own browser |
 | **Custom Stickers** | Upload your own sticker packs (single or bulk), send from the picker or with `:stickername:` shortcodes — fresh installs ship with a starter pack |
 | **Personas** | Send messages as alternate characters — type `::Name your message` with autocomplete, per-persona avatars, and `@PersonaName` mentions |
 | **Direct Messages** | Private 1-on-1 conversations — click 💬 on any user in the member list |
 | **User Status** | Online, Away, Do Not Disturb, Invisible — with custom status text and auto-away after 5 min idle |
+| **Rich Presence** | See what people are playing and listening to, in the member list and on their profile — powered by **Last.fm**, **Steam**, **Spotify**, or Haven's own voice-channel music player. Entirely optional, can be hidden per-category, never shared while you're Invisible, and never written to the database |
 | **File Sharing** | Upload and share PDFs, documents, audio, video, archives (up to 25 MB) with inline players |
 | **Persistent Unread** | Server-tracked read state — unread badges survive page refreshes and reconnects |
 | **Slash Commands** | `/shrug`, `/tableflip`, `/roll 2d20`, `/flip`, `/me`, `/spoiler`, `/tts`, and more — type `/` to see them all |
@@ -309,8 +310,21 @@ Haven creates a `.env` config file automatically on first launch — you don't n
 | `SSL_CERT_PATH` | *(auto-detected)* | Path to SSL certificate |
 | `SSL_KEY_PATH` | *(auto-detected)* | Path to SSL private key |
 | `HAVEN_DATA_DIR` | *(see above)* | Override the data directory location |
+| `PUBLIC_URL` | *(auto-detected)* | Your server's public address, including `https://`. Only needed if Haven can't work it out itself — see below |
 
 After editing `.env`, restart the server.
+
+> **Steam or Spotify linking sending people to the wrong address?** If you run
+> Haven behind Docker port mapping (say `8080:3000`), a reverse proxy that
+> strips the port out of the Host header, or a Cloudflare Tunnel, the server
+> can't reliably guess its own public address, so those sign-in round-trips
+> fail. Set it explicitly:
+> ```
+> PUBLIC_URL=https://haven.example.com:8443
+> ```
+> For security this one is `.env`-only and deliberately **not** editable from
+> the admin panel — a callback address that could be changed from the web UI
+> would be a way to hijack sign-in redirects.
 
 ### Running Multiple Servers
 
@@ -493,6 +507,54 @@ Haven has a built-in GIF picker powered by **GIPHY**. To enable it you need a fr
 That's it. All users can now search and send GIFs.
 
 > **Free tier:** GIPHY's free tier allows plenty of requests for a private chat server — you'll never come close to the limit.
+
+---
+
+## Rich Presence — Show What You're Playing & Listening To
+
+Haven can show a member's current game or track in the member list and on their
+profile card. Games take precedence in the member list so the sidebar stays
+scannable, and the profile card shows a line for each, so someone doing both
+gets both.
+
+There are four sources, and **you only need as many as you want**:
+
+| Source | Setup | Covers |
+|--------|-------|--------|
+| **Haven's music player** | None — works immediately | Whatever is playing in a Haven voice channel |
+| **Last.fm** ⭐ | Server admin adds one API key; each user enters their username | Spotify, Apple Music, YouTube Music, Navidrome, Plex — anything that scrobbles |
+| **Steam** | Server admin adds one API key; each user links their account | Games |
+| **Spotify** | Server admin adds a client ID + secret; each user signs in | Spotify only |
+
+### Why Last.fm is the recommended music source
+
+Linking is just a username — no sign-in redirect, nothing stored, no per-user
+cap. And because Spotify, Apple Music, YouTube Music, Navidrome and Plex all
+scrobble to Last.fm, one connection covers whatever you actually listen with.
+
+Spotify's own integration works, but a Spotify app in development mode is
+limited to a small number of listed users, so it does not scale to a whole
+server without extra approval from Spotify.
+
+> Scrobbling has to be switched on in Last.fm's own settings first. Haven's
+> setup panel explains how for each service.
+
+### Adding the keys
+
+1. Log into Haven as your **admin** account
+2. Go to **Settings → Connections**
+3. Each provider has a **Set up** button with a link to where its key comes from
+4. Paste the key and save — it's written to `.env` automatically, no restart needed
+
+Already configured a provider and need to swap a key (it leaked, or Steam
+revoked it)? Hit **Change key** on that row. There's no need to hand-edit
+`.env`.
+
+### Privacy
+
+Presence is **off until you turn it on**, is never shared while your status is
+**Invisible**, can be hidden per-category (games separately from music), and is
+never written to the database — it lives in memory only.
 
 ---
 
