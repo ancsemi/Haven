@@ -605,6 +605,60 @@ Restart Haven, and voice/screen sharing will work across any network.
 
 ---
 
+## 🎮 Rich Presence (What You're Playing & Listening To)
+
+Haven can show your current game or track next to your name in the member list,
+and on your profile card. Games take priority in the member list so the sidebar
+stays readable; your profile card shows both if you're doing both.
+
+**This is off until you turn it on.** Nothing is shared until you link an
+account.
+
+### Linking your accounts
+
+1. Click **⚙️ Settings** → **Connections**
+2. Pick a source and follow the prompt:
+
+| Source | What you do | What it covers |
+|--------|-------------|----------------|
+| **Haven's music player** | Nothing, it just works | Anything playing in a Haven voice channel |
+| **Last.fm** ⭐ | Enter your username | Spotify, Apple Music, YouTube Music, Navidrome, Plex |
+| **Steam** | Click Link and sign in | Games |
+| **Spotify** | Click Link and sign in | Spotify only |
+
+**Last.fm is the one to pick for music.** It's just a username, there's no
+sign-in redirect and nothing gets stored, and because most music apps scrobble
+to Last.fm, that single connection covers whatever you actually listen with.
+
+> Scrobbling has to be turned on in Last.fm's own settings first. Haven's setup
+> panel walks you through it for each app.
+
+### Controlling what people see
+
+- **Master switch** — turn presence off entirely
+- **Per-category** — show games but not music, or the other way round
+- **Invisible** — while your status is Invisible, nothing is shared, regardless
+  of the settings above
+
+None of it is written to the database. Presence lives in memory and disappears
+when the server restarts.
+
+### If nothing is showing up
+
+- Give it a minute. Haven checks for updates on a timer rather than instantly.
+- For music, confirm the track actually appears on your Last.fm profile. If it
+  isn't scrobbling there, Haven has nothing to read.
+- For Steam, your Steam profile's game details must be set to **Public**.
+  Steam's API returns nothing for private profiles.
+- Check that your status isn't set to Invisible.
+
+**Admins:** each provider needs a free API key before anyone can link to it.
+Settings → Connections has a **Set up** button per provider with a link to where
+that key comes from, and keys are saved without a restart. To swap a key later,
+use **Change key** on that row.
+
+---
+
 ## 🔔 Push Notifications
 
 Push notifications let you receive alerts when someone messages a channel you're in, even when the Haven tab is in the background or closed.
