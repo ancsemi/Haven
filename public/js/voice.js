@@ -1894,6 +1894,13 @@ class VoiceManager {
   }
 
   _removePeer(userId) {
+    // Cancel any pending ICE-restart-recovery check so a departed peer can't
+    // be re-restarted after removal (voice-user-left, leave, stale-peer
+    // teardown all route through here). (#5444)
+    if (this._iceHealTimers && this._iceHealTimers[userId]) {
+      clearTimeout(this._iceHealTimers[userId]);
+      delete this._iceHealTimers[userId];
+    }
     const peer = this.peers.get(userId);
     if (peer) {
       peer.connection.close();
@@ -1915,13 +1922,44 @@ class VoiceManager {
     }
   }
 
-  async _restartIce(userId, connection) {
-    try {
-      await this._renegotiate(userId, connection, { iceRestart: true });
-    } catch (err) {
-      console.error('ICE restart failed for', userId, '— removing peer:', err);
-      this._removePeer(userId);
-    }
+  async _restartIce(userId, connection, attempt = 0) {
+    // _renegotiate swallows its own errors and returns false instead of
+    // throwing, so the try/catch that used to wrap this call was dead code:
+    // a stuck or un-issuable ICE restart silently left the peer with a dead
+    // media path and no retry. That is the "rejoined voice but still can't
+    // hear one person until I leave and rejoin" report (#5444). Verify the
+    // connection actually recovers, and if it's still broken a few seconds
+    // later, re-attempt the ICE restart a bounded number of times. An ICE
+    // restart continues the SAME RTCPeerConnection and is applied bilaterally
+    // by the remote via 'voice-offer', so re-issuing it is safe and
+    // near-seamless on a healthy pair — unlike tearing the peer down, which
+    // would need both sides to rebuild in lock-step.
+    await this._renegotiate(userId, connection, { iceRestart: true });
+
+    if (!this._iceHealTimers) this._iceHealTimers = {};
+    if (this._iceHealTimers[userId]) clearTimeout(this._iceHealTimers[userId]);
+    this._iceHealTimers[userId] = setTimeout(() => {
+      delete this._iceHealTimers[userId];
+      const peer = this.peers.get(userId);
+      // Peer was replaced, removed, or we left voice — nothing to do.
+      if (!this.inVoice || !peer || peer.connection !== connection) return;
+      const cs = connection.connectionState;
+      const ics = connection.iceConnectionState;
+      // Only intervene when the path is definitively broken. 'connecting' /
+      // 'checking' / 'new' mean the restart is still negotiating (slow TURN
+      // relay), so leave those to finish instead of restarting underneath.
+      const broken = cs === 'failed' || cs === 'disconnected' ||
+                     ics === 'failed' || ics === 'disconnected';
+      if (!broken) return;
+      if (attempt >= 2) {
+        console.warn('[Voice] ICE restart exhausted for', userId,
+          `(conn=${cs}, ice=${ics}) — leaving peer for the next reconnect/heal sweep`);
+        return;
+      }
+      console.warn('[Voice] ICE restart did not recover peer', userId,
+        `(conn=${cs}, ice=${ics}) — re-attempting (retry ${attempt + 1})`);
+      this._restartIce(userId, connection, attempt + 1);
+    }, 5000);
   }
 
   // (#5427) Proactive recovery sweep, called after a socket reconnect while
