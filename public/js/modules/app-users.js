@@ -1080,26 +1080,46 @@ _renderVoiceUsers(users, channelCode) {
     let streamBadge = '';
     if (isStreaming) {
       const myStream = streams.find(s => s.sharerId === u.id);
-      const viewerCount = myStream ? myStream.viewers.length : 0;
-      streamBadge = `<span class="voice-stream-badge live" title="${viewerCount ? t(viewerCount === 1 ? 'users.streaming_viewers_one' : 'users.streaming_viewers_other', { count: viewerCount }) : t('users.streaming_no_viewers')}">🔴 ${t('users.streaming_live')}${viewerCount ? ' · ' + viewerCount : ''}</span>`;
+      const viewers = myStream ? myStream.viewers : [];
+      const viewerCount = viewers.length;
+      // Compact the LIVE badge to a red dot + viewer count. The old
+      // "🔴 LIVE · N" text ate too much horizontal room in a narrow panel,
+      // squeezing out the username. The descriptive detail (viewer count
+      // plus who's watching) now lives in the hover tooltip. (#voice-declutter)
+      const liveLabel = viewerCount
+        ? t(viewerCount === 1 ? 'users.streaming_viewers_one' : 'users.streaming_viewers_other', { count: viewerCount })
+        : t('users.streaming_no_viewers');
+      const viewerNames = viewers.map(v => v.username).join(', ');
+      const liveTitle = this._escapeHtml(viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel);
+      streamBadge = `<span class="voice-stream-badge live" title="${liveTitle}">🔴${viewerCount ? ' ' + viewerCount : ''}</span>`;
     }
     if (hasWebcam) {
       streamBadge += `<span class="voice-stream-badge webcam" title="Camera on">📹</span>`;
     }
     if (isWatching) {
       const watchNames = watchingStreams.map(s => s.sharerName).join(', ');
-      streamBadge += `<span class="voice-stream-badge watching" title="${t('users.watching_stream_title', { names: watchNames })}">👁</span>`;
+      const watchCount = watchingStreams.length;
+      streamBadge += `<span class="voice-stream-badge watching" title="${this._escapeHtml(t('users.watching_stream_title', { names: watchNames }))}">👁${watchCount > 1 ? ' ' + watchCount : ''}</span>`;
     }
 
-    const muteIcon = `<span class="voice-status-icon${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : 'Unmuted'}">🎙️</span>`;
-    const deafenIcon = `<span class="voice-status-icon${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : 'Listening'}">🔊</span>`;
+    // Only render mic/speaker icons when they actually signal something —
+    // i.e. the user is muted or deafened. An unmuted, listening user shows
+    // no icons at all, so the roster stays legible instead of every row
+    // carrying two faded glyphs. The "you" tag is dropped too — people know
+    // who they are, and it was just more clutter. (#voice-declutter)
+    const statusIcons = [];
+    if (u.isMuted) statusIcons.push(`<span class="voice-status-icon is-muted" title="Muted">🎙️</span>`);
+    if (u.isDeafened) statusIcons.push(`<span class="voice-status-icon is-deafened" title="Deafened">🔊</span>`);
+    const statusIconsHtml = statusIcons.length
+      ? `<span class="voice-status-icons">${statusIcons.join('')}</span>`
+      : '';
     return `
       <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
         ${streamBadge}
-        <span class="voice-status-icons">${muteIcon}${deafenIcon}</span> 
-        ${isSelf ? `<span class="you-tag">${t('users.you_tag')}</span>` : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
+        ${statusIconsHtml}
+        ${isSelf ? '' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
       </div>
     `;
   }).join('');
