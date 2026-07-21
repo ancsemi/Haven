@@ -570,6 +570,23 @@ app.get('/api/ice-servers', (req, res) => {
   }
   }
 
+  // Chrome logs "Using five or more STUN/TURN servers slows down discovery"
+  // and genuinely gathers candidates more slowly past that point. A TURN relay
+  // on top of the four built-in STUN defaults lands on exactly five, which is
+  // what dragged out reconnection after a socket flap in #5444 (peers stuck on
+  // ice=checking). Cap the list at four, dropping STUN entries first so the
+  // TURN relay — the one that actually traverses strict NAT — always survives.
+  const MAX_ICE_SERVERS = 4;
+  if (iceServers.length > MAX_ICE_SERVERS) {
+    const isTurn = (s) => /turns?:/i.test(String(s.urls));
+    const turns = iceServers.filter(isTurn);
+    const stuns = iceServers.filter(s => !isTurn(s));
+    const keepStun = Math.max(0, MAX_ICE_SERVERS - turns.length);
+    const trimmed = [...stuns.slice(0, keepStun), ...turns];
+    iceServers.length = 0;
+    iceServers.push(...trimmed);
+  }
+
   res.json({ iceServers });
 });
 
