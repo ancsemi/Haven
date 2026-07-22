@@ -1740,6 +1740,24 @@ _setupUI() {
 
   // Global keyboard shortcuts
   document.addEventListener('keydown', (e) => {
+    // Type-to-focus: start typing anywhere and the message box takes over.
+    // No preventDefault, so the browser inserts the keystroke into the newly
+    // focused textarea — nothing is dropped.
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing) {
+      const ae = document.activeElement;
+      const tag = ae?.tagName;
+      const editing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae?.isContentEditable;
+      // getClientRects().length is 0 for hidden elements, incl. fixed overlays
+      const popupOpen = [...document.querySelectorAll(
+        '.modal-overlay, #quick-switcher-overlay, #theme-popup, #search-container, .context-menu'
+      )].some(el => el.getClientRects().length > 0);
+      const msgInput = document.getElementById('message-input');
+      const msgArea = document.getElementById('message-area');
+      if (!editing && !popupOpen && this.currentChannel && msgInput && msgArea && msgArea.style.display !== 'none') {
+        msgInput.focus();
+      }
+    }
+
     // Ctrl+F = search
     if ((e.ctrlKey || e.metaKey) && e.key === 'f' && this.currentChannel) {
       e.preventDefault();
