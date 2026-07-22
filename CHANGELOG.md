@@ -11,6 +11,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.36.0] — 2026-07-21
+
+### Added
+- **Opt-in "repair voice audio after a reconnect" toggle (Settings → Debug, #5444).** If you sometimes rejoin a voice call and still can't hear one or more people until you leave and rejoin, there's a new Debug toggle for it. When two people reconnect at the same moment, their connections can collide mid-repair (both sides ICE-restart every peer at once) and the losing offer's restart intent was dropped on rollback — so the media path never actually restarted, the two sides' ICE credentials crossed, and one direction of audio stayed dead until a manual rejoin. Turning this on carries the restart through so Haven re-runs it and the audio comes back on its own. Off by default while it's being verified in the field.
+
+### Changed
+- **The voice channel panel is less cluttered.** Mic and speaker icons now appear only when someone is actually muted or deafened, instead of every participant carrying two faded glyphs, so names are easier to read at a glance. The "you" tag next to your own name is gone (you know who you are), and the LIVE badge is now a compact red dot plus viewer count — hover it for the full "who's watching" detail.
+
+### Fixed
+- **Voice recovers audio more reliably after a brief disconnect (#5444).** After a reconnect Haven ICE-restarts each peer to repair the media path, but if that restart couldn't be issued the peer was silently abandoned with no retry, leaving that person's audio dead until a manual rejoin. The recovery now verifies each connection a few seconds after the restart and re-attempts it while the path is still broken.
+- **Fewer ICE servers handed to the browser (#5444).** With no custom STUN configured, Haven handed out four built-in STUN servers; adding a TURN relay made five, which Chrome warns slows down connection setup — and measurably delayed reconnecting after a socket flap. The list is now capped at four, always keeping your TURN relay, so connections establish faster.
+
+---
+
 ## [3.35.0] — 2026-07-19
 
 ### Added
