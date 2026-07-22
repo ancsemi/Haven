@@ -1800,4 +1800,136 @@ _initMoveMessages() {
   });
 },
 
+/* ── Message right-click context menu (main #messages pane) ───────────
+   A right-click twin of the hover toolbar carrying the same set of actions
+   (edit, reply, quote, pin, react, thread, copy-link, archive, delete). It
+   calls the exact same underlying methods the toolbar dispatch does (no new
+   API surface), gates each item on the same permissions the toolbar uses, and
+   borrows the channel context menu's CSS classes (.channel-ctx-menu /
+   .channel-ctx-item / .channel-ctx-sep / .danger) so it inherits every
+   theme — including win95 — for free. Cursor-positioned and self-closing,
+   modelled on _showImageContextMenu. */
+_showMessageContextMenu(e, msgEl) {
+  this._hideMessageContextMenu();
+  const msgId = parseInt(msgEl.dataset.msgId, 10);
+  if (!msgId) return;
+
+  const curCh      = this.channels?.find(c => c.code === this.currentChannel);
+  const isDm       = !!curCh?.is_dm;
+  const isOwn      = String(msgEl.dataset.userId) === String(this.user?.id);
+  const isPinned   = msgEl.dataset.pinned === '1'  || msgEl.classList.contains('pinned');
+  const isArchived = msgEl.dataset.archived === '1' || msgEl.classList.contains('archived');
+  const canPin       = !!(this.user?.isAdmin || this._hasPerm('pin_message'));
+  const canArchive   = !!(this.user?.isAdmin || this._hasPerm('archive_messages'));
+  const canShareLink = !isDm && !!this._canShareChannelLink?.(this.currentChannel);
+  const canDelete    = isOwn || this.user?.isAdmin || this._canModerate();
+
+  // Layout: the actions defined first (Edit, Reply, Quote, Pin) — separator —
+  // the remaining hover-toolbar actions (React, Thread, Copy Link, Protect) —
+  // separator — Delete. Every item carries the same data-action the toolbar
+  // uses, and each action is gated on the same permission, so the two menus
+  // stay behaviourally identical.
+  const items = [];
+  // First group (as originally defined)
+  if (isOwn) items.push(`<button class="channel-ctx-item" data-action="edit">✏️ <span>${t('msg_toolbar.edit')}</span></button>`);
+  items.push(`<button class="channel-ctx-item" data-action="reply">↩️ <span>${t('msg_toolbar.reply')}</span></button>`);
+  items.push(`<button class="channel-ctx-item" data-action="quote">💬 <span>${t('msg_toolbar.quote')}</span></button>`);
+  if (canPin) {
+    items.push(isPinned
+      ? `<button class="channel-ctx-item" data-action="unpin">📌 <span>${t('msg_toolbar.unpin')}</span></button>`
+      : `<button class="channel-ctx-item" data-action="pin">📌 <span>${t('msg_toolbar.pin')}</span></button>`);
+  }
+  // Separator, then the rest of the hover-toolbar actions
+  items.push('<hr class="channel-ctx-sep">');
+  items.push(`<button class="channel-ctx-item" data-action="react">😀 <span>${t('msg_toolbar.react')}</span></button>`);
+  if (!isDm) items.push(`<button class="channel-ctx-item" data-action="thread">🧵 <span>Thread</span></button>`);
+  if (canShareLink) items.push(`<button class="channel-ctx-item" data-action="copy-link">🔗 <span>${t('msg_toolbar.copy_link')}</span></button>`);
+  if (canArchive) {
+    items.push(isArchived
+      ? `<button class="channel-ctx-item" data-action="unarchive">🛡️ <span>${t('app.messages.unprotect_btn')}</span></button>`
+      : `<button class="channel-ctx-item" data-action="archive">🛡️ <span>${t('app.messages.protect_btn')}</span></button>`);
+  }
+  // Separator right above Delete
+  if (canDelete) {
+    items.push('<hr class="channel-ctx-sep">');
+    items.push(`<button class="channel-ctx-item danger" data-action="delete">🗑️ <span>${t('msg_toolbar.delete')}</span></button>`);
+  }
+
+  const menu = document.createElement('div');
+  menu.id = 'message-context-menu';
+  menu.className = 'channel-ctx-menu';
+  menu.innerHTML = items.join('');
+  menu.style.left = e.clientX + 'px';
+  menu.style.top  = e.clientY + 'px';
+  document.body.appendChild(menu);
+
+  // Clamp inside the viewport (same as the image/channel menus).
+  const rect = menu.getBoundingClientRect();
+  if (rect.right  > window.innerWidth)  menu.style.left = (window.innerWidth  - rect.width  - 8) + 'px';
+  if (rect.bottom > window.innerHeight) menu.style.top  = (window.innerHeight - rect.height - 8) + 'px';
+
+  menu.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    this._hideMessageContextMenu();
+    if (action === 'edit') {
+      this._startEditMessage(msgEl, msgId);
+    } else if (action === 'reply') {
+      this._setReply(msgEl, msgId);
+    } else if (action === 'quote') {
+      this._quoteMessage(msgEl);
+    } else if (action === 'react') {
+      this._showReactionPicker(msgEl, msgId);
+    } else if (action === 'thread') {
+      // Defence in depth — threads never exist in DMs.
+      if (this.channels?.find(c => c.code === this.currentChannel)?.is_dm) {
+        this._showToast?.('Threads are not available in DMs', 'info');
+      } else {
+        this._openThread(msgId);
+      }
+    } else if (action === 'copy-link') {
+      this._copyChannelLink(this.currentChannel, msgId);
+    } else if (action === 'pin') {
+      if (await this._showConfirmModal(t('confirm.pin_message'), '')) {
+        this.socket.emit('pin-message', { messageId: msgId });
+      }
+    } else if (action === 'unpin') {
+      this.socket.emit('unpin-message', { messageId: msgId });
+    } else if (action === 'archive') {
+      this.socket.emit('archive-message', { messageId: msgId });
+    } else if (action === 'unarchive') {
+      this.socket.emit('unarchive-message', { messageId: msgId });
+    } else if (action === 'delete') {
+      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
+        this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
+      }
+    }
+  });
+
+  // Dismiss on outside click, another right-click, or scroll of the pane —
+  // mirrors the image context menu's self-closing lifecycle.
+  const closer = (ev) => {
+    if (ev && ev.type !== 'scroll' && menu.contains(ev.target)) return;
+    this._hideMessageContextMenu();
+  };
+  this._msgCtxCloser = closer;
+  setTimeout(() => {
+    document.addEventListener('click', closer, true);
+    document.addEventListener('contextmenu', closer, true);
+    document.getElementById('messages')?.addEventListener('scroll', closer, true);
+  }, 0);
+},
+
+_hideMessageContextMenu() {
+  const existing = document.getElementById('message-context-menu');
+  if (existing) existing.remove();
+  if (this._msgCtxCloser) {
+    document.removeEventListener('click', this._msgCtxCloser, true);
+    document.removeEventListener('contextmenu', this._msgCtxCloser, true);
+    document.getElementById('messages')?.removeEventListener('scroll', this._msgCtxCloser, true);
+    this._msgCtxCloser = null;
+  }
+},
+
 };

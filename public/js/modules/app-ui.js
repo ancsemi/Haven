@@ -1906,6 +1906,22 @@ _setupUI() {
     }
   });
 
+  // Message right-click — custom context menu (edit / reply / quote / pin / delete).
+  // Reuses the hover-toolbar actions; only opens over a real message row.
+  document.getElementById('messages').addEventListener('contextmenu', (e) => {
+    // Images have their own Save/Copy/Open menu (handled above) — leave them.
+    if (e.target.closest('.chat-image')) return;
+    // Don't hijack right-click while picking messages to move.
+    if (this._moveSelectionActive) return;
+    const msgEl = e.target.closest('.message, .message-compact');
+    if (!msgEl || !msgEl.dataset.msgId) return; // empty gutter / unsent rows → native menu
+    // Preserve native copy: if text is selected inside this message, defer.
+    const sel = window.getSelection?.();
+    if (sel && !sel.isCollapsed && msgEl.contains(sel.anchorNode)) return;
+    e.preventDefault();
+    this._showMessageContextMenu(e, msgEl);
+  });
+
   // Risky file download warning — intercept clicks on potentially harmful files
   document.getElementById('messages').addEventListener('click', (e) => {
     const link = e.target.closest('a.risky-file');
