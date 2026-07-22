@@ -348,6 +348,14 @@ class VoiceManager {
       connection.signalingState !== 'stable'));
   }
 
+  // Opt-in Debug toggle (Settings -> Debug) for the #5444 glare/ICE-restart
+  // recovery. Off by default while it's unverified in the field; read live so
+  // flipping it takes effect on the next renegotiation without a reload.
+  _glareIceRestartFixEnabled() {
+    try { return localStorage.getItem('haven_voice_glare_ice_fix') === '1'; }
+    catch { return false; }
+  }
+
   // ── Socket event listeners ──────────────────────────────
 
   _setupSocketListeners() {
@@ -455,15 +463,33 @@ class VoiceManager {
         // post-answer drain can re-issue one fresh follow-up offer afterwards
         // if we still have local changes to publish.
         const hadPendingLocalChanges = peer._makingOffer || peer._awaitingAnswer;
+        const rolledBackIceRestart = !!peer._offerIsIceRestart;
         peer._makingOffer = false;
         peer._awaitingAnswer = false;
+        peer._offerIsIceRestart = false;
         if (conn.signalingState !== 'stable') {
           await conn.setLocalDescription({ type: 'rollback' });
         }
         // Anything we were trying to publish (added screen tracks, an ICE
         // restart) was just discarded with the rollback. Queue it so the drain
         // after this answer re-offers it, rather than silently losing it.
-        if (hadPendingLocalChanges) peer._renegotiateQueued = true;
+        if (hadPendingLocalChanges) {
+          peer._renegotiateQueued = true;
+          // (#5444, opt-in Debug toggle) When the offer we just rolled back was
+          // an ICE restart, the drain used to re-issue it as a *plain*
+          // renegotiation because the restart intent wasn't carried across the
+          // rollback. On a reconnect where both peers ICE-restart at once (the
+          // #5427 heal), that left the media path un-restarted and crossed the
+          // two sides' ICE credentials — producing "answer indicates ICE
+          // restart but offer did not request ICE restart" plus a flood of
+          // "Unknown ufrag" candidate errors, and audio stayed dead until a
+          // manual rejoin. Re-queuing the restart makes the follow-up offer
+          // actually restart ICE. Gated behind a toggle while it's unverified
+          // in the field (Settings -> Debug).
+          if (rolledBackIceRestart && this._glareIceRestartFixEnabled()) {
+            peer._queuedIceRestart = true;
+          }
+        }
         await conn.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await conn.createAnswer();
         await conn.setLocalDescription(answer);
@@ -506,6 +532,7 @@ class VoiceManager {
           if (peer.connection.signalingState === 'have-local-offer') {
             await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
             peer._awaitingAnswer = false;
+            peer._offerIsIceRestart = false;
             // Flush buffered ICE candidates that arrived before the answer
             if (peer._pendingCandidates && peer._pendingCandidates.length) {
               for (const c of peer._pendingCandidates) {
@@ -1656,6 +1683,10 @@ class VoiceManager {
       }
       await connection.setLocalDescription(offer);
       peer._awaitingAnswer = true;
+      // Remember whether the offer now in flight is an ICE restart, so that if
+      // it later yields to glare the restart intent can be re-queued rather
+      // than silently downgraded to a plain renegotiation (#5444).
+      peer._offerIsIceRestart = iceRestart;
       this.socket.emit('voice-offer', {
         code: this.currentChannel,
         targetUserId: userId,
@@ -1885,6 +1916,7 @@ class VoiceManager {
       _awaitingAnswer: false,
       _renegotiateQueued: false,
       _queuedIceRestart: false,
+      _offerIsIceRestart: false,
     });
 
     // If we're the initiator, create and send an offer

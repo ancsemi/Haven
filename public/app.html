@@ -1868,6 +1868,14 @@
           <p class="settings-hint" data-i18n="settings.debug_section.screen_audio_webaudio_hint">By default Haven plays incoming screen-share audio straight through the audio element, which keeps it in sync with the video over a TURN/relay connection. Turn this on to route it through Haven's Web Audio mixer instead, which unlocks the per-stream volume boost above 100% but can cause audio stutter and audio/video desync over a relay (it's fine on a local network). Leave it off if a screen share's audio stutters or drifts out of sync. (#5426)</p>
         </div>
 
+        <div class="desktop-pref-row">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-voice-glare-ice-fix">
+            <span class="toggle-label" data-i18n="settings.debug_section.voice_glare_ice_fix">Repair voice audio after a reconnect (experimental)</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.voice_glare_ice_fix_hint">If you sometimes rejoin a voice call and still can't hear one or more people until you leave and rejoin, turn this on. When two people reconnect at the same moment their connections can collide mid-repair and one direction of audio stays dead; this makes Haven re-run the repair so the audio comes back on its own. Off by default while it's still being tested. (#5444)</p>
+        </div>
+
         <!-- Desktop-only debug setting: shown when running in Haven Desktop -->
         <div class="desktop-pref-row" id="pref-force-sdr-row" style="display:none">
           <label class="toggle-row">

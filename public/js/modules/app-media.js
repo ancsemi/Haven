@@ -2412,6 +2412,22 @@ _setupDebugSection() {
     });
   }
 
+  // #5444 — opt-in glare/ICE-restart recovery for voice. When two peers
+  // reconnect simultaneously their ICE restarts can collide and leave one
+  // audio direction dead until a manual rejoin. This re-queues the restart so
+  // the connection repairs itself. Off by default while it's unverified; read
+  // live by voice.js on each renegotiation, so no reload is needed.
+  const glareCb = document.getElementById('pref-debug-voice-glare-ice-fix');
+  if (glareCb) {
+    try { glareCb.checked = localStorage.getItem('haven_voice_glare_ice_fix') === '1'; } catch {}
+    glareCb.addEventListener('change', () => {
+      try {
+        if (glareCb.checked) localStorage.setItem('haven_voice_glare_ice_fix', '1');
+        else localStorage.removeItem('haven_voice_glare_ice_fix');
+      } catch {}
+    });
+  }
+
   // #5380 — always join voice muted
   const moCb = document.getElementById('pref-voice-mute-on-join');
   if (moCb) {
