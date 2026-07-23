@@ -41,9 +41,41 @@ function baseUrl(req) {
   const override = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
   if (override) return override;
 
-  // Honours X-Forwarded-Proto/Host when the app has 'trust proxy' set, which
-  // matters because Haven is usually behind Traefik/nginx terminating TLS.
-  return `${req.protocol}://${req.get('host')}`;
+  // ── Behind a trusted reverse proxy ──────────────────────────────
+  // When Express trust proxy is enabled and the proxy sets
+  // X-Forwarded-Host, that value contains the real hostname (and
+  // optionally the port) the browser used.  Use it verbatim:
+  //   'haven.example.com'       → https://haven.example.com
+  //   'haven.example.com:8443'  → https://haven.example.com:8443
+  // This is more reliable than extracting a port from the raw Host
+  // header, which often carries an internal address (localhost:3000).
+  const isTrusted = req.app ? req.app.get('trust proxy') : false;
+  if (isTrusted) {
+    const fwdHost = req.get('X-Forwarded-Host');
+    if (fwdHost) {
+      // Multiple proxies may each append their value.  The outermost
+      // (first) entry carries the browser's original Host header.
+      return `${req.protocol}://${fwdHost.split(/\s*,\s*/)[0].trim()}`;
+    }
+  }
+
+  // ── Direct exposure or proxy didn't set X-Forwarded-Host ────────
+  // Fall back to req.hostname (trusts X-Forwarded-Host if available,
+  // otherwise reads raw Host header — but always strips port).
+  // Only append a non-standard port from the raw Host header when it
+  // is NOT a common reverse-proxy internal port, so we don't leak
+  // the backend's private port into the public callback URL.
+  const rawHost = req.get('host') || '';
+  const INTERNAL_PORTS = new Set(['3000', '3001', '8080', '8000', '80', '443']);
+  let rawPort = '';
+  if (rawHost.includes(':')) {
+    // Extract the last colon-delimited segment (handles IPv6
+    // addresses like [::1]:3000 without mangling them).
+    const segments = rawHost.split(':');
+    const candidate = segments[segments.length - 1];
+    if (!INTERNAL_PORTS.has(candidate)) rawPort = `:${candidate}`;
+  }
+  return `${req.protocol}://${req.hostname}${rawPort}`;
 }
 
 /** Verify a 'connect'-scoped token and return the user id, or null. */
@@ -152,9 +184,15 @@ function createConnectRoutes(getActivity) {
   });
 
   router.get('/steam/callback', async (req, res) => {
-    if (!req.activity.isSteamConfigured()) return finish(res, 'error', 'steam');
+    if (!req.activity.isSteamConfigured()) {
+      console.error('[Haven activity] Steam callback: integration not configured');
+      return finish(res, 'error', 'steam');
+    }
     const userId = connectUserId(req.query.token, 'steam');
-    if (!userId) return finish(res, 'error', 'steam');
+    if (!userId) {
+      console.error('[Haven activity] Steam callback: invalid or expired connect token');
+      return finish(res, 'error', 'steam');
+    }
 
     try {
       // Echo every openid.* param back to Steam with mode=check_authentication.
@@ -166,13 +204,25 @@ function createConnectRoutes(getActivity) {
       }
       check['openid.mode'] = 'check_authentication';
 
+      const returnToFromCheck = check['openid.return_to'] || '(missing)';
+
       const resp = await postForm('https://steamcommunity.com/openid/login', check);
       const body = await resp.text();
-      if (!/is_valid\s*:\s*true/i.test(body)) return finish(res, 'error', 'steam');
+      if (!/is_valid\s*:\s*true/i.test(body)) {
+        console.error('[Haven activity] Steam check_authentication failed.');
+        console.error('  openid.return_to:', returnToFromCheck);
+        console.error('  openid.realm:', check['openid.realm']);
+        console.error('  openid.op_endpoint:', check['openid.op_endpoint']);
+        console.error('  response:', body.slice(0, 500));
+        return finish(res, 'error', 'steam');
+      }
 
       const claimed = String(req.query['openid.claimed_id'] || '');
       const match = claimed.match(/^https?:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/);
-      if (!match) return finish(res, 'error', 'steam');
+      if (!match) {
+        console.error('[Haven activity] Steam callback: claimed_id did not match — got:', claimed);
+        return finish(res, 'error', 'steam');
+      }
       const steamId = match[1];
 
       // Pull the persona name so the settings UI can show which account is
