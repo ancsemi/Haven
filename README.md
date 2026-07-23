@@ -307,6 +307,7 @@ Haven creates a `.env` config file automatically on first launch — you don't n
 | `SERVER_NAME` | `Haven` | Your server's display name |
 | `ADMIN_USERNAME` | `admin` | Register with this name to get admin powers |
 | `JWT_SECRET` | *(auto-generated)* | Security key — don't share or edit this |
+| `STEAM_API_KEY` | *(empty)* | Steam Web API Key for rich presence. Get yours at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) (any domain works). Once set, users can link their Steam account in **Settings → Connections** |
 | `SSL_CERT_PATH` | *(auto-detected)* | Path to SSL certificate |
 | `SSL_KEY_PATH` | *(auto-detected)* | Path to SSL private key |
 | `HAVEN_DATA_DIR` | *(see above)* | Override the data directory location |
