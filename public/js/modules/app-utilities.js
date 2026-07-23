@@ -4,6 +4,29 @@
 const GIF_FAVORITES_KEY = 'haven_gif_favorites';
 const GIF_FAVORITES_MAX = 200;
 
+// Emoji skin tones. A tone is a Unicode Fitzpatrick modifier appended to a
+// "modifier base" emoji (hands, people, body parts); non-base emoji are left
+// untouched. EMOJI_MODIFIER_BASE is the authoritative set from the Unicode
+// emoji-data, so the transform stays correct as Haven's emoji lists grow.
+const SKIN_TONE_KEY = 'haven_emoji_skin_tone';
+const SKIN_TONE_MODIFIERS = {
+  light: '\u{1F3FB}', 'medium-light': '\u{1F3FC}', medium: '\u{1F3FD}',
+  'medium-dark': '\u{1F3FE}', dark: '\u{1F3FF}'
+};
+const EMOJI_MODIFIER_BASE = new Set(
+  ('261D 26F9 270A 270B 270C 270D 1F385 1F3C2 1F3C3 1F3C4 1F3C7 1F3CA 1F3CB 1F3CC ' +
+   '1F442 1F443 1F446 1F447 1F448 1F449 1F44A 1F44B 1F44C 1F44D 1F44E 1F44F 1F450 ' +
+   '1F466 1F467 1F468 1F469 1F46B 1F46C 1F46D 1F46E 1F470 1F471 1F472 1F473 1F474 ' +
+   '1F475 1F476 1F477 1F478 1F47C 1F481 1F482 1F483 1F485 1F486 1F487 1F48F 1F491 ' +
+   '1F4AA 1F574 1F575 1F57A 1F590 1F595 1F596 1F645 1F646 1F647 1F64B 1F64C 1F64D ' +
+   '1F64E 1F64F 1F6A3 1F6B4 1F6B5 1F6B6 1F6C0 1F6CC 1F90C 1F90F 1F918 1F919 1F91A ' +
+   '1F91B 1F91C 1F91D 1F91E 1F91F 1F926 1F930 1F931 1F932 1F933 1F934 1F935 1F936 ' +
+   '1F937 1F938 1F939 1F93D 1F93E 1F977 1F9B5 1F9B6 1F9B8 1F9B9 1F9BB 1F9CD 1F9CE ' +
+   '1F9CF 1F9D1 1F9D2 1F9D3 1F9D4 1F9D5 1F9D6 1F9D7 1F9D8 1F9D9 1F9DA 1F9DB 1F9DC ' +
+   '1F9DD 1FAC3 1FAC4 1FAC5 1FAF0 1FAF1 1FAF2 1FAF3 1FAF4 1FAF5 1FAF6 1FAF7 1FAF8')
+  .split(' ').map(h => String.fromCodePoint(parseInt(h, 16)))
+);
+
 export default {
 
 // ── Utilities ─────────────────────────────────────────
@@ -1086,6 +1109,43 @@ _showRiskyDownloadWarning(fileName, ext, url) {
 // EMOJI PICKER (categorized + searchable)
 // ═══════════════════════════════════════════════════════
 
+// Skin-tone preference, cached in memory and mirrored to localStorage
+// (same pattern as _getQuickEmojis). Stored as base emoji everywhere; the
+// tone is applied only at display and insert time via _toneEmoji.
+_getEmojiSkinTone() {
+  if (this._skinTone === undefined) this._skinTone = localStorage.getItem(SKIN_TONE_KEY) || 'default';
+  return this._skinTone;
+},
+
+_saveEmojiSkinTone(tone) {
+  this._skinTone = tone;
+  localStorage.setItem(SKIN_TONE_KEY, tone);
+},
+
+// Apply a specific tone to one emoji. Only single-person "modifier base"
+// emoji are toned; multi-person sequences (couples, people holding hands)
+// carry more than one base and are left as-is.
+_applySkinTone(emoji, tone) {
+  const mod = SKIN_TONE_MODIFIERS[tone];
+  if (!mod || typeof emoji !== 'string') return emoji;
+  const cps = [...emoji];
+  if (cps.filter(c => EMOJI_MODIFIER_BASE.has(c)).length !== 1) return emoji;
+  const out = [];
+  for (let i = 0; i < cps.length; i++) {
+    out.push(cps[i]);
+    if (EMOJI_MODIFIER_BASE.has(cps[i])) {
+      out.push(mod);
+      if (cps[i + 1] === '\uFE0F') i++; // skip VS16: the modifier already implies emoji style
+    }
+  }
+  return out.join('');
+},
+
+// Apply the user's current tone — used at every render/insert surface.
+_toneEmoji(emoji) {
+  return this._applySkinTone(emoji, this._getEmojiSkinTone());
+},
+
 _toggleEmojiPicker(anchorEl) {
   const picker = document.getElementById('emoji-picker');
   if (picker.style.display === 'flex') {
@@ -1244,31 +1304,74 @@ _toggleEmojiPicker(anchorEl) {
   searchInput.placeholder = t('emoji.search_placeholder');
   searchInput.maxLength = 30;
   searchRow.appendChild(searchInput);
+
+  // Skin-tone selector: a hand button whose glyph reflects the current tone,
+  // opening a dropdown of Default + the five tones. Picking one saves the
+  // preference and re-renders so every emoji adopts it.
+  const skinBtn = document.createElement('button');
+  skinBtn.className = 'emoji-skin-btn';
+  skinBtn.title = t('emoji.skin_tone');
+  const skinMenu = document.createElement('div');
+  skinMenu.className = 'emoji-skin-menu';
+  skinMenu.style.display = 'none';
+  const paintSkinBtn = () => { skinBtn.textContent = this._toneEmoji('✋'); };
+  paintSkinBtn();
+  ['default', 'light', 'medium-light', 'medium', 'medium-dark', 'dark'].forEach(tone => {
+    const opt = document.createElement('button');
+    opt.className = 'emoji-skin-opt';
+    opt.textContent = this._applySkinTone('✋', tone);
+    opt.title = t(`emoji.skin_tones.${tone.replace('-', '_')}`);
+    opt.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      this._saveEmojiSkinTone(tone);
+      paintSkinBtn();
+      skinMenu.style.display = 'none';
+      renderGrid(searchInput.value.trim() || null);
+    });
+    skinMenu.appendChild(opt);
+  });
+  skinBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    skinMenu.style.display = skinMenu.style.display === 'none' ? 'flex' : 'none';
+  });
+  searchRow.appendChild(skinBtn);
+  searchRow.appendChild(skinMenu);
   picker.appendChild(searchRow);
 
-  // Build combined categories (standard + custom)
-  const allCategories = { ...this.emojiCategories };
+  // Build combined categories — custom first so they sit front and centre,
+  // then the standard sets.
+  const allCategories = {};
   const hasCustom = this.customEmojis && this.customEmojis.length > 0;
   if (hasCustom) {
     allCategories['Custom'] = this.customEmojis.map(e => `:${e.name}:`);
   }
+  Object.assign(allCategories, this.emojiCategories);
+  this._emojiActiveCategory = Object.keys(allCategories)[0];
 
-  // Category tabs
+  // Category tabs — clicking scrolls the grid to that section rather than
+  // swapping it out, so every category is reachable by scrolling too.
   const tabRow = document.createElement('div');
   tabRow.className = 'emoji-tab-row';
   const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Flags':'🚩', 'Custom':'⭐' };
+  const catTabs = {};
+  const catSections = {}; // cat -> non-sticky section wrapper, our stable scroll anchor
+  const setActiveTab = (cat) => {
+    for (const [c, tab] of Object.entries(catTabs)) tab.classList.toggle('active', c === cat);
+  };
   for (const cat of Object.keys(allCategories)) {
     const tab = document.createElement('button');
     tab.className = 'emoji-tab' + (cat === this._emojiActiveCategory ? ' active' : '');
     tab.textContent = catIcons[cat] || cat.charAt(0);
     tab.title = t(`emoji.categories.${cat.toLowerCase()}`) || cat;
     tab.addEventListener('click', () => {
-      this._emojiActiveCategory = cat;
-      searchInput.value = '';
-      renderGrid();
-      tabRow.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
+      if (searchInput.value.trim()) { searchInput.value = ''; renderGrid(); }
+      const section = catSections[cat];
+      // Scroll to the section wrapper, not its header: the wrapper isn't
+      // sticky, so its offsetTop is always the true layout position.
+      if (section) grid.scrollTop = section.offsetTop;
+      setActiveTab(cat);
     });
+    catTabs[cat] = tab;
     tabRow.appendChild(tab);
   }
   picker.appendChild(tabRow);
@@ -1279,9 +1382,44 @@ _toggleEmojiPicker(anchorEl) {
   picker.appendChild(grid);
 
   const self = this;
+  function appendEmojiButton(parent, emoji) {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-item';
+    // Check if it's a custom emoji (:name:)
+    const customMatch = typeof emoji === 'string' && emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+    // Standard emoji get the current skin tone; custom emoji pass through.
+    const value = customMatch ? emoji : self._toneEmoji(emoji);
+    if (customMatch) {
+      const ce = self._findNamedEmoji(customMatch[1]);
+      if (ce) {
+        btn.innerHTML = `<img src="${self._escapeHtml(ce.url)}" alt=":${self._escapeHtml(ce.name)}:" class="custom-emoji">`;
+        btn.title = `:${ce.name}:`;
+      } else {
+        btn.textContent = emoji;
+        btn.title = emoji;
+      }
+    } else {
+      btn.textContent = value;
+      // Use the first keyword (canonical name) as the tooltip,
+      // matching the reaction picker behavior.
+      const names = self.emojiNames && self.emojiNames[emoji];
+      btn.title = names ? names.split(/\s+/)[0] : emoji;
+    }
+    btn.addEventListener('click', () => {
+      // Insert into the active edit textarea if editing, otherwise the main input
+      const input = self._activeEditTextarea || document.getElementById('message-input');
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.value = input.value.substring(0, start) + value + input.value.substring(end);
+      input.selectionStart = input.selectionEnd = start + value.length;
+      input.focus();
+    });
+    parent.appendChild(btn);
+  }
+
   function renderGrid(filter) {
     grid.innerHTML = '';
-    let emojis;
+    for (const k in catSections) delete catSections[k];
     if (filter) {
       const q = filter.toLowerCase().trim();
       const matched = new Set();
@@ -1305,51 +1443,55 @@ _toggleEmojiPicker(anchorEl) {
           if (e.name.includes(q) || (e.keywords && e.keywords.toLowerCase().includes(q))) matched.add(`:${e.name}:`);
         });
       }
-      emojis = matched.size > 0 ? [...matched] : [];
-    } else {
-      emojis = allCategories[self._emojiActiveCategory] || self.emojis;
-    }
-    if (filter && emojis.length === 0) {
-      grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">${t('emoji.no_results')}</p>`;
+      if (matched.size === 0) {
+        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">${t('emoji.no_results')}</p>`;
+        return;
+      }
+      const results = document.createElement('div');
+      results.className = 'emoji-cat-grid';
+      matched.forEach(e => appendEmojiButton(results, e));
+      grid.appendChild(results);
       return;
     }
-    emojis.forEach(emoji => {
-      const btn = document.createElement('button');
-      btn.className = 'emoji-item';
-      // Check if it's a custom emoji (:name:)
-      const customMatch = typeof emoji === 'string' && emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-      if (customMatch) {
-        const ce = self._findNamedEmoji(customMatch[1]);
-        if (ce) {
-          btn.innerHTML = `<img src="${self._escapeHtml(ce.url)}" alt=":${self._escapeHtml(ce.name)}:" class="custom-emoji">`;
-          btn.title = `:${ce.name}:`;
-        } else {
-          btn.textContent = emoji;
-          btn.title = emoji;
-        }
-      } else {
-        btn.textContent = emoji;
-        // Use the first keyword (canonical name) as the tooltip,
-        // matching the reaction picker behavior.
-        const names = self.emojiNames && self.emojiNames[emoji];
-        btn.title = names ? names.split(/\s+/)[0] : emoji;
-      }
-      btn.addEventListener('click', () => {
-        // Insert into the active edit textarea if editing, otherwise the main input
-        const input = self._activeEditTextarea || document.getElementById('message-input');
-        const start = input.selectionStart;
-        const end = input.selectionEnd;
-        input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
-        input.selectionStart = input.selectionEnd = start + emoji.length;
-        input.focus();
-      });
-      grid.appendChild(btn);
-    });
+    // No filter: render every category as its own section (sticky header +
+    // its emoji grid) so scrolling flows through all of them and adjacent
+    // headers push each other out cleanly.
+    for (const [cat, list] of Object.entries(allCategories)) {
+      const section = document.createElement('div');
+      section.className = 'emoji-cat';
+      const header = document.createElement('div');
+      header.className = 'emoji-cat-header';
+      header.textContent = t(`emoji.categories.${cat.toLowerCase()}`) || cat;
+      section.appendChild(header);
+      const catGrid = document.createElement('div');
+      catGrid.className = 'emoji-cat-grid';
+      list.forEach(e => appendEmojiButton(catGrid, e));
+      section.appendChild(catGrid);
+      grid.appendChild(section);
+      catSections[cat] = section;
+    }
   }
+
+  // Scroll-spy: highlight the tab of whichever section is at the top. Compares
+  // stable offsetTop values against scrollTop — no sticky-poisoned measurements.
+  grid.addEventListener('scroll', () => {
+    if (searchInput.value.trim()) return;
+    const y = grid.scrollTop;
+    let current = null;
+    for (const cat of Object.keys(catSections)) {
+      if (catSections[cat].offsetTop - y <= 8) current = cat;
+      else break;
+    }
+    if (current && current !== self._emojiActiveCategory) {
+      self._emojiActiveCategory = current;
+      setActiveTab(current);
+    }
+  });
 
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim();
     renderGrid(q || null);
+    if (!q) setActiveTab(self._emojiActiveCategory = Object.keys(allCategories)[0]);
   });
 
   renderGrid();
@@ -2002,7 +2144,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
           slot.title = emoji;
         }
       } else {
-        slot.textContent = emoji;
+        slot.textContent = this._toneEmoji(emoji);
         slot.title = (this.emojiNames && this.emojiNames[emoji]) ? this.emojiNames[emoji] : emoji;
       }
       slot.addEventListener('click', (e) => {
@@ -2037,7 +2179,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
         btn.className = 'reaction-full-btn';
         const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
         if (named) btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:22px;height:22px">`;
-        else btn.textContent = emoji;
+        else btn.textContent = this._toneEmoji(emoji);
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (activeSlot !== null) {
@@ -2158,6 +2300,7 @@ _showReactionPicker(msgEl, msgId) {
     btn.className = 'reaction-pick-btn';
     // Check for custom emoji
     const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+    const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
     if (customMatch && this.customEmojis) {
       const ce = this._findNamedEmoji(customMatch[1]);
       if (ce) {
@@ -2168,11 +2311,11 @@ _showReactionPicker(msgEl, msgId) {
         btn.title = emoji;
       }
     } else {
-      btn.textContent = emoji;
+      btn.textContent = value;
       btn.title = (this.emojiNames && this.emojiNames[emoji]) ? this.emojiNames[emoji] : emoji;
     }
     btn.addEventListener('click', () => {
-      this.socket.emit('add-reaction', { messageId: msgId, emoji });
+      this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
       picker.remove();
       msgEl.classList.remove('showing-picker');
       if (this._reactionPickerClose) {
@@ -2305,10 +2448,11 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
         const btn = document.createElement('button');
         btn.className = 'reaction-full-btn';
         const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
+        const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
         if (named) { btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" title="${this._escapeHtml(emoji)}" class="custom-emoji">`; }
-        else { btn.textContent = emoji; btn.title = this.emojiNames[emoji] || ''; }
+        else { btn.textContent = value; btn.title = this.emojiNames[emoji] || ''; }
         btn.addEventListener('click', () => {
-          this.socket.emit('add-reaction', { messageId: msgId, emoji });
+          this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
           panel.remove();
           quickPicker.remove();
           msgEl.classList.remove('showing-picker');
