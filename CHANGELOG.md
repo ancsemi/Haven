@@ -11,6 +11,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.37.0] — 2026-07-23
+
+### Added
+- **Persistent welcome messages for new members.** Welcome messages used to be live-only: drawn on screen from the real-time join event and never saved, so they only appeared for whoever happened to be viewing that exact channel at that instant, vanished on reload, and re-fired every time a member reconnected (which made them look random and out of chronological order). A new member's welcome is now posted once, when they register, as a saved message in every channel flagged to show them, so it stays in history for everyone like Discord. A new per-channel **Welcome Messages** toggle lives in Channel Functions (admin only) and defaults on for the server's first/default channel; the existing admin welcome-message template still controls the text and doubles as the on/off switch (an empty template turns the feature off).
+- **Emoji picker overhaul (#5449).** The picker now renders every category as one continuous scrolling list with sticky headers, so scrolling past the end of one category flows into the next and clicking a category tab jumps to its section. Your server's custom emoji now sit first for quick access (unchanged if you have none), and there is full **skin tone** support: a hand button beside the search bar opens a tone picker, your choice is remembered, and it applies everywhere emoji appear — the picker, reactions and quick reactions. Contributed by Bo0sted.
+- **Right-click context menu for messages (#5446).** Right-clicking a message opens a themed, cursor-positioned menu mirroring the hover toolbar's actions (edit, reply, quote, pin, react, thread, copy link, protect, delete), gated on the same permissions. It defers to the image menu on images and to the browser's native copy when text is selected. Contributed by Bo0sted.
+- **Type-to-focus the message box (#5445).** Start typing anywhere with nothing focused and no popup or modal open, and the message box takes over so the first keystroke lands there. Modifier combos and keyboard shortcuts are left alone, and it stays out of the way during IME composition. Contributed by Bo0sted.
+- **`STEAM_API_KEY` documented (#5447).** Added to the README config table and `.env.example` with a link to the Steam dev portal, and `docker-compose.override.yml` is now gitignored. Contributed by KevonLin.
+
+### Fixed
+- **Steam account linking behind a CDN, proxy or tunnel (#5448).** When Haven ran behind a CDN → proxy → Docker chain on a non-standard port, the Steam OpenID callback could be built from the proxy's internal address and fail verification. `baseUrl()` now honours `X-Forwarded-Host` when trust proxy is enabled and only appends a genuine external port otherwise, and the project-root `.env` is loaded as a fallback so a manually set `PUBLIC_URL` always applies. Adds diagnostic logging on the failure path. Contributed by KevonLin.
+
+---
+
 ## [3.36.0] — 2026-07-21
 
 ### Added
