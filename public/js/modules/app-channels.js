@@ -609,6 +609,10 @@ _updateChannelFunctionsPanel(ch) {
   const interval = ch.slow_mode_interval || 0;
   this._setCfnBadge('slow-mode', interval > 0, interval > 0 ? `${interval}s` : 'OFF');
   this._setCfnBadge('cleanup-exempt', ch.cleanup_exempt === 1, ch.cleanup_exempt === 1 ? 'ON' : 'OFF');
+  // Welcome messages — text channels only, hide the row for DMs.
+  const welcomeRow = document.querySelector('.cfn-row[data-fn="welcome"]');
+  if (welcomeRow) welcomeRow.style.display = ch.is_dm ? 'none' : '';
+  this._setCfnBadge('welcome', ch.show_welcome === 1, ch.show_welcome === 1 ? 'ON' : 'OFF');
   // Streams and music greyed when voice is disabled (they depend on voice)
   const streamsRow = document.querySelector('.cfn-row[data-fn="streams"]');
   if (streamsRow) streamsRow.classList.toggle('cfn-disabled', voiceOff);

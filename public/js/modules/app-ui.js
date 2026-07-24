@@ -462,6 +462,10 @@ _setupUI() {
       const newVal = ch && ch.cleanup_exempt === 1 ? 0 : 1;
       optimistic({ cleanup_exempt: newVal });
       this.socket.emit('toggle-cleanup-exempt', { code });
+    } else if (fn === 'welcome') {
+      const newVal = ch && ch.show_welcome === 1 ? 0 : 1;
+      optimistic({ show_welcome: newVal });
+      this.socket.emit('toggle-welcome-channel', { code });
     } else if (fn === 'voice') {
       const newVal = ch && ch.voice_enabled === 0 ? 1 : 0;
       // Disabling voice also disables streams and music

@@ -1170,12 +1170,24 @@ _setupSocketListeners() {
     if (data.channelCode === this.currentChannel) {
       this._appendSystemMessage(t('header.messages.user_joined', { name: this._getNickname(data.user.id, data.user.username) }));
       this.notifications.play('join');
-      // Show configurable welcome message if set
-      const welcomeTemplate = this.serverSettings?.welcome_message;
-      if (welcomeTemplate) {
-        const welcomeText = welcomeTemplate.replace(/\{user\}/gi, this._getNickname(data.user.id, data.user.username));
-        this._appendWelcomeMessage(welcomeText);
-      }
+      // Welcome messages are no longer drawn here. They're now posted once, as a
+      // persisted message, when a member first registers (see the 'welcome-message'
+      // handler below + server auth.js), so they stay in history for everyone
+      // instead of flashing live only for whoever was watching this channel.
+    }
+  });
+
+  // Persisted new-member welcome message — appended live for anyone currently
+  // viewing the channel. It's also saved server-side, so it renders in history
+  // on reload (unlike the old ephemeral welcome, which was never saved).
+  this.socket.on('welcome-message', (data) => {
+    if (!data || !data.message || data.channelCode !== this.currentChannel) return;
+    // Only append live when the newest messages are actually in view; if the
+    // user is scrolled up in trimmed history it will load in order on scroll.
+    // The message is persisted either way, so nothing is lost.
+    if (this._noMoreFuture !== false) {
+      this._appendMessage(data.message);
+      if (Number.isInteger(data.message.id) && data.message.id > 0) this._newestMsgId = data.message.id;
     }
   });
 

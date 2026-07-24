@@ -1603,6 +1603,8 @@
     "slow_mode": "Slow Mode",
     "slow_mode_hint": "Require a cooldown between messages (0 = off)",
     "cleanup_guard": "Cleanup Guard",
+    "welcome": "Welcome Messages",
+    "welcome_hint": "Post a saved welcome message here when a new member joins the server",
     "cleanup_guard_hint": "Protect this channel from automatic message cleanup",
     "voice_limit": "Voice Limit",
     "voice_limit_hint": "Limit simultaneous voice users (click to set; blank = unlimited)",

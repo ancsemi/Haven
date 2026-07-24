@@ -1584,6 +1584,8 @@
     "slow_mode": "Tryb wolny",
     "slow_mode_hint": "Wymagaj czasu oczekiwania między wiadomościami (0 = wyłączony)",
     "cleanup_guard": "Ochrona przed czyszczeniem",
+    "welcome": "Wiadomości powitalne",
+    "welcome_hint": "Publikuj tutaj zapisaną wiadomość powitalną, gdy nowy członek dołącza do serwera",
     "cleanup_guard_hint": "Chroń ten kanał przed automatycznym usuwaniem wiadomości",
     "voice_limit": "Limit użytkowników czatu głosowego",
     "voice_limit_hint": "Ogranicz jednoczesnych użytkowników czatu głosowego (kliknij, aby ustawić; puste = bez limitu)",

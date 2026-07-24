@@ -1525,6 +1525,8 @@
     "slow_mode": "慢速模式",
     "slow_mode_hint": "要求消息之间有冷却时间（0 = 关闭）",
     "cleanup_guard": "清理保护",
+    "welcome": "欢迎消息",
+    "welcome_hint": "当新成员加入服务器时在此频道发布保存的欢迎消息",
     "cleanup_guard_hint": "保护此频道免受自动消息清理",
     "voice_limit": "语音人数限制",
     "voice_limit_hint": "限制同时在线语音用户数（点击设置；空白 = 无限制）",

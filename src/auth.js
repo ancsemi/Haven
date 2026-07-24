@@ -433,6 +433,46 @@ router.post('/register', authLimiter, async (req, res) => {
       }
     } catch { /* non-critical */ }
 
+    // ── Persistent welcome message ─────────────────────────
+    // Post a saved welcome message to every channel flagged show_welcome, so a
+    // new member gets a permanent, consistent welcome that stays in history for
+    // everyone (replacing the old live-only flash that vanished on reload and
+    // only showed to whoever happened to be watching that channel). Gated on
+    // the admin welcome_message template — an empty template turns it off.
+    try {
+      const wmRow = db.prepare("SELECT value FROM server_settings WHERE key = 'welcome_message'").get();
+      const template = wmRow && typeof wmRow.value === 'string' ? wmRow.value.trim() : '';
+      if (template) {
+        const welcomeText = template.replace(/\{user\}/gi, username).slice(0, 500);
+        const welcomeChannels = db.prepare(
+          'SELECT id, code FROM channels WHERE is_dm = 0 AND show_welcome = 1'
+        ).all();
+        if (welcomeChannels.length) {
+          const insertWelcome = db.prepare(
+            "INSERT INTO messages (channel_id, user_id, content, type) VALUES (?, ?, ?, 'welcome')"
+          );
+          const io = req.app.get('io');
+          for (const ch of welcomeChannels) {
+            const info = insertWelcome.run(ch.id, result.lastInsertRowid, welcomeText);
+            if (io) {
+              io.to(`channel:${ch.code}`).emit('welcome-message', {
+                channelCode: ch.code,
+                message: {
+                  id: info.lastInsertRowid,
+                  user_id: result.lastInsertRowid,
+                  content: welcomeText,
+                  type: 'welcome',
+                  created_at: new Date().toISOString()
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[welcome] Failed to post welcome message:', err.message);
+    }
+
     const token = jwt.sign(
       { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username, pwv: 1 },
       JWT_SECRET,

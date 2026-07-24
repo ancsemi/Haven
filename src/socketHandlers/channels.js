@@ -119,6 +119,16 @@ module.exports = function register(socket, ctx) {
         'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)'
       ).run(result.lastInsertRowid, socket.user.id);
 
+      // The first non-DM channel on a fresh server becomes the default welcome
+      // channel, so persistent new-member welcome messages have somewhere to go
+      // out of the box. Admins can move it later in Channel Functions.
+      try {
+        const nonDmCount = db.prepare('SELECT COUNT(*) AS n FROM channels WHERE is_dm = 0').get().n;
+        if (nonDmCount === 1) {
+          db.prepare('UPDATE channels SET show_welcome = 1 WHERE id = ?').run(result.lastInsertRowid);
+        }
+      } catch { /* non-critical */ }
+
       // Optional: bulk-add every existing user to the new channel.
       // Lets admins approximate Discord-style "everyone is in every channel"
       // when a server uses the server-wide invite code. (#5271)
@@ -839,6 +849,24 @@ module.exports = function register(socket, ctx) {
     } catch (err) {
       console.error('Toggle cleanup exempt error:', err);
       socket.emit('error-msg', 'Failed to toggle cleanup exemption');
+    }
+  });
+
+  socket.on('toggle-welcome-channel', (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can change welcome message settings');
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    if (!channel) return socket.emit('error-msg', 'Channel not found');
+    const newVal = channel.show_welcome ? 0 : 1;
+    try {
+      db.prepare('UPDATE channels SET show_welcome = ? WHERE id = ?').run(newVal, channel.id);
+      broadcastChannelLists();
+      socket.emit('toast', { message: newVal ? '👋 New-member welcome messages will post in this channel' : 'Welcome messages disabled for this channel', type: 'success' });
+    } catch (err) {
+      console.error('Toggle welcome channel error:', err);
+      socket.emit('error-msg', 'Failed to toggle welcome messages');
     }
   });
 

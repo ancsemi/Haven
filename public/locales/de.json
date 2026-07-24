@@ -1525,6 +1525,8 @@
     "slow_mode": "Langsam-Modus",
     "slow_mode_hint": "Abkühlzeit zwischen Nachrichten verlangen (0 = aus)",
     "cleanup_guard": "Bereinigungsschutz",
+    "welcome": "Willkommensnachrichten",
+    "welcome_hint": "Hier eine gespeicherte Willkommensnachricht posten, wenn ein neues Mitglied dem Server beitritt",
     "cleanup_guard_hint": "Diesen Kanal vor automatischer Nachrichtenbereinigung schützen",
     "voice_limit": "Sprachchat-Limit",
     "voice_limit_hint": "Gleichzeitige Sprachchat-Nutzer begrenzen (klicken zum Festlegen; leer = unbegrenzt)",

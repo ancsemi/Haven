@@ -1525,6 +1525,8 @@
     "slow_mode": "Mode lent",
     "slow_mode_hint": "Imposer un délai entre les messages (0 = désactivé)",
     "cleanup_guard": "Protection nettoyage",
+    "welcome": "Messages de bienvenue",
+    "welcome_hint": "Publier ici un message de bienvenue enregistré lorsqu'un nouveau membre rejoint le serveur",
     "cleanup_guard_hint": "Protéger ce salon du nettoyage automatique des messages",
     "voice_limit": "Limite vocal",
     "voice_limit_hint": "Limiter les utilisateurs vocaux simultanés (cliquer pour définir ; vide = illimité)",

@@ -643,6 +643,18 @@ _appendMessage(message, forceScroll = false) {
 },
 
 _createMessageEl(msg, prevMsg) {
+  // Persisted welcome message (new-member greeting). Rendered as a simple,
+  // non-interactive system line reusing the .welcome-message styling — no
+  // avatar, toolbar, reactions, or grouping. Covers history load and live
+  // append alike. Uses textContent so the name/template can't inject HTML.
+  if (msg && msg.type === 'welcome') {
+    const el = document.createElement('div');
+    el.className = 'welcome-message';
+    el.dataset.type = 'welcome';
+    if (Number.isInteger(msg.id) && msg.id > 0) el.dataset.msgId = msg.id;
+    el.textContent = msg.content;
+    return el;
+  }
   const isImage = this._isImageUrl(msg.content);
   const curCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
   const isAnnouncement = curCh && curCh.notification_type === 'announcement';
@@ -652,6 +664,8 @@ _createMessageEl(msg, prevMsg) {
   // there is no entry point left in any DM surface.
   const isDmContext = !!(msg && msg._isDmRender) || !!(curCh && curCh.is_dm);
   const isCompact = prevMsg &&
+    // A preceding welcome/system line never folds the next message into it.
+    (prevMsg.type || 'user') === 'user' &&
     prevMsg.user_id === msg.user_id &&
     // Persona / webhook / Discord-imported messages must each break the
     // grouping chain so a different persona under the same account doesn't
@@ -1034,16 +1048,6 @@ _appendSystemMessage(text) {
   const wasAtBottom = this._coupledToBottom;
   const el = document.createElement('div');
   el.className = 'system-message';
-  el.textContent = text;
-  container.appendChild(el);
-  if (wasAtBottom) this._scrollToBottom(true);
-},
-
-_appendWelcomeMessage(text) {
-  const container = document.getElementById('messages');
-  const wasAtBottom = this._coupledToBottom;
-  const el = document.createElement('div');
-  el.className = 'welcome-message';
   el.textContent = text;
   container.appendChild(el);
   if (wasAtBottom) this._scrollToBottom(true);

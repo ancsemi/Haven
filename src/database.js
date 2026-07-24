@@ -279,6 +279,36 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN break_chain INTEGER DEFAULT 0");
   }
 
+  // ── Migration: type column on messages (persistent welcome messages) ──
+  // 'user' (default) = an ordinary user message. 'welcome' = a persisted
+  // welcome message posted when a new member first registers. It is stored
+  // like any message so it stays in history for everyone, replacing the old
+  // ephemeral (live-only) welcome that vanished on reload.
+  try {
+    db.prepare("SELECT type FROM messages LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE messages ADD COLUMN type TEXT DEFAULT 'user'");
+  }
+
+  // ── Migration: show_welcome flag on channels (persistent welcome messages) ──
+  // 1 = new-member welcome messages are posted to this channel. On existing
+  // servers the first/default channel is switched on so the feature works out
+  // of the box; admins toggle it per channel in Channel Functions. Fresh
+  // installs flag their first-ever channel at creation time instead.
+  try {
+    db.prepare("SELECT show_welcome FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN show_welcome INTEGER DEFAULT 0");
+    try {
+      const firstChannel = db.prepare(
+        "SELECT id FROM channels WHERE is_dm = 0 ORDER BY position ASC, id ASC LIMIT 1"
+      ).get();
+      if (firstChannel) {
+        db.prepare("UPDATE channels SET show_welcome = 1 WHERE id = ?").run(firstChannel.id);
+      }
+    } catch { /* no channels yet — fresh install handles this at channel creation */ }
+  }
+
   // ── Migration: high_scores table ────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS high_scores (
