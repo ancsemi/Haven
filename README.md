@@ -249,29 +249,49 @@ If you'd like to "own" a language and keep it current, reach out via an issue. L
 
 ## Letting Friends Connect Over the Internet
 
-If your friends aren't on your WiFi, you need to open a port on your router.
+When your friends are not on your WiFi network, you need to set up a means for them to connect remotely. There are many ways to do this, but in this documentation we'll cover two ways, both with varying levels of safety and difficulty. 
 
-### Step 1 — Find Your Public IP
+### Method 1 - Port forwarding - Safety Level: Unsafe
+
+Opening up a port on your router means anybody on the entire internet is allowed to reach your Haven login page. There are a few issues with this approach that aren't immediately obvious. 
+- Bot networks: Malicious actors use cheap [VPS services](https://en.wikipedia.org/wiki/Virtual_private_server) to run bot networks 24/7. The goal of these bot networks is simple: to detect vulnerable or poorly configured web services. Once you port forward on your network, within minutes your IP will start getting hit with malicious requests. Majority of these requests are harmless and will get rejected by Haven and/or your computer's firewall, but the risk of getting hacked is certainly not zero. 
+   - These bot networks also consume a small fraction of your internet bandwidth. Nothing substantial, but it isn't zero either.
+- DHCP risk: Majority of home routers use [DHCP](https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol) to assign IP addresses on your WiFi network. This means your security cameras get a random IP, your printer gets a random IP, and obviously anything else that's on your WiFi gets a random IP. These addresses usually stay the same for a while, which is what makes this insidious. It works fine until the device or the router reboots, and then the device hosting Haven can land on a different IP. Now your port forward is pointing at whatever device took the old address. Your friends can't reach Haven anymore, and something else on your network is sitting there exposed instead.
+   - The solution here is assigning a static IP to the device you're running Haven on. (Please refer to Step 2a)
+- Brute force possibility: Your Haven login page is now reachable by the entire internet, and Haven currently has no rate limiting. Bots will throw username and password combinations at it from old data breaches, so if you reused a password from another site then you're vulnerable. 
+   - Not to mention a persistent attacker hammering your Haven login page will slow down your service or flat out cause a [DoS](https://en.wikipedia.org/wiki/Denial-of-service_attack) which takes it completely offline.  
+
+Nonetheless, if you understand the risks involved in port forwarding, please proceed below:
+
+## Step 1 — Find Your Public IP
 
 Go to [whatismyip.com](https://whatismyip.com). That's the address your friends will use.
 
-### Step 2 — Port Forward
+## Step 2 — Port Forward
 
 1. Log into your router (usually `http://192.168.1.1` or `http://10.0.0.1`)
 2. Find **Port Forwarding** (sometimes called NAT or Virtual Servers)
 3. Forward port **3000** (TCP) to your PC's local IP
 4. Save
 
-> **Find your local IP:** Open Command Prompt → type `ipconfig` → look for IPv4 Address (e.g. `192.168.1.50`)
+> **Find your local IP:** Open Command Prompt → type `ipconfig` → look for IPv4 Address (e.g. `192.168.1.50`), please jot this down for step 2a.
 
-### Step 3 — Windows Firewall
+## Step 2a: Static IP Assignment (Optional, but highly recommended to prevent complications further down the line)
+1. Refer to [this guide](https://technologyaccent.com/how-to-find-mac-address-on-linux-mac-windows-and-android/). You're looking to find the MAC Address for the computer or server you'll be using to host Haven. It typically looks like A1:B2:3C:4D:5E:6F. If your computer has multiple network cards, like an ethernet card and a WiFi card, make sure to lookup the MAC address for your primary network card.
+2. You'll also need your **private IP address**. You got this from Step 2.
+3. Find **Manual / Static IP Assignment** (typically under LAN / DHCP settngs)
+4. In the client / machine name, paste the MAC address. In the IP address section, enter the private IP address you located in step 2. Since you're using the IP your machine already has, your router will not complain that the IP is already taken.
+5. Save your changes.
+6. All the devices on your network will briefly disconnect and reconnect. Once you reconnect, locate your private IP address again and confirm its still the same.
+
+## Step 3 — Windows Firewall
 
 Open PowerShell as Administrator and run:
 ```powershell
 New-NetFirewallRule -DisplayName "Haven Chat" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
 ```
 
-### Step 4 — Share With Friends
+## Step 4 — Share With Friends
 
 Send them:
 ```
@@ -280,10 +300,63 @@ https://YOUR_PUBLIC_IP:3000
 
 Tell them to click **Advanced** → **Proceed** on the certificate warning. It's normal.
 
+### Method 2 - Tailscale / Wireguard - Safety Level: Safe
+- Unlike port forwarding, Tailscale does not require you to touch your router or your computer's firewall. Tailscale uses [Wireguard](https://en.wikipedia.org/wiki/WireGuard) under the hood, which is the same protocol many reputable VPN companies use. Wireguard creates an encrypted, end-to-end tunnel from your computer to your friend's computer. Most firewalls, like the one your router and computer use, allow outbound connections by default. Tailscale establishes a persistent, outbound connection to the Tailscale coordination server, which then allows your friends to connect. This is why configuring your firewall is not a requirement for this method. 
+  
+- Anyone who wants access to your Haven server will first need a **Share link** generated by you, the administrator, via your Tailscale admin dashboard. If you follow this guide correctly, your friend will **only** have access to Haven and strictly nothing else on your device.
+- The obvious tradeoff with this approach is setup. Both you and your friends will need to connect to Tailscale anytime you want to access Haven. But the brightside of this approach is once setup is complete, and you're logged in, connecting to Tailscale is as simple as flipping a switch. Tailscale works on pretty much all devices you can think of, and its seamless.
+- To be clear, Tailscale does change your device's DNS settings. But unlike a traditional VPN, Tailscale **does not** route your internet traffic through some remote server. Tailscale is **purely** a connection between your computer, and your friend's computer. Your IP does not change and your internet speed doesn't slow down in any meaningful way.
+
+## Step 1 - Make an account
+- Visit https://tailscale.com and make an account. Tailscale will walk you through downloading Tailscale onto your device, you may proceed with that.
+
+- Once Tailscale is running on your machine, it may ask you to add another device, click the "Skip" button at the bottom of the page.
+
+ 
+## Step 2: Navigate to Tailscale admin page
+Click [here](https://console.tailscale.com/admin/machines) to access the admin page. Here, you will see a list of all the devices on your Tailnet. 
+
+## Step 3: Lock down access
+- Currently, if you share access to your Tailscale device, any other ports that are open on your machine will be reachable by your friends. We solve this issue by setting up ACL rules. ACL Rules will ensure only Haven is accessible by your friends, and strictly nothing else.
+- On your Tailscale admin page, click "Access Controls".
+- Click "JSON Editor" and replace everything in that section with the following, secure config:
+   - Please ensure you copy everything, including the trailing comma at the end of the code block 
+  ```
+  {
+  "grants": [
+    // autogroup:member are members of your tailnet. We are sharing a device with your friends, NOT adding them to our tailnet. So you are the only person on your tailnet who should have this permission. And therefore, we are giving members of this tailnet unrestricted access to everything.
+    {
+      "src": ["autogroup:member"],
+      "dst": ["*"],
+      "ip":  ["*"],
+    },
+
+    // autogroup:shared are your friends who are connecting to your shared machine. This control restricts the port your friends may use to connect to your machine. If you changed your Haven port, make sure to change the ports to whatever port you set. Otherwise, leave everything below as default. 
+    {
+      "src": ["autogroup:shared"],
+      "dst": ["*"],
+      "ip":  ["3000", "3001"],
+    },
+  ],
+   }
+  ```
+
+## Step 4: Share, not invite
+- This step is critical. There is a fundamental difference between inviting someone to your tailnet, and simply sharing one machine. The settings above DO NOT apply if you invite someone to your tailnet, and they will get access to your **whole tailnet**. If your Haven computer is running any other web server, or if you add more Tailscale devices down the road, your friends will have acccess to them. You do not want this. 
+- To **SHARE** a device, go to your Tailscale admin page, click the 3 dot menu next to your device, and click **Share**. If you are sharing a link, make sure **Reusable link** is turned off. This way, each link you use only works once, and you maintain complete control over who can access your shared device.
+
+## Step 5: Sharing the link
+- Once you provide a share link to your friend, he will need to make an account on Tailscale, download the client and connect on his machine. Please note, your friend **does not** need to share anything from his end. Only the person hosting Haven will have to share.
+- Once your friend accepts the link, his device will now be able to reach your shared device.
+
+## Step 6: Usage
+- Once everything is wired up, go to your Tailscale admin page, find your device, and notice the **IP Address** listed next to your device. This is your Tailnet IP address. It is not your actual IP address.
+- Accessing Haven is as simple as going to https://TailscaleIPAddress:3000 (or whatever port you configured in ACL settings)
+- Please note: If you are the one hosting Haven, you may also access Haven from your LAN IP that Haven is running on (typically 192.168.X.X), but your friends **need** to use your Tailscale IP. 
+
 ---
 
 ## Configuration
-
 Haven creates a `.env` config file automatically on first launch — you don't need to create or rename anything. It lives in your **data directory**:
 
 | OS | Data Directory |
