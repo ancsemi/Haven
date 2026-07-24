@@ -1951,7 +1951,19 @@ _checkEmojiTrigger(inputEl) {
 },
 
 _showEmojiDropdown(query) {
-  const dd = document.getElementById('emoji-dropdown');
+  // #emoji-dropdown is a single shared node re-parented next to the active
+  // input (#5296). Opening the suggestions inside an inline message-edit box
+  // parks it in that message; saving/cancelling the edit wipes the message's
+  // HTML and deletes the node, so every later `:emoji` throws on the null
+  // element and autocomplete dies until a refresh. The node holds no state
+  // (its contents are rebuilt below), so recreate it if it's missing.
+  let dd = document.getElementById('emoji-dropdown');
+  if (!dd) {
+    dd = document.createElement('div');
+    dd.id = 'emoji-dropdown';
+    dd.className = 'emoji-dropdown';
+    dd.style.display = 'none';
+  }
   // Re-parent so the absolute-positioned dropdown anchors above the active
   // input (works for thread input + DM PiP input + main input). (#5296)
   const host = (this._emojiAcInput && this._emojiAcInput.parentElement) || null;
