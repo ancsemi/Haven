@@ -26,6 +26,21 @@ if (!fs.existsSync(ENV_PATH)) {
 }
 
 require('dotenv').config({ path: ENV_PATH });
+
+// Also load the project root .env as an override source.
+// Docker compose injects it via env_file, but when running directly on the
+// host the data-directory .env may be stale (created before PUBLIC_URL was
+// added), so the root .env serves as a fallback for env vars the server
+// administrator has explicitly set.
+//
+// This must be done *after* ENV_PATH so the data-dir .env takes precedence
+// for server-generated values (JWT_SECRET, VAPID keys).
+const rootEnv = path.join(__dirname, '.env');
+if (fs.existsSync(rootEnv)) {
+  require('dotenv').config({ path: rootEnv, override: false });
+  console.log('📄 Loaded project root .env as supplementary source');
+}
+
 const express = require('express');
 const { createServer } = require('http');
 const { createServer: createHttpsServer } = require('https');
