@@ -279,7 +279,7 @@ Go to [whatismyip.com](https://whatismyip.com). That's the address your friends 
 ## Step 2a: Static IP Assignment (Optional, but highly recommended to prevent complications further down the line)
 1. Refer to [this guide](https://technologyaccent.com/how-to-find-mac-address-on-linux-mac-windows-and-android/). You're looking to find the MAC Address for the computer or server you'll be using to host Haven. It typically looks like A1:B2:3C:4D:5E:6F. If your computer has multiple network cards, like an ethernet card and a WiFi card, make sure to lookup the MAC address for your primary network card.
 2. You'll also need your **private IP address**. You got this from Step 2.
-3. Find **Manual / Static IP Assignment** (typically under LAN / DHCP settngs)
+3. Within your router admin page, find **Manual / Static IP Assignment** (typically under LAN / DHCP settngs)
 4. In the client / machine name, paste the MAC address. In the IP address section, enter the private IP address you located in step 2. Since you're using the IP your machine already has, your router will not complain that the IP is already taken.
 5. Save your changes.
 6. All the devices on your network will briefly disconnect and reconnect. Once you reconnect, locate your private IP address again and confirm its still the same.
