@@ -1664,6 +1664,15 @@
     "all_emojis_title": "All emojis",
     "customize_quick_title": "Customize Quick Reactions",
     "customize_quick_hint": "Click a slot, then pick an emoji to replace it.",
+    "skin_tone": "Skin tone",
+    "skin_tones": {
+      "default": "Default",
+      "light": "Light",
+      "medium_light": "Medium-light",
+      "medium": "Medium",
+      "medium_dark": "Medium-dark",
+      "dark": "Dark"
+    },
     "categories": {
       "smileys": "Smileys",
       "faces": "Faces",

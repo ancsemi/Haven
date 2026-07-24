@@ -1604,6 +1604,15 @@
     "all_emojis_title": "Tous les emojis",
     "customize_quick_title": "Personnaliser les réactions rapides",
     "customize_quick_hint": "Cliquez sur un emplacement, puis choisissez un emoji pour le remplacer.",
+    "skin_tone": "Teint",
+    "skin_tones": {
+      "default": "Par défaut",
+      "light": "Clair",
+      "medium_light": "Moyennement clair",
+      "medium": "Moyen",
+      "medium_dark": "Moyennement foncé",
+      "dark": "Foncé"
+    },
     "categories": {
       "smileys": "Smileys",
       "faces": "Visages",

@@ -1582,6 +1582,15 @@
     "all_emojis_title": "Alle Emojis",
     "customize_quick_title": "Schnellreaktionen anpassen",
     "customize_quick_hint": "Auf ein Feld klicken, dann ein Emoji auswählen, um es zu ersetzen.",
+    "skin_tone": "Hautton",
+    "skin_tones": {
+      "default": "Standard",
+      "light": "Hell",
+      "medium_light": "Mittelhell",
+      "medium": "Mittel",
+      "medium_dark": "Mitteldunkel",
+      "dark": "Dunkel"
+    },
     "categories": {
       "smileys": "Smileys",
       "faces": "Gesichter",

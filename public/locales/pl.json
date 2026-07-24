@@ -1641,6 +1641,15 @@
     "all_emojis_title": "Wszystkie emoji",
     "customize_quick_title": "Dostosuj szybkie reakcje",
     "customize_quick_hint": "Kliknij slot, a następnie wybierz emoji, aby go zastąpić.",
+    "skin_tone": "Odcień skóry",
+    "skin_tones": {
+      "default": "Domyślny",
+      "light": "Jasny",
+      "medium_light": "Średnio jasny",
+      "medium": "Średni",
+      "medium_dark": "Średnio ciemny",
+      "dark": "Ciemny"
+    },
     "categories": {
       "smileys": "Buźki",
       "faces": "Twarze",

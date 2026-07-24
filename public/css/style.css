@@ -6885,10 +6885,15 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .emoji-search-row {
   padding: 0 2px 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  position: relative; /* anchor for the skin-tone dropdown */
 }
 
 .emoji-search-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -6900,6 +6905,50 @@ details.sound-section:not([open]) .sound-section-label::before {
 .emoji-search-input:focus {
   border-color: var(--accent);
 }
+
+/* Skin-tone selector (hand button + tone dropdown) */
+.emoji-skin-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  cursor: pointer;
+}
+.emoji-skin-btn:hover { border-color: var(--accent); }
+
+.emoji-skin-menu {
+  position: absolute;
+  top: 100%;
+  right: 2px;
+  margin-top: 4px;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  z-index: 2;
+}
+.emoji-skin-opt {
+  width: 30px;
+  height: 30px;
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+.emoji-skin-opt:hover { background: var(--bg-tertiary); }
 
 .emoji-tab-row {
   display: flex;
@@ -6925,13 +6974,31 @@ details.sound-section:not([open]) .sound-section-label::before {
 .emoji-tab.active { opacity: 1; background: var(--bg-tertiary); }
 
 .emoji-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
   overflow-y: scroll;
   max-height: 240px;
   padding: 2px;
+  position: relative; /* offsetParent for category sections, so tab clicks can scroll to them */
 }
+
+.emoji-cat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.emoji-cat-header {
+  position: sticky;
+  top: 0;
+  padding: 6px 4px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  z-index: 1;
+}
+.emoji-cat:first-child .emoji-cat-header { padding-top: 2px; }
 
 .emoji-item {
   width: 36px;

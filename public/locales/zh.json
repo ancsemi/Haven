@@ -1582,6 +1582,15 @@
     "all_emojis_title": "所有表情",
     "customize_quick_title": "自定义快速回应",
     "customize_quick_hint": "点击槽位，然后选择表情进行替换。",
+    "skin_tone": "肤色",
+    "skin_tones": {
+      "default": "默认",
+      "light": "浅色",
+      "medium_light": "中浅色",
+      "medium": "中等",
+      "medium_dark": "中深色",
+      "dark": "深色"
+    },
     "categories": {
       "smileys": "笑脸",
       "faces": "面孔",
