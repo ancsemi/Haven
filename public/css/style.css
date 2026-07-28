@@ -7026,6 +7026,13 @@ details.sound-section:not([open]) .sound-section-label::before {
   transform: scale(1.2);
 }
 
+/* Keyboard selection highlight (arrow-key navigation in the picker) */
+.emoji-item.kb-active {
+  background: var(--bg-tertiary);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 /* ── Stickers ───────────────────────────────────────── */
 /* Inline rendered sticker in messages — larger than chat-image, no background. */
 .sticker-img {
