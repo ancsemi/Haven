@@ -1368,7 +1368,12 @@ _toggleEmojiPicker(anchorEl) {
       const section = catSections[cat];
       // Scroll to the section wrapper, not its header: the wrapper isn't
       // sticky, so its offsetTop is always the true layout position.
-      if (section) grid.scrollTop = section.offsetTop;
+      if (section) {
+        grid.scrollTop = section.offsetTop;
+        // Move the keyboard highlight to this category's first emoji, so
+        // arrowing/Enter continues from where the user just jumped to.
+        highlightFirstEmoji(section);
+      }
       setActiveTab(cat);
     });
     catTabs[cat] = tab;
@@ -1419,9 +1424,11 @@ _toggleEmojiPicker(anchorEl) {
 
   // Keyboard nav: highlight the first emoji so arrow keys + Enter work the
   // moment the picker opens (Discord-style). Re-run after every grid render.
-  const highlightFirstEmoji = () => {
+  // Pass a section to highlight the first emoji within it (e.g. after a
+  // category jump); defaults to the first emoji in the whole grid.
+  const highlightFirstEmoji = (scope) => {
     grid.querySelectorAll('.emoji-item.kb-active').forEach(el => el.classList.remove('kb-active'));
-    const first = grid.querySelector('.emoji-item');
+    const first = (scope || grid).querySelector('.emoji-item');
     if (first) first.classList.add('kb-active');
   };
 
@@ -1576,6 +1583,12 @@ _toggleEmojiPicker(anchorEl) {
 
   picker.style.display = 'flex';
   searchInput.focus();
+
+  // Always open scrolled to the top, so the view and the keyboard highlight
+  // both start on the first category in every browser. Chromium discards the
+  // old scroll when the grid is rebuilt; Firefox/Safari can preserve it, which
+  // would leave the view on the last-used category while the highlight resets.
+  grid.scrollTop = 0;
 },
 
 // Find the emoji one visual row above/below the current one (dir: -1 up, 1 down).
