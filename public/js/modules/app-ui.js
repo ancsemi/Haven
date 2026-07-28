@@ -1774,6 +1774,12 @@ _setupUI() {
       e.preventDefault();
       this._openQuickSwitcher();
     }
+    // Ctrl+E = toggle emoji picker (open/close)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e' && this.currentChannel) {
+      e.preventDefault();
+      this._emojiPickerContext = 'main';
+      this._toggleEmojiPicker();
+    }
     // Alt+ArrowUp/Down = navigate channels
     if (e.altKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
