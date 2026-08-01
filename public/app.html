@@ -544,7 +544,7 @@
         <div id="sb-sidebar-resize-handle" class="sb-sidebar-resize-handle"></div>
         <div class="sb-sidebar-header">&#x1F3B5; Soundboard</div>
         <div class="sb-sidebar-body">
-          <input type="text" id="sb-sidebar-search" placeholder="Search sounds..." class="settings-text-input" style="width:100%;box-sizing:border-box;font-size:12px">
+          <input type="text" id="sb-sidebar-search" placeholder="Search sounds..." class="settings-text-input" style="width:100%;box-sizing:border-box;font-size:0.75rem">
           <div id="sb-sidebar-grid" class="soundboard-grid sidebar-mode"></div>
         </div>
       </aside>
@@ -559,7 +559,7 @@
         <div class="right-sidebar-voice" id="right-sidebar-voice">
           <div class="panel">
             <div class="voice-panel-header">
-              <h5 class="panel-title" style="margin-bottom:0">🔊 <span data-i18n="right_sidebar.voice_title">Voice</span></h5>
+              <h5 class="panel-title" style="margin-bottom:0"><span class="title-emoji">🔊 </span><span data-i18n="right_sidebar.voice_title">Voice</span></h5>
               <button id="mobile-right-close" class="mobile-panel-close mobile-panel-close-right" data-i18n-title="modals.common.close" data-i18n-aria-label="right_sidebar.close_panel" title="Close" aria-label="Close panel">&times;</button>
               <div class="voice-header-actions">
                 <button id="voice-mute-btn-header" class="voice-header-btn" data-i18n-title="voice.mute" title="Mute" style="display:none">🎙️</button>
@@ -575,7 +575,7 @@
         <!-- Scrollable users section -->
         <div class="right-sidebar-users" id="right-sidebar-users">
           <div class="panel">
-            <h5 class="panel-title">👥 <span data-i18n="right_sidebar.online_title">Online</span></h5>
+            <h5 class="panel-title"><span class="title-emoji">👥 </span><span data-i18n="right_sidebar.online_title">Online</span></h5>
             <div id="online-users" class="user-list">
               <p class="muted-text" data-i18n="right_sidebar.select_channel">Select a channel</p>
             </div>
@@ -1228,7 +1228,7 @@
       <!-- Soundboard Sidebar Setting -->
       <div class="settings-section" id="section-soundboard-mode" style="border-top: 1px solid var(--border-light); padding-top: 14px; margin-top: 8px;">
         <h5 class="settings-section-title">🎵 Soundboard</h5>
-        <label class="checkbox-row" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <label class="checkbox-row" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8125rem">
           <input type="checkbox" id="soundboard-sidebar-mode-settings" style="cursor:pointer">
           Sidebar mode
         </label>
@@ -1237,25 +1237,14 @@
 
       <!-- Font Size -->
       <div class="settings-section" id="section-font-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🔤 <span data-i18n="settings.font_size.title">Font Size</span></h5>
-        <div class="font-size-picker" id="font-size-picker">
-          <button type="button" class="density-btn" data-fontsize="small" data-i18n-title="settings.font_size.small_hint" title="Small — 13px base">
-            <span class="density-icon" style="font-size:11px">A</span>
-            <span class="density-label" data-i18n="settings.font_size.small">Small</span>
-          </button>
-          <button type="button" class="density-btn active" data-fontsize="normal" data-i18n-title="settings.font_size.normal_hint" title="Normal — 15px base (default)">
-            <span class="density-icon" style="font-size:14px">A</span>
-            <span class="density-label" data-i18n="settings.font_size.normal">Normal</span>
-          </button>
-          <button type="button" class="density-btn" data-fontsize="large" data-i18n-title="settings.font_size.large_hint" title="Large — 17px base">
-            <span class="density-icon" style="font-size:17px">A</span>
-            <span class="density-label" data-i18n="settings.font_size.large">Large</span>
-          </button>
-          <button type="button" class="density-btn" data-fontsize="x-large" data-i18n-title="settings.font_size.xl_hint" title="Extra Large — 20px base">
-            <span class="density-icon" style="font-size:20px">A</span>
-            <span class="density-label" data-i18n="settings.font_size.xl">XL</span>
-          </button>
+        <h5 class="settings-section-title">🔍 <span data-i18n="settings.zoom.title">Zoom</span></h5>
+        <div class="zoom-control" id="zoom-control">
+          <button type="button" class="zoom-step" id="zoom-out-btn" title="Zoom out" aria-label="Zoom out">−</button>
+          <input type="range" class="zoom-slider" id="ui-zoom-slider" min="70" max="150" step="5" value="100" aria-label="Interface zoom">
+          <button type="button" class="zoom-step" id="zoom-in-btn" title="Zoom in" aria-label="Zoom in">+</button>
+          <output class="zoom-value" id="ui-zoom-value" for="ui-zoom-slider">100%</output>
         </div>
+        <small class="settings-hint" style="margin-top:6px;display:block">Scales the whole interface. Drag for the exact size you want.</small>
       </div>
 
       <!-- Emoji Reaction Size -->
@@ -1263,19 +1252,19 @@
         <h5 class="settings-section-title">😀 Reaction Size</h5>
         <div class="font-size-picker" id="emoji-size-picker">
           <button type="button" class="density-btn" data-emojisize="small" title="Small reactions">
-            <span class="density-icon" style="font-size:11px">😀</span>
+            <span class="density-icon" style="font-size:0.6875rem">😀</span>
             <span class="density-label">Small</span>
           </button>
           <button type="button" class="density-btn active" data-emojisize="normal" title="Normal reactions (default)">
-            <span class="density-icon" style="font-size:14px">😀</span>
+            <span class="density-icon" style="font-size:0.875rem">😀</span>
             <span class="density-label">Normal</span>
           </button>
           <button type="button" class="density-btn" data-emojisize="large" title="Large reactions">
-            <span class="density-icon" style="font-size:18px">😀</span>
+            <span class="density-icon" style="font-size:1.125rem">😀</span>
             <span class="density-label">Large</span>
           </button>
           <button type="button" class="density-btn" data-emojisize="x-large" title="Extra large reactions">
-            <span class="density-icon" style="font-size:22px">😀</span>
+            <span class="density-icon" style="font-size:1.375rem">😀</span>
             <span class="density-label">XL</span>
           </button>
         </div>
@@ -1376,12 +1365,12 @@
       <!-- Banner Display (client-side) -->
       <div class="settings-section" id="section-banner-display" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px; display:none;">
         <h5 class="settings-section-title">🏞️ Banner Display</h5>
-        <label style="margin-top:4px;display:flex;align-items:center;gap:8px;font-size:12px">
+        <label style="margin-top:4px;display:flex;align-items:center;gap:8px;font-size:0.75rem">
           <span style="white-space:nowrap">Banner height</span>
           <input type="range" id="banner-height-slider" min="80" max="400" step="10" value="180" style="flex:1">
           <span id="banner-height-value" style="min-width:36px;text-align:right;font-variant-numeric:tabular-nums">180px</span>
         </label>
-        <label style="margin-top:4px;display:flex;align-items:center;gap:8px;font-size:12px">
+        <label style="margin-top:4px;display:flex;align-items:center;gap:8px;font-size:0.75rem">
           <span style="white-space:nowrap">Vertical offset</span>
           <input type="range" id="banner-offset-slider" min="0" max="100" step="1" value="0" style="flex:1">
           <span id="banner-offset-value" style="min-width:30px;text-align:right;font-variant-numeric:tabular-nums">0%</span>
@@ -1678,11 +1667,11 @@
           </div>
           <p class="settings-hint" style="margin-bottom:4px" data-i18n="settings.two_factor_section.manual_hint">Or enter this secret manually:</p>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
-            <code id="totp-secret-text" style="font-size:14px;letter-spacing:2px;user-select:all;flex:1;word-break:break-all"></code>
+            <code id="totp-secret-text" style="font-size:0.875rem;letter-spacing:2px;user-select:all;flex:1;word-break:break-all"></code>
             <button class="btn-sm" id="totp-copy-secret" data-i18n-title="settings.two_factor_section.copy_secret_title" title="Copy secret" style="white-space:nowrap">📋 <span data-i18n="settings.two_factor_section.copy_secret_btn">Copy</span></button>
           </div>
           <div class="form-group compact">
-            <input type="text" id="totp-verify-code" data-i18n-placeholder="settings.two_factor_section.verify_placeholder" placeholder="Enter 6-digit code to confirm" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" style="text-align:center;font-size:18px;letter-spacing:6px">
+            <input type="text" id="totp-verify-code" data-i18n-placeholder="settings.two_factor_section.verify_placeholder" placeholder="Enter 6-digit code to confirm" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" style="text-align:center;font-size:1.125rem;letter-spacing:6px">
           </div>
           <button class="btn-sm btn-full" id="totp-verify-setup-btn" data-i18n="settings.two_factor_section.verify_btn">Verify & Activate</button>
           <button class="btn-sm btn-full" id="totp-cancel-setup-btn" data-i18n="modals.common.cancel" style="margin-top:6px;opacity:0.7">Cancel</button>
@@ -1693,7 +1682,7 @@
         <div id="totp-backup-area" style="display:none">
           <h5 style="margin-bottom:6px">🗝️ <span data-i18n="settings.two_factor_section.backup_title">Backup Codes</span></h5>
           <p class="settings-hint" style="margin-bottom:8px" data-i18n="settings.two_factor_section.backup_hint">Save these codes somewhere safe. Each can be used once if you lose access to your authenticator.</p>
-          <div id="totp-backup-codes" style="font-family:monospace;font-size:15px;line-height:2;background:var(--bg-primary);padding:12px;border-radius:8px;text-align:center;user-select:all"></div>
+          <div id="totp-backup-codes" style="font-family:monospace;font-size:0.9375rem;line-height:2;background:var(--bg-primary);padding:12px;border-radius:8px;text-align:center;user-select:all"></div>
           <button class="btn-sm btn-full" id="totp-copy-backup-btn" style="margin-top:8px">📋 <span data-i18n="settings.two_factor_section.copy_backup_btn">Copy Backup Codes</span></button>
           <button class="btn-sm btn-full" id="totp-backup-done-btn" data-i18n="settings.two_factor_section.done_btn" style="margin-top:6px">Done</button>
         </div>
@@ -1733,7 +1722,7 @@
         <!-- Codes display (shown after generation) -->
         <div id="recovery-codes-area" style="display:none">
           <p class="settings-hint" style="margin-bottom:8px" data-i18n="settings.recovery_section.save_hint">Save these codes now — they will not be shown again. Each code can only be used once.</p>
-          <div id="recovery-codes-list" style="font-family:monospace;font-size:15px;line-height:2;background:var(--bg-primary);padding:12px;border-radius:8px;text-align:center;user-select:all"></div>
+          <div id="recovery-codes-list" style="font-family:monospace;font-size:0.9375rem;line-height:2;background:var(--bg-primary);padding:12px;border-radius:8px;text-align:center;user-select:all"></div>
           <button class="btn-sm btn-full" id="recovery-copy-btn" style="margin-top:8px">📋 <span data-i18n="settings.recovery_section.copy_codes_btn">Copy Codes</span></button>
           <button class="btn-sm btn-full" id="recovery-codes-done-btn" data-i18n="settings.recovery_section.done_btn" style="margin-top:6px">Done</button>
         </div>
@@ -1753,9 +1742,9 @@
         <div style="display:flex;gap:8px;margin-bottom:12px;">
           <button class="btn-sm btn-accent" id="plugin-refresh-btn">🔄 <span data-i18n="settings.plugins_section.refresh_btn">Refresh</span></button>
         </div>
-        <h6 style="margin:10px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)" data-i18n="settings.plugins_section.plugins_label">Plugins</h6>
+        <h6 style="margin:10px 0 6px;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)" data-i18n="settings.plugins_section.plugins_label">Plugins</h6>
         <div id="plugin-list" class="plugin-list"></div>
-        <h6 style="margin:14px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)" data-i18n="settings.plugins_section.themes_label">Themes</h6>
+        <h6 style="margin:14px 0 6px;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)" data-i18n="settings.plugins_section.themes_label">Themes</h6>
         <div id="theme-list" class="plugin-list"></div>
       </div>
 
@@ -1962,7 +1951,7 @@
                 <span class="server-icon-text">⬡</span>
               </div>
               <div class="server-icon-upload-controls">
-                <input type="file" id="server-icon-file" accept="image/*" style="font-size:11px;max-width:160px">
+                <input type="file" id="server-icon-file" accept="image/*" style="font-size:0.6875rem;max-width:160px">
                 <div style="display:flex;gap:4px;margin-top:4px">
                   <button class="btn-sm btn-accent" id="server-icon-upload-btn" data-i18n="settings.admin.upload_btn">Upload</button>
                   <button class="btn-sm" id="server-icon-remove-btn" data-i18n="settings.admin.remove_btn">Remove</button>
@@ -1976,10 +1965,10 @@
             <small class="settings-group-label">Server banner (wide, max 4 MB)</small>
             <div class="server-banner-upload-area">
               <div class="server-banner-preview" id="server-banner-preview">
-                <span class="muted-text" style="font-size:11px">No banner</span>
+                <span class="muted-text" style="font-size:0.6875rem">No banner</span>
               </div>
               <div class="server-banner-upload-controls">
-                <input type="file" id="server-banner-file" accept="image/jpeg,image/png,image/gif,image/webp" style="font-size:11px;max-width:160px">
+                <input type="file" id="server-banner-file" accept="image/jpeg,image/png,image/gif,image/webp" style="font-size:0.6875rem;max-width:160px">
                 <div style="display:flex;gap:4px;margin-top:4px">
                   <button class="btn-sm btn-accent" id="server-banner-upload-btn">Upload</button>
                   <button class="btn-sm" id="server-banner-remove-btn">Remove</button>
@@ -2045,7 +2034,7 @@
             <small class="settings-group-label">Custom Themes</small>
             <p class="settings-hint" style="margin:0 0 8px">Drop <code>.theme.css</code> files into the <code>themes/</code> folder, then check the ones you want to appear in the theme picker for all users.</p>
             <div id="admin-theme-list" style="display:flex;flex-direction:column;gap:6px">
-              <span style="font-size:12px;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>
+              <span style="font-size:0.75rem;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>
             </div>
           </div>
         </div>
@@ -2346,7 +2335,7 @@
           <small class="settings-hint" data-i18n="settings.admin.connectivity_hint">STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on "ICE: Connecting...", set your own servers here.</small>
           <label class="select-row" style="margin-top:8px; align-items:flex-start">
             <span data-i18n="settings.admin.stun_urls">STUN servers</span>
-            <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:stun.l.google.com:19302" style="flex:1; resize:vertical; font-family:monospace; font-size:12px"></textarea>
+            <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:stun.l.google.com:19302" style="flex:1; resize:vertical; font-family:monospace; font-size:0.75rem"></textarea>
           </label>
           <small class="settings-hint" data-i18n="settings.admin.stun_urls_hint">One stun: URI per line (or comma separated). Blank = built-in defaults.</small>
           <label class="select-row" style="margin-top:8px">
@@ -2434,7 +2423,7 @@
           </label>
           <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
             <button class="btn-sm btn-accent" id="tunnel-toggle-btn" data-i18n="settings.admin.tunnel_start_btn">Start Tunnel</button>
-            <span id="tunnel-status-display" class="muted-text" data-i18n="settings.admin.tunnel_inactive" style="font-size:11px;">Inactive</span>
+            <span id="tunnel-status-display" class="muted-text" data-i18n="settings.admin.tunnel_inactive" style="font-size:0.6875rem;">Inactive</span>
           </div>
         </div>
         <!-- Webhooks / Bots (Admin only) -->
@@ -2452,7 +2441,7 @@
         <div class="admin-settings" id="section-custom-tos" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">⚖️ <span data-i18n="settings.admin.custom_tos_title">Custom Terms of Service</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.custom_tos_hint">Add custom terms that appear before the default ToS on the login page. Supports plain text. Leave empty to show only the default Haven ToS.</small>
-          <textarea id="custom-tos-input" class="settings-textarea" rows="6" maxlength="50000" placeholder="Enter your custom terms of service..." style="margin-top:8px;width:100%;resize:vertical;min-height:80px;font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-family:inherit;"></textarea>
+          <textarea id="custom-tos-input" class="settings-textarea" rows="6" maxlength="50000" placeholder="Enter your custom terms of service..." style="margin-top:8px;width:100%;resize:vertical;min-height:80px;font-size:0.75rem;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-family:inherit;"></textarea>
         </div>
         <!-- Discord Import (Admin only) -->
         <div class="admin-settings" id="section-import" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
@@ -2518,7 +2507,7 @@
             <div class="import-dropzone-content">
               <span class="import-dropzone-icon">📁</span>
               <span><span data-i18n="modals.discord_import.drop_text">Drop file here or </span><a href="#" id="import-browse-link" data-i18n="modals.discord_import.browse_link">browse</a></span>
-              <span class="muted-text" style="font-size:11px" data-i18n="modals.discord_import.dropzone_hint">.json or .zip — up to 500 MB</span>
+              <span class="muted-text" style="font-size:0.6875rem" data-i18n="modals.discord_import.dropzone_hint">.json or .zip — up to 500 MB</span>
             </div>
           </div>
           <div id="import-upload-progress" style="display:none">
@@ -2561,7 +2550,7 @@
           <div id="import-connect-step-servers" style="display:none">
             <div class="import-info-bar" style="margin-bottom:8px">
               <span><span data-i18n="modals.discord_import.connected_as">Connected as</span> <strong id="import-discord-username"></strong></span>
-              <a href="#" id="import-connect-disconnect" data-i18n="modals.discord_import.disconnect" style="font-size:11px;margin-left:auto">Disconnect</a>
+              <a href="#" id="import-connect-disconnect" data-i18n="modals.discord_import.disconnect" style="font-size:0.6875rem;margin-left:auto">Disconnect</a>
             </div>
             <p class="settings-hint" style="margin-bottom:6px" data-i18n="modals.discord_import.pick_server">Pick a server to import from:</p>
             <div id="import-server-list" class="import-server-grid"></div>
@@ -2570,11 +2559,11 @@
           <div id="import-connect-step-channels" style="display:none">
             <div class="import-info-bar" style="margin-bottom:8px">
               <span id="import-connect-guild-name" style="font-weight:600"></span>
-              <a href="#" id="import-connect-back-servers" data-i18n="modals.discord_import.back_to_servers" style="font-size:11px;margin-left:auto">← Back to servers</a>
+              <a href="#" id="import-connect-back-servers" data-i18n="modals.discord_import.back_to_servers" style="font-size:0.6875rem;margin-left:auto">← Back to servers</a>
             </div>
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
               <p class="settings-hint" style="margin:0;flex:1" data-i18n="modals.discord_import.select_channels">Select channels to fetch:</p>
-              <a href="#" id="import-connect-toggle-all" data-i18n="modals.discord_import.deselect_all" style="font-size:11px;white-space:nowrap">Deselect All</a>
+              <a href="#" id="import-connect-toggle-all" data-i18n="modals.discord_import.deselect_all" style="font-size:0.6875rem;white-space:nowrap">Deselect All</a>
             </div>
             <div class="import-channel-list" id="import-connect-channel-list"></div>
             <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
@@ -2594,7 +2583,7 @@
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin:8px 0 6px">
           <p class="settings-hint" style="margin:0;flex:1" data-i18n="modals.discord_import.preview_select_hint">Select channels to import. You can rename them before importing.</p>
-          <a href="#" id="import-toggle-all" data-i18n="modals.discord_import.deselect_all" style="font-size:11px;white-space:nowrap">Deselect All</a>
+          <a href="#" id="import-toggle-all" data-i18n="modals.discord_import.deselect_all" style="font-size:0.6875rem;white-space:nowrap">Deselect All</a>
         </div>
         <div class="import-channel-list" id="import-channel-list"></div>
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
@@ -2605,8 +2594,8 @@
 
       <!-- Step 3: Done -->
       <div id="import-step-done" style="display:none;text-align:center;padding:20px 0">
-        <div style="font-size:48px;margin-bottom:12px">✅</div>
-        <p id="import-done-msg" style="font-size:14px" data-i18n="modals.discord_import.import_complete">Import complete!</p>
+        <div style="font-size:3rem;margin-bottom:12px">✅</div>
+        <p id="import-done-msg" style="font-size:0.875rem" data-i18n="modals.discord_import.import_complete">Import complete!</p>
       </div>
 
       <div class="modal-actions" style="margin-top:12px">
@@ -2639,7 +2628,7 @@
   <div class="modal-overlay" id="role-members-modal" style="display:none">
     <div class="modal" style="width:460px;max-height:80vh;display:flex;flex-direction:column;gap:0">
       <h3 style="margin-bottom:4px">👥 <span id="role-members-modal-title"></span></h3>
-      <p class="muted-text" style="font-size:12px;margin-bottom:10px">Server-wide assignment only. For channel-specific roles, use the Role Assignment menu in member management.</p>
+      <p class="muted-text" style="font-size:0.75rem;margin-bottom:10px">Server-wide assignment only. For channel-specific roles, use the Role Assignment menu in member management.</p>
       <input type="text" id="role-members-search" class="settings-text-input" placeholder="Search members…" style="margin-bottom:10px;flex-shrink:0">
       <div id="role-members-list" style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:6px;min-height:100px"></div>
       <div class="modal-actions" style="margin-top:12px;flex-shrink:0">
@@ -2754,7 +2743,7 @@
         <div class="sound-search-row">
           <input type="text" id="soundboard-search" data-i18n-placeholder="modals.sound_manager.search_placeholder" placeholder="Search sounds..." class="settings-text-input" style="flex:1">
           <button id="soundboard-popout-btn" class="icon-btn small" title="Pop out soundboard">⧉</button>
-                <div style="display:flex;gap:8px;margin-bottom:8px;font-size:12px">
+                <div style="display:flex;gap:8px;margin-bottom:8px;font-size:0.75rem">
                   <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="soundboard-show-hidden" style="cursor:pointer"> Show hidden</label>
                   <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="soundboard-list-mode" style="cursor:pointer"> List view</label>
                   <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="soundboard-sidebar-mode" style="cursor:pointer"> Sidebar mode</label>
@@ -2797,7 +2786,7 @@
         <small class="settings-hint" style="display:block;margin-bottom:12px" data-i18n="modals.sound_manager.upload_hint">Upload audio files for custom sounds (max 1 MB each, mp3/ogg/wav/webm)</small>
         <div class="whitelist-add-row">
           <input type="text" id="sound-name-input" data-i18n-placeholder="modals.sound_manager.name_placeholder" placeholder="Sound name..." maxlength="30" class="settings-text-input">
-          <input type="file" id="sound-file-input" accept="audio/*" style="max-width:120px;font-size:11px">
+          <input type="file" id="sound-file-input" accept="audio/*" style="max-width:120px;font-size:0.6875rem">
           <button class="btn-sm btn-accent" id="sound-upload-btn" data-i18n="modals.sound_manager.upload_btn">Upload</button>
         </div>
         <div id="custom-sounds-list" style="margin-top:12px;">
@@ -2820,7 +2809,7 @@
       <small class="settings-hint" style="display:block;margin-bottom:12px" data-i18n="settings.admin.emojis_upload_hint">Upload images for custom server emojis (max 256 KB, png/gif/webp). Name must be lowercase, no spaces.</small>
       <div class="whitelist-add-row">
         <input type="text" id="emoji-name-input" data-i18n-placeholder="modals.emoji_mgmt.name_placeholder" placeholder="emoji_name" maxlength="30" class="settings-text-input">
-        <input type="file" id="emoji-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:11px">
+        <input type="file" id="emoji-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:0.6875rem">
         <button class="btn-sm btn-accent" id="emoji-upload-btn" data-i18n="modals.emoji_mgmt.upload_btn">Upload</button>
       </div>
       <div style="margin-top:6px;text-align:center">
@@ -2851,7 +2840,7 @@
       <div class="whitelist-add-row">
         <input type="text" id="sticker-name-input" data-i18n-placeholder="modals.sticker_mgmt.name_placeholder" placeholder="sticker_name (optional)" maxlength="40" class="settings-text-input">
         <input type="text" id="sticker-pack-input" data-i18n-placeholder="modals.sticker_mgmt.pack_placeholder" placeholder="Pack name (optional)" maxlength="40" class="settings-text-input">
-        <input type="file" id="sticker-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:11px">
+        <input type="file" id="sticker-file-input" accept="image/png,image/gif,image/webp,image/jpeg" style="max-width:120px;font-size:0.6875rem">
         <button class="btn-sm btn-accent" id="sticker-upload-btn" data-i18n="modals.sticker_mgmt.upload_btn">Upload</button>
       </div>
       <div style="margin-top:6px;text-align:center">
@@ -2876,9 +2865,9 @@
       <small class="settings-hint" style="display:block;margin-bottom:10px" data-i18n="modals.emoji_crop.hint">Drag to reposition · Slider to zoom</small>
       <canvas id="emoji-crop-canvas" width="256" height="256" style="border-radius:var(--radius);cursor:grab;display:block;margin:0 auto 10px;border:2px solid var(--accent);max-width:100%;touch-action:none"></canvas>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:0 4px">
-        <span style="font-size:13px" title="Zoom out">🔍</span>
+        <span style="font-size:0.8125rem" title="Zoom out">🔍</span>
         <input type="range" id="emoji-crop-zoom" min="100" max="500" value="100" step="1" style="flex:1;accent-color:var(--accent)">
-        <span style="font-size:13px" title="Zoom in">🔎</span>
+        <span style="font-size:0.8125rem" title="Zoom in">🔎</span>
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="emoji-crop-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>
@@ -2965,10 +2954,10 @@
   <!-- All Members Modal -->
   <div class="modal-overlay" id="all-members-modal" style="display:none">
     <div class="modal modal-wide" style="max-width:720px;max-height:85vh;display:flex;flex-direction:column">
-      <h3>👥 <span data-i18n="modals.all_members.title">All Members</span> <span id="all-members-count" class="muted-text" style="font-size:13px;font-weight:normal"></span></h3>
+      <h3>👥 <span data-i18n="modals.all_members.title">All Members</span> <span id="all-members-count" class="muted-text" style="font-size:0.8125rem;font-weight:normal"></span></h3>
       <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" id="all-members-search" data-i18n-placeholder="modals.all_members.search_placeholder" placeholder="Search users..." maxlength="40" class="settings-text-input" style="flex:1;min-width:140px">
-        <select id="all-members-filter" style="font-size:12px;padding:4px 8px;border-radius:var(--radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border)">
+        <select id="all-members-filter" style="font-size:0.75rem;padding:4px 8px;border-radius:var(--radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border)">
           <option value="all" data-i18n="modals.all_members.filter_all">All</option>
           <option value="online" data-i18n="modals.all_members.filter_online">Online</option>
           <option value="offline" data-i18n="modals.all_members.filter_offline">Offline</option>
@@ -3495,9 +3484,9 @@
     <div class="game-iframe-header">
       <span class="game-iframe-title" id="game-iframe-title">Game</span>
       <div class="game-iframe-actions">
-        <label style="display:flex;align-items:center;gap:6px;color:var(--text-secondary);font-size:12px;margin-right:8px;" title="Game Volume">
+        <label style="display:flex;align-items:center;gap:6px;color:var(--text-secondary);font-size:0.75rem;margin-right:8px;" title="Game Volume">
           🔊 <input type="range" id="game-volume-slider" min="0" max="100" value="80" style="width:80px;accent-color:var(--accent);">
-          <span id="game-volume-pct" style="min-width:28px;font-size:11px;">80%</span>
+          <span id="game-volume-pct" style="min-width:28px;font-size:0.6875rem;">80%</span>
         </label>
         <button class="btn-sm" id="game-iframe-popout" title="Open in new window">↗️ <span data-i18n="modals.game_overlay.popout_btn">Pop Out</span></button>
         <button class="btn-sm btn-danger" id="game-iframe-close" data-i18n="modals.game_overlay.close_btn" title="Close game">&times; Close</button>
@@ -3508,14 +3497,14 @@
 
   <div class="modal-overlay" id="push-error-modal" style="display:none">
     <div class="modal" style="width:420px;text-align:center;padding:28px 24px;">
-      <div style="font-size:48px;margin-bottom:12px;">🔕</div>
+      <div style="font-size:3rem;margin-bottom:12px;">🔕</div>
       <h3 style="margin:0 0 12px;color:var(--text-primary)" data-i18n="modals.push_error.title">Push Notifications Unavailable</h3>
-      <p id="push-error-reason" style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 16px;"></p>
-      <p style="color:var(--text-muted);font-size:12px;line-height:1.5;margin:0 0 20px;" data-i18n-html="modals.push_error.recommendation">
+      <p id="push-error-reason" style="color:var(--text-secondary);font-size:0.875rem;line-height:1.5;margin:0 0 16px;"></p>
+      <p style="color:var(--text-muted);font-size:0.75rem;line-height:1.5;margin:0 0 20px;" data-i18n-html="modals.push_error.recommendation">
         <strong>Recommended:</strong> Google Chrome, Microsoft Edge, or Opera on desktop.<br>
         iOS requires Safari 16.4+ with Haven added to your Home Screen.
       </p>
-      <button class="btn-accent" id="push-error-dismiss-btn" style="width:100%;padding:10px;font-size:14px;font-weight:600;" data-i18n="modals.push_error.got_it">Got It</button>
+      <button class="btn-accent" id="push-error-dismiss-btn" style="width:100%;padding:10px;font-size:0.875rem;font-weight:600;" data-i18n="modals.push_error.got_it">Got It</button>
     </div>
   </div>
 

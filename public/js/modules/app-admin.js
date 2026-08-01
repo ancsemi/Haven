@@ -553,7 +553,7 @@ _applyServerSettings() {
     if (this.serverSettings.server_banner) {
       bannerPreview.innerHTML = `<img src="${this._escapeHtml(this.serverSettings.server_banner)}" style="max-width:100%;max-height:80px;border-radius:6px;object-fit:cover">`;
     } else {
-      bannerPreview.innerHTML = '<span class="muted-text" style="font-size:11px">No banner</span>';
+      bannerPreview.innerHTML = '<span class="muted-text" style="font-size:0.6875rem">No banner</span>';
     }
   }
 
@@ -586,7 +586,7 @@ _renderWebhooksList(webhooks) {
     const avatarHtml = wh.avatar_url
       ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">`
       : '🤖';
-    return `<div class="role-preview-item">${avatarHtml} <span style="font-weight:600">${this._escapeHtml(wh.name)}</span> <span style="opacity:0.5;font-size:11px">#${this._escapeHtml(wh.channel_name)}</span> ${statusDot}</div>`;
+    return `<div class="role-preview-item">${avatarHtml} <span style="font-weight:600">${this._escapeHtml(wh.name)}</span> <span style="opacity:0.5;font-size:0.6875rem">#${this._escapeHtml(wh.channel_name)}</span> ${statusDot}</div>`;
   }).join('');
 },
 
@@ -999,14 +999,14 @@ async _renderAdminThemeList() {
   } catch { /* server not ready */ }
 
   if (themes.length === 0) {
-    container.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>';
+    container.innerHTML = '<span style="font-size:0.75rem;color:var(--text-muted)">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>';
     return;
   }
 
   container.innerHTML = '';
   for (const theme of themes) {
     const label = document.createElement('label');
-    label.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
+    label.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:0.8125rem;cursor:pointer';
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.dataset.file = theme.file;
@@ -1014,7 +1014,7 @@ async _renderAdminThemeList() {
     const nameSpan = document.createElement('span');
     nameSpan.textContent = theme.name || theme.file;
     const descSpan = document.createElement('span');
-    descSpan.style.cssText = 'font-size:11px;color:var(--text-muted)';
+    descSpan.style.cssText = 'font-size:0.6875rem;color:var(--text-muted)';
     descSpan.textContent = theme.description || '';
     label.append(cb, nameSpan);
     if (theme.description) label.append(descSpan);
@@ -3328,7 +3328,7 @@ async _importPickGuild(guild) {
       }
       const icon = typeIcons[ch.type] || '#';
       const tagHint = ch.tags && ch.tags.length
-        ? ` <span class="muted-text" style="font-size:10px">(${ch.tags.map(t => t.name).join(', ')})</span>`
+        ? ` <span class="muted-text" style="font-size:0.625rem">(${ch.tags.map(t => t.name).join(', ')})</span>`
         : '';
       const row = document.createElement('div');
       row.className = 'import-channel-row';
@@ -3350,7 +3350,7 @@ async _importPickGuild(guild) {
         const childThreads = data.threads.filter(t => t.parentId === ch.id);
         childThreads.forEach(t => {
           const tagStr = t.tags && t.tags.length
-            ? ` <span class="muted-text" style="font-size:10px">[${t.tags.join(', ')}]</span>`
+            ? ` <span class="muted-text" style="font-size:0.625rem">[${t.tags.join(', ')}]</span>`
             : '';
           const tRow = document.createElement('div');
           tRow.className = 'import-channel-row import-thread-row';
@@ -3389,7 +3389,7 @@ async _importPickGuild(guild) {
           tRow.innerHTML = `
             <label>
               <input type="checkbox" checked>
-              <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:10px">in #${this._escapeHtml(t.parentName)}</span>` : ''}</span>
+              <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:0.625rem">in #${this._escapeHtml(t.parentName)}</span>` : ''}</span>
             </label>
             <span class="import-ch-count import-type-badge">thread</span>
           `;
@@ -3654,8 +3654,8 @@ _renderRolesPreview() {
   container.innerHTML = this._allRoles.map(r =>
     `<div class="role-preview-item">
       <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
-      <span>${this._escapeHtml(r.name)}${r.auto_assign ? ` <span title="${t('settings.admin.role_form.auto_assign')}" style="font-size:10px;opacity:0.6">⚡</span>` : ''}</span>
-      <span class="muted-text" style="font-size:11px;margin-left:auto">Lv.${r.level}</span>
+      <span>${this._escapeHtml(r.name)}${r.auto_assign ? ` <span title="${t('settings.admin.role_form.auto_assign')}" style="font-size:0.625rem;opacity:0.6">⚡</span>` : ''}</span>
+      <span class="muted-text" style="font-size:0.6875rem;margin-left:auto">Lv.${r.level}</span>
     </div>`
   ).join('');
   // Keep the "channel creator role" picker in sync with the role list (#5461)
@@ -3742,27 +3742,27 @@ _renderRoleDetail() {
       <input type="color" id="role-edit-color" value="${role.color || '#aaaaaa'}" style="width:50px;height:30px;border:none;cursor:pointer">
       <label class="settings-label" style="margin-top:8px;">Role Icon</label>
       <div class="role-icon-upload-row">
-        ${role.icon ? `<img class="role-icon-preview" src="${this._escapeHtml(role.icon)}" alt="icon">` : '<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">None</div>'}
+        ${role.icon ? `<img class="role-icon-preview" src="${this._escapeHtml(role.icon)}" alt="icon">` : '<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6875rem;color:var(--text-muted)">None</div>'}
         <input type="file" id="role-icon-file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
         <button class="btn-sm" id="role-icon-upload-btn" type="button">Upload</button>
         ${role.icon ? '<button class="btn-sm danger" id="role-icon-remove-btn" type="button">Remove</button>' : ''}
       </div>
-      <small class="muted-text" style="font-size:11px;">Icon shown next to role name (auto-resized to 16×16). Max 512KB.</small>
+      <small class="muted-text" style="font-size:0.6875rem;">Icon shown next to role name (auto-resized to 16×16). Max 512KB.</small>
       <label class="toggle-row" style="margin-top:12px;">
         <span>${t('settings.admin.role_form.auto_assign')}</span>
         <input type="checkbox" id="role-edit-auto-assign" ${role.auto_assign ? 'checked' : ''}>
       </label>
-      <small class="muted-text" style="font-size:11px;">${t('settings.admin.role_form.auto_assign_hint')}</small>
+      <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.auto_assign_hint')}</small>
       <div class="role-channel-access-section">
         <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.channel_access')}</h5>
         <label class="toggle-row">
           <span>${t('settings.admin.role_form.link_channel_access')}</span>
           <input type="checkbox" id="role-edit-link-channel-access" ${role.link_channel_access ? 'checked' : ''}>
         </label>
-        <small class="muted-text" style="font-size:11px;">${t('settings.admin.role_form.link_channel_access_hint')}</small>
+        <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.link_channel_access_hint')}</small>
         <div id="role-channel-access-panel" style="display:${role.link_channel_access ? 'block' : 'none'};margin-top:8px;">
           <div class="role-channel-access-list" id="role-channel-access-list">
-            <p class="muted-text" style="padding:12px;text-align:center;font-size:12px">${t('modals.common.loading')}</p>
+            <p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${t('modals.common.loading')}</p>
           </div>
           <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn" title="${this._escapeHtml(t('settings.admin.role_form.reapply_access_tooltip') || 'Re-runs the channel-access rules above against every user who already holds this role. Useful after editing the Grant/Revoke checkboxes: it brings existing members in line with the current configuration without you having to re-assign the role.')}">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
         </div>
@@ -3822,7 +3822,7 @@ _renderRoleDetail() {
   document.getElementById('role-icon-remove-btn')?.addEventListener('click', () => {
     this._pendingRoleIcon = null;
     const preview = panel.querySelector('.role-icon-preview');
-    if (preview) { preview.outerHTML = '<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">None</div>'; }
+    if (preview) { preview.outerHTML = '<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6875rem;color:var(--text-muted)">None</div>'; }
     const removeBtn = document.getElementById('role-icon-remove-btn');
     if (removeBtn) removeBtn.remove();
     this._showToast('Icon removed — save role to apply', 'success');
@@ -3992,11 +3992,11 @@ _openRoleMembersModal(role) {
         ? `<img class="rac-user-avatar" src="${this._escapeHtml(u.avatar)}" alt="${initial}" style="${shapeStyle}">`
         : `<span class="rac-user-avatar" style="background-color:${color};${shapeStyle}">${initial}</span>`;
       const badgeHtml = hasRole
-        ? `<span class="role-member-badge" style="background:${this._safeColor(role.color,'#aaa')}22;color:${this._safeColor(role.color,'#aaa')};border:1px solid ${this._safeColor(role.color,'#aaa')}44;border-radius:4px;padding:1px 6px;font-size:11px;white-space:nowrap">${this._escapeHtml(role.name)}</span>`
+        ? `<span class="role-member-badge" style="background:${this._safeColor(role.color,'#aaa')}22;color:${this._safeColor(role.color,'#aaa')};border:1px solid ${this._safeColor(role.color,'#aaa')}44;border-radius:4px;padding:1px 6px;font-size:0.6875rem;white-space:nowrap">${this._escapeHtml(role.name)}</span>`
         : '';
       return `<div class="rac-user-item" style="cursor:default;gap:10px" data-uid="${u.id}">
         ${avatarHtml}
-        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">${this._escapeHtml(this._getNickname(u.id, u.displayName))}</span>
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.8125rem">${this._escapeHtml(this._getNickname(u.id, u.displayName))}</span>
         ${badgeHtml}
         <button class="btn-sm${hasRole ? ' danger' : ' btn-accent'} role-member-toggle-btn" data-uid="${u.id}" data-has="${hasRole}" style="flex-shrink:0;min-width:64px">
           ${hasRole ? 'Remove' : 'Assign'}
@@ -4048,11 +4048,11 @@ _openRoleMembersModal(role) {
 _loadRoleChannelAccess(roleId) {
   const listEl = document.getElementById('role-channel-access-list');
   if (!listEl) return;
-  listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:12px">${t('modals.common.loading')}</p>`;
+  listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${t('modals.common.loading')}</p>`;
 
   this.socket.emit('get-role-channel-access', { roleId }, (res) => {
     if (res && res.error) {
-      listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:12px">${this._escapeHtml(res.error)}</p>`;
+      listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${this._escapeHtml(res.error)}</p>`;
       return;
     }
     const channels = res.channels || [];
@@ -4060,7 +4060,7 @@ _loadRoleChannelAccess(roleId) {
     (res.access || []).forEach(a => { accessMap[a.channel_id] = a; });
 
     if (!channels.length) {
-      listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:12px">${t('settings.admin.roles_no_channels')}</p>`;
+      listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${t('settings.admin.roles_no_channels')}</p>`;
       return;
     }
 

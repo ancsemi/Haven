@@ -1043,7 +1043,7 @@ _showExternalLinkWarning(displayText, url) {
       <div class="risky-download-icon">🔗</div>
       <h3 style="color:var(--text-primary,#dbdee1)">External Link</h3>
       <p>You're about to visit:</p>
-      <p style="background:var(--bg-tertiary,#232428);padding:8px 12px;border-radius:6px;font-size:13px;word-break:break-all;color:var(--accent,#5865f2)">${this._escapeHtml(url)}</p>
+      <p style="background:var(--bg-tertiary,#232428);padding:8px 12px;border-radius:6px;font-size:0.8125rem;word-break:break-all;color:var(--accent,#5865f2)">${this._escapeHtml(url)}</p>
       <p class="risky-download-desc">Make sure you trust this link before continuing.</p>
       <div class="risky-download-actions">
         <button class="risky-download-cancel">Cancel</button>
@@ -1244,7 +1244,7 @@ _toggleEmojiPicker(anchorEl) {
         list = stickers.filter(s => (s.pack_name || 'General') === self._activeStickerPack);
       }
       if (list.length === 0) {
-        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">${
+        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:0.75rem;width:100%;text-align:center">${
           stickers.length === 0
             ? (t('emoji.no_stickers') || 'No stickers yet — an admin can upload some from the Manage Stickers panel')
             : (t('emoji.no_results') || 'No results')
@@ -1459,7 +1459,7 @@ _toggleEmojiPicker(anchorEl) {
         });
       }
       if (matched.size === 0) {
-        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:12px;width:100%;text-align:center">${t('emoji.no_results')}</p>`;
+        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:0.75rem;width:100%;text-align:center">${t('emoji.no_results')}</p>`;
         return;
       }
       const results = document.createElement('div');
@@ -2198,7 +2198,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
 
   const hint = document.createElement('p');
   hint.className = 'muted-text';
-  hint.style.cssText = 'font-size:11px;padding:0 8px 6px;margin:0';
+  hint.style.cssText = 'font-size:0.6875rem;padding:0 8px 6px;margin:0';
   hint.textContent = t('emoji.customize_quick_hint');
   editor.appendChild(hint);
 

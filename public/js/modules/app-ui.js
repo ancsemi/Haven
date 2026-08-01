@@ -5714,7 +5714,7 @@ _renderMobileServerList() {
   if (!list || !this.serverManager) return;
   const servers = this.serverManager.getAll();
   if (servers.length === 0) {
-    list.innerHTML = `<div style="padding:8px 10px;color:var(--text-muted);font-size:12px;">${t('servers.no_servers')}</div>`;
+    list.innerHTML = `<div style="padding:8px 10px;color:var(--text-muted);font-size:0.75rem;">${t('servers.no_servers')}</div>`;
     return;
   }
   list.innerHTML = servers.map(s => {

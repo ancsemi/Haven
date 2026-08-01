@@ -259,7 +259,7 @@ _updateAvatarPreview() {
   } else {
     const color = this._getUserColor(this.user.username);
     const initial = this.user.username.charAt(0).toUpperCase();
-    preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:white">${initial}</div>`;
+    preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.125rem;color:white">${initial}</div>`;
   }
 },
 
@@ -317,7 +317,7 @@ _setupAvatarUpload() {
       if (preview) {
         const color = this._getUserColor(this.user.username);
         const initial = this.user.username.charAt(0).toUpperCase();
-        preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:white">${initial}</div>`;
+        preview.innerHTML = `<div style="background-color:${color};width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.125rem;color:white">${initial}</div>`;
       }
       this._markAvatarUnsaved();
       return;
@@ -1045,7 +1045,7 @@ _popOutSoundboard() {
     </div>
     <div class="sb-pip-body">
       <div class="sound-search-row" style="padding:0;margin-bottom:0">
-        <input type="text" id="sb-pip-search" placeholder="Search sounds..." class="settings-text-input" style="flex:1;font-size:12px">
+        <input type="text" id="sb-pip-search" placeholder="Search sounds..." class="settings-text-input" style="flex:1;font-size:0.75rem">
       </div>
       <div id="sb-pip-grid" class="sb-pip-grid"></div>
     </div>
@@ -1922,7 +1922,7 @@ _renderStickerList(stickers) {
   });
   list.innerHTML = Object.keys(packs).sort().map(pack => `
     <div class="sticker-pack-group" style="margin-top:8px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary)">${this._escapeHtml(pack)}</div>
+      <div style="font-size:0.75rem;font-weight:600;margin-bottom:4px;color:var(--text-secondary)">${this._escapeHtml(pack)}</div>
       ${packs[pack].map(s => `
         <div class="custom-sound-item">
           <img src="${this._escapeHtml(s.url)}" alt=":${this._escapeHtml(s.name)}:" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;object-fit:contain;border-radius:4px;background:var(--bg-secondary)">
@@ -2110,7 +2110,7 @@ _renderBotSidebar(webhooks) {
   sidebar.innerHTML = webhooks.map(wh => {
     const avatarHtml = wh.avatar_url
       ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0">`
-      : `<span style="width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;color:#fff">🤖</span>`;
+      : `<span style="width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.625rem;flex-shrink:0;color:#fff">🤖</span>`;
     const activeClass = this._selectedBotId === wh.id ? ' active' : '';
     return `<div class="role-sidebar-item${activeClass}" data-bot-id="${wh.id}">${avatarHtml}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(wh.name)}</span></div>`;
   }).join('');
@@ -2141,7 +2141,7 @@ _showBotDetail(botId) {
       <label class="settings-label">${t('modals.bot_mgmt.avatar_label')}</label>
       <div class="bot-avatar-row" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
         <div class="bot-avatar-preview" style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid var(--border);background:var(--bg-tertiary);flex-shrink:0;display:flex;align-items:center;justify-content:center">
-          ${wh.avatar_url ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:24px">🤖</span>'}
+          ${wh.avatar_url ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:1.5rem">🤖</span>'}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <button class="btn-xs btn-accent" id="bot-upload-avatar-btn">📷 ${t('modals.bot_mgmt.upload_avatar_btn')}</button>
@@ -2164,20 +2164,20 @@ _showBotDetail(botId) {
 
       <label class="settings-label">${t('modals.bot_mgmt.webhook_url_label')}</label>
       <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-        <code style="flex:1;font-size:11px;padding:6px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(webhookUrl)}</code>
+        <code style="flex:1;font-size:0.6875rem;padding:6px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(webhookUrl)}</code>
         <button class="btn-xs" id="bot-detail-copy-url" title="${t('modals.bot_mgmt.copy_url_title')}">📋</button>
       </div>
 
       <label class="settings-label">${t('modals.bot_mgmt.token_label')}</label>
-      <div style="font-size:11px;font-family:monospace;padding:4px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-muted);margin-bottom:12px">${maskedToken}</div>
+      <div style="font-size:0.6875rem;font-family:monospace;padding:4px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-muted);margin-bottom:12px">${maskedToken}</div>
 
-      <label class="settings-label">📡 Callback URL <span style="font-size:10px;color:var(--text-muted)">(optional — Haven will POST messages to this URL)</span></label>
+      <label class="settings-label">📡 Callback URL <span style="font-size:0.625rem;color:var(--text-muted)">(optional — Haven will POST messages to this URL)</span></label>
       <input type="url" id="bot-detail-callback-url" value="${this._escapeHtml(wh.callback_url || '')}" placeholder="https://mybot.example.com/haven-events" class="settings-text-input" style="width:100%;margin-bottom:8px">
 
-      <label class="settings-label">🔑 Callback Secret <span style="font-size:10px;color:var(--text-muted)">(optional — used to sign payloads via X-Haven-Signature)</span></label>
+      <label class="settings-label">🔑 Callback Secret <span style="font-size:0.625rem;color:var(--text-muted)">(optional — used to sign payloads via X-Haven-Signature)</span></label>
       <input type="text" id="bot-detail-callback-secret" value="${this._escapeHtml(wh.callback_secret || '')}" placeholder="my-secret-key" class="settings-text-input" style="width:100%;margin-bottom:12px">
 
-      <label class="settings-label">🛡️ Moderation <span style="font-size:10px;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
+      <label class="settings-label">🛡️ Moderation <span style="font-size:0.625rem;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
       <label class="toggle-row" style="margin-bottom:12px">
         <input type="checkbox" id="bot-detail-can-moderate" ${wh.can_moderate ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
         <span>Allow this bot to perform moderation actions</span>
@@ -2343,25 +2343,40 @@ _setupToggleStylePicker() {
 
 // ── Font Size Picker ──
 
-_setupFontSizePicker() {
-  const picker = document.getElementById('font-size-picker');
-  if (!picker) return;
+// ── Interface Zoom slider ──
+// Scales the whole UI by setting the root font-size through --ui-scale (a
+// percentage). Everything is sized in rem, so one change rescales the entire
+// interface crisply and the layout reflows — no CSS zoom/transform.
+_setupZoomSlider() {
+  const slider = document.getElementById('ui-zoom-slider');
+  if (!slider) return;
+  const label = document.getElementById('ui-zoom-value');
+  const outBtn = document.getElementById('zoom-out-btn');
+  const inBtn = document.getElementById('zoom-in-btn');
 
-  const saved = localStorage.getItem('haven-fontsize') || 'normal';
-  document.documentElement.dataset.fontsize = saved;
-  picker.querySelectorAll('[data-fontsize]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.fontsize === saved);
-  });
+  const MIN = parseInt(slider.min, 10) || 70;
+  const MAX = parseInt(slider.max, 10) || 150;
+  const STEP = parseInt(slider.step, 10) || 5;
+  const clamp = (n) => Math.min(MAX, Math.max(MIN, n));
 
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-fontsize]');
-    if (!btn) return;
-    const size = btn.dataset.fontsize;
-    document.documentElement.dataset.fontsize = size;
-    localStorage.setItem('haven-fontsize', size);
-    picker.querySelectorAll('[data-fontsize]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  // Starting value: saved scale, else migrate the old 4-tier setting, else 100.
+  const LEGACY = { small: 85, normal: 100, large: 118, 'x-large': 138 };
+  let pct = parseInt(localStorage.getItem('haven-zoom'), 10);
+  if (!pct) pct = LEGACY[localStorage.getItem('haven-fontsize')] || 100;
+  pct = clamp(pct);
+
+  const apply = (value, persist) => {
+    pct = clamp(value);
+    document.documentElement.style.setProperty('--ui-scale', pct + '%');
+    slider.value = pct;
+    if (label) label.textContent = pct + '%';
+    if (persist) localStorage.setItem('haven-zoom', pct);
+  };
+
+  apply(pct, false);
+  slider.addEventListener('input', () => apply(parseInt(slider.value, 10) || 100, true));
+  outBtn?.addEventListener('click', () => apply(pct - STEP, true));
+  inBtn?.addEventListener('click', () => apply(pct + STEP, true));
 },
 
 // ── Emoji Reaction Size Picker ──

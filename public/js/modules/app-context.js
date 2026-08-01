@@ -868,17 +868,17 @@ _showPushError(reason) {
   // Detect Brave-specific advice and add a copy button for the settings URL
   if (reason.includes('brave://settings')) {
     const settingsUrl = 'brave://settings/privacy';
-    html += `<div style="margin-top:12px;padding:10px;background:var(--bg-secondary);border-radius:6px;font-family:monospace;font-size:13px;display:flex;align-items:center;gap:8px;justify-content:center;">
+    html += `<div style="margin-top:12px;padding:10px;background:var(--bg-secondary);border-radius:6px;font-family:monospace;font-size:0.8125rem;display:flex;align-items:center;gap:8px;justify-content:center;">
       <span style="user-select:all;">${settingsUrl}</span>
       <button class="btn-accent" onclick="navigator.clipboard.writeText('${settingsUrl}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)"
-        style="padding:4px 10px;font-size:12px;min-width:52px;">Copy</button>
+        style="padding:4px 10px;font-size:0.75rem;min-width:52px;">Copy</button>
     </div>
-    <p style="color:var(--text-muted);font-size:11px;margin:8px 0 0;">Paste this into your Brave address bar, then enable "Use Google Services for Push Messaging" and restart Brave.</p>`;
+    <p style="color:var(--text-muted);font-size:0.6875rem;margin:8px 0 0;">Paste this into your Brave address bar, then enable "Use Google Services for Push Messaging" and restart Brave.</p>`;
   }
 
   // Detect permission denied and provide Chrome/Edge settings hints
   if (reason.includes('Permission denied') || reason.includes('permission was denied')) {
-    html += `<div style="margin-top:12px;font-size:12px;color:var(--text-secondary);line-height:1.6;">
+    html += `<div style="margin-top:12px;font-size:0.75rem;color:var(--text-secondary);line-height:1.6;">
       <strong>How to fix:</strong><br>
       \u2022 Click the lock/info icon in your address bar → Site settings → Notifications → Allow<br>
       \u2022 Or go to browser settings → Privacy → Site Settings → Notifications
@@ -887,7 +887,7 @@ _showPushError(reason) {
 
   // iOS standalone hint
   if (reason.includes('Add to Home Screen')) {
-    html += `<div style="margin-top:12px;font-size:12px;color:var(--text-secondary);line-height:1.6;">
+    html += `<div style="margin-top:12px;font-size:0.75rem;color:var(--text-secondary);line-height:1.6;">
       <strong>Steps:</strong><br>
       1. Tap the <strong>Share</strong> button (box with arrow) in Safari<br>
       2. Scroll down and tap <strong>"Add to Home Screen"</strong><br>

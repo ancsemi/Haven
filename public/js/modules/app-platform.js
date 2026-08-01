@@ -288,13 +288,13 @@ _initWelcomePopups() {
     const remaining = queue.length - idx - 1;
     const footer = document.createElement('div');
     footer.className = 'haven-welcome-queue-footer';
-    footer.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border, rgba(255,255,255,0.08));font-size:12px;color:var(--text-muted, #888);';
+    footer.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border, rgba(255,255,255,0.08));font-size:0.75rem;color:var(--text-muted, #888);';
     const isLast = remaining === 0;
     footer.innerHTML = `
       <span class="haven-welcome-queue-pos">${idx + 1} of ${queue.length}</span>
       <span style="display:flex;align-items:center;gap:8px;">
-        ${queue.length > 1 && !isLast ? `<button type="button" class="haven-welcome-queue-skip" style="background:none;border:none;color:var(--text-muted, #888);text-decoration:underline;cursor:pointer;font-size:12px;padding:4px 8px;">Skip all</button>` : ''}
-        <button type="button" class="haven-welcome-queue-next" style="background:var(--accent, #5865f2);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;">${isLast ? 'Done' : 'Next'}</button>
+        ${queue.length > 1 && !isLast ? `<button type="button" class="haven-welcome-queue-skip" style="background:none;border:none;color:var(--text-muted, #888);text-decoration:underline;cursor:pointer;font-size:0.75rem;padding:4px 8px;">Skip all</button>` : ''}
+        <button type="button" class="haven-welcome-queue-next" style="background:var(--accent, #5865f2);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:0.75rem;font-weight:600;">${isLast ? 'Done' : 'Next'}</button>
       </span>
     `;
     // Find the deepest single-child div to append into; falls back gracefully
@@ -1149,10 +1149,10 @@ async _showE2EVerification() {
     overlay.innerHTML = `
       <div class="modal" style="max-width:420px;text-align:center">
         <h3 style="margin-bottom:8px">🔐 ${t('header.verify_encryption')}</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:16px">
           ${t('modals.e2e_verify.desc', { name: this._escapeHtml(partnerName) })}
         </p>
-        <div class="e2e-safety-number" style="font-family:monospace;font-size:18px;letter-spacing:2px;line-height:2;padding:16px;background:var(--bg-secondary);border-radius:var(--radius-md);border:1px solid var(--border);user-select:all;word-break:break-all">${code}</div>
+        <div class="e2e-safety-number" style="font-family:monospace;font-size:1.125rem;letter-spacing:2px;line-height:2;padding:16px;background:var(--bg-secondary);border-radius:var(--radius-md);border:1px solid var(--border);user-select:all;word-break:break-all">${code}</div>
         <div style="margin-top:16px;display:flex;gap:8px;justify-content:center">
           <button class="btn-sm btn-accent" id="e2e-copy-code-btn">${t('modals.e2e_verify.copy_btn')}</button>
           <button class="btn-sm" id="e2e-close-verify-btn">${t('modals.common.close')}</button>
@@ -1214,7 +1214,7 @@ _showE2EResetConfirmation() {
         ${t('modals.e2e_reset.warning_permanent')}
       </div>
       <div class="e2e-confirm-type">
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px">${t('modals.e2e_reset.type_confirm')}</p>
+        <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:8px">${t('modals.e2e_reset.type_confirm')}</p>
         <input type="text" id="e2e-reset-confirm-input" placeholder="${t('modals.e2e_reset.confirm_placeholder')}" autocomplete="off" spellcheck="false">
       </div>
       <div class="e2e-reset-actions">

@@ -301,7 +301,7 @@ class HavenApp {
     this.modMode?.init();
     this._setupDensityPicker();
     this._setupToggleStylePicker();
-    this._setupFontSizePicker();
+    this._setupZoomSlider();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
     this._setupEmbedSizePicker();
