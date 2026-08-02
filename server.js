@@ -4097,6 +4097,12 @@ if (useSSL) {
     // Timeout to prevent Slowloris on redirect server
     httpRedirectServer.headersTimeout = 5000;
     httpRedirectServer.requestTimeout = 5000;
+    // The redirect listener is a nicety — if its port is taken (or
+    // binding it needs elevation), warn and carry on with HTTPS alone
+    // rather than letting the bind error become an uncaught exception.
+    httpRedirectServer.on('error', (err) => {
+      console.warn(`⚠️  HTTP→HTTPS redirect server could not bind port ${HTTP_REDIRECT_PORT} (${(err && err.code) || err}). HTTPS continues on port ${safePort}.`);
+    });
     httpRedirectServer.listen(HTTP_REDIRECT_PORT, process.env.HOST || '0.0.0.0', () => {
       console.log(`â†ªï¸  HTTP redirect running on port ${HTTP_REDIRECT_PORT} → HTTPS`);
     });
@@ -4797,6 +4803,29 @@ server.headersTimeout = 15000;     // 15s to send all headers
 server.requestTimeout = 3600000;   // 1h max to finish sending a request body (large restore uploads)
 server.keepAliveTimeout = 65000;   // slightly above typical ALB/LB timeout
 server.timeout = 120000;           // 2 min socket inactivity timeout (resets on I/O)
+
+// ── Fatal listen errors must be loud ─────────────────────
+// A failed bind (port already taken, no permission) surfaces as an
+// async 'error' event.  Without this handler it falls through to the
+// global uncaughtException keep-alive below, which writes it to
+// crash.log and keeps a process alive that never got its socket —
+// to the user that is a silent crash on launch: no banner, no error,
+// no exit, and the stale port-holder makes launch scripts think the
+// server came up.  Bind failures are fatal: say why, then exit.
+server.on('error', (err) => {
+  if (err && (err.code === 'EADDRINUSE' || err.code === 'EACCES' || err.code === 'EADDRNOTAVAIL')) {
+    const why = err.code === 'EADDRINUSE'
+      ? `port ${PORT} is already in use — is another Haven instance (or other app) running?`
+      : err.code === 'EADDRNOTAVAIL'
+        ? `this machine has no network interface with address ${HOST} — check HOST in your .env`
+        : `no permission to bind port ${PORT} (ports below 1024 need elevation)`;
+    console.error(`\n❌ Haven could not start: ${why}`);
+    console.error(`   Stop the other process or change PORT in your .env, then start Haven again.`);
+    logCrash('Fatal listen error (exiting)', err);
+    process.exit(1);
+  }
+  logCrash('HTTP server error (server kept alive)', err);
+});
 
 server.listen(PORT, HOST, () => {
   console.log(`
