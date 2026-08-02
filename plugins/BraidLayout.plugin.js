@@ -2,7 +2,7 @@
  * @name Braid Layout
  * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes.
  * @author Amnibro
- * @version 1.3
+ * @version 1.4
  */
 class BraidLayout {
   start() {
@@ -199,16 +199,21 @@ class BraidLayout {
   }
 
   _buildMoreMenu() {
+    if (document.querySelector('.braid-more-wrap')) return;
+    // The hamburger lives bottom-left, where the icon bar it absorbed
+    // used to be — the popups it opens (themes, activities) anchor down
+    // there, so the menu and its children share a corner.
+    const bar = document.querySelector('.sidebar-bottom-bar');
     const header = document.querySelector('.channel-header');
-    if (!header || header.querySelector('.braid-more-wrap')) return;
+    const host = bar || header;
+    if (!host) return;
     const wrap = document.createElement('div');
     wrap.className = 'braid-more-wrap';
     wrap.innerHTML =
       '<button type="button" class="braid-more-btn" id="braid-more-btn" title="Menu" aria-label="Menu" aria-expanded="false">' +
-      '<span class="braid-ham"><span class="braid-ham-line"></span><span class="braid-ham-line"></span><span class="braid-ham-line"></span></span></button>';
-    const voice = header.querySelector('.voice-controls');
-    if (voice) header.insertBefore(wrap, voice);
-    else header.appendChild(wrap);
+      '<span class="braid-ham"><span class="braid-ham-line"></span><span class="braid-ham-line"></span><span class="braid-ham-line"></span></span>' +
+      '<span class="braid-ham-label">Menu</span></button>';
+    host.prepend(wrap);
     // The menu lives on <body>: the blurred header is a containing block
     // (backdrop-filter) with overflow:hidden, which would trap and clip
     // even a position:fixed dropdown rendered inside it.
@@ -312,6 +317,7 @@ class BraidLayout {
     this._quietChips();
     this._markRuns();
     this._themeBottomIcons();
+    this._themeSettingsNav();
     this._injectTextSliders();
   }
 
@@ -445,6 +451,68 @@ class BraidLayout {
       btn.innerHTML = btn.dataset.braidOrig || btn.innerHTML;
       delete btn.dataset.braidIcon;
       delete btn.dataset.braidOrig;
+    });
+  }
+
+  // ── Themed settings-nav icons ────────────────────────────
+  // Same treatment as the old bottom-left buttons: the leading emoji on
+  // every nav row (and the User/Admin tabs) becomes a currentColor line
+  // glyph, so the rail follows the palette. Unmapped rows get the Haven
+  // hexagon. Idempotent per element; originals restore on disable.
+  _themeSettingsNav() {
+    const svg = (paths, size = 15) =>
+      `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+    const hex = '<path d="M12 2.5 20.2 7.25v9.5L12 21.5 3.8 16.75v-9.5Z"/>';
+    const map = {
+      'section-language': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/>',
+      'section-density': '<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M9 3v18M3 9h6"/>',
+      'section-font-size': '<path d="M4 19 10 5h1.5L17.5 19M6.2 14h8.1M19 12v7M16.5 14.5 19 12l2.5 2.5"/>',
+      'section-emoji-size': '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+      'section-role-display': '<path d="M12 2.7 20 7v10l-8 4.3L4 17V7Z"/><circle cx="12" cy="10" r="2.2"/><path d="M8.5 16.2c.7-1.8 1.9-2.7 3.5-2.7s2.8.9 3.5 2.7"/>',
+      'section-toolbar-icons': '<path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.4-2.4Z"/>',
+      'section-image-display': '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 3 3 4-4 4 4"/>',
+      'section-embed-size': '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m10.5 9 4.5 3-4.5 3Z"/>',
+      'section-statusbar': '<path d="M3 12h4l2.5-6 4 12L16 12h5"/>',
+      'section-chat-behavior': '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/>',
+      'section-soundboard-mode': '<path d="M9 18V6l10-2v11.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
+      'section-sounds': '<path d="M4 10v4h3.5L12 18V6l-4.5 4Z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.7a8 8 0 0 1 0 10.6"/>',
+      'section-push': '<path d="M18 9a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 15 18 9"/><path d="M10.3 20a2 2 0 0 0 3.4 0"/>',
+      'section-activity': '<circle cx="12" cy="12" r="2"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.5 10.5 0 0 0 0 14.8M19.4 4.6a10.5 10.5 0 0 1 0 14.8"/>',
+      'section-score-badges': '<circle cx="12" cy="9" r="5.5"/><path d="m8.8 13.7-1.5 6.8 4.7-2.7 4.7 2.7-1.5-6.8"/>',
+      'section-password': '<rect x="4.5" y="10.5" width="15" height="9.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3M12 14.5v2"/>',
+      'section-two-factor': '<path d="M12 2.7 20 6.5v5.2c0 4.8-3.2 8.2-8 9.6-4.8-1.4-8-4.8-8-9.6V6.5Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
+      'section-recovery': '<circle cx="8.5" cy="8.5" r="5"/><path d="m12 12 8.5 8.5M17 17l2-2M14.5 19.5l2-2"/>',
+      'section-account': '<circle cx="12" cy="8.5" r="4"/><path d="M4.5 20c.9-4 3.7-6 7.5-6s6.6 2 7.5 6"/>',
+      'section-plugins': '<path d="M10 3.5V6H7a2 2 0 0 0-2 2v3H2.5v2H5v3a2 2 0 0 0 2 2h3v2.5h2V18h3a2 2 0 0 0 2-2v-3h2.5v-2H19V8a2 2 0 0 0-2-2h-3V3.5Z"/>',
+      'section-debug': '<rect x="8" y="7" width="8" height="11" rx="4"/><path d="M12 7V4.5M6 10H3.5M20.5 10H18M6 15H3.5M20.5 15H18M9 5.5 7.5 4M15 5.5 16.5 4"/>',
+      'section-modmode': '<path d="M4 9h16M4 15h16M9 4v16M15 4v16"/><rect x="4" y="4" width="16" height="16" rx="2.5"/>',
+    };
+    document.querySelectorAll('.settings-nav-item').forEach((item) => {
+      if (item.dataset.braidIcon === '1') return;
+      item.dataset.braidIcon = '1';
+      item.dataset.braidOrig = item.innerHTML;
+      const label = item.querySelector('span');
+      const paths = map[item.dataset.target] || hex;
+      if (label) {
+        item.innerHTML = svg(paths);
+        item.appendChild(label);
+      } else {
+        const text = item.textContent.replace(/^[^\p{L}\p{N}]+\s*/u, '').trim();
+        item.innerHTML = `${svg(paths)}<span>${text}</span>`;
+      }
+    });
+    document.querySelectorAll('.settings-tab').forEach((tab) => {
+      if (tab.dataset.braidIcon === '1') return;
+      tab.dataset.braidIcon = '1';
+      tab.dataset.braidOrig = tab.innerHTML;
+      const label = tab.querySelector('span');
+      const paths = tab.dataset.tab === 'admin'
+        ? '<path d="M12 2.7 20 6.5v5.2c0 4.8-3.2 8.2-8 9.6-4.8-1.4-8-4.8-8-9.6V6.5Z"/>'
+        : '<circle cx="12" cy="8.5" r="4"/><path d="M4.5 20c.9-4 3.7-6 7.5-6s6.6 2 7.5 6"/>';
+      if (label) {
+        tab.innerHTML = svg(paths, 13);
+        tab.appendChild(label);
+      }
     });
   }
 
@@ -593,20 +661,22 @@ html[data-braid-layout="1"].braid-sound-open #soundboard-sidebar,
 html[data-braid-layout="1"].braid-sound-open .soundboard-sidebar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
 html[data-braid-layout="1"].braid-status-open .status-bar,
 html[data-braid-layout="1"].braid-status-open #status-bar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
-html[data-braid-layout="1"] .sidebar-bottom-bar{display:none!important}
-html[data-braid-layout="1"] .braid-more-wrap{position:relative}
-html[data-braid-layout="1"] .braid-more-btn{width:2.125rem;height:2.125rem;border:0;border-radius:.625rem;background:transparent;color:var(--text-muted);cursor:pointer;display:grid;place-items:center}
-html[data-braid-layout="1"] .braid-more-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
+html[data-braid-layout="1"] .sidebar-bottom-bar{display:flex!important;padding:.5rem .625rem!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar>*:not(.braid-more-wrap){display:none!important}
+html[data-braid-layout="1"] .braid-more-wrap{position:relative;flex:1;display:flex}
+html[data-braid-layout="1"] .braid-more-btn{flex:1;display:flex;align-items:center;gap:.625rem;height:2.5rem;padding:0 .875rem;border:1px solid var(--border)!important;border-radius:.75rem;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-size:calc(.8125rem*var(--braid-ui-scale,1));font-weight:600;letter-spacing:-.01em;transition:background .15s,color .15s,border-color .15s}
+html[data-braid-layout="1"] .braid-more-btn:hover{background:var(--bg-hover);color:var(--text-primary);border-color:color-mix(in srgb,var(--accent) 35%,var(--border))!important}
+html[data-braid-layout="1"] .braid-ham-label{pointer-events:none}
 html[data-braid-layout="1"] .braid-ham{display:flex;flex-direction:column;justify-content:center;gap:.25rem;width:1.0625rem;height:1.0625rem}
 html[data-braid-layout="1"] .braid-ham-line{display:block;height:2px;width:100%;border-radius:2px;background:currentColor;transition:transform .28s cubic-bezier(.16,1,.3,1),opacity .18s ease;transform-origin:center}
 html[data-braid-layout="1"] .braid-more-wrap.open .braid-more-btn{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 html[data-braid-layout="1"] .braid-more-wrap.open .braid-ham-line:nth-child(1){transform:translateY(.375rem) rotate(45deg)}
 html[data-braid-layout="1"] .braid-more-wrap.open .braid-ham-line:nth-child(2){opacity:0;transform:scaleX(.2)}
 html[data-braid-layout="1"] .braid-more-wrap.open .braid-ham-line:nth-child(3){transform:translateY(-.375rem) rotate(-45deg)}
-html[data-braid-layout="1"] .braid-more-menu{display:none;position:fixed;right:1rem;top:calc(var(--braid-bar-h,3rem) + .625rem);min-width:15rem;max-height:min(72vh,34rem);overflow:auto;z-index:90;background:var(--bg-card);border:1px solid var(--border);border-radius:.875rem;box-shadow:0 16px 48px -12px rgba(0,0,0,.22),var(--braid-shadow,0 1px 2px rgba(0,0,0,.2));padding:.375rem;transform-origin:top right}
+html[data-braid-layout="1"] .braid-more-menu{display:none;position:fixed;left:1rem;bottom:3.875rem;top:auto;right:auto;min-width:15rem;max-height:min(72vh,34rem);overflow:auto;z-index:90;background:var(--bg-card);border:1px solid var(--border);border-radius:.875rem;box-shadow:0 16px 48px -12px rgba(0,0,0,.28),var(--braid-shadow,0 1px 2px rgba(0,0,0,.2));padding:.375rem;transform-origin:bottom left}
 html[data-braid-layout="1"] .braid-more-menu.open{display:block;animation:braid-menu-pop .22s cubic-bezier(.16,1,.3,1) both}
-@keyframes braid-menu-pop{from{opacity:0;transform:scale(.92) translateY(-.25rem)}to{opacity:1;transform:none}}
-@keyframes braid-item-in{from{opacity:0;transform:translateY(-.375rem)}to{opacity:1;transform:none}}
+@keyframes braid-menu-pop{from{opacity:0;transform:scale(.92) translateY(.375rem)}to{opacity:1;transform:none}}
+@keyframes braid-item-in{from{opacity:0;transform:translateY(.375rem)}to{opacity:1;transform:none}}
 html[data-braid-layout="1"] .braid-more-menu.open>button,
 html[data-braid-layout="1"] .braid-more-menu.open>.braid-menu-label{animation:braid-item-in .3s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--i,0)*18ms)}
 html[data-braid-layout="1"] .braid-menu-label{font-size:.59375rem;font-weight:650;letter-spacing:.13em;text-transform:uppercase;color:var(--text-muted);padding:.5rem .625rem .25rem}
@@ -772,11 +842,18 @@ html[data-braid-layout="1"] .settings-tab-bar{background:var(--bg-tertiary)!impo
 html[data-braid-layout="1"] .settings-tab{border-radius:.5625rem!important;border:0!important;padding:.375rem .875rem!important;font-weight:550!important}
 html[data-braid-layout="1"] .settings-close-btn{width:2.125rem;height:2.125rem;border-radius:.625rem!important;border:0!important;background:transparent!important;color:var(--text-muted)!important;font-size:1.125rem;display:grid;place-items:center}
 html[data-braid-layout="1"] .settings-close-btn:hover{background:var(--bg-hover)!important;color:var(--text-primary)!important}
-html[data-braid-layout="1"] .settings-nav{background:var(--bg-secondary)!important;border-right:1px solid var(--border)!important;padding:.625rem!important}
-html[data-braid-layout="1"] .settings-nav-group-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.875rem .5rem .25rem!important}
-html[data-braid-layout="1"] .settings-nav-item{border-radius:.625rem!important;padding:.4375rem .625rem!important;margin:1px 0!important;font-size:.8125rem!important;font-weight:550!important;border:1px solid transparent!important}
+html[data-braid-layout="1"] .settings-nav{background:var(--bg-secondary)!important;border-right:1px solid var(--border)!important;padding:.625rem .5rem .625rem .625rem!important}
+html[data-braid-layout="1"] .settings-nav-group-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.875rem .375rem .25rem!important}
+/* Full-width pills. Stock uses a hanging-indent hack (padding-left
+   1.625rem + negative text-indent) so wrapped lines clear the leading
+   emoji — with a real icon element that hack would push the first line
+   left OUT of the pill, which is why highlights never covered the row. */
+html[data-braid-layout="1"] .settings-nav-item{display:flex!important;align-items:center;gap:.5rem;width:100%;box-sizing:border-box;border-radius:.625rem!important;padding:.4375rem .625rem!important;text-indent:0!important;margin:1px 0!important;font-size:calc(.8125rem*var(--braid-ui-scale,1))!important;font-weight:550!important;border:1px solid transparent!important}
+html[data-braid-layout="1"] .settings-nav-item svg{flex:0 0 auto;opacity:.75}
 html[data-braid-layout="1"] .settings-nav-item:hover{background:var(--bg-hover)!important}
 html[data-braid-layout="1"] .settings-nav-item.active{background:color-mix(in srgb,var(--accent) 14%,var(--bg-tertiary))!important;color:var(--accent)!important;border:1px solid color-mix(in srgb,var(--accent) 28%,transparent)!important}
+html[data-braid-layout="1"] .settings-nav-item.active svg{opacity:1}
+html[data-braid-layout="1"] .settings-tab svg{margin-right:.375rem;vertical-align:-.1875rem}
 html[data-braid-layout="1"] .settings-section{background:var(--bg-card)!important;border:1px solid var(--border)!important;border-top:1px solid var(--border)!important;border-radius:1rem!important;padding:1rem 1.125rem!important;margin:0 0 .75rem!important}
 html[data-braid-layout="1"] .settings-section-subtitle{font-weight:650!important;letter-spacing:-.015em!important}
 html[data-braid-layout="1"] .settings-section select,
