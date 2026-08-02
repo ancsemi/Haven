@@ -2,7 +2,7 @@
  * @name Braid Layout
  * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes.
  * @author Amnibro
- * @version 1.2
+ * @version 1.3
  */
 class BraidLayout {
   start() {
@@ -19,6 +19,11 @@ class BraidLayout {
     document.documentElement.setAttribute('data-braid-form', '1');
     this._paintOwn();
     this._themeBottomIcons();
+    this._applyTextScales();
+    // Channel switches get the hex loader moment
+    this._listen(document, 'click', (e) => {
+      if (e.target.closest && e.target.closest('.channel-item')) this._showHexLoader();
+    }, true);
     // Mod Mode (Haven's layout editor) must see the real chrome to drag
     // it around — suspend the whole Braid layer while it is editing and
     // come back when it saves. body class changes are attribute
@@ -57,6 +62,10 @@ class BraidLayout {
     if (this._obs) { this._obs.disconnect(); this._obs = null; }
     if (this._modObs) { this._modObs.disconnect(); this._modObs = null; }
     this._restoreBottomIcons();
+    document.getElementById('braid-text-sliders')?.remove();
+    document.getElementById('braid-hex-overlay')?.remove();
+    document.documentElement.style.removeProperty('--braid-chat-scale');
+    document.documentElement.style.removeProperty('--braid-ui-scale');
     // Unfold the server rail back to its own column
     const bar = document.getElementById('server-bar');
     const strip = document.getElementById('braid-server-strip');
@@ -67,6 +76,7 @@ class BraidLayout {
     }
     strip?.remove();
     document.querySelector('.braid-more-wrap')?.remove();
+    document.getElementById('braid-more-menu')?.remove();
     document.getElementById('braid-apps-drawer')?.remove();
     // Restore everything we hid
     for (const [el, prev] of this._hidden) {
@@ -194,51 +204,78 @@ class BraidLayout {
     const wrap = document.createElement('div');
     wrap.className = 'braid-more-wrap';
     wrap.innerHTML =
-      '<button type="button" class="braid-more-btn" id="braid-more-btn" title="More" aria-label="More">' +
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">' +
-      '<circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg></button>' +
-      '<div class="braid-more-menu" id="braid-more-menu" role="menu"></div>';
+      '<button type="button" class="braid-more-btn" id="braid-more-btn" title="Menu" aria-label="Menu" aria-expanded="false">' +
+      '<span class="braid-ham"><span class="braid-ham-line"></span><span class="braid-ham-line"></span><span class="braid-ham-line"></span></span></button>';
     const voice = header.querySelector('.voice-controls');
     if (voice) header.insertBefore(wrap, voice);
     else header.appendChild(wrap);
-    const menu = wrap.querySelector('#braid-more-menu');
+    // The menu lives on <body>: the blurred header is a containing block
+    // (backdrop-filter) with overflow:hidden, which would trap and clip
+    // even a position:fixed dropdown rendered inside it.
+    const menu = document.createElement('div');
+    menu.className = 'braid-more-menu';
+    menu.id = 'braid-more-menu';
+    menu.setAttribute('role', 'menu');
+    document.body.appendChild(menu);
     const btn = wrap.querySelector('#braid-more-btn');
+    // One hamburger absorbs the header extras AND the old bottom-left
+    // icon bar — every Haven feature keeps a door, just behind one
+    // animated menu instead of chrome on two edges.
+    let itemIndex = 0;
+    const addLabel = (text) => {
+      const d = document.createElement('div');
+      d.className = 'braid-menu-label';
+      d.textContent = text;
+      d.style.setProperty('--i', itemIndex++);
+      menu.appendChild(d);
+    };
     const addItem = (label, onClick, muted) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.innerHTML = muted ? `${label} <span class="muted">${muted}</span>` : label;
-      b.addEventListener('click', () => { menu.classList.remove('open'); onClick(); });
+      b.style.setProperty('--i', itemIndex++);
+      b.addEventListener('click', () => { closeMenu(); onClick(); });
       menu.appendChild(b);
     };
+    const addProxy = (id, label, muted) => {
+      const src = document.getElementById(id);
+      if (src) addItem(label, () => src.click(), muted);
+    };
     const toggleHtmlClass = (cls) => document.documentElement.classList.toggle(cls);
+    const closeMenu = () => {
+      menu.classList.remove('open');
+      wrap.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    };
+    addLabel('Channel');
+    addProxy('search-toggle-btn', 'Search messages');
+    addProxy('pinned-toggle-btn', 'Pinned messages');
+    addProxy('gallery-toggle-btn', 'Files & media');
+    addProxy('copy-code-btn', 'Copy channel code');
+    addProxy('channel-code-settings-btn', 'Channel code settings');
+    addProxy('e2e-menu-btn', 'Encryption');
+    addLabel('View');
     addItem('People & voice', () => this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open')), 'right panel');
     addItem('Soundboard', () => toggleHtmlClass('braid-sound-open'), 'toggle');
-    addItem('Status bar', () => toggleHtmlClass('braid-status-open'), 'debug footer');
-    [
-      { id: 'search-toggle-btn', label: 'Search messages' },
-      { id: 'pinned-toggle-btn', label: 'Pinned messages' },
-      { id: 'gallery-toggle-btn', label: 'Files & media' },
-      { id: 'copy-code-btn', label: 'Copy channel code' },
-      { id: 'channel-code-settings-btn', label: 'Channel code settings' },
-      { id: 'e2e-menu-btn', label: 'Encryption' },
-    ].forEach((it) => {
-      const src = document.getElementById(it.id);
-      if (!src) return;
-      addItem(it.label, () => src.click());
-    });
-    const desktopBanner = document.getElementById('desktop-app-banner');
-    if (desktopBanner) addItem('Desktop app', () => (desktopBanner.querySelector('a') || desktopBanner).click(), 'download');
-    const androidBanner = document.getElementById('android-beta-banner');
-    if (androidBanner) addItem('Android app', () => androidBanner.click(), 'download');
+    addItem('Status bar', () => toggleHtmlClass('braid-status-open'), 'toggle');
     addItem('Edit layout', () => {
       const mm = window.app && window.app.modMode;
       if (mm) mm.toggle();
       else document.getElementById('mod-mode-settings-toggle')?.click();
     }, 'Mod Mode');
+    addLabel('App');
+    addProxy('theme-popup-toggle', 'Themes');
+    addProxy('activities-btn', 'Activities');
+    addProxy('sidebar-members-btn', 'All members');
     addItem('Settings', () => {
       document.getElementById('open-settings-btn')?.click();
       document.getElementById('mobile-settings-btn')?.click();
     });
+    addProxy('donors-btn', 'Support Haven', '♥');
+    const desktopBanner = document.getElementById('desktop-app-banner');
+    if (desktopBanner) addItem('Desktop app', () => (desktopBanner.querySelector('a') || desktopBanner).click(), 'download');
+    const androidBanner = document.getElementById('android-beta-banner');
+    if (androidBanner) addItem('Android app', () => androidBanner.click(), 'download');
     const peopleHdr = document.getElementById('mobile-users-btn');
     if (peopleHdr) {
       this._listen(peopleHdr, 'click', (e) => {
@@ -247,20 +284,15 @@ class BraidLayout {
         this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open'));
       }, true);
     }
-    const sideMembers = document.getElementById('sidebar-members-btn');
-    if (sideMembers) {
-      if (sideMembers.style.display === 'none') sideMembers.style.display = '';
-      this._listen(sideMembers, 'click', (e) => {
-        e.preventDefault();
-        this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open'));
-      });
-    }
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      menu.classList.toggle('open');
+      const opening = !menu.classList.contains('open');
+      menu.classList.toggle('open', opening);
+      wrap.classList.toggle('open', opening);
+      btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
     });
     this._listen(document, 'click', (e) => {
-      if (!wrap.contains(e.target)) menu.classList.remove('open');
+      if (!wrap.contains(e.target) && !menu.contains(e.target)) closeMenu();
     });
   }
 
@@ -280,6 +312,64 @@ class BraidLayout {
     this._quietChips();
     this._markRuns();
     this._themeBottomIcons();
+    this._injectTextSliders();
+  }
+
+  // ── Text size sliders (Settings → Text Size card) ────────
+  _applyTextScales() {
+    const chat = parseFloat(HavenApi.Data.load('BraidLayout', 'chatScale', '1')) || 1;
+    const ui = parseFloat(HavenApi.Data.load('BraidLayout', 'uiScale', '1')) || 1;
+    document.documentElement.style.setProperty('--braid-chat-scale', chat);
+    document.documentElement.style.setProperty('--braid-ui-scale', ui);
+  }
+
+  _injectTextSliders() {
+    if (document.getElementById('braid-text-sliders')) return;
+    const anchor = document.getElementById('section-font-size');
+    if (!anchor) return;
+    const card = document.createElement('div');
+    card.className = 'settings-section';
+    card.id = 'braid-text-sliders';
+    const row = (id, label, min, max) => `
+      <div style="display:flex;align-items:center;gap:.75rem;margin-top:.625rem">
+        <span style="flex:0 0 7.5rem;font-size:.8125rem;color:var(--text-secondary)">${label}</span>
+        <input type="range" id="${id}" min="${min}" max="${max}" step="5" style="flex:1;accent-color:var(--accent)">
+        <span id="${id}-val" style="flex:0 0 3rem;text-align:right;font-size:.75rem;color:var(--text-muted)"></span>
+      </div>`;
+    card.innerHTML = `
+      <h5 class="settings-section-subtitle">🪢 Braid text size</h5>
+      <p style="font-size:.75rem;color:var(--text-muted);margin:.25rem 0 0">Continuous sliders, layered on top of Zoom — chat text and interface text scale independently.</p>
+      ${row('braid-chat-scale', 'Chat text', 80, 160)}
+      ${row('braid-ui-scale', 'Interface text', 85, 140)}`;
+    anchor.after(card);
+    const wire = (id, key) => {
+      const input = card.querySelector(`#${id}`);
+      const val = card.querySelector(`#${id}-val`);
+      const current = Math.round((parseFloat(HavenApi.Data.load('BraidLayout', key, '1')) || 1) * 100);
+      input.value = current;
+      val.textContent = `${current}%`;
+      input.addEventListener('input', () => {
+        const scale = parseInt(input.value, 10) / 100;
+        val.textContent = `${input.value}%`;
+        HavenApi.Data.save('BraidLayout', key, String(scale));
+        document.documentElement.style.setProperty(key === 'chatScale' ? '--braid-chat-scale' : '--braid-ui-scale', scale);
+      });
+    };
+    wire('braid-chat-scale', 'chatScale');
+    wire('braid-ui-scale', 'uiScale');
+  }
+
+  // ── Hex loader ───────────────────────────────────────────
+  _showHexLoader() {
+    if (this._suspended || document.getElementById('braid-hex-overlay')) return;
+    const main = document.querySelector('.main');
+    if (!main) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'braid-hex-overlay';
+    overlay.innerHTML = '<span class="braid-hex-loader" role="status" aria-label="Loading"></span>';
+    main.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('braid-fade'), 520);
+    setTimeout(() => overlay.remove(), 740);
   }
 
   // ── Mod Mode interop ─────────────────────────────────────
@@ -363,13 +453,35 @@ class BraidLayout {
   // Chromium re-runs :has() invalidation on every sibling insert, which
   // made a 600-message channel load go quadratic (622ms vs 80ms).
   // Attribute marking here is O(n) per observer batch.
+  //
+  // Runs chain on AUTHOR, not on the app's compact grouping: consecutive
+  // posts by the same user (same persona, no explicit break_chain, not a
+  // system notice) merge into one card even when the app rendered them as
+  // separate full .message elements. A continuing .message gets
+  // data-braid-cont="1" — its avatar/header hide and its timestamp
+  // surfaces in the gutter on hover via data-time-short.
   _markRuns() {
     const runOf = (first, last) => (first ? (last ? 'solo' : 'start') : (last ? 'end' : 'mid'));
-    document.querySelectorAll('.messages > .message, .messages > .message-compact').forEach((el) => {
-      const next = el.nextElementSibling;
-      const v = runOf(el.classList.contains('message'), !next || !next.classList.contains('message-compact'));
+    const chainKey = (el) => {
+      if (!el || (!el.classList.contains('message') && !el.classList.contains('message-compact'))) return null;
+      if (el.classList.contains('system-message') || el.classList.contains('announcement')) return null;
+      return `${el.dataset.userId || '?'}|${el.dataset.personaId || ''}`;
+    };
+    const nodes = [...document.querySelectorAll('.messages > .message, .messages > .message-compact')];
+    for (let i = 0; i < nodes.length; i++) {
+      const el = nodes[i];
+      const key = chainKey(el);
+      const prevKey = i > 0 ? chainKey(nodes[i - 1]) : null;
+      const nextEl = i + 1 < nodes.length ? nodes[i + 1] : null;
+      const nextKey = chainKey(nextEl);
+      const first = !key || key !== prevKey || el.dataset.breakChain === '1';
+      const last = !key || key !== nextKey || (nextEl && nextEl.dataset.breakChain === '1');
+      const v = runOf(first, last);
       if (el.getAttribute('data-braid-run') !== v) el.setAttribute('data-braid-run', v);
-    });
+      const cont = !first && el.classList.contains('message') ? '1' : null;
+      if (cont) { if (el.getAttribute('data-braid-cont') !== '1') el.setAttribute('data-braid-cont', '1'); }
+      else if (el.hasAttribute('data-braid-cont')) el.removeAttribute('data-braid-cont');
+    }
     document.querySelectorAll('.channel-item').forEach((el) => {
       const prev = el.previousElementSibling;
       const next = el.nextElementSibling;
@@ -418,6 +530,7 @@ html[data-braid-layout="1"] .sidebar-mod-container{order:1;flex:1;min-height:0;o
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"],
 html[data-braid-layout="1"] .sidebar-section#admin-controls{border:0!important;padding:2px .625rem!important;margin:0!important}
 html:not([data-braid-layout="1"]) .braid-more-wrap,
+html:not([data-braid-layout="1"]) .braid-more-menu,
 html:not([data-braid-layout="1"]) .braid-server-strip{display:none!important}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{font-size:.71875rem!important;letter-spacing:0!important;text-transform:none!important;font-weight:550!important;color:var(--text-muted)!important;margin:2px 0!important;padding:.4375rem .5rem;border-radius:.625rem}
@@ -480,14 +593,30 @@ html[data-braid-layout="1"].braid-sound-open #soundboard-sidebar,
 html[data-braid-layout="1"].braid-sound-open .soundboard-sidebar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
 html[data-braid-layout="1"].braid-status-open .status-bar,
 html[data-braid-layout="1"].braid-status-open #status-bar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar{display:none!important}
 html[data-braid-layout="1"] .braid-more-wrap{position:relative}
 html[data-braid-layout="1"] .braid-more-btn{width:2.125rem;height:2.125rem;border:0;border-radius:.625rem;background:transparent;color:var(--text-muted);cursor:pointer;display:grid;place-items:center}
 html[data-braid-layout="1"] .braid-more-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
-html[data-braid-layout="1"] .braid-more-menu{display:none;position:absolute;right:0;top:calc(100% + .375rem);min-width:13.75rem;z-index:50;background:var(--bg-card);border:1px solid var(--border);border-radius:.875rem;box-shadow:0 16px 48px -12px rgba(0,0,0,.22),var(--braid-shadow,0 1px 2px rgba(0,0,0,.2));padding:.375rem}
-html[data-braid-layout="1"] .braid-more-menu.open{display:block}
-html[data-braid-layout="1"] .braid-more-menu button{display:flex;width:100%;align-items:center;gap:.5rem;border:0;background:transparent;padding:.5625rem .625rem;border-radius:.625rem;font-size:.8125rem;font-weight:550;color:var(--text-primary);cursor:pointer;text-align:left}
+html[data-braid-layout="1"] .braid-ham{display:flex;flex-direction:column;justify-content:center;gap:.25rem;width:1.0625rem;height:1.0625rem}
+html[data-braid-layout="1"] .braid-ham-line{display:block;height:2px;width:100%;border-radius:2px;background:currentColor;transition:transform .28s cubic-bezier(.16,1,.3,1),opacity .18s ease;transform-origin:center}
+html[data-braid-layout="1"] .braid-more-wrap.open .braid-more-btn{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+html[data-braid-layout="1"] .braid-more-wrap.open .braid-ham-line:nth-child(1){transform:translateY(.375rem) rotate(45deg)}
+html[data-braid-layout="1"] .braid-more-wrap.open .braid-ham-line:nth-child(2){opacity:0;transform:scaleX(.2)}
+html[data-braid-layout="1"] .braid-more-wrap.open .braid-ham-line:nth-child(3){transform:translateY(-.375rem) rotate(-45deg)}
+html[data-braid-layout="1"] .braid-more-menu{display:none;position:fixed;right:1rem;top:calc(var(--braid-bar-h,3rem) + .625rem);min-width:15rem;max-height:min(72vh,34rem);overflow:auto;z-index:90;background:var(--bg-card);border:1px solid var(--border);border-radius:.875rem;box-shadow:0 16px 48px -12px rgba(0,0,0,.22),var(--braid-shadow,0 1px 2px rgba(0,0,0,.2));padding:.375rem;transform-origin:top right}
+html[data-braid-layout="1"] .braid-more-menu.open{display:block;animation:braid-menu-pop .22s cubic-bezier(.16,1,.3,1) both}
+@keyframes braid-menu-pop{from{opacity:0;transform:scale(.92) translateY(-.25rem)}to{opacity:1;transform:none}}
+@keyframes braid-item-in{from{opacity:0;transform:translateY(-.375rem)}to{opacity:1;transform:none}}
+html[data-braid-layout="1"] .braid-more-menu.open>button,
+html[data-braid-layout="1"] .braid-more-menu.open>.braid-menu-label{animation:braid-item-in .3s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--i,0)*18ms)}
+html[data-braid-layout="1"] .braid-menu-label{font-size:.59375rem;font-weight:650;letter-spacing:.13em;text-transform:uppercase;color:var(--text-muted);padding:.5rem .625rem .25rem}
+html[data-braid-layout="1"] .braid-more-menu button{display:flex;width:100%;align-items:center;gap:.5rem;border:0;background:transparent;padding:.5rem .625rem;border-radius:.625rem;font-size:calc(.8125rem*var(--braid-ui-scale,1));font-weight:550;color:var(--text-primary);cursor:pointer;text-align:left}
 html[data-braid-layout="1"] .braid-more-menu button:hover{background:var(--bg-hover)}
 html[data-braid-layout="1"] .braid-more-menu .muted{color:var(--text-muted);font-size:.71875rem;font-weight:450;margin-left:auto}
+@media (prefers-reduced-motion: reduce){
+html[data-braid-layout="1"] .braid-more-menu.open,html[data-braid-layout="1"] .braid-more-menu.open>button,html[data-braid-layout="1"] .braid-more-menu.open>.braid-menu-label{animation:none!important}
+html[data-braid-layout="1"] .braid-ham-line{transition:none!important}
+}
 html[data-braid-layout="1"] .welcome-content{text-align:center;max-width:36ch;padding:2rem 1.25rem;margin:auto}
 html[data-braid-layout="1"] .welcome-content h2{font-size:1.625rem;font-weight:680;letter-spacing:-.035em;margin:0 0 .625rem}
 html[data-braid-layout="1"] .welcome-content p{color:var(--text-muted);font-size:.9375rem;line-height:1.5}
@@ -510,8 +639,8 @@ html[data-braid-form="1"]{
 --braid-bub:var(--bg-hover,var(--bg-card));
 --braid-line:var(--border);
 --braid-seam:color-mix(in srgb,var(--border) 55%,var(--braid-bub));
---braid-me:color-mix(in srgb,var(--accent) 12%,var(--bg-secondary));
---braid-me-line:color-mix(in srgb,var(--accent) 35%,var(--border));
+--braid-me:color-mix(in srgb,var(--accent) 8%,var(--bg-secondary));
+--braid-me-line:color-mix(in srgb,var(--accent) 26%,var(--border));
 --braid-gutter:3.625rem;
 }
 html[data-braid-form="1"] .message,
@@ -524,14 +653,27 @@ html[data-braid-form="1"] .message-avatar,
 html[data-braid-form="1"] .message-avatar-img{width:2.25rem!important;height:2.25rem!important;min-width:2.25rem!important;box-sizing:border-box!important;border:0!important;margin:0!important}
 html[data-braid-form="1"] .message:hover,
 html[data-braid-form="1"] .message-compact:hover{background:transparent!important}
+/* No internal horizontal borders inside a run — every body keeps only its
+   side rails; the run's top and bottom edges are drawn by start/end alone.
+   (The old base rule left border-bottom on every body, which stacked a
+   solid line under the dotted seam and read as a full-width divider.) */
 html[data-braid-form="1"] .message>.message-row>.message-body,
-html[data-braid-form="1"] .message-compact>.message-body{position:relative;flex:1 1 auto;min-width:0;background:var(--braid-bub);border:1px solid var(--braid-line);border-top:0;border-radius:0;padding:.3125rem .8125rem}
+html[data-braid-form="1"] .message-compact>.message-body{position:relative;flex:1 1 auto;min-width:0;background:var(--braid-bub);border:1px solid var(--braid-line);border-top:0;border-bottom:0;border-radius:0;padding:.3125rem .8125rem}
 html[data-braid-form="1"] .message[data-braid-run="start"]>.message-row>.message-body,
 html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body{border-top:1px solid var(--braid-line);border-top-left-radius:var(--braid-r);border-top-right-radius:var(--braid-r);padding-top:.5625rem;margin-top:.5rem}
 html[data-braid-form="1"] .message[data-braid-run="end"]>.message-row>.message-body,
 html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body,
-html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:.5625rem;margin-bottom:.5rem}
-html[data-braid-form="1"] .message-compact>.message-body::before{content:'';position:absolute;left:50%;transform:translateX(-50%);width:min(7rem,45%);top:0;border-top:1px dotted color-mix(in srgb,var(--braid-seam) 75%,transparent);pointer-events:none}
+html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom:1px solid var(--braid-line);border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:.5625rem;margin-bottom:.5rem}
+/* the only separator inside a run: a small centered dotted seam */
+html[data-braid-form="1"] .message-compact>.message-body::before,
+html[data-braid-form="1"] .message[data-braid-cont="1"]>.message-row>.message-body::before{content:'';position:absolute;left:50%;transform:translateX(-50%);width:min(7rem,45%);top:0;border-top:1px dotted color-mix(in srgb,var(--braid-seam) 75%,transparent);pointer-events:none}
+/* a .message continuing another author-run: no repeated avatar/header —
+   the gutter keeps its width, and the post's own time shows there on hover */
+html[data-braid-form="1"] .message[data-braid-cont="1"]{position:relative}
+html[data-braid-form="1"] .message[data-braid-cont="1"] .message-avatar,
+html[data-braid-form="1"] .message[data-braid-cont="1"] .message-avatar-img{visibility:hidden}
+html[data-braid-form="1"] .message[data-braid-cont="1"]>.message-row>.message-body>.message-header{display:none}
+html[data-braid-form="1"] .message[data-braid-cont="1"]:hover::before{content:attr(data-time-short);position:absolute;left:.625rem;top:.5rem;width:2.25rem;text-align:center;font-size:.5625rem;line-height:1.2;color:var(--text-muted);pointer-events:none}
 html[data-braid-form="1"] .message>.message-row>.message-body:hover,
 html[data-braid-form="1"] .message-compact>.message-body:hover{background:color-mix(in srgb,var(--bg-active) 40%,var(--braid-bub))}
 html[data-braid-form="1"] .message-user-sep{border-top:0!important;padding-top:0!important}
@@ -641,6 +783,46 @@ html[data-braid-layout="1"] .settings-section select,
 html[data-braid-layout="1"] .settings-section input[type="text"],
 html[data-braid-layout="1"] .settings-section input[type="password"],
 html[data-braid-layout="1"] .settings-section input[type="number"]{border-radius:.625rem!important;border:1px solid var(--border)!important;background:var(--bg-input)!important;padding:.5rem .75rem!important}
+
+/* ── Haven logo glow-up ── the brand hexagon breathes in the accent */
+@keyframes braid-logo-breathe{
+0%,100%{filter:drop-shadow(0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)) drop-shadow(0 0 7px color-mix(in srgb,var(--accent) 22%,transparent))}
+50%{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 70%,transparent)) drop-shadow(0 0 14px color-mix(in srgb,var(--accent) 38%,transparent))}
+}
+html[data-braid-layout="1"] .brand .logo-sm,
+html[data-braid-layout="1"] .sidebar-header .logo-sm{color:var(--accent)!important;animation:braid-logo-breathe 3.6s ease-in-out infinite;transition:transform .45s cubic-bezier(.16,1,.3,1);display:inline-block}
+html[data-braid-layout="1"] .brand:hover .logo-sm{transform:rotate(120deg) scale(1.12)}
+@media (prefers-reduced-motion: reduce){
+html[data-braid-layout="1"] .brand .logo-sm,html[data-braid-layout="1"] .sidebar-header .logo-sm{animation:none!important;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 40%,transparent))}
+}
+
+/* ── Hexagonal loading indicator ── a mint hex ring that spins while a
+   solid core hexagon pulses inside it; also reskins the setup wizard's
+   stock circular spinner. */
+@keyframes braid-hex-spin{to{transform:rotate(360deg)}}
+@keyframes braid-hex-pulse{0%,100%{transform:scale(.55);opacity:.5}50%{transform:scale(.8);opacity:1}}
+html[data-braid-layout="1"] .braid-hex-loader{position:relative;width:2.75rem;height:2.75rem;display:inline-block}
+html[data-braid-layout="1"] .braid-hex-loader::before{content:'';position:absolute;inset:0;background:conic-gradient(from 0deg,transparent 0 40%,var(--accent) 78%,transparent 78.5%);clip-path:polygon(50% 0,93.3% 25%,93.3% 75%,50% 100%,6.7% 75%,6.7% 25%,50% 0,50% 12%,17% 31%,17% 69%,50% 88%,83% 69%,83% 31%,50% 12%);animation:braid-hex-spin 1.1s linear infinite}
+html[data-braid-layout="1"] .braid-hex-loader::after{content:'';position:absolute;inset:0;background:var(--accent);clip-path:polygon(50% 0,93.3% 25%,93.3% 75%,50% 100%,6.7% 75%,6.7% 25%);animation:braid-hex-pulse 1.4s ease-in-out infinite}
+html[data-braid-layout="1"] #braid-hex-overlay{position:absolute;inset:0;z-index:30;display:grid;place-items:center;background:color-mix(in srgb,var(--bg-primary) 55%,transparent);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);opacity:1;transition:opacity .2s ease}
+html[data-braid-layout="1"] #braid-hex-overlay.braid-fade{opacity:0}
+html[data-braid-layout="1"] .wizard-spinner{border:0!important;border-radius:0!important;width:2.75rem!important;height:2.75rem!important;background:conic-gradient(from 0deg,transparent 0 40%,var(--accent) 78%,transparent 78.5%);clip-path:polygon(50% 0,93.3% 25%,93.3% 75%,50% 100%,6.7% 75%,6.7% 25%,50% 0,50% 12%,17% 31%,17% 69%,50% 88%,83% 69%,83% 31%,50% 12%);animation:braid-hex-spin 1.1s linear infinite!important}
+@media (prefers-reduced-motion: reduce){
+html[data-braid-layout="1"] .braid-hex-loader::before,html[data-braid-layout="1"] .braid-hex-loader::after,html[data-braid-layout="1"] .wizard-spinner{animation:none!important}
+}
+
+/* ── Text size sliders ── two continuous scales layered over rem zoom:
+   chat text and UI chrome text, both live-adjustable from Settings. */
+html[data-braid-layout="1"] .message-text,
+html[data-braid-layout="1"] .message-content{font-size:calc(.9375rem*var(--braid-chat-scale,1))!important}
+html[data-braid-layout="1"] .message-header .message-author{font-size:calc(.875rem*var(--braid-chat-scale,1))!important}
+html[data-braid-layout="1"] .channel-name{font-size:calc(.875rem*var(--braid-ui-scale,1))!important}
+html[data-braid-layout="1"] .brand-text{font-size:calc(1rem*var(--braid-ui-scale,1))!important}
+html[data-braid-layout="1"] #channel-header-name{font-size:calc(.90625rem*var(--braid-ui-scale,1))!important}
+html[data-braid-layout="1"] .section-label{font-size:calc(.625rem*var(--braid-ui-scale,1))!important}
+html[data-braid-layout="1"] .settings-nav-item{font-size:calc(.8125rem*var(--braid-ui-scale,1))!important}
+html[data-braid-layout="1"] .current-user{font-size:calc(.8125rem*var(--braid-ui-scale,1))!important}
+html[data-braid-layout="1"] .user-item,html[data-braid-layout="1"] .member-item{font-size:calc(.8125rem*var(--braid-ui-scale,1))}
 `;
 
 BraidLayout._MOTION_CSS = `

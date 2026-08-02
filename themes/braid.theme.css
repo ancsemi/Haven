@@ -64,6 +64,21 @@
   --scanline:      none;
 }
 
+
+/* == Type & color enforcement == make the Braid type stack and palette
+   land everywhere, over style.css's own per-element declarations. */
+body, button, input, textarea, select { font-family: var(--font-main) !important; }
+h1, h2, h3, h4, h5, h6, .brand-text, .auth-header h1 { font-family: var(--font-heading) !important; }
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text-primary); }
+::placeholder { color: var(--text-muted) !important; opacity: 1; }
+a, .text-link { color: var(--text-link); }
+.message-time, .msg-time, .message-header .msg-time, .timestamp { color: var(--text-muted) !important; }
+.message-text, .message-content { color: var(--text-primary) !important; }
+.message-text a, .message-content a { color: var(--text-link) !important; }
+.section-label, .settings-nav-group-label, .braid-menu-label { color: var(--text-muted) !important; }
+.channel-name, .current-user, #channel-header-name { color: var(--text-primary) !important; }
+.channel-topic-bar { color: var(--text-muted) !important; }
+
 /* ── Base type & chrome ──────────────────────────── */
 html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; background: var(--bg-primary); }
 body { background: var(--bg-primary) !important; color: var(--text-primary) !important; font: 400 .9375rem/1.5 var(--font-main); letter-spacing: -.011em; }
