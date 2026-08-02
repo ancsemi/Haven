@@ -1796,15 +1796,52 @@ app.delete('/api/stickers/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
 });
 
-// ── GIF search proxy (GIPHY API — keeps key server-side) ──
-function getGiphyKey() {
+// ── GIF search proxy (Tenor v2 or GIPHY — keeps keys server-side) ──
+// Tenor is the preferred provider: GIPHY stopped issuing API keys to
+// new applications, so fresh installs can no longer configure it.
+// Existing GIPHY keys keep working unchanged.
+function getGifProvider() {
   // Check database first (set via admin panel), fall back to .env
-  try {
-    const { getDb } = require('./src/database');
-    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'giphy_api_key'").get();
-    if (row && row.value) return row.value;
-  } catch { /* DB not ready yet or no key stored */ }
-  return process.env.GIPHY_API_KEY || '';
+  const readSetting = (key) => {
+    try {
+      const { getDb } = require('./src/database');
+      const row = getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
+      if (row && row.value) return row.value;
+    } catch { /* DB not ready yet or no key stored */ }
+    return '';
+  };
+  const tenorKey = readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '';
+  if (tenorKey) return { provider: 'tenor', key: tenorKey };
+  const giphyKey = readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '';
+  if (giphyKey) return { provider: 'giphy', key: giphyKey };
+  return null;
+}
+
+// Both providers normalize to the same result shape the client expects:
+// { id, title, tiny (grid thumbnail), full (send URL) }.
+function fetchGifs(kind, q, limit, cfg) {
+  if (cfg.provider === 'tenor') {
+    const base = kind === 'search'
+      ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&`
+      : 'https://tenor.googleapis.com/v2/featured?';
+    const url = `${base}key=${encodeURIComponent(cfg.key)}&limit=${limit}&media_filter=tinygif,gif&contentfilter=off`;
+    return fetch(url).then(r => r.json()).then(data => (data.results || []).map(g => ({
+      id: g.id,
+      title: g.content_description || g.title || '',
+      tiny: g.media_formats?.tinygif?.url || g.media_formats?.gif?.url || '',
+      full: g.media_formats?.gif?.url || '',
+    })));
+  }
+  const base = kind === 'search'
+    ? `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q)}&lang=en&`
+    : 'https://api.giphy.com/v1/gifs/trending?';
+  const url = `${base}api_key=${encodeURIComponent(cfg.key)}&limit=${limit}&rating=r`;
+  return fetch(url).then(r => r.json()).then(data => (data.data || []).map(g => ({
+    id: g.id,
+    title: g.title || '',
+    tiny: g.images?.fixed_height_small?.url || g.images?.fixed_height?.url || '',
+    full: g.images?.original?.url || '',
+  })));
 }
 
 // ── Server icon upload (admin only, image only, max 2 MB) ──
@@ -2328,21 +2365,14 @@ app.get('/api/gif/search', gifLimiter, (req, res) => {
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const key = getGiphyKey();
-  if (!key) return res.status(501).json({ error: 'gif_not_configured' });
+  const cfg = getGifProvider();
+  if (!cfg) return res.status(501).json({ error: 'gif_not_configured' });
   const q = (req.query.q || '').trim().slice(0, 100);
   if (!q) return res.status(400).json({ error: 'Missing search query' });
   const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-  const url = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=${limit}&rating=r&lang=en`;
-  fetch(url).then(r => r.json()).then(data => {
-    const results = (data.data || []).map(g => ({
-      id: g.id,
-      title: g.title || '',
-      tiny: g.images?.fixed_height_small?.url || g.images?.fixed_height?.url || '',
-      full: g.images?.original?.url || '',
-    }));
-    res.json({ results });
-  }).catch(() => res.status(502).json({ error: 'GIPHY API error' }));
+  fetchGifs('search', q, limit, cfg)
+    .then(results => res.json({ provider: cfg.provider, results }))
+    .catch(() => res.status(502).json({ error: 'GIF provider API error' }));
 });
 
 app.get('/api/gif/trending', gifLimiter, (req, res) => {
@@ -2351,19 +2381,12 @@ app.get('/api/gif/trending', gifLimiter, (req, res) => {
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const key = getGiphyKey();
-  if (!key) return res.status(501).json({ error: 'gif_not_configured' });
+  const cfg = getGifProvider();
+  if (!cfg) return res.status(501).json({ error: 'gif_not_configured' });
   const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-  const url = `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(key)}&limit=${limit}&rating=r`;
-  fetch(url).then(r => r.json()).then(data => {
-    const results = (data.data || []).map(g => ({
-      id: g.id,
-      title: g.title || '',
-      tiny: g.images?.fixed_height_small?.url || g.images?.fixed_height?.url || '',
-      full: g.images?.original?.url || '',
-    }));
-    res.json({ results });
-  }).catch(() => res.status(502).json({ error: 'GIPHY API error' }));
+  fetchGifs('trending', '', limit, cfg)
+    .then(results => res.json({ provider: cfg.provider, results }))
+    .catch(() => res.status(502).json({ error: 'GIF provider API error' }));
 });
 
 // ── Link preview (Open Graph metadata) ──────────────────

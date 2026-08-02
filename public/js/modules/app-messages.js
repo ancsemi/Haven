@@ -1471,6 +1471,7 @@ _fetchLinkPreviews(containerEl) {
     // Skip image URLs (already rendered inline) and internal URLs
     if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url)) return;
     if (/^https:\/\/media\d*\.giphy\.com\//i.test(url)) return;
+    if (/^https:\/\/(media|c)\.tenor\.com\//i.test(url)) return;
     if (url.startsWith(window.location.origin)) return;
 
     // ── Inline YouTube embed (wrapped in the shared embed chrome) ──

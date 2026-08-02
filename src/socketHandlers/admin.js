@@ -16,7 +16,7 @@ module.exports = function register(socket, ctx) {
   socket.on('get-server-settings', () => {
     const rows = db.prepare('SELECT key, value FROM server_settings').all();
     const settings = {};
-    const sensitiveKeys = ['giphy_api_key', 'server_code', 'registration_token', 'turn_password', 'turnstile_secret_key'];
+    const sensitiveKeys = ['giphy_api_key', 'tenor_api_key', 'server_code', 'registration_token', 'turn_password', 'turnstile_secret_key'];
     rows.forEach(r => {
       if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
       settings[r.key] = r.value;
@@ -35,7 +35,7 @@ module.exports = function register(socket, ctx) {
 
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
-      'giphy_api_key', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
+      'giphy_api_key', 'tenor_api_key', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_poll_options',
       'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only',
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
@@ -86,6 +86,7 @@ module.exports = function register(socket, ctx) {
       if (!parts.every(p => valid.has(p))) return;
     }
     if (key === 'giphy_api_key') { if (value && (value.length < 10 || value.length > 100)) return; }
+    if (key === 'tenor_api_key') { if (value && (value.length < 10 || value.length > 100)) return; }
     if (key === 'server_name') { if (value.length > 32) return; }
     if (key === 'server_title') { if (value.length > 40) return; }
     if (key === 'server_icon') { if (value && !isValidUploadPath(value)) return; }

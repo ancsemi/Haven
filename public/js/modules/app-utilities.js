@@ -293,8 +293,9 @@ _isImageUrl(str) {
   if (trimmed.startsWith('e2e-img:')) return true;
   if (/^\/uploads\/(stickers\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
   if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
-  // GIPHY GIF URLs (may not have file extensions)
+  // GIPHY / Tenor GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
+  if (/^https:\/\/(media|c)\.tenor\.com\/.+/i.test(trimmed)) return true;
   return false;
 },
 
@@ -594,7 +595,8 @@ _formatContent(str) {
       const safeUrl = url.replace(/['"<>]/g, '');
       const idx = autoLinks.length;
       if (/\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(safeUrl) ||
-          /^https:\/\/media\d*\.giphy\.com\//i.test(safeUrl)) {
+          /^https:\/\/media\d*\.giphy\.com\//i.test(safeUrl) ||
+          /^https:\/\/(media|c)\.tenor\.com\//i.test(safeUrl)) {
         autoLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
           ? this._hiddenImagePlaceholder(safeUrl)
           : `<img src="${safeUrl}" class="chat-image" alt="image" loading="lazy">`);
@@ -1710,6 +1712,14 @@ _switchGifTab(tab) {
   }
 },
 
+// The proxy reports which provider served the batch — keep the picker
+// footer honest ("Powered by Tenor" vs "Powered by GIPHY").
+_setGifFooter(provider) {
+  if (!provider) return;
+  const footer = document.querySelector('.gif-picker-footer');
+  if (footer) footer.textContent = provider === 'tenor' ? 'Powered by Tenor' : 'Powered by GIPHY';
+},
+
 _loadTrendingGifs() {
   const grid = document.getElementById('gif-grid');
   grid.innerHTML = '<div class="gif-picker-empty">Loading...</div>';
@@ -1727,6 +1737,7 @@ _loadTrendingGifs() {
         grid.innerHTML = `<div class="gif-picker-empty">${this._escapeHtml(data.error)}</div>`;
         return;
       }
+      this._setGifFooter(data.provider);
       this._renderGifGrid(data.results || []);
     })
     .catch(() => {
@@ -1757,6 +1768,7 @@ _searchGifs(query) {
         grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.no_results')}</div>`;
         return;
       }
+      this._setGifFooter(data.provider);
       this._renderGifGrid(results);
     })
     .catch(() => {
@@ -1768,29 +1780,50 @@ _searchGifs(query) {
 _showGifSetupGuide(grid) {
   const isAdmin = this.user && this.user.isAdmin;
   if (isAdmin) {
-    grid.innerHTML = `
-      <div class="gif-setup-guide">
-        <h3>🎞️ ${t('gifs.setup.title')}</h3>
-        <p>${t('gifs.setup.powered_by')}</p>
+    // Tenor steps render by default — GIPHY stopped issuing API keys to
+    // new applications, so it is kept only as the legacy choice for
+    // admins who already hold a working key.
+    const guides = {
+      tenor: `<p>${t('gifs.setup.tenor_powered_by')}</p>
+        <ol>
+          <li>${t('gifs.setup.tenor_step_1')}</li>
+          <li>${t('gifs.setup.tenor_step_2')}</li>
+          <li>${t('gifs.setup.tenor_step_3')}</li>
+        </ol>`,
+      giphy: `<p>${t('gifs.setup.powered_by')}</p>
         <ol>
           <li>${t('gifs.setup.step_1')}</li>
           <li>${t('gifs.setup.step_2')}</li>
           <li>${t('gifs.setup.step_3')}</li>
           <li>${t('gifs.setup.step_4')}</li>
           <li>${t('gifs.setup.step_5')}</li>
-        </ol>
+        </ol>`,
+    };
+    grid.innerHTML = `
+      <div class="gif-setup-guide">
+        <h3>🎞️ ${t('gifs.setup.title')}</h3>
+        <div id="gif-setup-steps">${guides.tenor}</div>
         <div class="gif-setup-input-row">
-          <input type="text" id="gif-giphy-key-input" placeholder="${t('gifs.setup.key_placeholder')}" spellcheck="false" autocomplete="off" />
-          <button id="gif-giphy-key-save">${t('gifs.setup.save_btn')}</button>
+          <select id="gif-provider-select" title="${t('gifs.setup.provider')}">
+            <option value="tenor">Tenor</option>
+            <option value="giphy">GIPHY</option>
+          </select>
+          <input type="text" id="gif-provider-key-input" placeholder="${t('gifs.setup.key_placeholder')}" spellcheck="false" autocomplete="off" />
+          <button id="gif-provider-key-save">${t('gifs.setup.save_btn')}</button>
         </div>
         <p class="gif-setup-note">💡 ${t('gifs.setup.note')}</p>
       </div>`;
-    const saveBtn = document.getElementById('gif-giphy-key-save');
-    const input = document.getElementById('gif-giphy-key-input');
+    const saveBtn = document.getElementById('gif-provider-key-save');
+    const input = document.getElementById('gif-provider-key-input');
+    const select = document.getElementById('gif-provider-select');
+    select.addEventListener('change', () => {
+      document.getElementById('gif-setup-steps').innerHTML = guides[select.value] || guides.tenor;
+    });
     saveBtn.addEventListener('click', () => {
       const key = input.value.trim();
       if (!key) return;
-      this.socket.emit('update-server-setting', { key: 'giphy_api_key', value: key });
+      const settingKey = select.value === 'giphy' ? 'giphy_api_key' : 'tenor_api_key';
+      this.socket.emit('update-server-setting', { key: settingKey, value: key });
       grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.setup.saved')}</div>`;
       setTimeout(() => this._loadTrendingGifs(), 500);
     });
@@ -1972,7 +2005,7 @@ _showGifSlashResults(query) {
     .then(r => r.json())
     .then(data => {
       if (data.error === 'gif_not_configured') {
-        picker.innerHTML = '<div class="gif-slash-loading">GIF search not configured — an admin needs to set up the GIPHY API key (use the GIF button 🎞️)</div>';
+        picker.innerHTML = '<div class="gif-slash-loading">GIF search not configured — an admin needs to set up a Tenor (or GIPHY) API key (use the GIF button 🎞️)</div>';
         return;
       }
       if (data.error) { picker.innerHTML = `<div class="gif-slash-loading">${this._escapeHtml(data.error)}</div>`; return; }

@@ -468,7 +468,7 @@
     "uploading": "Uploading...",
     "cancel_reply": "Cancel reply",
     "message_placeholder_commands": "Type a message... (/ for commands)",
-    "gif_search_placeholder": "Search GIPHY...",
+    "gif_search_placeholder": "Search GIFs...",
     "powered_by_giphy": "Powered by GIPHY",
     "search_results_one": "{{count}} result for \"{{query}}\"",
     "search_results_other": "{{count}} results for \"{{query}}\"",
@@ -1802,18 +1802,23 @@
     "search_failed": "Search failed",
     "setup": {
       "title": "Set Up GIF Search",
+      "provider": "GIF provider",
+      "tenor_powered_by": "GIF search is powered by <strong>Tenor</strong> and needs a free API key. (GIPHY no longer issues new keys — pick it below only if you already have one.)",
+      "tenor_step_1": "Go to <a href=\"https://console.cloud.google.com/\" target=\"_blank\" rel=\"noopener\">console.cloud.google.com</a> and create (or pick) a project",
+      "tenor_step_2": "Enable the <b>Tenor API</b>, then open <b>Credentials</b> → <b>Create credentials</b> → <b>API key</b>",
+      "tenor_step_3": "Copy the API key and paste it below",
       "powered_by": "GIF search is powered by <strong>GIPHY</strong> and needs a free API key.",
       "step_1": "Go to <a href=\"https://developers.giphy.com/\" target=\"_blank\" rel=\"noopener\">developers.giphy.com</a>",
       "step_2": "Create an account (or sign in)",
       "step_3": "Click <b>Create an App</b> → choose <b>API</b>",
       "step_4": "Name it anything (e.g. \"Haven Chat\")",
       "step_5": "Copy the API key and paste it below",
-      "key_placeholder": "Paste your GIPHY API key…",
+      "key_placeholder": "Paste your API key…",
       "save_btn": "Save",
-      "note": "No payment required — GIPHY's free tier is generous enough for a private server.",
+      "note": "No payment required — the free tiers are generous enough for a private server.",
       "saved": "Saved! Loading GIFs…",
       "unavailable_title": "GIF Search Not Available",
-      "unavailable_desc": "An admin needs to set up the GIPHY API key before GIF search can work."
+      "unavailable_desc": "An admin needs to set up a GIF provider API key before GIF search can work."
     }
   }
 }
