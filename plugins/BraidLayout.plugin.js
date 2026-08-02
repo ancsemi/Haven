@@ -1,8 +1,8 @@
 /**
  * @name Braid Layout
- * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, tucks header extras into a kebab menu, and calms the chrome. Pairs with the Braid / Braid Light themes.
+ * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. Pairs with the Braid / Braid Light themes.
  * @author Amnibro
- * @version 1.0
+ * @version 1.1
  */
 class BraidLayout {
   start() {
@@ -12,8 +12,11 @@ class BraidLayout {
     this._collapsedAdded = [];         // elements we added a class to
     HavenApi.DOM.addStyle('BraidLayoutCSS', BraidLayout._LAYOUT_CSS);
     HavenApi.DOM.addStyle('BraidShapeCSS', BraidLayout._SHAPE_CSS);
+    HavenApi.DOM.addStyle('BraidFormCSS', BraidLayout._FORM_CSS);
     HavenApi.DOM.addStyle('BraidMotionCSS', BraidLayout._MOTION_CSS);
     document.documentElement.setAttribute('data-braid-layout', '1');
+    document.documentElement.setAttribute('data-braid-form', '1');
+    this._paintOwn();
     this._collapseJoinCreate();
     this._setPeopleOpen(false);
     this._buildMoreMenu();
@@ -71,9 +74,13 @@ class BraidLayout {
     this._listeners = [];
     document.documentElement.classList.remove('braid-people-open', 'braid-sound-open', 'braid-status-open');
     document.documentElement.removeAttribute('data-braid-layout');
+    document.documentElement.removeAttribute('data-braid-form');
+    document.querySelectorAll('[data-braid-run]').forEach((el) => el.removeAttribute('data-braid-run'));
     HavenApi.DOM.removeStyle('BraidLayoutCSS');
     HavenApi.DOM.removeStyle('BraidMotionCSS');
     HavenApi.DOM.removeStyle('BraidShapeCSS');
+    HavenApi.DOM.removeStyle('BraidFormCSS');
+    HavenApi.DOM.removeStyle('BraidFormOwn');
     console.log('[BraidLayout] Stopped');
   }
 
@@ -249,11 +256,53 @@ class BraidLayout {
     this._foldServersIntoSidebar();
     this._hideEdgeChrome();
     this._quietChips();
+    this._markRuns();
+  }
+
+  // Run position for the merged cards, desktop twin of Haven-Mobile's
+  // braidForm(). This is deliberately NOT :has(+ .message-compact) —
+  // Chromium re-runs :has() invalidation on every sibling insert, which
+  // made a 600-message channel load go quadratic (622ms vs 80ms).
+  // Attribute marking here is O(n) per observer batch.
+  _markRuns() {
+    const runOf = (first, last) => (first ? (last ? 'solo' : 'start') : (last ? 'end' : 'mid'));
+    document.querySelectorAll('.messages > .message, .messages > .message-compact').forEach((el) => {
+      const next = el.nextElementSibling;
+      const v = runOf(el.classList.contains('message'), !next || !next.classList.contains('message-compact'));
+      if (el.getAttribute('data-braid-run') !== v) el.setAttribute('data-braid-run', v);
+    });
+    document.querySelectorAll('.channel-item').forEach((el) => {
+      const prev = el.previousElementSibling;
+      const next = el.nextElementSibling;
+      const v = runOf(!prev || !prev.classList.contains('channel-item'), !next || !next.classList.contains('channel-item'));
+      if (el.getAttribute('data-braid-run') !== v) el.setAttribute('data-braid-run', v);
+    });
+  }
+
+  // Own messages get an accent-tinted card, like mobile.
+  _paintOwn() {
+    let id = null;
+    try { id = (JSON.parse(localStorage.getItem('haven_user') || 'null') || {}).id; } catch {}
+    if (!id) { HavenApi.DOM.removeStyle('BraidFormOwn'); return; }
+    const sel = `html[data-braid-form="1"] .message[data-user-id="${id}"]>.message-row>.message-body,` +
+      `html[data-braid-form="1"] .message-compact[data-user-id="${id}"]>.message-body`;
+    HavenApi.DOM.addStyle('BraidFormOwn',
+      `${sel}{background:var(--braid-me);border-color:var(--braid-me-line)}` +
+      sel.split(',').map((s) => s + ':hover').join(',') +
+      `{background:color-mix(in srgb,var(--accent) 18%,var(--bg-secondary))}`);
   }
 }
 
 BraidLayout._LAYOUT_CSS = `
-html[data-braid-layout="1"]{--sidebar-width:17.5rem;--braid-bar-h:3.25rem}
+html[data-braid-layout="1"]{--sidebar-width:17.5rem;--braid-bar-h:3rem}
+html[data-braid-layout="1"] .channel-topic-bar{background:transparent!important;border-bottom:0!important;padding:.125rem 1.75rem .375rem!important;font-size:.71875rem!important;min-height:0!important;line-height:1.4!important;color:var(--text-muted)!important}
+html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
+html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{padding:.3125rem .5rem!important}
+html[data-braid-layout="1"] .user-bar{padding:.5rem .625rem!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar{padding:.375rem .5rem!important}
+html[data-braid-layout="1"] .message-input-area .icon-btn,
+html[data-braid-layout="1"] .message-input-area>button,
+html[data-braid-layout="1"] .message-input-container .icon-btn{width:2rem;height:2rem}
 html[data-braid-layout="1"] body,
 html[data-braid-layout="1"] #app{overflow:hidden}
 html[data-braid-layout="1"] #app-body{display:flex!important;flex-direction:row!important;min-height:0;height:100%}
@@ -312,7 +361,7 @@ html[data-braid-layout="1"] .voice-controls span[style*="background"]{background
 html[data-braid-layout="1"] .message-area{flex:1;min-height:0;display:flex;flex-direction:column}
 html[data-braid-layout="1"] .messages{padding:1.125rem 1.75rem .5rem!important;width:100%;box-sizing:border-box}
 html[data-braid-layout="1"] .message-input-area,
-html[data-braid-layout="1"] .message-input-container{padding:.625rem 1.25rem .875rem!important;width:100%;box-sizing:border-box;border-top:1px solid var(--border)!important;background:color-mix(in srgb,var(--bg-secondary) 94%,transparent)!important}
+html[data-braid-layout="1"] .message-input-container{padding:.5rem 1rem .75rem!important;width:100%;box-sizing:border-box;border-top:1px solid var(--border)!important;background:color-mix(in srgb,var(--bg-secondary) 94%,transparent)!important}
 html[data-braid-layout="1"] .right-sidebar,
 html[data-braid-layout="1"] .right-sidebar.collapsed,
 html[data-braid-layout="1"] #right-sidebar{display:none!important;width:0!important;min-width:0!important;max-width:0!important;border:0!important;opacity:0!important;pointer-events:none!important;overflow:hidden!important}
@@ -346,6 +395,57 @@ html[data-braid-layout="1"] .messages{padding:.875rem .75rem!important;max-width
 html[data-braid-layout="1"] .server-bar{display:none!important}
 html[data-braid-layout="1"].braid-people-open .right-sidebar{position:fixed;right:0;top:0;bottom:0;z-index:40;max-width:86vw!important}
 }
+`;
+
+BraidLayout._FORM_CSS = `
+html[data-braid-form="1"]{
+--braid-r:.875rem;
+--braid-bub:var(--bg-hover,var(--bg-card));
+--braid-line:var(--border);
+--braid-seam:color-mix(in srgb,var(--border) 55%,var(--braid-bub));
+--braid-me:color-mix(in srgb,var(--accent) 12%,var(--bg-secondary));
+--braid-me-line:color-mix(in srgb,var(--accent) 35%,var(--border));
+--braid-gutter:3.625rem;
+}
+html[data-braid-form="1"] .message,
+html[data-braid-form="1"] .message-compact{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;margin:0!important}
+html[data-braid-form="1"] .messages{gap:0!important}
+html[data-braid-form="1"] .message{padding:0 1.125rem 0 .625rem!important}
+html[data-braid-form="1"] .message-compact{padding:0 1.125rem 0 var(--braid-gutter)!important}
+html[data-braid-form="1"] .message-row{padding:0!important;gap:.75rem!important;align-items:flex-start}
+html[data-braid-form="1"] .message-avatar,
+html[data-braid-form="1"] .message-avatar-img{width:2.25rem!important;height:2.25rem!important;min-width:2.25rem!important;box-sizing:border-box!important;border:0!important;margin:0!important}
+html[data-braid-form="1"] .message:hover,
+html[data-braid-form="1"] .message-compact:hover{background:transparent!important}
+html[data-braid-form="1"] .message>.message-row>.message-body,
+html[data-braid-form="1"] .message-compact>.message-body{position:relative;flex:1 1 auto;min-width:0;background:var(--braid-bub);border:1px solid var(--braid-line);border-top:0;border-radius:0;padding:.3125rem .8125rem}
+html[data-braid-form="1"] .message[data-braid-run="start"]>.message-row>.message-body,
+html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body{border-top:1px solid var(--braid-line);border-top-left-radius:var(--braid-r);border-top-right-radius:var(--braid-r);padding-top:.5625rem;margin-top:.5rem}
+html[data-braid-form="1"] .message[data-braid-run="end"]>.message-row>.message-body,
+html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body,
+html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:.5625rem;margin-bottom:.5rem}
+html[data-braid-form="1"] .message-compact>.message-body::before{content:'';position:absolute;left:.8125rem;right:.8125rem;top:0;border-top:1px dashed var(--braid-seam);pointer-events:none}
+html[data-braid-form="1"] .message>.message-row>.message-body:hover,
+html[data-braid-form="1"] .message-compact>.message-body:hover{background:color-mix(in srgb,var(--bg-active) 40%,var(--braid-bub))}
+html[data-braid-form="1"] .message-user-sep{border-top:0!important;padding-top:0!important}
+html[data-braid-form="1"] .message.system-message>.message-row>.message-body,
+html[data-braid-form="1"] .message.announcement>.message-row>.message-body{background:transparent;border:0;border-radius:0}
+html[data-braid-form="1"] .channel-item{position:relative;margin:0 .5rem!important;border:1px solid var(--braid-line)!important;border-top:0!important;border-radius:0!important;background:var(--braid-bub)}
+html[data-braid-form="1"] .channel-item[data-braid-run="start"],
+html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-top:1px solid var(--braid-line)!important;border-top-left-radius:.75rem!important;border-top-right-radius:.75rem!important;margin-top:.25rem!important}
+html[data-braid-form="1"] .channel-item[data-braid-run="end"],
+html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-bottom-left-radius:.75rem!important;border-bottom-right-radius:.75rem!important;margin-bottom:.25rem!important}
+html[data-braid-form="1"] .channel-item[data-braid-run="mid"]::before,
+html[data-braid-form="1"] .channel-item[data-braid-run="end"]::before{content:'';position:absolute;left:.75rem;right:.75rem;top:0;border-top:1px dashed var(--braid-seam);pointer-events:none}
+html[data-braid-form="1"] .channel-item:hover{background:color-mix(in srgb,var(--bg-active) 45%,var(--braid-bub))}
+html[data-braid-form="1"] .channel-item.active{background:color-mix(in srgb,var(--accent) 16%,var(--bg-secondary));border-color:var(--accent)!important}
+html[data-braid-form="1"] .channel-item.active::before,
+html[data-braid-form="1"] .channel-item.active + .channel-item::before{display:none!important}
+html[data-braid-form="1"] .reaction,
+html[data-braid-form="1"] .reaction-add,
+html[data-braid-form="1"] .message-reactions>*{border-radius:999px!important}
+html[data-braid-form="1"] .message-input-area textarea,
+html[data-braid-form="1"] .message-input-container textarea{background:var(--bg-primary)!important}
 `;
 
 BraidLayout._SHAPE_CSS = `
