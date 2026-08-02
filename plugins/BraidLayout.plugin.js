@@ -1,8 +1,8 @@
 /**
  * @name Braid Layout
- * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. Pairs with the Braid / Braid Light themes.
+ * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes.
  * @author Amnibro
- * @version 1.1
+ * @version 1.2
  */
 class BraidLayout {
   start() {
@@ -14,9 +14,22 @@ class BraidLayout {
     HavenApi.DOM.addStyle('BraidShapeCSS', BraidLayout._SHAPE_CSS);
     HavenApi.DOM.addStyle('BraidFormCSS', BraidLayout._FORM_CSS);
     HavenApi.DOM.addStyle('BraidMotionCSS', BraidLayout._MOTION_CSS);
+    this._evalOrderCSS();
     document.documentElement.setAttribute('data-braid-layout', '1');
     document.documentElement.setAttribute('data-braid-form', '1');
     this._paintOwn();
+    this._themeBottomIcons();
+    // Mod Mode (Haven's layout editor) must see the real chrome to drag
+    // it around — suspend the whole Braid layer while it is editing and
+    // come back when it saves. body class changes are attribute
+    // mutations, which the main childList observer deliberately ignores.
+    this._suspended = false;
+    this._modObs = new MutationObserver(() => {
+      const editing = document.body.classList.contains('mod-mode-on');
+      if (editing && !this._suspended) this._suspend();
+      else if (!editing && this._suspended) this._resume();
+    });
+    this._modObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     this._collapseJoinCreate();
     this._setPeopleOpen(false);
     this._buildMoreMenu();
@@ -42,6 +55,8 @@ class BraidLayout {
 
   stop() {
     if (this._obs) { this._obs.disconnect(); this._obs = null; }
+    if (this._modObs) { this._modObs.disconnect(); this._modObs = null; }
+    this._restoreBottomIcons();
     // Unfold the server rail back to its own column
     const bar = document.getElementById('server-bar');
     const strip = document.getElementById('braid-server-strip');
@@ -81,6 +96,7 @@ class BraidLayout {
     HavenApi.DOM.removeStyle('BraidShapeCSS');
     HavenApi.DOM.removeStyle('BraidFormCSS');
     HavenApi.DOM.removeStyle('BraidFormOwn');
+    HavenApi.DOM.removeStyle('BraidOrderCSS');
     console.log('[BraidLayout] Stopped');
   }
 
@@ -214,6 +230,11 @@ class BraidLayout {
     if (desktopBanner) addItem('Desktop app', () => (desktopBanner.querySelector('a') || desktopBanner).click(), 'download');
     const androidBanner = document.getElementById('android-beta-banner');
     if (androidBanner) addItem('Android app', () => androidBanner.click(), 'download');
+    addItem('Edit layout', () => {
+      const mm = window.app && window.app.modMode;
+      if (mm) mm.toggle();
+      else document.getElementById('mod-mode-settings-toggle')?.click();
+    }, 'Mod Mode');
     addItem('Settings', () => {
       document.getElementById('open-settings-btn')?.click();
       document.getElementById('mobile-settings-btn')?.click();
@@ -253,10 +274,88 @@ class BraidLayout {
   }
 
   _applyLayout() {
+    if (this._suspended) return;
     this._foldServersIntoSidebar();
     this._hideEdgeChrome();
     this._quietChips();
     this._markRuns();
+    this._themeBottomIcons();
+  }
+
+  // ── Mod Mode interop ─────────────────────────────────────
+  // While the layout editor is active the Braid gates come off and the
+  // server rail unfolds, so every draggable section and panel handle is
+  // real and visible. On exit the layer re-applies — and honours any
+  // custom section order the user just saved (see _evalOrderCSS).
+  _suspend() {
+    this._suspended = true;
+    const bar = document.getElementById('server-bar');
+    const strip = document.getElementById('braid-server-strip');
+    if (bar && strip) {
+      while (strip.firstChild) bar.appendChild(strip.firstChild);
+      delete bar.dataset.braidFolded;
+      bar.removeAttribute('aria-hidden');
+      bar.style.display = '';
+    }
+    const right = document.getElementById('right-sidebar');
+    if (right) right.style.display = '';
+    document.documentElement.removeAttribute('data-braid-layout');
+    document.documentElement.removeAttribute('data-braid-form');
+  }
+
+  _resume() {
+    this._suspended = false;
+    this._evalOrderCSS();
+    document.documentElement.setAttribute('data-braid-layout', '1');
+    document.documentElement.setAttribute('data-braid-form', '1');
+    this._setPeopleOpen(document.documentElement.classList.contains('braid-people-open'));
+    this._applyLayout();
+  }
+
+  // Braid pushes join/create below the channel list by default, but a
+  // user who reordered sections in Mod Mode has expressed an explicit
+  // preference — the CSS order overrides only apply when no custom
+  // layout is saved.
+  _evalOrderCSS() {
+    let custom = null;
+    try { custom = JSON.parse(localStorage.getItem('haven-layout')); } catch {}
+    if (Array.isArray(custom) && custom.length) HavenApi.DOM.removeStyle('BraidOrderCSS');
+    else HavenApi.DOM.addStyle('BraidOrderCSS', BraidLayout._ORDER_CSS);
+  }
+
+  // ── Themed bottom-left icons ─────────────────────────────
+  // The stock buttons are colored emoji, which fight every palette.
+  // Swap them for line icons drawn with currentColor so they follow
+  // the theme like the rest of the chrome; originals are stashed for
+  // stop(). Buttons added later (voice mute/deafen appear on join)
+  // are themed by the observer pass.
+  _themeBottomIcons() {
+    const svg = (paths) =>
+      `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+    const icons = {
+      'theme-popup-toggle': svg('<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-7.8-9-7.8Z"/><circle cx="7.5" cy="11.5" r=".6"/><circle cx="10.5" cy="7.5" r=".6"/><circle cx="15" cy="7.5" r=".6"/>'),
+      'activities-btn': svg('<path d="M6 9h4M8 7v4M15 8.5h.01M17.5 11h.01"/><path d="M17.3 5H6.7a4.7 4.7 0 0 0-4.6 4L1.3 14a3.2 3.2 0 0 0 5.7 2.6L8.6 14h6.8l1.6 2.6A3.2 3.2 0 0 0 22.7 14l-.8-5a4.7 4.7 0 0 0-4.6-4Z"/>'),
+      'sidebar-members-btn': svg('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.7 5.5-4.7s4.9 1.7 5.5 4.7"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.9M17.8 14.6c1.5.7 2.4 2 2.7 4"/>'),
+      'mobile-settings-btn': svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.01a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/>'),
+      'donors-btn': svg('<path d="M12 20.3 4.8 13a4.7 4.7 0 0 1 6.6-6.6l.6.6.6-.6a4.7 4.7 0 0 1 6.6 6.6Z"/>'),
+      'voice-mute-btn': svg('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>'),
+      'voice-deafen-btn': svg('<path d="M4 13a8 8 0 0 1 16 0"/><path d="M4 13v4a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2ZM20 13v4a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2Z"/>'),
+    };
+    Object.entries(icons).forEach(([id, markup]) => {
+      const btn = document.getElementById(id);
+      if (!btn || btn.dataset.braidIcon === '1') return;
+      btn.dataset.braidIcon = '1';
+      btn.dataset.braidOrig = btn.innerHTML;
+      btn.innerHTML = markup;
+    });
+  }
+
+  _restoreBottomIcons() {
+    document.querySelectorAll('[data-braid-icon="1"]').forEach((btn) => {
+      btn.innerHTML = btn.dataset.braidOrig || btn.innerHTML;
+      delete btn.dataset.braidIcon;
+      delete btn.dataset.braidOrig;
+    });
   }
 
   // Run position for the merged cards, desktop twin of Haven-Mobile's
@@ -317,7 +416,9 @@ html[data-braid-layout="1"] .brand-text{font-size:.9375rem!important;font-weight
 html[data-braid-layout="1"] .user-bar{border-radius:.75rem!important;padding:.5rem .625rem!important;gap:.5rem!important;background:var(--bg-tertiary)!important;border:1px solid var(--border)!important}
 html[data-braid-layout="1"] .sidebar-mod-container{order:1;flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:2px 0 .375rem}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"],
-html[data-braid-layout="1"] .sidebar-section#admin-controls{order:3;border:0!important;padding:2px .625rem!important;margin:0!important}
+html[data-braid-layout="1"] .sidebar-section#admin-controls{border:0!important;padding:2px .625rem!important;margin:0!important}
+html:not([data-braid-layout="1"]) .braid-more-wrap,
+html:not([data-braid-layout="1"]) .braid-server-strip{display:none!important}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{font-size:.71875rem!important;letter-spacing:0!important;text-transform:none!important;font-weight:550!important;color:var(--text-muted)!important;margin:2px 0!important;padding:.4375rem .5rem;border-radius:.625rem}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label:hover,
@@ -326,7 +427,7 @@ html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"].braid-collapsed
 html[data-braid-layout="1"] .sidebar-section#admin-controls.braid-collapsed .collapsible-section-body,
 html[data-braid-layout="1"] #join-section-body.collapsed,
 html[data-braid-layout="1"] #create-section-body.collapsed{display:none!important}
-html[data-braid-layout="1"] .sidebar-split{order:1;flex:1;min-height:0;display:flex;flex-direction:column;border:0!important}
+html[data-braid-layout="1"] .sidebar-split{flex:1;min-height:0;display:flex;flex-direction:column;border:0!important}
 html[data-braid-layout="1"] .channel-section{flex:1;min-height:0;padding:2px .375rem .375rem!important;border:0!important}
 html[data-braid-layout="1"] .dm-section-pane{flex:0 0 auto;max-height:28%;padding:2px .375rem .375rem!important;border-top:1px solid var(--border)!important}
 html[data-braid-layout="1"] .section-label.channels-toggle,
@@ -397,6 +498,12 @@ html[data-braid-layout="1"].braid-people-open .right-sidebar{position:fixed;righ
 }
 `;
 
+BraidLayout._ORDER_CSS = `
+html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"],
+html[data-braid-layout="1"] .sidebar-section#admin-controls{order:3}
+html[data-braid-layout="1"] .sidebar-split{order:1}
+`;
+
 BraidLayout._FORM_CSS = `
 html[data-braid-form="1"]{
 --braid-r:.875rem;
@@ -424,7 +531,7 @@ html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-
 html[data-braid-form="1"] .message[data-braid-run="end"]>.message-row>.message-body,
 html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body,
 html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:.5625rem;margin-bottom:.5rem}
-html[data-braid-form="1"] .message-compact>.message-body::before{content:'';position:absolute;left:.8125rem;right:.8125rem;top:0;border-top:1px dashed var(--braid-seam);pointer-events:none}
+html[data-braid-form="1"] .message-compact>.message-body::before{content:'';position:absolute;left:50%;transform:translateX(-50%);width:min(7rem,45%);top:0;border-top:1px dotted color-mix(in srgb,var(--braid-seam) 75%,transparent);pointer-events:none}
 html[data-braid-form="1"] .message>.message-row>.message-body:hover,
 html[data-braid-form="1"] .message-compact>.message-body:hover{background:color-mix(in srgb,var(--bg-active) 40%,var(--braid-bub))}
 html[data-braid-form="1"] .message-user-sep{border-top:0!important;padding-top:0!important}
@@ -511,6 +618,29 @@ html[data-braid-layout="1"] .message-input-area textarea:focus,
 html[data-braid-layout="1"] .message-input-container textarea:focus{border-color:color-mix(in srgb,var(--accent) 45%,var(--border))!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 12%,transparent)!important}
 html[data-braid-layout="1"] .music-panel-controls button,
 html[data-braid-layout="1"] .music-btn{border-radius:.625rem!important}
+html[data-braid-layout="1"] .sidebar-bottom-btn svg{display:block}
+
+/* ── Modern settings ── the long scrolling column becomes cards, the
+   nav becomes a pill rail, and the inline hairline separators between
+   sections go away (the cards carry the separation). */
+html[data-braid-layout="1"] .modal-settings{border-radius:1.25rem!important;overflow:hidden}
+html[data-braid-layout="1"] .settings-header{padding:.875rem 1.25rem!important;border-bottom:1px solid var(--border)!important;background:color-mix(in srgb,var(--bg-secondary) 92%,transparent)!important;backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);gap:.75rem}
+html[data-braid-layout="1"] .settings-header h3{font-size:1rem!important;font-weight:650!important;letter-spacing:-.02em!important}
+html[data-braid-layout="1"] .settings-tab-bar{background:var(--bg-tertiary)!important;border:1px solid var(--border)!important;border-radius:.75rem!important;padding:3px!important;gap:2px!important}
+html[data-braid-layout="1"] .settings-tab{border-radius:.5625rem!important;border:0!important;padding:.375rem .875rem!important;font-weight:550!important}
+html[data-braid-layout="1"] .settings-close-btn{width:2.125rem;height:2.125rem;border-radius:.625rem!important;border:0!important;background:transparent!important;color:var(--text-muted)!important;font-size:1.125rem;display:grid;place-items:center}
+html[data-braid-layout="1"] .settings-close-btn:hover{background:var(--bg-hover)!important;color:var(--text-primary)!important}
+html[data-braid-layout="1"] .settings-nav{background:var(--bg-secondary)!important;border-right:1px solid var(--border)!important;padding:.625rem!important}
+html[data-braid-layout="1"] .settings-nav-group-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.875rem .5rem .25rem!important}
+html[data-braid-layout="1"] .settings-nav-item{border-radius:.625rem!important;padding:.4375rem .625rem!important;margin:1px 0!important;font-size:.8125rem!important;font-weight:550!important;border:1px solid transparent!important}
+html[data-braid-layout="1"] .settings-nav-item:hover{background:var(--bg-hover)!important}
+html[data-braid-layout="1"] .settings-nav-item.active{background:color-mix(in srgb,var(--accent) 14%,var(--bg-tertiary))!important;color:var(--accent)!important;border:1px solid color-mix(in srgb,var(--accent) 28%,transparent)!important}
+html[data-braid-layout="1"] .settings-section{background:var(--bg-card)!important;border:1px solid var(--border)!important;border-top:1px solid var(--border)!important;border-radius:1rem!important;padding:1rem 1.125rem!important;margin:0 0 .75rem!important}
+html[data-braid-layout="1"] .settings-section-subtitle{font-weight:650!important;letter-spacing:-.015em!important}
+html[data-braid-layout="1"] .settings-section select,
+html[data-braid-layout="1"] .settings-section input[type="text"],
+html[data-braid-layout="1"] .settings-section input[type="password"],
+html[data-braid-layout="1"] .settings-section input[type="number"]{border-radius:.625rem!important;border:1px solid var(--border)!important;background:var(--bg-input)!important;padding:.5rem .75rem!important}
 `;
 
 BraidLayout._MOTION_CSS = `
