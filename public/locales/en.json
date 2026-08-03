@@ -701,7 +701,8 @@
       "tunnel": "Tunnel",
       "bots": "Bots",
       "import": "Import",
-      "mod_mode": "Mod Mode"
+      "mod_mode": "Mod Mode",
+      "security": "Security"
     },
     "language_section": {
       "title": "Language",
@@ -870,6 +871,14 @@
     },
     "admin": {
       "title": "Admin",
+      "security_title": "Security",
+      "referrer_policy_group": "Referrer configuration",
+      "referrer_policy_label": "Referrer policy",
+      "referrer_policy_desc": "Sets the Referrer-Policy header Haven sends to browsers, which controls how much of the current page's address is shared when the browser loads resources or follows links to other sites. The recommended options cover almost every server; the advanced policies are standard browser values included for completeness and are left to your discretion.",
+      "referrer_policy_opt_default": "<strong>Strict-Origin-When-Cross-Origin (default):</strong> within this server, shares the full address; to other sites, shares only the origin.",
+      "referrer_policy_opt_same": "<strong>Same-Origin:</strong> within this server, shares the full address; to other sites, shares nothing.",
+      "referrer_policy_opt_none": "<strong>No-Referrer:</strong> shares nothing anywhere — not even within this server.",
+      "referrer_policy_note": "Same-Origin and No-Referrer send nothing to other sites, so either one fixes embeds whose CDN rejects a cross-origin referrer, such as Twitter/X video. They differ only in what is shared within this server.",
       "branding_title": "Server Branding",
       "server_name": "Server Name",
       "login_title": "Login Title",

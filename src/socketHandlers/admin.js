@@ -8,7 +8,7 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserRoles, getUserHighestRole,
     emitOnlineUsers, broadcastChannelLists, generateChannelCode,
-    logAudit, fireWebhookEvent
+    logAudit, fireWebhookEvent, onReferrerPolicyChange
   } = ctx;
   const { channelUsers } = state;
 
@@ -49,7 +49,8 @@ module.exports = function register(socket, ctx) {
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
-      'channel_creator_role' // (#5461) role auto-granted to a non-admin who creates a channel
+      'channel_creator_role', // (#5461) role auto-granted to a non-admin who creates a channel
+      'referrer_policy' // Referrer-Policy header, admin-configurable under Settings → Security
     ];
     if (!allowedKeys.includes(key)) return;
 
@@ -66,6 +67,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'registration_rate_limit_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'registration_rate_limit_per_hour') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 100000) return; }
 
+    if (key === 'referrer_policy' && !['no-referrer', 'no-referrer-when-downgrade', 'origin', 'origin-when-cross-origin', 'same-origin', 'strict-origin', 'strict-origin-when-cross-origin', 'unsafe-url'].includes(value)) return;
     if (key === 'member_visibility' && !['all', 'online', 'none'].includes(value)) return;
     if (key === 'cleanup_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'cleanup_max_age_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 3650) return; }
@@ -212,6 +214,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'member_visibility') {
       for (const [code] of channelUsers) { emitOnlineUsers(code); }
     }
+    if (key === 'referrer_policy') onReferrerPolicyChange(value);
   });
 
   // ── Whitelist management ────────────────────────────────

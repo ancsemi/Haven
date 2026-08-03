@@ -32,6 +32,7 @@ const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 // ══════════════════════════════════════════════════════════════
 function setupSocketHandlers(io, db, opts = {}) {
   const invalidateIpBanCache = (typeof opts.invalidateIpBanCache === 'function') ? opts.invalidateIpBanCache : () => {};
+  const onReferrerPolicyChange = (typeof opts.onReferrerPolicyChange === 'function') ? opts.onReferrerPolicyChange : () => {};
 
   // ── Permission helpers (shared across all connections) ───
   const {
@@ -1585,6 +1586,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       transferAdminRef,
       // Audit log
       logAudit,
+      onReferrerPolicyChange,
       // IP-ban cache invalidator (server.js HTTP-side cache)
       invalidateIpBanCache,
       // Constants

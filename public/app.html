@@ -1156,6 +1156,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-update" style="display:none">⬆️ <span data-i18n="settings.nav.server_updates">Server Updates</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-members" style="display:none">👥 <span data-i18n="settings.nav.members">Members</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-security" style="display:none">🔒 <span data-i18n="settings.nav.security">Security</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🛡️ <span data-i18n="settings.nav.whitelist">Whitelist</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-invite" style="display:none">🌐 <span data-i18n="settings.nav.invite">Invite Code</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-cleanup" style="display:none">🗑️ <span data-i18n="settings.nav.cleanup">Cleanup</span></div>
@@ -2064,6 +2065,34 @@
             <input type="checkbox" id="admin-password-reset-enabled">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.admin_pw_reset_hint">⚠️ When enabled, admins can reset any user's password to a one-time temp value. The user must change it on next login. Resetting a password also wipes that user's E2E DM history (their wrap key derives from the password). The fact that this is enabled is exposed via /api/public-config so users can see whether admins on this server have this power.</small>
+        </div>
+        <div class="admin-settings" id="section-security" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🔒 <span data-i18n="settings.admin.security_title">Security</span></h5>
+          <small class="settings-group-label" style="margin-top:8px;display:block">🔗 <span data-i18n="settings.admin.referrer_policy_group">Referrer configuration</span></small>
+          <small class="settings-hint" style="display:block" data-i18n="settings.admin.referrer_policy_desc">Sets the Referrer-Policy header Haven sends to browsers, which controls how much of the current page's address is shared when the browser loads resources or follows links to other sites. The recommended options cover almost every server; the advanced policies are standard browser values included for completeness and are left to your discretion.</small>
+          <ul class="settings-hint" style="margin:6px 0 0;padding-left:20px">
+            <li data-i18n-html="settings.admin.referrer_policy_opt_default"><strong>Strict-Origin-When-Cross-Origin (default):</strong> within this server, shares the full address; to other sites, shares only the origin.</li>
+            <li style="margin-top:4px" data-i18n-html="settings.admin.referrer_policy_opt_same"><strong>Same-Origin:</strong> within this server, shares the full address; to other sites, shares nothing.</li>
+            <li style="margin-top:4px" data-i18n-html="settings.admin.referrer_policy_opt_none"><strong>No-Referrer:</strong> shares nothing anywhere — not even within this server.</li>
+          </ul>
+          <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.referrer_policy_note">Same-Origin and No-Referrer send nothing to other sites, so either one fixes embeds whose CDN rejects a cross-origin referrer, such as Twitter/X video. They differ only in what is shared within this server.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.referrer_policy_label">Referrer policy</span>
+            <select id="referrer-policy-select">
+              <optgroup label="Recommended">
+                <option value="strict-origin-when-cross-origin">Strict-Origin-When-Cross-Origin (default)</option>
+                <option value="same-origin">Same-Origin</option>
+                <option value="no-referrer">No-Referrer</option>
+              </optgroup>
+              <optgroup label="Advanced — use at your own discretion">
+                <option value="strict-origin">Strict-Origin</option>
+                <option value="origin">Origin</option>
+                <option value="origin-when-cross-origin">Origin-When-Cross-Origin</option>
+                <option value="no-referrer-when-downgrade">No-Referrer-When-Downgrade</option>
+                <option value="unsafe-url">Unsafe-URL</option>
+              </optgroup>
+            </select>
+          </label>
         </div>
         <div class="admin-settings" id="section-whitelist" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.whitelist_title">Whitelist</span></h5>

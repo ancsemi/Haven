@@ -187,6 +187,15 @@ function userHasPermission(userId, permission) {
   } catch { return false; }
 }
 
+// ── Referrer-Policy (admin-configurable) ─────────────────
+// The Referrer-Policy header is sent on every response by the security-headers
+// middleware below. Admins can change it from Settings → Security; the value is
+// cached in memory (loaded at boot, refreshed when it changes) so we never read
+// the DB per request. Default matches the value helmet used to set.
+const VALID_REFERRER_POLICIES = ['no-referrer', 'no-referrer-when-downgrade', 'origin', 'origin-when-cross-origin', 'same-origin', 'strict-origin', 'strict-origin-when-cross-origin', 'unsafe-url'];
+const DEFAULT_REFERRER_POLICY = 'strict-origin-when-cross-origin';
+let currentReferrerPolicy = DEFAULT_REFERRER_POLICY;
+
 // ── Security Headers (helmet) ────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
@@ -210,13 +219,14 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,  // needed for WebRTC
   crossOriginOpenerPolicy: false,    // needed for WebRTC
   hsts: (process.env.FORCE_HTTP || '').toLowerCase() === 'true' ? false : { maxAge: 31536000, includeSubDomains: false }, // force HTTPS for 1 year (disabled when FORCE_HTTP=true)
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  referrerPolicy: false, // set dynamically from the admin-configurable cache in the middleware below
 }));
 
 // Additional security headers helmet doesn't cover
 app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=()');
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', currentReferrerPolicy); // admin-configurable (Settings → Security)
   next();
 });
 
@@ -4188,6 +4198,12 @@ const db = initDatabase();
 // (#5335) Seed starter stickers now that the DB is ready.
 try { seedStarterStickers(); } catch {}
 
+// Load the admin-configured Referrer-Policy into the in-memory cache.
+try {
+  const rp = db.prepare("SELECT value FROM server_settings WHERE key = 'referrer_policy'").get()?.value;
+  if (rp && VALID_REFERRER_POLICIES.includes(rp)) currentReferrerPolicy = rp;
+} catch {}
+
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.
 // The variable is removed from .env automatically after use.
@@ -4217,7 +4233,11 @@ if (process.env.ADMIN_RESET_PASSWORD) {
 
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
-activityRef.engine = setupSocketHandlers(io, db, { invalidateIpBanCache }).activity;
+activityRef.engine = setupSocketHandlers(io, db, {
+  invalidateIpBanCache,
+  // Keep the Referrer-Policy cache in sync when an admin changes it.
+  onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
+}).activity;
 registerProcessCleanup();
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────

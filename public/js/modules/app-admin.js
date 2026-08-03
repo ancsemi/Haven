@@ -312,6 +312,10 @@ _applyServerSettings() {
     if (vis && this.serverSettings.member_visibility) {
       vis.value = this.serverSettings.member_visibility;
     }
+    const refPol = document.getElementById('referrer-policy-select');
+    if (refPol && this.serverSettings.referrer_policy) {
+      refPol.value = this.serverSettings.referrer_policy;
+    }
     const nameInput = document.getElementById('server-name-input');
     if (nameInput && this.serverSettings.server_name !== undefined) {
       nameInput.value = this.serverSettings.server_name || '';
@@ -695,6 +699,7 @@ _snapshotAdminSettings() {
     server_title: this.serverSettings.server_title || '',
     welcome_message: this.serverSettings.welcome_message || '',
     member_visibility: this.serverSettings.member_visibility || 'online',
+    referrer_policy: this.serverSettings.referrer_policy || 'strict-origin-when-cross-origin',
     cleanup_enabled: this.serverSettings.cleanup_enabled || 'false',
     cleanup_max_age_days: this.serverSettings.cleanup_max_age_days || '0',
     cleanup_max_size_mb: this.serverSettings.cleanup_max_size_mb || '0',
@@ -763,6 +768,12 @@ _saveAdminSettings() {
   const vis = document.getElementById('member-visibility-select')?.value;
   if (vis && vis !== snap.member_visibility) {
     this.socket.emit('update-server-setting', { key: 'member_visibility', value: vis });
+    changed = true;
+  }
+
+  const refPol = document.getElementById('referrer-policy-select')?.value;
+  if (refPol && refPol !== snap.referrer_policy) {
+    this.socket.emit('update-server-setting', { key: 'referrer_policy', value: refPol });
     changed = true;
   }
 
@@ -965,6 +976,8 @@ _cancelAdminSettings() {
     if (ti) ti.value = snap.server_title || '';
     const vis = document.getElementById('member-visibility-select');
     if (vis) vis.value = snap.member_visibility;
+    const refPol = document.getElementById('referrer-policy-select');
+    if (refPol) refPol.value = snap.referrer_policy;
     const ce = document.getElementById('cleanup-enabled');
     if (ce) ce.checked = snap.cleanup_enabled === 'true';
     const ca = document.getElementById('cleanup-max-age');
