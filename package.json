@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "haven",
   "version": "3.40.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
@@ -12,7 +12,7 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.0",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.10.0",
