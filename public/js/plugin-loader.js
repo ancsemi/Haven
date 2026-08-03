@@ -175,6 +175,16 @@ window.HavenPluginLoader = (function () {
   function setEnabledThemes(list) {
     localStorage.setItem('haven_enabled_themes', JSON.stringify(list));
   }
+  // Published themes are what the theme picker offers, so only one can be
+  // active at a time. Unpublished ones are additive CSS tweaks that stack on
+  // top of whatever theme is selected.
+  function isPublishedTheme(file) {
+    return !!loadedThemes.get(file)?.meta?.published;
+  }
+  function getActiveFileTheme() {
+    const saved = localStorage.getItem('haven_theme') || '';
+    return saved.startsWith('file:') ? saved.slice(5) : null;
+  }
 
   // ── Load a single plugin ──
   async function loadPlugin(meta) {
@@ -255,7 +265,11 @@ window.HavenPluginLoader = (function () {
   // ── Load a theme ──
   function loadTheme(meta) {
     if (loadedThemes.has(meta.file)) return;
-    const enabled = getEnabledThemes().includes(meta.file);
+    // A published theme is only injected when it is the selected one; leaving a
+    // previously-selected one in the enabled list must not stack it on top of
+    // whatever theme is active now.
+    const enabled = getEnabledThemes().includes(meta.file)
+      && (!meta.published || getActiveFileTheme() === meta.file);
     let linkEl = null;
     if (enabled) {
       linkEl = document.createElement('link');
@@ -270,6 +284,12 @@ window.HavenPluginLoader = (function () {
   function enableTheme(file) {
     const t = loadedThemes.get(file);
     if (!t || t.enabled) return;
+    // A published theme is one of the picker's choices, not a stackable tweak —
+    // turning it on means selecting it, so the two surfaces stay in agreement.
+    if (t.meta.published) {
+      applyFileTheme(file);
+      return;
+    }
     t.enabled = true;
     const linkEl = document.createElement('link');
     linkEl.rel = 'stylesheet';
@@ -290,7 +310,28 @@ window.HavenPluginLoader = (function () {
     document.getElementById(`haven-theme-${file}`)?.remove();
     const list = getEnabledThemes().filter(f => f !== file);
     setEnabledThemes(list);
+    // Turning off the selected published theme deselects it, which means falling
+    // back to the built-in default rather than leaving the picker pointing at a
+    // stylesheet that is no longer loaded.
+    if (t.meta.published && getActiveFileTheme() === file) selectBuiltinTheme('haven');
     renderPluginUI();
+  }
+
+  // Switch back to a built-in data-theme, mirroring what a theme-picker button
+  // does in theme.js (which isn't reachable from here as a function).
+  function selectBuiltinTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('haven_theme', theme);
+    document.querySelectorAll('.theme-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.theme === theme);
+    });
+    if (window.havenSocket && window.havenSocket.connected) {
+      window.havenSocket.emit('set-preference', { key: 'theme', value: theme });
+    }
+    if (typeof applyEffects === 'function') {
+      applyEffects(typeof _getStoredEffectMode === 'function' ? _getStoredEffectMode() : 'auto');
+    }
+    if (typeof showEffectEditorIfDynamic === 'function') showEffectEditorIfDynamic(theme);
   }
 
 
@@ -478,16 +519,39 @@ window.HavenPluginLoader = (function () {
       b.classList.toggle('active', b.dataset.theme === `file:${file}`);
     });
 
+    // Selecting a published theme deselects any other one, so drop the others
+    // from the enabled list — otherwise the Settings toggles claim a theme is
+    // on while the picker shows a different one as active.
+    const kept = getEnabledThemes().filter(f => f !== file && !isPublishedTheme(f));
+    setEnabledThemes([file, ...kept]);
+
     // Re-inject user-enabled custom CSS tweaks (non-published themes) on top of the new base.
-    // The check below skips the file we just injected since it's already in the DOM.
-    reapplyEnabledThemes();
+    reapplyEnabledThemes(file);
+    renderPluginUI();
+
+    // Built-in theme buttons re-run the effect layer on every switch; file themes
+    // have to do the same or the previous theme's overlays (FFX water, Matrix rain,
+    // Nord snow…) keep running on top of the new one. Guarded because theme.js
+    // isn't guaranteed to be loaded wherever the loader runs.
+    if (typeof applyEffects === 'function') {
+      const fxMode = typeof _getStoredEffectMode === 'function' ? _getStoredEffectMode() : 'auto';
+      applyEffects(fxMode);
+    }
+    if (typeof showEffectEditorIfDynamic === 'function') {
+      showEffectEditorIfDynamic(`file:${file}`);
+    }
   }
 
-  // Re-inject all user-enabled themes that are missing from the DOM.
+  // Re-inject the user-enabled CSS tweaks that are missing from the DOM.
   // Called after any theme switch that removes haven-theme-* links.
-  function reapplyEnabledThemes() {
+  // The active theme is skipped (it was just injected, and re-adding it would
+  // move it after the tweaks meant to override it) and so is every other
+  // published theme, which is a selectable theme rather than an overlay.
+  function reapplyEnabledThemes(activeFile = getActiveFileTheme()) {
     const enabledList = getEnabledThemes();
     for (const file of enabledList) {
+      if (file === activeFile) continue;
+      if (isPublishedTheme(file)) continue;
       if (document.getElementById(`haven-theme-${file}`)) continue; // already present
       const linkEl = document.createElement('link');
       linkEl.rel = 'stylesheet';
