@@ -1,20 +1,48 @@
 /**
  * @name Braid Layout
- * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes.
+ * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, docks the full voice controls bottom-left, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. One-key toggle (Ctrl+Shift+B) between Braid and the classic layout. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes.
  * @author Amnibro
- * @version 1.4
+ * @version 1.5
  */
 class BraidLayout {
   start() {
+    this._permListeners = [];          // survive disengage; removed only in stop()
+    this._engaged = false;
+    HavenApi.DOM.addStyle('BraidPillCSS', BraidLayout._PILL_CSS);
+    this._buildReturnPill();
+    // One shortcut, both directions: the way back must never be buried.
+    // Ctrl+Alt+B is the browser-safe twin (Chrome eats Ctrl+Shift+B on web).
+    const kd = (e) => {
+      if (e.ctrlKey && (e.shiftKey || e.altKey) && (e.key === 'B' || e.key === 'b')) {
+        e.preventDefault();
+        this._toggleLayout();
+      }
+    };
+    document.addEventListener('keydown', kd, true);
+    this._permListeners.push([document, 'keydown', kd, true]);
+    if (HavenApi.Data.load('BraidLayout', 'layoutOn', '1') !== '0') this._engage();
+    else console.log('[BraidLayout] Started dormant — classic layout (pill or Ctrl+Shift+B to re-engage)');
+  }
+
+  _toggleLayout() {
+    this._engaged ? this._disengage() : this._engage();
+  }
+
+  // Everything visual lives between _engage and _disengage, so "back to
+  // normal" is one click without touching the plugin toggle in Settings.
+  _engage() {
+    if (this._engaged) return;
+    this._engaged = true;
+    HavenApi.Data.save('BraidLayout', 'layoutOn', '1');
     this._hidden = new Map();          // el -> { display, hadHidden }
     this._lsPrev = new Map();          // localStorage key -> previous value (null = absent)
     this._listeners = [];              // [target, type, fn, opts]
     this._collapsedAdded = [];         // elements we added a class to
+    this._moved = [];                  // [el, origParent, origNextSibling] for relocations
     HavenApi.DOM.addStyle('BraidLayoutCSS', BraidLayout._LAYOUT_CSS);
     HavenApi.DOM.addStyle('BraidShapeCSS', BraidLayout._SHAPE_CSS);
     HavenApi.DOM.addStyle('BraidFormCSS', BraidLayout._FORM_CSS);
     HavenApi.DOM.addStyle('BraidMotionCSS', BraidLayout._MOTION_CSS);
-    this._evalOrderCSS();
     document.documentElement.setAttribute('data-braid-layout', '1');
     document.documentElement.setAttribute('data-braid-form', '1');
     this._paintOwn();
@@ -55,12 +83,29 @@ class BraidLayout {
       });
     });
     this._obs.observe(document.getElementById('app-body') || document.body, { childList: true, subtree: true });
-    console.log('[BraidLayout] Started');
+    console.log('[BraidLayout] Engaged');
   }
 
   stop() {
+    this._disengage(false);
+    for (const [t, type, fn, opts] of this._permListeners || []) t.removeEventListener(type, fn, opts);
+    this._permListeners = [];
+    document.getElementById('braid-return-pill')?.remove();
+    document.getElementById('braid-mod-done')?.remove();
+    HavenApi.DOM.removeStyle('BraidPillCSS');
+    console.log('[BraidLayout] Stopped');
+  }
+
+  // persist=false is the plugin-loader disable path: tearing the layer down
+  // must not overwrite the user's Braid/classic preference.
+  _disengage(persist = true) {
+    if (!this._engaged) return;
+    this._engaged = false;
+    if (persist) HavenApi.Data.save('BraidLayout', 'layoutOn', '0');
     if (this._obs) { this._obs.disconnect(); this._obs = null; }
     if (this._modObs) { this._modObs.disconnect(); this._modObs = null; }
+    document.getElementById('braid-mod-done')?.remove();
+    this._unfoldVoiceDock();
     this._restoreBottomIcons();
     document.getElementById('braid-text-sliders')?.remove();
     document.getElementById('braid-hex-overlay')?.remove();
@@ -77,6 +122,8 @@ class BraidLayout {
     strip?.remove();
     document.querySelector('.braid-more-wrap')?.remove();
     document.getElementById('braid-more-menu')?.remove();
+    document.getElementById('braid-theme-btn')?.remove();
+    document.getElementById('braid-classic-btn')?.remove();
     document.getElementById('braid-apps-drawer')?.remove();
     // Restore everything we hid
     for (const [el, prev] of this._hidden) {
@@ -106,8 +153,47 @@ class BraidLayout {
     HavenApi.DOM.removeStyle('BraidShapeCSS');
     HavenApi.DOM.removeStyle('BraidFormCSS');
     HavenApi.DOM.removeStyle('BraidFormOwn');
-    HavenApi.DOM.removeStyle('BraidOrderCSS');
-    console.log('[BraidLayout] Stopped');
+    console.log('[BraidLayout] Disengaged — classic layout');
+  }
+
+  // The classic-mode switch lives INSIDE the stock bottom-left icon bar,
+  // right next to the theme button — a peer of the other settings, never
+  // floating over them. Falls back to a fixed pill only if the bar is gone.
+  _buildReturnPill() {
+    if (document.getElementById('braid-return-pill')) return;
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.id = 'braid-return-pill';
+    pill.title = 'Braid layout (Ctrl+Shift+B)';
+    pill.setAttribute('aria-label', 'Switch to Braid layout');
+    pill.innerHTML =
+      '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 20.2 7.25v9.5L12 21.5 3.8 16.75v-9.5Z"/></svg>';
+    pill.addEventListener('click', () => this._engage());
+    const bar = document.querySelector('.sidebar-bottom-bar');
+    if (bar) {
+      pill.className = 'sidebar-bottom-btn braid-return-btn';
+      const themeBtn = document.getElementById('theme-popup-toggle');
+      themeBtn && themeBtn.parentElement === bar ? bar.insertBefore(pill, themeBtn.nextSibling) : bar.prepend(pill);
+    } else {
+      pill.className = 'braid-return-float';
+      document.body.appendChild(pill);
+    }
+  }
+
+  // While Mod Mode edits the layout Braid steps aside — this is the one
+  // unmissable way back out of the editor.
+  _showModDone() {
+    if (document.getElementById('braid-mod-done')) return;
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.id = 'braid-mod-done';
+    done.innerHTML = '✓ Done editing layout';
+    done.addEventListener('click', () => {
+      const mm = window.app && window.app.modMode;
+      if (mm) mm.toggle();
+      else document.getElementById('mod-mode-settings-toggle')?.click();
+    });
+    document.body.appendChild(done);
   }
 
   _listen(target, type, fn, opts) {
@@ -148,9 +234,65 @@ class BraidLayout {
       if (header) sidebar.insertBefore(strip, header);
       else sidebar.prepend(strip);
     }
-    while (bar.firstChild) strip.appendChild(bar.firstChild);
+    // Mod Mode's drag handles stay OUT of the strip — folding them in
+    // hides them from the editor's own cleanup and they leak, one per
+    // edit session. Anything mod-owned rides in the (hidden) bar.
+    strip.querySelectorAll('.mod-panel-handle').forEach((h) => bar.appendChild(h));
+    [...bar.children].forEach((el) => {
+      if (!el.classList.contains('mod-panel-handle')) strip.appendChild(el);
+    });
     bar.dataset.braidFolded = '1';
     bar.setAttribute('aria-hidden', 'true');
+  }
+
+  // ── Voice dock ───────────────────────────────────────────
+  // Stock keeps every in-call control — camera, screen share, soundboard,
+  // listen-together, the settings panel with the stream quality pickers —
+  // inside the right sidebar, which Braid hides. Relocate the real
+  // elements (all voice JS is getElementById-based, and their CSS is
+  // ancestor-free) into a dock above the bottom-left Menu, so a call has
+  // its full controls without opening the People panel. Original DOM
+  // positions are recorded and restored LIFO on suspend/disengage.
+  _foldVoiceDock() {
+    if (this._suspended || document.getElementById('braid-voice-dock')) return;
+    const bottom = document.querySelector('.sidebar-bottom');
+    const panel = document.getElementById('voice-panel');
+    if (!bottom || !panel) return;
+    const dock = document.createElement('div');
+    dock.id = 'braid-voice-dock';
+    bottom.insertBefore(dock, bottom.firstChild);
+    const adopt = (el, parent, before) => {
+      if (!el) return;
+      this._moved.push([el, el.parentNode, el.nextSibling]);
+      parent.insertBefore(el, before || null);
+    };
+    adopt(document.getElementById('voice-settings-panel'), dock);
+    adopt(panel, dock);
+    // Both mute/deafen pairs (header pair is default, bottom-bar pair is
+    // the haven_sidebar_voice_controls opt-in — stock shows one at a time)
+    const anchor = panel.firstChild;
+    adopt(document.getElementById('voice-mute-btn-header'), panel, anchor);
+    adopt(document.getElementById('voice-deafen-btn-header'), panel, anchor);
+    adopt(document.getElementById('voice-mute-btn'), panel, anchor);
+    adopt(document.getElementById('voice-deafen-btn'), panel, anchor);
+    const people = document.createElement('button');
+    people.type = 'button';
+    people.id = 'braid-voice-people-btn';
+    people.className = 'voice-panel-btn';
+    people.title = 'People & voice panel';
+    people.innerHTML =
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.7 5.5-4.7s4.9 1.7 5.5 4.7"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.9M17.8 14.6c1.5.7 2.4 2 2.7 4"/></svg>';
+    people.addEventListener('click', () => this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open')));
+    panel.insertBefore(people, document.getElementById('voice-settings-toggle'));
+  }
+
+  _unfoldVoiceDock() {
+    document.getElementById('braid-voice-people-btn')?.remove();
+    for (const [el, parent, next] of [...(this._moved || [])].reverse()) {
+      try { parent.insertBefore(el, next && next.parentNode === parent ? next : null); } catch {}
+    }
+    this._moved = [];
+    document.getElementById('braid-voice-dock')?.remove();
   }
 
   _collapseJoinCreate() {
@@ -214,6 +356,27 @@ class BraidLayout {
       '<span class="braid-ham"><span class="braid-ham-line"></span><span class="braid-ham-line"></span><span class="braid-ham-line"></span></span>' +
       '<span class="braid-ham-label">Menu</span></button>';
     host.prepend(wrap);
+    // Themes and the layout switch keep first-class seats next to the Menu
+    // — always one click, never buried.
+    if (bar && !document.getElementById('braid-theme-btn')) {
+      const mk = (id, title, paths, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.id = id;
+        b.className = 'braid-bar-btn';
+        b.title = title;
+        b.setAttribute('aria-label', title);
+        b.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+        b.addEventListener('click', onClick);
+        bar.appendChild(b);
+      };
+      mk('braid-theme-btn', 'Themes',
+        '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-7.8-9-7.8Z"/><circle cx="7.5" cy="11.5" r=".6"/><circle cx="10.5" cy="7.5" r=".6"/><circle cx="15" cy="7.5" r=".6"/>',
+        () => document.getElementById('theme-popup-toggle')?.click());
+      mk('braid-classic-btn', 'Classic layout (Ctrl+Shift+B)',
+        '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16M3 9h6"/>',
+        () => this._disengage());
+    }
     // The menu lives on <body>: the blurred header is a containing block
     // (backdrop-filter) with overflow:hidden, which would trap and clip
     // even a position:fixed dropdown rendered inside it.
@@ -227,6 +390,8 @@ class BraidLayout {
     // icon bar — every Haven feature keeps a door, just behind one
     // animated menu instead of chrome on two edges.
     let itemIndex = 0;
+    const mi = (paths) =>
+      `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
     const addLabel = (text) => {
       const d = document.createElement('div');
       d.className = 'braid-menu-label';
@@ -234,17 +399,19 @@ class BraidLayout {
       d.style.setProperty('--i', itemIndex++);
       menu.appendChild(d);
     };
-    const addItem = (label, onClick, muted) => {
+    // icon + short label; muted hints are reserved for shortcuts only —
+    // the menu reads as a glanceable list, not a paragraph.
+    const addItem = (icon, label, onClick, muted) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.innerHTML = muted ? `${label} <span class="muted">${muted}</span>` : label;
+      b.innerHTML = `<span class="braid-mi">${mi(icon)}</span><span>${label}</span>${muted ? `<span class="muted">${muted}</span>` : ''}`;
       b.style.setProperty('--i', itemIndex++);
       b.addEventListener('click', () => { closeMenu(); onClick(); });
       menu.appendChild(b);
     };
-    const addProxy = (id, label, muted) => {
+    const addProxy = (id, icon, label, muted) => {
       const src = document.getElementById(id);
-      if (src) addItem(label, () => src.click(), muted);
+      if (src) addItem(icon, label, () => src.click(), muted);
     };
     const toggleHtmlClass = (cls) => document.documentElement.classList.toggle(cls);
     const closeMenu = () => {
@@ -252,35 +419,55 @@ class BraidLayout {
       wrap.classList.remove('open');
       btn.setAttribute('aria-expanded', 'false');
     };
+    const I = {
+      search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/>',
+      pin: '<path d="M12 21v-6M8 3h8l-1.5 6.5L18 12H6l3.5-2.5Z"/>',
+      media: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 3 3 4-4 4 4"/>',
+      copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+      code: '<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
+      lock: '<rect x="4.5" y="10.5" width="15" height="9.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+      people: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.7 5.5-4.7s4.9 1.7 5.5 4.7"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.9M17.8 14.6c1.5.7 2.4 2 2.7 4"/>',
+      sound: '<path d="M9 18V6l10-2v11.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
+      pulse: '<path d="M3 12h4l2.5-6 4 12L16 12h5"/>',
+      grid: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/>',
+      classic: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16M3 9h6"/>',
+      palette: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-7.8-9-7.8Z"/><circle cx="7.5" cy="11.5" r=".6"/><circle cx="10.5" cy="7.5" r=".6"/><circle cx="15" cy="7.5" r=".6"/>',
+      game: '<path d="M6 9h4M8 7v4M15 8.5h.01M17.5 11h.01"/><path d="M17.3 5H6.7a4.7 4.7 0 0 0-4.6 4L1.3 14a3.2 3.2 0 0 0 5.7 2.6L8.6 14h6.8l1.6 2.6A3.2 3.2 0 0 0 22.7 14l-.8-5a4.7 4.7 0 0 0-4.6-4Z"/>',
+      gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.01a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/>',
+      heart: '<path d="M12 20.3 4.8 13a4.7 4.7 0 0 1 6.6-6.6l.6.6.6-.6a4.7 4.7 0 0 1 6.6 6.6Z"/>',
+      desktop: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+      phone: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>',
+    };
     addLabel('Channel');
-    addProxy('search-toggle-btn', 'Search messages');
-    addProxy('pinned-toggle-btn', 'Pinned messages');
-    addProxy('gallery-toggle-btn', 'Files & media');
-    addProxy('copy-code-btn', 'Copy channel code');
-    addProxy('channel-code-settings-btn', 'Channel code settings');
-    addProxy('e2e-menu-btn', 'Encryption');
+    addProxy('search-toggle-btn', I.search, 'Search');
+    addProxy('pinned-toggle-btn', I.pin, 'Pinned');
+    addProxy('gallery-toggle-btn', I.media, 'Files & media');
+    addProxy('copy-code-btn', I.copy, 'Copy code');
+    addProxy('channel-code-settings-btn', I.code, 'Code settings');
+    addProxy('e2e-menu-btn', I.lock, 'Encryption');
     addLabel('View');
-    addItem('People & voice', () => this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open')), 'right panel');
-    addItem('Soundboard', () => toggleHtmlClass('braid-sound-open'), 'toggle');
-    addItem('Status bar', () => toggleHtmlClass('braid-status-open'), 'toggle');
-    addItem('Edit layout', () => {
+    addItem(I.people, 'People & voice', () => this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open')));
+    addItem(I.sound, 'Soundboard', () => toggleHtmlClass('braid-sound-open'));
+    addItem(I.pulse, 'Status bar', () => toggleHtmlClass('braid-status-open'));
+    addItem(I.grid, 'Edit layout', () => {
       const mm = window.app && window.app.modMode;
       if (mm) mm.toggle();
       else document.getElementById('mod-mode-settings-toggle')?.click();
-    }, 'Mod Mode');
+    });
+    addItem(I.classic, 'Classic layout', () => this._disengage(), 'Ctrl⇧B');
     addLabel('App');
-    addProxy('theme-popup-toggle', 'Themes');
-    addProxy('activities-btn', 'Activities');
-    addProxy('sidebar-members-btn', 'All members');
-    addItem('Settings', () => {
+    addProxy('theme-popup-toggle', I.palette, 'Themes');
+    addProxy('activities-btn', I.game, 'Activities');
+    addProxy('sidebar-members-btn', I.people, 'All members');
+    addItem(I.gear, 'Settings', () => {
       document.getElementById('open-settings-btn')?.click();
       document.getElementById('mobile-settings-btn')?.click();
     });
-    addProxy('donors-btn', 'Support Haven', '♥');
+    addProxy('donors-btn', I.heart, 'Support Haven');
     const desktopBanner = document.getElementById('desktop-app-banner');
-    if (desktopBanner) addItem('Desktop app', () => (desktopBanner.querySelector('a') || desktopBanner).click(), 'download');
+    if (desktopBanner) addItem(I.desktop, 'Desktop app', () => (desktopBanner.querySelector('a') || desktopBanner).click());
     const androidBanner = document.getElementById('android-beta-banner');
-    if (androidBanner) addItem('Android app', () => androidBanner.click(), 'download');
+    if (androidBanner) addItem(I.phone, 'Android app', () => androidBanner.click());
     const peopleHdr = document.getElementById('mobile-users-btn');
     if (peopleHdr) {
       this._listen(peopleHdr, 'click', (e) => {
@@ -313,6 +500,7 @@ class BraidLayout {
   _applyLayout() {
     if (this._suspended) return;
     this._foldServersIntoSidebar();
+    this._foldVoiceDock();
     this._hideEdgeChrome();
     this._quietChips();
     this._markRuns();
@@ -385,6 +573,8 @@ class BraidLayout {
   // custom section order the user just saved (see _evalOrderCSS).
   _suspend() {
     this._suspended = true;
+    this._showModDone();
+    this._unfoldVoiceDock();
     const bar = document.getElementById('server-bar');
     const strip = document.getElementById('braid-server-strip');
     if (bar && strip) {
@@ -401,22 +591,11 @@ class BraidLayout {
 
   _resume() {
     this._suspended = false;
-    this._evalOrderCSS();
+    document.getElementById('braid-mod-done')?.remove();
     document.documentElement.setAttribute('data-braid-layout', '1');
     document.documentElement.setAttribute('data-braid-form', '1');
     this._setPeopleOpen(document.documentElement.classList.contains('braid-people-open'));
     this._applyLayout();
-  }
-
-  // Braid pushes join/create below the channel list by default, but a
-  // user who reordered sections in Mod Mode has expressed an explicit
-  // preference — the CSS order overrides only apply when no custom
-  // layout is saved.
-  _evalOrderCSS() {
-    let custom = null;
-    try { custom = JSON.parse(localStorage.getItem('haven-layout')); } catch {}
-    if (Array.isArray(custom) && custom.length) HavenApi.DOM.removeStyle('BraidOrderCSS');
-    else HavenApi.DOM.addStyle('BraidOrderCSS', BraidLayout._ORDER_CSS);
   }
 
   // ── Themed bottom-left icons ─────────────────────────────
@@ -434,9 +613,10 @@ class BraidLayout {
       'sidebar-members-btn': svg('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.7 5.5-4.7s4.9 1.7 5.5 4.7"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.9M17.8 14.6c1.5.7 2.4 2 2.7 4"/>'),
       'mobile-settings-btn': svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.01a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/>'),
       'donors-btn': svg('<path d="M12 20.3 4.8 13a4.7 4.7 0 0 1 6.6-6.6l.6.6.6-.6a4.7 4.7 0 0 1 6.6 6.6Z"/>'),
-      'voice-mute-btn': svg('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>'),
-      'voice-deafen-btn': svg('<path d="M4 13a8 8 0 0 1 16 0"/><path d="M4 13v4a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2ZM20 13v4a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2Z"/>'),
     };
+    // voice mute/deafen deliberately absent: they live in the voice dock
+    // now, where _syncMuteDeafenButtons rewrites textContent on every
+    // state change — an injected SVG would be clobbered mid-call anyway.
     Object.entries(icons).forEach(([id, markup]) => {
       const btn = document.getElementById(id);
       if (!btn || btn.dataset.braidIcon === '1') return;
@@ -573,7 +753,9 @@ class BraidLayout {
 }
 
 BraidLayout._LAYOUT_CSS = `
-html[data-braid-layout="1"]{--sidebar-width:17.5rem;--braid-bar-h:3rem}
+/* Button fills mix from text-primary, not a fixed surface: guaranteed
+   contrast against the ground in light AND dark palettes alike. */
+html[data-braid-layout="1"]{--sidebar-width:17.5rem;--braid-bar-h:3rem;--braid-btn-bg:color-mix(in srgb,var(--text-primary) 7%,var(--bg-secondary));--braid-btn-bg-hover:color-mix(in srgb,var(--text-primary) 13%,var(--bg-secondary));--braid-btn-line:color-mix(in srgb,var(--text-primary) 18%,var(--border))}
 html[data-braid-layout="1"] .channel-topic-bar{background:transparent!important;border-bottom:0!important;padding:.125rem 1.75rem .375rem!important;font-size:.71875rem!important;min-height:0!important;line-height:1.4!important;color:var(--text-muted)!important}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{padding:.3125rem .5rem!important}
@@ -586,19 +768,39 @@ html[data-braid-layout="1"] body,
 html[data-braid-layout="1"] #app{overflow:hidden}
 html[data-braid-layout="1"] #app-body{display:flex!important;flex-direction:row!important;min-height:0;height:100%}
 html[data-braid-layout="1"] .server-bar{display:none!important}
-html[data-braid-layout="1"] .sidebar{width:var(--sidebar-width)!important;min-width:15rem!important;max-width:21.25rem!important;flex:0 0 var(--sidebar-width)!important;background:var(--bg-secondary)!important;border-right:1px solid var(--border)!important;display:flex!important;flex-direction:column!important;position:relative;z-index:5}
-html[data-braid-layout="1"] .braid-server-strip{display:flex;align-items:center;gap:.375rem;padding:.625rem .625rem .5rem;overflow-x:auto;border-bottom:1px solid var(--border);flex-shrink:0;scrollbar-width:thin}
+/* width deliberately NOT !important — the stock resize handle writes an
+   inline style.width (persisted as haven_sidebar_width) and must win */
+html[data-braid-layout="1"] .sidebar{width:var(--sidebar-width);min-width:12.5rem;max-width:25rem;flex:0 0 auto!important;background:var(--bg-secondary)!important;border-right:1px solid var(--border)!important;display:flex!important;flex-direction:column!important;position:relative;z-index:5}
+html[data-braid-layout="1"] .braid-server-strip{display:flex;align-items:center;gap:.3125rem;padding:.625rem .625rem .5rem;overflow-x:auto;border-bottom:1px solid var(--border);flex-shrink:0;scrollbar-width:none}
+html[data-braid-layout="1"] .braid-server-strip::-webkit-scrollbar{display:none;width:0;height:0}
 html[data-braid-layout="1"] .braid-server-strip .server-icon{width:2.25rem!important;height:2.25rem!important;min-width:2.25rem;border-radius:.6875rem!important;flex-shrink:0;position:relative}
-html[data-braid-layout="1"] .braid-server-strip .server-separator{display:none}
+/* #server-list is a plain block div — inside the horizontal strip its
+   children would stack vertically (exactly what broke multi-server
+   setups). Flex it inline so every icon rides the same row. */
+html[data-braid-layout="1"] .braid-server-strip #server-list{display:flex;align-items:center;gap:.3125rem;min-width:0;flex-shrink:0}
+html[data-braid-layout="1"] .braid-server-strip .server-separator{width:1px;height:1.375rem;background:var(--border);border-radius:0;margin:0 .1875rem;flex-shrink:0}
+html[data-braid-layout="1"] .braid-server-strip .server-icon-img{border-radius:inherit}
+html[data-braid-layout="1"] .braid-server-strip .server-status-dot{width:.625rem;height:.625rem;bottom:-2px;right:-2px;border-width:2px}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers{background:var(--braid-btn-bg)}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server{border-color:var(--braid-btn-line)}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers{width:1.875rem!important;height:1.875rem!important;min-width:1.875rem;border-radius:.5625rem!important}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server{margin-left:auto}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server .server-icon-text{font-size:1rem}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers .server-icon-text,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers .server-icon-text{font-size:.875rem}
 html[data-braid-layout="1"] .sidebar-header{order:0;padding:.625rem .75rem!important;border-bottom:1px solid var(--border)!important;background:color-mix(in srgb,var(--bg-secondary) 92%,transparent)!important;backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px)}
 html[data-braid-layout="1"] .brand{margin-bottom:.5rem!important;gap:.5rem!important}
 html[data-braid-layout="1"] .brand-text{font-size:.9375rem!important;font-weight:650!important;letter-spacing:-.03em!important;text-transform:none!important}
-html[data-braid-layout="1"] .user-bar{border-radius:.75rem!important;padding:.5rem .625rem!important;gap:.5rem!important;background:var(--bg-tertiary)!important;border:1px solid var(--border)!important}
+html[data-braid-layout="1"] .user-bar{border-radius:.75rem!important;padding:.5rem .625rem!important;gap:.5rem!important;background:var(--braid-btn-bg)!important;border:1px solid var(--braid-btn-line)!important}
 html[data-braid-layout="1"] .sidebar-mod-container{order:1;flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:2px 0 .375rem}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"],
 html[data-braid-layout="1"] .sidebar-section#admin-controls{border:0!important;padding:2px .625rem!important;margin:0!important}
 html:not([data-braid-layout="1"]) .braid-more-wrap,
 html:not([data-braid-layout="1"]) .braid-more-menu,
+html:not([data-braid-layout="1"]) .braid-bar-btn,
 html:not([data-braid-layout="1"]) .braid-server-strip{display:none!important}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{font-size:.71875rem!important;letter-spacing:0!important;text-transform:none!important;font-weight:550!important;color:var(--text-muted)!important;margin:2px 0!important;padding:.4375rem .5rem;border-radius:.625rem}
@@ -640,6 +842,34 @@ html[data-braid-layout="1"] .voice-active-indicator{background:color-mix(in srgb
 html[data-braid-layout="1"] .voice-controls button[style*="background"],
 html[data-braid-layout="1"] .voice-controls div[style*="background"],
 html[data-braid-layout="1"] .voice-controls span[style*="background"]{background:var(--bg-tertiary)!important;color:var(--text-secondary)!important;border:1px solid var(--border)!important;border-radius:999px!important;box-shadow:none!important}
+/* ── Voice dock ── the relocated stock controls, bottom-left. Camera,
+   screen share, soundboard, listen-together, settings (stream quality
+   lives in there), people, leave — every streaming option in reach. */
+html[data-braid-layout="1"] #braid-voice-dock{flex-shrink:0;display:flex;flex-direction:column;min-width:0}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel{border-top:1px solid var(--border)!important;border-bottom:0!important;background:var(--bg-secondary)!important;padding:.4375rem .5rem!important;gap:.25rem!important;justify-content:flex-start!important;flex-wrap:wrap}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn,
+html[data-braid-layout="1"] #braid-voice-dock .voice-header-btn{width:2rem;height:2rem;border-radius:.625rem!important;border:1px solid var(--braid-btn-line)!important;background:var(--braid-btn-bg)!important;color:var(--text-primary)!important;font-size:.875rem;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;cursor:pointer;transition:background .15s,color .15s,border-color .15s,transform .12s}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn:hover,
+html[data-braid-layout="1"] #braid-voice-dock .voice-header-btn:hover{background:var(--braid-btn-bg-hover)!important;color:var(--text-primary)!important;border-color:color-mix(in srgb,var(--accent) 40%,var(--braid-btn-line))!important}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn:active,
+html[data-braid-layout="1"] #braid-voice-dock .voice-header-btn:active{transform:scale(.92)}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn.active,
+html[data-braid-layout="1"] #braid-voice-dock .voice-header-btn.active{background:color-mix(in srgb,var(--accent) 16%,var(--bg-tertiary))!important;border-color:var(--accent)!important;color:var(--accent)!important}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn.sharing{background:color-mix(in srgb,var(--success) 18%,var(--bg-tertiary))!important;border-color:var(--success)!important;color:var(--success)!important}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn.muted,
+html[data-braid-layout="1"] #braid-voice-dock .voice-header-btn.muted{background:color-mix(in srgb,var(--warning) 20%,var(--bg-tertiary))!important;border-color:var(--warning)!important;color:var(--warning)!important}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-divider{height:1.375rem;margin:0 .25rem;background:var(--border)}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-leave{margin-left:auto;width:2rem;height:2rem;font-size:.75rem;background:color-mix(in srgb,var(--danger) 14%,var(--bg-tertiary))!important;border-color:color-mix(in srgb,var(--danger) 45%,var(--border))!important;color:var(--danger)!important}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-leave:hover{background:var(--danger)!important;color:#fff!important;border-color:var(--danger)!important}
+html[data-braid-layout="1"] #braid-voice-dock .voice-settings-panel{border-top:1px solid var(--border)!important;border-bottom:0!important;background:var(--bg-secondary)!important;max-height:min(46vh,21rem);overflow:auto;padding:.625rem .75rem!important;scrollbar-width:thin}
+html[data-braid-layout="1"] #braid-voice-dock .voice-settings-select{border-radius:.5625rem!important;border:1px solid var(--border)!important;background:var(--bg-input,var(--bg-tertiary))!important}
+html[data-braid-layout="1"] #braid-voice-dock .voice-settings-section-label{font-size:.625rem;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted)}
+/* The in-call status bar rides between dock and Menu — same quiet chrome */
+html[data-braid-layout="1"] .sidebar-bottom .voice-bar{border-top:1px solid var(--border)!important;background:var(--bg-secondary)!important;padding:.375rem .625rem!important;box-shadow:none!important}
+html[data-braid-layout="1"] .sidebar-bottom .voice-bar-channel{font-size:.71875rem;color:var(--text-muted)}
+html[data-braid-layout="1"] .sidebar-bottom .voice-bar-badge{border-radius:999px!important;font-size:.59375rem;border:1px solid var(--braid-btn-line);background:var(--braid-btn-bg)}
+html[data-braid-layout="1"] .sidebar-bottom .voice-bar-leave{border-radius:.625rem!important;box-shadow:none!important;background:var(--braid-btn-bg)!important;border:1px solid var(--braid-btn-line)!important;color:var(--text-primary)!important}
+html[data-braid-layout="1"] .sidebar-bottom .voice-bar-leave:hover{background:color-mix(in srgb,var(--danger) 18%,var(--bg-secondary))!important;border-color:var(--danger)!important;color:var(--danger)!important}
 html[data-braid-layout="1"] .message-area{flex:1;min-height:0;display:flex;flex-direction:column}
 html[data-braid-layout="1"] .messages{padding:1.125rem 1.75rem .5rem!important;width:100%;box-sizing:border-box}
 html[data-braid-layout="1"] .message-input-area,
@@ -661,11 +891,14 @@ html[data-braid-layout="1"].braid-sound-open #soundboard-sidebar,
 html[data-braid-layout="1"].braid-sound-open .soundboard-sidebar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
 html[data-braid-layout="1"].braid-status-open .status-bar,
 html[data-braid-layout="1"].braid-status-open #status-bar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
-html[data-braid-layout="1"] .sidebar-bottom-bar{display:flex!important;padding:.5rem .625rem!important}
-html[data-braid-layout="1"] .sidebar-bottom-bar>*:not(.braid-more-wrap){display:none!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar{display:flex!important;padding:.5rem .625rem!important;gap:.375rem!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar>*:not(.braid-more-wrap):not(.braid-bar-btn){display:none!important}
+html[data-braid-layout="1"] .braid-bar-btn{flex:0 0 auto;width:2.5rem;height:2.5rem;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--braid-btn-line)!important;border-radius:.75rem;background:var(--braid-btn-bg);color:var(--text-secondary);cursor:pointer;padding:0;transition:background .15s,color .15s,border-color .15s,transform .12s}
+html[data-braid-layout="1"] .braid-bar-btn:hover{background:var(--braid-btn-bg-hover);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--braid-btn-line))!important}
+html[data-braid-layout="1"] .braid-bar-btn:active{transform:scale(.93)}
 html[data-braid-layout="1"] .braid-more-wrap{position:relative;flex:1;display:flex}
-html[data-braid-layout="1"] .braid-more-btn{flex:1;display:flex;align-items:center;gap:.625rem;height:2.5rem;padding:0 .875rem;border:1px solid var(--border)!important;border-radius:.75rem;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-size:calc(.8125rem*var(--braid-ui-scale,1));font-weight:600;letter-spacing:-.01em;transition:background .15s,color .15s,border-color .15s}
-html[data-braid-layout="1"] .braid-more-btn:hover{background:var(--bg-hover);color:var(--text-primary);border-color:color-mix(in srgb,var(--accent) 35%,var(--border))!important}
+html[data-braid-layout="1"] .braid-more-btn{flex:1;display:flex;align-items:center;gap:.625rem;height:2.5rem;padding:0 .875rem;border:1px solid var(--braid-btn-line)!important;border-radius:.75rem;background:var(--braid-btn-bg);color:var(--text-primary);cursor:pointer;font-size:calc(.8125rem*var(--braid-ui-scale,1));font-weight:600;letter-spacing:-.01em;transition:background .15s,color .15s,border-color .15s}
+html[data-braid-layout="1"] .braid-more-btn:hover{background:var(--braid-btn-bg-hover);color:var(--text-primary);border-color:color-mix(in srgb,var(--accent) 40%,var(--braid-btn-line))!important}
 html[data-braid-layout="1"] .braid-ham-label{pointer-events:none}
 html[data-braid-layout="1"] .braid-ham{display:flex;flex-direction:column;justify-content:center;gap:.25rem;width:1.0625rem;height:1.0625rem}
 html[data-braid-layout="1"] .braid-ham-line{display:block;height:2px;width:100%;border-radius:2px;background:currentColor;transition:transform .28s cubic-bezier(.16,1,.3,1),opacity .18s ease;transform-origin:center}
@@ -680,8 +913,10 @@ html[data-braid-layout="1"] .braid-more-menu.open{display:block;animation:braid-
 html[data-braid-layout="1"] .braid-more-menu.open>button,
 html[data-braid-layout="1"] .braid-more-menu.open>.braid-menu-label{animation:braid-item-in .3s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--i,0)*18ms)}
 html[data-braid-layout="1"] .braid-menu-label{font-size:.59375rem;font-weight:650;letter-spacing:.13em;text-transform:uppercase;color:var(--text-muted);padding:.5rem .625rem .25rem}
-html[data-braid-layout="1"] .braid-more-menu button{display:flex;width:100%;align-items:center;gap:.5rem;border:0;background:transparent;padding:.5rem .625rem;border-radius:.625rem;font-size:calc(.8125rem*var(--braid-ui-scale,1));font-weight:550;color:var(--text-primary);cursor:pointer;text-align:left}
+html[data-braid-layout="1"] .braid-more-menu button{display:flex;width:100%;align-items:center;gap:.625rem;border:0;background:transparent;padding:.5rem .625rem;border-radius:.625rem;font-size:calc(.8125rem*var(--braid-ui-scale,1));font-weight:550;color:var(--text-primary);cursor:pointer;text-align:left}
 html[data-braid-layout="1"] .braid-more-menu button:hover{background:var(--bg-hover)}
+html[data-braid-layout="1"] .braid-mi{display:flex;flex:0 0 auto;opacity:.7}
+html[data-braid-layout="1"] .braid-more-menu button:hover .braid-mi{opacity:1;color:var(--accent)}
 html[data-braid-layout="1"] .braid-more-menu .muted{color:var(--text-muted);font-size:.71875rem;font-weight:450;margin-left:auto}
 @media (prefers-reduced-motion: reduce){
 html[data-braid-layout="1"] .braid-more-menu.open,html[data-braid-layout="1"] .braid-more-menu.open>button,html[data-braid-layout="1"] .braid-more-menu.open>.braid-menu-label{animation:none!important}
@@ -697,11 +932,6 @@ html[data-braid-layout="1"].braid-people-open .right-sidebar{position:fixed;righ
 }
 `;
 
-BraidLayout._ORDER_CSS = `
-html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"],
-html[data-braid-layout="1"] .sidebar-section#admin-controls{order:3}
-html[data-braid-layout="1"] .sidebar-split{order:1}
-`;
 
 BraidLayout._FORM_CSS = `
 html[data-braid-form="1"]{
@@ -728,12 +958,12 @@ html[data-braid-form="1"] .message-compact:hover{background:transparent!importan
    (The old base rule left border-bottom on every body, which stacked a
    solid line under the dotted seam and read as a full-width divider.) */
 html[data-braid-form="1"] .message>.message-row>.message-body,
-html[data-braid-form="1"] .message-compact>.message-body{position:relative;flex:1 1 auto;min-width:0;background:var(--braid-bub);border:1px solid var(--braid-line);border-top:0;border-bottom:0;border-radius:0;padding:.3125rem .8125rem}
+html[data-braid-form="1"] .message-compact>.message-body{position:relative;flex:1 1 auto;min-width:0;background:var(--braid-bub);border:1px solid var(--braid-line);border-top:0;border-bottom:0;border-radius:0;padding:.4375rem .9375rem}
 html[data-braid-form="1"] .message[data-braid-run="start"]>.message-row>.message-body,
-html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body{border-top:1px solid var(--braid-line);border-top-left-radius:var(--braid-r);border-top-right-radius:var(--braid-r);padding-top:.5625rem;margin-top:.5rem}
+html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body{border-top:1px solid var(--braid-line);border-top-left-radius:var(--braid-r);border-top-right-radius:var(--braid-r);padding-top:.6875rem;margin-top:.625rem}
 html[data-braid-form="1"] .message[data-braid-run="end"]>.message-row>.message-body,
 html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body,
-html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom:1px solid var(--braid-line);border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:.5625rem;margin-bottom:.5rem}
+html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom:1px solid var(--braid-line);border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:.6875rem;margin-bottom:.625rem}
 /* the only separator inside a run: a small centered dotted seam */
 html[data-braid-form="1"] .message-compact>.message-body::before,
 html[data-braid-form="1"] .message[data-braid-cont="1"]>.message-row>.message-body::before{content:'';position:absolute;left:50%;transform:translateX(-50%);width:min(7rem,45%);top:0;border-top:1px dotted color-mix(in srgb,var(--braid-seam) 75%,transparent);pointer-events:none}
@@ -923,6 +1153,21 @@ html[data-braid-layout="1"] .theme-popup,html[data-braid-layout="1"] .modal-cont
 html[data-braid-layout="1"] .message,html[data-braid-layout="1"] .message-compact,html[data-braid-layout="1"] .messages,html[data-braid-layout="1"] .reaction,html[data-braid-layout="1"] .message-reactions>*,html[data-braid-layout="1"] .typing-indicator,html[data-braid-layout="1"] .typing-text,html[data-braid-layout="1"] .msg-toolbar,html[data-braid-layout="1"] .context-menu,html[data-braid-layout="1"] .dropdown-menu,html[data-braid-layout="1"] .theme-popup,html[data-braid-layout="1"] .modal-content,html[data-braid-layout="1"] .settings-panel{animation:none!important}
 html[data-braid-layout="1"] .channel-item,html[data-braid-layout="1"] .btn-send,html[data-braid-layout="1"] .icon-btn,html[data-braid-layout="1"] .reaction{transition:none!important;transform:none!important}
 }
+`;
+
+// Self-contained (no braid keyframes/vars assumed): this sheet is the one
+// piece that stays loaded while the layout is disengaged, so the way back
+// exists even with every Braid layer torn down.
+BraidLayout._PILL_CSS = `
+#braid-return-pill.braid-return-btn{color:var(--accent,#00ff9d)!important;border:1px solid color-mix(in srgb,var(--accent,#00ff9d) 35%,transparent)!important;border-radius:.625rem}
+#braid-return-pill.braid-return-btn:hover{background:color-mix(in srgb,var(--accent,#00ff9d) 14%,transparent)!important}
+#braid-return-pill.braid-return-btn svg{display:block;margin:auto}
+#braid-return-pill.braid-return-float{position:fixed;left:.875rem;bottom:.875rem;z-index:120;display:inline-flex;align-items:center;justify-content:center;width:2.5rem;height:2.5rem;border-radius:999px;border:1px solid var(--border,#333a46);background:var(--bg-card,var(--bg-secondary,#12151c));color:var(--accent,#00ff9d);cursor:pointer;box-shadow:0 10px 28px -10px rgba(0,0,0,.45)}
+html[data-braid-layout="1"] #braid-return-pill{display:none!important}
+body.mod-mode-on #braid-return-pill{display:none!important}
+#braid-mod-done{position:fixed;left:50%;bottom:5.75rem;transform:translateX(-50%);z-index:200;display:inline-flex;align-items:center;gap:.5rem;padding:.6875rem 1.25rem;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent,#00ff9d) 55%,transparent);background:var(--accent,#00ff9d);color:var(--bg-primary,#0b0d12);font-family:inherit;font-size:.8125rem;font-weight:700;letter-spacing:-.01em;line-height:1;cursor:pointer;box-shadow:0 14px 36px -10px rgba(0,0,0,.5);transition:transform .12s,filter .15s}
+#braid-mod-done:hover{filter:brightness(1.08)}
+#braid-mod-done:active{transform:translateX(-50%) scale(.96)}
 `;
 
 // Register with the plugin loader's _win scope
