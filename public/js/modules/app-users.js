@@ -776,7 +776,7 @@ _showProfilePopup(profile) {
     : '';
   const actionsHtml = isSelf
     ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ ${t('users.edit_profile')}</button><button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}" title="Notes to self">📝 Notes to self</button>`
-    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}">${nickBtnLabel}</button>${gearBtnHtml}`;
+    : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}" data-nick-dname="${this._escapeHtml(profile.displayName)}">${nickBtnLabel}</button>${gearBtnHtml}`;
 
   const popup = document.createElement('div');
   popup.id = 'profile-popup';
@@ -864,8 +864,9 @@ _showProfilePopup(profile) {
     nickBtnEl.addEventListener('click', () => {
       const uid = parseInt(nickBtnEl.dataset.nickUid);
       const uname = nickBtnEl.dataset.nickUname;
+      const dname = nickBtnEl.dataset.nickDname;
       this._closeProfilePopup();
-      this._showNicknameDialog(uid, uname);
+      this._showNicknameDialog(uid, uname, dname);
     });
   }
 
@@ -1379,8 +1380,12 @@ _setNickname(userId, nickname) {
   }
 },
 
-_showNicknameDialog(userId, currentUsername) {
+_showNicknameDialog(userId, currentUsername, currentDisplayName) {
   const existing = this._nicknames[userId] || '';
+  const displayName = currentDisplayName || currentUsername;
+  // Members with Manage Display Names can flip this modal into editing the
+  // target's real (server-wide) display name instead of a private nickname.
+  const canManageNames = userId !== this.user?.id && this._hasPerm('manage_display_names');
   const dialog = document.createElement('div');
   dialog.className = 'modal-overlay';
   dialog.style.display = 'flex';
@@ -1390,8 +1395,15 @@ _showNicknameDialog(userId, currentUsername) {
       <h3 style="margin-top:0">${t('users.set_nickname_title')}</h3>
       <p class="muted-text" style="margin:0 0 12px">${t('users.nickname_hint', { name: `<strong>${this._escapeHtml(currentUsername)}</strong>` })}</p>
       <input type="text" id="nickname-input" class="modal-input" value="${this._escapeHtml(existing)}" placeholder="${this._escapeHtml(currentUsername)}" maxlength="32" style="width:100%;box-sizing:border-box">
+      ${canManageNames ? `
+      <label class="toggle-row" style="margin-top:12px">
+        <span>${t('users.edit_display_name_toggle')}</span>
+        <input type="checkbox" id="nickname-global-toggle">
+      </label>
+      <p class="muted-text" id="nickname-global-note" style="display:none;margin:8px 0 0;padding:8px 10px;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-light);color:var(--text-secondary)">${t('users.edit_display_name_note')}</p>
+      ` : ''}
       <div class="modal-actions" style="margin-top:12px">
-        ${existing ? `<button class="btn-sm" id="nickname-clear">${t('users.nickname_clear_btn')}</button>` : ''}
+        <button class="btn-sm" id="nickname-clear" style="${existing ? '' : 'display:none'}">${t('users.nickname_clear_btn')}</button>
         <button class="btn-sm" id="nickname-cancel">${t('modals.common.cancel')}</button>
         <button class="btn-sm btn-accent" id="nickname-save">${t('modals.common.save')}</button>
       </div>
@@ -1406,24 +1418,52 @@ _showNicknameDialog(userId, currentUsername) {
   dialog.querySelector('#nickname-cancel').addEventListener('click', close);
   dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
 
+  const globalToggle = dialog.querySelector('#nickname-global-toggle');
+  const globalNote = dialog.querySelector('#nickname-global-note');
   const clearBtn = dialog.querySelector('#nickname-clear');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      this._setNickname(userId, null);
-      this._refreshNicknameDisplays();
-      this._showToast(t('users.nickname_cleared'), 'info');
-      close();
+  const isGlobal = () => !!(globalToggle && globalToggle.checked);
+
+  if (globalToggle) {
+    globalToggle.addEventListener('change', () => {
+      const on = globalToggle.checked;
+      // Checked: prefill the target's current display name and reveal the
+      // warning. Unchecked: fall back to the private nickname exactly as before.
+      input.value = on ? displayName : existing;
+      input.maxLength = on ? 20 : 32;
+      globalNote.style.display = on ? '' : 'none';
+      clearBtn.style.display = (on || existing) ? '' : 'none';
+      clearBtn.textContent = on ? t('users.display_name_reset_btn') : t('users.nickname_clear_btn');
+      input.focus();
+      input.select();
     });
   }
 
+  clearBtn.addEventListener('click', () => {
+    if (isGlobal()) {
+      // Reset the target's display name back to their username
+      this.socket.emit('rename-user-global', { targetId: userId, displayName: '' });
+      this._showToast(t('users.display_name_reset'), 'info');
+    } else {
+      this._setNickname(userId, null);
+      this._refreshNicknameDisplays();
+      this._showToast(t('users.nickname_cleared'), 'info');
+    }
+    close();
+  });
+
   dialog.querySelector('#nickname-save').addEventListener('click', () => {
     const val = input.value.trim();
-    this._setNickname(userId, val || null);
-    this._refreshNicknameDisplays();
-    if (val) {
-      this._showToast(t('users.nickname_set', { name: val }), 'success');
+    if (isGlobal()) {
+      this.socket.emit('rename-user-global', { targetId: userId, displayName: val });
+      this._showToast(t('users.display_name_updated', { name: val || displayName }), 'success');
     } else {
-      this._showToast(t('users.nickname_cleared'), 'info');
+      this._setNickname(userId, val || null);
+      this._refreshNicknameDisplays();
+      if (val) {
+        this._showToast(t('users.nickname_set', { name: val }), 'success');
+      } else {
+        this._showToast(t('users.nickname_cleared'), 'info');
+      }
     }
     close();
   });

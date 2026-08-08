@@ -432,7 +432,8 @@
     "manage_server": "Manage Server",
     "delete_channel": "Delete Channels",
     "read_only_override": "Read-Only Override",
-    "view_audit_log": "View Audit Log"
+    "view_audit_log": "View Audit Log",
+    "manage_display_names": "Manage Display Names"
   },
   "slowmode": {
     "wait": "Slow mode — wait {{seconds}}s before sending another message",
@@ -590,6 +591,11 @@
     "set_nickname_title": "Set Nickname",
     "nickname_hint": "Only you will see this nickname for {{name}}.",
     "nickname_clear_btn": "Clear",
+    "edit_display_name_toggle": "Edit Display Name (Global)",
+    "edit_display_name_note": "You are now editing the Display Name of this user. This change will be visible to every member in the server.",
+    "display_name_reset_btn": "Reset to Username",
+    "display_name_reset": "Display name reset",
+    "display_name_updated": "Display name updated to \"{{name}}\"",
     "edit_profile_modal_title": "Edit Profile",
     "bio_label": "Bio",
     "bio_max_hint": "(max 190 chars)",

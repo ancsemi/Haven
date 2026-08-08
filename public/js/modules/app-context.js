@@ -98,7 +98,7 @@ _showUserContextMenu(e, targetUserId) {
   nickBtn.innerHTML = `🏷️ ${t('users.set_nickname')}`;
   nickBtn.addEventListener('click', () => {
     this._hideUserContextMenu();
-    this._showNicknameDialog(targetUserId, targetName);
+    this._showNicknameDialog(targetUserId, targetName, targetName);
   });
   menu.appendChild(nickBtn);
 

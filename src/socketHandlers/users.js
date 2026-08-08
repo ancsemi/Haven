@@ -744,6 +744,116 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // ── Global display name (Manage Display Names permission) ──
+  // Lets a moderator change another member's real display name — the one
+  // everyone sees — reusing the same validation and broadcast path as a
+  // self-rename. A blank displayName resets the target back to their username.
+  socket.on('rename-user-global', (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_display_names')) {
+      return socket.emit('error-msg', 'You do not have permission to manage display names');
+    }
+    const targetId = parseInt(data.targetId, 10);
+    if (!Number.isFinite(targetId) || targetId <= 0) return;
+
+    const target = db.prepare('SELECT id, username, display_name FROM users WHERE id = ?').get(targetId);
+    if (!target) return socket.emit('error-msg', 'User not found');
+
+    const raw = typeof data.displayName === 'string' ? data.displayName.trim().replace(/\s+/g, ' ') : '';
+    const oldName = target.display_name || target.username;
+
+    let newName, newDisplayCol;
+    if (raw) {
+      if (raw.length < 2 || raw.length > 20) {
+        return socket.emit('error-msg', 'Display name must be 2-20 characters');
+      }
+      if (!/^[a-zA-Z0-9_ ]+$/.test(raw)) {
+        return socket.emit('error-msg', 'Letters, numbers, underscores, and spaces only');
+      }
+      try {
+        const conflict = db.prepare(`
+          SELECT id FROM users
+          WHERE id != ?
+            AND (LOWER(display_name) = LOWER(?)
+                 OR (display_name IS NULL AND LOWER(username) = LOWER(?)))
+          LIMIT 1
+        `).get(targetId, raw, raw);
+        if (conflict) {
+          return socket.emit('error-msg', 'That display name is already taken on this server');
+        }
+      } catch (err) {
+        console.error('Display name conflict check failed:', err);
+      }
+      newName = raw;
+      newDisplayCol = raw;
+    } else {
+      // Reset back to the login username
+      newName = target.username;
+      newDisplayCol = null;
+    }
+
+    try {
+      db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(newDisplayCol, targetId);
+    } catch (err) {
+      console.error('Global rename error:', err);
+      return socket.emit('error-msg', 'Failed to update display name');
+    }
+
+    // Refresh presence maps silently — no user-renamed system message, since a
+    // moderator changing someone's name shouldn't announce itself in-channel.
+    for (const [code, users] of channelUsers) {
+      if (users.has(targetId)) {
+        users.get(targetId).username = newName;
+        emitOnlineUsers(code);
+      }
+    }
+    for (const [code, users] of voiceUsers) {
+      if (users.has(targetId)) {
+        users.get(targetId).username = newName;
+        broadcastVoiceUsers(code);
+      }
+    }
+
+    // Update the target's own connected sessions (token + UI) as if they renamed
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === targetId) {
+        s.user.displayName = newName;
+        const newToken = generateToken({ id: s.user.id, username: s.user.username, isAdmin: s.user.isAdmin, displayName: newName });
+        s.emit('renamed', {
+          token: newToken,
+          user: { id: s.user.id, username: s.user.username, isAdmin: s.user.isAdmin, displayName: newName },
+          oldName
+        });
+      }
+    }
+
+    // Notify DM partners so their sidebars update
+    try {
+      const dmPartners = db.prepare(`
+        SELECT DISTINCT cm2.user_id FROM channel_members cm1
+        JOIN channels c ON c.id = cm1.channel_id AND c.is_dm = 1
+        JOIN channel_members cm2 ON cm2.channel_id = c.id AND cm2.user_id != ?
+        WHERE cm1.user_id = ?
+      `).all(targetId, targetId);
+      for (const partner of dmPartners) {
+        for (const [, s] of io.sockets.sockets) {
+          if (s.user && s.user.id === partner.user_id) {
+            s.emit('dm-name-updated', { userId: targetId, newName });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('DM name update broadcast error:', err);
+    }
+
+    console.log(`✏️  ${socket.user.username} set display name of ${target.username} to ${newName}`);
+    if (oldName !== newName) {
+      _audit({ actor: socket.user, action: 'user_rename',
+        target_type: 'user', target_id: targetId, target_name: newName,
+        details: { oldName, newName } });
+    }
+  });
+
   socket.on('set-nicknames-bulk', (data) => {
     if (!data || typeof data !== 'object') return;
     const map = data.nicknames;

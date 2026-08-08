@@ -9,7 +9,7 @@ const ALL_PERMS = [
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
   'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
-  'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log'
+  'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names'
 ];
 //Similarly flavored solution to perm labels
 const PERM_LABELS = {
@@ -46,7 +46,8 @@ const PERM_LABELS = {
   get manage_server() { return t('permissions.manage_server'); },
   get delete_channel() { return t('permissions.delete_channel'); },
   get read_only_override() { return t('permissions.read_only_override'); },
-  get view_audit_log() { return t('permissions.view_audit_log'); }
+  get view_audit_log() { return t('permissions.view_audit_log'); },
+  get manage_display_names() { return t('permissions.manage_display_names'); }
 };
 
 export default {
@@ -1675,7 +1676,7 @@ _renderAllMembers(members) {
       let btns = '';
       // Always-available: DM and Nickname
       btns += `<button class="aml-action-btn aml-btn-dm" data-uid="${m.id}" data-uname="${this._escapeHtml(m.displayName)}" title="${t('users.direct_message')}">💬</button>`;
-      btns += `<button class="aml-action-btn aml-btn-nick" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" title="${t('users.set_nickname')}">🏷️</button>`;
+      btns += `<button class="aml-action-btn aml-btn-nick" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" data-dname="${this._escapeHtml(m.displayName)}" title="${t('users.set_nickname')}">🏷️</button>`;
       if (perms.canPromote && !m.banned) {
         btns += `<button class="aml-action-btn aml-btn-role" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" title="${t('users.gear_menu.assign_role')}">👑</button>`;
       }
@@ -1741,7 +1742,8 @@ _bindMemberListActions(container) {
       e.stopPropagation();
       const uid = parseInt(btn.dataset.uid);
       const uname = btn.dataset.uname;
-      self._showNicknameDialog(uid, uname);
+      const dname = btn.dataset.dname;
+      self._showNicknameDialog(uid, uname, dname);
     });
   });
 
