@@ -201,6 +201,25 @@ module.exports = function createPermissions(db) {
     `).all(userId);
   }
 
+  // Cosmetic display for the synthetic admin role, backed by the
+  // 'admin_role_display' server setting (falls back to sensible defaults).
+  // This is purely cosmetic: is_admin, the effective level (100) and the
+  // permission set (['*']) are computed independently and never look at this.
+  function getAdminRoleDisplay() {
+    const defaults = { name: 'Admin', color: '#e74c3c', icon: null, visible: true };
+    try {
+      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_display'").get();
+      if (!row) return defaults;
+      const p = JSON.parse(row.value);
+      return {
+        name: (typeof p.name === 'string' && p.name.trim()) ? p.name : defaults.name,
+        color: (typeof p.color === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(p.color)) ? p.color : defaults.color,
+        icon: (typeof p.icon === 'string' && p.icon) ? p.icon : null,
+        visible: p.visible !== false
+      };
+    } catch { return defaults; }
+  }
+
   function getUserHighestRole(userId, channelId = null) {
     const all = getUserAllRoles(userId, channelId);
     return all.length > 0 ? all[0] : null;
@@ -214,7 +233,10 @@ module.exports = function createPermissions(db) {
   function getUserAllRoles(userId, channelId = null) {
     const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
     if (user && user.is_admin) {
-      return [{ id: 0, name: 'Admin', level: 100, color: '#e74c3c', icon: null, scope: 'server', channel_id: null }];
+      const d = getAdminRoleDisplay();
+      // Visibility off hides the admin badge/colour everywhere, for everyone.
+      if (!d.visible) return [];
+      return [{ id: 0, name: d.name, level: 100, color: d.color, icon: d.icon, scope: 'server', channel_id: null }];
     }
 
     // Dedupe by role.id for display purposes — if a user holds the same
@@ -261,6 +283,6 @@ module.exports = function createPermissions(db) {
   return {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
     userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles,
-    getUserHighestRole, getUserAllRoles
+    getUserHighestRole, getUserAllRoles, getAdminRoleDisplay
   };
 };

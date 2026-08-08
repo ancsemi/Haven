@@ -8,7 +8,7 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole,
     emitOnlineUsers, broadcastChannelLists, getEnrichedChannels,
-    transferAdminRef, HAVEN_VERSION, logAudit
+    transferAdminRef, HAVEN_VERSION, logAudit, getAdminRoleDisplay
   } = ctx;
   const { channelUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -135,6 +135,42 @@ module.exports = function register(socket, ctx) {
     cb({ channelId: channel.id, channelName: channel.name, members: result });
   });
 
+  // ── Admin role cosmetic display (admin only) ────────────
+  // The admin role is synthetic (there is no row for it in `roles`). These
+  // handlers persist a purely cosmetic override in server_settings under
+  // 'admin_role_display'. Nothing here affects is_admin, level or permissions.
+  socket.on('get-admin-role-display', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!socket.user.isAdmin) return cb({ error: 'Only the admin can view this' });
+    cb({ display: getAdminRoleDisplay() });
+  });
+
+  socket.on('update-admin-role-display', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!socket.user.isAdmin) return cb({ error: 'Only the admin can edit this' });
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+
+    // Validated like create/update-role; invalid fields fall back to the safe
+    // default rather than being rejected, since this is cosmetic only.
+    const name = isString(data.name, 1, 30) ? data.name.trim() : 'Admin';
+    const color = (isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color)) ? data.color : '#e74c3c';
+    const icon = (isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon)) ? data.icon : null;
+    const visible = data.visible !== false;
+
+    db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_display', ?)")
+      .run(JSON.stringify({ name, color, icon, visible }));
+
+    // Refresh every live display: member lists re-read getUserHighestRole and
+    // clients re-fetch role-driven UI on roles-updated.
+    for (const [code] of channelUsers) { emitOnlineUsers(code); }
+    io.emit('roles-updated');
+
+    cb({ success: true, display: { name, color, icon, visible } });
+    _audit({ actor: socket.user, action: 'admin_role_display_update',
+      target_type: 'server', target_id: null, target_name: 'admin_role_display',
+      details: { name, color, icon, visible } });
+  });
+
   // ── Create role ─────────────────────────────────────────
   socket.on('create-role', (data, callback) => {
     if (!data || typeof data !== 'object') return;
@@ -151,6 +187,15 @@ module.exports = function register(socket, ctx) {
     const color = isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color) ? data.color : null;
     const autoAssign = data.autoAssign ? 1 : 0;
     const icon = isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon) ? data.icon : null;
+
+    // A non-admin cannot create a role at or above their own level (they'd be
+    // unable to assign it anyway, and it must not sit at/over their rank).
+    if (!socket.user.isAdmin) {
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (level >= myLevel) {
+        return cb({ error: `You can only create roles below your level (${myLevel})` });
+      }
+    }
 
     try {
       if (autoAssign) {
@@ -193,6 +238,22 @@ module.exports = function register(socket, ctx) {
     const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(roleId);
     if (!role) return cb({ error: 'Role not found' });
 
+    // Role hierarchy: a non-admin may only edit roles strictly below their own
+    // level, and may never raise a role to or above their level. This is the
+    // real guard behind the behaviour that used to happen by accident — editing
+    // a peer or higher role would nuke its permissions and lock the caller out,
+    // while the level change itself still went through. Viewing is unaffected
+    // (get-roles has no such gate). Mirrors assign-role / promote-user.
+    if (!socket.user.isAdmin) {
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      if (role.level >= myLevel) {
+        return cb({ error: `You can only edit roles below your level (${myLevel})` });
+      }
+      if (isInt(data.level) && data.level >= myLevel) {
+        return cb({ error: `A role's level must stay below your own (${myLevel})` });
+      }
+    }
+
     const updateRoleTx = db.transaction(() => {
       const updates = [];
       const values = [];
@@ -223,14 +284,38 @@ module.exports = function register(socket, ctx) {
       }
 
       if (Array.isArray(data.permissions)) {
-        const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+        const requested = data.permissions.filter(p => VALID_ROLE_PERMS.includes(p));
+
+        // Resolve the final permission set BEFORE deleting anything. The old
+        // code deleted the role's permissions first and then re-checked each
+        // requested perm with userHasPermission(caller) — inside the same
+        // transaction, so the delete was already visible. When a non-admin
+        // edited the very role that granted their own permissions, that source
+        // was gone at check time, so every perm they "no longer had" was
+        // silently dropped, wiping it for every other member of the role too.
+        // We now snapshot the caller's rights up front and preserve any
+        // permission they don't personally control (admin-only perms, or perms
+        // they lack) exactly as the role already had them — a non-admin can
+        // only add or remove perms they actually hold, and never deletes the
+        // rest as a side effect.
+        let finalPerms;
+        if (socket.user.isAdmin) {
+          finalPerms = requested;
+        } else {
+          const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+          const current = db.prepare(
+            'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
+          ).all(roleId).map(r => r.permission);
+          const callerPerms = new Set(getUserPermissions(socket.user.id));
+          const controllable = (p) => !adminOnlyPerms.includes(p) && (callerPerms.has('*') || callerPerms.has(p));
+          const lockedKept = current.filter(p => !controllable(p));
+          const controlledChosen = requested.filter(p => controllable(p));
+          finalPerms = [...new Set([...lockedKept, ...controlledChosen])];
+        }
+
         db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
         const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
-        data.permissions.forEach(p => {
-          if (!VALID_ROLE_PERMS.includes(p)) return;
-          if (!socket.user.isAdmin && (adminOnlyPerms.includes(p) || !userHasPermission(socket.user.id, p))) return;
-          insertPerm.run(roleId, p);
-        });
+        finalPerms.forEach(p => insertPerm.run(roleId, p));
       }
     });
     updateRoleTx();

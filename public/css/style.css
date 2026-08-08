@@ -6887,6 +6887,33 @@ details.sound-section:not([open]) .sound-section-label::before {
   cursor: pointer;
 }
 
+/* Admin-only permission callout in the role editors. The note and the
+   highlighted permission labels share the same theme-aware colour so the
+   connection reads at a glance. */
+.perm-admin-note {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--warning);
+}
+.toggle-row.perm-admin-only > span,
+.cr-perm-toggle.perm-admin-only > span {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* Read-only banner shown when a non-admin opens a role at or above their own
+   level — they can view it but not edit it. */
+.role-readonly-note {
+  margin: 0 0 0.625rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  border-radius: 0.375rem;
+}
+
 .slider-sm {
   width: 5rem;
   height: 0.875rem;
@@ -14705,6 +14732,12 @@ ul.chat-list { list-style-type: disc; }
 .role-sidebar-item.active {
   background: var(--accent, #5865f2);
   color: #fff;
+}
+/* Separates the synthetic Admin role from the real roles in the sidebar. */
+.role-sidebar-divider {
+  height: 1px;
+  margin: 0.375rem 0.25rem;
+  background: var(--border, rgba(255,255,255,0.12));
 }
 .role-color-dot {
   width: 0.625rem;

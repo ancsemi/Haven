@@ -9,7 +9,7 @@ const { setEnvValue, isWritableKey } = require('../envStore');
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission,
           emitOnlineUsers, broadcastVoiceUsers, generateToken,
-          touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit } = ctx;
+          touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit, getAdminRoleDisplay } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
@@ -240,7 +240,8 @@ module.exports = function register(socket, ctx) {
       const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(data.userId);
       if (isAdmin && isAdmin.is_admin) {
         roles.length = 0;
-        roles.push({ id: -1, name: 'Admin', level: 100, color: '#e74c3c' });
+        const d = getAdminRoleDisplay();
+        if (d.visible) roles.push({ id: -1, name: d.name, level: 100, color: d.color, icon: d.icon });
       } else if (roles.length > 1) {
         const userRoleIdx = roles.findIndex(r => r.name === 'User' && r.level <= 1);
         if (userRoleIdx !== -1) roles.splice(userRoleIdx, 1);

@@ -11,6 +11,10 @@ const ALL_PERMS = [
   'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log'
 ];
+// Permissions only the server owner (admin) may grant. Highlighted in the
+// role editors and locked for non-admins; mirrors adminOnlyPerms in
+// socketHandlers/roles.js.
+const ADMIN_ONLY_PERMS = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
 //Similarly flavored solution to perm labels
 const PERM_LABELS = {
   get edit_own_messages() { return t('permissions.edit_own_messages'); },
@@ -3564,6 +3568,7 @@ async _importExecute(importId, selectedChannels) {
 _initRoleManagement() {
   this._allRoles = [];
   this._selectedRoleId = null;
+  this._adminRoleDisplay = null;
 
   // Open role editor modal
   document.getElementById('open-role-editor-btn')?.addEventListener('click', () => {
@@ -3728,29 +3733,159 @@ _renderChannelCreatorRoleSelect() {
 
 _openRoleModal() {
   document.getElementById('role-modal').style.display = 'flex';
+  // Admin-only: fetch the current cosmetic display for the synthetic Admin
+  // role so the sidebar entry shows its saved name/colour.
+  if (this.user && this.user.isAdmin) {
+    this.socket.emit('get-admin-role-display', {}, (res) => {
+      if (res && res.display) { this._adminRoleDisplay = res.display; this._renderRoleSidebar(); }
+    });
+  }
   this._loadRoles();
 },
 
 _renderRoleSidebar() {
   const list = document.getElementById('role-list-sidebar');
   if (!list) return;
-  list.innerHTML = this._allRoles.map(r =>
+  let html = '';
+  // Admin-only: the synthetic Admin role sits on top, separated from the real
+  // roles by a divider. Its id is the string 'admin' so it never collides with
+  // real (integer) role ids.
+  if (this.user && this.user.isAdmin) {
+    const d = this._adminRoleDisplay || { name: 'Admin', color: '#e74c3c' };
+    html += `<div class="role-sidebar-item${this._selectedRoleId === 'admin' ? ' active' : ''}" data-role-id="admin">
+      <span class="role-color-dot" style="background:${this._safeColor(d.color, '#e74c3c')}"></span>
+      ${this._escapeHtml(d.name)}
+    </div>
+    <div class="role-sidebar-divider"></div>`;
+  }
+  html += this._allRoles.map(r =>
     `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
       <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
       ${this._escapeHtml(r.name)}
     </div>`
   ).join('');
+  list.innerHTML = html;
   list.querySelectorAll('.role-sidebar-item').forEach(el => {
     el.addEventListener('click', () => {
-      this._selectedRoleId = parseInt(el.dataset.roleId, 10);
+      const id = el.dataset.roleId;
+      this._selectedRoleId = (id === 'admin') ? 'admin' : parseInt(id, 10);
       this._renderRoleSidebar();
       this._renderRoleDetail();
     });
   });
 },
 
+// Whether the current user may toggle permission `p` on a role. A non-admin
+// can only add or remove permissions they personally hold; admin-only perms
+// and perms they lack are locked. Mirrors the server rule in update-role
+// (socketHandlers/roles.js), which preserves any locked perm the role already
+// has rather than deleting it — so the UI disables those toggles instead of
+// letting the user check/uncheck them and be silently overridden.
+_canControlRolePerm(p) {
+  return !!(this.user && this.user.isAdmin) || (!ADMIN_ONLY_PERMS.includes(p) && this._hasPerm(p));
+},
+
+// Cosmetic-only editor for the synthetic Admin role. Everything here maps to
+// the 'admin_role_display' server setting and changes appearance only — the
+// admin keeps level 100 and every permission regardless. No level, permissions,
+// auto-assign or delete, because there is nothing functional to edit.
+_renderAdminRoleDetail() {
+  const panel = document.getElementById('role-detail-panel');
+  const d = this._adminRoleDisplay || { name: 'Admin', color: '#e74c3c', icon: null, visible: true };
+  // The shared modal-actions Save button is for real roles; this editor is
+  // self-contained with its own Save, so hide the shared one.
+  const sharedSave = document.getElementById('save-role-btn');
+  if (sharedSave) sharedSave.style.display = 'none';
+  const iconPreview = d.icon
+    ? `<img class="role-icon-preview" src="${this._escapeHtml(d.icon)}" alt="icon">`
+    : '<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6875rem;color:var(--text-muted)">None</div>';
+
+  panel.innerHTML = `
+    <div class="role-detail-form">
+      <p class="perm-admin-note">${t('settings.admin.role_form.admin_cosmetic_note')}</p>
+      <label class="settings-label">${t('settings.admin.role_form.name')}</label>
+      <input type="text" class="settings-text-input" id="admin-role-name" value="${this._escapeHtml(d.name)}" maxlength="30">
+      <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.color')}</label>
+      <input type="color" id="admin-role-color" value="${this._safeColor(d.color, '#e74c3c')}" style="width:50px;height:30px;border:none;cursor:pointer">
+      <label class="settings-label" style="margin-top:8px;">Role Icon</label>
+      <div class="role-icon-upload-row">
+        ${iconPreview}
+        <input type="file" id="admin-role-icon-file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+        <button class="btn-sm" id="admin-role-icon-upload-btn" type="button">Upload</button>
+        ${d.icon ? '<button class="btn-sm danger" id="admin-role-icon-remove-btn" type="button">Remove</button>' : ''}
+      </div>
+      <small class="muted-text" style="font-size:0.6875rem;">Icon shown next to the role name (auto-resized to 16×16). Max 512KB.</small>
+      <label class="toggle-row" style="margin-top:12px;">
+        <span>${t('settings.admin.role_form.visibility')}</span>
+        <input type="checkbox" id="admin-role-visible" ${d.visible ? 'checked' : ''}>
+      </label>
+      <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.visibility_hint')}</small>
+      <div style="margin-top:12px;">
+        <button class="btn-sm btn-accent" id="admin-role-save-btn">${t('settings.admin.roles_save')}</button>
+      </div>
+    </div>
+  `;
+
+  // Pending icon change: undefined = unchanged, null = removed, string = new path.
+  this._pendingAdminIcon = undefined;
+  const fileInput = document.getElementById('admin-role-icon-file');
+  document.getElementById('admin-role-icon-upload-btn')?.addEventListener('click', () => fileInput.click());
+  fileInput?.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (file.size > 512 * 1024) { this._showToast('Icon must be under 512KB', 'error'); return; }
+    let uploadFile = file;
+    try {
+      const bmp = await createImageBitmap(file);
+      if (bmp.width !== 16 || bmp.height !== 16) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 16; canvas.height = 16;
+        canvas.getContext('2d').drawImage(bmp, 0, 0, 16, 16);
+        bmp.close();
+        uploadFile = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      } else { bmp.close(); }
+    } catch { /* fall through with original file */ }
+    const fd = new FormData();
+    fd.append('icon', uploadFile, 'role-icon.png');
+    try {
+      const res = await fetch('/api/upload-role-icon', { method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token }, body: fd });
+      const j = await res.json();
+      if (j.error) { this._showToast(j.error, 'error'); return; }
+      this._pendingAdminIcon = j.path;
+      const preview = panel.querySelector('.role-icon-preview');
+      if (preview) preview.outerHTML = `<img class="role-icon-preview" src="${this._escapeHtml(j.path)}" alt="icon">`;
+      this._showToast('Icon uploaded — save to apply', 'success');
+    } catch { this._showToast('Upload failed', 'error'); }
+  });
+  document.getElementById('admin-role-icon-remove-btn')?.addEventListener('click', () => {
+    this._pendingAdminIcon = null;
+    const preview = panel.querySelector('.role-icon-preview');
+    if (preview) preview.outerHTML = '<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6875rem;color:var(--text-muted)">None</div>';
+    document.getElementById('admin-role-icon-remove-btn')?.remove();
+    this._showToast('Icon removed — save to apply', 'success');
+  });
+
+  document.getElementById('admin-role-save-btn')?.addEventListener('click', () => {
+    const icon = this._pendingAdminIcon !== undefined ? this._pendingAdminIcon : (d.icon || null);
+    const payload = {
+      name: document.getElementById('admin-role-name').value.trim() || 'Admin',
+      color: document.getElementById('admin-role-color').value,
+      icon,
+      visible: document.getElementById('admin-role-visible').checked
+    };
+    this.socket.emit('update-admin-role-display', payload, (res) => {
+      if (res && res.error) { this._showToast(res.error, 'error'); return; }
+      this._adminRoleDisplay = res.display || payload;
+      this._showToast(t('settings.admin.roles_saved'), 'success');
+      this._renderRoleSidebar();
+      this._renderAdminRoleDetail();
+    });
+  });
+},
+
 _renderRoleDetail() {
   const panel = document.getElementById('role-detail-panel');
+  if (this._selectedRoleId === 'admin') { this._renderAdminRoleDetail(); return; }
   const role = this._allRoles.find(r => r.id === this._selectedRoleId);
   if (!role) {
     panel.innerHTML = `<p class="muted-text" style="padding:20px;text-align:center">${t('settings.admin.roles_select_role')}</p>`;
@@ -3798,12 +3933,16 @@ _renderRoleDetail() {
         </div>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>
-      ${allPerms.map(p => `
-        <label class="toggle-row">
+      <p class="perm-admin-note">${t('settings.admin.role_form.admin_only_note')}</p>
+      ${allPerms.map(p => {
+        const locked = !this._canControlRolePerm(p);
+        const adminOnly = ADMIN_ONLY_PERMS.includes(p);
+        return `
+        <label class="toggle-row${adminOnly ? ' perm-admin-only' : ''}"${locked ? ' style="opacity:.55" title="You can only change permissions you hold"' : ''}>
           <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
-          <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}>
-        </label>
-      `).join('')}
+          <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}${locked ? ' disabled' : ''}>
+        </label>`;
+      }).join('')}
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-sm btn-accent" id="role-members-btn">👥 Members</button>
         <button class="btn-sm" id="duplicate-role-btn">📋 Duplicate</button>
@@ -3987,6 +4126,38 @@ _renderRoleDetail() {
   document.getElementById('role-members-btn')?.addEventListener('click', () => {
     this._openRoleMembersModal(role);
   });
+
+  // Role hierarchy gate: a non-admin may only edit roles strictly below their
+  // own level. Roles at or above them are shown read-only (every field and
+  // mutating action disabled) — mirrors the server guard in update-role and
+  // the RAC's grantable-roles lock. Runs last so it overrides the Save button
+  // being re-shown above. Viewing members stays available (read-only).
+  this._applyRoleEditGate(panel, role, {
+    actionButtonIds: ['save-role-btn', 'delete-role-btn', 'duplicate-role-btn'],
+    keepEnabledIds: ['role-members-btn'],
+    formSelector: '.role-detail-form'
+  });
+},
+
+// Disables the whole role editor for a non-admin when `role.level` is at or
+// above the caller's level, and prepends a read-only note. Shared by both role
+// editors so the rule stays in one place.
+_applyRoleEditGate(panel, role, { actionButtonIds = [], keepEnabledIds = [], formSelector }) {
+  const isAdmin = !!(this.user && this.user.isAdmin);
+  const myLevel = (this.user && this.user.effectiveLevel) || 0;
+  if (isAdmin || role.level < myLevel) return;
+
+  panel.querySelectorAll('input, select, textarea, button').forEach(el => { el.disabled = true; });
+  keepEnabledIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+  actionButtonIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+
+  const form = formSelector ? panel.querySelector(formSelector) : panel;
+  if (form && !form.querySelector('.role-readonly-note')) {
+    const note = document.createElement('p');
+    note.className = 'role-readonly-note';
+    note.textContent = t('settings.admin.role_form.readonly_note', { level: myLevel });
+    form.insertBefore(note, form.firstChild);
+  }
 },
 
 _openRoleMembersModal(role) {
@@ -4349,13 +4520,17 @@ _renderChannelRolesRoleDetail() {
         <span>${t('settings.admin.role_form.auto_assign')}</span>
       </label>
       <label class="cr-role-label" style="margin-top:4px">${t('settings.admin.role_form.permissions')}</label>
+      <p class="perm-admin-note">${t('settings.admin.role_form.admin_only_note')}</p>
       <div class="cr-role-perms">
-        ${allPerms.map(p => `
-          <label class="cr-perm-toggle">
-            <input type="checkbox" class="cr-perm-cb" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}>
+        ${allPerms.map(p => {
+          const locked = !this._canControlRolePerm(p);
+          const adminOnly = ADMIN_ONLY_PERMS.includes(p);
+          return `
+          <label class="cr-perm-toggle${adminOnly ? ' perm-admin-only' : ''}"${locked ? ' style="opacity:.55" title="You can only change permissions you hold"' : ''}>
+            <input type="checkbox" class="cr-perm-cb" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}${locked ? ' disabled' : ''}>
             <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
-          </label>
-        `).join('')}
+          </label>`;
+        }).join('')}
       </div>
       <div class="cr-role-btns">
         <button class="btn-sm btn-accent" id="cr-save-role-btn">${t('settings.admin.roles_save')}</button>
@@ -4405,6 +4580,13 @@ _renderChannelRolesRoleDetail() {
         this._refreshChannelRoles();
       });
     });
+  });
+
+  // Same hierarchy gate as the main role editor: read-only for a non-admin
+  // when the role is at or above their level.
+  this._applyRoleEditGate(panel, role, {
+    actionButtonIds: ['cr-save-role-btn', 'cr-delete-role-btn'],
+    formSelector: '.cr-role-form'
   });
 },
 
@@ -4774,7 +4956,7 @@ _renderRacConfig() {
   const callerPerms = this._racData.callerPerms || [];
   const callerIsAdmin = this._racData.callerIsAdmin;
   const allPerms = ALL_PERMS;
-  const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+  const adminOnlyPerms = ADMIN_ONLY_PERMS;
   const permLabels = PERM_LABELS;
   const maxLevel = callerIsAdmin ? 99 : (this._racData.callerLevel - 1);
   const isParentChannel = channelId && this._racData.channels.some(c => c.parentId === channelId);

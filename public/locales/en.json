@@ -1121,6 +1121,11 @@
         "reapply_access": "Reapply Access to All Users",
         "reapply_access_tooltip": "Re-runs the channel-access rules above against every user who already holds this role. Useful after editing the Grant/Revoke checkboxes: it brings existing members in line with the current configuration without you having to re-assign the role.",
         "permissions": "Permissions",
+        "admin_only_note": "Highlighted permissions are admin-only — only the server owner can grant them.",
+        "readonly_note": "This role is at or above your level ({{level}}). You can view it, but only someone ranked above it can make changes.",
+        "admin_cosmetic_note": "These settings only change how the Admin role looks. They do not affect what it can do.",
+        "visibility": "Visibility",
+        "visibility_hint": "When off, the Admin role is hidden on profiles and its color is not applied to your name anywhere, for everyone. Your admin powers are unaffected.",
         "delete": "Delete"
       }
     }
