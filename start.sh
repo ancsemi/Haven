@@ -42,12 +42,11 @@ if [ "$NODE_VER" -lt 18 ]; then
     echo -e "${YELLOW}  [!] Node.js 18+ recommended. You have v${NODE_VER}.${NC}"
 fi
 
-if [ "$NODE_VER" -ge 24 ]; then
-    echo -e "${RED}  [!] WARNING: Node.js v${NODE_VER} detected. Haven requires Node 18-22.${NC}"
-    echo "  better-sqlite3 does not ship prebuilt binaries for Node 24+,"
-    echo "  so npm install will fail without C++ build tools."
-    echo "  Install Node 22 LTS: https://nodejs.org/"
-    exit 1
+if [ "$NODE_VER" -ge 25 ]; then
+    echo -e "${YELLOW}  [!] Node.js v${NODE_VER} is newer than Haven has been tested with.${NC}"
+    echo "  Continuing — native modules are verified functionally below."
+elif [ "$NODE_VER" -ge 24 ]; then
+    echo "  [*] Node.js v${NODE_VER} — verifying native modules load (below)."
 fi
 
 # ── Install dependencies ───────────────────────────────────
@@ -56,6 +55,26 @@ if [ ! -d "node_modules" ]; then
     npm install
     echo ""
 fi
+
+# ── Functional gate: the version number matters less than whether the
+#    native module actually loads on THIS node. Same check the Windows
+#    launcher uses. A load failure gets one rebuild attempt first.
+if ! node -e "require('better-sqlite3')" &> /dev/null; then
+    echo -e "${YELLOW}  [!] better-sqlite3 failed to load on Node $(node -v) — rebuilding...${NC}"
+    npm rebuild better-sqlite3 || true
+    if ! node -e "require('better-sqlite3')" &> /dev/null; then
+        echo -e "${RED}  [ERROR] better-sqlite3 cannot load on Node $(node -v).${NC}"
+        echo "  Fix options:"
+        echo "    - Install Node 22 LTS (https://nodejs.org/), or"
+        echo "    - Install C++ build tools and re-run:"
+        echo "        Ubuntu/Debian:  sudo apt install build-essential python3"
+        echo "        Fedora:         sudo dnf group install 'Development Tools'"
+        echo "      then: npm rebuild better-sqlite3"
+        exit 1
+    fi
+    echo "  [✓] Native modules rebuilt successfully"
+fi
+echo "  [✓] Native modules OK"
 
 # ── Create .env in data directory if missing ───────────────
 if [ ! -f "$HAVEN_DATA/.env" ]; then
@@ -114,19 +133,46 @@ echo ""
 node server.js &
 SERVER_PID=$!
 
-# Wait for server to be ready
-for i in $(seq 1 15); do
+# ── Wait for readiness ─────────────────────────────────────
+# The probe runs on node itself — it is guaranteed present (it runs the
+# server), unlike curl/wget which minimal server images often lack. The
+# old curl-only probe silently failed on such systems every second for
+# 15s and then KILLED a perfectly healthy server (the frontend was
+# already serving) with a misleading "failed to start".
+#
+# Two rules now:
+#   1. A dead server process is the only real startup failure — detected
+#      immediately, with a pointer at the real log.
+#   2. A probe failure alone NEVER kills a live server. If readiness
+#      can't be confirmed after the window, we say so and leave it up.
+probe_url() {
+    node -e 'const u=process.argv[1];const m=u.indexOf("https")===0?require("https"):require("http");const q=m.get(u,{rejectUnauthorized:false,timeout:1500},r=>{r.resume();process.exit(0)});q.on("error",()=>process.exit(1));q.on("timeout",()=>{q.destroy();process.exit(1)});' "$1" 2>/dev/null
+}
+
+PROBE_OK=0
+for i in $(seq 1 30); do
     sleep 1
-    if curl -sk "https://localhost:${HAVEN_PORT}/api/health" &> /dev/null || \
-       curl -sk "http://localhost:${HAVEN_PORT}/api/health" &> /dev/null; then
-        break
-    fi
-    if [ $i -eq 15 ]; then
-        echo -e "${RED}  [ERROR] Server failed to start after 15 seconds.${NC}"
-        kill $SERVER_PID 2>/dev/null || true
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo ""
+        echo -e "${RED}  [ERROR] The server process exited during startup.${NC}"
+        echo "  The real reason is printed above, or in: $HAVEN_DATA/crash.log"
+        echo "  Common causes: port ${HAVEN_PORT} already in use (another Haven still"
+        echo "  running?), a broken install, or a bad .env value."
         exit 1
     fi
+    if probe_url "https://localhost:${HAVEN_PORT}/api/health" || \
+       probe_url "http://localhost:${HAVEN_PORT}/api/health"; then
+        PROBE_OK=1
+        break
+    fi
 done
+
+if [ "$PROBE_OK" -ne 1 ]; then
+    echo -e "${YELLOW}  [!] Could not confirm readiness on port ${HAVEN_PORT} after 30s,${NC}"
+    echo -e "${YELLOW}      but the server process is running — leaving it up.${NC}"
+    echo "      If it never becomes reachable, check $HAVEN_DATA/crash.log,"
+    echo "      the PORT in $HAVEN_DATA/.env, and any firewall on ${HAVEN_PORT}."
+fi
 
 PORT=${HAVEN_PORT}
 
