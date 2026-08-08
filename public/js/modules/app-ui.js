@@ -1801,8 +1801,34 @@ _setupUI() {
       // restore runs, and only when it's open so Escape can't open it.
       const emojiPicker = document.getElementById('emoji-picker');
       if (emojiPicker && emojiPicker.style.display === 'flex') this._toggleEmojiPicker();
+      // Close the GIF picker too, matching the emoji picker's Escape behavior.
+      const gifPicker = document.getElementById('gif-picker');
+      if (gifPicker && gifPicker.style.display === 'flex') gifPicker.style.display = 'none';
     }
   });
+
+  // Escape (no modifiers) with nothing else to close → jump to the latest
+  // message, same as the jump-to-bottom button. Runs in the CAPTURE phase so it
+  // inspects overlays/dropdowns *before* the bubble-phase handlers above (and
+  // the message-input dropdown handlers) close them. If any closeable UI is
+  // open we bail and let those handlers run, so Escape never both dismisses a
+  // popup and jumps. Gated on an active channel with the message view visible.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    if (!this.currentChannel) return;
+    const msgArea = document.getElementById('message-area');
+    if (!msgArea || msgArea.style.display === 'none') return;
+    // getClientRects().length is 0 for hidden/display:none nodes — same popup
+    // detection the type-to-focus guard uses above.
+    const somethingOpen = [...document.querySelectorAll(
+      '.modal-overlay, #quick-switcher-overlay, #theme-popup, #search-container, ' +
+      '#search-results-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
+      '#gif-picker, .context-menu, #emoji-dropdown, #slash-dropdown, ' +
+      '#mention-dropdown, #channel-dropdown, #persona-dropdown, #gif-slash-picker'
+    )].some(el => el.getClientRects().length > 0);
+    if (somethingOpen) return;
+    this._jumpToLatest();
+  }, true);
 
   // Theme popup toggle
   document.getElementById('theme-popup-toggle')?.addEventListener('click', () => {

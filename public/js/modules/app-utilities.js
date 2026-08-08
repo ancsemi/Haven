@@ -944,6 +944,40 @@ _scrollToBottom(force) {
   }
 },
 
+// Jump to the newest message. Shared by the jump-to-bottom button and the
+// Escape hotkey. When the DOM window has been trimmed (_noMoreFuture === false)
+// the newest messages aren't loaded, so re-fetch from the present; otherwise a
+// plain scroll reaches the true bottom instantly.
+_jumpToLatest() {
+  document.getElementById('jump-to-bottom')?.classList.remove('visible');
+  if (this._noMoreFuture === false) {
+    this._reloadChannelFromPresent();
+  } else {
+    this._scrollToBottom(true);
+    this._coupledToBottom = true;
+  }
+},
+
+// Snap the feed back to the live present by re-running the fresh channel load.
+// Needed when the DOM window has been trimmed (newest messages aren't in the
+// DOM, i.e. _noMoreFuture === false) — a plain _scrollToBottom only reaches the
+// artificial bottom of the loaded window. This mirrors the reset the own-message
+// and tab-resync paths already use, so message-history renders the initial-load
+// branch and _renderMessages lands at the true bottom.
+_reloadChannelFromPresent() {
+  if (!this.currentChannel || !this.socket?.connected) return;
+  this._coupledToBottom = true;
+  this._oldestMsgId = null;
+  this._noMoreHistory = false;
+  this._loadingHistory = false;
+  this._historyBefore = null;
+  this._newestMsgId = null;
+  this._noMoreFuture = true;
+  this._loadingFuture = false;
+  this._historyAfter = null;
+  this.socket.emit('get-messages', { code: this.currentChannel });
+},
+
 // Debounced version used by image/media load handlers. Multiple images in the
 // same batch (e.g. 5 photos loaded from history) all collapse into a single
 // scroll call instead of firing an individual hard-snap per image, which is

@@ -892,11 +892,7 @@ _setupSocketListeners() {
 
     // Jump-to-bottom click handler
     if (jumpBtn) {
-      jumpBtn.addEventListener('click', () => {
-        this._scrollToBottom(true);
-        this._coupledToBottom = true;
-        jumpBtn.classList.remove('visible');
-      });
+      jumpBtn.addEventListener('click', () => this._jumpToLatest());
     }
 
     this._historyDebounce = 0; // timestamp of last history request
