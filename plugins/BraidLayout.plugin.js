@@ -1,8 +1,8 @@
 /**
  * @name Braid Layout
- * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, docks the full voice controls bottom-left, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. One-key toggle (Ctrl+Shift+B) between Braid and the classic layout. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes.
+ * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, docks the full voice controls bottom-left, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. One-key toggle (Ctrl+Shift+B) between Braid and the classic layout. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes, and respects every other theme: cosmetic shape rules use :where() so any [data-theme] override wins.
  * @author Amnibro
- * @version 1.5
+ * @version 1.6
  */
 class BraidLayout {
   start() {
@@ -780,6 +780,10 @@ html[data-braid-layout="1"] .braid-server-strip .server-icon{width:2.25rem!impor
 html[data-braid-layout="1"] .braid-server-strip #server-list{display:flex;align-items:center;gap:.3125rem;min-width:0;flex-shrink:0}
 html[data-braid-layout="1"] .braid-server-strip .server-separator{width:1px;height:1.375rem;background:var(--border);border-radius:0;margin:0 .1875rem;flex-shrink:0}
 html[data-braid-layout="1"] .braid-server-strip .server-icon-img{border-radius:inherit}
+html[data-braid-layout="1"] .braid-server-strip .server-icon>img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.home .server-icon-text,
+html[data-braid-layout="1"] .braid-server-strip .server-icon:hover .server-icon-text{color:var(--bg-primary)}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server:hover .server-icon-text{color:var(--accent)}
 html[data-braid-layout="1"] .braid-server-strip .server-status-dot{width:.625rem;height:.625rem;bottom:-2px;right:-2px;border-width:2px}
 html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers,
 html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers{background:var(--braid-btn-bg)}
@@ -936,7 +940,7 @@ html[data-braid-layout="1"].braid-people-open .right-sidebar{position:fixed;righ
 BraidLayout._FORM_CSS = `
 html[data-braid-form="1"]{
 --braid-r:.875rem;
---braid-bub:var(--bg-hover,var(--bg-card));
+--braid-bub:color-mix(in srgb,var(--text-primary) 5%,var(--bg-secondary));
 --braid-line:var(--border);
 --braid-seam:color-mix(in srgb,var(--border) 55%,var(--braid-bub));
 --braid-me:color-mix(in srgb,var(--accent) 8%,var(--bg-secondary));
@@ -975,7 +979,7 @@ html[data-braid-form="1"] .message[data-braid-cont="1"] .message-avatar-img{visi
 html[data-braid-form="1"] .message[data-braid-cont="1"]>.message-row>.message-body>.message-header{display:none}
 html[data-braid-form="1"] .message[data-braid-cont="1"]:hover::before{content:attr(data-time-short);position:absolute;left:.625rem;top:.5rem;width:2.25rem;text-align:center;font-size:.5625rem;line-height:1.2;color:var(--text-muted);pointer-events:none}
 html[data-braid-form="1"] .message>.message-row>.message-body:hover,
-html[data-braid-form="1"] .message-compact>.message-body:hover{background:color-mix(in srgb,var(--bg-active) 40%,var(--braid-bub))}
+html[data-braid-form="1"] .message-compact>.message-body:hover{background:color-mix(in srgb,var(--text-primary) 9%,var(--bg-secondary))}
 html[data-braid-form="1"] .message-user-sep{border-top:0!important;padding-top:0!important}
 html[data-braid-form="1"] .message.system-message>.message-row>.message-body,
 html[data-braid-form="1"] .message.announcement>.message-row>.message-body{background:transparent;border:0;border-radius:0}
@@ -986,13 +990,13 @@ html[data-braid-form="1"] .channel-item[data-braid-run="end"],
 html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-bottom-left-radius:.75rem!important;border-bottom-right-radius:.75rem!important;margin-bottom:.25rem!important}
 html[data-braid-form="1"] .channel-item[data-braid-run="mid"]::before,
 html[data-braid-form="1"] .channel-item[data-braid-run="end"]::before{content:'';position:absolute;left:.75rem;right:.75rem;top:0;border-top:1px dashed var(--braid-seam);pointer-events:none}
-html[data-braid-form="1"] .channel-item:hover{background:color-mix(in srgb,var(--bg-active) 45%,var(--braid-bub))}
+html[data-braid-form="1"] .channel-item:hover{background:color-mix(in srgb,var(--text-primary) 10%,var(--bg-secondary))}
 html[data-braid-form="1"] .channel-item.active{background:color-mix(in srgb,var(--accent) 16%,var(--bg-secondary));border-color:var(--accent)!important}
 html[data-braid-form="1"] .channel-item.active::before,
 html[data-braid-form="1"] .channel-item.active + .channel-item::before{display:none!important}
-html[data-braid-form="1"] .reaction,
-html[data-braid-form="1"] .reaction-add,
-html[data-braid-form="1"] .message-reactions>*{border-radius:999px!important}
+html[data-braid-form="1"] :where(.reaction),
+html[data-braid-form="1"] :where(.reaction-add),
+html[data-braid-form="1"] :where(.message-reactions>*){border-radius:999px}
 html[data-braid-form="1"] .message-input-area textarea,
 html[data-braid-form="1"] .message-input-container textarea{background:var(--bg-primary)!important}
 `;
@@ -1002,8 +1006,8 @@ html[data-braid-layout="1"]{--radius:.875rem;--radius-sm:.75rem}
 html[data-braid-layout="1"] ::-webkit-scrollbar{width:.5rem;height:.5rem}
 html[data-braid-layout="1"] ::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
 html[data-braid-layout="1"] :focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:2px;border-radius:.5rem}
-html[data-braid-layout="1"] .icon-btn{border-radius:.625rem}
-html[data-braid-layout="1"] .message{border-radius:.875rem!important}
+html[data-braid-layout="1"] :where(.icon-btn){border-radius:.625rem}
+html[data-braid-layout="1"] :where(.message){border-radius:.875rem}
 html[data-braid-layout="1"] .message:hover{background:color-mix(in srgb,var(--bg-hover) 80%,transparent)!important;box-shadow:none!important}
 html[data-braid-layout="1"] .message-row{gap:.875rem!important;padding:.5rem .75rem!important}
 html[data-braid-layout="1"] .message-avatar,
@@ -1012,54 +1016,54 @@ html[data-braid-layout="1"] .message-author,
 html[data-braid-layout="1"] .message-username{font-weight:650;letter-spacing:-.01em}
 html[data-braid-layout="1"] .message-text,
 html[data-braid-layout="1"] .message-content{line-height:1.58!important;letter-spacing:-.01em}
-html[data-braid-layout="1"] .btn-send,
-html[data-braid-layout="1"] .thread-send-btn{border-radius:.875rem!important;box-shadow:none!important}
-html[data-braid-layout="1"] .input-row input{border-radius:.625rem}
+html[data-braid-layout="1"] :where(.btn-send),
+html[data-braid-layout="1"] :where(.thread-send-btn){border-radius:.875rem;box-shadow:none}
+html[data-braid-layout="1"] :where(.input-row input){border-radius:.625rem}
 html[data-braid-layout="1"] .input-row input:focus{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
-html[data-braid-layout="1"] .btn-sm,
-html[data-braid-layout="1"] .btn-secondary,
-html[data-braid-layout="1"] .btn.secondary,
-html[data-braid-layout="1"] .btn-primary,
-html[data-braid-layout="1"] .btn-accent,
-html[data-braid-layout="1"] .profile-dm-btn,
-html[data-braid-layout="1"] .btn-admin-save{border-radius:.75rem!important;box-shadow:none!important}
-html[data-braid-layout="1"] .modal,
-html[data-braid-layout="1"] .modal-content,
-html[data-braid-layout="1"] .settings-modal,
-html[data-braid-layout="1"] .dialog,
-html[data-braid-layout="1"] .settings-panel{border-radius:1.125rem!important;border:1px solid var(--border)!important}
-html[data-braid-layout="1"] .settings-tab,
-html[data-braid-layout="1"] .settings-nav-item,
-html[data-braid-layout="1"] .sound-tab{border-radius:.625rem!important}
+html[data-braid-layout="1"] :where(.btn-sm),
+html[data-braid-layout="1"] :where(.btn-secondary),
+html[data-braid-layout="1"] :where(.btn.secondary),
+html[data-braid-layout="1"] :where(.btn-primary),
+html[data-braid-layout="1"] :where(.btn-accent),
+html[data-braid-layout="1"] :where(.profile-dm-btn),
+html[data-braid-layout="1"] :where(.btn-admin-save){border-radius:.75rem;box-shadow:none}
+html[data-braid-layout="1"] :where(.modal),
+html[data-braid-layout="1"] :where(.modal-content),
+html[data-braid-layout="1"] :where(.settings-modal),
+html[data-braid-layout="1"] :where(.dialog),
+html[data-braid-layout="1"] :where(.settings-panel){border-radius:1.125rem;border:1px solid var(--border)}
+html[data-braid-layout="1"] :where(.settings-tab),
+html[data-braid-layout="1"] :where(.settings-nav-item),
+html[data-braid-layout="1"] :where(.sound-tab){border-radius:.625rem}
 html[data-braid-layout="1"] .settings-tab.active,
 html[data-braid-layout="1"] .settings-nav-item.active,
 html[data-braid-layout="1"] .sound-tab.active{background:color-mix(in srgb,var(--accent) 16%,var(--bg-tertiary))!important;color:var(--accent)!important;border:1px solid color-mix(in srgb,var(--accent) 30%,transparent)!important}
-html[data-braid-layout="1"] .context-menu,
-html[data-braid-layout="1"] .dropdown-menu,
-html[data-braid-layout="1"] .msg-toolbar{border-radius:.875rem!important;border:1px solid var(--border)!important}
-html[data-braid-layout="1"] .profile-popup,
-html[data-braid-layout="1"] .profile-card{border-radius:1rem!important;border:1px solid var(--border)!important}
-html[data-braid-layout="1"] .theme-btn{border-radius:.75rem!important}
-html[data-braid-layout="1"] .reaction,
-html[data-braid-layout="1"] .reaction-chip,
-html[data-braid-layout="1"] .reaction-badge{border-radius:999px!important}
-html[data-braid-layout="1"] .toast,
-html[data-braid-layout="1"] .notification-toast,
-html[data-braid-layout="1"] .chip-toast{border-radius:999px!important;backdrop-filter:blur(10px)}
-html[data-braid-layout="1"] .jump-to-bottom{border-radius:999px!important;border:1px solid var(--border-light)!important}
-html[data-braid-layout="1"] .inline-code,
-html[data-braid-layout="1"] code{border-radius:.375rem!important}
-html[data-braid-layout="1"] .mention{border-radius:.375rem!important}
-html[data-braid-layout="1"] .user-item,
-html[data-braid-layout="1"] .member-item{margin:2px .625rem;padding:.625rem .75rem;border-radius:.75rem}
+html[data-braid-layout="1"] :where(.context-menu),
+html[data-braid-layout="1"] :where(.dropdown-menu),
+html[data-braid-layout="1"] :where(.msg-toolbar){border-radius:.875rem;border:1px solid var(--border)}
+html[data-braid-layout="1"] :where(.profile-popup),
+html[data-braid-layout="1"] :where(.profile-card){border-radius:1rem;border:1px solid var(--border)}
+html[data-braid-layout="1"] :where(.theme-btn){border-radius:.75rem}
+html[data-braid-layout="1"] :where(.reaction),
+html[data-braid-layout="1"] :where(.reaction-chip),
+html[data-braid-layout="1"] :where(.reaction-badge){border-radius:999px}
+html[data-braid-layout="1"] :where(.toast),
+html[data-braid-layout="1"] :where(.notification-toast),
+html[data-braid-layout="1"] :where(.chip-toast){border-radius:999px;backdrop-filter:blur(10px)}
+html[data-braid-layout="1"] :where(.jump-to-bottom){border-radius:999px;border:1px solid var(--border-light)}
+html[data-braid-layout="1"] :where(.inline-code),
+html[data-braid-layout="1"] :where(code){border-radius:.375rem}
+html[data-braid-layout="1"] :where(.mention){border-radius:.375rem}
+html[data-braid-layout="1"] :where(.user-item),
+html[data-braid-layout="1"] :where(.member-item){margin:2px .625rem;padding:.625rem .75rem;border-radius:.75rem}
 html[data-braid-layout="1"] .user-item:hover,
 html[data-braid-layout="1"] .member-item:hover{background:var(--bg-hover)}
-html[data-braid-layout="1"] .message-input-area textarea,
-html[data-braid-layout="1"] .message-input-container textarea{border-radius:1.25rem!important;border:1px solid var(--border-light)!important;transition:border-color .15s,box-shadow .15s}
+html[data-braid-layout="1"] :where(.message-input-area textarea),
+html[data-braid-layout="1"] :where(.message-input-container textarea){border-radius:1.25rem;border:1px solid var(--border-light);transition:border-color .15s,box-shadow .15s}
 html[data-braid-layout="1"] .message-input-area textarea:focus,
 html[data-braid-layout="1"] .message-input-container textarea:focus{border-color:color-mix(in srgb,var(--accent) 40%,var(--border))!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 9%,transparent)!important;outline:none!important}
-html[data-braid-layout="1"] .music-panel-controls button,
-html[data-braid-layout="1"] .music-btn{border-radius:.625rem!important}
+html[data-braid-layout="1"] :where(.music-panel-controls button),
+html[data-braid-layout="1"] :where(.music-btn){border-radius:.625rem}
 html[data-braid-layout="1"] .sidebar-bottom-btn svg{display:block}
 
 /* ── Modern settings ── the long scrolling column becomes cards, the

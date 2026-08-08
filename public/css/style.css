@@ -5744,6 +5744,17 @@ details.sound-section:not([open]) .sound-section-label::before {
   pointer-events: none;
 }
 
+/* The admin-set server icon is injected into #home-server as a bare <img>
+   (no class) — without sizing it renders at natural size and sprawls
+   behind the neighboring server tiles. Constrain any direct img child. */
+.server-icon > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 .server-icon.add-server {
   background: transparent;
   border: 2px dashed var(--border-light);
