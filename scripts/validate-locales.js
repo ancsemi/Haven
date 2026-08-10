@@ -133,14 +133,11 @@ function main() {
   }
 
   const argv = process.argv.slice(2);
-  let targets;
-  if (argv.length > 0) {
-    targets = argv.map(p => path.resolve(p));
-  } else {
-    targets = fs.readdirSync(LOCALES_DIR)
-      .filter(f => f.endsWith('.json') && f !== 'en.json')
-      .map(f => path.join(LOCALES_DIR, f));
-  }
+  const allTargets = fs.readdirSync(LOCALES_DIR)
+    .filter(f => /^[a-zA-Z0-9_-]+\.json$/.test(f) && f !== 'en.json')
+    .map(f => `${LOCALES_DIR}${path.sep}${f}`);
+  const targets = argv.length === 0 ? allTargets
+    : allTargets.filter(t => argv.includes(path.basename(t)));
 
   let failed = 0;
   for (const file of targets) {
