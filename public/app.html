@@ -2161,9 +2161,9 @@
           </div>
         </div>
         <div class="admin-settings" id="section-invite" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🌐 <span data-i18n="settings.admin.invite_title">Server Invite Code</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.invite_hint">A single code that adds people to every channel &amp; sub-channel on the server</small>
-          <div style="margin-top:8px;">
+          <h5 class="settings-section-subtitle invite-admin-only">🌐 <span data-i18n="settings.admin.invite_title">Server Invite Code</span></h5>
+          <small class="settings-hint invite-admin-only" data-i18n="settings.admin.invite_hint">A single code that adds people to every channel &amp; sub-channel on the server</small>
+          <div class="invite-admin-only" style="margin-top:8px;">
             <div id="server-code-display" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
               <code id="server-code-value" style="font-family:monospace;font-size:1rem;letter-spacing:0.05em;opacity:0.7">—</code>
               <button class="btn-sm" id="copy-server-code-btn" data-i18n-title="settings.admin.copy_code_title" title="Copy code">📋</button>
@@ -2173,7 +2173,7 @@
               <button class="btn-sm" id="clear-server-code-btn" data-i18n="settings.admin.invite_clear_btn">Clear</button>
             </div>
           </div>
-          <div style="margin-top:12px;">
+          <div class="invite-admin-only" style="margin-top:12px;">
             <label class="select-row">
               <span>Vanity Invite Link</span>
               <input type="text" id="vanity-code-input" maxlength="32" class="settings-text-input" style="max-width:160px" placeholder="my-server">
@@ -2187,7 +2187,7 @@
           <!-- (#5345) Default channels for invite-code joiners.
                Private channels are always excluded; this lets the admin
                narrow it further to a curated set of public channels. -->
-          <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
+          <div class="invite-admin-only" style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
             <h6 style="margin:0 0 4px;font-size:0.85rem;font-weight:600">📋 Default channels for invite joiners</h6>
             <small class="settings-hint">Pick which public channels people land in when they use the invite code or vanity link. Private channels are <strong>never</strong> auto-joined regardless of selection. Leave everything checked to grant all public channels.</small>
             <div id="default-join-channels-list" style="margin-top:8px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px">

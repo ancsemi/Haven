@@ -293,8 +293,16 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Managed invite links (multi-code menu) ──────────────
-  const _canManageInvites = () =>
+  // (#5470) Two tiers. Admins / manage_server can manage every link (and the
+  // server code, vanity link and default-channel config above). The
+  // invite_users permission grants a non-admin the invite *links* feature only:
+  // they see and manage just the links they created, capped, with no access to
+  // any server configuration.
+  const _isInviteAdmin = () =>
     socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_server');
+  const _canManageInvites = () =>
+    _isInviteAdmin() || userHasPermission(socket.user.id, 'invite_users');
+  const INVITE_LINK_CAP = 25; // per-user cap for non-admin invite_users holders
 
   // True if `code` already names a channel, the server code, the legacy vanity
   // code, or another invite link — anything join-channel could ambiguously
@@ -327,12 +335,18 @@ module.exports = function register(socket, ctx) {
   };
 
   const _emitInviteCodes = (target = socket) => {
-    const rows = db.prepare(`
+    // (#5470) invite_users holders without manage_server only ever see the
+    // links they created; admins / manage_server see every link.
+    const ownerScoped = !(target.user && (target.user.isAdmin ||
+      userHasPermission(target.user.id, 'manage_server')));
+    const base = `
       SELECT ic.*,
         (SELECT COUNT(*) FROM invite_code_uses u WHERE u.invite_code_id = ic.id) AS use_count,
         (ic.expires_at IS NOT NULL AND ic.expires_at <= CURRENT_TIMESTAMP) AS is_expired
-      FROM invite_codes ic ORDER BY ic.created_at DESC
-    `).all();
+      FROM invite_codes ic`;
+    const rows = ownerScoped
+      ? db.prepare(`${base} WHERE ic.created_by = ? ORDER BY ic.created_at DESC`).all(target.user.id)
+      : db.prepare(`${base} ORDER BY ic.created_at DESC`).all();
     rows.forEach(r => {
       r.created_at = utcStamp(r.created_at);
       if (r.expires_at) r.expires_at = utcStamp(r.expires_at);
@@ -351,8 +365,16 @@ module.exports = function register(socket, ctx) {
   });
 
   socket.on('create-invite-code', (data) => {
-    if (!_canManageInvites()) return socket.emit('error-msg', 'Only admins can manage invite links');
+    if (!_canManageInvites()) return socket.emit('error-msg', 'You don\'t have permission to manage invite links');
     if (!data || typeof data !== 'object') return;
+
+    // (#5470) Non-admin invite_users holders are capped at their own links.
+    if (!_isInviteAdmin()) {
+      const mine = db.prepare('SELECT COUNT(*) AS n FROM invite_codes WHERE created_by = ?').get(socket.user.id).n;
+      if (mine >= INVITE_LINK_CAP) {
+        return socket.emit('error-msg', `You've reached your limit of ${INVITE_LINK_CAP} invite links. Delete one to create another.`);
+      }
+    }
 
     const label = typeof data.label === 'string' ? data.label.trim().slice(0, 60) : '';
     const channels = _normaliseInviteChannels(data.channels);
@@ -390,12 +412,16 @@ module.exports = function register(socket, ctx) {
   });
 
   socket.on('update-invite-code', (data) => {
-    if (!_canManageInvites()) return socket.emit('error-msg', 'Only admins can manage invite links');
+    if (!_canManageInvites()) return socket.emit('error-msg', 'You don\'t have permission to manage invite links');
     if (!data || typeof data !== 'object') return;
     const id = parseInt(data.id);
     if (!Number.isInteger(id)) return;
     const row = db.prepare('SELECT * FROM invite_codes WHERE id = ?').get(id);
     if (!row) return socket.emit('error-msg', 'Invite link not found');
+    // (#5470) Non-admin holders may only touch their own links.
+    if (!_isInviteAdmin() && row.created_by !== socket.user.id) {
+      return socket.emit('error-msg', 'You can only manage invite links you created');
+    }
 
     const sets = [];
     const vals = [];
@@ -428,12 +454,16 @@ module.exports = function register(socket, ctx) {
   });
 
   socket.on('delete-invite-code', (data) => {
-    if (!_canManageInvites()) return socket.emit('error-msg', 'Only admins can manage invite links');
+    if (!_canManageInvites()) return socket.emit('error-msg', 'You don\'t have permission to manage invite links');
     if (!data || typeof data !== 'object') return;
     const id = parseInt(data.id);
     if (!Number.isInteger(id)) return;
-    const row = db.prepare('SELECT code FROM invite_codes WHERE id = ?').get(id);
+    const row = db.prepare('SELECT code, created_by FROM invite_codes WHERE id = ?').get(id);
     if (!row) return;
+    // (#5470) Non-admin holders may only delete their own links.
+    if (!_isInviteAdmin() && row.created_by !== socket.user.id) {
+      return socket.emit('error-msg', 'You can only manage invite links you created');
+    }
     db.prepare('DELETE FROM invite_codes WHERE id = ?').run(id);
     if (typeof logAudit === 'function') {
       logAudit({

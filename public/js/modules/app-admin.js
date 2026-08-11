@@ -5,7 +5,7 @@ const ALL_PERMS = [
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'create_channel', 'create_temp_channel', 'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
   'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
-  'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log'
+  'invite_users', 'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log'
 ];
 //Similarly flavored solution to perm labels
 const PERM_LABELS = {
@@ -37,6 +37,7 @@ const PERM_LABELS = {
   get manage_soundboard() { return t('permissions.manage_soundboard'); },
   get manage_music_queue() { return t('permissions.manage_music_queue'); },
   get promote_user() { return t('permissions.promote_user'); },
+  get invite_users() { return t('permissions.invite_users'); },
   get manage_roles() { return t('permissions.manage_roles'); },
   get manage_server() { return t('permissions.manage_server'); },
   get delete_channel() { return t('permissions.delete_channel'); },
@@ -603,7 +604,9 @@ _syncSettingsNav() {
   const canManageRoles = isAdmin || this._hasPerm('manage_roles');
   const canManageServer = isAdmin || this._hasPerm('manage_server');
   const canManageWebhooks = isAdmin || this._hasPerm('manage_webhooks');
-  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageStickers || canManageSounds || canManageRoles || canManageServer || canManageWebhooks;
+  // (#5470) invite_users lets a non-admin manage their own invite links.
+  const canInviteUsers = isAdmin || this._hasPerm('invite_users');
+  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageStickers || canManageSounds || canManageRoles || canManageServer || canManageWebhooks || canInviteUsers;
 
   // Show/hide individual admin nav items (default: hidden for non-admins)
   document.querySelectorAll('.settings-nav-admin').forEach(el => {
@@ -671,6 +674,16 @@ _syncSettingsNav() {
       const navItem = document.querySelector(`.settings-nav-item[data-target="${target}"]`);
       if (navItem) navItem.style.display = '';
     });
+  }
+  // (#5470) invite_users holders WITHOUT manage_server get the Invite section
+  // too, but only the "Invite Links" block — the server code, vanity link and
+  // default-channel settings are server config and stay admin/manage_server
+  // only (both here and server-side).
+  if (!isAdmin && !canManageServer && canInviteUsers) {
+    const inviteNav = document.querySelector('.settings-nav-item[data-target="section-invite"]');
+    if (inviteNav) inviteNav.style.display = '';
+    document.querySelectorAll('#section-invite .invite-admin-only')
+      .forEach(el => { el.style.display = 'none'; });
   }
   // Show Bots tab for users with manage_webhooks permission
   const botsNavItem = document.querySelector('.settings-nav-item[data-target="section-bots"]');
