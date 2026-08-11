@@ -307,6 +307,13 @@ Tell them to click **Advanced** → **Proceed** on the certificate warning. It's
 - The obvious tradeoff with this approach is setup. Both you and your friends will need to connect to Tailscale anytime you want to access Haven. But the bright side of this approach is once setup is complete, and you're logged in, connecting to Tailscale is as simple as flipping a switch. Tailscale works on pretty much all devices you can think of, and it's seamless.
 - To be clear, Tailscale does change your device's DNS settings. But unlike a traditional VPN, Tailscale **does not** route your internet traffic through some remote server. Tailscale is **purely** a connection between your computer, and your friend's computer. Your IP does not change and your internet speed doesn't slow down in any meaningful way.
 
+> #### ⚠️ Voice chat over a *shared device*
+> Text chat, uploads, and everything that flows **through** the Haven server work perfectly with the shared-device setup below. **Voice is the exception.** Haven voice is peer-to-peer: everyone in a call opens a direct connection to every *other* person in the call, not just to the host. Sharing a single device only puts the **host** machine on the shared path, so your friends can reach the host but not each other — and the return path from the host back to a friend isn't guaranteed either. The classic symptom is **one-directional audio** (everyone hears the host, but the host can't hear anyone). This isn't a bug in the shared-device config — it's just that a single shared machine can't provide the full mesh of paths a peer-to-peer call needs.
+>
+> Two ways to get voice working, most-recommended first:
+> 1. **Add a TURN server** in Haven under **Settings → Admin → Voice & Connectivity (STUN/TURN)**. TURN relays all voice media through one reachable point, so the peer-to-peer paths are no longer required and the secure single-device sharing below keeps working exactly as written. This is the recommended fix — it keeps least-privilege sharing intact. (You can run your own [coturn](https://github.com/coturn/coturn) server or use a hosted TURN provider.)
+> 2. **Put everyone on the same tailnet** instead of sharing one device. Tailnet members get direct connectivity to one another, so the mesh forms and voice works both ways. This works, but it gives your friends **broader access than device-sharing does** — read **Step 4** below and only do this if you accept that tradeoff.
+
 #### Step 1 - Make an account
 - Visit https://tailscale.com and make an account. Tailscale will walk you through downloading Tailscale onto your device, you may proceed with that.
 
