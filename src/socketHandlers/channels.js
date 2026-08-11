@@ -71,6 +71,17 @@ module.exports = function register(socket, ctx) {
     (!!parentId && userHasPermission(socket.user.id, 'manage_sub_channels', parentId)) ||
     userHasPermission(socket.user.id, 'create_channel');
 
+  // (#5492) Nesting a channel *under* a parent adds a child to that parent's
+  // structure, so it must require authority over that specific parent: admin
+  // or a channel-scoped manage_sub_channels grant. Unlike _canManageSubsOf,
+  // the server-wide create_channel permission is deliberately NOT enough here.
+  // Otherwise anyone who can create a channel could make a top-level channel
+  // and move it under a parent they don't moderate, sidestepping
+  // manage_sub_channels entirely.
+  const _canManageSubsScoped = (parentId) =>
+    socket.user.isAdmin ||
+    (!!parentId && userHasPermission(socket.user.id, 'manage_sub_channels', parentId));
+
   // ── Get user's channels ─────────────────────────────────
   socket.on('get-channels', () => {
     const channels = getEnrichedChannels(
@@ -1260,7 +1271,9 @@ module.exports = function register(socket, ctx) {
         if (channel.parent_channel_id === newParent.id) return socket.emit('error-msg', 'Channel is already under that parent');
         // (#5424) A sub-channel manager of the destination parent (or the
         // channel's current parent) may re-nest an existing sub-channel.
-        if (!_canManageSubsOf(newParent.id) && !_canManageSubsOf(channel.parent_channel_id)) {
+        // (#5492) Authority here is channel-scoped only — server-wide
+        // create_channel does not let you nest under a parent you don't manage.
+        if (!_canManageSubsScoped(newParent.id) && !_canManageSubsScoped(channel.parent_channel_id)) {
           return socket.emit('error-msg', 'You don\'t have permission to move channels');
         }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(newParent.id);
