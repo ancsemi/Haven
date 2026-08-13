@@ -4545,13 +4545,13 @@ _setupUI() {
   // Invite Links popout — open/close. Refresh the list and create-form channels
   // on open so the modal always reflects current state.
   document.getElementById('open-invite-links-btn')?.addEventListener('click', () => {
-    const modal = document.getElementById('invite-links-modal');
-    if (!modal) return;
-    if (typeof this._renderInviteCreateChannels === 'function') {
-      try { this._renderInviteCreateChannels(true); } catch { /* non-critical */ }
-    }
-    if (this.socket?.connected) { try { this.socket.emit('get-invite-codes'); } catch { /* non-critical */ } }
-    modal.style.display = 'flex';
+    this._openInviteLinksModal();
+  });
+  document.getElementById('right-btn-invite-popout')?.addEventListener('click', () => {
+    this._openInviteLinksModal();
+  });
+  document.getElementById('aml-view-invite-btn')?.addEventListener('click', () => {
+    this._openInviteLinksModal();
   });
   document.getElementById('close-invite-links-btn')?.addEventListener('click', () => {
     const modal = document.getElementById('invite-links-modal');

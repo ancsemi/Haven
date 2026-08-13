@@ -92,9 +92,11 @@ _setupSocketListeners() {
     // Refresh UI to reflect new permissions
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
     const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
+    const canCreateInvites = this.user.isAdmin || this._hasGlobalPerm('invite_users');
     document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_stickers') || this._hasPerm('manage_soundboard') || this._hasPerm('view_audit_log')) ? 'block' : 'none';
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
+    document.getElementById('sidebar-invite-panel').style.display = canCreateInvites ? 'block' : 'none';
     this._showToast(t('toasts.roles_updated'), 'info');
   });
 
