@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Three Braid spacing levels, either side of the shipped one.** Settings → Braid spacing (and Menu → Braid spacing, which cycles) offers Compact, Cozy, and Spacious. Cozy is exactly what shipped; the other two take roughly a fifth off or add a fifth on. Message runs and channel rows move together, and the rounded card shapes are identical at all three levels — only padding, gutters, avatar size, and sidebar width change. The continuation gutter is derived from inset + avatar + row gap, so a smaller avatar can't drift a run out of alignment with its own leader.
+
+### Fixed
+- **The Android App badge was white on light green.** Accent-filled controls now read `--accent-text`, but this badge paints itself with a fixed Android-green gradient in every theme, so it kept its hardcoded white label at 1.78:1. It and its dismiss button now use a dark ink that measures 9.65:1 at the light end of the gradient and 6.46:1 at the dark end.
+
 ## [3.46.0] — 2026-08-10
 
 ### Added
