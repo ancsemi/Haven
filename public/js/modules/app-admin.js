@@ -1637,9 +1637,11 @@ _openAllMembersModal() {
     document.getElementById('all-members-count').textContent = `(${res.total})`;
     // Toggle moderator-only nav buttons (View Bans / View Deleted) based on perms.
     // Server-side handlers re-validate, so DOM tampering can't reveal data.
+    const inviteBtn = document.getElementById('aml-view-invite-btn');
     const banBtn = document.getElementById('aml-view-bans-btn');
     const delBtn = document.getElementById('aml-view-deleted-btn');
     const cleanupBtn = document.getElementById('aml-bulk-cleanup-btn');
+    if (inviteBtn) inviteBtn.style.display = (this._allMembersPerms.canInvite || this._allMembersPerms.isAdmin) ? '' : 'none';
     if (banBtn) banBtn.style.display = (this._allMembersPerms.canBan || this._allMembersPerms.isAdmin) ? '' : 'none';
     if (delBtn) delBtn.style.display = this._allMembersPerms.isAdmin ? '' : 'none';
     if (cleanupBtn) cleanupBtn.style.display = this._allMembersPerms.isAdmin ? '' : 'none';
@@ -2146,6 +2148,20 @@ _openMemberChannelPicker(userId, username, mode) {
     // Refresh after a short delay
     setTimeout(() => this._openAllMembersModal(), 800);
   });
+},
+
+// ═══════════════════════════════════════════════════════
+// INVITE LINKS
+// ═══════════════════════════════════════════════════════
+
+_openInviteLinksModal() {
+  const modal = document.getElementById('invite-links-modal');
+  if (!modal) return;
+  if (typeof this._renderInviteCreateChannels === 'function') {
+    try { this._renderInviteCreateChannels(true); } catch { /* non-critical */ }
+  }
+  if (this.socket?.connected) { try { this.socket.emit('get-invite-codes'); } catch { /* non-critical */ } }
+  modal.style.display = 'flex';
 },
 
 // ═══════════════════════════════════════════════════════

@@ -362,6 +362,9 @@ class HavenApp {
     if (this.user.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('manage_server')) {
       document.getElementById('admin-mod-panel').style.display = 'block';
     }
+    if (this.user.isAdmin || this._hasGlobalPerm('invite_users')) {
+      document.getElementById('sidebar-invite-panel').style.display = 'block';
+    }
     const organizeBtn = document.getElementById('organize-channels-btn');
     if (organizeBtn) organizeBtn.style.display = '';
 

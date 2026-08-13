@@ -1021,6 +1021,7 @@ module.exports = function register(socket, ctx) {
           canPromote: isAdmin || userHasPermission(socket.user.id, 'promote_user'),
           canKick: isAdmin || userHasPermission(socket.user.id, 'kick_user'),
           canBan: isAdmin || userHasPermission(socket.user.id, 'ban_user'),
+          canInvite: isAdmin || userHasPermission(socket.user.id, 'invite_users'),
         }
       });
     } catch (err) {
