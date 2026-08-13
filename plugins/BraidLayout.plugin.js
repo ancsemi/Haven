@@ -2,9 +2,15 @@
  * @name Braid Layout
  * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, docks the full voice controls bottom-left, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. One-key toggle (Ctrl+Shift+B) between Braid and the classic layout. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes, and respects every other theme: cosmetic shape rules use :where() so any [data-theme] override wins.
  * @author Amnibro
- * @version 1.6
+ * @version 1.7
  */
 class BraidLayout {
+  static _DENSITIES = [
+    { id: 'compact', label: 'Compact', hint: 'Tighter than stock — more messages on screen', tick: '3px' },
+    { id: 'cozy', label: 'Cozy', hint: 'The shipped Braid spacing', tick: '5px' },
+    { id: 'spacious', label: 'Spacious', hint: 'Roomier than stock — more air around each run', tick: '7px' },
+  ];
+
   start() {
     this._permListeners = [];          // survive disengage; removed only in stop()
     this._engaged = false;
@@ -45,6 +51,7 @@ class BraidLayout {
     HavenApi.DOM.addStyle('BraidMotionCSS', BraidLayout._MOTION_CSS);
     document.documentElement.setAttribute('data-braid-layout', '1');
     document.documentElement.setAttribute('data-braid-form', '1');
+    this._applyDensity();
     this._paintOwn();
     this._themeBottomIcons();
     this._applyTextScales();
@@ -108,7 +115,9 @@ class BraidLayout {
     this._unfoldVoiceDock();
     this._restoreBottomIcons();
     document.getElementById('braid-text-sliders')?.remove();
+    document.getElementById('braid-density-card')?.remove();
     document.getElementById('braid-hex-overlay')?.remove();
+    document.documentElement.removeAttribute('data-braid-density');
     document.documentElement.style.removeProperty('--braid-chat-scale');
     document.documentElement.style.removeProperty('--braid-ui-scale');
     // Unfold the server rail back to its own column
@@ -153,6 +162,7 @@ class BraidLayout {
     HavenApi.DOM.removeStyle('BraidShapeCSS');
     HavenApi.DOM.removeStyle('BraidFormCSS');
     HavenApi.DOM.removeStyle('BraidFormOwn');
+    HavenApi.DOM.removeStyle('BraidDensityCSS');
     console.log('[BraidLayout] Disengaged — classic layout');
   }
 
@@ -437,6 +447,7 @@ class BraidLayout {
       heart: '<path d="M12 20.3 4.8 13a4.7 4.7 0 0 1 6.6-6.6l.6.6.6-.6a4.7 4.7 0 0 1 6.6 6.6Z"/>',
       desktop: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
       phone: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>',
+      rows: '<rect x="3" y="4" width="18" height="4.5" rx="1.5"/><rect x="3" y="11" width="18" height="4.5" rx="1.5"/><path d="M3 19.5h18"/>',
     };
     addLabel('Channel');
     addProxy('search-toggle-btn', I.search, 'Search');
@@ -449,6 +460,15 @@ class BraidLayout {
     addItem(I.people, 'People & voice', () => this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open')));
     addItem(I.sound, 'Soundboard', () => toggleHtmlClass('braid-sound-open'));
     addItem(I.pulse, 'Status bar', () => toggleHtmlClass('braid-status-open'));
+    // Stays open on click: cycling Compact → Cozy → Spacious is something
+    // you want to see happen behind the menu, not one level per reopen.
+    const densityItem = document.createElement('button');
+    densityItem.type = 'button';
+    densityItem.id = 'braid-density-item';
+    densityItem.innerHTML = `<span class="braid-mi">${mi(I.rows)}</span><span>Braid spacing</span><span class="muted braid-mi-tag"></span>`;
+    densityItem.style.setProperty('--i', itemIndex++);
+    densityItem.addEventListener('click', (e) => { e.stopPropagation(); this._cycleDensity(); });
+    menu.appendChild(densityItem);
     addItem(I.grid, 'Edit layout', () => {
       const mm = window.app && window.app.modMode;
       if (mm) mm.toggle();
@@ -507,6 +527,73 @@ class BraidLayout {
     this._themeBottomIcons();
     this._themeSettingsNav();
     this._injectTextSliders();
+    this._injectDensityCard();
+  }
+
+  // ── Density (Settings → Layout & Density card) ───────────
+  // Three levels either side of the shipped spacing, so the cards can be
+  // roomier or tighter without losing the rounded run/channel shapes.
+  _densityValue() {
+    const v = HavenApi.Data.load('BraidLayout', 'density', 'cozy');
+    return BraidLayout._DENSITIES.some((d) => d.id === v) ? v : 'cozy';
+  }
+
+  _applyDensity() {
+    const v = this._densityValue();
+    document.documentElement.setAttribute('data-braid-density', v);
+    document.querySelectorAll('#braid-density-card .braid-density-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.braidDensity === v);
+      b.setAttribute('aria-pressed', String(b.dataset.braidDensity === v));
+    });
+    const tag = document.querySelector('#braid-density-item .braid-mi-tag');
+    if (tag) tag.textContent = BraidLayout._DENSITIES.find((d) => d.id === v).label;
+  }
+
+  _setDensity(v) {
+    HavenApi.Data.save('BraidLayout', 'density', v);
+    this._applyDensity();
+  }
+
+  _cycleDensity() {
+    const ids = BraidLayout._DENSITIES.map((d) => d.id);
+    this._setDensity(ids[(ids.indexOf(this._densityValue()) + 1) % ids.length]);
+  }
+
+  _injectDensityCard() {
+    if (document.getElementById('braid-density-card')) return;
+    const anchor = document.getElementById('section-font-size');
+    if (!anchor) return;
+    const card = document.createElement('div');
+    card.className = 'settings-section';
+    card.id = 'braid-density-card';
+    card.innerHTML = `
+      <h5 class="settings-section-subtitle">🪢 Braid spacing</h5>
+      <p class="braid-density-hint">How much room the message runs and channel rows take. The rounded cards stay the same at every level.</p>
+      <div class="braid-density-row">
+        ${BraidLayout._DENSITIES.map((d) => `
+          <button type="button" class="braid-density-btn" data-braid-density="${d.id}" aria-pressed="false" title="${d.hint}">
+            <span class="braid-density-ticks" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="braid-density-label">${d.label}</span>
+          </button>`).join('')}
+      </div>`;
+    anchor.after(card);
+    card.querySelectorAll('.braid-density-btn').forEach((b) => {
+      b.addEventListener('click', () => this._setDensity(b.dataset.braidDensity));
+    });
+    // Styled from a stylesheet rather than inline attributes: an inline
+    // background would outrank the .active rule and the selected level
+    // would never light up.
+    HavenApi.DOM.addStyle('BraidDensityCSS', `
+#braid-density-card .braid-density-hint{font-size:.75rem;color:var(--text-muted);margin:.25rem 0 0}
+#braid-density-card .braid-density-row{display:flex;gap:.5rem;margin-top:.625rem}
+#braid-density-card .braid-density-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.625rem .5rem;border-radius:.75rem;border:1px solid var(--braid-btn-line,var(--border));background:var(--braid-btn-bg,var(--bg-tertiary));color:var(--text-secondary);cursor:pointer;font:inherit}
+#braid-density-card .braid-density-btn:hover{background:var(--braid-btn-bg-hover,var(--bg-hover));color:var(--text-primary)}
+#braid-density-card .braid-density-btn.active{background:color-mix(in srgb,var(--accent) 16%,var(--bg-tertiary));border-color:var(--accent);color:var(--accent)}
+#braid-density-card .braid-density-ticks{display:flex;flex-direction:column;width:1.25rem}
+#braid-density-card .braid-density-ticks>i{height:2px;border-radius:1px;background:currentColor}
+#braid-density-card .braid-density-label{font-size:.75rem}
+${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data-braid-density="${d.id}"] .braid-density-ticks{gap:${d.tick}}`).join('\n')}`);
+    this._applyDensity();
   }
 
   // ── Text size sliders (Settings → Text Size card) ────────
@@ -594,6 +681,7 @@ class BraidLayout {
     document.getElementById('braid-mod-done')?.remove();
     document.documentElement.setAttribute('data-braid-layout', '1');
     document.documentElement.setAttribute('data-braid-form', '1');
+    this._applyDensity();
     this._setPeopleOpen(document.documentElement.classList.contains('braid-people-open'));
     this._applyLayout();
   }
@@ -755,7 +843,9 @@ class BraidLayout {
 BraidLayout._LAYOUT_CSS = `
 /* Button fills mix from text-primary, not a fixed surface: guaranteed
    contrast against the ground in light AND dark palettes alike. */
-html[data-braid-layout="1"]{--sidebar-width:17.5rem;--braid-bar-h:3rem;--braid-btn-bg:color-mix(in srgb,var(--text-primary) 7%,var(--bg-secondary));--braid-btn-bg-hover:color-mix(in srgb,var(--text-primary) 13%,var(--bg-secondary));--braid-btn-line:color-mix(in srgb,var(--text-primary) 18%,var(--border))}
+html[data-braid-layout="1"]{--sidebar-width:17.5rem;--braid-bar-h:3rem;--braid-btn-bg:color-mix(in srgb,var(--text-primary) 7%,var(--bg-secondary));--braid-btn-bg-hover:color-mix(in srgb,var(--text-primary) 13%,var(--bg-secondary));--braid-btn-line:color-mix(in srgb,var(--text-primary) 18%,var(--border));--braid-chan-pad-y:.5rem;--braid-chan-pad-x:.625rem;--braid-msg-pad-y:1.125rem;--braid-msg-pad-x:1.75rem}
+html[data-braid-density="spacious"][data-braid-layout="1"]{--sidebar-width:18.5rem;--braid-chan-pad-y:.6875rem;--braid-chan-pad-x:.75rem;--braid-msg-pad-y:1.5rem;--braid-msg-pad-x:2.25rem}
+html[data-braid-density="compact"][data-braid-layout="1"]{--sidebar-width:16.25rem;--braid-chan-pad-y:.3125rem;--braid-chan-pad-x:.5rem;--braid-msg-pad-y:.625rem;--braid-msg-pad-x:1rem}
 html[data-braid-layout="1"] .channel-topic-bar{background:transparent!important;border-bottom:0!important;padding:.125rem 1.75rem .375rem!important;font-size:.71875rem!important;min-height:0!important;line-height:1.4!important;color:var(--text-muted)!important}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{padding:.3125rem .5rem!important}
@@ -819,7 +909,7 @@ html[data-braid-layout="1"] .channel-section{flex:1;min-height:0;padding:2px .37
 html[data-braid-layout="1"] .dm-section-pane{flex:0 0 auto;max-height:28%;padding:2px .375rem .375rem!important;border-top:1px solid var(--border)!important}
 html[data-braid-layout="1"] .section-label.channels-toggle,
 html[data-braid-layout="1"] .section-label.dm-section-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.5rem .5rem .25rem!important}
-html[data-braid-layout="1"] .channel-item{margin:1px .375rem!important;padding:.5rem .625rem!important;border-radius:.625rem!important}
+html[data-braid-layout="1"] .channel-item{margin:1px .375rem!important;padding:var(--braid-chan-pad-y) var(--braid-chan-pad-x)!important;border-radius:.625rem!important}
 html[data-braid-layout="1"] .channel-item.active{background:var(--bg-active)!important}
 html[data-braid-layout="1"] .sidebar-bottom{order:4;border-top:1px solid var(--border)!important;background:var(--bg-secondary)!important;flex-shrink:0}
 html[data-braid-layout="1"] .sidebar-bottom-bar{padding:.5rem!important;gap:2px!important;display:flex;align-items:center}
@@ -875,7 +965,7 @@ html[data-braid-layout="1"] .sidebar-bottom .voice-bar-badge{border-radius:999px
 html[data-braid-layout="1"] .sidebar-bottom .voice-bar-leave{border-radius:.625rem!important;box-shadow:none!important;background:var(--braid-btn-bg)!important;border:1px solid var(--braid-btn-line)!important;color:var(--text-primary)!important}
 html[data-braid-layout="1"] .sidebar-bottom .voice-bar-leave:hover{background:color-mix(in srgb,var(--danger) 18%,var(--bg-secondary))!important;border-color:var(--danger)!important;color:var(--danger)!important}
 html[data-braid-layout="1"] .message-area{flex:1;min-height:0;display:flex;flex-direction:column}
-html[data-braid-layout="1"] .messages{padding:1.125rem 1.75rem .5rem!important;width:100%;box-sizing:border-box}
+html[data-braid-layout="1"] .messages{padding:var(--braid-msg-pad-y) var(--braid-msg-pad-x) .5rem!important;width:100%;box-sizing:border-box}
 html[data-braid-layout="1"] .message-input-area,
 html[data-braid-layout="1"] .message-input-container{padding:.5rem 1rem .75rem!important;width:100%;box-sizing:border-box;border-top:1px solid var(--border)!important;background:color-mix(in srgb,var(--bg-secondary) 94%,transparent)!important}
 html[data-braid-layout="1"] .right-sidebar,
@@ -945,16 +1035,50 @@ html[data-braid-form="1"]{
 --braid-seam:color-mix(in srgb,var(--border) 55%,var(--braid-bub));
 --braid-me:color-mix(in srgb,var(--accent) 8%,var(--bg-secondary));
 --braid-me-line:color-mix(in srgb,var(--accent) 26%,var(--border));
---braid-gutter:3.625rem;
+/* Spacing scale. Every gap in a run card and a channel row reads one of
+   these, so a density level only has to restate the tokens — the corner
+   radii are deliberately NOT in here, the cards stay equally rounded at
+   all three levels. --braid-gutter must stay derived: a continuation
+   indents by exactly the leader's inset + avatar + row gap, so shrinking
+   the avatar without recomputing it drifts the whole run left. */
+--braid-inset:.625rem;
+--braid-avatar:2.25rem;
+--braid-row-gap:.75rem;
+--braid-gutter:calc(var(--braid-inset) + var(--braid-avatar) + var(--braid-row-gap));
+--braid-body-pad-y:.4375rem;
+--braid-body-pad-x:.9375rem;
+--braid-cap-pad:.6875rem;
+--braid-run-gap:.625rem;
+--braid-chan-run:.25rem;
+}
+html[data-braid-density="spacious"][data-braid-form="1"]{
+--braid-inset:.875rem;
+--braid-avatar:2.5rem;
+--braid-row-gap:.9375rem;
+--braid-body-pad-y:.625rem;
+--braid-body-pad-x:1.125rem;
+--braid-cap-pad:.9375rem;
+--braid-run-gap:1rem;
+--braid-chan-run:.4375rem;
+}
+html[data-braid-density="compact"][data-braid-form="1"]{
+--braid-inset:.5rem;
+--braid-avatar:1.75rem;
+--braid-row-gap:.5rem;
+--braid-body-pad-y:.25rem;
+--braid-body-pad-x:.75rem;
+--braid-cap-pad:.4375rem;
+--braid-run-gap:.3125rem;
+--braid-chan-run:.125rem;
 }
 html[data-braid-form="1"] .message,
 html[data-braid-form="1"] .message-compact{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;margin:0!important}
 html[data-braid-form="1"] .messages{gap:0!important}
-html[data-braid-form="1"] .message{padding:0 1.125rem 0 .625rem!important}
+html[data-braid-form="1"] .message{padding:0 1.125rem 0 var(--braid-inset)!important}
 html[data-braid-form="1"] .message-compact{padding:0 1.125rem 0 var(--braid-gutter)!important}
-html[data-braid-form="1"] .message-row{padding:0!important;gap:.75rem!important;align-items:flex-start}
+html[data-braid-form="1"] .message-row{padding:0!important;gap:var(--braid-row-gap)!important;align-items:flex-start}
 html[data-braid-form="1"] .message-avatar,
-html[data-braid-form="1"] .message-avatar-img{width:2.25rem!important;height:2.25rem!important;min-width:2.25rem!important;box-sizing:border-box!important;border:0!important;margin:0!important}
+html[data-braid-form="1"] .message-avatar-img{width:var(--braid-avatar)!important;height:var(--braid-avatar)!important;min-width:var(--braid-avatar)!important;box-sizing:border-box!important;border:0!important;margin:0!important}
 html[data-braid-form="1"] .message:hover,
 html[data-braid-form="1"] .message-compact:hover{background:transparent!important}
 /* No internal horizontal borders inside a run — every body keeps only its
@@ -962,12 +1086,12 @@ html[data-braid-form="1"] .message-compact:hover{background:transparent!importan
    (The old base rule left border-bottom on every body, which stacked a
    solid line under the dotted seam and read as a full-width divider.) */
 html[data-braid-form="1"] .message>.message-row>.message-body,
-html[data-braid-form="1"] .message-compact>.message-body{position:relative;flex:1 1 auto;min-width:0;background:var(--braid-bub);border:1px solid var(--braid-line);border-top:0;border-bottom:0;border-radius:0;padding:.4375rem .9375rem}
+html[data-braid-form="1"] .message-compact>.message-body{position:relative;flex:1 1 auto;min-width:0;background:var(--braid-bub);border:1px solid var(--braid-line);border-top:0;border-bottom:0;border-radius:0;padding:var(--braid-body-pad-y) var(--braid-body-pad-x)}
 html[data-braid-form="1"] .message[data-braid-run="start"]>.message-row>.message-body,
-html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body{border-top:1px solid var(--braid-line);border-top-left-radius:var(--braid-r);border-top-right-radius:var(--braid-r);padding-top:.6875rem;margin-top:.625rem}
+html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body{border-top:1px solid var(--braid-line);border-top-left-radius:var(--braid-r);border-top-right-radius:var(--braid-r);padding-top:var(--braid-cap-pad);margin-top:var(--braid-run-gap)}
 html[data-braid-form="1"] .message[data-braid-run="end"]>.message-row>.message-body,
 html[data-braid-form="1"] .message[data-braid-run="solo"]>.message-row>.message-body,
-html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom:1px solid var(--braid-line);border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:.6875rem;margin-bottom:.625rem}
+html[data-braid-form="1"] .message-compact[data-braid-run="end"]>.message-body{border-bottom:1px solid var(--braid-line);border-bottom-left-radius:var(--braid-r);border-bottom-right-radius:var(--braid-r);padding-bottom:var(--braid-cap-pad);margin-bottom:var(--braid-run-gap)}
 /* the only separator inside a run: a small centered dotted seam */
 html[data-braid-form="1"] .message-compact>.message-body::before,
 html[data-braid-form="1"] .message[data-braid-cont="1"]>.message-row>.message-body::before{content:'';position:absolute;left:50%;transform:translateX(-50%);width:min(7rem,45%);top:0;border-top:1px dotted color-mix(in srgb,var(--braid-seam) 75%,transparent);pointer-events:none}
@@ -977,7 +1101,7 @@ html[data-braid-form="1"] .message[data-braid-cont="1"]{position:relative}
 html[data-braid-form="1"] .message[data-braid-cont="1"] .message-avatar,
 html[data-braid-form="1"] .message[data-braid-cont="1"] .message-avatar-img{visibility:hidden}
 html[data-braid-form="1"] .message[data-braid-cont="1"]>.message-row>.message-body>.message-header{display:none}
-html[data-braid-form="1"] .message[data-braid-cont="1"]:hover::before{content:attr(data-time-short);position:absolute;left:.625rem;top:.5rem;width:2.25rem;text-align:center;font-size:.5625rem;line-height:1.2;color:var(--text-muted);pointer-events:none}
+html[data-braid-form="1"] .message[data-braid-cont="1"]:hover::before{content:attr(data-time-short);position:absolute;left:var(--braid-inset);top:.5rem;width:var(--braid-avatar);text-align:center;font-size:.5625rem;line-height:1.2;color:var(--text-muted);pointer-events:none}
 html[data-braid-form="1"] .message>.message-row>.message-body:hover,
 html[data-braid-form="1"] .message-compact>.message-body:hover{background:color-mix(in srgb,var(--text-primary) 9%,var(--bg-secondary))}
 html[data-braid-form="1"] .message-user-sep{border-top:0!important;padding-top:0!important}
@@ -985,9 +1109,9 @@ html[data-braid-form="1"] .message.system-message>.message-row>.message-body,
 html[data-braid-form="1"] .message.announcement>.message-row>.message-body{background:transparent;border:0;border-radius:0}
 html[data-braid-form="1"] .channel-item{position:relative;margin:0 .5rem!important;border:1px solid var(--braid-line)!important;border-top:0!important;border-radius:0!important;background:var(--braid-bub)}
 html[data-braid-form="1"] .channel-item[data-braid-run="start"],
-html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-top:1px solid var(--braid-line)!important;border-top-left-radius:.75rem!important;border-top-right-radius:.75rem!important;margin-top:.25rem!important}
+html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-top:1px solid var(--braid-line)!important;border-top-left-radius:.75rem!important;border-top-right-radius:.75rem!important;margin-top:var(--braid-chan-run)!important}
 html[data-braid-form="1"] .channel-item[data-braid-run="end"],
-html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-bottom-left-radius:.75rem!important;border-bottom-right-radius:.75rem!important;margin-bottom:.25rem!important}
+html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-bottom-left-radius:.75rem!important;border-bottom-right-radius:.75rem!important;margin-bottom:var(--braid-chan-run)!important}
 html[data-braid-form="1"] .channel-item[data-braid-run="mid"]::before,
 html[data-braid-form="1"] .channel-item[data-braid-run="end"]::before{content:'';position:absolute;left:.75rem;right:.75rem;top:0;border-top:1px dashed var(--braid-seam);pointer-events:none}
 html[data-braid-form="1"] .channel-item:hover{background:color-mix(in srgb,var(--text-primary) 10%,var(--bg-secondary))}
