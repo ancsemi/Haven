@@ -1349,13 +1349,19 @@
 [data-theme="win95"] .icon-btn:active { border: 2px inset #808080; }
 
 /* Win95 settings button */
-[data-theme="win95"] .btn-settings-popout {
+[data-theme="win95"] .btn-settings-popout,
+[data-theme="win95"] .btn-invite-popout {
   background: #bfbfbf; color: #000; border: 3px outset #fff;
   border-radius: 0 !important;
 }
-[data-theme="win95"] .btn-settings-popout:hover { background: #dfdfdf; color: #000; }
-[data-theme="win95"] .btn-settings-popout:active { border: 3px inset #808080; }
-[data-theme="win95"] .btn-settings-popout svg { color: #000; }
+[data-theme="win95"] .btn-settings-popout:hover,
+[data-theme="win95"] .btn-invite-popout:hover {background: #dfdfdf; color: #000; }
+
+[data-theme="win95"] .btn-settings-popout:active,
+[data-theme="win95"] .btn-invite-popout:active { border: 3px inset #808080; }
+
+[data-theme="win95"] .btn-settings-popout svg,
+[data-theme="win95"] .btn-invite-popout svg { color: #000; }
 
 /* Win95 status picker dot — beveled */
 [data-theme="win95"] .status-picker-dot { border: 2px outset #fff; border-radius: 0 !important; }
@@ -10582,14 +10588,16 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-color: var(--accent);
 }
 
-.sidebar-settings-panel {
+.sidebar-settings-panel,
+.sidebar-invite-panel {
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   border-bottom: none;
   padding: 0.625rem 1rem;
 }
 
-.btn-settings-popout {
+.btn-settings-popout,
+.btn-invite-popout {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -10604,16 +10612,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-weight: 500;
   transition: all 0.15s ease;
 }
-.btn-settings-popout:hover {
+.btn-settings-popout:hover,
+.btn-invite-popout:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--accent);
 }
-.btn-settings-popout svg {
+.btn-settings-popout svg,
+.btn-invite-popout svg {
   flex-shrink: 0;
   opacity: 0.7;
 }
-.btn-settings-popout:hover svg { opacity: 1; }
+.btn-settings-popout:hover svg,
+.btn-invite-popout:hover svg { 
+  opacity: 1;
+}
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ADMIN MEMBER LIST
