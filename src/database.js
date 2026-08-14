@@ -1054,6 +1054,36 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN public_key TEXT DEFAULT NULL");
   }
 
+  // ── Migration: E2E signing key (ECDSA P-256) ────────────
+  // Separate from public_key because P-256 cannot both agree and sign. This is
+  // what gives messages a sender the recipient can verify, rather than one the
+  // server asserts. See docs/group-dm-e2e-plan.md.
+  try {
+    db.prepare("SELECT signing_key FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN signing_key TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: group DM epoch keys ──────────────────────
+  try {
+    db.prepare("SELECT key_epoch FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN key_epoch INTEGER DEFAULT 0");
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dm_group_keys (
+      channel_id   INTEGER NOT NULL,
+      epoch        INTEGER NOT NULL,
+      recipient_id INTEGER NOT NULL,
+      wrapped_key  TEXT    NOT NULL,
+      wrapped_by   INTEGER NOT NULL,
+      created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (channel_id, epoch, recipient_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_dm_group_keys_lookup
+      ON dm_group_keys (channel_id, recipient_id, epoch);
+  `);
+
   // ── Migration: E2E encrypted private key (per-account sync) ──
   try {
     db.prepare("SELECT encrypted_private_key FROM users LIMIT 0").get();
