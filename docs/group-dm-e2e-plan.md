@@ -15,7 +15,7 @@ Established by reading the implementation, not assumed:
 
 Three properties drive every decision below.
 
-**1. Clients decrypt history on demand, from server-held ciphertext.** `decryptMessages()` runs on every `message-history` payload, including back-pagination. The server stores ciphertext permanently and clients re-decrypt whenever the user scrolls. This is the single most important constraint in this document, and §4 explains why.
+**1. Clients decrypt history on demand, from server-held ciphertext.** `decryptMessages()` runs on every `message-history` payload, including back-pagination. The server stores ciphertext permanently and clients re-decrypt whenever the user scrolls. This is the single most important constraint in this document, and §4 explains why. §4a covers detecting a tampered channel.
 
 **2. There is no forward secrecy.** The pairwise key derives once from two long-term keys and never rotates.
 
