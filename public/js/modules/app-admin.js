@@ -2157,6 +2157,7 @@ _openMemberChannelPicker(userId, username, mode) {
 _openInviteLinksModal() {
   const modal = document.getElementById('invite-links-modal');
   if (!modal) return;
+  if (!this.user.isAdmin && !this._hasGlobalPerm('invite_users')) return this.socket.emit('error-msg', 'You don\'t have permission to manage invite links');
   if (typeof this._renderInviteCreateChannels === 'function') {
     try { this._renderInviteCreateChannels(true); } catch { /* non-critical */ }
   }
