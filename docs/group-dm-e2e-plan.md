@@ -78,7 +78,7 @@ CREATE TABLE dm_group_keys (
 Envelope, versioned so 1:1 `v:2` traffic is untouched:
 
 ```json
-{ "v": 3, "e": 4, "iv": "…", "ct": "…", "sig": "…" }
+{ "v": 3, "e": 4, "prev": "…", "iv": "…", "ct": "…", "sig": "…" }
 ```
 
 ---
@@ -98,6 +98,55 @@ This is not a shortcut being rationalised. Copying the ratchet here would produc
 - Rotate on every membership change (required for correctness).
 - Optionally rotate on a schedule — every N days or N messages — which bounds the blast radius of a compromised key to one epoch's traffic.
 - Clients retain the old epoch keys they already hold, so history stays readable. A client that wants stronger guarantees can discard epoch keys past a retention horizon and accept that older history goes dark. That is a **policy choice exposed to the user**, not something the protocol has to decide.
+
+---
+
+## 4a. Detecting a tampered channel
+
+Two distinct worries, often collapsed into one: *is the key I hold really theirs* (MITM), and *is the message stream I received the real one* (compromised delivery). They need different answers.
+
+### Not network identifiers
+
+Binding trust to MAC address or IP was considered and rejected. Recording why, so it does not resurface:
+
+- **A browser cannot read its own MAC.** No web API exposes it, and web is a first-class Haven client.
+- **MAC addresses do not survive the first router hop.** Layer 2 addressing is rewritten hop by hop, so the server never sees a remote client's MAC — only the nearest gateway's. It could therefore only ever be *self-reported*.
+- **Self-reported values are attacker-controlled.** That is the exact weakness §2 exists to fix. Sender identity today is a server assertion; replacing it with a client assertion is not an improvement, because a compromised client reports whatever passes.
+- **A server-observed IP is circular here.** End-to-end encryption exists because the server is not trusted. Asking that server what address it saw, in order to detect server-mediated compromise, closes no loop — it can simply lie.
+- **Both identifiers are deliberately unstable now.** iOS and Android randomize MAC per SSID on their own schedule, and addresses change on Wi-Fi/cellular handoff, CGNAT and VPN. The result is a stream of false compromise alerts, which teaches people to dismiss the warning — worse than showing none.
+- **It is a privacy regression.** Persisting device and network identifiers builds exactly the tracking surface this project exists to avoid, visible to the operator you are defending against.
+- **It does not detect the attack anyway.** MITM here means key substitution. An IP address says nothing about whether the public key you fetched is genuine.
+
+### Key substitution: verify the roster, not the network
+
+Pairwise verification already exists — `getVerificationCode()` (`e2e.js:290`) derives a Signal-style 60-digit safety number from both public keys, and TOFU pinning already refuses silent key changes.
+
+Groups allow something strictly stronger, and it costs almost nothing: **roster gossip**. Each member periodically publishes a signed digest over the sorted list of `(user_id, ECDH pubkey, signing pubkey)` for the whole group. Every client compares the digests.
+
+- All digests equal → every member sees identical keys for everyone. No substitution has occurred anywhere in the group.
+- One digest differs → that member has been fed a different key for someone, and the client says so, naming the disagreement.
+
+A 1:1 conversation cannot do this, because there is no third party to disagree with. A group is its own redundancy, so substitution becomes detectable **without** anyone reading digits aloud. Out-of-band safety-number comparison stays available as the manual escalation once a disagreement is flagged.
+
+### Compromised delivery: chain the transcript
+
+Signatures stop tampering and injection, but a signature on each message says nothing about the *set* of messages, so a hostile server can still drop, reorder, or withhold messages from selected members and every remaining signature verifies.
+
+Fix by binding each message to the one before it. Every message carries `prev`, the SHA-256 of the previous message envelope the sender had seen in that channel, and `prev` sits inside the signed digest from §2:
+
+```
+sig = ECDSA-SHA256( sk_sign, "havenmsg:v1" ‖ channel_id ‖ epoch ‖ sender_id ‖ prev ‖ iv ‖ ciphertext )
+```
+
+Now the message history is an append-only hash chain that the server cannot rewrite:
+
+- **Dropped or withheld message** → the next message's `prev` refers to something the recipient never received. Gap detected.
+- **Reordering** → the chain does not link. Detected.
+- **Split view** (different members shown different histories) → their chains diverge, and roster gossip surfaces the divergence because the heads disagree.
+
+Cost is 32 bytes per message and no new primitives. Concurrent sends legitimately produce branches — several senders can share the same `prev` — so clients treat it as a DAG and only alarm on a `prev` that never arrives, not on ordinary forks.
+
+This is the honest version of the instinct behind checking network identity: verify the *conversation*, cryptographically, instead of guessing from the transport.
 
 ---
 
@@ -160,5 +209,8 @@ The rejected fan-out alternative would instead multiply every message *and every
 - [ ] An epoch publish omitting a current member is rejected server-side.
 - [ ] A member who resets keys recovers after a rewrap, with an explicit waiting state before it, and a conflict prompt if the pinned key changed.
 - [ ] Scrolling back through a group DM still decrypts after several epoch rotations — the specific regression a ratchet design would have caused.
+- [ ] A message withheld from one member by the server is **detected** by that member via a broken `prev` chain, not silently absent.
+- [ ] A member fed a substituted public key is detected by roster-digest disagreement, without any out-of-band step.
+- [ ] Concurrent sends sharing the same `prev` do **not** raise a false alarm.
 - [ ] Web, Android and iOS interoperate in one group, including signature verification across all three.
 - [ ] 1:1 DMs keep working throughout, and gain signatures on the same schedule.
