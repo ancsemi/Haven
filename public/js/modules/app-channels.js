@@ -477,7 +477,8 @@ _openChannelCtxMenu(code, btnEl) {
   // Show "Promote to Channel" only for sub-channels
   const promoteBtn = menu.querySelector('[data-action="promote-channel"]');
   if (promoteBtn && ch) {
-    promoteBtn.style.display = (canManageChannels && ch.parent_channel_id) ? '' : 'none';
+    const canManageSub = isAdmin || canManageSettings || !!(ch && ch.canManageSubs);
+    promoteBtn.style.display = (canManageSub && ch.parent_channel_id) ? '' : 'none';
   }
   // Update Channel Functions panel with current channel values
   if (canManageSettings) this._updateChannelFunctionsPanel(ch);
