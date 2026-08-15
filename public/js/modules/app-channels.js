@@ -383,6 +383,7 @@ _openChannelCtxMenu(code, btnEl) {
   // used to show the entry everywhere once you held the permission anywhere.
   const ch = this.channels.find(c => c.code === code);
   const canManageSettings = isAdmin || !!(ch && ch.canManageSettings);
+  const canManageSubs = isAdmin || !!(ch && ch.canManageSubs);
   const isMod = isAdmin || this._canModerate();
   menu.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = canManageChannels ? '' : 'none';
@@ -472,12 +473,11 @@ _openChannelCtxMenu(code, btnEl) {
   if (moveToBtn && ch) {
     const hasChildren = this.channels.some(c => c.parent_channel_id === ch.id);
     // Can move if: admin, not a DM, and has no children (can't nest 2 levels)
-    moveToBtn.style.display = (canManageChannels && !ch.is_dm && !hasChildren) ? '' : 'none';
+    moveToBtn.style.display = (canManageSubs && !ch.is_dm && !hasChildren) ? '' : 'none';
   }
   // Show "Promote to Channel" only for sub-channels
   const promoteBtn = menu.querySelector('[data-action="promote-channel"]');
   if (promoteBtn && ch) {
-    const canManageSub = isAdmin || canManageSettings || !!(ch && ch.canManageSubs);
     promoteBtn.style.display = (canManageSub && ch.parent_channel_id) ? '' : 'none';
   }
   // Update Channel Functions panel with current channel values

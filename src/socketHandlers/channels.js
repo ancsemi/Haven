@@ -1335,8 +1335,8 @@ module.exports = function register(socket, ctx) {
         // (#5424) A sub-channel manager of the destination parent (or the
         // channel's current parent) may re-nest an existing sub-channel.
         // (#5492) Authority here is channel-scoped only — server-wide
-        // create_channel does not let you nest under a parent you don't manage.
-        if (!_canManageSubsScoped(newParent.id) && !_canManageSubsScoped(channel.parent_channel_id)) {
+        // create_channel does not let you nest under, or move from, a parent you don't manage.
+        if (!_canManageSubsScoped(newParent.id) || !_canManageSubsScoped(channel.parent_channel_id)) {
           return socket.emit('error-msg', 'You don\'t have permission to move channels');
         }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(newParent.id);
