@@ -1314,6 +1314,9 @@ module.exports = function register(socket, ctx) {
     try {
       if (newParentCode === null || newParentCode === undefined) {
         if (!channel.parent_channel_id) return socket.emit('error-msg', 'Channel is already top-level');
+        if (!_canManageSubsScoped(channel.parent_channel_id)) {
+          return socket.emit('error-msg', 'You don\'t have permission to promote this channel');
+        }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0').get();
         const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
         db.prepare('UPDATE channels SET parent_channel_id = NULL, position = ?, category = NULL WHERE id = ?').run(position, channel.id);
