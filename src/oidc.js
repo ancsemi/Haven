@@ -53,7 +53,7 @@ function _setting(key) {
  * ride along inside one. (Same reasoning as JWT_SECRET.)
  */
 function getOidcConfig() {
-  const issuer = _setting('oidc_issuer_url').replace(/\/+$/, '');
+  const issuer = _setting('oidc_issuer_url'); // don't try to alter thet issuer url uppon fetching.
   const clientId = _setting('oidc_client_id');
   const clientSecret = process.env.OIDC_CLIENT_SECRET || '';
   const scopes = _setting('oidc_scopes') || 'openid profile email';
@@ -109,8 +109,10 @@ async function discover(issuer) {
   _assertSafeIssuer(issuer);
   const hit = _discoveryCache.get(issuer);
   if (hit && Date.now() - hit.at < DISCOVERY_TTL_MS) return hit.doc;
-
-  const doc = await _fetchJson(`${issuer}/.well-known/openid-configuration`);
+  
+  // remove trailing slash if present to construct the openid-config path
+  const normalized_issuer = issuer.replace(/\/+$/, '');
+  const doc = await _fetchJson(`${normalized_issuer}/.well-known/openid-configuration`);
 
   // The issuer inside the document is authoritative and must match what the
   // admin configured, or we could be talking to a provider that impersonates
