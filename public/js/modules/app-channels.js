@@ -456,8 +456,8 @@ _openChannelCtxMenu(code, btnEl) {
   // this eliminates a double divider being displayed when both of these buttons are not displayed
   const renameOrCreateSubDivider = menu.querySelector('[class="channel-ctx-sep rename-or-createSub"]');
   if (renameOrCreateSubDivider && ch) {
-    const renameCtxBtn_visible = renameCtxBtn && renameCtxBtn.style.display !== None;
-    const createSubBtn_visible = createSubBtn && createSubBtn.style.display !== None;
+    const renameCtxBtn_visible = renameCtxBtn && renameCtxBtn.style.display !== 'none';
+    const createSubBtn_visible = createSubBtn && createSubBtn.style.display !== 'none';
     renameOrCreateSubDivider.style.display = (renameCtxBtn_visible || createSubBtn_visible) ? '' : 'none';
   }
   // Hide "Leave Channel" for admins (always in all channels)
