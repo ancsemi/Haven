@@ -3617,10 +3617,13 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
 // GET /api/bot-commands — list all registered bot commands (for client autocomplete)
 app.get('/api/bot-commands', (req, res) => {
   const { getDb } = require('./src/database');
+  // (#5504) channel_code scopes each command to the channel its bot lives in,
+  // so the client only offers it there instead of in every channel.
   const rows = getDb().prepare(`
-    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name
+    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name, c.code as channel_code
     FROM bot_commands bc
     JOIN webhooks w ON bc.webhook_id = w.id
+    JOIN channels c ON w.channel_id = c.id
     WHERE w.is_active = 1
   `).all();
   const commands = [];
@@ -3641,7 +3644,8 @@ app.get('/api/bot-commands', (req, res) => {
           description: typeof sc.description === 'string' && sc.description.trim()
             ? sc.description.trim()
             : (row.description || 'Bot command'),
-          bot_name: row.bot_name || 'Bot'
+          bot_name: row.bot_name || 'Bot',
+          channel_code: row.channel_code
         });
       }
       continue;
@@ -3649,7 +3653,8 @@ app.get('/api/bot-commands', (req, res) => {
     commands.push({
       command: row.command,
       description: row.description || '',
-      bot_name: row.bot_name || 'Bot'
+      bot_name: row.bot_name || 'Bot',
+      channel_code: row.channel_code
     });
   }
   res.json({ commands });

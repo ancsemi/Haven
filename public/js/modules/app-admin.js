@@ -2366,7 +2366,13 @@ _showSlashDropdown(query) {
   const host = (this._slashInput && this._slashInput.parentElement) || null;
   if (host && dropdown.parentElement !== host) host.appendChild(dropdown);
   const q = String(query || '').toLowerCase();
-  const filtered = this.slashCommands
+  // (#5504) Bot slash commands are scoped to the channel their bot lives in.
+  // Built-in commands carry no channelCode and are always available; a bot
+  // command is only offered while you're in that bot's channel (it does
+  // nothing elsewhere, so surfacing it there was just misleading).
+  const commands = this.slashCommands
+    .filter(c => !c.channelCode || c.channelCode === this.currentChannel);
+  const filtered = commands
     .filter(c => String(c.cmd || '').toLowerCase().startsWith(q))
     // For base queries like "rss", show "/rss add" before plain "/rss" so
     // discoverable subcommands appear first and users don't keep selecting the
@@ -2382,7 +2388,7 @@ _showSlashDropdown(query) {
     })
     .slice(0, 10);
 
-  if (filtered.length === 0 || (query === '' && filtered.length === this.slashCommands.length)) {
+  if (filtered.length === 0 || (query === '' && filtered.length === commands.length)) {
     // Show all on empty query
     if (query === '') {
       // show all
@@ -2392,7 +2398,7 @@ _showSlashDropdown(query) {
     }
   }
 
-  const shown = query === '' ? this.slashCommands.slice(0, 12) : filtered;
+  const shown = query === '' ? commands.slice(0, 12) : filtered;
 
   dropdown.innerHTML = shown.map((c, i) =>
     `<div class="slash-item${i === 0 ? ' active' : ''}" data-cmd="${c.cmd}">

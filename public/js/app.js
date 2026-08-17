@@ -364,19 +364,29 @@ class HavenApp {
       if (!res.ok) return;
       const data = await res.json();
       if (!data.commands || !data.commands.length) return;
-      const knownCmds = new Set(this.slashCommands.map(c => String(c.cmd || '').toLowerCase()));
+      // Built-in commands must never be shadowed by a bot command. Bot
+      // commands are otherwise scoped per channel (#5504), so the same command
+      // name may legitimately exist in two different channels — dedupe on
+      // (channel, command) rather than command name alone.
+      const builtinCmds = new Set(this.slashCommands.map(c => String(c.cmd || '').toLowerCase()));
+      const seen = new Set();
       for (const bc of data.commands) {
         const cmd = String(bc.command || '').trim();
         if (!cmd) continue;
         const key = cmd.toLowerCase();
-        if (knownCmds.has(key)) continue;
-        knownCmds.add(key);
+        if (builtinCmds.has(key)) continue;
+        const channelCode = bc.channel_code || null;
+        const dedupKey = `${channelCode || ''}::${key}`;
+        if (seen.has(dedupKey)) continue;
+        seen.add(dedupKey);
         this.slashCommands.push({
           cmd,
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || 'Bot command'}  [${bc.bot_name || 'Bot'}]`
+          desc: `${bc.description || 'Bot command'}  [${bc.bot_name || 'Bot'}]`,
+          // (#5504) only offered while the user is in this bot's channel.
+          channelCode
         });
       }
     } catch { /* non-critical */ }
