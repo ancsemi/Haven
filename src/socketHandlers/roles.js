@@ -41,6 +41,23 @@ module.exports = function register(socket, ctx) {
   // Expose on ctx so other modules can use it if needed
   ctx.applyRoleChannelAccess = applyRoleChannelAccess;
 
+  // ── Helper: live-refresh for 'view_all_channels' ────────
+  // A role that grants view_all_channels changes what its holder can SEE, so
+  // push them a rebuilt channel list (joining the new rooms) the same way
+  // applyRoleChannelAccess does, instead of it only appearing on next login.
+  function roleGrantsSeeAll(roleId) {
+    return !!db.prepare(
+      "SELECT 1 FROM role_permissions WHERE role_id = ? AND permission = 'view_all_channels' AND allowed = 1"
+    ).get(roleId);
+  }
+  function pushChannelList(userId) {
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === userId) {
+        s.emit('channels-list', getEnrichedChannels(userId, s.user.isAdmin, (room) => s.join(room)));
+      }
+    }
+  }
+
   // ── Notify helper: push one user's recomputed role state to their sockets ──
   // Recomputes from the DB, so it's correct whether the change was to the
   // user's role ASSIGNMENTS (assign/revoke/promote) or to the PERMISSIONS of a
@@ -214,7 +231,7 @@ module.exports = function register(socket, ctx) {
       ).run(name, level, scope, color, autoAssign, icon);
 
       const perms = Array.isArray(data.permissions) ? data.permissions : [];
-      const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+      const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
       const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
       perms.forEach(p => {
         if (!VALID_ROLE_PERMS.includes(p)) return;
@@ -310,7 +327,7 @@ module.exports = function register(socket, ctx) {
         if (socket.user.isAdmin) {
           finalPerms = requested;
         } else {
-          const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+          const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
           const current = db.prepare(
             'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
           ).all(roleId).map(r => r.permission);
@@ -344,6 +361,9 @@ module.exports = function register(socket, ctx) {
     // (and the hidden IP-ban option) until they reconnected.
     const affected = db.prepare('SELECT DISTINCT user_id FROM user_roles WHERE role_id = ?').all(roleId);
     for (const row of affected) pushUserRoleState(row.user_id);
+    // If the edit granted view_all_channels, every holder's visible channel
+    // set just grew — refresh their lists live, like assign-role does.
+    if (roleGrantsSeeAll(roleId)) for (const row of affected) pushChannelList(row.user_id);
 
     socket.broadcast.emit('roles-updated');
     cb({ success: true, roles: freshRoles });
@@ -624,7 +644,7 @@ module.exports = function register(socket, ctx) {
         // is admin, and drop any perm the caller doesn't currently hold.
         // This prevents a non-admin promoter from escalating perms via a
         // crafted customPerms payload.
-        const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+        const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
         const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserPermissions(socket.user.id));
         const customPerms = data.customPerms.filter(p => {
           if (typeof p !== 'string') return false;
@@ -652,6 +672,7 @@ module.exports = function register(socket, ctx) {
       }
 
       applyRoleChannelAccess(roleId, userId, 'grant');
+      if (roleGrantsSeeAll(roleId)) pushChannelList(userId);
       refreshUserRoles(userId);
       cb({ success: true });
       try {

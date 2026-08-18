@@ -351,8 +351,14 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // ── getEnrichedChannels ─────────────────────────────────
   function getEnrichedChannels(userId, isAdmin, joinRooms) {
+    // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
+    // same visibility treatment as the admin: every non-DM channel, with
+    // membership filled in on the fly — so channels created after the role
+    // was granted show up for them automatically instead of someone having
+    // to add every mod to every new channel by hand.
+    const seesAll = isAdmin || userHasPermission(userId, 'view_all_channels');
     let channels;
-    if (isAdmin) {
+    if (seesAll) {
       channels = db.prepare(`
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,

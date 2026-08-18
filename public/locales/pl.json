@@ -397,6 +397,7 @@
     "mention_everyone": "Wspominaj @everyone",
     "view_history": "Przeglądaj historię wiadomości",
     "view_all_members": "Przeglądaj wszystkich członków serwera",
+    "view_all_channels": "Widzi wszystkie kanały (auto-dołączanie)",
     "view_channel_members": "Przeglądaj członków kanału",
     "manage_emojis": "Zarządzaj niestandardowymi emoji",
     "manage_soundboard": "Zarządzaj panelem dźwięków",

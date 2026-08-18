@@ -379,6 +379,7 @@
     "mention_everyone": "@everyone erwähnen",
     "view_history": "Nachrichtenverlauf anzeigen",
     "view_all_members": "Alle Servermitglieder anzeigen",
+    "view_all_channels": "Alle Kanäle sehen (Auto-Beitritt)",
     "manage_emojis": "Benutzerdefinierte Emojis verwalten",
     "manage_soundboard": "Soundboard verwalten",
     "promote_user": "Nutzer befördern",

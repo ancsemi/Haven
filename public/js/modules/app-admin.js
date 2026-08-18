@@ -15,13 +15,13 @@ const ALL_PERMS = [
   // see and manage only the links they made.
   'create_channel', 'create_temp_channel', 'invite_users',
   'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
+  'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names'
 ];
 // Permissions only the server owner (admin) may grant. Highlighted in the
 // role editors and locked for non-admins; mirrors adminOnlyPerms in
 // socketHandlers/roles.js.
-const ADMIN_ONLY_PERMS = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+const ADMIN_ONLY_PERMS = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
 //Similarly flavored solution to perm labels
 const PERM_LABELS = {
   get edit_own_messages() { return t('permissions.edit_own_messages'); },
@@ -49,6 +49,7 @@ const PERM_LABELS = {
   get mention_everyone() { return t('permissions.mention_everyone'); },
   get view_history() { return t('permissions.view_history'); },
   get view_all_members() { return t('permissions.view_all_members'); },
+  get view_all_channels() { return t('permissions.view_all_channels'); },
   get view_channel_members() { return t('permissions.view_channel_members'); },
   get manage_emojis() { return t('permissions.manage_emojis'); },
   get manage_stickers() { return t('permissions.manage_stickers'); },

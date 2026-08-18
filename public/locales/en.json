@@ -426,6 +426,7 @@
     "mention_everyone": "Mention @everyone",
     "view_history": "View Message History",
     "view_all_members": "View All Server Members",
+    "view_all_channels": "See All Channels (Auto-Join)",
     "view_channel_members": "View Channel Members",
     "manage_emojis": "Manage Custom Emojis",
     "manage_stickers": "Manage Stickers",
