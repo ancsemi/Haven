@@ -754,12 +754,15 @@ class BraidLayout {
     }
     const famOf = (el) => {
       if (!el || !el.classList || !el.classList.contains('channel-item')) return null;
+      if (el.classList.contains('dm-item')) return 'dm';
       return el.classList.contains('sub-channel-item') ? `sub:${el.dataset.parentId || ''}` : 'main';
     };
     const joinsRun = (a, b) => {
       const fa = famOf(a), fb = famOf(b);
       if (!fa || !fb) return false;
-      return fa === fb || (fa === 'main' && fb.slice(0, 4) === 'sub:');
+      if (fa === 'dm' && fb === 'dm') return true;
+      if (fb.slice(0, 4) !== 'sub:') return false;
+      return fa === fb || fa === 'main';
     };
     document.querySelectorAll('.channel-item').forEach((el) => {
       const v = runOf(!joinsRun(el.previousElementSibling, el), !joinsRun(el, el.nextElementSibling));
