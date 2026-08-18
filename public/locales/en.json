@@ -175,6 +175,7 @@
   },
   "toasts": {
     "roles_updated": "Your roles have been updated",
+    "role_server_no_response": "No response from the server — it may be running an older Haven version. Update the server files and fully restart it, then try again.",
     "status_pending_reconnect": "Status will update when reconnected",
     "channel_created": "Channel \"#{{name}}\" created!\nCode: {{code}}",
     "channel_deleted": "Channel was deleted",

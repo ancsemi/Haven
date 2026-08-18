@@ -149,6 +149,7 @@
   },
   "toasts": {
     "roles_updated": "Tus roles han sido actualizados",
+    "role_server_no_response": "El servidor no responde — puede que ejecute una versión antigua de Haven. Actualiza los archivos del servidor, reinícialo por completo y vuelve a intentarlo.",
     "status_pending_reconnect": "El estado se actualizará al reconectarse",
     "channel_created": "Canal \"#{{name}}\" creado!\nCódigo: {{code}}",
     "channel_deleted": "El canal fue eliminado",

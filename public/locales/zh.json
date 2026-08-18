@@ -149,6 +149,7 @@
   },
   "toasts": {
     "roles_updated": "您的角色已更新",
+    "role_server_no_response": "服务器无响应——它可能运行的是旧版 Haven。请更新服务器文件并完全重启服务器，然后重试。",
     "status_pending_reconnect": "状态将在重新连接后更新",
     "channel_created": "频道 \"#{{name}}\" 已创建！\n邀请码：{{code}}",
     "channel_deleted": "频道已删除",
