@@ -262,6 +262,7 @@
     });
   });
 
+  // Switch to registration page if an invite link is detected.
   if (_pendingInvite) {
     showTab('register');
   }
