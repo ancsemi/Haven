@@ -555,7 +555,7 @@ router.post('/register', authLimiter, async (req, res) => {
 
     const existing = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(username);
     if (existing) {
-      return res.status(400).json({ error: 'Registration could not be completed' });
+      return res.status(400).json({ error: 'Registration could not be completed: Username already exists' });
     }
 
     const hash = await bcrypt.hash(password, 12);
