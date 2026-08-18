@@ -2,7 +2,7 @@
  * @name Braid Layout
  * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, docks the full voice controls bottom-left, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. One-key toggle (Ctrl+Shift+B) between Braid and the classic layout. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes, and respects every other theme: cosmetic shape rules use :where() so any [data-theme] override wins.
  * @author Amnibro
- * @version 1.7
+ * @version 1.8
  */
 class BraidLayout {
   start() {
@@ -752,10 +752,17 @@ class BraidLayout {
       if (cont) { if (el.getAttribute('data-braid-cont') !== '1') el.setAttribute('data-braid-cont', '1'); }
       else if (el.hasAttribute('data-braid-cont')) el.removeAttribute('data-braid-cont');
     }
+    const famOf = (el) => {
+      if (!el || !el.classList || !el.classList.contains('channel-item')) return null;
+      return el.classList.contains('sub-channel-item') ? `sub:${el.dataset.parentId || ''}` : 'main';
+    };
+    const joinsRun = (a, b) => {
+      const fa = famOf(a), fb = famOf(b);
+      if (!fa || !fb) return false;
+      return fa === fb || (fa === 'main' && fb.slice(0, 4) === 'sub:');
+    };
     document.querySelectorAll('.channel-item').forEach((el) => {
-      const prev = el.previousElementSibling;
-      const next = el.nextElementSibling;
-      const v = runOf(!prev || !prev.classList.contains('channel-item'), !next || !next.classList.contains('channel-item'));
+      const v = runOf(!joinsRun(el.previousElementSibling, el), !joinsRun(el, el.nextElementSibling));
       if (el.getAttribute('data-braid-run') !== v) el.setAttribute('data-braid-run', v);
     });
   }
