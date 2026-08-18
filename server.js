@@ -14,6 +14,41 @@ if (nodeMajor < 22 || nodeMajor > 26) {
 // Bootstrap .env into the data directory if it doesn't exist yet
 const fs = require('fs');
 const path = require('path');
+
+// ── Stale-install guard ───────────────────────────────────
+// Updating by unzipping/copying a release over an existing install leaves
+// behind files that newer versions deleted. That is normally harmless — until
+// the deleted file is a module that was split into a folder of the same name
+// (src/socketHandlers.js became src/socketHandlers/ in 2.9.8): require()
+// resolves the leftover FILE before the directory, so the server silently
+// runs months-old module code no matter how current every other file is, and
+// eventually dies somewhere unrelated. A real self-host crashed on boot with
+// "Cannot read properties of undefined (reading 'activity')" because a
+// pre-2.9.8 socketHandlers.js was still shadowing the folder — after months
+// of its socket layer being frozen at the old version while "fully updated".
+// Catch the pattern generically and say exactly which file to delete.
+{
+  const srcDir = path.join(__dirname, 'src');
+  let entries = [];
+  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); } catch { /* no src = other problems */ }
+  const dirNames = new Set(entries.filter(e => e.isDirectory()).map(e => e.name));
+  const stale = entries.filter(e =>
+    e.isFile() && e.name.endsWith('.js') && dirNames.has(e.name.slice(0, -3)) &&
+    fs.existsSync(path.join(srcDir, e.name.slice(0, -3), 'index.js'))
+  ).map(e => path.join('src', e.name));
+  if (stale.length > 0) {
+    console.error('\n❌ Stale file(s) from an older Haven install detected:\n');
+    for (const f of stale) console.error(`     ${f}`);
+    console.error('\n  Each file above is left over from an old version and hides the');
+    console.error('  module folder of the same name, so this server would run with');
+    console.error('  outdated code and fail in confusing ways.');
+    console.error('  Fix: delete the file(s) listed above (the folders contain the');
+    console.error('  current code), or update by replacing the whole Haven folder');
+    console.error('  instead of copying new files over an old install. Your data is');
+    console.error(`  safe — it lives in ${DATA_DIR}, not in the install folder.\n`);
+    process.exit(1);
+  }
+}
 if (!fs.existsSync(ENV_PATH)) {
   const example = path.join(__dirname, '.env.example');
   if (fs.existsSync(example)) {
