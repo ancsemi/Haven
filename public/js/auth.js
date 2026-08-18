@@ -951,11 +951,34 @@
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true, registrationToken, captchaToken: captchaToken || '' })
+        body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true, registrationToken, inviteCode: _pendingInvite, captchaToken: captchaToken || ''})
       });
 
       const data = await res.json();
-      if (!res.ok) { _resetCaptcha('main'); return showError(data.error || t('auth.errors.registration_failed')); }
+      if (!res.ok) {
+        _resetCaptcha('main');
+
+        const error = data.error || t('auth.errors.registration_failed');
+
+        // if registration error is due to an invalid invite link, redirect to a non-invite link after showing the error for 5s.
+        // This allows the user to attempt registration again, with the registration code, or a new invitation link.
+        if (error.toLowerCase().includes('invite link')) {
+          showError(error + ' Redirecting in 5s');
+
+          setTimeout(() => {
+            sessionStorage.removeItem('haven_pending_invite');
+
+            const url = new URL(window.location.href);
+            url.searchParams.delete('invite');
+
+            window.location.href = url.pathname + url.search + url.hash;
+          }, 5000);
+        } else {
+          showError(error);
+        }
+
+        return;
+      }
 
       // Derive E2E wrapping key from password (client-side only, never sent to server)
       const e2eWrap = await deriveE2EWrappingKey(password);

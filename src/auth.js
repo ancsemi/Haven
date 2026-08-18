@@ -474,19 +474,46 @@ router.post('/register', authLimiter, async (req, res) => {
 
     const db = getDb();
 
-    // (#5344) Registration token check — admin-controlled gate that can
-    // sit alongside (or instead of) the whitelist. If enabled and a
-    // token is set, the registrant must supply the matching token.
-    const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
-    if (tokenEnabledRow && tokenEnabledRow.value === 'true') {
-      const tokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
-      const expected = tokenRow && typeof tokenRow.value === 'string' ? tokenRow.value.trim() : '';
-      const supplied = typeof req.body.registrationToken === 'string' ? req.body.registrationToken.trim() : '';
-      if (!expected) {
-        return res.status(403).json({ error: 'Registration is restricted. Ask the server admin for an invite.' });
+    // if invite code is used, validate invite code and use it in place of registration code
+    const inviteCode = typeof req.body.inviteCode === 'string' ? req.body.inviteCode.trim() : '';
+    if (inviteCode) {
+      const inviteRow = db.prepare(
+        "SELECT *, (expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP) AS is_expired FROM invite_codes WHERE code = ?"
+      ).get(inviteCode);
+
+      if (!inviteRow) {
+        return res.status(403).json({error: 'Invalid invite link.'});
       }
-      if (supplied !== expected) {
-        return res.status(403).json({ error: 'Invalid or missing registration token.' });
+      if (!inviteRow.enabled) {
+        return res.status(403).json({error: 'This invite link has been disabled.'});
+      }
+      if (inviteRow.is_expired) {
+        return res.status(403).json({error: 'This invite link has expired.'});
+      }
+      if (inviteRow.max_uses > 0) {
+        const used = db.prepare(
+          'SELECT COUNT(*) AS n FROM invite_code_uses WHERE invite_code_id = ?'
+        ).get(inviteRow.id).n;
+
+        if (used >= inviteRow.max_uses) {
+          return res.status(403).json({error: 'This invite link has reached its use limit.'});
+        }
+      }
+    } else {
+      // (#5344) Registration token check — admin-controlled gate that can
+      // sit alongside (or instead of) the whitelist. If enabled and a
+      // token is set, the registrant must supply the matching token.
+      const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
+      if (tokenEnabledRow && tokenEnabledRow.value === 'true') {
+        const tokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
+        const expected = tokenRow && typeof tokenRow.value === 'string' ? tokenRow.value.trim() : '';
+        const supplied = typeof req.body.registrationToken === 'string' ? req.body.registrationToken.trim() : '';
+        if (!expected) {
+          return res.status(403).json({ error: 'Registration is restricted. Ask the server admin for an invite.' });
+        }
+        if (supplied !== expected) {
+          return res.status(403).json({ error: 'Invalid or missing registration token.' });
+        }
       }
     }
 
