@@ -241,20 +241,30 @@
     hideError();
   }
 
+  // function to swap the active tab and form
+  function showTab(target) {
+    tabs.forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === target);
+    });
+
+    loginForm.style.display = target === 'login' ? 'flex' : 'none';
+    registerForm.style.display = target === 'register' ? 'flex' : 'none';
+    if (ssoForm) ssoForm.style.display = target === 'sso' ? 'flex' : 'none';
+    totpForm.style.display = 'none';
+    document.getElementById('recover-form').style.display = 'none';
+    hideError();
+  }
+
+  // listen for clicks on the login tabs to swap the tab and form
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-
-      const target = tab.dataset.tab;
-      loginForm.style.display = target === 'login' ? 'flex' : 'none';
-      registerForm.style.display = target === 'register' ? 'flex' : 'none';
-      if (ssoForm) ssoForm.style.display = target === 'sso' ? 'flex' : 'none';
-      totpForm.style.display = 'none';
-      document.getElementById('recover-form').style.display = 'none';
-      hideError();
+      showTab(tab.dataset.tab);
     });
   });
+
+  if (_pendingInvite) {
+    showTab('register');
+  }
 
   function showError(msg) {
     errorEl.textContent = msg;
