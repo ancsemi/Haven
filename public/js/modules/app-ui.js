@@ -4473,8 +4473,13 @@ _setupUI() {
     const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
     // All checked → [] = "grant all public" (future-proof as new channels appear).
     const channels = (total > 0 && picked.length === total) ? [] : picked;
-    const maxUses = parseInt(document.getElementById('invite-new-maxuses')?.value) || 0;
-    const expiresInHours = parseInt(document.getElementById('invite-new-expiry')?.value) || 0;
+    
+    const maxUsesValue = document.getElementById('invite-new-maxuses')?.value;
+    const maxUses = maxUsesValue === '' ? 1 : parseInt(maxUsesValue);
+
+    const expiryValue = document.getElementById('invite-new-expiry')?.value;
+    const expiresInHours = expiryValue === '' ? 720 : parseInt(expiryValue);
+
     const slug = document.getElementById('invite-new-slug')?.value.trim() || '';
     const payload = { label, channels, maxUses, expiresInHours };
     if (slug) payload.code = slug;
@@ -4482,8 +4487,8 @@ _setupUI() {
     // Reset the form fields (channel checks reset on the next list render).
     const lblEl = document.getElementById('invite-new-label'); if (lblEl) lblEl.value = '';
     const slugEl = document.getElementById('invite-new-slug'); if (slugEl) slugEl.value = '';
-    const muEl = document.getElementById('invite-new-maxuses'); if (muEl) muEl.value = '0';
-    const expEl = document.getElementById('invite-new-expiry'); if (expEl) expEl.value = '0';
+    const muEl = document.getElementById('invite-new-maxuses'); if (muEl) muEl.value = '1';
+    const expEl = document.getElementById('invite-new-expiry'); if (expEl) expEl.value = '720';
   });
 
   // One delegated handler for all per-card actions (the list re-renders often).
