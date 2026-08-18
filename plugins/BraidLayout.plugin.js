@@ -768,6 +768,12 @@ class BraidLayout {
       const v = runOf(!joinsRun(el.previousElementSibling, el), !joinsRun(el, el.nextElementSibling));
       if (el.getAttribute('data-braid-run') !== v) el.setAttribute('data-braid-run', v);
     });
+    document.querySelectorAll('.channel-item.sub-channel-item').forEach((el) => {
+      const hash = el.querySelector('.channel-hash');
+      const flat = el.hasAttribute('data-sub-tag') && hash && hash.textContent.trim() === '↳';
+      if (flat) { if (el.getAttribute('data-braid-flat') !== '1') el.setAttribute('data-braid-flat', '1'); }
+      else if (el.hasAttribute('data-braid-flat')) el.removeAttribute('data-braid-flat');
+    });
   }
 
   // Own messages get an accent-tinted card, like mobile.
@@ -1020,6 +1026,8 @@ html[data-braid-form="1"] .channel-item[data-braid-run="end"],
 html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-bottom-left-radius:.75rem!important;border-bottom-right-radius:.75rem!important;margin-bottom:.25rem!important}
 html[data-braid-form="1"] .channel-item[data-braid-run="mid"]::before,
 html[data-braid-form="1"] .channel-item[data-braid-run="end"]::before{content:'';position:absolute;left:.75rem;right:.75rem;top:0;border-top:1px dashed var(--braid-seam);pointer-events:none}
+html[data-braid-form="1"] .channel-item[data-braid-flat="1"] .channel-hash{visibility:hidden;position:relative}
+html[data-braid-form="1"] .channel-item[data-braid-flat="1"] .channel-hash::after{content:'#';visibility:visible;position:absolute;left:0;top:0}
 html[data-braid-form="1"] .channel-item:hover{background:color-mix(in srgb,var(--text-primary) 10%,var(--bg-secondary))}
 html[data-braid-form="1"] .channel-item.active{background:color-mix(in srgb,var(--accent) 16%,var(--bg-secondary));border-color:var(--accent)!important}
 html[data-braid-form="1"] .channel-item.active::before,
