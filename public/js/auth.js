@@ -911,12 +911,13 @@
   // (#5344) If the server requires a registration token, reveal the
   // token field. Best-effort fetch — if it fails we just leave the
   // field hidden and the server will reject without the token.
+  // field is also hidden if an invite link is used.
   (async () => {
     try {
       const r = await fetch('/api/auth/registration-info');
       if (!r.ok) return;
       const info = await r.json();
-      if (info && info.requiresToken) {
+      if (info && info.requiresToken && !_pendingInvite) {
         const grp = document.getElementById('reg-token-group');
         const inp = document.getElementById('reg-token');
         if (grp) grp.style.display = '';
