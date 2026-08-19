@@ -554,9 +554,13 @@ router.post('/register', authLimiter, async (req, res) => {
       }
     }
 
+    // Make Sure username doesn't already exist.
+    // Provide a vague error response that promts the user to change the username, -
+    // but is vague enough to not reveal existing usernames to a probing attacker or bot.
+    // check this after authenticating the capacha and invite to reduce probing risk.
     const existing = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(username);
     if (existing) {
-      return res.status(400).json({ error: 'Registration could not be completed: Username already exists' });
+      return res.status(400).json({ error: 'Registration could not be completed: invalid username' });
     }
 
     const hash = await bcrypt.hash(password, 12);
