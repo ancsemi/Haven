@@ -1951,6 +1951,14 @@ _setupSocketListeners() {
     }
   });
 
+  // ── Channel thread list (#5506) ──
+  this.socket.on('channel-threads', (data) => {
+    if (!data || data.channelCode !== this.currentChannel) return;
+    this._threadListData = Array.isArray(data.threads) ? data.threads : [];
+    const search = document.getElementById('threads-list-search');
+    this._renderThreadList?.(search ? search.value : '');
+  });
+
   // ── Channel Media Gallery (#5350) ──
   this.socket.on('channel-media', (data) => {
     if (!data || data.channelCode !== this.currentChannel) return;

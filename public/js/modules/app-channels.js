@@ -89,6 +89,10 @@ async switchChannel(code) {
   document.getElementById('pinned-toggle-btn').style.display = '';
   const _galleryBtn = document.getElementById('gallery-toggle-btn');
   if (_galleryBtn) _galleryBtn.style.display = isDm ? 'none' : '';
+  // (#5506) Same reasoning as the gallery: DM content is end-to-end encrypted,
+  // so a server-built list of it would have nothing readable to show.
+  const _threadsBtn = document.getElementById('threads-toggle-btn');
+  if (_threadsBtn) _threadsBtn.style.display = isDm ? 'none' : '';
   // Auto-close pinned panel and Pins PiP on channel switch so stale pins don't linger
   document.getElementById('pinned-panel').style.display = 'none';
   this._closePinsPiP?.();
@@ -451,6 +455,14 @@ _openChannelCtxMenu(code, btnEl) {
     const renamePerm = ch.parent_channel_id ? 'rename_sub_channel' : 'rename_channel';
     const canRename = isMod || this._hasPerm(renamePerm);
     renameCtxBtn.style.display = canRename ? '' : 'none';
+  }
+  // Only display the divider when the "rename-channel" and/or "create-sub-channel" buttons are visible.
+  // this eliminates a double divider being displayed when both of these buttons are not displayed
+  const renameOrCreateSubDivider = menu.querySelector('.channel-ctx-sep.rename-or-createSub');
+  if (renameOrCreateSubDivider && ch) {
+    const renameCtxBtn_visible = renameCtxBtn && renameCtxBtn.style.display !== 'none';
+    const createSubBtn_visible = createSubBtn && createSubBtn.style.display !== 'none';
+    renameOrCreateSubDivider.style.display = (renameCtxBtn_visible || createSubBtn_visible) ? '' : 'none';
   }
   // Hide "Leave Channel" for admins (always in all channels)
   const leaveBtn = menu.querySelector('[data-action="leave-channel"]');

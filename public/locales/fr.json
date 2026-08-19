@@ -149,6 +149,7 @@
   },
   "toasts": {
     "roles_updated": "Vos rôles ont été mis à jour",
+    "role_server_no_response": "Aucune réponse du serveur. Il utilise peut-être une ancienne version de Haven. Mettez à jour les fichiers du serveur, redémarrez-le complètement, puis réessayez.",
     "status_pending_reconnect": "Le statut sera mis à jour lors de la reconnexion",
     "channel_created": "Salon \"#{{name}}\" créé !\nCode : {{code}}",
     "channel_deleted": "Le salon a été supprimé",
@@ -379,6 +380,7 @@
     "mention_everyone": "Mentionner @everyone",
     "view_history": "Voir l'historique des messages",
     "view_all_members": "Voir tous les membres",
+    "view_all_channels": "Voir tous les salons (adhésion auto)",
     "manage_emojis": "Gérer les emojis personnalisés",
     "manage_soundboard": "Gérer le soundboard",
     "promote_user": "Promouvoir des utilisateurs",

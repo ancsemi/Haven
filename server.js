@@ -14,6 +14,41 @@ if (nodeMajor < 22 || nodeMajor > 26) {
 // Bootstrap .env into the data directory if it doesn't exist yet
 const fs = require('fs');
 const path = require('path');
+
+// ── Stale-install guard ───────────────────────────────────
+// Updating by unzipping/copying a release over an existing install leaves
+// behind files that newer versions deleted. That is normally harmless — until
+// the deleted file is a module that was split into a folder of the same name
+// (src/socketHandlers.js became src/socketHandlers/ in 2.9.8): require()
+// resolves the leftover FILE before the directory, so the server silently
+// runs months-old module code no matter how current every other file is, and
+// eventually dies somewhere unrelated. A real self-host crashed on boot with
+// "Cannot read properties of undefined (reading 'activity')" because a
+// pre-2.9.8 socketHandlers.js was still shadowing the folder — after months
+// of its socket layer being frozen at the old version while "fully updated".
+// Catch the pattern generically and say exactly which file to delete.
+{
+  const srcDir = path.join(__dirname, 'src');
+  let entries = [];
+  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); } catch { /* no src = other problems */ }
+  const dirNames = new Set(entries.filter(e => e.isDirectory()).map(e => e.name));
+  const stale = entries.filter(e =>
+    e.isFile() && e.name.endsWith('.js') && dirNames.has(e.name.slice(0, -3)) &&
+    fs.existsSync(path.join(srcDir, e.name.slice(0, -3), 'index.js'))
+  ).map(e => path.join('src', e.name));
+  if (stale.length > 0) {
+    console.error('\n❌ Stale file(s) from an older Haven install detected:\n');
+    for (const f of stale) console.error(`     ${f}`);
+    console.error('\n  Each file above is left over from an old version and hides the');
+    console.error('  module folder of the same name, so this server would run with');
+    console.error('  outdated code and fail in confusing ways.');
+    console.error('  Fix: delete the file(s) listed above (the folders contain the');
+    console.error('  current code), or update by replacing the whole Haven folder');
+    console.error('  instead of copying new files over an old install. Your data is');
+    console.error(`  safe — it lives in ${DATA_DIR}, not in the install folder.\n`);
+    process.exit(1);
+  }
+}
 if (!fs.existsSync(ENV_PATH)) {
   const example = path.join(__dirname, '.env.example');
   if (fs.existsSync(example)) {
@@ -48,6 +83,11 @@ const { Server } = require('socket.io');
 const crypto = require('crypto');
 const helmet = require('helmet');
 const multer = require('multer');
+const diskGuard = require('./src/diskGuard');
+
+// (#5505) Refuse uploads that would eat into the reserved disk headroom, so a
+// full volume can never leave admins unable to delete the files that filled it.
+const uploadDiskGuard = diskGuard.guardUploads();
 
 console.log(`📂 Data directory: ${DATA_DIR}`);
 
@@ -685,7 +725,7 @@ app.get('/api/ice-servers', (req, res) => {
 });
 
 // ── Avatar upload endpoint (saves to /uploads, updates DB) ──
-app.post('/api/upload-avatar', uploadLimiter, (req, res) => {
+app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -786,7 +826,7 @@ app.post('/api/set-avatar-shape', express.json(), (req, res) => {
 });
 
 // ── Webhook/Bot avatar upload endpoint ──
-app.post('/api/upload-webhook-avatar', uploadLimiter, (req, res) => {
+app.post('/api/upload-webhook-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -979,7 +1019,7 @@ app.delete('/api/personas/:id', (req, res) => {
 });
 
 // Persona avatar upload — same validation as user avatar (2 MB, magic-byte check)
-app.post('/api/upload-persona-avatar', uploadLimiter, (req, res) => {
+app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1333,7 +1373,7 @@ function uploadLimiter(req, res, next) {
 setInterval(() => { const now = Date.now(); for (const [ip, t] of uploadLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) uploadLimitStore.delete(ip); else uploadLimitStore.set(ip, f); } }, 5 * 60 * 1000);
 
 // ── Image upload (authenticated + not banned) ────────────
-app.post('/api/upload', uploadLimiter, (req, res) => {
+app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1406,7 +1446,7 @@ app.post('/api/upload', uploadLimiter, (req, res) => {
 });
 
 // ── General file upload (authenticated + not banned) ─────
-app.post('/api/upload-file', uploadLimiter, (req, res) => {
+app.post('/api/upload-file', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1536,7 +1576,7 @@ function createSoundUpload() {
   });
 }
 
-app.post('/api/upload-sound', uploadLimiter, (req, res) => {
+app.post('/api/upload-sound', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1665,7 +1705,7 @@ function createEmojiUpload() {
   });
 }
 
-app.post('/api/upload-emoji', uploadLimiter, (req, res) => {
+app.post('/api/upload-emoji', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1691,7 +1731,7 @@ app.post('/api/upload-emoji', uploadLimiter, (req, res) => {
 });
 
 // ── Bulk emoji upload (multiple files, auto-named from filenames) ──
-app.post('/api/upload-emojis', uploadLimiter, (req, res) => {
+app.post('/api/upload-emojis', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1828,7 +1868,7 @@ function createStickerUpload() {
   });
 }
 
-app.post('/api/upload-sticker', uploadLimiter, (req, res) => {
+app.post('/api/upload-sticker', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1856,7 +1896,7 @@ app.post('/api/upload-sticker', uploadLimiter, (req, res) => {
   });
 });
 
-app.post('/api/upload-stickers', uploadLimiter, (req, res) => {
+app.post('/api/upload-stickers', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -1971,7 +2011,7 @@ function fetchGifs(kind, q, limit, cfg) {
 }
 
 // ── Server icon upload (admin only, image only, max 2 MB) ──
-app.post('/api/upload-server-icon', uploadLimiter, (req, res) => {
+app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -2006,7 +2046,7 @@ app.post('/api/upload-server-icon', uploadLimiter, (req, res) => {
 });
 
 // ── Role icon upload (admin only, image only, max 512 KB) ──
-app.post('/api/upload-role-icon', uploadLimiter, (req, res) => {
+app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -2437,7 +2477,7 @@ app.post('/api/admin/restore', (req, res) => {
 });
 
 // ── Server banner upload (admin only, image only, max 4 MB) ──
-app.post('/api/upload-server-banner', uploadLimiter, (req, res) => {
+app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -3834,7 +3874,7 @@ const importUpload = multer({
 });
 
 // ── Step 1: Upload & parse → return preview ──────────────
-app.post('/api/import/discord/upload', uploadLimiter, (req, res) => {
+app.post('/api/import/discord/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });

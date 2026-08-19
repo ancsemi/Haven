@@ -15,13 +15,13 @@ const ALL_PERMS = [
   // see and manage only the links they made.
   'create_channel', 'create_temp_channel', 'invite_users',
   'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
+  'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names'
 ];
 // Permissions only the server owner (admin) may grant. Highlighted in the
 // role editors and locked for non-admins; mirrors adminOnlyPerms in
 // socketHandlers/roles.js.
-const ADMIN_ONLY_PERMS = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+const ADMIN_ONLY_PERMS = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
 //Similarly flavored solution to perm labels
 const PERM_LABELS = {
   get edit_own_messages() { return t('permissions.edit_own_messages'); },
@@ -49,6 +49,7 @@ const PERM_LABELS = {
   get mention_everyone() { return t('permissions.mention_everyone'); },
   get view_history() { return t('permissions.view_history'); },
   get view_all_members() { return t('permissions.view_all_members'); },
+  get view_all_channels() { return t('permissions.view_all_channels'); },
   get view_channel_members() { return t('permissions.view_channel_members'); },
   get manage_emojis() { return t('permissions.manage_emojis'); },
   get manage_stickers() { return t('permissions.manage_stickers'); },
@@ -3788,6 +3789,19 @@ async _importExecute(importId, selectedChannels) {
 // ── Role Management ───────────────────────────────────
 // ═══════════════════════════════════════════════════════
 
+// Every role-editor emit that expects an ack goes through this wrapper. A
+// server that predates an event never sends the ack, so the plain callback
+// form waits forever and the UI does nothing — no toast, no error, nothing.
+// That is exactly what happens on partially-updated self-hosts (new public/
+// files served by an old server.js, e.g. a server older than 3.44.0 asked for
+// 'update-admin-role-display'). Surface it as an actionable error instead.
+_roleEmit(event, payload, cb) {
+  this.socket.timeout(10000).emit(event, payload, (err, res) => {
+    if (err) { this._showToast(t('toasts.role_server_no_response'), 'error'); return; }
+    if (typeof cb === 'function') cb(res);
+  });
+},
+
 _initRoleManagement() {
   this._allRoles = [];
   this._selectedRoleId = null;
@@ -3807,7 +3821,7 @@ _initRoleManagement() {
     if (levelStr === null) return;
     const level = parseInt(levelStr, 10);
     if (isNaN(level) || level < 1 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
-    this.socket.emit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
+    this._roleEmit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_created'), 'success');
       this._loadRoles();
@@ -3855,13 +3869,13 @@ _initRoleManagement() {
     };
 
     toAssign.forEach(roleId => {
-      this.socket.emit('assign-role', { userId, roleId, channelId }, (res) => {
+      this._roleEmit('assign-role', { userId, roleId, channelId }, (res) => {
         if (res && res.error && !firstError) firstError = res.error;
         if (--pending === 0) finish();
       });
     });
     toRevoke.forEach(roleId => {
-      this.socket.emit('revoke-role', { userId, roleId, channelId }, (res) => {
+      this._roleEmit('revoke-role', { userId, roleId, channelId }, (res) => {
         if (res && res.error && !firstError) firstError = res.error;
         if (--pending === 0) finish();
       });
@@ -3874,7 +3888,7 @@ _initRoleManagement() {
   // Reset roles to default
   document.getElementById('reset-roles-btn')?.addEventListener('click', () => {
     if (!confirm(t('settings.admin.roles_reset_confirm'))) return;
-    this.socket.emit('reset-roles-to-default', {}, (res) => {
+    this._roleEmit('reset-roles-to-default', {}, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_reset_success'), 'success');
       this._selectedRoleId = null;
@@ -3890,7 +3904,7 @@ _initRoleManagement() {
 },
 
 _loadRoles(cb) {
-  this.socket.emit('get-roles', {}, (res) => {
+  this._roleEmit('get-roles', {}, (res) => {
     if (res.error) return;
     this._allRoles = res.roles || [];
     this._renderRolesPreview();
@@ -3959,7 +3973,7 @@ _openRoleModal() {
   // Admin-only: fetch the current cosmetic display for the synthetic Admin
   // role so the sidebar entry shows its saved name/colour.
   if (this.user && this.user.isAdmin) {
-    this.socket.emit('get-admin-role-display', {}, (res) => {
+    this._roleEmit('get-admin-role-display', {}, (res) => {
       if (res && res.display) { this._adminRoleDisplay = res.display; this._renderRoleSidebar(); }
     });
   }
@@ -4096,7 +4110,7 @@ _renderAdminRoleDetail() {
       icon,
       visible: document.getElementById('admin-role-visible').checked
     };
-    this.socket.emit('update-admin-role-display', payload, (res) => {
+    this._roleEmit('update-admin-role-display', payload, (res) => {
       if (res && res.error) { this._showToast(res.error, 'error'); return; }
       this._adminRoleDisplay = res.display || payload;
       this._showToast(t('settings.admin.roles_saved'), 'success');
@@ -4229,7 +4243,7 @@ _renderRoleDetail() {
   // Reapply button
   document.getElementById('rca-reapply-btn').addEventListener('click', () => {
     if (!confirm(t('settings.admin.roles_reapply_confirm'))) return;
-    this.socket.emit('reapply-role-access', { roleId: role.id }, (res) => {
+    this._roleEmit('reapply-role-access', { roleId: role.id }, (res) => {
       if (res && res.error) return this._showToast(res.error, 'error');
       this._showToast(t(res.affected === 1 ? 'settings.admin.roles_reapplied_one' : 'settings.admin.roles_reapplied_other', { count: res.affected }), 'success');
     });
@@ -4256,7 +4270,7 @@ _renderRoleDetail() {
       revoke: row.querySelector('.rca-revoke')?.checked || false
     })).filter(a => a.channelId);
 
-    this.socket.emit('update-role', {
+    this._roleEmit('update-role', {
       roleId: role.id,
       name: document.getElementById('role-edit-name').value.trim(),
       level: parseInt(document.getElementById('role-edit-level').value, 10),
@@ -4270,7 +4284,7 @@ _renderRoleDetail() {
 
       // Save channel access config separately
       if (linkEnabled && accessData.length) {
-        this.socket.emit('update-role-channel-access', {
+        this._roleEmit('update-role-channel-access', {
           roleId: role.id,
           linkEnabled: true,
           access: accessData
@@ -4279,7 +4293,7 @@ _renderRoleDetail() {
         });
       } else if (!linkEnabled) {
         // Disable channel access linking
-        this.socket.emit('update-role-channel-access', {
+        this._roleEmit('update-role-channel-access', {
           roleId: role.id,
           linkEnabled: false,
           access: []
@@ -4313,7 +4327,7 @@ _renderRoleDetail() {
       { danger: true }
     );
     if (!ok) return;
-    this.socket.emit('delete-role', { roleId: role.id }, (res) => {
+    this._roleEmit('delete-role', { roleId: role.id }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_deleted'), 'success');
       this._selectedRoleId = null;
@@ -4331,7 +4345,7 @@ _renderRoleDetail() {
     const newName = await this._showPromptModal('Duplicate Role', 'Name for the duplicated role:', defaultName);
     if (!newName || !newName.trim()) return;
     const trimmed = newName.trim().slice(0, 30);
-    this.socket.emit('create-role', {
+    this._roleEmit('create-role', {
       name: trimmed,
       level: role.level,
       color: role.color || '#aaaaaa',
@@ -4440,7 +4454,7 @@ _openRoleMembersModal(role) {
             btn.disabled = false;
             return;
           }
-          this.socket.emit('get-role-assignment-data', {}, (r) => {
+          this._roleEmit('get-role-assignment-data', {}, (r) => {
             if (!r.error) { cachedData = r; renderList(r.users, document.getElementById('role-members-search').value); }
           });
         });
@@ -4448,7 +4462,7 @@ _openRoleMembersModal(role) {
     });
   };
 
-  this.socket.emit('get-role-assignment-data', {}, (res) => {
+  this._roleEmit('get-role-assignment-data', {}, (res) => {
     if (res.error) { this._showToast(res.error, 'error'); return; }
     cachedData = res;
     renderList(res.users, '');
@@ -4474,7 +4488,7 @@ _loadRoleChannelAccess(roleId) {
   if (!listEl) return;
   listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${t('modals.common.loading')}</p>`;
 
-  this.socket.emit('get-role-channel-access', { roleId }, (res) => {
+  this._roleEmit('get-role-channel-access', { roleId }, (res) => {
     if (res && res.error) {
       listEl.innerHTML = `<p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${this._escapeHtml(res.error)}</p>`;
       return;
@@ -4543,7 +4557,7 @@ _openChannelRolesModal(channelCode) {
   // Fetch members + roles and all available roles in parallel
   this._loadRoles(() => {
     this._renderChannelRolesRoleList();
-    this.socket.emit('get-channel-member-roles', { code: channelCode }, (res) => {
+    this._roleEmit('get-channel-member-roles', { code: channelCode }, (res) => {
       if (res.error) {
         document.getElementById('channel-roles-member-list').innerHTML =
           `<p class="channel-roles-no-members">${this._escapeHtml(res.error)}</p>`;
@@ -4613,7 +4627,7 @@ _renderChannelRolesMembers() {
       const rid = parseInt(btn.dataset.rid);
       const scope = btn.dataset.scope;
       const channelId = scope === 'channel' ? this._channelRolesChannelId : null;
-      this.socket.emit('revoke-role', { userId: uid, roleId: rid, channelId });
+      this._roleEmit('revoke-role', { userId: uid, roleId: rid, channelId });
       this._showToast(t('settings.admin.roles_revoked'), 'success');
       // Refresh after a short delay
       setTimeout(() => this._refreshChannelRoles(), 400);
@@ -4662,7 +4676,7 @@ _assignChannelRole() {
   const scopeVal = document.getElementById('channel-roles-scope-select').value;
   const channelId = scopeVal === 'channel' ? this._channelRolesChannelId : null;
 
-  this.socket.emit('assign-role', { userId, roleId, channelId }, (res) => {
+  this._roleEmit('assign-role', { userId, roleId, channelId }, (res) => {
     if (res.error) return this._showToast(res.error, 'error');
     this._showToast(t('settings.admin.roles_assigned'), 'success');
     // Reset selection
@@ -4674,7 +4688,7 @@ _assignChannelRole() {
 
 _refreshChannelRoles() {
   if (!this._channelRolesCode) return;
-  this.socket.emit('get-channel-member-roles', { code: this._channelRolesCode }, (res) => {
+  this._roleEmit('get-channel-member-roles', { code: this._channelRolesCode }, (res) => {
     if (res.error) return;
     this._channelRolesMembers = res.members || [];
     this._renderChannelRolesMembers();
@@ -4766,7 +4780,7 @@ _renderChannelRolesRoleDetail() {
     const perms = [...panel.querySelectorAll('.cr-perm-cb:checked')].map(cb => cb.dataset.perm);
     const newLevel = parseInt(document.getElementById('cr-role-level').value, 10);
     if (isNaN(newLevel) || newLevel < 1 || newLevel > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
-    this.socket.emit('update-role', {
+    this._roleEmit('update-role', {
       roleId: role.id,
       name: document.getElementById('cr-role-name').value.trim(),
       level: newLevel,
@@ -4792,7 +4806,7 @@ _renderChannelRolesRoleDetail() {
       { danger: true }
     );
     if (!ok) return;
-    this.socket.emit('delete-role', { roleId: role.id }, (res) => {
+    this._roleEmit('delete-role', { roleId: role.id }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_deleted'), 'success');
       this._channelRolesSelectedRole = null;
@@ -4820,7 +4834,7 @@ async _createChannelRole() {
   if (levelStr === null) return;
   const level = parseInt(levelStr, 10);
   if (isNaN(level) || level < 1 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
-  this.socket.emit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
+  this._roleEmit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
     if (res.error) { this._showToast(res.error, 'error'); return; }
     this._showToast(t('settings.admin.roles_created'), 'success');
     this._loadRoles(() => {
@@ -4949,7 +4963,7 @@ _openRoleAssignCenter(preSelectUserId = null) {
   const manageBtn = document.getElementById('rac-manage-roles-btn');
   if (manageBtn) manageBtn.style.display = (this.user.isAdmin || this._hasPerm('manage_roles')) ? '' : 'none';
 
-  this.socket.emit('get-role-assignment-data', {}, (res) => {
+  this._roleEmit('get-role-assignment-data', {}, (res) => {
     if (res.error) { this._showToast(res.error, 'error'); return; }
     this._racData = res;
     this._renderRacUsers();
@@ -5589,7 +5603,7 @@ _racSaveChanges() {
     }
     this._racPendingChanges = {};
     document.getElementById('rac-save-btn').disabled = true;
-    this.socket.emit('get-role-assignment-data', {}, (res) => {
+    this._roleEmit('get-role-assignment-data', {}, (res) => {
       if (!res.error) {
         this._racData = res;
         this._renderRacUsers(document.getElementById('rac-user-search')?.value || '');
@@ -5601,13 +5615,13 @@ _racSaveChanges() {
 
   ops.forEach(op => {
     if (op.kind === 'revoke') {
-      this.socket.emit('revoke-role', { userId: op.userId, roleId: op.roleId, channelId: op.channelId }, (res) => {
+      this._roleEmit('revoke-role', { userId: op.userId, roleId: op.roleId, channelId: op.channelId }, (res) => {
         completed++;
         if (res && res.error) errors.push(res.error);
         if (completed === total) onDone();
       });
     } else {
-      this.socket.emit('assign-role', {
+      this._roleEmit('assign-role', {
         userId: op.userId, roleId: op.roleId, channelId: op.channelId,
         customLevel: op.level, customPerms: op.customPerms
       }, (res) => {

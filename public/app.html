@@ -296,6 +296,7 @@
             <button id="search-toggle-btn" class="icon-btn small" data-i18n-title="header.search_messages" title="Search messages (Ctrl+F)">🔍</button>
             <button id="pinned-toggle-btn" class="icon-btn small" data-i18n-title="header.pinned_messages" title="Pinned messages">📌</button>
             <button id="gallery-toggle-btn" class="icon-btn small" data-i18n-title="header.media_gallery" title="View files & media">🖼</button>
+            <button id="threads-toggle-btn" class="icon-btn small" data-i18n-title="header.thread_list" title="View threads">🧵</button>
             <button id="move-select-btn" class="icon-btn small" data-i18n-title="header.select_messages_to_move" title="Select messages to move" style="display:none">☰</button>
             <div class="e2e-menu-wrapper" style="display:none" id="e2e-menu-wrapper">
               <button id="e2e-menu-btn" class="icon-btn small" data-i18n-title="header.encryption_options" title="Encryption options">🔐</button>
@@ -3303,7 +3304,7 @@
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item" data-action="leave-channel">🚪 <span data-i18n="context_menu.channel.leave">Leave Channel</span></button>
     <button class="channel-ctx-item" data-action="hide-channel" style="display:none">🙈 <span data-i18n="context_menu.channel.hide">Hide Channel</span></button>
-    <hr class="channel-ctx-sep">
+    <hr class="channel-ctx-sep rename-or-createSub">
     <button class="channel-ctx-item mod-only" data-action="rename-channel">✏️ <span data-i18n="context_menu.channel.rename">Rename Channel</span></button>
     <button class="channel-ctx-item mod-only" data-action="create-sub-channel">📁 <span data-i18n="context_menu.channel.create_sub">Create Sub-channel</span></button>
     <hr class="channel-ctx-sep admin-only">
@@ -3850,6 +3851,23 @@
       </div>
       <div class="media-gallery-body" id="media-gallery-body">
         <div class="media-gallery-empty muted-text" data-i18n="media_gallery.loading">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="threads-list-modal" style="display:none">
+    <div class="modal media-gallery-modal">
+      <div class="media-gallery-header">
+        <h3 data-i18n="thread_list.title">Threads</h3>
+        <button class="icon-btn small" id="threads-list-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="media-gallery-toolbar">
+        <input type="text" id="threads-list-search" class="thread-list-search"
+               data-i18n-placeholder="thread_list.search_placeholder"
+               placeholder="Search threads…" autocomplete="off">
+        <span class="thread-list-count muted-text" id="threads-list-count"></span>
+      </div>
+      <div class="media-gallery-body" id="threads-list-body">
+        <div class="media-gallery-empty muted-text" data-i18n="thread_list.loading">Loading…</div>
       </div>
     </div>
   </div>

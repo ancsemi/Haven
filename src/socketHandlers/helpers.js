@@ -46,6 +46,54 @@ function isValidUploadPath(value) {
   return /^\/uploads\/[\w\-.]+$/.test(value);
 }
 
+// ── Display names (#5509) ───────────────────────────────
+// Letters, numbers and combining marks from any script, plus underscore and
+// space. Widened from ASCII so people can write their own name in their own
+// language, without giving up what the old charset was really buying:
+//   - no dots, slashes or colons, so a display name still cannot carry a
+//     working URL (the reason the ASCII rule existed).
+//   - no format characters. Zero-width joiners and bidi overrides are Cf, not
+//     letters, so they cannot pass. Two display names can never differ by
+//     something nobody can see, and nobody can flip the sidebar to RTL.
+// Homoglyphs remain possible (Cyrillic "а" reads as Latin "a"). No charset
+// fixes that; the automod deny-list is what reserves names like "Admin".
+const DISPLAY_NAME_ALLOWED = /^[\p{L}\p{N}\p{M}_ ]+$/u;
+
+// Vietnamese and several Indic scripts legitimately stack marks on one base.
+// Past three in a row it is Zalgo, which climbs out of the message row and
+// over the rest of the UI.
+const DISPLAY_NAME_MARK_RUN = /\p{M}{4,}/u;
+
+const DISPLAY_NAME_MIN = 2;
+const DISPLAY_NAME_MAX = 20;
+
+/**
+ * Validate a display name and return its canonical form.
+ * Returns { value } on success, or { error } carrying a user-facing message.
+ */
+function normalizeDisplayName(raw) {
+  const tooLong = `Display name must be ${DISPLAY_NAME_MIN}-${DISPLAY_NAME_MAX} characters`;
+  if (typeof raw !== 'string') return { error: tooLong };
+
+  // NFC first. The same name typed two ways (composed vs decomposed) becomes
+  // one string, so the length below counts what the user actually sees and the
+  // duplicate-name check compares like with like.
+  const value = raw.normalize('NFC').trim().replace(/\s+/g, ' ');
+
+  // Code points, not UTF-16 units, or scripts outside the BMP would be charged
+  // double for characters that occupy one column.
+  const length = [...value].length;
+  if (length < DISPLAY_NAME_MIN || length > DISPLAY_NAME_MAX) return { error: tooLong };
+
+  if (!DISPLAY_NAME_ALLOWED.test(value)) {
+    return { error: 'Letters, numbers, underscores, and spaces only' };
+  }
+  if (DISPLAY_NAME_MARK_RUN.test(value)) {
+    return { error: 'Too many stacked accent marks' };
+  }
+  return { value };
+}
+
 // All recognized role permissions. Any permission sent by a client that is not here is silently rejected.
 const VALID_ROLE_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
@@ -54,7 +102,7 @@ const VALID_ROLE_PERMS = [
   'manage_channel_settings',
   'create_channel', 'create_temp_channel', 'invite_users',
   'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
-  'view_all_members', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue',
+  'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue',
   'promote_user', 'transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'read_only_override',
   'view_audit_log', 'manage_display_names'
 ];
@@ -84,4 +132,4 @@ function filterIdleOnline(entries, thresholdMs, nowMs) {
   return out;
 }
 
-module.exports = { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, VALID_ROLE_PERMS, filterIdleOnline };
+module.exports = { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, VALID_ROLE_PERMS, filterIdleOnline };

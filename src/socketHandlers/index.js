@@ -351,8 +351,18 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // ── getEnrichedChannels ─────────────────────────────────
   function getEnrichedChannels(userId, isAdmin, joinRooms) {
+    // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
+    // same visibility treatment as the admin: every non-DM channel, with
+    // membership filled in on the fly — so channels created after the role
+    // was granted show up for them automatically instead of someone having
+    // to add every mod to every new channel by hand.
+    const seesAll = isAdmin || userHasPermission(userId, 'view_all_channels');
+    // Only auto-joins owed to the permission are marked. An admin's are not:
+    // admin is not a role that gets revoked in the same casual way, and their
+    // memberships should survive a permission cleanup. (#5512)
+    const autoJoin = seesAll && !isAdmin ? 1 : 0;
     let channels;
-    if (isAdmin) {
+    if (seesAll) {
       channels = db.prepare(`
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
                c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
@@ -373,8 +383,10 @@ function setupSocketHandlers(io, db, opts = {}) {
         WHERE cm.user_id = ? AND c.is_dm = 1
         ORDER BY is_dm, position, name
       `).all(userId);
-      const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
-      channels.forEach(ch => { if (!ch.is_dm) insertMember.run(ch.id, userId); });
+      // OR IGNORE, so a membership the user already had by other means keeps
+      // its existing flag and survives a later cleanup.
+      const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id, auto_all_channels) VALUES (?, ?, ?)');
+      channels.forEach(ch => { if (!ch.is_dm) insertMember.run(ch.id, userId, autoJoin); });
     } else {
       channels = db.prepare(`
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,

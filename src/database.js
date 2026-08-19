@@ -1161,6 +1161,18 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN password_version INTEGER DEFAULT 1");
   }
 
+  // ── Migration: mark auto-joins made by view_all_channels ─
+  // The permission inserts a real channel_members row per channel, which is
+  // what makes losing it dangerous: without knowing which rows it created,
+  // revoking cannot take them back and a demoted mod keeps every private
+  // channel. Rows it adds carry this flag; everything else stays 0 and is
+  // never touched by the cleanup. (#5512)
+  try {
+    db.prepare("SELECT auto_all_channels FROM channel_members LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channel_members ADD COLUMN auto_all_channels INTEGER NOT NULL DEFAULT 0");
+  }
+
   // ── Migration: role-based channel access ────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS role_channel_access (

@@ -515,6 +515,56 @@ module.exports = function register(socket, ctx) {
     });
   });
 
+  // ── Channel thread list (#5506) ─────────────────────────
+  // Every thread in the channel, newest activity first, so people can find a
+  // conversation again without scrolling the channel back to where it started.
+  socket.on('get-channel-threads', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    if (!channel) return;
+
+    const member = db.prepare(
+      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
+    ).get(channel.id, socket.user.id);
+    if (!member && !socket.user.isAdmin) {
+      return socket.emit('error-msg', 'Not a member of this channel');
+    }
+
+    // A thread is a message that has replies hanging off it, so the join is
+    // what defines one: no replies, no thread, nothing to list. Capped like
+    // the media gallery so a long-lived channel cannot produce an unbounded
+    // payload. Ordered by last reply, because "which thread is alive" is the
+    // question people open this to answer.
+    const threads = db.prepare(`
+      SELECT p.id,
+             p.content,
+             p.created_at,
+             COALESCE(p.persona_username, p.webhook_username, u.display_name, u.username, '[Deleted User]') AS username,
+             u.id AS user_id,
+             COUNT(t.id) AS reply_count,
+             MAX(t.created_at) AS last_reply_at
+      FROM messages p
+      JOIN messages t ON t.thread_id = p.id
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE p.channel_id = ? AND p.thread_id IS NULL
+      GROUP BY p.id
+      ORDER BY last_reply_at DESC, p.id DESC
+      LIMIT 500
+    `).all(channel.id);
+
+    socket.emit('channel-threads', {
+      channelCode: code,
+      threads: threads.map(t => ({
+        ...t,
+        created_at: utcStamp(t.created_at),
+        last_reply_at: utcStamp(t.last_reply_at),
+      })),
+    });
+  });
+
   // ── Shared bulk message delete ──────────────────────────
   // Deletes many messages by id in one transaction using the same
   // permission rules as the single `delete-message` handler, moves their

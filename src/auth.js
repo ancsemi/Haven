@@ -1953,7 +1953,7 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
     const subject = String(claims.sub);
 
     let user = db.prepare('SELECT * FROM users WHERE oidc_issuer = ? AND oidc_subject = ?')
-      .get(cfg.issuer, subject);
+      .get(cfg.issuerKey, subject);
 
     if (!user) {
       if (!cfg.createUsers) return _oidcFail(res, 'no_account');
@@ -1963,10 +1963,10 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
       // their own username at the IdP walk in as the server admin.
       const result = db.prepare(
         'INSERT INTO users (username, password_hash, is_admin, oidc_issuer, oidc_subject) VALUES (?, ?, 0, ?, ?)'
-      ).run(username, OIDC_NO_PASSWORD, cfg.issuer, subject);
+      ).run(username, OIDC_NO_PASSWORD, cfg.issuerKey, subject);
       provisionNewUser(db, result.lastInsertRowid, username, req.app.get('io'));
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
-      console.log(`🔐 OIDC: created account "${username}" for ${cfg.issuer} subject ${subject.slice(0, 8)}…`);
+      console.log(`🔐 OIDC: created account "${username}" for ${cfg.issuerKey} subject ${subject.slice(0, 8)}…`);
     }
 
     const banned = db.prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);

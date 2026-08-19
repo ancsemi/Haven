@@ -45,6 +45,18 @@ function _setting(key) {
 }
 
 /**
+ * Canonical form of an issuer URL: no trailing slash.
+ *
+ * Providers disagree on whether the issuer carries a trailing slash, and both
+ * spellings name the same provider. The canonical form is what Haven compares
+ * and what it keys federated accounts on, so neither a provider's preference
+ * nor an admin's typing changes who a returning user is.
+ */
+function _canonicalIssuer(value) {
+  return String(value || '').replace(/\/+$/, '');
+}
+
+/**
  * Current OIDC configuration.
  *
  * The client secret comes from the environment only, never the database. A
@@ -53,14 +65,21 @@ function _setting(key) {
  * ride along inside one. (Same reasoning as JWT_SECRET.)
  */
 function getOidcConfig() {
-  const issuer = _setting('oidc_issuer_url').replace(/\/+$/, '');
+  // Kept exactly as the admin entered it (#5501, #5503): providers such as
+  // Authentik publish the issuer with a trailing slash and reject the other
+  // spelling, so Haven must not rewrite it.
+  const issuer = _setting('oidc_issuer_url');
+  // Identity key for federated accounts. Canonical rather than verbatim, so
+  // editing the trailing slash in settings cannot orphan existing SSO users
+  // into brand new accounts.
+  const issuerKey = _canonicalIssuer(issuer);
   const clientId = _setting('oidc_client_id');
   const clientSecret = process.env.OIDC_CLIENT_SECRET || '';
   const scopes = _setting('oidc_scopes') || 'openid profile email';
   const buttonLabel = _setting('oidc_button_label') || 'Sign in with SSO';
   const createUsers = _setting('oidc_create_users') !== '0';
   const enabled = _setting('oidc_enabled') === '1' && !!issuer && !!clientId && !!clientSecret;
-  return { enabled, issuer, clientId, clientSecret, scopes, buttonLabel, createUsers };
+  return { enabled, issuer, issuerKey, clientId, clientSecret, scopes, buttonLabel, createUsers };
 }
 
 /**
@@ -107,15 +126,21 @@ async function _fetchJson(url, options = {}) {
 /** Fetch (and cache) the provider's discovery document. */
 async function discover(issuer) {
   _assertSafeIssuer(issuer);
-  const hit = _discoveryCache.get(issuer);
+  // Cached under the canonical form so the two spellings of one provider
+  // share an entry instead of fetching discovery twice.
+  const cacheKey = _canonicalIssuer(issuer);
+  const hit = _discoveryCache.get(cacheKey);
   if (hit && Date.now() - hit.at < DISCOVERY_TTL_MS) return hit.doc;
 
-  const doc = await _fetchJson(`${issuer}/.well-known/openid-configuration`);
+  // Trailing slash removed here so the well-known path never doubles up.
+  const doc = await _fetchJson(`${cacheKey}/.well-known/openid-configuration`);
 
   // The issuer inside the document is authoritative and must match what the
   // admin configured, or we could be talking to a provider that impersonates
-  // another one's identifiers.
-  if (doc.issuer !== issuer) {
+  // another one's identifiers. Compared canonically so the admin does not have
+  // to guess which spelling their provider publishes; every other difference
+  // still fails.
+  if (_canonicalIssuer(doc.issuer) !== cacheKey) {
     throw new Error(`Provider issuer mismatch: configured ${issuer}, document says ${doc.issuer}`);
   }
   for (const field of ['authorization_endpoint', 'token_endpoint', 'jwks_uri']) {
@@ -126,7 +151,7 @@ async function discover(issuer) {
     throw new Error('Provider does not support PKCE S256');
   }
 
-  _discoveryCache.set(issuer, { doc, at: Date.now() });
+  _discoveryCache.set(cacheKey, { doc, at: Date.now() });
   return doc;
 }
 
@@ -253,7 +278,10 @@ async function verifyIdToken(idToken, expectedNonce) {
   const key = await _getSigningKey(doc.jwks_uri, header.kid);
   const claims = jwt.verify(idToken, key, {
     algorithms: ALLOWED_ALGS,
-    issuer: cfg.issuer,
+    // The provider signs `iss` in its own spelling. discover() has already
+    // proven that equals the configured issuer, so this is the string to
+    // check against; the configured one rejects the other spelling.
+    issuer: doc.issuer,
     audience: cfg.clientId,
     clockTolerance: 60,
   });

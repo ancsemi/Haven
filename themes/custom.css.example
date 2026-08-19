@@ -22,6 +22,32 @@
   base Haven theme. Only override what you actually want to change.
 */
 
+/*
+  BACKGROUND IMAGE
+  ────────────────
+  Drop an image into this same themes/ folder and uncomment the block below.
+  The path is relative to this file, so no leading slash is needed.
+
+  .main is the chat area; the message list and the messages themselves are
+  transparent, so the image sits behind all of them. The gradient on top is a
+  scrim that keeps text readable over a bright or busy image: raise 0.55 to dim
+  the image more, lower it to show more, or remove that line if the image is
+  already dark. Use white instead of black on a light theme.
+
+  The sidebar keeps its own colour. Add .sidebar to the selector to cover it
+  too, or use body to cover the whole window.
+*/
+
+/*
+.main {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
+    url("wallpaper.jpg");
+  background-size: cover;
+  background-position: center;
+}
+*/
+
 :root {
   /* ── Backgrounds ───────────────────────────────── */
   --bg-primary:    #191b28;   /* main app background */

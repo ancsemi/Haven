@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, isWritableKey } = require('../envStore');
 
@@ -16,14 +16,9 @@ module.exports = function register(socket, ctx) {
   // ── Rename (display name) ───────────────────────────────
   socket.on('rename-user', (data) => {
     if (!data || typeof data !== 'object') return;
-    const newName = typeof data.username === 'string' ? data.username.trim().replace(/\s+/g, ' ') : '';
-
-    if (!newName || newName.length < 2 || newName.length > 20) {
-      return socket.emit('error-msg', 'Display name must be 2-20 characters');
-    }
-    if (!/^[a-zA-Z0-9_ ]+$/.test(newName)) {
-      return socket.emit('error-msg', 'Letters, numbers, underscores, and spaces only');
-    }
+    const checked = normalizeDisplayName(typeof data.username === 'string' ? data.username : '');
+    if (checked.error) return socket.emit('error-msg', checked.error);
+    const newName = checked.value;
 
     // (#5482) A moderator-set display name holds. Otherwise the whole
     // Manage Display Names permission is decorative — the moderated user
@@ -37,9 +32,10 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    // The charset above already rules out dots, so a display name cannot carry
-    // a working URL. Run it through automod anyway so the deny-list can be
-    // used to reserve impersonation-prone names (e.g. "Admin", "Moderator").
+    // The charset still rules out dots, so a display name cannot carry a
+    // working URL. Run it through automod anyway so the deny-list can be
+    // used to reserve impersonation-prone names (e.g. "Admin", "Moderator"),
+    // which is also the only answer to homoglyph lookalikes (#5509).
     if (enforceAutomod(newName, { surface: 'profile' })) return;
 
     // Reject if another user on this server already uses this display name
@@ -805,17 +801,19 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    const raw = typeof data.displayName === 'string' ? data.displayName.trim().replace(/\s+/g, ' ') : '';
+    // Blank still means "reset to the login username", so only a non-empty
+    // value goes through validation.
+    const submitted = typeof data.displayName === 'string' ? data.displayName.trim() : '';
+    let raw = '';
+    if (submitted) {
+      const checked = normalizeDisplayName(submitted);
+      if (checked.error) return socket.emit('error-msg', checked.error);
+      raw = checked.value;
+    }
     const oldName = target.display_name || target.username;
 
     let newName, newDisplayCol;
     if (raw) {
-      if (raw.length < 2 || raw.length > 20) {
-        return socket.emit('error-msg', 'Display name must be 2-20 characters');
-      }
-      if (!/^[a-zA-Z0-9_ ]+$/.test(raw)) {
-        return socket.emit('error-msg', 'Letters, numbers, underscores, and spaces only');
-      }
       // (#5482) Same automod pass a self-rename gets. The deny-list is what
       // reserves impersonation-prone names like "Admin" / "Moderator", and
       // holding this permission is no reason to be able to hand one out.

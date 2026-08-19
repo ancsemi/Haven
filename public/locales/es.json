@@ -149,6 +149,7 @@
   },
   "toasts": {
     "roles_updated": "Tus roles han sido actualizados",
+    "role_server_no_response": "El servidor no responde. Puede que ejecute una versión antigua de Haven. Actualiza los archivos del servidor, reinícialo por completo y vuelve a intentarlo.",
     "status_pending_reconnect": "El estado se actualizará al reconectarse",
     "channel_created": "Canal \"#{{name}}\" creado!\nCódigo: {{code}}",
     "channel_deleted": "El canal fue eliminado",
@@ -379,6 +380,7 @@
     "mention_everyone": "Mencionar @everyone",
     "view_history": "Ver historial de mensajes",
     "view_all_members": "Ver todos los miembros del servidor",
+    "view_all_channels": "Ver todos los canales (unión automática)",
     "manage_emojis": "Administrar emojis personalizados",
     "manage_soundboard": "Administrar soundboard",
     "promote_user": "Promover usuarios",

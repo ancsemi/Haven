@@ -175,6 +175,7 @@
   },
   "toasts": {
     "roles_updated": "Your roles have been updated",
+    "role_server_no_response": "No response from the server. It may be running an older Haven version. Update the server files and fully restart it, then try again.",
     "status_pending_reconnect": "Status will update when reconnected",
     "channel_created": "Channel \"#{{name}}\" created!\nCode: {{code}}",
     "channel_deleted": "Channel was deleted",
@@ -213,6 +214,7 @@
     "encrypted_image_failed": "Encrypted image upload failed",
     "display_name_too_short": "Display name must be at least 2 characters",
     "display_name_invalid_chars": "Letters, numbers, underscores, and spaces only",
+    "display_name_too_many_marks": "Too many stacked accent marks",
     "select_channel_first": "Select a channel first",
     "searching": "Searching…",
     "encryption_key_unavailable": "Encryption key unavailable — message sent without E2E",
@@ -426,6 +428,7 @@
     "mention_everyone": "Mention @everyone",
     "view_history": "View Message History",
     "view_all_members": "View All Server Members",
+    "view_all_channels": "See All Channels (Auto-Join)",
     "view_channel_members": "View Channel Members",
     "manage_emojis": "Manage Custom Emojis",
     "manage_stickers": "Manage Stickers",
@@ -489,7 +492,8 @@
       "message_unpinned": "A message was unpinned",
       "protected_by": "{{name}} protected a message from cleanup",
       "message_unprotected": "A message was unprotected"
-    }
+    },
+    "thread_list": "View threads"
   },
   "media": {
     "upload_file_title": "Upload File",
@@ -1863,5 +1867,14 @@
       "unavailable_title": "GIF Search Not Available",
       "unavailable_desc": "An admin needs to set up a GIF provider API key before GIF search can work."
     }
+  },
+  "thread_list": {
+    "title": "Threads",
+    "search_placeholder": "Search threads…",
+    "loading": "Loading…",
+    "empty": "No threads in this channel yet",
+    "no_matches": "No threads match that search",
+    "reply_one": "1 reply",
+    "reply_other": "{{count}} replies"
   }
 }

@@ -149,6 +149,7 @@
   },
   "toasts": {
     "roles_updated": "Deine Rollen wurden aktualisiert",
+    "role_server_no_response": "Keine Antwort vom Server. Er läuft möglicherweise mit einer älteren Haven-Version. Aktualisiere die Serverdateien, starte den Server vollständig neu und versuche es erneut.",
     "status_pending_reconnect": "Status wird nach Wiederverbindung aktualisiert",
     "channel_created": "Kanal „#{{name}}“ erstellt!\nCode: {{code}}",
     "channel_deleted": "Kanal wurde gelöscht",
@@ -379,6 +380,7 @@
     "mention_everyone": "@everyone erwähnen",
     "view_history": "Nachrichtenverlauf anzeigen",
     "view_all_members": "Alle Servermitglieder anzeigen",
+    "view_all_channels": "Alle Kanäle sehen (Auto-Beitritt)",
     "manage_emojis": "Benutzerdefinierte Emojis verwalten",
     "manage_soundboard": "Soundboard verwalten",
     "promote_user": "Nutzer befördern",

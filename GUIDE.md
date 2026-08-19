@@ -573,6 +573,45 @@ To make a bundled theme available to everyone, go to **Settings → Admin → �
 
 Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes/` folder, restart, then publish it in the same place. A theme can also be set as the server **default** from that section, which applies to anyone who has not already picked a theme of their own. It is a default rather than a lock, so a user who chooses a different theme keeps their choice.
 
+### Background images (wallpapers)
+
+A theme is ordinary CSS, so it can set a background image and not just colours.
+Put the image in `themes/` next to your `.theme.css` file, then point at it with
+a plain relative path. Haven serves the whole `themes/` folder, so
+`url("wallpaper.jpg")` resolves to `/themes/wallpaper.jpg` on its own.
+
+```css
+.main {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
+    url("wallpaper.jpg");
+  background-size: cover;
+  background-position: center;
+}
+```
+
+`.main` is the chat area. The message list, the channel header and the messages
+themselves have no background of their own, so the image shows through behind
+all of them.
+
+The `linear-gradient` on top is a dark scrim, and it is doing real work: over a
+bright or busy photo, message text becomes unreadable without it. Raise `0.55`
+towards `1` to dim the image further, lower it to let more through, or delete
+that line entirely if your image is already dark. On a light theme, use white
+(`rgba(255, 255, 255, 0.6)`) instead.
+
+The sidebar keeps its own colour and is not covered. Add `.sidebar` to the same
+rule if you want the image there too, or set it on `body` to cover everything.
+
+Two things worth knowing before you plan around this:
+
+- A theme is a file on the server, so **adding one needs access to the server
+  itself**, and publishing it puts it in the theme picker for everyone. There is
+  no per-user wallpaper setting. It is personal only in the sense that a theme
+  applies to whoever picks it.
+- Keep the file reasonably small. Every member downloads it when they select the
+  theme, and a 12 MB photo is a 12 MB download.
+
 > **Docker users:** `themes/` and `plugins/` live inside the image, not in the `/data` volume, so pulling a newer image is all you need to get new bundled files. Remember to recreate the container afterwards (`docker compose up -d`), since pulling alone leaves the old container running the old image. If you bind-mount over `/app`, your host folder wins and you will need to add the files there yourself.
 
 ---

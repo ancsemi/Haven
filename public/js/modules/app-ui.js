@@ -1584,6 +1584,51 @@ _setupUI() {
       this.socket.emit('get-channel-media', { code: this.currentChannel });
     });
   }
+  // ── Channel thread list (#5506) ──
+  const threadsBtn = document.getElementById('threads-toggle-btn');
+  if (threadsBtn) {
+    threadsBtn.addEventListener('click', () => {
+      if (!this.currentChannel) return;
+      const modal = document.getElementById('threads-list-modal');
+      const body = document.getElementById('threads-list-body');
+      const search = document.getElementById('threads-list-search');
+      this._threadListData = null;
+      if (search) search.value = '';
+      body.innerHTML = `<div class="media-gallery-empty muted-text">${(window.t && t('thread_list.loading')) || 'Loading…'}</div>`;
+      modal.style.display = 'flex';
+      this.socket.emit('get-channel-threads', { code: this.currentChannel });
+      // Opened by pointer, so focusing the filter is a convenience, not a trap.
+      if (search) setTimeout(() => search.focus(), 50);
+    });
+  }
+  const threadsClose = document.getElementById('threads-list-close');
+  if (threadsClose) threadsClose.addEventListener('click', () => {
+    document.getElementById('threads-list-modal').style.display = 'none';
+  });
+  const threadsModal = document.getElementById('threads-list-modal');
+  if (threadsModal) threadsModal.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+  const threadsSearch = document.getElementById('threads-list-search');
+  if (threadsSearch) threadsSearch.addEventListener('input', () => {
+    // Filtering client-side: the list is already capped server-side, and a
+    // round trip per keystroke would be worse than filtering 500 rows.
+    this._renderThreadList(threadsSearch.value);
+  });
+  const threadsBody = document.getElementById('threads-list-body');
+  if (threadsBody) threadsBody.addEventListener('click', (e) => {
+    const row = e.target.closest('.thread-list-row');
+    if (!row) return;
+    const parentId = parseInt(row.dataset.parentId, 10);
+    if (!parentId) return;
+    document.getElementById('threads-list-modal').style.display = 'none';
+    // Jump first: _openThread reads the parent's author and preview out of the
+    // rendered message, so opening a thread whose root sits far up the channel
+    // would otherwise show an empty header.
+    this._jumpToMessage?.(parentId);
+    setTimeout(() => this._openThread?.(parentId), 150);
+  });
+
   const galleryClose = document.getElementById('media-gallery-close');
   if (galleryClose) galleryClose.addEventListener('click', () => {
     document.getElementById('media-gallery-modal').style.display = 'none';
@@ -6241,12 +6286,17 @@ _reportThemeColor() {
 
 _saveRename() {
   const input = document.getElementById('rename-input');
-  const newName = input.value.trim().replace(/\s+/g, ' ');
-  if (!newName || newName.length < 2) {
+  // Mirrors normalizeDisplayName on the server (#5509) so a name in any
+  // script gets an instant answer here rather than a bare error-msg back.
+  const newName = input.value.normalize('NFC').trim().replace(/\s+/g, ' ');
+  if (!newName || [...newName].length < 2) {
     return this._showToast(t('toasts.display_name_too_short'), 'error');
   }
-  if (!/^[a-zA-Z0-9_ ]+$/.test(newName)) {
+  if (!/^[\p{L}\p{N}\p{M}_ ]+$/u.test(newName)) {
     return this._showToast(t('toasts.display_name_invalid_chars'), 'error');
+  }
+  if (/\p{M}{4,}/u.test(newName)) {
+    return this._showToast(t('toasts.display_name_too_many_marks'), 'error');
   }
   this.socket.emit('rename-user', { username: newName });
   // Save bio
@@ -6436,6 +6486,57 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
 },
 
 // ── Channel Media Gallery (#5350) ─────────────────────
+_renderThreadList(filter = '') {
+  const body = document.getElementById('threads-list-body');
+  const countEl = document.getElementById('threads-list-count');
+  if (!body) return;
+
+  const all = this._threadListData || [];
+  const needle = String(filter || '').trim().toLowerCase();
+  const rows = needle
+    ? all.filter(th =>
+        String(th.content || '').toLowerCase().includes(needle) ||
+        String(th.username || '').toLowerCase().includes(needle))
+    : all;
+
+  if (countEl) {
+    countEl.textContent = needle
+      ? `${rows.length} / ${all.length}`
+      : (all.length ? String(all.length) : '');
+  }
+
+  if (!rows.length) {
+    const key = all.length ? 'thread_list.no_matches' : 'thread_list.empty';
+    const fallback = all.length
+      ? 'No threads match that search'
+      : 'No threads in this channel yet';
+    body.innerHTML = `<div class="media-gallery-empty muted-text">${(window.t && t(key)) || fallback}</div>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(th => {
+    const replies = Number(th.reply_count) || 0;
+    const label = replies === 1
+      ? ((window.t && t('thread_list.reply_one')) || '1 reply')
+      : ((window.t && t('thread_list.reply_other', { count: replies })) || `${replies} replies`);
+    // Strip attachment markdown so a thread started with a file reads as its
+    // filename rather than a wall of markup.
+    const preview = String(th.content || '')
+      .replace(/\[file:([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/!\[[^\]]*\]\(([^)\s]+)\)/g, '$1')
+      .trim();
+    return `
+      <button class="thread-list-row" data-parent-id="${th.id}">
+        <span class="thread-list-row-top">
+          <span class="thread-list-author">${this._escapeHtml(th.username || '')}</span>
+          <span class="thread-list-replies">${this._escapeHtml(label)}</span>
+          <span class="thread-list-when">${this._escapeHtml(this._formatTime?.(th.last_reply_at) || '')}</span>
+        </span>
+        <span class="thread-list-preview">${this._escapeHtml(preview)}</span>
+      </button>`;
+  }).join('');
+},
+
 _renderMediaGallery(data) {
   this._mediaGalleryData = data;
   ['photos','videos','audios','files','links'].forEach(k => {
