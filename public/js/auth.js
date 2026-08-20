@@ -920,7 +920,7 @@
       const r = await fetch('/api/auth/registration-info');
       if (!r.ok) return;
       const info = await r.json();
-      if (info && info.requiresToken && (!_pendingInvite || info.invitesBypassToken)) {
+      if (info && info.requiresToken && (!_pendingInvite || !info.invitesBypassToken)) {
         const grp = document.getElementById('reg-token-group');
         const inp = document.getElementById('reg-token');
         if (grp) grp.style.display = '';
