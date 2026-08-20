@@ -200,7 +200,7 @@ Or manually: `npm install && node server.js`
 | **E2E Encryption** | ECDH P-256 + AES-256-GCM encrypted DMs — private keys never leave the browser |
 | **Discord Import** | Import your entire Discord server history — channels, threads, forums, reactions, pins, avatars — directly from Haven's UI or via file upload |
 | **Game** | Shippy Container — Drew's shipment got hung up. Server-wide leaderboard. |
-| **Translations** | 7 languages out of the box (English, French, German, Spanish, Polish, Russian, Chinese). Community-contributed. |
+| **Translations** | 8 languages out of the box (English, French, German, Spanish, Polish, Russian, Chinese, Brazilian Portuguese). Community-contributed. |
 
 
 <img width="1917" height="911" alt="Screenshot 2026-02-16 013038" src="https://github.com/user-attachments/assets/79b62980-0822-4e9d-b346-c5a93de95862" />
@@ -221,6 +221,7 @@ Haven supports multiple languages. Users can switch languages from **Settings �
 | Polski | `pl` | 🟢 Human-translated |
 | Русский | `ru` | 🟢 Human-translated |
 | 中文 | `zh` | 🟡 AI-generated, needs review |
+| Português (Brasil) | `pt` | 🟢 Human-translated |
 
 ### ⚠️ Translation Quality
 

@@ -236,7 +236,7 @@ module.exports = function register(socket, ctx) {
       if (!validBuiltin.includes(value) && !/^file:[a-zA-Z0-9_\-. ]+\.theme\.css$/.test(value)) return;
     }
     if (key === 'default_locale') {
-      const validLocales = ['', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh'];
+      const validLocales = ['', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt'];
       if (!validLocales.includes(value)) return;
     }
     if (key === 'published_themes') {
