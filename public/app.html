@@ -2274,6 +2274,10 @@
               <input type="checkbox" id="registration-token-enabled">
             </label>
             <small class="settings-hint">When enabled, anyone registering must enter the token below. Works alongside the whitelist (both checks must pass) or on its own.</small>
+            <label class="toggle-row">
+              <span>Allow invitation links to bypass token requirement</span>
+              <input type="checkbox" id="invites-bypass-registration-token">
+            </label>
             <div id="registration-token-display" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
               <code id="registration-token-value" style="font-family:monospace;font-size:1rem;letter-spacing:0.05em;opacity:0.7">—</code>
               <button class="btn-sm" id="copy-registration-token-btn" title="Copy token">📋</button>

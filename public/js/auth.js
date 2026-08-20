@@ -3,7 +3,7 @@
 (async function () {
   // Preserve invite param across login/register so vanity invite links work for new users
   const _urlParams = new URLSearchParams(window.location.search);
-  const _pendingInvite = _urlParams.get('invite') || sessionStorage.getItem('haven_pending_invite') || '';
+  let _pendingInvite = _urlParams.get('invite') || sessionStorage.getItem('haven_pending_invite') || '';
   if (_pendingInvite) sessionStorage.setItem('haven_pending_invite', _pendingInvite);
   // Preserve channel/message deep-link params (?channel=CODE&message=ID) too
   const _pendingChannel = _urlParams.get('channel') || sessionStorage.getItem('haven_pending_channel') || '';
@@ -11,14 +11,17 @@
   if (_pendingChannel) sessionStorage.setItem('haven_pending_channel', _pendingChannel);
   if (_pendingMessage) sessionStorage.setItem('haven_pending_message', _pendingMessage);
 
-  const _appQuery = (() => {
-    const parts = [];
-    if (_pendingInvite) parts.push('invite=' + encodeURIComponent(_pendingInvite));
-    if (_pendingChannel) parts.push('channel=' + encodeURIComponent(_pendingChannel));
-    if (_pendingMessage) parts.push('message=' + encodeURIComponent(_pendingMessage));
-    return parts.length ? '?' + parts.join('&') : '';
-  })();
-  const _appUrl = '/app' + _appQuery;
+  function _buildAppUrl() {
+    const _appQuery = (() => {
+      const parts = [];
+      if (_pendingInvite) parts.push('invite=' + encodeURIComponent(_pendingInvite));
+      if (_pendingChannel) parts.push('channel=' + encodeURIComponent(_pendingChannel));
+      if (_pendingMessage) parts.push('message=' + encodeURIComponent(_pendingMessage));
+      return parts.length ? '?' + parts.join('&') : '';
+    })();
+    return '/app' + _appQuery;
+  }
+  let _appUrl = _buildAppUrl();
 
   // (#12) A returning SSO callback stashes its session here and bounces to
   // this page. Claim it before the already-logged-in check below, so an old
@@ -911,13 +914,13 @@
   // (#5344) If the server requires a registration token, reveal the
   // token field. Best-effort fetch — if it fails we just leave the
   // field hidden and the server will reject without the token.
-  // field is also hidden if an invite link is used.
-  (async () => {
+  // field is also hidden if an invite link is used and is allowed to override the token requirement.
+  async function  _initRegistrationForm() {
     try {
       const r = await fetch('/api/auth/registration-info');
       if (!r.ok) return;
       const info = await r.json();
-      if (info && info.requiresToken && !_pendingInvite) {
+      if (info && info.requiresToken && (!_pendingInvite || info.invitesBypassToken)) {
         const grp = document.getElementById('reg-token-group');
         const inp = document.getElementById('reg-token');
         if (grp) grp.style.display = '';
@@ -927,7 +930,8 @@
         _initRegistrationCaptcha(info.turnstileSiteKey);
       }
     } catch { /* ignore */ }
-  })();
+  }
+  _initRegistrationForm();
 
   registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -960,23 +964,21 @@
 
         const error = data.error || t('auth.errors.registration_failed');
 
-        // if registration error is due to an invalid invite link, redirect to a non-invite link after showing the error for 5s.
+        // if registration error is due to an invalid invite link, display the invite error and show the registration key field if required.
         // This allows the user to attempt registration again, with the registration code, or a new invitation link.
         if (error.toLowerCase().includes('invite link')) {
-          showError(error + ' Redirecting in 5s');
+          sessionStorage.removeItem('haven_pending_invite');
+          _pendingInvite = '';
+          
+          const url = new URL(window.location.href);
+          url.searchParams.delete('invite');
+          window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+          _appUrl = _buildAppUrl();
 
-          setTimeout(() => {
-            sessionStorage.removeItem('haven_pending_invite');
-
-            const url = new URL(window.location.href);
-            url.searchParams.delete('invite');
-
-            window.location.href = url.pathname + url.search + url.hash;
-          }, 5000);
-        } else {
-          showError(error);
+          await _initRegistrationForm();
         }
-
+        
+        showError(error);
         return;
       }
 

@@ -583,6 +583,8 @@ _applyServerSettings() {
   }
   const tokenToggle = document.getElementById('registration-token-enabled');
   if (tokenToggle) tokenToggle.checked = this.serverSettings.registration_token_enabled === 'true';
+  const invBpsTokenToggle = document.getElementById('invites-bypass-registration-token');
+  if (invBpsTokenToggle) invBpsTokenToggle.checked = this.serverSettings.invites_bypass_registration_token === 'true';
 
   const capToggle = document.getElementById('registration-captcha-enabled');
   if (capToggle) capToggle.checked = this.serverSettings.registration_captcha_enabled === 'true';

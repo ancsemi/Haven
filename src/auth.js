@@ -238,8 +238,10 @@ router.get('/registration-info', (req, res) => {
   try {
     const db = getDb();
     const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
+    const inviteBypassTokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'invites_bypass_registration_token'").get();
     const tokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
     const requiresToken = !!(tokenEnabledRow && tokenEnabledRow.value === 'true' && tokenRow && tokenRow.value);
+    const invitesBypassToken = !!(inviteBypassTokenRow && inviteBypassTokenRow.value === 'true');
     // Opt-in Turnstile CAPTCHA. Only the public site key is exposed (safe by
     // design); the secret key never leaves the server. Gated on a site key
     // being present so the page never tries to render a keyless widget.
@@ -247,7 +249,7 @@ router.get('/registration-info', (req, res) => {
     const siteKeyRow = db.prepare("SELECT value FROM server_settings WHERE key = 'turnstile_site_key'").get();
     const turnstileSiteKey = (siteKeyRow && typeof siteKeyRow.value === 'string') ? siteKeyRow.value.trim() : '';
     const captchaEnabled = !!(capEnabledRow && capEnabledRow.value === 'true' && turnstileSiteKey);
-    res.json({ requiresToken, captchaEnabled, turnstileSiteKey: captchaEnabled ? turnstileSiteKey : '' });
+    res.json({ requiresToken, invitesBypassToken, captchaEnabled, turnstileSiteKey: captchaEnabled ? turnstileSiteKey : '' });
   } catch (err) {
     res.json({ requiresToken: false, captchaEnabled: false, turnstileSiteKey: '' });
   }
@@ -475,13 +477,15 @@ router.post('/register', authLimiter, async (req, res) => {
     const db = getDb();
 
     // (#5344) Registration token check — admin-controlled gate that can
-    // sit alongside (or instead of) the whitelist. If enabled and a
-    // token is set, the registrant must be using a valid invite link, otherwise the matching token must be supplied
+    // sit alongside (or instead of) the whitelist. When enabled, a valid
+    // registration token is required unless a valid invite link is being
+    // used and invite links are configured to bypass the token requirement.
     const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
     if (tokenEnabledRow && tokenEnabledRow.value === 'true') {
-      // if invite code is used, validate invite code and use it in place of registration code
+      // if invite code is used, and admin allows invites to override registration code requirement, validate invite code and use it in place of the registration code
+      const inviteOverridesTokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'invites_bypass_registration_token'").get();
       const inviteCode = typeof req.body.inviteCode === 'string' ? req.body.inviteCode.trim() : '';
-      if (inviteCode) {
+      if (inviteOverridesTokenRow && inviteOverridesTokenRow.value === 'true' && inviteCode) {
         const inviteRow = db.prepare(
           "SELECT *, (expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP) AS is_expired FROM invite_codes WHERE code = ?"
         ).get(inviteCode);

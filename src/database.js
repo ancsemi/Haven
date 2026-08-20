@@ -406,6 +406,7 @@ function initDatabase() {
   insertSetting.run('server_code', '');                // server-wide invite code (joins all channels)
   insertSetting.run('default_join_channels', '');       // (#5345) JSON array of channel IDs that server-code/vanity-code joiners get added to (empty = all public)
   insertSetting.run('registration_token_enabled', 'false'); // (#5344) require a token on the registration form
+  insertSetting.run('invites_bypass_registration_token', 'false'); // Allow invite links to bypass token on the registration form
   insertSetting.run('registration_token', '');          // (#5344) the token value (admin-generated, rerollable)
   insertSetting.run('registration_captcha_enabled', 'false'); // opt-in Cloudflare Turnstile CAPTCHA on registration
   insertSetting.run('turnstile_site_key', '');          // Turnstile public site key (safe to expose to the page)

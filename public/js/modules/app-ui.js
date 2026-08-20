@@ -4246,6 +4246,12 @@ _setupUI() {
       value: e.target.checked ? 'true' : 'false'
     });
   });
+  document.getElementById('invites-bypass-registration-token')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', {
+      key: 'invites_bypass_registration_token',
+      value: e.target.checked ? 'true' : 'false'
+    });
+  });
   document.getElementById('generate-registration-token-btn')?.addEventListener('click', () => {
     this.socket.emit('generate-registration-token');
   });

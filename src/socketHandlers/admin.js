@@ -86,7 +86,7 @@ module.exports = function register(socket, ctx) {
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
       'session_duration_days', 'max_message_chars',
-      'default_join_channels', 'registration_token_enabled', // (#5344, #5345), registration_token has its own generate/clear handlers
+      'default_join_channels', 'registration_token_enabled', 'invites_bypass_registration_token', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
@@ -254,6 +254,9 @@ module.exports = function register(socket, ctx) {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
     }
     if (key === 'registration_token_enabled') {
+      if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'invites_bypass_registration_token') {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'guests_enabled') {
