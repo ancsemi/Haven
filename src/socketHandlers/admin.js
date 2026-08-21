@@ -9,7 +9,7 @@ module.exports = function register(socket, ctx) {
     getUserPermissions, getUserRoles, getUserHighestRole,
     emitOnlineUsers, broadcastChannelLists, generateChannelCode,
     logAudit, fireWebhookEvent, onReferrerPolicyChange, automod, getIdleOnlineUsers,
-    revokeBotVoiceAccess
+    revokeBotVoiceAccess, getUploadUsage
   } = ctx;
   const { channelUsers } = state;
 
@@ -1023,12 +1023,35 @@ module.exports = function register(socket, ctx) {
         });
       }
 
+      // Upload storage per member (#5521). Moderator-only: it is a moderation
+      // signal, not something every member needs to see about everyone else.
+      // The DM figure is a size, never a hint at what was sent: DM attachments
+      // are encrypted client-side and stay unreadable to the server.
+      let usage = null;
+      if (canMod) {
+        try { usage = getUploadUsage(); } catch (err) {
+          console.warn('get-all-members: upload usage unavailable:', err.message);
+        }
+      }
+      const storageFor = (userId) => {
+        if (!usage) return undefined;
+        const entry = usage.byUser.get(userId);
+        return {
+          total: entry ? entry.total : 0,
+          channel: entry ? entry.channel : 0,
+          dm: entry ? entry.dm : 0,
+          profile: entry ? entry.profile : 0,
+          files: entry ? entry.files : 0
+        };
+      };
+
       const members = users.map(u => ({
         id: u.id, username: u.username, displayName: u.displayName,
         isAdmin: !!u.is_admin, online: onlineIds.has(u.id),
         banned: bannedIds.has(u.id), roles: userRoles[u.id] || [],
         channels: channelCounts[u.id] || 0,
         channelList: canMod ? (userChannelMap[u.id] || []) : undefined,
+        storage: storageFor(u.id),
         avatar: u.avatar || null, avatarShape: u.avatar_shape || 'circle',
         status: u.status || 'online', statusText: u.status_text || '',
         createdAt: u.created_at
@@ -1037,6 +1060,14 @@ module.exports = function register(socket, ctx) {
       cb({
         members, total: members.length, channelOnly: !!channelOnly,
         allChannels: canMod ? allChannels : undefined,
+        // Files uploaded before this shipped have no owner on record, so they
+        // are reported as their own total instead of being blamed on anyone.
+        storageSummary: usage ? {
+          liveBytes: usage.liveBytes,
+          attributedBytes: usage.attributedBytes,
+          unattributedBytes: usage.unattributedBytes,
+          fileCount: usage.fileCount
+        } : undefined,
         callerPerms: {
           isAdmin, canMod,
           canPromote: isAdmin || userHasPermission(socket.user.id, 'promote_user'),

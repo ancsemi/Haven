@@ -42,6 +42,11 @@ function setupSocketHandlers(io, db, opts = {}) {
   const invalidateIpBanCache = (typeof opts.invalidateIpBanCache === 'function') ? opts.invalidateIpBanCache : () => {};
   const onReferrerPolicyChange = (typeof opts.onReferrerPolicyChange === 'function') ? opts.onReferrerPolicyChange : () => {};
   const botAudioManager = opts.botAudioManager || null;
+  // Per-member upload totals, computed by the HTTP layer that owns the
+  // uploads directory. Returns empty usage when the host did not supply it.
+  const getUploadUsage = (typeof opts.getUploadUsage === 'function')
+    ? opts.getUploadUsage
+    : () => ({ byUser: new Map(), liveBytes: 0, attributedBytes: 0, unattributedBytes: 0, fileCount: 0 });
 
   // ── Client IP + ban matching (v3.42.0) ───────────────────
   // Both delegate to the same helpers the HTTP layer uses so the two gates
@@ -572,6 +577,21 @@ function setupSocketHandlers(io, db, opts = {}) {
     });
 
     return channels;
+  }
+
+  // ── Channel member list (@mention autocomplete source) ──
+  // A ban leaves channel_members alone on purpose, so an unban puts the person
+  // back in exactly the channels they were in. That meant banned accounts kept
+  // appearing in @mention autocomplete, so filter them here (the one place
+  // this list is built) rather than in each caller.
+  function getMentionableChannelMembers(channelId) {
+    return db.prepare(`
+      SELECT u.id, COALESCE(u.display_name, u.username) as username, u.username as loginName FROM users u
+      JOIN channel_members cm ON u.id = cm.user_id
+      LEFT JOIN bans b ON b.user_id = u.id
+      WHERE cm.channel_id = ? AND b.user_id IS NULL
+      ORDER BY COALESCE(u.display_name, u.username)
+    `).all(channelId);
   }
 
   // ── broadcastChannelLists (debounced, shared timer) ─────
@@ -2071,6 +2091,10 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Idle-online oversight (flag accounts sitting connected + green + silent)
       getIdleOnlineUsers,
       onReferrerPolicyChange,
+      // Per-member upload storage totals (#5521)
+      getUploadUsage,
+      // Ban-filtered channel roster used by @mention autocomplete
+      getMentionableChannelMembers,
       // IP-ban cache invalidator (server.js HTTP-side cache)
       invalidateIpBanCache,
       // Constants

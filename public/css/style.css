@@ -10782,6 +10782,16 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   opacity: 0.7;
 }
 
+/* Upload storage per member. Deliberately a touch stronger than the other
+   meta chips: it is the one number an admin scans this list looking for. */
+.aml-member-storage {
+  font-size: 0.625rem;
+  color: var(--text-secondary, var(--text-muted));
+  opacity: 0.85;
+  white-space: nowrap;
+  cursor: help;
+}
+
 /* ── Channel Picker (Add/Remove user from channels) ── */
 .aml-ch-picker {
   max-width: 26.25rem;
@@ -17581,7 +17591,7 @@ ul.chat-list { list-style-type: disc; }
     flex-wrap: wrap;
   }
   .aml-role-badge { font-size: 0.5625rem; padding: 0 0.3125rem; }
-  .aml-member-joined, .aml-member-channels { font-size: 0.5625rem; }
+  .aml-member-joined, .aml-member-channels, .aml-member-storage { font-size: 0.5625rem; }
 
   /* Actions: always visible on mobile (no hover), compact */
   .aml-actions {

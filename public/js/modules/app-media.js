@@ -332,6 +332,8 @@ async _flushThreadPending(parentId) {
   for (const file of files) {
     try {
       const formData = new FormData();
+      const threadCh = this.channels.find(c => c.code === this.currentChannel);
+      formData.append('scope', threadCh && threadCh.is_dm ? 'dm' : 'channel');
       formData.append('file', file);
       const data = await this._uploadWithProgress('/api/upload-file', formData);
       if (!data || data.error) { this._showToast(data?.error || 'Upload failed', 'error'); continue; }

@@ -6433,6 +6433,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
       const blob = new Blob([encrypted], { type: 'application/octet-stream' });
       const formData = new FormData();
+      formData.append('scope', 'dm');
       formData.append('file', blob, 'e2e-image.enc');
       const data = await this._uploadWithProgress('/api/upload-file', formData);
       const mime = file.type || 'image/png';
@@ -6457,12 +6458,15 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   try {
     // SVG must use /api/upload-file (the raster-only /api/upload rejects it)
     let data;
+    const uploadScope = isDm ? 'dm' : 'channel';
     if (file.type === 'image/svg+xml') {
       const fd = new FormData();
+      fd.append('scope', uploadScope);
       fd.append('file', file);
       data = await this._uploadWithProgress('/api/upload-file', fd);
     } else {
       const formData = new FormData();
+      formData.append('scope', uploadScope);
       formData.append('image', file);
       data = await this._uploadWithProgress('/api/upload', formData);
     }

@@ -228,6 +228,24 @@ function initDatabase() {
       PRIMARY KEY (invite_code_id, user_id)
     );
 
+    -- Who uploaded which file, recorded at the upload endpoint. Message content
+    -- is the only other record of an attachment, and in a DM that content is E2E
+    -- ciphertext (the file bytes are encrypted client-side too), so scanning
+    -- messages would silently miss every private upload, which is exactly the
+    -- storage nobody could account for before. The upload endpoint is the one
+    -- place the server still knows both the uploader and the file. Sizes are
+    -- re-read from disk when the member list is built, so a file that has been
+    -- deleted or purged stops counting without a bookkeeping hook here.
+    CREATE TABLE IF NOT EXISTS upload_ownership (
+      rel_path TEXT PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      bytes INTEGER NOT NULL DEFAULT 0,
+      scope TEXT NOT NULL DEFAULT 'channel',   -- 'channel' | 'dm' | 'profile'
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_upload_ownership_user
+      ON upload_ownership(user_id);
+
     CREATE INDEX IF NOT EXISTS idx_messages_channel
       ON messages(channel_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_channel_code

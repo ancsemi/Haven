@@ -1038,6 +1038,12 @@
       "joined_date": "Joined {{date}}",
       "channel_count_one": "{{count}} ch",
       "channel_count_other": "{{count}} ch",
+      "storage_public": "{{size}} in channels",
+      "storage_private": "{{size}} in DMs",
+      "storage_profile": "{{size}} in avatars",
+      "storage_tooltip": "Uploads still on the server: {{files}} files ({{breakdown}}). DM attachments are encrypted, so only their size is known.",
+      "storage_summary": "Uploads on disk: {{total}} across {{files}} files.",
+      "storage_summary_unattributed": "{{size}} of that predates per-member tracking and has no owner on record.",
       "already_in_all_channels": "{{name}} is already in all channels",
       "not_in_any_channels": "{{name}} isn't in any channels",
       "picker_add_title": "Add {{name}} to Channel",
@@ -1587,7 +1593,8 @@
       "filter_online": "Online",
       "filter_offline": "Offline",
       "filter_new": "New (7 days)",
-      "filter_banned": "Banned"
+      "filter_banned": "Banned",
+      "filter_storage": "Most storage used"
     },
     "role_management": {
       "title": "Role Management",

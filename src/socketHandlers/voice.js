@@ -6,7 +6,8 @@ module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
           broadcastVoiceUsers, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
           pruneStaleVoiceUsers,
-          getActiveMusicSyncState, getMusicQueuePayload, botAudioManager } = ctx;
+          getMentionableChannelMembers, getActiveMusicSyncState, getMusicQueuePayload,
+          botAudioManager } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
           activeScreenSharers, activeWebcamUsers, streamViewers, pendingTempDelete,
           pendingVoiceLeave } = state;
@@ -983,12 +984,7 @@ module.exports = function register(socket, ctx) {
       if (!(socket.user.isAdmin && chRow && !chRow.is_dm)) return;
     }
 
-    const members = db.prepare(`
-      SELECT u.id, COALESCE(u.display_name, u.username) as username, u.username as loginName FROM users u
-      JOIN channel_members cm ON u.id = cm.user_id
-      WHERE cm.channel_id = ?
-      ORDER BY COALESCE(u.display_name, u.username)
-    `).all(channel.id);
+    const members = getMentionableChannelMembers(channel.id);
 
     socket.emit('channel-members', { channelCode: code, members });
   });

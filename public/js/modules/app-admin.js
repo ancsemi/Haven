@@ -1618,6 +1618,8 @@ _openAllMembersModal() {
   document.getElementById('all-members-search').value = '';
   document.getElementById('all-members-filter').value = 'all';
   document.getElementById('all-members-count').textContent = '';
+  const storageEl = document.getElementById('all-members-storage-summary');
+  if (storageEl) storageEl.style.display = 'none';
   modal.style.display = 'flex';
 
   // Pass current channel so the server can fall back to view_channel_members
@@ -1630,6 +1632,8 @@ _openAllMembersModal() {
     this._allMembersData = res.members || [];
     this._allMembersChannels = res.allChannels || [];
     this._allMembersPerms = res.callerPerms || {};
+    this._allMembersStorage = res.storageSummary || null;
+    this._renderStorageSummary();
     // Update title to reflect channel-only vs all members
     const titleEl = document.querySelector('#all-members-modal [data-i18n="modals.all_members.title"]');
     if (titleEl) {
@@ -1662,6 +1666,15 @@ _filterAllMembers() {
   else if (filter === 'offline') filtered = filtered.filter(m => !m.online && !m.banned);
   else if (filter === 'new') filtered = filtered.filter(m => m.createdAt && (now - new Date(m.createdAt).getTime()) < sevenDays);
   else if (filter === 'banned') filtered = filtered.filter(m => m.banned);
+  // "Most storage used" answers a different question from the other filters:
+  // it ranks rather than narrows. Members with nothing uploaded are dropped so
+  // the list is the ranking itself instead of a long tail of zeroes. (#5521)
+  else if (filter === 'storage') {
+    filtered = filtered
+      .filter(m => m.storage && m.storage.total > 0)
+      .slice()
+      .sort((a, b) => b.storage.total - a.storage.total);
+  }
 
   if (query) {
     filtered = filtered.filter(m =>
@@ -1865,6 +1878,20 @@ _renderAllMembers(members) {
     const isNew = created && (Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000;
     const newBadge = isNew ? `<span class="aml-new-badge">${t('settings.admin.badge_new')}</span>` : '';
 
+    // Storage consumed (#5521). Only moderators get a `storage` object at all,
+    // so a member viewing this list simply sees no chip. The breakdown goes in
+    // the tooltip: DM attachments are encrypted, so their size is all the
+    // server knows about them and all this can ever report.
+    let storageHtml = '';
+    if (m.storage && m.storage.total > 0) {
+      const parts = [];
+      if (m.storage.channel) parts.push(t('settings.admin.storage_public', { size: this._formatFileSize(m.storage.channel) }));
+      if (m.storage.dm) parts.push(t('settings.admin.storage_private', { size: this._formatFileSize(m.storage.dm) }));
+      if (m.storage.profile) parts.push(t('settings.admin.storage_profile', { size: this._formatFileSize(m.storage.profile) }));
+      const title = t('settings.admin.storage_tooltip', { files: m.storage.files, breakdown: parts.join(', ') });
+      storageHtml = `<span class="aml-member-storage" title="${this._escapeHtml(title)}">💾 ${this._escapeHtml(this._formatFileSize(m.storage.total))}</span>`;
+    }
+
     const avatarUrl = m.avatar ? m.avatar : '';
     const avatarShape = m.avatarShape === 'square' ? 'border-radius:4px' : 'border-radius:50%';
     const avatarHtml = avatarUrl
@@ -1912,6 +1939,7 @@ _renderAllMembers(members) {
             ${rolesHtml}
             <span class="aml-member-joined">${joinedStr ? t('settings.admin.joined_date', { date: joinedStr }) : ''}</span>
             ${m.channels > 0 ? `<span class="aml-member-channels">${t(m.channels === 1 ? 'settings.admin.channel_count_one' : 'settings.admin.channel_count_other', { count: m.channels })}</span>` : ''}
+            ${storageHtml}
           </div>
         </div>
       </div>
@@ -1921,6 +1949,28 @@ _renderAllMembers(members) {
 
   // Bind action buttons
   this._bindMemberListActions(list);
+},
+
+// Server-wide upload totals under the search box. The unattributed figure is
+// the honest part of this: files uploaded before per-member accounting existed
+// have no owner on record, and guessing an owner would be worse than saying so.
+_renderStorageSummary() {
+  const el = document.getElementById('all-members-storage-summary');
+  if (!el) return;
+  const summary = this._allMembersStorage;
+  if (!summary || !summary.liveBytes) { el.style.display = 'none'; return; }
+
+  let text = t('settings.admin.storage_summary', {
+    total: this._formatFileSize(summary.liveBytes),
+    files: summary.fileCount
+  });
+  if (summary.unattributedBytes > 0) {
+    text += ' ' + t('settings.admin.storage_summary_unattributed', {
+      size: this._formatFileSize(summary.unattributedBytes)
+    });
+  }
+  el.textContent = text;
+  el.style.display = '';
 },
 
 _bindMemberListActions(container) {
@@ -2986,6 +3036,9 @@ _uploadGeneralFile(file, targetCode) {
     if (handled) return;
 
     const formData = new FormData();
+    // Tells the server which column this lands in on the admin storage
+    // report. It only ever splits this uploader's own total. (#5521)
+    formData.append('scope', _ugCh && _ugCh.is_dm ? 'dm' : 'channel');
     formData.append('file', file);
     this._uploadWithProgress('/api/upload-file', formData)
     .then(data => {
@@ -3039,6 +3092,7 @@ async _maybeUploadEncryptedDmFile(file, code, ch) {
     const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
     const blob = new Blob([encrypted], { type: 'application/octet-stream' });
     const formData = new FormData();
+    formData.append('scope', 'dm');
     formData.append('file', blob, 'e2e-file.enc');
     const data = await this._uploadWithProgress('/api/upload-file', formData);
     if (!data || !data.url) {

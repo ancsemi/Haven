@@ -186,6 +186,95 @@ function isUploadStillReferenced(db, relPath) {
   return false;
 }
 
+// ── Per-member upload accounting (#5521) ─────────────────
+// Admins could see the total size of uploads/ but never who filled it, so one
+// person quietly using the server as personal cloud storage was invisible
+// unless you went and read the directory yourself. DM attachments made that
+// worse: the file bytes are encrypted client-side and the message that links
+// them is E2E ciphertext, so nothing the server can read connects a private
+// upload to the person who made it. Recording the owner at the moment of
+// upload is the only place that link still exists.
+function recordUploadOwnership(userId, relPath, bytes, scope = 'channel') {
+  if (!Number.isInteger(userId) || !isSafeUploadRelPath(relPath)) return;
+  try {
+    const { getDb } = require('./src/database');
+    getDb().prepare(
+      'INSERT OR REPLACE INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, ?, ?, ?)'
+    ).run(relPath, userId, Number.isFinite(bytes) ? Math.max(0, Math.round(bytes)) : 0,
+          ['channel', 'dm', 'profile'].includes(scope) ? scope : 'channel');
+  } catch (err) {
+    // Accounting is a reporting nicety; never fail a working upload over it.
+    console.warn('[uploads] ownership record failed:', err.message);
+  }
+}
+
+// The uploader's chosen scope only ever narrows what we already know from the
+// endpoint, so a client that lies about it can shift its own bytes between the
+// public and private columns of its own row. It cannot move them onto someone
+// else, and the total (the number that matters here) is unaffected.
+function uploadScopeFromRequest(req, fallback = 'channel') {
+  const raw = typeof req.body?.scope === 'string' ? req.body.scope.trim().toLowerCase() : '';
+  return ['channel', 'dm', 'profile'].includes(raw) ? raw : fallback;
+}
+
+// Walk the live uploads tree once and total it per owner. Reading sizes from
+// disk rather than trusting the stored byte count means a deleted, purged, or
+// moved-to-deleted-attachments file drops out on its own, with no delete hook to
+// keep in sync, and no drift between the report and reality.
+let _uploadUsageCache = null;
+function getUploadUsage() {
+  if (_uploadUsageCache && Date.now() - _uploadUsageCache.at < 60_000) return _uploadUsageCache.data;
+
+  const sizes = new Map();   // relPath → bytes
+  const walk = (dir, rel) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      // Deleted attachments and transient bot audio are not storage the
+      // member is still holding.
+      if (!rel && ['bot-audio', 'deleted-attachments'].includes(entry.name)) continue;
+      const sub = rel ? `${rel}/${entry.name}` : entry.name;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full, sub); continue; }
+      try { sizes.set(sub, fs.statSync(full).size); } catch { /* vanished mid-walk */ }
+    }
+  };
+  walk(UPLOADS_DIR, '');
+
+  const byUser = new Map();  // userId → { total, channel, dm, profile, files }
+  let attributedBytes = 0;
+  try {
+    const { getDb } = require('./src/database');
+    const rows = getDb().prepare('SELECT rel_path, user_id, scope FROM upload_ownership').all();
+    for (const row of rows) {
+      if (row.user_id === null) continue;
+      const bytes = sizes.get(row.rel_path);
+      if (bytes === undefined) continue;   // gone from disk, so stop counting it
+      let entry = byUser.get(row.user_id);
+      if (!entry) { entry = { total: 0, channel: 0, dm: 0, profile: 0, files: 0 }; byUser.set(row.user_id, entry); }
+      entry.total += bytes;
+      entry[['channel', 'dm', 'profile'].includes(row.scope) ? row.scope : 'channel'] += bytes;
+      entry.files++;
+      attributedBytes += bytes;
+    }
+  } catch { /* table missing on a database that has not migrated yet */ }
+
+  let liveBytes = 0;
+  for (const bytes of sizes.values()) liveBytes += bytes;
+
+  // Uploads made before this shipped have no owner row, so they land here
+  // rather than being silently spread across members who did not make them.
+  const data = {
+    byUser,
+    liveBytes,
+    attributedBytes,
+    unattributedBytes: Math.max(0, liveBytes - attributedBytes),
+    fileCount: sizes.size
+  };
+  _uploadUsageCache = { at: Date.now(), data };
+  return data;
+}
+
 // Trust proxy configuration — controls how many reverse-proxy hops to trust
 // when reading the real client IP from X-Forwarded-For.
 //
@@ -840,6 +929,8 @@ app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
     }
     const avatarUrl = `/uploads/${finalName}`;
 
+    recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
+
     // Update the user's avatar in the database
     try {
       const db = getDb();
@@ -1127,6 +1218,7 @@ app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res
       fs.renameSync(req.file.path, path.join(uploadDir, finalName));
     }
     const avatarUrl = `/uploads/${finalName}`;
+    recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 
     // Optional: if a personaId is supplied, persist immediately (verifying ownership).
     const personaId = parseInt(req.body?.personaId || req.query?.personaId);
@@ -1500,8 +1592,10 @@ app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
       const oldPath = req.file.path;
       const newPath = path.join(uploadDir, safeName);
       fs.renameSync(oldPath, newPath);
+      recordUploadOwnership(user.id, safeName, req.file.size, uploadScopeFromRequest(req));
       return res.json({ url: `/uploads/${safeName}` });
     }
+    recordUploadOwnership(user.id, req.file.filename, req.file.size, uploadScopeFromRequest(req));
     res.json({ url: `/uploads/${req.file.filename}` });
   });
 });
@@ -1544,6 +1638,8 @@ app.post('/api/upload-file', uploadLimiter, uploadDiskGuard, (req, res) => {
     // original text (fixes garbled Chinese/emoji/non-ASCII filenames).
     const originalName = Buffer.from(req.file.originalname || 'file', 'latin1').toString('utf8');
     const fileSize = req.file.size;
+
+    recordUploadOwnership(user.id, req.file.filename, fileSize, uploadScopeFromRequest(req));
 
     res.json({
       url: `/uploads/${req.file.filename}`,
@@ -4777,6 +4873,9 @@ socketRuntime = setupSocketHandlers(io, db, {
   // on both normalization and CIDR handling, and the socket path stops
   // querying SQLite on every single connection. (v3.42.0)
   isIpBanned,
+  // Per-member upload totals for the All Members list. Lives here because the
+  // uploads directory and the walk that reads it are the HTTP layer's. (#5521)
+  getUploadUsage,
   // Keep the Referrer-Policy cache in sync when an admin changes it.
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
