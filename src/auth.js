@@ -479,14 +479,15 @@ router.post('/register', authLimiter, async (req, res) => {
     // (#5344) Registration token check — admin-controlled gate that can
     // sit alongside (or instead of) the whitelist. When enabled, a valid
     // registration token is required unless a valid invite link is being
-    // used and invite links are configured to bypass the token requirement.
+    // used and invite links are configured to bypass the token requirement
+    let inviteRow
     const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
     if (tokenEnabledRow && tokenEnabledRow.value === 'true') {
       // if invite code is used, and admin allows invites to override registration code requirement, validate invite code and use it in place of the registration code
       const inviteOverridesTokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'invites_bypass_registration_token'").get();
       const inviteCode = typeof req.body.inviteCode === 'string' ? req.body.inviteCode.trim() : '';
       if (inviteOverridesTokenRow && inviteOverridesTokenRow.value === 'true' && inviteCode) {
-        const inviteRow = db.prepare(
+        inviteRow = db.prepare(
           "SELECT *, (expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP) AS is_expired FROM invite_codes WHERE code = ?"
         ).get(inviteCode);
 
@@ -586,6 +587,13 @@ router.post('/register', authLimiter, async (req, res) => {
       'INSERT INTO users (username, password_hash, is_admin, avatar) VALUES (?, ?, ?, ?)'
     ).run(username, hash, isAdmin, avatarPath);
     _regTimestamps.push(Date.now()); // feed the opt-in global registration rate limit
+
+    // Consume the invite if it was used for registration.
+    if (inviteRow) {
+      db.prepare(
+        'INSERT INTO invite_code_uses (invite_code_id, user_id) VALUES (?, ?)'
+      ).run(inviteRow.id, result.lastInsertRowid);
+    }
 
     provisionNewUser(db, result.lastInsertRowid, username, req.app.get('io'));
 
