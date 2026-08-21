@@ -714,6 +714,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
     });
     deleteAll(channel.id);
+    broadcastChannelLists();
 
     // The same file can be linked from more than one message (a copy-pasted
     // image URL), so only relocate the ones nothing else points at anymore.
