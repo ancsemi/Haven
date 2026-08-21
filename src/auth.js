@@ -480,7 +480,7 @@ router.post('/register', authLimiter, async (req, res) => {
     // sit alongside (or instead of) the whitelist. When enabled, a valid
     // registration token is required unless a valid invite link is being
     // used and invite links are configured to bypass the token requirement
-    let inviteRow
+    let inviteRow = null;
     const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
     if (tokenEnabledRow && tokenEnabledRow.value === 'true') {
       // if invite code is used, and admin allows invites to override registration code requirement, validate invite code and use it in place of the registration code
