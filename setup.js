@@ -1,0 +1,31 @@
+const {io}=require('socket.io-client');
+const http=require('http');
+const post=(path,body)=>new Promise((res,rej)=>{const d=JSON.stringify(body);
+ const r=http.request({host:'localhost',port:3211,path,method:'POST',headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(d)}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>{try{res(JSON.parse(b))}catch(e){res({raw:b})}})});r.on('error',rej);r.write(d);r.end();});
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+ const admin=await post('/api/auth/register',{username:'admin',password:'braidtest123',eulaVersion:'1.0',ageVerified:true});
+ console.log('admin token?', !!admin.token);
+ const bird=await post('/api/auth/register',{username:'birdy',password:'braidtest123',eulaVersion:'1.0',ageVerified:true});
+ console.log('birdy token?', !!bird.token);
+ const s=io('http://localhost:3211',{auth:{token:admin.token},transports:['websocket']});
+ await new Promise(r=>s.on('connect',r));
+ s.on('error-msg',m=>console.log('ERR',m));
+ s.emit('update-server-setting',{key:'published_themes',value:JSON.stringify(['braid.theme.css'])});
+ let code=null;
+ s.on('channel-created',c=>{code=c.code||c.channel?.code});
+ s.on('channels-list',l=>{const c=(l||[]).find(x=>x.name==='general');if(c)code=c.code});
+ s.emit('create-channel',{name:'general'});
+ for(let i=0;i<20&&!code;i++) await wait(300);
+ console.log('channel code:', code);
+ // birdy joins so a non-admin has a channel to look at
+ const s2=io('http://localhost:3211',{auth:{token:bird.token},transports:['websocket']});
+ await new Promise(r=>s2.on('connect',r));
+ s2.emit('join-channel',{code});
+ await wait(800);
+ s.emit('send-message',{code,content:'braid repro seed'});
+ await wait(1200);
+ console.log('BIRD_TOKEN='+bird.token);
+ console.log('ADMIN_TOKEN='+admin.token);
+ process.exit(0);
+})().catch(e=>{console.error(e);process.exit(1)});
