@@ -8,7 +8,8 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserRoles, getUserHighestRole,
     emitOnlineUsers, broadcastChannelLists, generateChannelCode,
-    logAudit, fireWebhookEvent, onReferrerPolicyChange, automod, getIdleOnlineUsers
+    logAudit, fireWebhookEvent, onReferrerPolicyChange, automod, getIdleOnlineUsers,
+    revokeBotVoiceAccess
   } = ctx;
   const { channelUsers } = state;
 
@@ -314,13 +315,13 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to save setting — database write error');
     }
 
-    io.emit('server-setting-changed', { key, value });
+    io.except('bot-sockets').emit('server-setting-changed', { key, value });
 
     // Clearing the name hands it back to SERVER_NAME, so tell everyone what
     // the name resolves to now rather than leaving the old one on screen
     // until the next reconnect. (#5489)
     if (key === 'server_name') {
-      io.emit('server-setting-changed', {
+      io.except('bot-sockets').emit('server-setting-changed', {
         key: 'server_name_effective',
         value: value || (process.env.SERVER_NAME || '').trim() || ''
       });
@@ -416,7 +417,7 @@ module.exports = function register(socket, ctx) {
     }
     const code = generateChannelCode();
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', code);
-    io.emit('server-setting-changed', { key: 'server_code', value: code });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'server_code', value: code });
     socket.emit('error-msg', `Server invite code generated: ${code}`);
   });
 
@@ -425,7 +426,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', '');
-    io.emit('server-setting-changed', { key: 'server_code', value: '' });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'server_code', value: '' });
     socket.emit('error-msg', 'Server invite code cleared');
   });
 
@@ -629,7 +630,7 @@ module.exports = function register(socket, ctx) {
     }
     const token = crypto.randomBytes(8).toString('hex');
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', token);
-    io.emit('server-setting-changed', { key: 'registration_token', value: token });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'registration_token', value: token });
     socket.emit('error-msg', `Registration token generated: ${token}`);
   });
 
@@ -638,7 +639,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage the registration token');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', '');
-    io.emit('server-setting-changed', { key: 'registration_token', value: '' });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'registration_token', value: '' });
     socket.emit('error-msg', 'Registration token cleared');
   });
 
@@ -710,7 +711,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -733,7 +734,7 @@ module.exports = function register(socket, ctx) {
       if (!channel) return;
 
       const webhooks = db.prepare(
-        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count, can_moderate FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
+        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count, can_moderate, can_use_voice FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
       ).all(channel.id);
       socket.emit('webhooks-list', { channelCode, webhooks });
     } else {
@@ -742,7 +743,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -760,6 +761,7 @@ module.exports = function register(socket, ctx) {
     const webhookId = parseInt(data.webhookId || data.id);
     if (!webhookId || isNaN(webhookId)) return;
 
+    revokeBotVoiceAccess?.(webhookId, 'Webhook was deleted');
     db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId);
 
     if (data.webhookId) {
@@ -771,7 +773,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -793,6 +795,7 @@ module.exports = function register(socket, ctx) {
     if (!wh) return socket.emit('error-msg', 'Webhook not found');
     const newState = wh.is_active ? 0 : 1;
     db.prepare('UPDATE webhooks SET is_active = ? WHERE id = ?').run(newState, webhookId);
+    if (!newState) revokeBotVoiceAccess?.(webhookId, 'Webhook was disabled');
 
     if (data.webhookId) {
       // Per-channel response
@@ -803,7 +806,7 @@ module.exports = function register(socket, ctx) {
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
@@ -821,6 +824,13 @@ module.exports = function register(socket, ctx) {
     const wh = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId);
     if (!wh) return socket.emit('error-msg', 'Webhook not found');
 
+    if (data.channel_id !== undefined) {
+      const requestedChannelId = parseInt(data.channel_id);
+      if (!socket.user.isAdmin && requestedChannelId !== wh.channel_id && (wh.can_use_voice || wh.can_moderate)) {
+        return socket.emit('error-msg', 'Only admins can move a bot with privileged permissions');
+      }
+    }
+
     if (typeof data.name === 'string' && data.name.trim()) {
       db.prepare('UPDATE webhooks SET name = ? WHERE id = ?').run(data.name.trim().slice(0, 32), webhookId);
     }
@@ -828,7 +838,10 @@ module.exports = function register(socket, ctx) {
       const channelId = parseInt(data.channel_id);
       if (!isNaN(channelId)) {
         const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
-        if (channel) db.prepare('UPDATE webhooks SET channel_id = ? WHERE id = ?').run(channelId, webhookId);
+        if (channel) {
+          db.prepare('UPDATE webhooks SET channel_id = ? WHERE id = ?').run(channelId, webhookId);
+          if (channelId !== wh.channel_id) revokeBotVoiceAccess?.(webhookId, 'Webhook voice channel scope changed');
+        }
       }
     }
     if (data.avatar_url !== undefined) {
@@ -871,12 +884,20 @@ module.exports = function register(socket, ctx) {
       const flag = data.can_moderate ? 1 : 0;
       db.prepare('UPDATE webhooks SET can_moderate = ? WHERE id = ?').run(flag, webhookId);
     }
+    if (data.can_use_voice !== undefined) {
+      if (!socket.user.isAdmin) {
+        return socket.emit('error-msg', 'Only admins can change a bot\'s voice permission');
+      }
+      const flag = data.can_use_voice ? 1 : 0;
+      db.prepare('UPDATE webhooks SET can_use_voice = ? WHERE id = ?').run(flag, webhookId);
+      if (!flag) revokeBotVoiceAccess?.(webhookId, 'Bot voice permission was revoked');
+    }
 
     const webhooks = db.prepare(`
       SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
              w.callback_url, w.callback_secret,
              w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-             w.last_delivery_error, w.failure_count, w.can_moderate,
+             w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
              c.name as channel_name, c.code as channel_code
       FROM webhooks w JOIN channels c ON w.channel_id = c.id
       ORDER BY w.created_at DESC
@@ -1155,7 +1176,7 @@ module.exports = function register(socket, ctx) {
       const payload = automod.enabled()
         ? Object.assign(automod.policy(), { enabled: true, scanDms: s.automod_scan_dms === 'true' })
         : { enabled: false, mode: 'off', allow: [], deny: [], scanDms: false };
-      io.emit('link-policy', payload);
+      io.except('bot-sockets').emit('link-policy', payload);
     } catch { /* non-critical */ }
   }
 

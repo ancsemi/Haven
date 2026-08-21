@@ -1,15 +1,16 @@
-﻿{
+{
   "name": "haven",
   "version": "3.48.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",
   "engines": {
-    "node": ">=18.0.0 <27.0.0"
+    "node": ">=22.0.0 <27.0.0"
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",
@@ -22,7 +23,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "localtunnel": "^2.0.2",
-    "multer": "^2.0.2",
+    "multer": "^2.2.0",
+    "music-metadata": "^11.15.0",
     "otpauth": "^9.5.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",

@@ -2334,6 +2334,12 @@ _showBotDetail(botId) {
         <span>Allow this bot to perform moderation actions</span>
       </label>
 
+      <label class="settings-label">Voice access <span style="font-size:0.625rem;color:var(--text-muted)">(admin only - lets this bot play audio and join voice as a WebRTC peer)</span></label>
+      <label class="toggle-row" style="margin-bottom:12px">
+        <input type="checkbox" id="bot-detail-can-use-voice" ${wh.can_use_voice ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
+        <span>Allow this bot to use voice channels</span>
+      </label>
+
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn-sm btn-accent" id="bot-detail-save" style="flex:1">💾 ${t('modals.bot_mgmt.save_btn')}</button>
         <button class="btn-sm btn-danger" id="bot-detail-delete">&#x1F5D1; ${t('modals.bot_mgmt.delete_btn')}</button>
@@ -2362,6 +2368,8 @@ _showBotDetail(botId) {
     const payload = { id: botId, name, channel_id: channelId, callback_url: callbackUrl, callback_secret: callbackSecret };
     const modBox = panel.querySelector('#bot-detail-can-moderate');
     if (modBox && !modBox.disabled) payload.can_moderate = modBox.checked ? 1 : 0;
+    const voiceBox = panel.querySelector('#bot-detail-can-use-voice');
+    if (voiceBox && !voiceBox.disabled) payload.can_use_voice = voiceBox.checked ? 1 : 0;
     this.socket.emit('update-webhook', payload);
   });
   panel.querySelector('#bot-detail-toggle').addEventListener('click', () => {

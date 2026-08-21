@@ -42,6 +42,7 @@ class VoiceManager {
     this.onWebcamStream = null;     // callback(userId, stream|null) — set by app.js
     this.onVoiceJoin = null;        // callback(userId, username)
     this.onVoiceLeave = null;       // callback(userId, username)
+    this.onLocalVoiceLeave = null;  // callback() - app-level local playback cleanup
     this.onTalkingChange = null;    // callback(userId, isTalking)
     this.screenSharers = new Set();  // userIds currently sharing
     this.webcamUsers = new Set();    // userIds currently broadcasting webcam
@@ -1133,6 +1134,7 @@ class VoiceManager {
   }
 
   leave() {
+    if (this.onLocalVoiceLeave) this.onLocalVoiceLeave();
     // Breadcrumb for the maximize/resize "fake disconnect" bug — if leave()
     // runs when the user didn't click Disconnect, the stack tells us why.
     try {
@@ -1236,6 +1238,7 @@ class VoiceManager {
    * Intentionally keeps haven_voice_channel in localStorage for that rejoin.
    */
   _softLeave() {
+    if (this.onLocalVoiceLeave) this.onLocalVoiceLeave();
     if (!this.inVoice) return;
 
     // Stop screen share / webcam (local cleanup only)

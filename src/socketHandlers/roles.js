@@ -220,7 +220,7 @@ module.exports = function register(socket, ctx) {
     // Refresh every live display: member lists re-read getUserHighestRole and
     // clients re-fetch role-driven UI on roles-updated.
     for (const [code] of channelUsers) { emitOnlineUsers(code); }
-    io.emit('roles-updated');
+    io.except('bot-sockets').emit('roles-updated');
 
     cb({ success: true, display: { name, color, icon, visible } });
     _audit({ actor: socket.user, action: 'admin_role_display_update',
@@ -479,7 +479,7 @@ module.exports = function register(socket, ctx) {
       for (const [, s] of io.sockets.sockets) {
         if (s.user && !seen.has(s.user.id)) { seen.add(s.user.id); pushUserRoleState(s.user.id); }
       }
-      io.emit('roles-updated');
+      io.except('bot-sockets').emit('roles-updated');
       cb({ success: true });
     } catch (err) {
       cb({ error: 'Failed to reset roles: ' + err.message });

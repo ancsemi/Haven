@@ -122,10 +122,20 @@ const { setupSocketHandlers, sanitizeText } = require('./src/socketHandlers');
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
 const { initFcm } = require('./src/fcm');
+const {
+  BotAudioManager,
+  inspectAudioFile,
+  MAX_AUDIO_BYTES
+} = require('./src/botAudio');
+const { getAccessibleVoiceChannels, canAccessVoiceChannel } = require('./src/botVoice');
 
 const app = express();
+const BOT_AUDIO_DIR = path.join(UPLOADS_DIR, 'bot-audio');
+fs.mkdirSync(BOT_AUDIO_DIR, { recursive: true });
+let botAudioManager = null;
+let socketRuntime = null;
 
-const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
+const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;
@@ -151,6 +161,29 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
   } catch { /* file locked or already moved */ }
+}
+
+function isUploadStillReferenced(db, relPath) {
+  if (!isSafeUploadRelPath(relPath)) return true;
+  const url = `/uploads/${relPath}`;
+  const like = `%${url.replace(/[\\%_]/g, '\\$&')}%`;
+  const checks = [
+    ['SELECT 1 FROM messages WHERE content LIKE ? ESCAPE \'\\\' OR persona_avatar = ? OR webhook_avatar = ? LIMIT 1', [like, url, url]],
+    ['SELECT 1 FROM users WHERE avatar = ? LIMIT 1', [url]],
+    ['SELECT 1 FROM user_personas WHERE avatar = ? LIMIT 1', [url]],
+    ['SELECT 1 FROM webhooks WHERE avatar_url = ? LIMIT 1', [url]],
+    ['SELECT 1 FROM roles WHERE icon = ? LIMIT 1', [url]],
+    ['SELECT 1 FROM server_settings WHERE value LIKE ? ESCAPE \'\\\' LIMIT 1', [like]],
+    ['SELECT 1 FROM custom_sounds WHERE filename = ? LIMIT 1', [relPath]],
+    ['SELECT 1 FROM custom_emojis WHERE filename = ? LIMIT 1', [relPath]],
+    ['SELECT 1 FROM stickers WHERE filename = ? LIMIT 1', [path.basename(relPath)]]
+  ];
+  for (const [sql, values] of checks) {
+    try {
+      if (db.prepare(sql).get(...values)) return true;
+    } catch { /* optional column/table may not exist on an old database */ }
+  }
+  return false;
 }
 
 // Trust proxy configuration — controls how many reverse-proxy hops to trust
@@ -328,6 +361,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // ── Block access to deleted-attachments folder ──────────
 // Files moved here are no longer part of any message; they should not be accessible.
 app.use('/uploads/deleted-attachments', (req, res) => res.status(404).end());
+// Temporary bot audio is served by a short-lived capability URL below, never
+// by the public, immutable uploads mount.
+app.use('/uploads/bot-audio', (req, res) => res.status(404).end());
 
 // ── Serve uploads from external data directory ──────────
 app.use('/uploads', express.static(UPLOADS_DIR, {
@@ -460,6 +496,31 @@ const upload = multer({
 const fileUpload = multer({
   storage: uploadStorage,
   limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
+});
+
+const botAudioUpload = multer({
+  storage: multer.diskStorage({
+    destination: BOT_AUDIO_DIR,
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.upload`)
+  }),
+  limits: {
+    fileSize: MAX_AUDIO_BYTES,
+    files: 1,
+    fields: 1,
+    parts: 3,
+    fieldSize: 64,
+    fieldNestingDepth: 0,
+    headerPairs: 20
+  },
+  fileFilter: (req, file, cb) => {
+    const allowed = new Set([
+      'audio/mpeg', 'audio/mp3',
+      'audio/wav', 'audio/wave', 'audio/x-wav',
+      'audio/ogg', 'application/ogg'
+    ]);
+    if (allowed.has(String(file.mimetype || '').toLowerCase())) cb(null, true);
+    else cb(new Error('Only MP3, WAV, or OGG audio is allowed'));
+  }
 });
 
 // ── API routes ────────────────────────────────────────────
@@ -2220,6 +2281,10 @@ function pipeBackupArchive(plan, destStream) {
         const walk = (dir, rel) => {
           for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
             if (entry.name === 'deleted-attachments') continue;
+            // Bot audio is an in-memory, temporary queue. Archiving these
+            // files would retain partial/rejected uploads that cannot be
+            // restored because no durable queue metadata exists.
+            if (!rel && entry.name === 'bot-audio') continue;
             const full = path.join(dir, entry.name);
             const sub = rel ? `${rel}/${entry.name}` : entry.name;
             try {
@@ -3210,6 +3275,8 @@ app.post('/api/high-scores', express.json(), (req, res) => {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const rateLimit = require('express-rate-limit');
 const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
+const webhookAudioLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Audio rate limit exceeded' } });
+const webhookAudioControlLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Audio control rate limit exceeded' } });
 app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' }), (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
@@ -3365,7 +3432,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   const uploadRe = UPLOAD_PATH_RE;
   let m;
   while ((m = uploadRe.exec(msg.content || '')) !== null) {
-    moveUploadToDeleted(m[1], uploadDir);
+    if (!isUploadStillReferenced(db, m[1])) moveUploadToDeleted(m[1], uploadDir);
   }
 
   // Find channel code for broadcasting
@@ -3380,10 +3447,230 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   res.json({ success: true });
 });
 
+// ── Bot: Delete the most recent messages in the webhook's channel ──
+app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
+  const webhook = requireModBot(req, res);
+  if (!webhook) return;
+
+  const limit = req.query.limit === undefined ? 20 : Number(req.query.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    return res.status(400).json({ error: 'limit must be an integer between 1 and 100' });
+  }
+
+  const { getDb } = require('./src/database');
+  const db = getDb();
+  const selected = db.prepare(`
+    SELECT id, content, thread_id
+    FROM messages
+    WHERE channel_id = ?
+    ORDER BY id DESC
+    LIMIT ?
+  `).all(webhook.channel_id, limit);
+  if (!selected.length) return res.json({ success: true, deleted: 0, message_ids: [] });
+
+  // Deleting a thread parent cascades to its replies. Include those rows in
+  // cleanup and client notifications so no attachment or open thread is left stale.
+  const selectedIds = new Set(selected.map(message => message.id));
+  const placeholders = selected.map(() => '?').join(',');
+  const replies = db.prepare(`
+    SELECT id, content, thread_id
+    FROM messages
+    WHERE channel_id = ? AND thread_id IN (${placeholders})
+  `).all(webhook.channel_id, ...selected.map(message => message.id));
+  const messages = [...selected];
+  for (const reply of replies) {
+    if (!selectedIds.has(reply.id)) {
+      selectedIds.add(reply.id);
+      messages.push(reply);
+    }
+  }
+
+  const deletePin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
+  const deleteReactions = db.prepare('DELETE FROM reactions WHERE message_id = ?');
+  const deleteMessage = db.prepare('DELETE FROM messages WHERE id = ?');
+  const purge = db.transaction(() => {
+    // Children first avoids relying on cascade order while retaining the same result.
+    for (const message of [...messages].sort((a, b) => b.id - a.id)) {
+      deletePin.run(message.id);
+      deleteReactions.run(message.id);
+      deleteMessage.run(message.id);
+    }
+  });
+
+  try {
+    purge();
+  } catch (err) {
+    console.error('Bot bulk delete error:', err);
+    return res.status(500).json({ error: 'Failed to delete messages' });
+  }
+
+  for (const message of messages) {
+    UPLOAD_PATH_RE.lastIndex = 0;
+    let match;
+    while ((match = UPLOAD_PATH_RE.exec(message.content || '')) !== null) {
+      if (!isUploadStillReferenced(db, match[1])) moveUploadToDeleted(match[1], uploadDir);
+    }
+    if (io) {
+      io.to(`channel:${webhook.channel_code}`).emit('message-deleted', {
+        channelCode: webhook.channel_code,
+        messageId: message.id
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    deleted: messages.length,
+    message_ids: messages.map(message => message.id)
+  });
+});
+
+// Short-lived capability endpoint for the item that is currently playing.
+// Queued, finished, skipped, and stopped files are never downloadable.
+app.get('/api/bot-audio/:playbackId/:accessToken', (req, res) => {
+  if (!/^[a-f0-9-]{36}$/i.test(req.params.playbackId) || !/^[a-f0-9]{48}$/i.test(req.params.accessToken)) {
+    return res.status(404).end();
+  }
+  const playable = botAudioManager?.getPlayable(req.params.playbackId, req.params.accessToken);
+  if (!playable) return res.status(404).end();
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.type(playable.mime);
+  res.sendFile(playable.filePath, err => {
+    if (err && !res.headersSent) res.status(err.statusCode || 404).end();
+  });
+});
+
+// ── Bot: Queue temporary audio for voice participants ─────
+app.post('/api/webhooks/:token/audio', webhookAudioLimiter, uploadDiskGuard, (req, res) => {
+  const webhook = requireVoiceBot(req, res);
+  if (!webhook) return;
+
+  botAudioUpload.single('audio')(req, res, async err => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'audio file is required' });
+
+    let finalPath = null;
+    const discardUpload = async () => {
+      const candidates = [req.file.path, finalPath].filter(Boolean);
+      await Promise.all(candidates.map(filePath => fs.promises.unlink(filePath).catch(() => {})));
+    };
+    try {
+      const requestedCode = req.body?.channel_code;
+      const channel = resolveBotVoiceChannel(webhook, requestedCode);
+      if (!channel) {
+        await discardUpload();
+        return res.status(403).json({ error: 'Bot cannot access this voice channel' });
+      }
+      if (channel.voice_enabled === 0) {
+        await discardUpload();
+        return res.status(409).json({ error: 'Voice is disabled in this channel' });
+      }
+      if (!botAudioManager) {
+        await discardUpload();
+        return res.status(503).json({ error: 'Audio service is not ready' });
+      }
+
+      const inspected = await inspectAudioFile(req.file.path);
+      const playbackId = crypto.randomUUID();
+      const accessToken = crypto.randomBytes(24).toString('hex');
+      const filename = `${playbackId}${inspected.extension}`;
+      finalPath = path.join(BOT_AUDIO_DIR, filename);
+      await fs.promises.rename(req.file.path, finalPath);
+
+      // Upload and metadata probing can outlive a permission change. Check the
+      // token, voice grant, and channel scope again before publishing the item.
+      const currentWebhook = getWebhookByToken(req.params.token);
+      if (!currentWebhook || !currentWebhook.can_use_voice) {
+        await discardUpload();
+        return res.status(currentWebhook ? 403 : 404).json({
+          error: currentWebhook ? 'This bot does not have voice permission' : 'Webhook not found or inactive'
+        });
+      }
+      const currentChannel = resolveBotVoiceChannel(currentWebhook, requestedCode);
+      if (!currentChannel) {
+        await discardUpload();
+        return res.status(403).json({ error: 'Bot cannot access this voice channel' });
+      }
+      if (currentChannel.voice_enabled === 0) {
+        await discardUpload();
+        return res.status(409).json({ error: 'Voice is disabled in this channel' });
+      }
+
+      const queued = botAudioManager.enqueue({
+        playbackId,
+        webhookId: currentWebhook.id,
+        botName: currentWebhook.name,
+        channelCode: currentChannel.code,
+        audioUrl: `/api/bot-audio/${playbackId}/${accessToken}`,
+        accessToken,
+        mime: inspected.mime,
+        filePath: finalPath,
+        durationMs: inspected.durationMs
+      });
+      if (queued.error) {
+        await fs.promises.unlink(finalPath).catch(() => {});
+        finalPath = null;
+        return res.status(409).json({ error: queued.error });
+      }
+
+      res.status(202).json({
+        success: true,
+        playback_id: playbackId,
+        channel_code: currentChannel.code,
+        duration_ms: inspected.durationMs,
+        queued: queued.queued,
+        position: queued.position
+      });
+    } catch (uploadError) {
+      await discardUpload();
+      res.status(400).json({ error: uploadError.message || 'Invalid audio upload' });
+    }
+  });
+});
+
+// Stop this bot's current playback and remove the rest of its queue.
+app.delete('/api/webhooks/:token/audio/current', webhookAudioControlLimiter, (req, res) => {
+  const webhook = requireVoiceBot(req, res);
+  if (!webhook) return;
+  const channel = resolveBotVoiceChannel(webhook, req.query.channel_code);
+  if (!channel) return res.status(403).json({ error: 'Bot cannot access this voice channel' });
+  const result = botAudioManager?.stop(channel.code, webhook.id) || { stopped: false, removed: 0 };
+  res.json({ success: true, ...result, channel_code: channel.code });
+});
+
+// Skip this bot's current item, or its first queued item if another bot is playing.
+app.post('/api/webhooks/:token/audio/skip', webhookAudioControlLimiter, express.json({ limit: '4kb' }), (req, res) => {
+  const webhook = requireVoiceBot(req, res);
+  if (!webhook) return;
+  const channel = resolveBotVoiceChannel(webhook, req.body?.channel_code);
+  if (!channel) return res.status(403).json({ error: 'Bot cannot access this voice channel' });
+  const result = botAudioManager?.skip(channel.code, webhook.id) || { skipped: false };
+  res.json({ success: true, ...result, channel_code: channel.code });
+});
+
+// Voice presence is restricted to the webhook's assigned channel, channels
+// its creator belongs to, and every non-DM channel when the creator is admin.
+app.get('/api/webhooks/:token/voice/channels', webhookLimiter, (req, res) => {
+  const webhook = requireVoiceBot(req, res);
+  if (!webhook) return;
+  const voiceUsers = socketRuntime?.state?.voiceUsers;
+  const channels = getAccessibleVoiceChannels(require('./src/database').getDb(), webhook)
+    .filter(channel => channel.voice_enabled !== 0)
+    .map(channel => {
+      const room = voiceUsers?.get(channel.code);
+      const members = room ? Array.from(room.values()).filter(user => !user.isBot).length : 0;
+      const bots = room ? Array.from(room.values()).filter(user => user.isBot).length : 0;
+      return { code: channel.code, name: channel.name, members, bots };
+    })
+    .sort((a, b) => b.members - a.members || a.name.localeCompare(b.name));
+  res.json({ channels });
+});
+
 // ── Bot: Play a soundboard sound in the webhook's channel ──
 app.post('/api/webhooks/:token/sounds', webhookLimiter, express.json({ limit: '16kb' }), (req, res) => {
-  const webhook = getWebhookByToken(req.params.token);
-  if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
+  const webhook = requireVoiceBot(req, res);
+  if (!webhook) return;
 
   const soundName = typeof req.body.sound === 'string' ? req.body.sound.trim() : '';
   if (!soundName) return res.status(400).json({ error: 'sound name required' });
@@ -3400,12 +3687,13 @@ app.post('/api/webhooks/:token/sounds', webhookLimiter, express.json({ limit: '1
     soundUrl = `/uploads/${custom.filename}`;
   }
 
-  // Find the channel code and broadcast the sound event
-  const channel = getDb().prepare('SELECT code FROM channels WHERE id = ?').get(webhook.channel_id);
-  if (!channel) return res.status(404).json({ error: 'Channel not found' });
+  const channel = resolveBotVoiceChannel(webhook, req.body?.channel_code);
+  if (!channel) return res.status(403).json({ error: 'Bot cannot access this voice channel' });
+  if (channel.voice_enabled === 0) return res.status(409).json({ error: 'Voice is disabled in this channel' });
+  if (channel.soundboard_enabled === 0) return res.status(409).json({ error: 'Soundboard is disabled in this channel' });
 
   if (io) {
-    io.to(`channel:${channel.code}`).emit('play-sound', {
+    io.to(`voice:${channel.code}`).emit('play-sound', {
       channelCode: channel.code,
       soundUrl,
       soundName,
@@ -3594,8 +3882,33 @@ function getWebhookByToken(token) {
   if (!token || typeof token !== 'string' || token.length !== 64) return null;
   const { getDb } = require('./src/database');
   return getDb().prepare(
-    'SELECT id, name, channel_id, callback_url, can_moderate, created_by FROM webhooks WHERE token = ? AND is_active = 1'
+    `SELECT w.id, w.name, w.channel_id, w.callback_url, w.can_moderate,
+            w.can_use_voice, w.created_by, c.code AS channel_code
+     FROM webhooks w
+     JOIN channels c ON c.id = w.channel_id
+     WHERE w.token = ? AND w.is_active = 1`
   ).get(token);
+}
+
+function requireVoiceBot(req, res) {
+  const webhook = getWebhookByToken(req.params.token);
+  if (!webhook) {
+    res.status(404).json({ error: 'Webhook not found or inactive' });
+    return null;
+  }
+  if (!webhook.can_use_voice) {
+    res.status(403).json({ error: 'This bot does not have voice permission' });
+    return null;
+  }
+  return webhook;
+}
+
+function resolveBotVoiceChannel(webhook, requestedCode) {
+  const code = typeof requestedCode === 'string' && requestedCode.trim()
+    ? requestedCode.trim()
+    : webhook.channel_code;
+  if (!/^[a-f0-9]{8}$/i.test(code)) return null;
+  return canAccessVoiceChannel(require('./src/database').getDb(), webhook, code);
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -4456,7 +4769,9 @@ if (process.env.ADMIN_RESET_PASSWORD) {
 
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
-activityRef.engine = setupSocketHandlers(io, db, {
+botAudioManager = new BotAudioManager(io, BOT_AUDIO_DIR);
+socketRuntime = setupSocketHandlers(io, db, {
+  botAudioManager,
   invalidateIpBanCache,
   // Share the cached ban matcher so the socket gate and the HTTP gate agree
   // on both normalization and CIDR handling, and the socket path stops
@@ -4464,7 +4779,8 @@ activityRef.engine = setupSocketHandlers(io, db, {
   isIpBanned,
   // Keep the Referrer-Policy cache in sync when an admin changes it.
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
-}).activity;
+});
+activityRef.engine = socketRuntime.activity;
 registerProcessCleanup();
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────
@@ -4645,6 +4961,7 @@ function runAutoCleanup() {
           }
           // Delete the channel — cascades to messages + read_positions +
           // channel_members + reactions etc. via the existing FKs.
+          botAudioManager?.stopChannel(ch.code);
           db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
           orphansDeleted++;
         } catch (e) {

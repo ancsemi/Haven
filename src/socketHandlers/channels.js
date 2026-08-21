@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 
-const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
-const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
+const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
+const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;
@@ -38,7 +38,8 @@ module.exports = function register(socket, ctx) {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
     handleVoiceLeave, broadcastVoiceUsers, generateChannelCode,
-    applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod
+    applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
+    rotateChannelCode, stopBotAudioForChannelTree
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -253,7 +254,7 @@ module.exports = function register(socket, ctx) {
       // connected sockets so it appears for them without a refresh. (#5271)
       if (data.addAllMembers && !isPrivate) {
         for (const [, s] of io.sockets.sockets) {
-          if (!s.user || s.user.id === socket.user.id) continue;
+          if (!s.user || s.user.isBot || s.user.id === socket.user.id) continue;
           s.join(`channel:${code}`);
           s.emit('channel-created', channel);
         }
@@ -307,9 +308,9 @@ module.exports = function register(socket, ctx) {
       };
 
       for (const [, s] of io.sockets.sockets) {
-        if (s.user) s.join(`channel:${code}`);
+        if (s.user && !s.user.isBot) s.join(`channel:${code}`);
       }
-      io.emit('temp-channel-created', channel);
+      io.except('bot-sockets').emit('temp-channel-created', channel);
       socket.emit('temp-channel-join-voice', { code });
     } catch (err) {
       console.error('Create temp channel error:', err);
@@ -532,27 +533,7 @@ module.exports = function register(socket, ctx) {
         const threshold = channel.code_rotation_interval || 5;
         if (newCount >= threshold) {
           const newCode = generateChannelCode();
-          db.prepare(
-            'UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?'
-          ).run(newCode, channel.id);
-          const oldRoom = `channel:${code}`;
-          const newRoom = `channel:${newCode}`;
-          const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-          if (roomSockets) {
-            for (const sid of [...roomSockets]) {
-              const s = io.sockets.sockets.get(sid);
-              if (s) {
-                s.leave(oldRoom);
-                s.join(newRoom);
-                if (s.currentChannel === code) s.currentChannel = newCode;
-              }
-            }
-          }
-          if (channelUsers.has(code)) {
-            channelUsers.set(newCode, channelUsers.get(code));
-            channelUsers.delete(code);
-          }
-          io.to(newRoom).emit('channel-code-rotated', { channelId: channel.id, oldCode: code, newCode });
+          rotateChannelCode(channel.id, code, newCode);
           channel.code = newCode;
         } else {
           db.prepare('UPDATE channels SET code_rotation_counter = ? WHERE id = ?').run(newCount, channel.id);
@@ -706,6 +687,7 @@ module.exports = function register(socket, ctx) {
       }
     } catch { /* best-effort cleanup — never block the delete */ }
 
+    stopBotAudioForChannelTree(channel.id);
     const deleteAll = db.transaction((chId) => {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
       db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
@@ -887,6 +869,7 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
+      stopBotAudioForChannelTree(channel.id);
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(channel.id);
       db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
@@ -1459,29 +1442,7 @@ module.exports = function register(socket, ctx) {
     if (!channel) return;
     const oldCode = channel.code;
     const newCode = generateChannelCode();
-    db.prepare('UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?').run(newCode, channelId);
-    const oldRoom = `channel:${oldCode}`;
-    const newRoom = `channel:${newCode}`;
-    const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-    if (roomSockets) {
-      for (const sid of [...roomSockets]) {
-        const s = io.sockets.sockets.get(sid);
-        if (s) {
-          s.leave(oldRoom);
-          s.join(newRoom);
-          if (s.currentChannel === oldCode) s.currentChannel = newCode;
-        }
-      }
-    }
-    if (channelUsers.has(oldCode)) {
-      channelUsers.set(newCode, channelUsers.get(oldCode));
-      channelUsers.delete(oldCode);
-    }
-    if (voiceUsers.has(oldCode)) {
-      voiceUsers.set(newCode, voiceUsers.get(oldCode));
-      voiceUsers.delete(oldCode);
-    }
-    io.to(newRoom).emit('channel-code-rotated', { channelId, oldCode, newCode });
+    rotateChannelCode(channelId, oldCode, newCode);
   });
 
   // ── Invite user to channel ──────────────────────────────
@@ -1666,6 +1627,7 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    stopBotAudioForChannelTree(channel.id);
     const deleteAll = db.transaction((chId) => {
       db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
       db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);

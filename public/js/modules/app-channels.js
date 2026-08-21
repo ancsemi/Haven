@@ -3068,7 +3068,8 @@ _updateChannelVoiceIndicators() {
         // Self-talking state is driven by the local analyser directly (not
         // server echo), so talkingState.get('self') reflects real-time mic level.
         const isTalking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
-        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}</div>`;
+        const botBadge = u.isBot ? '<span class="bot-badge" title="Bot is connected and can receive voice audio">BOT</span>' : '';
+        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}${botBadge}</div>`;
       }).join('');
       // Right-click on a left-sidebar voice user → same voice options menu
       userList.querySelectorAll('.channel-voice-user').forEach(item => {

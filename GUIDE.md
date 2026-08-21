@@ -858,7 +858,7 @@ Click the **🔐** button in the DM header to view your **safety number** — a 
 
 ## 🤖 Bot & Webhook Developer Guide
 
-Haven has a built-in bot API powered by webhooks. Bots can send messages, delete messages, play soundboard sounds, and register custom slash commands.
+Haven has a built-in bot API powered by webhooks. Bots can send and delete messages, queue dynamic voice audio, inspect voice presence, join voice as WebRTC peers, play soundboard sounds, and register custom slash commands.
 
 > **Looking for ready-made bots and webhooks?** The community library at [**ancsemi/haven-community**](https://github.com/ancsemi/haven-community) collects user-contributed integrations you can deploy as-is — a GitHub releases poster, etc. PRs welcome there if you've built one of your own. See its [`CONTRIBUTING.md`](https://github.com/ancsemi/haven-community/blob/main/CONTRIBUTING.md) for how to submit.
 
@@ -867,6 +867,8 @@ Haven has a built-in bot API powered by webhooks. Bots can send messages, delete
 1. Go to **Settings → Server Admin Settings → Bots** (or open a channel's settings and look for the webhook/bot option)
 2. Create a new webhook — give it a name, optionally set an avatar URL and a callback URL
 3. Copy the **Webhook Token** (64-character hex string) — this is your bot's API key
+
+Voice access is disabled by default. A server admin must enable **Allow this bot to use voice channels** before the audio, voice presence, soundboard, or WebRTC gateway APIs can be used. This permission allows the bot to receive live microphone audio, so grant it only to trusted integrations.
 
 ### Sending Messages
 
@@ -912,6 +914,122 @@ DELETE https://your-server.com/api/webhooks/<token>/messages/<message_id>
 
 Bots can delete any message in their assigned channel. Returns `{ "success": true }`.
 
+Bots with the **Moderation** permission can delete recent messages in bulk:
+
+```
+DELETE https://your-server.com/api/webhooks/<token>/messages?limit=20
+```
+
+`limit` must be between 1 and 100. The operation is restricted to the webhook's assigned channel, removes reactions and pins in one transaction, cleans up attachments, and emits the normal `message-deleted` event for each affected message. Deleting a thread parent also deletes its replies, so `deleted` can be greater than `limit`.
+
+### Dynamic Voice Audio
+
+Upload an MP3, WAV, or OGG file as multipart form data:
+
+```
+POST https://your-server.com/api/webhooks/<token>/audio
+Content-Type: multipart/form-data
+
+audio=@response.mp3
+channel_code=abcd1234
+```
+
+Example with curl:
+
+```bash
+curl -F "audio=@response.mp3" \
+  -F "channel_code=abcd1234" \
+  "https://your-server.com/api/webhooks/<token>/audio"
+```
+
+`channel_code` is optional and defaults to the webhook's assigned channel. A non-admin webhook creator can target only that channel and other channels they belong to. Webhooks created by an admin can target any non-DM voice channel.
+
+The server validates the file's magic bytes and parsed duration. Files are limited to 10 MB and 5 minutes, queues are limited to 25 items per bot, and temporary files are deleted after playback. Playback is serialized per channel and delivered only to users currently connected to that voice channel.
+
+Response:
+
+```json
+{
+  "success": true,
+  "playback_id": "9d6ee1a8-7d1c-47ff-a667-b1fb46c06002",
+  "channel_code": "abcd1234",
+  "duration_ms": 1820,
+  "queued": false,
+  "position": 0
+}
+```
+
+Skip the bot's current item, or its first queued item if another bot currently owns channel playback:
+
+```
+POST /api/webhooks/<token>/audio/skip
+Content-Type: application/json
+
+{ "channel_code": "abcd1234" }
+```
+
+Stop the bot's current item and clear the rest of its queue:
+
+```
+DELETE /api/webhooks/<token>/audio/current?channel_code=abcd1234
+```
+
+### Voice Channel Presence
+
+```
+GET https://your-server.com/api/webhooks/<token>/voice/channels
+```
+
+The result is ordered by active human member count, highest first:
+
+```json
+{
+  "channels": [
+    { "code": "abcd1234", "name": "Gaming", "members": 4, "bots": 1 }
+  ]
+}
+```
+
+The same channel access rules as dynamic audio apply. DM channels and voice-disabled channels are never returned.
+
+### Bot Voice Gateway
+
+For bidirectional voice, connect a Socket.IO 4.x client to the Haven origin using the webhook token as `botToken`:
+
+```js
+import { io } from 'socket.io-client';
+
+const socket = io('https://your-server.com', {
+  auth: { botToken: process.env.HAVEN_WEBHOOK_TOKEN }
+});
+
+socket.on('bot-session', session => {
+  console.log('Bot voice user ID:', session.id);
+  socket.emit('voice-join', { code: 'abcd1234' }, result => {
+    if (result.error) throw new Error(result.error);
+  });
+});
+```
+
+The gateway authenticates the webhook as a visible bot participant. Haven clients show a `BOT` badge while it is connected and listening.
+
+The signaling protocol uses the same events as browser participants:
+
+| Direction | Event | Payload |
+|---|---|---|
+| Haven to bot | `bot-session` | `{ id, webhookId, username, channelCode }` |
+| Bot to Haven | `voice-join` | `{ code }` plus an acknowledgement callback |
+| Haven to bot | `voice-existing-users` | `{ channelCode, users, voiceBitrate }` |
+| Either direction | `voice-offer` | `{ code, targetUserId, offer }` when sending |
+| Either direction | `voice-answer` | `{ code, targetUserId, answer }` when sending |
+| Either direction | `voice-ice-candidate` | `{ code, targetUserId, candidate }` when sending |
+| Bot to Haven | `voice-speaking` | `{ speaking }` |
+| Bot to Haven | `voice-mute-state` | `{ code, muted }` |
+| Bot to Haven | `voice-leave` | `{ code }` |
+| Haven to bot | `channel-code-rotated` | `{ channelId, oldCode, newCode }` |
+
+Incoming offers, answers, and ICE candidates contain `from: { id, username, isBot }` and `channelCode`. The bot creates one `RTCPeerConnection` per participant. After `voice-existing-users`, it should create offers for those users; for users who join later, it must accept their offers. Remote audio tracks can be decoded for STT, and a bot-generated TTS audio track can be added to each peer connection. Codec conversion and STT/TTS remain in the bot process; Haven provides authenticated presence and signaling without routing unencrypted media through the server.
+
 ### Playing Soundboard Sounds
 
 ```
@@ -923,7 +1041,7 @@ Content-Type: application/json
 }
 ```
 
-Plays the named sound for all users currently viewing the bot's channel. Use `GET /api/sounds` (with a Bearer token) to list available sound names.
+Plays the named sound locally for all users currently connected to the target voice channel. `channel_code` can be supplied in the JSON body and follows the same access rules as dynamic audio. Use `GET /api/sounds` (with a Bearer token) to list available sound names.
 
 ### Registering Slash Commands
 
@@ -975,11 +1093,24 @@ When a user types `/leaderboard`, Haven sends a POST to your bot's callback URL 
 
 ### Rate Limits
 
-All webhook endpoints are rate-limited to **30 requests per minute** per IP.
+Most webhook endpoints are rate-limited to **30 requests per minute** per IP. Dynamic audio uploads have a separate limit of **10 per minute**, and audio controls have a separate limit of **30 per minute**.
 
 ### Callback Payloads
 
-If your webhook has a `callback_url` and `callback_secret` configured, Haven will POST command invocations to your URL. The payload includes an HMAC signature in the `X-Haven-Signature` header that you should verify using your callback secret.
+If your webhook has a `callback_url` and `callback_secret` configured, Haven will POST subscribed events and command invocations to your URL. Every callback includes `event_id`, `event`, `timestamp`, and `channelCode`, plus an `X-Haven-Event` header. Slash commands also include `invocation_id` for execution deduplication.
+
+Event callbacks use the normalized signature in both headers:
+
+```
+X-Haven-Signature: sha256=<lowercase hexadecimal HMAC>
+X-Haven-Signature-256: sha256=<lowercase hexadecimal HMAC>
+```
+
+For backward compatibility, slash-command callbacks retain the original raw
+hexadecimal value in `X-Haven-Signature`. Their normalized value is available
+in `X-Haven-Signature-256`; new integrations should prefer that header.
+
+Compute HMAC-SHA256 over the exact raw request body using the callback secret and compare it in constant time. A retried delivery keeps the same `event_id`, so integrations can safely deduplicate it.
 
 ---
 

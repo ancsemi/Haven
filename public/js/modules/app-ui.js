@@ -1393,6 +1393,8 @@ _setupUI() {
     if (this._renegBudget) delete this._renegBudget[userId];
   };
 
+  this.voice.onLocalVoiceLeave = () => this._stopBotAudioPlayback();
+
   // Wire up AFK auto-move
   this.voice.onAfkMove = (channelCode) => {
     this._showToast('Moved to AFK sub-channel due to inactivity', 'info');

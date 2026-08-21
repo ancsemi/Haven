@@ -42,6 +42,7 @@ async _joinVoice() {
   let success = false;
   try {
   // voice.join() auto-leaves old channel if connected
+  if (this.voice?.inVoice && this.voice.currentChannel !== this.currentChannel) this._stopBotAudioPlayback();
   success = await this.voice.join(this.currentChannel);
   if (success) {
     const joinedCode = this.currentChannel;
@@ -121,7 +122,7 @@ _leaveVoice() {
     delete this.voiceCounts[leftCode];
     delete this.voiceChannelUsers[leftCode];
     // Clear the right VOICE panel whenever it was bound to the channel we
-    // just left — including the case where we're reading a different text
+  // just left — including the case where we're reading a different text
     // channel (DM etc.) while the panel was still showing the VC roster.
     if (this.currentChannel === leftCode || this._lastVoiceUsersChannel === leftCode) {
       this._renderVoiceUsers([], leftCode);
@@ -132,6 +133,37 @@ _leaveVoice() {
   // Close the soundboard panel/popup/modal — sounds can't route to VC
   // anymore, and the panel doubles as a 'you're in voice' affordance.
   this._closeSoundboardForVoiceLeave?.();
+},
+
+_stopBotAudioPlayback() {
+  if (this._botAudioPlayback?.audio) {
+    try {
+      this._botAudioPlayback.audio.pause();
+      this._botAudioPlayback.audio.src = '';
+    } catch {}
+  }
+  this._botAudioPlayback = null;
+  for (const audio of this._activeSoundboardAudio || []) {
+    try {
+      audio.pause();
+      audio.src = '';
+    } catch {}
+  }
+  this._activeSoundboardAudio?.clear();
+},
+
+_syncBotAudioVolume() {
+  const audio = this._botAudioPlayback?.audio;
+  if (!audio) return;
+  const volume = Math.max(0, Math.min(1, this.notifications.volume * this.notifications.volume));
+  audio.volume = this.voice?.isDeafened ? 0 : volume;
+},
+
+_syncSoundboardAudioVolume() {
+  const volume = Math.max(0, Math.min(1, this.notifications.volume * this.notifications.volume));
+  for (const audio of this._activeSoundboardAudio || []) {
+    audio.volume = this.voice?.isDeafened ? 0 : volume;
+  }
 },
 
 _toggleMute() {
@@ -189,6 +221,8 @@ _toggleDeafen() {
       this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
     }
   }
+  this._syncBotAudioVolume();
+  this._syncSoundboardAudioVolume();
   this._syncMuteDeafenButtons();
   this._updateVoiceBar();
 },

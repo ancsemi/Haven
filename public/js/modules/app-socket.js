@@ -1223,7 +1223,8 @@ _setupSocketListeners() {
     // panel guard above.
     const usersForSidebar = users.map(u => ({
       id: u.id, username: u.username,
-      isMuted: !!u.isMuted, isDeafened: !!u.isDeafened
+      isMuted: !!u.isMuted, isDeafened: !!u.isDeafened,
+      isBot: !!u.isBot, isListening: !!u.isListening
     }));
     const skipEmptyWipe = usersForSidebar.length === 0 && isInVoice &&
       Array.isArray(this.voiceChannelUsers?.[data.channelCode]) &&
@@ -1581,6 +1582,26 @@ _setupSocketListeners() {
 
   // ── Channel code rotated (dynamic codes) ────────
   this.socket.on('channel-code-rotated', (data) => {
+    const migrateObjectKey = store => {
+      if (!store || !Object.prototype.hasOwnProperty.call(store, data.oldCode)) return;
+      if (!Object.prototype.hasOwnProperty.call(store, data.newCode)) store[data.newCode] = store[data.oldCode];
+      delete store[data.oldCode];
+    };
+    migrateObjectKey(this.unreadCounts);
+    migrateObjectKey(this.voiceCounts);
+    migrateObjectKey(this.voiceChannelUsers);
+    migrateObjectKey(this._threadMentions);
+    this._persistThreadMentions?.();
+    try {
+      if (localStorage.getItem('haven_voice_channel') === data.oldCode) {
+        localStorage.setItem('haven_voice_channel', data.newCode);
+      }
+      for (const key of ['haven_muted_channels', 'haven_hidden_channels']) {
+        const values = JSON.parse(localStorage.getItem(key) || '[]');
+        if (!Array.isArray(values) || !values.includes(data.oldCode)) continue;
+        localStorage.setItem(key, JSON.stringify([...new Set(values.map(code => code === data.oldCode ? data.newCode : code))]));
+      }
+    } catch { /* localStorage may be unavailable or contain stale data */ }
     const ch = this.channels.find(c => c.id === data.channelId);
     if (ch) {
       const wasViewing = this.currentChannel === data.oldCode;
@@ -1608,6 +1629,7 @@ _setupSocketListeners() {
           this.voice._softLeftChannel = data.newCode;
         }
       }
+      if (this._lastVoiceUsersChannel === data.oldCode) this._lastVoiceUsersChannel = data.newCode;
       this._renderChannels();
       // If currently viewing this channel, update the header code display
       if (this.currentChannel === data.newCode) {
@@ -1838,9 +1860,57 @@ _setupSocketListeners() {
 
   // ── Bot soundboard trigger ───────────────────────
   this.socket.on('play-sound', (data) => {
-    if (data.channelCode === this.currentChannel && data.soundUrl) {
-      this._playSoundFile(data.soundUrl);
-    }
+    if (!data?.soundUrl || !this.voice?.inVoice || this.voice.currentChannel !== data.channelCode) return;
+    const channel = this.channels?.find(item => item.code === data.channelCode);
+    if (channel?.soundboard_enabled === 0) return;
+    try {
+      const audio = new Audio(data.soundUrl);
+      if (!this._activeSoundboardAudio) this._activeSoundboardAudio = new Set();
+      this._activeSoundboardAudio.add(audio);
+      const forgetAudio = () => this._activeSoundboardAudio?.delete(audio);
+      audio.addEventListener('ended', forgetAudio, { once: true });
+      audio.addEventListener('error', forgetAudio, { once: true });
+      this._syncSoundboardAudioVolume();
+      audio.play().catch(forgetAudio);
+    } catch {}
+  });
+
+  // Dynamic bot audio is server-queued and sent only to current voice
+  // participants. Play it locally: mixing it into every participant's
+  // outgoing WebRTC stream would make everyone hear one duplicate per peer.
+  this.socket.on('bot-audio-play', (data) => {
+    if (!data?.playbackId || !data.audioUrl || !this.voice?.inVoice || this.voice.currentChannel !== data.channelCode) return;
+    if (this._botAudioPlayback?.playbackId === data.playbackId) return;
+    try {
+      if (this._botAudioPlayback?.audio) {
+        this._botAudioPlayback.audio.pause();
+        this._botAudioPlayback.audio.src = '';
+      }
+      const audio = new Audio(data.audioUrl);
+      const offsetSeconds = Math.max(0, Number(data.offsetMs) || 0) / 1000;
+      if (offsetSeconds > 0) {
+        audio.addEventListener('loadedmetadata', () => {
+          if (Number.isFinite(audio.duration)) audio.currentTime = Math.min(offsetSeconds, Math.max(0, audio.duration - 0.05));
+        }, { once: true });
+      }
+      this._botAudioPlayback = { playbackId: data.playbackId, audio };
+      this._syncBotAudioVolume();
+      audio.addEventListener('ended', () => {
+        if (this._botAudioPlayback?.playbackId === data.playbackId) this._botAudioPlayback = null;
+      }, { once: true });
+      audio.play().catch(() => {
+        if (this._botAudioPlayback?.playbackId === data.playbackId) this._botAudioPlayback = null;
+      });
+    } catch {}
+  });
+
+  this.socket.on('bot-audio-stop', (data) => {
+    if (!data?.playbackId || this._botAudioPlayback?.playbackId !== data.playbackId) return;
+    try {
+      this._botAudioPlayback.audio.pause();
+      this._botAudioPlayback.audio.src = '';
+    } catch {}
+    this._botAudioPlayback = null;
   });
 
   // ── Messages moved (source channel) ──────────────

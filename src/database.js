@@ -949,6 +949,9 @@ function initDatabase() {
     // 3.18.0 — opt-in moderation actions (kick/ban/mute) for bot webhooks.
     // Defaults to 0 so existing bots cannot suddenly moderate. Per #5397.
     { name: 'can_moderate',         sql: "ALTER TABLE webhooks ADD COLUMN can_moderate INTEGER DEFAULT 0" },
+    // Voice access can expose live microphone audio, so it is separately
+    // opt-in and may only be granted by a server admin.
+    { name: 'can_use_voice',        sql: "ALTER TABLE webhooks ADD COLUMN can_use_voice INTEGER DEFAULT 0" },
   ];
   for (const col of webhookCallbackCols) {
     try { db.prepare(`SELECT ${col.name} FROM webhooks LIMIT 0`).get(); } catch { db.exec(col.sql); }

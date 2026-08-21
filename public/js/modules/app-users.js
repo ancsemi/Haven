@@ -1101,6 +1101,9 @@ _renderVoiceUsers(users, channelCode) {
     const hasWebcam = this.voice && this.voice.webcamUsers && this.voice.webcamUsers.has(u.id);
 
     let streamBadge = '';
+    if (u.isBot) {
+      streamBadge = `<span class="bot-badge" title="Bot is connected and can receive voice audio">BOT</span>`;
+    }
     if (isStreaming) {
       const myStream = streams.find(s => s.sharerId === u.id);
       const viewers = myStream ? myStream.viewers : [];
@@ -1137,7 +1140,7 @@ _renderVoiceUsers(users, channelCode) {
       ? `<span class="voice-status-icons">${statusIcons.join('')}</span>`
       : '';
     return `
-      <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
+      <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? '1' : '0'}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
         ${streamBadge}
@@ -1164,6 +1167,7 @@ _renderVoiceUsers(users, channelCode) {
       nameEl.style.cursor = 'pointer';
       nameEl.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (item.dataset.isBot === '1') return;
         const userId = parseInt(item.dataset.userId);
         if (!isNaN(userId)) {
           this._profilePopupAnchor = nameEl;

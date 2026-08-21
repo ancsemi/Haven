@@ -6,7 +6,7 @@ const { utcStamp, isInt } = require('./helpers');
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit,
-          invalidateIpBanCache } = ctx;
+          invalidateIpBanCache, stopBotAudioForChannelTree } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
   const _invalidateIpCache = (typeof invalidateIpBanCache === 'function') ? invalidateIpBanCache : () => {};
@@ -664,6 +664,7 @@ module.exports = function register(socket, ctx) {
         for (const dm of dmChannels) {
           const remaining = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE channel_id = ?').get(dm.id);
           if (remaining.cnt === 0) {
+            stopBotAudioForChannelTree(dm.id);
             db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(dm.id);
             _runIfTable('read_positions', 'DELETE FROM read_positions WHERE channel_id = ?', dm.id);
             db.prepare('DELETE FROM channels WHERE id = ?').run(dm.id);

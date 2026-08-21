@@ -3,6 +3,10 @@
 const crypto = require('crypto');
 const path   = require('path');
 const fs     = require('fs');
+const dns    = require('dns').promises;
+const net    = require('net');
+const http   = require('http');
+const https  = require('https');
 const webpush = require('web-push');
 
 const { verifyToken, generateChannelCode, generateToken } = require('../auth');
@@ -15,6 +19,8 @@ const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
+const { getBotVoiceAccessFailure, registerBotVoiceSocket } = require('../botVoice');
+const { persistChannelCodeRotation, rotateLiveChannelState } = require('../channelRotation');
 
 const { createActivity } = require('../activity');
 
@@ -35,6 +41,7 @@ const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 function setupSocketHandlers(io, db, opts = {}) {
   const invalidateIpBanCache = (typeof opts.invalidateIpBanCache === 'function') ? opts.invalidateIpBanCache : () => {};
   const onReferrerPolicyChange = (typeof opts.onReferrerPolicyChange === 'function') ? opts.onReferrerPolicyChange : () => {};
+  const botAudioManager = opts.botAudioManager || null;
 
   // ── Client IP + ban matching (v3.42.0) ───────────────────
   // Both delegate to the same helpers the HTTP layer uses so the two gates
@@ -112,7 +119,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
   const streamViewers       = new Map(); // "code:sharerId" → Set<viewerUserId>
   const slowModeTracker     = new Map(); // "slow:{userId}:{channelId}" → timestamp
-  const pendingTempDelete   = new Map(); // code → timeout handle (grace-period before deleting temp-voice channel)
+  const pendingTempDelete   = new Map(); // code → { timer, code } (grace-period before deleting temp-voice channel)
   const pendingVoiceLeave   = new Map(); // `${userId}:${code}` → { timer, oldSocketId } (grace-period before evicting a transiently-disconnected voice user)
 
   const state = {
@@ -284,7 +291,9 @@ function setupSocketHandlers(io, db, opts = {}) {
   function syncMusicActivity(code) {
     if (!state.activity) return;
     const room = voiceUsers.get(code);
-    const listeners = room ? Array.from(room.keys()) : [];
+    const listeners = room
+      ? Array.from(room.values()).filter(user => !user.isBot).map(user => user.id)
+      : [];
     const music = activeMusic.get(code);
 
     if (!music || music.playbackState?.isPlaying === false) {
@@ -572,7 +581,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     _broadcastPending = setTimeout(() => {
       _broadcastPending = null;
       for (const [, s] of io.sockets.sockets) {
-        if (s.user) {
+        if (s.user && !s.user.isBot) {
           s.emit('channels-list', getEnrichedChannels(s.user.id, s.user.isAdmin, null));
         }
       }
@@ -641,12 +650,13 @@ function setupSocketHandlers(io, db, opts = {}) {
       try {
         const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
         if (ch && ch.is_temp_voice) {
+          stopBotAudioForChannelTree(ch.id);
           db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
           db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
           db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
           db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
           db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-          io.emit('channel-deleted', { code, reason: 'temp-empty' });
+          io.except('bot-sockets').emit('channel-deleted', { code, reason: 'temp-empty' });
           channelUsers.delete(code);
           console.log(`[Temporary] Temp voice channel "${code}" deleted (pruned empty)`);
         }
@@ -677,21 +687,26 @@ function setupSocketHandlers(io, db, opts = {}) {
     const room = voiceUsers.get(code);
     const users = room
       ? Array.from(room.values()).map(u => {
-          const role = getUserHighestRole(u.id, channelId);
-          const roles = getUserAllRoles(u.id, channelId);
+          const role = u.isBot ? null : getUserHighestRole(u.id, channelId);
+          const roles = u.isBot ? [] : getUserAllRoles(u.id, channelId);
           return {
             id: u.id, username: u.username,
             roleColor: role ? role.color : null,
             roleName: role ? role.name : null,
             roles,
-            isMuted: u.isMuted || false, isDeafened: u.isDeafened || false
+            isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+            isBot: !!u.isBot, isListening: !!u.isListening
           };
         })
       : [];
     io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', { channelCode: code, users });
-    io.emit('voice-count-update', {
+    io.except('bot-sockets').emit('voice-count-update', {
       code, count: users.length,
-      users: users.map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }))
+      users: users.map(u => ({
+        id: u.id, username: u.username,
+        isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+        isBot: !!u.isBot, isListening: !!u.isListening
+      }))
     });
   }
 
@@ -886,24 +901,27 @@ function setupSocketHandlers(io, db, opts = {}) {
       syncMusicActivity(code);
       musicQueues.delete(code);
 
+      const pendingDeletion = { timer: null, code };
       const doDeleteTempChannel = () => {
+        const deleteCode = pendingDeletion.code;
         try {
-          const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
+          const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(deleteCode);
           if (ch && ch.is_temp_voice) {
             // Double-check the room is still empty — someone may have rejoined
             // during the grace period.
-            const currentRoom = voiceUsers.get(code);
+            const currentRoom = voiceUsers.get(deleteCode);
             if (currentRoom && currentRoom.size > 0) return;
+            stopBotAudioForChannelTree(ch.id);
             db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
             db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
             db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
             db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
             db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-            io.emit('channel-deleted', { code, reason: 'temp-empty' });
-            channelUsers.delete(code);
-            voiceUsers.delete(code);
-            pendingTempDelete.delete(code);
-            console.log(`[Temporary] Temp voice channel "${code}" deleted (everyone left)`);
+            io.except('bot-sockets').emit('channel-deleted', { code: deleteCode, reason: 'temp-empty' });
+            channelUsers.delete(deleteCode);
+            voiceUsers.delete(deleteCode);
+            pendingTempDelete.delete(deleteCode);
+            console.log(`[Temporary] Temp voice channel "${deleteCode}" deleted (everyone left)`);
           }
         } catch { /* column may not exist yet */ }
       };
@@ -913,14 +931,14 @@ function setupSocketHandlers(io, db, opts = {}) {
         // This prevents the channel from vanishing when a socket briefly
         // drops and immediately reconnects (e.g. network hiccup, or the
         // Desktop app's memory-based page reload).
-        if (pendingTempDelete.has(code)) clearTimeout(pendingTempDelete.get(code));
-        const timer = setTimeout(doDeleteTempChannel, 8000);
-        pendingTempDelete.set(code, timer);
+        if (pendingTempDelete.has(code)) clearTimeout(pendingTempDelete.get(code).timer);
+        pendingDeletion.timer = setTimeout(doDeleteTempChannel, 8000);
+        pendingTempDelete.set(code, pendingDeletion);
         console.log(`[Temporary] Temp voice channel "${code}" grace period started (socket disconnect)`);
       } else {
         // Intentional leave — cancel any pending grace-period timer and delete immediately.
         if (pendingTempDelete.has(code)) {
-          clearTimeout(pendingTempDelete.get(code));
+          clearTimeout(pendingTempDelete.get(code).timer);
           pendingTempDelete.delete(code);
         }
         doDeleteTempChannel();
@@ -933,6 +951,60 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
     if (!stillInVoice) voiceLastActivity.delete(socket.user.id);
   }
+
+  function revokeBotVoiceAccess(webhookId, reason = 'Bot voice access was revoked') {
+    botAudioManager?.stopWebhook(webhookId);
+    for (const [, botSocket] of Array.from(io.sockets.sockets.entries())) {
+      if (!botSocket.user?.isBot || botSocket.user.webhookId !== webhookId) continue;
+      for (const [code, room] of Array.from(voiceUsers.entries())) {
+        if (room.get(botSocket.user.id)?.socketId === botSocket.id) {
+          handleVoiceLeave(botSocket, code);
+        }
+      }
+      botSocket.emit('voice-kicked', { channelCode: botSocket.user.channelCode, reason });
+      botSocket.disconnect(true);
+    }
+  }
+
+  function stopBotAudioForChannelTree(channelId) {
+    const channels = db.prepare(`
+      WITH RECURSIVE doomed(id, code) AS (
+        SELECT id, code FROM channels WHERE id = ?
+        UNION ALL
+        SELECT c.id, c.code FROM channels c JOIN doomed d ON c.parent_channel_id = d.id
+      )
+      SELECT code FROM doomed
+    `).all(channelId);
+    for (const channel of channels) botAudioManager?.stopChannel(channel.code);
+  }
+
+  function reconcileBotVoiceAccess() {
+    const scopes = new Map();
+    const addScope = (webhookId, channelCode) => {
+      if (!Number.isInteger(webhookId)) return;
+      if (!scopes.has(webhookId)) scopes.set(webhookId, new Set());
+      if (typeof channelCode === 'string' && channelCode) scopes.get(webhookId).add(channelCode);
+    };
+
+    for (const [, connectedSocket] of io.sockets.sockets) {
+      if (!connectedSocket.user?.isBot) continue;
+      addScope(connectedSocket.user.webhookId, null);
+      for (const room of connectedSocket.rooms) {
+        if (room.startsWith('voice:')) addScope(connectedSocket.user.webhookId, room.slice(6));
+      }
+    }
+    for (const scope of botAudioManager?.getScopes() || []) {
+      addScope(scope.webhookId, scope.channelCode);
+    }
+
+    for (const [webhookId, channelCodes] of scopes) {
+      const reason = getBotVoiceAccessFailure(db, webhookId, channelCodes);
+      if (reason) revokeBotVoiceAccess(webhookId, reason);
+    }
+  }
+
+  const botVoiceReconciliationTimer = setInterval(reconcileBotVoiceAccess, 2000);
+  botVoiceReconciliationTimer.unref?.();
 
   // ── Push notification helper ────────────────────────────
   function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent) {
@@ -1018,18 +1090,91 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── Webhook callback helper ─────────────────────────────
-  // SSRF guard: reject private/internal IPs in callback URLs
+  function isBlockedCallbackIp(address) {
+    let ip = String(address || '').toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
+    if (ip.startsWith('::ffff:')) ip = ip.slice(7);
+    const version = net.isIP(ip);
+    if (version === 4) {
+      const parts = ip.split('.').map(Number);
+      const [a, b, c] = parts;
+      return a === 0 || a === 10 || a === 127 ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+        (a === 192 && b === 168) ||
+        (a === 198 && (b === 18 || b === 19)) ||
+        (a === 198 && b === 51 && c === 100) ||
+        (a === 203 && b === 0 && c === 113) || a >= 224;
+    }
+    if (version === 6) {
+      return ip === '::' || ip === '::1' || ip.startsWith('fc') || ip.startsWith('fd') ||
+        /^fe[89a-f]/.test(ip) || ip.startsWith('ff') || ip.startsWith('2001:db8:');
+    }
+    return true;
+  }
+
+  // Fast syntax/literal-IP guard used before callbacks are queued.
   function isSafeCallbackUrl(urlString) {
     try {
       const u = new URL(urlString);
-      const h = u.hostname.toLowerCase();
-      if (['localhost','127.0.0.1','[::1]','0.0.0.0','::'].includes(h)) return false;
-      if (h.startsWith('10.') || h.startsWith('192.168.')) return false;
-      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
-      if (h === '169.254.169.254') return false;
-      if (h.endsWith('.local') || h.endsWith('.internal')) return false;
-      return /^https?:$/i.test(u.protocol);
+      const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+      if (!/^https?:$/i.test(u.protocol) || u.username || u.password) return false;
+      if (!h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return false;
+      if (net.isIP(h)) return !isBlockedCallbackIp(h);
+      return h.includes('.');
     } catch { return false; }
+  }
+
+  async function isSafeCallbackDestination(urlString) {
+    if (!isSafeCallbackUrl(urlString)) return null;
+    try {
+      const url = new URL(urlString);
+      const hostname = url.hostname.replace(/^\[|\]$/g, '');
+      if (net.isIP(hostname)) {
+        return isBlockedCallbackIp(hostname) ? null : { url, address: hostname, family: net.isIP(hostname) };
+      }
+      const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+      if (!addresses.length || addresses.some(entry => isBlockedCallbackIp(entry.address))) return null;
+      return { url, address: addresses[0].address, family: addresses[0].family };
+    } catch {
+      return null;
+    }
+  }
+
+  function postWebhook(destination, payload, headers, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const transport = destination.url.protocol === 'https:' ? https : http;
+      const request = transport.request(destination.url, {
+        method: 'POST',
+        agent: false,
+        headers: { ...headers, 'Content-Length': Buffer.byteLength(payload) },
+        // Use the exact address that passed validation. Keeping the original
+        // URL preserves the Host header and TLS SNI while preventing a second
+        // DNS answer from rebinding the request to a private address.
+        lookup: (_hostname, options, callback) => {
+          if (options?.all) {
+            callback(null, [{ address: destination.address, family: destination.family }]);
+          } else {
+            callback(null, destination.address, destination.family);
+          }
+        }
+      }, response => {
+        response.resume();
+        resolve({ ok: response.statusCode >= 200 && response.statusCode < 300, status: response.statusCode });
+        response.once('close', () => clearTimeout(deadline));
+      });
+      const deadline = setTimeout(() => {
+        request.destroy(new Error('Webhook callback exceeded its 10 second deadline'));
+      }, timeoutMs);
+      deadline.unref?.();
+      request.setTimeout(timeoutMs, () => request.destroy(new Error('Webhook callback timed out')));
+      request.on('error', error => {
+        clearTimeout(deadline);
+        reject(error);
+      });
+      request.end(payload);
+    });
   }
 
   // ── Webhook event delivery (3.13.0 expansion) ───────────
@@ -1062,16 +1207,32 @@ function setupSocketHandlers(io, db, opts = {}) {
   // network error. 4xx responses are NOT retried (treated as bot rejection).
   async function _deliverWebhook(bot, payload, headers, attempt = 0) {
     try {
-      const resp = await fetch(bot.callback_url, {
-        method: 'POST', headers, body: payload,
-        signal: AbortSignal.timeout(10000)
-      });
+      const deadlineAt = Date.now() + 10000;
+      let resolutionTimer;
+      const destination = await Promise.race([
+        isSafeCallbackDestination(bot.callback_url),
+        new Promise((_, reject) => {
+          resolutionTimer = setTimeout(() => reject(new Error('Webhook callback DNS resolution timed out')), 10000);
+          resolutionTimer.unref?.();
+        })
+      ]).finally(() => clearTimeout(resolutionTimer));
+      if (!destination) {
+        _recordWebhookDelivery(bot.id, 0, 'Callback URL resolves to a blocked network');
+        return;
+      }
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) throw new Error('Webhook callback exceeded its 10 second deadline');
+      const resp = await postWebhook(destination, payload, headers, remainingMs);
       if (resp.ok) {
         _recordWebhookDelivery(bot.id, resp.status, null);
         return;
       }
       if (resp.status >= 500 && attempt < 1) {
         setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
+        return;
+      }
+      if (resp.status >= 300 && resp.status < 400) {
+        _recordWebhookDelivery(bot.id, resp.status, 'Redirects are not allowed for webhook callbacks');
         return;
       }
       _recordWebhookDelivery(bot.id, resp.status, `HTTP ${resp.status}`);
@@ -1094,8 +1255,12 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (!bots.length) return;
 
       const payload = JSON.stringify({
+        event_id: crypto.randomUUID(),
         event: eventType,
+        // Keep channelId for existing integrations while exposing the
+        // consistently-named field used by slash command callbacks.
         channelId: channelCode,
+        channelCode,
         timestamp: new Date().toISOString(),
         ...body
       });
@@ -1110,8 +1275,9 @@ function setupSocketHandlers(io, db, opts = {}) {
           'X-Haven-Event': eventType
         };
         if (bot.callback_secret) {
-          headers['X-Haven-Signature'] =
-            'sha256=' + crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
+          const signature = 'sha256=' + crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
+          headers['X-Haven-Signature'] = signature;
+          headers['X-Haven-Signature-256'] = signature;
         }
 
         _deliverWebhook(bot, payload, headers).catch(() => {});
@@ -1212,6 +1378,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           try { broadcastChannelLists(); } catch {}
           console.log(`[Temporary] Channel "${ch.code}" messages cleared (auto-clear mode)`);
         } else {
+          stopBotAudioForChannelTree(ch.id);
           db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
           db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
           db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
@@ -1257,12 +1424,13 @@ function setupSocketHandlers(io, db, opts = {}) {
           "SELECT (julianday('now') - julianday(created_at)) * 86400 AS secs FROM channels WHERE id = ?"
         ).get(ch.id);
         if (age && age.secs != null && age.secs < 30) continue;
+        stopBotAudioForChannelTree(ch.id);
         db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
         db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
         db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
         db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
         db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-        io.emit('channel-deleted', { code: ch.code, reason: 'temp-empty' });
+        io.except('bot-sockets').emit('channel-deleted', { code: ch.code, reason: 'temp-empty' });
         channelUsers.delete(ch.code);
         voiceUsers.delete(ch.code);
         activeMusic.delete(ch.code);
@@ -1272,6 +1440,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
     } catch { /* column may not exist yet */ }
   }, 60 * 1000);
+
+  function rotateChannelCode(channelId, oldCode, newCode) {
+    persistChannelCodeRotation(db, channelId, oldCode, newCode);
+    rotateLiveChannelState(io, state, botAudioManager, channelId, oldCode, newCode);
+  }
 
   // Channel code rotation (every 30s)
   setInterval(() => {
@@ -1286,50 +1459,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (now - lastRotated >= intervalMs) {
           const oldCode = ch.code;
           const newCode = generateChannelCode();
-          db.prepare('UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?').run(newCode, ch.id);
-          const oldRoom = `channel:${oldCode}`;
-          const newRoom = `channel:${newCode}`;
-          const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-          if (roomSockets) {
-            for (const sid of [...roomSockets]) {
-              const s = io.sockets.sockets.get(sid);
-              if (s) {
-                s.leave(oldRoom);
-                s.join(newRoom);
-                if (s.currentChannel === oldCode) s.currentChannel = newCode;
-              }
-            }
-          }
-          if (channelUsers.has(oldCode)) { channelUsers.set(newCode, channelUsers.get(oldCode)); channelUsers.delete(oldCode); }
-          // Migrate voice room socket-membership AND map entry. Without
-          // moving sockets from voice:<oldCode> to voice:<newCode> they'd
-          // stop receiving voice broadcasts after rotation, and without
-          // notifying them they'd keep emitting voice events with the old
-          // code — the exact "voice channel is gone" loop from #5347.
-          const oldVoiceRoom = `voice:${oldCode}`;
-          const newVoiceRoom = `voice:${newCode}`;
-          const voiceRoomSockets = io.sockets.adapter.rooms.get(oldVoiceRoom);
-          if (voiceRoomSockets) {
-            for (const sid of [...voiceRoomSockets]) {
-              const s = io.sockets.sockets.get(sid);
-              if (s) { s.leave(oldVoiceRoom); s.join(newVoiceRoom); }
-            }
-          }
-          if (voiceUsers.has(oldCode)) { voiceUsers.set(newCode, voiceUsers.get(oldCode)); voiceUsers.delete(oldCode); }
-          // Also migrate any pendingVoiceLeave grace timers keyed by oldCode
-          // so a disconnect that landed mid-rotation can still be cancelled.
-          for (const [key, val] of [...pendingVoiceLeave.entries()]) {
-            if (key.endsWith(':' + oldCode)) {
-              const userId = key.split(':')[0];
-              pendingVoiceLeave.delete(key);
-              pendingVoiceLeave.set(`${userId}:${newCode}`, val);
-            }
-          }
-          // Emit to BOTH the text-channel room AND the voice room — voice
-          // participants who aren't actively viewing the text channel
-          // would otherwise miss this and stay desynced.
-          io.to(newRoom).emit('channel-code-rotated', { channelId: ch.id, oldCode, newCode });
-          io.to(newVoiceRoom).emit('channel-code-rotated', { channelId: ch.id, oldCode, newCode });
+          rotateChannelCode(ch.id, oldCode, newCode);
           console.log(`🔄 Auto-rotated code for channel "${ch.name}": ${oldCode} → ${newCode}`);
         }
       }
@@ -1385,6 +1515,34 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Auth middleware
   io.use((socket, next) => {
+    const botToken = socket.handshake.auth.botToken;
+    if (botToken !== undefined) {
+      if (typeof botToken !== 'string' || !/^[a-f0-9]{64}$/i.test(botToken)) {
+        return next(new Error('Invalid bot token'));
+      }
+      const webhook = db.prepare(`
+        SELECT w.id, w.name, w.channel_id, w.created_by, w.can_use_voice,
+               c.code AS channel_code
+        FROM webhooks w
+        JOIN channels c ON c.id = w.channel_id
+        WHERE w.token = ? AND w.is_active = 1
+      `).get(botToken);
+      if (!webhook) return next(new Error('Webhook not found or inactive'));
+      if (!webhook.can_use_voice) return next(new Error('Bot voice permission is disabled'));
+      socket.user = {
+        id: -webhook.id,
+        webhookId: webhook.id,
+        username: `bot-${webhook.id}`,
+        displayName: webhook.name,
+        channelId: webhook.channel_id,
+        channelCode: webhook.channel_code,
+        isBot: true,
+        isAdmin: false,
+        isGuest: false
+      };
+      return next();
+    }
+
     const token = socket.handshake.auth.token;
     if (!token || typeof token !== 'string') return next(new Error('Authentication required'));
 
@@ -1493,6 +1651,32 @@ function setupSocketHandlers(io, db, opts = {}) {
       return;
     }
 
+    if (socket.user.isBot) {
+      console.log(`Bot ${socket.user.displayName} connected to the voice gateway`);
+      socket.join('bot-sockets');
+      const joinVoiceRoom = socket.join.bind(socket);
+      socket.join = rooms => {
+        const requestedRooms = Array.isArray(rooms) ? rooms : [rooms];
+        const allowedRooms = requestedRooms.filter(room => typeof room === 'string' && room.startsWith('voice:'));
+        if (!allowedRooms.length) return Promise.resolve();
+        return joinVoiceRoom(Array.isArray(rooms) ? allowedRooms : allowedRooms[0]);
+      };
+      socket.use((_packet, next) => {
+        const channelCodes = new Set();
+        for (const room of socket.rooms) {
+          if (room.startsWith('voice:')) channelCodes.add(room.slice(6));
+        }
+        const reason = getBotVoiceAccessFailure(db, socket.user.webhookId, channelCodes);
+        if (!reason) return next();
+        next(new Error(reason));
+        revokeBotVoiceAccess(socket.user.webhookId, reason);
+      });
+      registerBotVoiceSocket(socket, {
+        io, db, state, broadcastVoiceUsers, handleVoiceLeave
+      });
+      return;
+    }
+
     console.log(`✅ ${socket.user.username} connected`);
     socket.currentChannel = null;
     socket.hasFocus = true;
@@ -1546,7 +1730,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(u => ({
-          id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false
+          id: u.id, username: u.username,
+          isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+          isBot: !!u.isBot, isListening: !!u.isListening
         }));
         socket.emit('voice-count-update', { code, count: room.size, users });
       } else {
@@ -1815,23 +2001,30 @@ function setupSocketHandlers(io, db, opts = {}) {
             return null;
           }
           // Fire command callback to the bot
+          const invocationId = crypto.randomUUID();
           const payload = JSON.stringify({
+            event_id: crypto.randomUUID(),
             event: 'slash_command',
+            timestamp: new Date().toISOString(),
+            invocation_id: invocationId,
             command: cmd,
             args: arg || '',
             channelCode: channelCode || null,
             author: { id: socket.user.id, username: socket.user.displayName }
           });
-          const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Haven-Webhook/1.0' };
+          const headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Haven-Webhook/1.1',
+            'X-Haven-Event': 'slash_command'
+          };
           if (botCmd.callback_secret) {
-            headers['X-Haven-Signature'] = require('crypto').createHmac('sha256', botCmd.callback_secret).update(payload).digest('hex');
+            const digest = crypto.createHmac('sha256', botCmd.callback_secret).update(payload).digest('hex');
+            // Preserve the original slash-command header for existing bots;
+            // new integrations can use the normalized companion header.
+            headers['X-Haven-Signature'] = digest;
+            headers['X-Haven-Signature-256'] = `sha256=${digest}`;
           }
-          fetch(botCmd.callback_url, {
-            method: 'POST', headers, body: payload,
-            signal: AbortSignal.timeout(10000)
-          }).catch(err => {
-            console.error(`Bot command callback failed for /${cmd} → ${botCmd.callback_url}: ${err.message}`);
-          });
+          _deliverWebhook({ ...botCmd, id: botCmd.webhook_id }, payload, headers).catch(() => {});
           return { botCommand: true };
         }
       } catch (err) {
@@ -1850,7 +2043,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
-      broadcastStreamInfo, touchVoiceActivity,
+      broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, stopBotAudioForChannelTree,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,
       // Slash commands
@@ -1863,6 +2056,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       popNextQueuedMusic, isNaturalMusicFinish,
       broadcastMusicQueue, getMusicQueuePayload,
       sanitizeQueueEntry, trimMusicText, stripYouTubePlaylistParam,
+      botAudioManager,
       // Auth
       generateChannelCode, generateToken,
       // Flood
@@ -1870,7 +2064,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Transfer admin mutex
       transferAdminRef,
       // Audit log
-      logAudit,
+      logAudit, revokeBotVoiceAccess,
       // Auto-moderation (v3.42.0)
       automod,
       enforceAutomod,
@@ -1990,10 +2184,12 @@ function setupSocketHandlers(io, db, opts = {}) {
           const existingPending = pendingVoiceLeave.get(key);
           if (existingPending) clearTimeout(existingPending.timer);
           const oldSocketId = socket.id;
+          const pending = { timer: null, oldSocketId, code };
           console.log(`[VoiceDiag] disconnect for ${socket.user.username} (id=${socket.user.id}) on ${code} — scheduling 4s grace eviction (oldSocket=${oldSocketId})`);
-          const timer = setTimeout(() => {
-            pendingVoiceLeave.delete(key);
-            const stillRoom = voiceUsers.get(code);
+          pending.timer = setTimeout(() => {
+            const currentKey = `${socket.user.id}:${pending.code}`;
+            pendingVoiceLeave.delete(currentKey);
+            const stillRoom = voiceUsers.get(pending.code);
             if (!stillRoom) return;
             const entry = stillRoom.get(socket.user.id);
             if (!entry) return;
@@ -2003,10 +2199,10 @@ function setupSocketHandlers(io, db, opts = {}) {
               console.log(`[VoiceDiag] grace eviction skipped — ${socket.user.username} rebound to ${entry.socketId}`);
               return;
             }
-            console.log(`[VoiceDiag] grace eviction firing for ${socket.user.username} on ${code} — never reconnected`);
-            handleVoiceLeave(socket, code, { softDisconnect: true });
+            console.log(`[VoiceDiag] grace eviction firing for ${socket.user.username} on ${pending.code} — never reconnected`);
+            handleVoiceLeave(socket, pending.code, { softDisconnect: true });
           }, 4000);
-          pendingVoiceLeave.set(key, { timer, oldSocketId });
+          pendingVoiceLeave.set(key, pending);
         } else {
           // Owner-mismatch or no entry: still run a prune pass for this room
           // so any other ghost entries (e.g. from a peer whose disconnect
@@ -2022,7 +2218,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity };
+  return { activity, state };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText };
