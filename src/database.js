@@ -1028,6 +1028,18 @@ function initDatabase() {
       PRIMARY KEY (user_id, channel_code)
     );
     CREATE INDEX IF NOT EXISTS idx_user_channel_prefs_user ON user_channel_prefs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_channel_prefs_channel ON user_channel_prefs(channel_code);
+  `);
+
+  // Keep old dynamic codes mapped to their stable channel id. Authorized
+  // clients can then repair persisted state after rotating while offline.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS channel_code_history (
+      old_code TEXT PRIMARY KEY,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      rotated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_channel_code_history_channel ON channel_code_history(channel_id);
   `);
 
   // ── Migration: channel feature toggles & QoL ────────────

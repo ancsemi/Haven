@@ -4293,6 +4293,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
     const { getDb } = require('./src/database');
     const db = getDb();
     const { generateChannelCode } = require('./src/auth');
+    const { generateUniqueChannelCode } = require('./src/channelRotation');
 
     const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0 };
 
@@ -4306,7 +4307,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
         if (!channelData || !channelData.messages) continue;
 
         const channelName = [...(sel.name || channelData.name)].slice(0, 50).join('');
-        const code = generateChannelCode();
+        const code = generateUniqueChannelCode(db, generateChannelCode);
 
         // Reuse an existing Haven channel if it was created from the same Discord channel.
         // This makes re-importing (or importing a second overlapping export) idempotent —
