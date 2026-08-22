@@ -3392,6 +3392,8 @@ html.rgb-cycling *::after {
 }
 
 .btn-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-sm:disabled:hover { background: var(--bg-tertiary); color: var(--text-secondary); }
 .btn-sm.btn-accent { background: var(--accent); color: var(--accent-text); font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
 .btn-sm.btn-accent:hover { background: var(--accent-hover); }
 .btn-sm.btn-danger { background: var(--danger, #e74c3c); color: white; font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
@@ -4748,6 +4750,20 @@ select.cfn-select.cfn-input {
   margin-top: 0.125rem;
 }
 
+/* pfp border overlay: the saved fit rendered on top of a real avatar. The host
+   is a positioning context sized to the avatar; the marker (.pfp-border) is
+   folded into .bce-op wrappers by _foldPfpBorder. Reuses .bce-op. */
+/* align-self stops the flex row from stretching the host to full row height
+   (tallest on emoji-only jumbo rows); block avatar drops the inline descender,
+   so the host is exactly the avatar box and the overlay stays centered on it. */
+.pfp-host { position: relative; display: inline-block; flex-shrink: 0; align-self: flex-start; margin-top: 0.125rem; }
+.pfp-host .message-avatar, .pfp-host .message-avatar-img { margin-top: 0; }
+.pfp-host .message-avatar-img { display: block; }
+/* No clip net: _computeMatrix3d refuses any distort whose perspective could fling
+   the border past the frame, so nothing here needs cropping. */
+.pfp-border { position: absolute; inset: 0; pointer-events: none; }
+.pfp-border-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+
 /* User list avatars */
 /* Discord-style avatar wrapper with overlaid status dot */
 .user-avatar-wrapper {
@@ -4834,6 +4850,108 @@ select.cfn-select.cfn-input {
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* Border edit modal: shaped avatar as the base layer, border image on top.
+   Both layers fill the same square so the shape and frame stay aligned. The
+   tool group (modes + stage) sits left, the edit history list sits right. */
+/* Wider than a default modal so the stage and history list sit comfortably. */
+#border-crop-modal .modal { width: min(92%, 36rem); }
+.border-crop-body { display: flex; gap: 0.75rem; align-items: stretch; }
+.border-crop-main { flex: 1; min-width: 0; }
+.border-crop-stage { display: flex; align-items: center; justify-content: center; padding: 1.5rem 0; }
+.border-crop-preview { position: relative; width: 14.4rem; height: 14.4rem; }
+/* Purely visual: all interaction goes through .border-crop-box. Without this, a
+   scaled/moved op wrapper's hit area overflows the stage and swallows clicks on
+   the tool tabs above it. */
+.border-crop-layers { position: absolute; inset: 0; pointer-events: none; }
+.border-crop-avatar {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 3rem; color: #fff;
+}
+.border-crop-border {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; pointer-events: none;
+}
+/* One folded op = one nested wrapper. The transform/clip is set inline in JS;
+   every wrapper fills its parent so ops compose cleanly from image outward. */
+.bce-op { position: absolute; inset: 0; }
+
+/* Edit history (the op log), newest at the bottom, each row undoes itself + later. */
+.border-crop-side { width: 8.5rem; display: flex; flex-direction: column; }
+.border-crop-side-title { margin: 0 0 0.4rem; font-size: 0.8125rem; color: var(--text-secondary); }
+.border-crop-history { flex: 1; overflow-y: auto; max-height: 15rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.bce-hist-empty { color: var(--text-muted); font-size: 0.8125rem; padding: 0.35rem 0; }
+.bce-hist-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+  padding: 0.3rem 0.45rem; border: 1px solid var(--border); border-radius: 0.4rem;
+  background: var(--bg-tertiary, #2a2a2e); font-size: 0.8125rem;
+}
+.bce-hist-label { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bce-hist-undo {
+  flex: none; border: none; background: none; cursor: pointer; padding: 0 0.15rem;
+  color: var(--text-muted); font-size: 1rem; line-height: 1;
+}
+.bce-hist-undo:hover { color: var(--accent, #7aa2ff); }
+
+/* Segmented mode selector: pick one tool. */
+.border-crop-modes { display: flex; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.75rem; }
+.border-crop-mode-btn {
+  flex: 1; padding: 0.4rem 0.5rem; border: none; border-right: 1px solid var(--border);
+  background: var(--bg-tertiary, #2a2a2e); color: var(--text-secondary); cursor: pointer;
+  font-size: 0.8125rem; font-weight: 600;
+}
+.border-crop-mode-btn:last-child { border-right: none; }
+.border-crop-mode-btn.active { background: var(--accent, #7aa2ff); color: #fff; }
+
+/* Shown only for the Crop tool (toggled in _renderBorderEditor). Auto-positions
+   the crop handles around the border's opaque pixels; user edits/keeps from there. */
+.border-crop-autocrop-btn {
+  display: none; width: 100%; padding: 0.4rem 0.5rem; margin-bottom: 0.75rem;
+  border: 1px solid var(--border); border-radius: 0.5rem;
+  background: var(--bg-tertiary, #2a2a2e); color: var(--text-secondary); cursor: pointer;
+  font-size: 0.8125rem; font-weight: 600;
+}
+.border-crop-autocrop-btn:hover { color: var(--text-primary); border-color: var(--accent, #7aa2ff); }
+.border-crop-autocrop-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.border-crop-autocrop-btn:disabled:hover { color: var(--text-secondary); border-color: var(--border); }
+
+/* Shown only for the Rotate tool (toggled in _renderBorderEditor). Quarter-turn
+   nudges that wrap through the same 0..360 logic as the manual rotate handle. */
+.border-crop-rotate-actions { display: none; gap: 0.5rem; margin-bottom: 0.75rem; }
+.border-crop-rotate-actions .btn-sm { flex: 1; text-align: center; }
+
+/* Shown only for the Opacity tool (toggled in _renderBorderEditor). */
+.border-crop-resize-actions { display: none; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.border-crop-resize-actions #border-resize-anchor { flex: 1; }
+.border-resize-anchor-label { font-size: 0.8125rem; color: var(--text-secondary); white-space: nowrap; }
+.border-crop-opacity-actions { display: none; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.border-crop-opacity-actions #border-opacity-slider { flex: 1; }
+.border-opacity-value { min-width: 3ch; text-align: right; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); }
+
+/* Drag handles overlaid on the border. All are positioned in JS (so they follow
+   the border) and hidden by default; only the active mode's handles show. */
+.border-crop-box { position: absolute; inset: 0; touch-action: none; }
+/* Move is the only tool that drags the image body, so it owns the move cursor. */
+.border-crop-preview.mode-move .border-crop-box { cursor: move; }
+.border-crop-handle {
+  position: absolute; width: 0.875rem; height: 0.875rem;
+  border-radius: 50%; background: var(--accent, #7aa2ff); border: 2px solid #fff;
+  box-sizing: border-box; touch-action: none; transform: translate(-50%, -50%);
+  display: none; align-items: center; justify-content: center;
+}
+.crop-edge { cursor: crosshair; }
+.corner-handle { background: var(--bg-secondary, #26262b); cursor: grab; }
+.corner-handle:active { cursor: grabbing; }
+.scale-handle, .rotate-handle { width: 1.25rem; height: 1.25rem; font-size: 0.8rem; color: #fff; line-height: 1; }
+.scale-handle { cursor: nwse-resize; }
+.rotate-handle { background: var(--bg-secondary, #26262b); cursor: grab; }
+.rotate-handle:active { cursor: grabbing; }
+.border-crop-preview.mode-crop .crop-edge,
+.border-crop-preview.mode-distort .corner-handle,
+.border-crop-preview.mode-resize .scale-handle,
+.border-crop-preview.mode-rotate .rotate-handle { display: flex; }
 
 /* Avatar Shape Picker */
 .avatar-shape-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -5497,7 +5615,6 @@ details.sound-section:not([open]) .sound-section-label::before {
 .profile-popup-avatar {
   width: 4.5rem; height: 4.5rem;
   border-radius: 50%;
-  border: 4px solid var(--bg-primary);
   object-fit: cover;
   display: flex;
   align-items: center;

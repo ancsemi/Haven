@@ -1033,6 +1033,23 @@
           <input type="file" id="avatar-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
         </div>
         <small class="muted-text" style="display:block;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.avatar_hint">JPG, PNG, GIF (animated!), WebP · Max 2 MB</small>
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.border_title">Border</h5>
+        <div class="avatar-upload-row" style="margin-bottom: 10px;">
+          <div class="avatar-upload-preview" id="border-upload-preview"></div>
+          <button type="button" class="btn-sm" id="border-upload-btn" data-i18n="modals.edit_profile.upload_btn">Upload</button>
+          <button type="button" class="btn-sm" id="border-crop-btn" data-i18n="modals.edit_profile.edit_btn">Edit</button>
+          <button type="button" class="btn-sm" id="border-remove-btn" data-i18n="modals.edit_profile.clear_btn">Clear</button>
+          <input type="file" id="border-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+        </div>
+        <small class="muted-text" style="display:block;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.border_hint">JPG, PNG, GIF (animated!), WebP · Max 2 MB</small>
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.animate_title">Animated profile</h5>
+        <select id="animate-profile-select" class="form-select" style="width:100%;margin-bottom:8px" data-i18n-title="modals.edit_profile.animate_title" title="Animated profile">
+          <option value="trigger" data-i18n="modals.edit_profile.animate_trigger">Trigger</option>
+          <option value="disabled" data-i18n="modals.edit_profile.animate_disabled">Disabled</option>
+        </select>
+        <small class="muted-text" style="display:block;margin-bottom:6px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_intro">Controls how animations on your profile will appear for every user on Haven. This applies to both your avatar and border, assuming you upload an animated image such as a GIF or APNG.</small>
+        <small class="muted-text" style="display:block;margin-bottom:4px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_trigger">Trigger — Animations on your profile will loop when a user puts their cursor over your message, or opens your profile card.</small>
+        <small class="muted-text" style="display:block;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_disabled">Disabled — Animations will be completely disabled for your profile. Existing animated images uploaded to your profile will remain untouched, however, only the first frame of the image will be displayed on your profile.</small>
         <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.shape_title">Shape</h5>
         <div class="avatar-shape-picker" id="avatar-shape-picker">
           <button type="button" class="avatar-shape-btn active" data-shape="circle" title="Circle"><div class="shape-preview shape-circle"></div></button>
@@ -1072,6 +1089,69 @@
         <span id="avatar-save-status" class="settings-hint" style="flex:1"></span>
         <button class="btn-sm" id="cancel-rename-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent" id="save-rename-btn" data-i18n="modals.common.save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Border Edit Modal. An append-only op log is the source of truth: each tool
+       appends one fraction-based op (crop / move / resize / rotate / distort),
+       folded in order as nested CSS wrappers. The right-side list shows the log
+       with per-entry undo. Nothing is baked; the same fold drives real rendering. -->
+  <div class="modal-overlay" id="border-crop-modal" style="display:none">
+    <div class="modal">
+      <h3 data-i18n="modals.border_crop.title">Edit</h3>
+      <div class="border-crop-body">
+        <div class="border-crop-main">
+          <div class="border-crop-modes" id="border-crop-modes">
+            <button type="button" class="border-crop-mode-btn active" data-mode="crop" data-i18n="modals.border_crop.mode_crop">Crop</button>
+            <button type="button" class="border-crop-mode-btn" data-mode="move" data-i18n="modals.border_crop.mode_move">Move</button>
+            <button type="button" class="border-crop-mode-btn" data-mode="resize" data-i18n="modals.border_crop.mode_resize">Resize</button>
+            <button type="button" class="border-crop-mode-btn" data-mode="rotate" data-i18n="modals.border_crop.mode_rotate">Rotate</button>
+            <button type="button" class="border-crop-mode-btn" data-mode="distort" data-i18n="modals.border_crop.mode_distort">Distort</button>
+            <button type="button" class="border-crop-mode-btn" data-mode="opacity" data-i18n="modals.border_crop.mode_opacity">Opacity</button>
+          </div>
+          <button type="button" class="border-crop-autocrop-btn" id="border-crop-autocrop-btn" data-i18n="modals.border_crop.autocrop">Crop out invisible pixels</button>
+          <div class="border-crop-rotate-actions" id="border-crop-rotate-actions">
+            <button type="button" class="btn-sm" id="border-rotate-ccw">-90°</button>
+            <button type="button" class="btn-sm" id="border-rotate-cw">+90°</button>
+          </div>
+          <div class="border-crop-resize-actions" id="border-crop-resize-actions">
+            <label class="border-resize-anchor-label" for="border-resize-anchor" data-i18n="modals.border_crop.anchor_label">Resize anchor</label>
+            <select id="border-resize-anchor" class="form-select">
+              <option value="center" data-i18n="modals.border_crop.anchor_center">Center</option>
+              <option value="corner" data-i18n="modals.border_crop.anchor_corner">Corner</option>
+            </select>
+          </div>
+          <div class="border-crop-opacity-actions" id="border-crop-opacity-actions">
+            <input type="range" id="border-opacity-slider" min="1" max="100" value="100">
+            <span class="border-opacity-value" id="border-opacity-value">100%</span>
+          </div>
+          <div class="border-crop-stage">
+            <div class="border-crop-preview mode-crop" id="border-crop-preview">
+              <div class="border-crop-layers" id="border-crop-layers"></div>
+              <div class="border-crop-box" id="border-crop-box">
+                <div class="border-crop-handle crop-edge crop-top" data-edge="top" data-i18n-title="modals.border_crop.crop_top" title="Crop top"></div>
+                <div class="border-crop-handle crop-edge crop-right" data-edge="right" data-i18n-title="modals.border_crop.crop_right" title="Crop right"></div>
+                <div class="border-crop-handle crop-edge crop-bottom" data-edge="bottom" data-i18n-title="modals.border_crop.crop_bottom" title="Crop bottom"></div>
+                <div class="border-crop-handle crop-edge crop-left" data-edge="left" data-i18n-title="modals.border_crop.crop_left" title="Crop left"></div>
+                <div class="border-crop-handle corner-handle corner-tl" data-corner="tl" data-i18n-title="modals.border_crop.distort_corner" title="Distort corner"></div>
+                <div class="border-crop-handle corner-handle corner-tr" data-corner="tr" data-i18n-title="modals.border_crop.distort_corner" title="Distort corner"></div>
+                <div class="border-crop-handle corner-handle corner-bl" data-corner="bl" data-i18n-title="modals.border_crop.distort_corner" title="Distort corner"></div>
+                <div class="border-crop-handle corner-handle corner-br" data-corner="br" data-i18n-title="modals.border_crop.distort_corner" title="Distort corner"></div>
+                <div class="border-crop-handle scale-handle" data-i18n-title="modals.border_crop.mode_resize" title="Resize">⤢</div>
+                <div class="border-crop-handle rotate-handle" data-i18n-title="modals.border_crop.mode_rotate" title="Rotate">⟳</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="border-crop-side">
+          <h5 class="border-crop-side-title" data-i18n="modals.border_crop.history_title">Edits</h5>
+          <div class="border-crop-history" id="border-crop-history"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="border-crop-reset-btn" data-i18n="modals.border_crop.discard">Discard</button>
+        <button class="btn-sm btn-accent" id="border-crop-done-btn" data-i18n="modals.common.done">Done</button>
       </div>
     </div>
   </div>

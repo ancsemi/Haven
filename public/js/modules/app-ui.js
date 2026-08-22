@@ -2892,6 +2892,7 @@ _setupUI() {
     // Load personas list (#86, #5349)
     this._loadPersonas?.();
     this._updateAvatarPreview();
+    this._resetBorderEditState();
     // Sync shape picker buttons
     const picker = document.getElementById('avatar-shape-picker');
     if (picker) {

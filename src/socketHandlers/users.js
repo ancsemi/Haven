@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, isWritableKey } = require('../envStore');
 
@@ -145,6 +145,38 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // Border is a pfp overlay saved like the avatar; broadcast so live views
+  // can pick it up without a reconnect.
+  socket.on('set-border', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const url = typeof data.url === 'string' ? data.url.trim() : '';
+    if (url && !isValidUploadPath(url)) return;
+    socket.user.border = url || null;
+    console.log(`[Border] ${socket.user.username} broadcast border: ${url || '(removed)'}`);
+    for (const [code, users] of channelUsers) {
+      if (users.has(socket.user.id)) {
+        users.get(socket.user.id).border = url || null;
+        emitOnlineUsers(code);
+      }
+    }
+  });
+
+  // Border fit (op log) broadcast, so live views re-render the overlay without
+  // a reconnect. The DB is already written by /api/set-border-transform; this
+  // just fans the sanitized value out to open channels.
+  socket.on('set-border-transform', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const transform = sanitizeBorderTransform(data.transform);
+    const value = (transform && transform.length) ? transform : null;
+    socket.user.borderTransform = value;
+    for (const [code, users] of channelUsers) {
+      if (users.has(socket.user.id)) {
+        users.get(socket.user.id).borderTransform = value;
+        emitOnlineUsers(code);
+      }
+    }
+  });
+
   socket.on('set-avatar-shape', (data) => {
     if (!data || typeof data !== 'object') return;
     const validShapes = ['circle', 'rounded', 'squircle', 'hex', 'diamond'];
@@ -162,6 +194,25 @@ module.exports = function register(socket, ctx) {
       socket.emit('avatar-shape-updated', { shape });
     } catch (err) {
       console.error('Set avatar shape error:', err);
+    }
+  });
+
+  socket.on('set-animate-profile', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const valid = ['trigger', 'disabled'];
+    const mode = valid.includes(data.mode) ? data.mode : 'trigger';
+    try {
+      db.prepare('UPDATE users SET animate_profile = ? WHERE id = ?').run(mode, socket.user.id);
+      socket.user.animate_profile = mode;
+      for (const [code, users] of channelUsers) {
+        if (users.has(socket.user.id)) {
+          users.get(socket.user.id).animate_profile = mode;
+          emitOnlineUsers(code);
+        }
+      }
+      socket.emit('animate-profile-updated', { mode });
+    } catch (err) {
+      console.error('Set animate profile error:', err);
     }
   });
 
@@ -204,7 +255,7 @@ module.exports = function register(socket, ctx) {
     try {
       const row = db.prepare(
         `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
-                u.avatar, u.avatar_shape, u.status, u.status_text, u.bio, u.created_at
+                u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at
          FROM users u WHERE u.id = ?`
       ).get(data.userId);
       if (!row) return;
@@ -266,6 +317,9 @@ module.exports = function register(socket, ctx) {
         displayName: row.displayName,
         avatar: row.avatar || null,
         avatarShape: row.avatar_shape || 'circle',
+        border: row.border || null,
+        borderTransform: parseBorderTransform(row.border_transform),
+        animateProfile: row.animate_profile || 'trigger',
         status: row.status || 'online',
         statusText: row.status_text || '',
         bio: row.bio || '',

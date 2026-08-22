@@ -251,11 +251,11 @@ _renderUserItem(u, scoreLookup) {
   const initial = u.username.charAt(0).toUpperCase();
   const shapeClass = 'avatar-' + (u.avatarShape || 'circle');
   const avatarImg = u.avatar
-    ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}" src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
+    ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}"${this._animAttr(u.animateProfile)} src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="user-item-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
   // Wrap avatar + status dot together (Discord-style overlay)
-  const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;
+  const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}${this._pfpBorderMarker(u.border, u.borderTransform, u.animateProfile)}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;
 
   // Role: color dot to the left of name + tooltip on hover
   // Role display mode
@@ -731,7 +731,7 @@ _showProfilePopup(profile) {
   const shapeClass = 'avatar-' + (profile.avatarShape || 'circle');
 
   const avatarHtml = profile.avatar
-    ? `<img class="profile-popup-avatar ${shapeClass}" src="${this._escapeHtml(profile.avatar)}" alt="${initial}">`
+    ? `<img class="profile-popup-avatar ${shapeClass}"${this._animAttr(profile.animateProfile)} src="${this._escapeHtml(profile.avatar)}" alt="${initial}">`
     : `<div class="profile-popup-avatar profile-popup-avatar-fallback ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
   // Status dot
@@ -787,6 +787,7 @@ _showProfilePopup(profile) {
     </div>
     <div class="profile-popup-avatar-wrapper">
       ${avatarHtml}
+      ${this._pfpBorderMarker(profile.border, profile.borderTransform, profile.animateProfile)}
       <span class="profile-popup-status-dot ${statusClass}" title="${statusLabel}"></span>
     </div>
     <div class="profile-popup-body">
@@ -814,6 +815,10 @@ _showProfilePopup(profile) {
   }
 
   document.body.appendChild(popup);
+
+  // Opening the profile card is a trigger context: flag the card so the freeze
+  // observer leaves its animated pfp (avatar and later-folded border) playing.
+  popup.dataset.animPlay = '1';
 
   // Position near the anchor element
   this._positionProfilePopup(popup);
@@ -895,6 +900,7 @@ _showProfilePopup(profile) {
       const bioInput = document.getElementById('edit-profile-bio');
       if (bioInput) bioInput.value = this.user.bio || '';
       this._updateAvatarPreview();
+      this._resetBorderEditState();
       const picker = document.getElementById('avatar-shape-picker');
       if (picker) {
         const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
