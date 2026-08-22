@@ -15,6 +15,11 @@ const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
+const {
+  UnsafeCallbackError,
+  postWebhookCallback,
+  validateCallbackUrl
+} = require('../webhookCallback');
 
 const { createActivity } = require('../activity');
 
@@ -1056,21 +1061,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   function isSafeCallbackUrl(urlString) {
-    try {
-      const u = new URL(urlString);
-      const h = u.hostname.toLowerCase();
-      if (!/^https?:$/i.test(u.protocol)) return false;
-      // 169.254.0.0/16 stays blocked even when private callbacks are allowed.
-      // That is where cloud instance metadata (and its credentials) lives, and
-      // nothing anyone would actually run a bot on listens there.
-      if (/^169\.254\./.test(h)) return false;
-      if (ALLOW_PRIVATE_CALLBACKS) return true;
-      if (['localhost','127.0.0.1','[::1]','0.0.0.0','::'].includes(h)) return false;
-      if (h.startsWith('10.') || h.startsWith('192.168.')) return false;
-      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
-      if (h.endsWith('.local') || h.endsWith('.internal')) return false;
-      return true;
-    } catch { return false; }
+    return validateCallbackUrl(urlString, ALLOW_PRIVATE_CALLBACKS);
   }
 
   // ── Webhook event delivery (3.13.0 expansion) ───────────
@@ -1103,9 +1094,9 @@ function setupSocketHandlers(io, db, opts = {}) {
   // network error. 4xx responses are NOT retried (treated as bot rejection).
   async function _deliverWebhook(bot, payload, headers, attempt = 0) {
     try {
-      const resp = await fetch(bot.callback_url, {
-        method: 'POST', headers, body: payload,
-        signal: AbortSignal.timeout(10000)
+      const resp = await postWebhookCallback(bot.callback_url, payload, headers, {
+        allowPrivateCallbacks: ALLOW_PRIVATE_CALLBACKS,
+        timeoutMs: 10000
       });
       if (resp.ok) {
         _recordWebhookDelivery(bot.id, resp.status, null);
@@ -1118,6 +1109,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       _recordWebhookDelivery(bot.id, resp.status, `HTTP ${resp.status}`);
     } catch (err) {
       const msg = (err && err.message) || String(err);
+      if (err instanceof UnsafeCallbackError || err?.code === 'ERR_UNSAFE_CALLBACK_URL') {
+        _recordWebhookDelivery(bot.id, 0, msg.slice(0, 200));
+        console.warn(`Webhook callback blocked for bot ${bot.id}: ${msg}`);
+        return;
+      }
       if (attempt < 1) {
         setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
         return;
@@ -1867,9 +1863,9 @@ function setupSocketHandlers(io, db, opts = {}) {
           if (botCmd.callback_secret) {
             headers['X-Haven-Signature'] = require('crypto').createHmac('sha256', botCmd.callback_secret).update(payload).digest('hex');
           }
-          fetch(botCmd.callback_url, {
-            method: 'POST', headers, body: payload,
-            signal: AbortSignal.timeout(10000)
+          postWebhookCallback(botCmd.callback_url, payload, headers, {
+            allowPrivateCallbacks: ALLOW_PRIVATE_CALLBACKS,
+            timeoutMs: 10000
           }).catch(err => {
             console.error(`Bot command callback failed for /${cmd} → ${botCmd.callback_url}: ${err.message}`);
           });
