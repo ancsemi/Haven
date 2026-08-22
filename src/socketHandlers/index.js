@@ -1078,6 +1078,9 @@ function setupSocketHandlers(io, db, opts = {}) {
         });
       }
 
+      // isFcmEnabled() also reflects the admin's FCM Privacy toggle, kept in
+      // memory and synced on change, so no per-message DB read. Web-push above
+      // is unaffected either way.
       if (isFcmEnabled()) {
         const inactiveMembers = db.prepare(`
           SELECT DISTINCT cm.user_id FROM channel_members cm

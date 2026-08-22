@@ -121,7 +121,7 @@ const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers, sanitizeText } = require('./src/socketHandlers');
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
-const { initFcm } = require('./src/fcm');
+const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
 const {
   BotAudioManager,
   inspectAudioFile,
@@ -399,11 +399,11 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'", "blob:", "https://www.youtube.com", "https://w.soundcloud.com", "https://unpkg.com", "https://challenges.cloudflare.com"],  // last host: opt-in Turnstile CAPTCHA on registration
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],  // inline styles + Google Fonts
+      styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles (fonts are self-hosted, no third-party CDN)
       imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],  // link preview OG images + GIPHY (http: for local/self-hosted services)
       connectSrc: ["'self'", "ws:", "wss:", "https:"],  // Socket.IO + cross-origin health checks
       mediaSrc: ["'self'", "blob:", "data:", "https:", "http:"],  // WebRTC audio + notification sounds + link preview video embeds
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],  // Google Fonts CDN
+      fontSrc: ["'self'"],  // self-hosted fonts only (see /public/fonts)
       workerSrc: ["'self'", "blob:", "https://unpkg.com"],  // service worker + Ruffle WebAssembly workers
       objectSrc: ["'none'"],
       frameSrc: ["'self'", "https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com", "https://challenges.cloudflare.com"],  // Listen Together embeds + game iframes + Turnstile widget
@@ -438,6 +438,17 @@ app.disable('x-powered-by');
 // where appropriate. (#5347 v3.15.7)
 app.use(express.json({ limit: '128kb' }));
 app.use(express.urlencoded({ extended: false, limit: '128kb' }));
+
+// ── Self-hosted fonts (long-lived cache) ─────────────────
+// Fonts never change for a given filename, so let clients cache them for a
+// year and skip revalidation. A ?v= bump in style.css busts the cache when a
+// file is ever replaced. Mounted before the general /public handler so these
+// win over its always-revalidate (maxAge:0) policy.
+app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
+  dotfiles: 'deny',
+  maxAge: '1y',
+  immutable: true,
+}));
 
 // ── Static files with caching ────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -796,7 +807,6 @@ app.get('/api/ice-servers', (req, res) => {
           'stun:stun.cloudflare.com:3478',
           'stun:stun.relay.metered.ca:80',
           'stun:global.stun.twilio.com:3478',
-          'stun:stun.l.google.com:19302',
         ];
   const iceServers = stunUrls.map(urls => ({ urls }));
 
@@ -4863,6 +4873,13 @@ if (process.env.ADMIN_RESET_PASSWORD) {
   delete process.env.ADMIN_RESET_PASSWORD;
 }
 
+// Load the admin FCM toggle (Settings → Security → FCM Privacy) into memory
+// before initFcm, so both the startup log line and isFcmEnabled() reflect it
+// without a per-message database read. Default on.
+try {
+  const fe = db.prepare("SELECT value FROM server_settings WHERE key = 'fcm_enabled'").get()?.value;
+  setFcmAdminEnabled(fe !== 'false');
+} catch {}
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
 botAudioManager = new BotAudioManager(io, BOT_AUDIO_DIR);

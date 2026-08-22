@@ -2177,6 +2177,13 @@
             <span data-i18n="settings.admin.voice_relay_label">Relay-only voice (hide member IPs)</span>
             <input type="checkbox" id="voice-force-relay">
           </label>
+          <small class="settings-group-label" style="margin-top:14px;display:block">🔔 <span data-i18n="settings.admin.fcm_privacy_group">FCM Privacy</span></small>
+          <small class="settings-hint" style="display:block" data-i18n-html="settings.admin.fcm_desc">FCM (Firebase Cloud Messaging) is Google's system for delivering push notifications to Android phones. It's what wakes your phone when you receive a new message while Haven is closed. This means that all notifications (including your Haven username, channel name and message content) sent to your Android phone have to pass through Google's servers to reach your phone.<br><br>While this may be fine for most users, some may prefer to keep Google completely out of the equation. <a href="https://unifiedpush.org" target="_blank" rel="noopener">UnifiedPush</a> is a decentralized notification standard that supports several notification apps, and if a UnifiedPush compatible app is installed on your phone, Haven Mobile will prioritize it over FCM.</small>
+          <small class="settings-hint" style="display:block;margin-top:8px" data-i18n-html="settings.admin.fcm_note"><strong>Dangerous Action Warning: Before disabling this, please ensure every member in your Haven server including yourself has a UnifiedPush compatible app installed on their phone. Otherwise, some members of your server will not receive any mobile notifications.</strong></small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.fcm_enabled_label">Enable Google FCM Push Notifications</span>
+            <input type="checkbox" id="fcm-enabled">
+          </label>
         </div>
         <div class="admin-settings" id="section-automod" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.automod_title">Auto-Mod</span></h5>
@@ -2521,7 +2528,7 @@
           <small class="settings-hint" data-i18n="settings.admin.connectivity_hint">STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on "ICE: Connecting...", set your own servers here.</small>
           <label class="select-row" style="margin-top:8px; align-items:flex-start">
             <span data-i18n="settings.admin.stun_urls">STUN servers</span>
-            <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:stun.l.google.com:19302" style="flex:1; resize:vertical; font-family:monospace; font-size:0.75rem"></textarea>
+            <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:monospace; font-size:0.75rem"></textarea>
           </label>
           <small class="settings-hint" data-i18n="settings.admin.stun_urls_hint">One stun: URI per line (or comma separated). Blank = built-in defaults.</small>
           <label class="select-row" style="margin-top:8px">

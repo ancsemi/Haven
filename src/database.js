@@ -489,6 +489,12 @@ function initDatabase() {
   // off means every embedded image leaks the viewer's IP to whoever posted it.
   insertSetting.run('media_proxy_enabled', 'true');
 
+  // Google FCM mobile push. On by default so existing Android users keep getting
+  // notifications on upgrade; admins who prefer a Google-free path (UnifiedPush /
+  // ntfy) can turn it off under Settings → Security → FCM Privacy. Off skips FCM
+  // sends only, so web-push to browsers is unaffected.
+  insertSetting.run('fcm_enabled', 'true');
+
   // Unique server fingerprint — used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
   insertSetting.run('server_fingerprint', crypto.randomUUID());

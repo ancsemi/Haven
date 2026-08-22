@@ -19,6 +19,10 @@ let cachedTokenExpiry = 0;
 let relayUrl = '';
 let relayKey = '';
 let projectId = '';
+// In-memory mirror of the fcm_enabled server setting (Settings → Security → FCM
+// Privacy). Kept in sync by setFcmAdminEnabled so the hot message path never
+// has to read the database. Default on so nothing breaks before it's loaded.
+let adminEnabled = true;
 
 const FCM_SCOPES = 'https://www.googleapis.com/auth/firebase.messaging';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -35,31 +39,41 @@ function initFcm(dataDir) {
     || findServiceAccount(dataDir)
     || findServiceAccount(__dirname);
 
+  let via = null;
+  let mode = 'disabled';
+
   if (saPath && fs.existsSync(saPath)) {
     try {
       serviceAccount = JSON.parse(fs.readFileSync(saPath, 'utf-8'));
       projectId = serviceAccount.project_id;
-      console.log(`🔔 FCM direct mode: ${projectId}`);
-      return { mode: 'direct' };
+      via = `direct API, project ${projectId}`;
+      mode = 'direct';
     } catch (err) {
       console.warn('⚠️  Failed to parse Firebase service account:', err.message);
     }
   }
 
-  // Fall back to relay mode — uses Haven Global Relay by default
-  relayUrl = process.env.FCM_RELAY_URL || DEFAULT_RELAY;
-  relayKey = process.env.FCM_PUSH_KEY || DEFAULT_KEY;
-
-  if (relayUrl && relayKey) {
-    if (relayUrl === DEFAULT_RELAY) {
-      console.log('🔔 FCM enabled via Haven Global Relay');
-    } else {
-      console.log(`🔔 FCM enabled via Custom Relay: ${relayUrl}`);
+  if (!serviceAccount) {
+    // Fall back to relay mode, using the Haven Global Relay by default.
+    relayUrl = process.env.FCM_RELAY_URL || DEFAULT_RELAY;
+    relayKey = process.env.FCM_PUSH_KEY || DEFAULT_KEY;
+    if (relayUrl && relayKey) {
+      via = relayUrl === DEFAULT_RELAY ? 'Haven Global Relay' : `Custom Relay ${relayUrl}`;
+      mode = 'relay';
     }
-    return { mode: 'relay' };
   }
 
-  return { mode: 'disabled' };
+  if (!via) return { mode: 'disabled' };
+
+  // The log reflects the effective state, not just the configuration: FCM can
+  // be wired up here yet still switched off by the admin under Settings >
+  // Security > FCM Privacy. adminEnabled is loaded from the DB before this runs.
+  if (adminEnabled) {
+    console.log(`🔔 FCM enabled via ${via}`);
+  } else {
+    console.log(`🔕 FCM configured via ${via}, but turned off in Settings > Security > FCM Privacy`);
+  }
+  return { mode };
 }
 
 /**
@@ -213,10 +227,20 @@ async function sendFcm(tokens, title, body, data = {}) {
 }
 
 /**
- * Check if FCM is available (either direct or relay mode).
+ * Check if FCM is available: configured (direct or relay mode) AND not turned
+ * off by the admin under Settings → Security → FCM Privacy.
  */
 function isFcmEnabled() {
-  return !!(serviceAccount || (relayUrl && relayKey));
+  return adminEnabled && !!(serviceAccount || (relayUrl && relayKey));
+}
+
+/**
+ * Sync the in-memory admin toggle. Called once at startup from the stored
+ * setting and again whenever an admin changes it, so isFcmEnabled() stays
+ * current without touching the database on the message hot path.
+ */
+function setFcmAdminEnabled(enabled) {
+  adminEnabled = enabled !== false;
 }
 
 /**
@@ -228,4 +252,4 @@ function getRelayKey() {
   return process.env.HAVEN_PUSH_KEY || null;
 }
 
-module.exports = { initFcm, sendFcm, isFcmEnabled, getRelayKey };
+module.exports = { initFcm, sendFcm, isFcmEnabled, setFcmAdminEnabled, getRelayKey };

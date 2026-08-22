@@ -109,19 +109,14 @@ class VoiceManager {
     // Result was every Haven server using default ICE config lost external
     // WebRTC simultaneously — LAN-to-LAN still worked because host
     // candidates don't need STUN, but anyone outside the server's subnet
-    // got stuck on "ICE: Connecting...". Defaults below are split into a
-    // preferred non-Google pool plus a Google fallback that only engages
-    // if every preferred server fails the runtime probe.
+    // got stuck on "ICE: Connecting...". The defaults below are a pool of
+    // three independent, non-Google providers. If they all fail the runtime
+    // probe the client keeps them and warns the user to configure STUN/TURN,
+    // rather than falling back to Google.
     this._stunPreferred = [
       'stun:stun.cloudflare.com:3478',
       'stun:stun.relay.metered.ca:80',
       'stun:global.stun.twilio.com:3478',
-    ];
-    this._stunFallback = [
-      // Last-ditch only. Google is widely reliable but we'd rather not send
-      // our users' NAT-discovery traffic there if we can avoid it.
-      'stun:stun.l.google.com:19302',
-      'stun:stun1.l.google.com:19302',
     ];
     this.rtcConfig = {
       iceServers: this._stunPreferred.map(urls => ({ urls })),
@@ -197,9 +192,8 @@ class VoiceManager {
   // Validates each default STUN URL by spinning up a throwaway
   // RTCPeerConnection and waiting for a srflx (server-reflexive)
   // candidate, which only appears if the STUN server actually responds.
-  // Survivors replace the iceServers list. If every preferred server is
-  // dead, the Google fallback pool is brought in so users aren't left
-  // with zero working STUN.
+  // Survivors replace the iceServers list. If every server is dead, the
+  // client keeps the list and warns the user to configure STUN/TURN.
 
   async _probeDefaultStun() {
     try {
@@ -250,30 +244,17 @@ class VoiceManager {
         return;
       }
 
-      // All preferred dead — bring in the fallback pool. Probe those too
-      // so we don't list servers that themselves happen to be unreachable.
-      console.warn('[Voice] All preferred STUN servers failed probe; trying fallback pool.');
-      const fallback = await Promise.all(this._stunFallback.map(u => probeOne(u)));
-      const liveFallback = fallback.filter(p => p.ok).map(p => p.url);
-
-      if (this._adminIceServersLoaded) return;
-
-      if (liveFallback.length) {
-        this.rtcConfig.iceServers = liveFallback.map(urls => ({ urls }));
-        console.warn(`🧊 Using fallback STUN pool (${liveFallback.length} alive): ${liveFallback.join(', ')}`);
-      } else {
-        // Every server we know about is unresponsive. Keep the original
-        // preferred list anyway — peers on the same LAN can still connect
-        // via host candidates and at least one server might come back up
-        // mid-call.
-        console.error('[Voice] All known STUN servers failed probe — external WebRTC will be impaired until an admin configures TURN.');
-        // Surface this to the user instead of leaving them stuck on
-        // "ICE: Connecting..." with no explanation (#5399). LAN calls still
-        // work, so keep it a warning, not a hard error.
-        if (!this._connectivityWarned && typeof this.onConnectivityWarning === 'function') {
-          this._connectivityWarned = true;
-          this.onConnectivityWarning('Voice connection servers (STUN) are unreachable. Calls may only work on your local network until an admin sets STUN/TURN in Settings → Voice & Connectivity.');
-        }
+      // Every preferred server is unresponsive. Keep the original list
+      // anyway: peers on the same LAN still connect via host candidates, and
+      // one of the providers may come back up mid-call. We no longer fall
+      // back to Google STUN; three independent providers is enough redundancy.
+      console.error('[Voice] All preferred STUN servers failed probe; external WebRTC will be impaired until an admin configures STUN/TURN.');
+      // Surface this to the user instead of leaving them stuck on
+      // "ICE: Connecting..." with no explanation (#5399). LAN calls still
+      // work, so keep it a warning, not a hard error.
+      if (!this._connectivityWarned && typeof this.onConnectivityWarning === 'function') {
+        this._connectivityWarned = true;
+        this.onConnectivityWarning('Voice connection servers (STUN) are unreachable. Calls may only work on your local network until an admin sets STUN/TURN in Settings → Voice & Connectivity.');
       }
     } catch (err) {
       console.warn('[Voice] STUN probe failed:', err && err.message);
