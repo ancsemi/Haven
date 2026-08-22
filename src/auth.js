@@ -461,17 +461,17 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'You must confirm that you are 18 years of age or older' });
     }
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password required' });
-    }
     if (username.length < 3 || username.length > 20) {
       return res.status(400).json({ error: 'Username must be 3-20 characters' });
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({ error: 'Username: letters, numbers, underscores only' });
     }
     if (password.length < 8 || password.length > 128) {
       return res.status(400).json({ error: 'Password must be 8-128 characters' });
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      return res.status(400).json({ error: 'Username: letters, numbers, underscores only' });
+    if (password.toLowerCase().includes(username.toLowerCase())) {
+      return res.status(400).json({ error: 'Password must not contain your username' });
     }
 
     const db = getDb();
@@ -1213,6 +1213,10 @@ router.post('/change-password', authLimiter, async (req, res) => {
     // compare below would just fail as "incorrect", which reads like a bug.
     if (user.oidc_subject && !hasLocalPassword(user)) {
       return res.status(400).json({ error: 'This account signs in through SSO, so it has no Haven password. Change it with your identity provider instead.' });
+    }
+
+    if (newPassword.toLowerCase().includes(user.username.toLowerCase())) {
+      return res.status(400).json({ error: 'Password must not contain your username' });
     }
 
     const valid = await bcrypt.compare(currentPassword, user.password_hash);
