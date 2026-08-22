@@ -21,6 +21,11 @@ const {
   postWebhookCallback,
   validateCallbackUrl
 } = require('../webhookCallback');
+const {
+  generateUniqueChannelCode,
+  persistChannelCodeRotation,
+  rotateLiveChannelState
+} = require('../channelRotation');
 
 const { createActivity } = require('../activity');
 
@@ -124,7 +129,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   const streamViewers       = new Map(); // "code:sharerId" → Set<viewerUserId>
   const slowModeTracker     = new Map(); // "slow:{userId}:{channelId}" → timestamp
   const pendingTempDelete   = new Map(); // code → timeout handle (grace-period before deleting temp-voice channel)
-  const pendingVoiceLeave   = new Map(); // `${userId}:${code}` → { timer, oldSocketId } (grace-period before evicting a transiently-disconnected voice user)
+  const pendingVoiceLeave   = new Map(); // `${userId}:${code}` → { timer, oldSocketId, code } (grace-period before evicting a transiently-disconnected voice user)
 
   const state = {
     channelUsers, voiceUsers, voiceLastActivity,
@@ -361,7 +366,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── getEnrichedChannels ─────────────────────────────────
-  function getEnrichedChannels(userId, isAdmin, joinRooms) {
+  function getEnrichedChannels(userId, isAdmin, joinRooms, knownCodes = []) {
     // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
     // same visibility treatment as the admin: every non-DM channel, with
     // membership filled in on the fly — so channels created after the role
@@ -477,7 +482,29 @@ function setupSocketHandlers(io, db, opts = {}) {
       const latestMap = {};
       latestRows.forEach(r => { latestMap[r.channel_id] = r.latest_id; });
 
+      const requestedAliases = [...new Set(knownCodes)]
+        .filter(code => typeof code === 'string' && /^[a-f0-9]{8}$/i.test(code))
+        .slice(0, 2000);
+      let historyRows = [];
+      if (requestedAliases.length > 0) {
+        const authorizedIds = new Set(channelIds);
+        for (let offset = 0; offset < requestedAliases.length; offset += 400) {
+          const batch = requestedAliases.slice(offset, offset + 400);
+          const aliasPlaceholders = batch.map(() => '?').join(',');
+          const rows = db.prepare(
+            `SELECT channel_id, old_code FROM channel_code_history WHERE old_code IN (${aliasPlaceholders}) ORDER BY rotated_at`
+          ).all(...batch);
+          historyRows.push(...rows.filter(row => authorizedIds.has(row.channel_id)));
+        }
+      }
+      const codeHistory = {};
+      for (const row of historyRows) {
+        if (!codeHistory[row.channel_id]) codeHistory[row.channel_id] = [];
+        codeHistory[row.channel_id].push(row.old_code);
+      }
+
       channels.forEach(ch => {
+        ch.previous_codes = codeHistory[ch.id] || [];
         const lastRead = readMap[ch.id] || 0;
         const latestId = latestMap[ch.id] || 0;
         ch.latestMessageId = latestId;
@@ -912,44 +939,51 @@ function setupSocketHandlers(io, db, opts = {}) {
       syncMusicActivity(code);
       musicQueues.delete(code);
 
-      const doDeleteTempChannel = () => {
-        try {
-          const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
-          if (ch && ch.is_temp_voice) {
-            // Double-check the room is still empty — someone may have rejoined
-            // during the grace period.
-            const currentRoom = voiceUsers.get(code);
-            if (currentRoom && currentRoom.size > 0) return;
-            db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-            db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-            db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
-            db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
-            db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-            io.emit('channel-deleted', { code, reason: 'temp-empty' });
-            channelUsers.delete(code);
-            voiceUsers.delete(code);
-            pendingTempDelete.delete(code);
-            console.log(`[Temporary] Temp voice channel "${code}" deleted (everyone left)`);
-          }
-        } catch { /* column may not exist yet */ }
-      };
+      let tempChannel = null;
+      try {
+        tempChannel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_temp_voice = 1').get(code);
+      } catch { /* column may not exist yet */ }
+      if (tempChannel) {
+        const doDeleteTempChannel = () => {
+          try {
+            const ch = db.prepare('SELECT id, code, is_temp_voice FROM channels WHERE id = ?').get(tempChannel.id);
+            if (ch && ch.is_temp_voice) {
+              const deleteCode = ch.code;
+              // Double-check the room is still empty — someone may have rejoined
+              // during the grace period.
+              const currentRoom = voiceUsers.get(deleteCode);
+              if (currentRoom && currentRoom.size > 0) return;
+              db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+              db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+              db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+              db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
+              db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+              io.emit('channel-deleted', { code: deleteCode, reason: 'temp-empty' });
+              channelUsers.delete(deleteCode);
+              voiceUsers.delete(deleteCode);
+              pendingTempDelete.delete(deleteCode);
+              console.log(`[Temporary] Temp voice channel "${deleteCode}" deleted (everyone left)`);
+            }
+          } catch { /* column may not exist yet */ }
+        };
 
-      if (softDisconnect) {
-        // Grace period: wait 8 s before deleting the temp channel.
-        // This prevents the channel from vanishing when a socket briefly
-        // drops and immediately reconnects (e.g. network hiccup, or the
-        // Desktop app's memory-based page reload).
-        if (pendingTempDelete.has(code)) clearTimeout(pendingTempDelete.get(code));
-        const timer = setTimeout(doDeleteTempChannel, 8000);
-        pendingTempDelete.set(code, timer);
-        console.log(`[Temporary] Temp voice channel "${code}" grace period started (socket disconnect)`);
-      } else {
-        // Intentional leave — cancel any pending grace-period timer and delete immediately.
-        if (pendingTempDelete.has(code)) {
-          clearTimeout(pendingTempDelete.get(code));
-          pendingTempDelete.delete(code);
+        if (softDisconnect) {
+          // Grace period: wait 8 s before deleting the temp channel.
+          // This prevents the channel from vanishing when a socket briefly
+          // drops and immediately reconnects (e.g. network hiccup, or the
+          // Desktop app's memory-based page reload).
+          if (pendingTempDelete.has(code)) clearTimeout(pendingTempDelete.get(code));
+          const timer = setTimeout(doDeleteTempChannel, 8000);
+          pendingTempDelete.set(code, timer);
+          console.log(`[Temporary] Temp voice channel "${code}" grace period started (socket disconnect)`);
+        } else {
+          // Intentional leave — cancel any pending grace-period timer and delete immediately.
+          if (pendingTempDelete.has(code)) {
+            clearTimeout(pendingTempDelete.get(code));
+            pendingTempDelete.delete(code);
+          }
+          doDeleteTempChannel();
         }
-        doDeleteTempChannel();
       }
     }
 
@@ -1311,6 +1345,17 @@ function setupSocketHandlers(io, db, opts = {}) {
     } catch { /* column may not exist yet */ }
   }, 60 * 1000);
 
+  function rotateChannelCode(channelId, oldCode) {
+    const newCode = generateUniqueSharedCode(oldCode);
+    persistChannelCodeRotation(db, channelId, oldCode, newCode);
+    rotateLiveChannelState(io, state, channelId, oldCode, newCode);
+    return newCode;
+  }
+
+  function generateUniqueSharedCode(excludeCode = null) {
+    return generateUniqueChannelCode(db, generateChannelCode, excludeCode);
+  }
+
   // Channel code rotation (every 30s)
   setInterval(() => {
     try {
@@ -1323,51 +1368,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         const intervalMs = (ch.code_rotation_interval || 60) * 60 * 1000;
         if (now - lastRotated >= intervalMs) {
           const oldCode = ch.code;
-          const newCode = generateChannelCode();
-          db.prepare('UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?').run(newCode, ch.id);
-          const oldRoom = `channel:${oldCode}`;
-          const newRoom = `channel:${newCode}`;
-          const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-          if (roomSockets) {
-            for (const sid of [...roomSockets]) {
-              const s = io.sockets.sockets.get(sid);
-              if (s) {
-                s.leave(oldRoom);
-                s.join(newRoom);
-                if (s.currentChannel === oldCode) s.currentChannel = newCode;
-              }
-            }
-          }
-          if (channelUsers.has(oldCode)) { channelUsers.set(newCode, channelUsers.get(oldCode)); channelUsers.delete(oldCode); }
-          // Migrate voice room socket-membership AND map entry. Without
-          // moving sockets from voice:<oldCode> to voice:<newCode> they'd
-          // stop receiving voice broadcasts after rotation, and without
-          // notifying them they'd keep emitting voice events with the old
-          // code — the exact "voice channel is gone" loop from #5347.
-          const oldVoiceRoom = `voice:${oldCode}`;
-          const newVoiceRoom = `voice:${newCode}`;
-          const voiceRoomSockets = io.sockets.adapter.rooms.get(oldVoiceRoom);
-          if (voiceRoomSockets) {
-            for (const sid of [...voiceRoomSockets]) {
-              const s = io.sockets.sockets.get(sid);
-              if (s) { s.leave(oldVoiceRoom); s.join(newVoiceRoom); }
-            }
-          }
-          if (voiceUsers.has(oldCode)) { voiceUsers.set(newCode, voiceUsers.get(oldCode)); voiceUsers.delete(oldCode); }
-          // Also migrate any pendingVoiceLeave grace timers keyed by oldCode
-          // so a disconnect that landed mid-rotation can still be cancelled.
-          for (const [key, val] of [...pendingVoiceLeave.entries()]) {
-            if (key.endsWith(':' + oldCode)) {
-              const userId = key.split(':')[0];
-              pendingVoiceLeave.delete(key);
-              pendingVoiceLeave.set(`${userId}:${newCode}`, val);
-            }
-          }
-          // Emit to BOTH the text-channel room AND the voice room — voice
-          // participants who aren't actively viewing the text channel
-          // would otherwise miss this and stay desynced.
-          io.to(newRoom).emit('channel-code-rotated', { channelId: ch.id, oldCode, newCode });
-          io.to(newVoiceRoom).emit('channel-code-rotated', { channelId: ch.id, oldCode, newCode });
+          const newCode = rotateChannelCode(ch.id, oldCode);
           console.log(`🔄 Auto-rotated code for channel "${ch.name}": ${oldCode} → ${newCode}`);
         }
       }
@@ -1911,7 +1912,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
-      broadcastStreamInfo, touchVoiceActivity,
+      broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,
       // Slash commands
@@ -1925,7 +1926,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       broadcastMusicQueue, getMusicQueuePayload,
       sanitizeQueueEntry, trimMusicText, stripYouTubePlaylistParam,
       // Auth
-      generateChannelCode, generateToken,
+      generateChannelCode, generateUniqueSharedCode, generateToken,
       // Flood
       floodCheck,
       // Transfer admin mutex
@@ -2055,10 +2056,11 @@ function setupSocketHandlers(io, db, opts = {}) {
           const existingPending = pendingVoiceLeave.get(key);
           if (existingPending) clearTimeout(existingPending.timer);
           const oldSocketId = socket.id;
+          const pending = { timer: null, oldSocketId, code };
           console.log(`[VoiceDiag] disconnect for ${socket.user.username} (id=${socket.user.id}) on ${code} — scheduling 4s grace eviction (oldSocket=${oldSocketId})`);
-          const timer = setTimeout(() => {
-            pendingVoiceLeave.delete(key);
-            const stillRoom = voiceUsers.get(code);
+          pending.timer = setTimeout(() => {
+            pendingVoiceLeave.delete(`${socket.user.id}:${pending.code}`);
+            const stillRoom = voiceUsers.get(pending.code);
             if (!stillRoom) return;
             const entry = stillRoom.get(socket.user.id);
             if (!entry) return;
@@ -2068,10 +2070,10 @@ function setupSocketHandlers(io, db, opts = {}) {
               console.log(`[VoiceDiag] grace eviction skipped — ${socket.user.username} rebound to ${entry.socketId}`);
               return;
             }
-            console.log(`[VoiceDiag] grace eviction firing for ${socket.user.username} on ${code} — never reconnected`);
-            handleVoiceLeave(socket, code, { softDisconnect: true });
+            console.log(`[VoiceDiag] grace eviction firing for ${socket.user.username} on ${pending.code} — never reconnected`);
+            handleVoiceLeave(socket, pending.code, { softDisconnect: true });
           }, 4000);
-          pendingVoiceLeave.set(key, { timer, oldSocketId });
+          pendingVoiceLeave.set(key, pending);
         } else {
           // Owner-mismatch or no entry: still run a prune pass for this room
           // so any other ghost entries (e.g. from a peer whose disconnect

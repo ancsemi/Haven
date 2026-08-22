@@ -38,11 +38,39 @@ module.exports = function register(socket, ctx) {
     io.to(`voice:${code}`).to(`channel:${code}`).emit('stream-viewers-update', { channelCode: code, streams });
   }
 
+  function resolveRotatedCode(code) {
+    if (pendingVoiceLeave) {
+      for (const [key, pending] of pendingVoiceLeave) {
+        if (!key.startsWith(`${socket.user.id}:`)) continue;
+        if (pending.code === code || pending.previousCodes?.includes(code)) return pending.code;
+      }
+    }
+    try {
+      const rotated = db.prepare(`
+        SELECT c.code
+        FROM channel_code_history h
+        JOIN channels c ON c.id = h.channel_id
+        WHERE h.old_code = ?
+      `).get(code);
+      if (rotated) return rotated.code;
+    } catch { /* history table may not exist on an old database */ }
+    return code;
+  }
+
+  function currentVoiceCode(fallback) {
+    for (const [code, room] of voiceUsers) {
+      if (room.get(socket.user.id)?.socketId === socket.id) return code;
+    }
+    return fallback;
+  }
+
   // ── Voice join ──────────────────────────────────────────
   socket.on('voice-join', (data) => {
     if (!data || typeof data !== 'object') return;
-    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    let code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const requestedCode = code;
+    code = resolveRotatedCode(code);
 
     const vch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!vch) return;
@@ -59,6 +87,9 @@ module.exports = function register(socket, ctx) {
     }
     if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', vch.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to use voice chat');
+    }
+    if (requestedCode !== code) {
+      socket.emit('channel-code-rotated', { channelId: vch.id, oldCode: requestedCode, newCode: code });
     }
     if (vchSettings && vchSettings.voice_user_limit > 0) {
       const currentCount = voiceUsers.has(code) ? voiceUsers.get(code).size : 0;
@@ -189,12 +220,13 @@ module.exports = function register(socket, ctx) {
         }).filter(Boolean)
       });
       setTimeout(() => {
-        for (const sharerId of sharers) {
-          const sharerInfo = voiceUsers.get(code)?.get(sharerId);
+        const activeCode = currentVoiceCode(code);
+        for (const sharerId of activeScreenSharers.get(activeCode) || []) {
+          const sharerInfo = voiceUsers.get(activeCode)?.get(sharerId);
           if (sharerInfo) {
             io.to(sharerInfo.socketId).emit('renegotiate-screen', {
               targetUserId: socket.user.id,
-              channelCode: code
+              channelCode: activeCode
             });
           }
         }
@@ -212,12 +244,13 @@ module.exports = function register(socket, ctx) {
         }).filter(Boolean)
       });
       setTimeout(() => {
-        for (const camUserId of camUsers) {
-          const camUserInfo = voiceUsers.get(code)?.get(camUserId);
+        const activeCode = currentVoiceCode(code);
+        for (const camUserId of activeWebcamUsers.get(activeCode) || []) {
+          const camUserInfo = voiceUsers.get(activeCode)?.get(camUserId);
           if (camUserInfo) {
             io.to(camUserInfo.socketId).emit('renegotiate-webcam', {
               targetUserId: socket.user.id,
-              channelCode: code
+              channelCode: activeCode
             });
           }
         }
@@ -619,8 +652,9 @@ module.exports = function register(socket, ctx) {
 
   socket.on('voice-mute-state', (data) => {
     if (!data || typeof data !== 'object') return;
-    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    let code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    code = resolveRotatedCode(code);
     const room = voiceUsers.get(code);
     if (!room || !room.has(socket.user.id)) return;
     room.get(socket.user.id).isMuted = !!data.muted;
@@ -660,8 +694,9 @@ module.exports = function register(socket, ctx) {
 
   socket.on('voice-deafen-state', (data) => {
     if (!data || typeof data !== 'object') return;
-    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    let code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    code = resolveRotatedCode(code);
     const room = voiceUsers.get(code);
     if (!room || !room.has(socket.user.id)) return;
     room.get(socket.user.id).isDeafened = !!data.deafened;
@@ -677,11 +712,13 @@ module.exports = function register(socket, ctx) {
       console.warn(`[VoiceDiag] voice-rejoin REJECTED — bad payload`);
       return;
     }
-    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    let code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) {
       console.warn(`[VoiceDiag] voice-rejoin REJECTED — invalid code "${code}"`);
       return;
     }
+    const requestedCode = code;
+    code = resolveRotatedCode(code);
 
     const vch = db.prepare('SELECT id, voice_enabled FROM channels WHERE code = ?').get(code);
     if (!vch) {
@@ -691,19 +728,27 @@ module.exports = function register(socket, ctx) {
       socket.emit('voice-channel-gone', { code });
       return;
     }
-    if (vch.voice_enabled === 0) {
-      console.warn(`[VoiceDiag] voice-rejoin REJECTED — voice disabled in channel ${code} (user=${socket.user.username}).`);
-      socket.emit('error-msg', 'Voice is disabled in this channel');
-      socket.emit('voice-channel-gone', { code });
-      return;
-    }
     const vMember = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(vch.id, socket.user.id);
     if (!vMember) {
       console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED — not a channel member`);
-      socket.emit('voice-channel-gone', { code });
+      socket.emit('voice-channel-gone', { code: requestedCode });
       return;
+    }
+    if (vch.voice_enabled === 0) {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED — voice disabled in channel ${code} (user=${socket.user.username}).`);
+      socket.emit('error-msg', 'Voice is disabled in this channel');
+      socket.emit('voice-channel-gone', { code: requestedCode });
+      return;
+    }
+    if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', vch.id)) {
+      socket.emit('error-msg', 'You don\'t have permission to use voice chat');
+      socket.emit('voice-channel-gone', { code: requestedCode });
+      return;
+    }
+    if (requestedCode !== code) {
+      socket.emit('channel-code-rotated', { channelId: vch.id, oldCode: requestedCode, newCode: code });
     }
 
     // ── FAST PATH: pending grace-period eviction ───────────
@@ -878,12 +923,13 @@ module.exports = function register(socket, ctx) {
         }).filter(Boolean)
       });
       setTimeout(() => {
-        for (const sharerId of sharers) {
-          const sharerInfo = voiceUsers.get(code)?.get(sharerId);
+        const activeCode = currentVoiceCode(code);
+        for (const sharerId of activeScreenSharers.get(activeCode) || []) {
+          const sharerInfo = voiceUsers.get(activeCode)?.get(sharerId);
           if (sharerInfo) {
             io.to(sharerInfo.socketId).emit('renegotiate-screen', {
               targetUserId: socket.user.id,
-              channelCode: code
+              channelCode: activeCode
             });
           }
         }
@@ -900,12 +946,13 @@ module.exports = function register(socket, ctx) {
         }).filter(Boolean)
       });
       setTimeout(() => {
-        for (const camUserId of camUsers) {
-          const camUserInfo = voiceUsers.get(code)?.get(camUserId);
+        const activeCode = currentVoiceCode(code);
+        for (const camUserId of activeWebcamUsers.get(activeCode) || []) {
+          const camUserInfo = voiceUsers.get(activeCode)?.get(camUserId);
           if (camUserInfo) {
             io.to(camUserInfo.socketId).emit('renegotiate-webcam', {
               targetUserId: socket.user.id,
-              channelCode: code
+              channelCode: activeCode
             });
           }
         }

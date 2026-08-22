@@ -7,7 +7,7 @@ module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserRoles, getUserHighestRole,
-    emitOnlineUsers, broadcastChannelLists, generateChannelCode,
+    emitOnlineUsers, broadcastChannelLists, generateUniqueSharedCode,
     logAudit, fireWebhookEvent, onReferrerPolicyChange, automod, getIdleOnlineUsers,
     getUploadUsage
   } = ctx;
@@ -255,6 +255,14 @@ module.exports = function register(socket, ctx) {
     if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
     if (key === 'vanity_code') {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
+      if (value) {
+        const conflicts =
+          db.prepare('SELECT 1 FROM channels WHERE code = ?').get(value) ||
+          db.prepare('SELECT 1 FROM channel_code_history WHERE old_code = ?').get(value) ||
+          db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(value) ||
+          db.prepare("SELECT 1 FROM server_settings WHERE key = 'server_code' AND value = ?").get(value);
+        if (conflicts) return socket.emit('error-msg', 'That code is already in use — pick another.');
+      }
     }
     if (key === 'registration_token_enabled') {
       if (!['true', 'false'].includes(value)) return;
@@ -424,7 +432,7 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', code);
     io.emit('server-setting-changed', { key: 'server_code', value: code });
     socket.emit('error-msg', `Server invite code generated: ${code}`);
@@ -471,6 +479,7 @@ module.exports = function register(socket, ctx) {
   // silently shadow a real channel; reject up front instead.
   const _inviteCodeTaken = (code, excludeId = null) => {
     if (db.prepare('SELECT 1 FROM channels WHERE code = ?').get(code)) return true;
+    if (db.prepare('SELECT 1 FROM channel_code_history WHERE old_code = ?').get(code)) return true;
     const ss = db.prepare("SELECT value FROM server_settings WHERE key IN ('server_code', 'vanity_code')").all();
     if (ss.some(r => r.value && r.value === code)) return true;
     const dup = db.prepare('SELECT id FROM invite_codes WHERE code = ?').get(code);
@@ -555,7 +564,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'That code is already in use — pick another.');
       }
     } else {
-      do { code = generateChannelCode(); } while (_inviteCodeTaken(code));
+      code = generateUniqueSharedCode();
     }
 
     const info = db.prepare(
