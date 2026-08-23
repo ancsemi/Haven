@@ -4451,9 +4451,11 @@ _setupUI() {
     host.innerHTML = this._inviteCodes.map(ic => {
       const status = !ic.enabled
         ? '<span style="color:var(--text-muted)">● Disabled</span>'
-        : ic.is_expired
-          ? '<span style="color:var(--danger,#e84a4a)">● Expired</span>'
-          : '<span style="color:var(--green,#43b581)">● Active</span>';
+        : ic.use_count >= ic.max_uses
+          ? '<span style="color:var(--text-secondary,#9498b3)">● Used</span>'
+          : ic.is_expired
+            ? '<span style="color:var(--danger,#e84a4a)">● Expired</span>'
+            : '<span style="color:var(--green,#43b581)">● Active</span>';
       const link = `${origin}/?invite=${encodeURIComponent(ic.code)}`;
       const chCount = (ic.channels && ic.channels.length)
         ? `${ic.channels.length} channel${ic.channels.length === 1 ? '' : 's'}`
