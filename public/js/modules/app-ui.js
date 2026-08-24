@@ -4497,8 +4497,8 @@ _setupUI() {
             <button class="btn-sm" data-act="edit-none">Select none</button>
           </div>
           <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="${minUsesInput}" max="${maxUsesInput}" value="${ic.max_uses || 1}" class="settings-number-input" data-role="edit-maxuses"></label>
-          <label class="select-row" style="margin-top:4px width: 6.5rem;"><span>Reset expiry</span>
-            <select class="settings-number-input" data-role="edit-expiry">
+          <label class="select-row" style="margin-top:4px"><span>Reset expiry</span>
+            <select class="settings-number-input" data-role="edit-expiry" style="width: 6.5rem;">
               <option value="-1" selected>Keep current</option>
               <option value="0">Never</option>
               <option value="1">After 1 hour</option>
