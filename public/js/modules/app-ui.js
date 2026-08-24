@@ -4447,6 +4447,13 @@ _setupUI() {
       host.innerHTML = '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No invite links yet. Create one below.</p>';
       return;
     }
+    // determine invite usage input limits
+    const parsedMaxInvtUses = parseInt(this.serverSettings?.max_invite_uses, 10);
+    const maxInvtUses = Number.isNaN(parsedMaxInvtUses) ? 1 : parsedMaxInvtUses;
+    const restrictUses = !this.user?.isAdmin && !this._hasPerm('manage_server') && maxInvtUses > 0;
+    const maxUsesInput = restrictUses ? maxInvtUses : 100000;
+    const minUsesInput = restrictUses ? 1 : 0;
+
     const origin = window.location.origin;
     host.innerHTML = this._inviteCodes.map(ic => {
       const status = !ic.enabled
@@ -4489,7 +4496,7 @@ _setupUI() {
             <button class="btn-sm" data-act="edit-all">Select all</button>
             <button class="btn-sm" data-act="edit-none">Select none</button>
           </div>
-          <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="0" max="100000" value="${ic.max_uses || 0}" class="settings-number-input" data-role="edit-maxuses"></label>
+          <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="${minUsesInput}" max="${maxUsesInput}" value="${ic.max_uses || 1}" class="settings-number-input" data-role="edit-maxuses"></label>
           <label class="select-row" style="margin-top:4px"><span>Reset expiry</span>
             <select class="settings-number-input" data-role="edit-expiry">
               <option value="-1" selected>Keep current</option>

@@ -2377,6 +2377,13 @@
             <small class="settings-hint">Shareable links that drop people straight into the channels you pick — no code to type. Each link can be turned off, limited to a number of people, or set to expire.</small>
             <button class="btn-sm btn-accent" id="open-invite-links-btn" type="button" style="margin-top:8px">🔗 Manage Invite Links <span id="invite-links-count" class="muted-text" style="font-weight:normal"></span></button>
           </div>
+          <div id="invite-links-settings-block">
+            <label class="select-row" style="margin-top:8px">
+              <span data-i18n="settings.admin.max_invite_uses">Max invite link uses</span>
+              <input type="number" id="max-invite-uses" min="0" max="100000" step="1" style="max-width:90px">
+            </label>
+            <small class="settings-hint" data-i18n="settings.admin.max_invite_uses_hint">The maximum number of uses an invite link can be set to. Admin and manage-server permission ignore this limit. (0 = unlimited)</small>
+          </div>
         </div>
         <!-- (#5381) Guest mode — password-less drop-in access scoped to a whitelist of channels -->
         <div class="admin-settings" id="section-guests" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">

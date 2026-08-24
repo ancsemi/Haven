@@ -431,6 +431,7 @@ function initDatabase() {
   insertSetting.run('turnstile_secret_key', '');        // Turnstile secret key (server-side verification only, never sent to clients)
   insertSetting.run('registration_rate_limit_enabled', 'false'); // opt-in global cap on new accounts per hour
   insertSetting.run('registration_rate_limit_per_hour', '20');   // the cap value when enabled
+  insertSetting.run('max_invite_uses', '1');            // the maximum uses each non-admin/manage-server invite link can accept
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)

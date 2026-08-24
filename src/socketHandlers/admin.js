@@ -93,6 +93,7 @@ module.exports = function register(socket, ctx) {
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
+      'max_invite_uses', // invite uses limiter for non-admin/mannage-server invite-links
       'channel_creator_role', // (#5461) role auto-granted to a non-admin who creates a channel
       // (#12) OIDC / SSO. The client secret is NOT here on purpose — it lives
       // in OIDC_CLIENT_SECRET in the environment, so a database backup never
@@ -168,6 +169,7 @@ module.exports = function register(socket, ctx) {
     if ((key === 'turnstile_site_key' || key === 'turnstile_secret_key') && value.length > 200) return;
     if (key === 'registration_rate_limit_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'registration_rate_limit_per_hour') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 100000) return; }
+    if (key === 'max_invite_uses') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
 
     // 'unsafe-url' and 'no-referrer-when-downgrade' are intentionally absent —
     // both leak the full URL cross-origin, and Haven's invite links live in the
@@ -538,6 +540,15 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Enforce the server-configured max uses for delegated inviters.
+    // 0 = unlimited. Admins and manage_server are uncapped.
+    let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
+    if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 1;
+    const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
+    if (restrictUses && (data.maxUses > maxInvtUsesSetting || data.maxUses <= 0)) {
+      return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
+    }
+
     const label = typeof data.label === 'string' ? data.label.trim().slice(0, 60) : '';
     const channels = _normaliseInviteChannels(data.channels);
     if (channels === null) return socket.emit('error-msg', 'Invalid channel selection');
@@ -580,6 +591,15 @@ module.exports = function register(socket, ctx) {
     if (!Number.isInteger(id)) return;
     const row = _ownedInvite(id);
     if (!row) return socket.emit('error-msg', 'Invite link not found');
+
+    // Enforce the server-configured max uses for delegated inviters.
+    // 0 = unlimited. Admins and manage_server are uncapped.
+    let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
+    if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 1;
+    const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
+    if (restrictUses && (data.maxUses > maxInvtUsesSetting || data.maxUses <= 0)) {
+      return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
+    }
 
     const sets = [];
     const vals = [];

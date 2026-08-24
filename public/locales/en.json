@@ -1000,6 +1000,8 @@
       "max_emoji_hint": "Max custom emoji upload size (64–1024 KB, default 256)",
       "max_poll_hint": "Maximum answer choices per poll (2–25, default 10)",
       "max_message_chars_hint": "Maximum characters per message, post, or DM (200–100000, default 2000)",
+      "max_invite_uses": "Max invite link uses",
+      "max_invite_uses_hint": "The maximum number of uses an invite link can be set to. Admin and manage-server permission ignore this limit. (0 = unlimited)",
       "connectivity_title": "Voice & Connectivity",
       "connectivity_hint": "STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on \"ICE: Connecting...\", set your own servers here.",
       "stun_urls": "STUN servers",

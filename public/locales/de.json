@@ -886,6 +886,8 @@
       "max_sound_hint": "Max. Soundboard-Upload-Größe (256–10240 KB, Standard 1024 / 1 MB)",
       "max_emoji_hint": "Max. benutzerdefinierte Emoji-Upload-Größe (64–1024 KB, Standard 256)",
       "max_poll_hint": "Maximale Antwortmöglichkeiten pro Umfrage (2–25, Standard 10)",
+      "max_invite_uses": "Maximale Anzahl der Einladungslink-Nutzungen",
+      "max_invite_uses_hint": "Die maximale Anzahl von Nutzungen, auf die ein Einladungslink festgelegt werden kann. Administratoren und Benutzer mit der Berechtigung zur Serververwaltung ignorieren dieses Limit. (0 = unbegrenzt)",
       "sounds_hint": "Audiodateien für benutzerdefinierte Benachrichtigungstöne hochladen",
       "emojis_hint": "Bilder für benutzerdefinierte Server-Emojis hochladen",
       "emojis_upload_hint": "Bilder für benutzerdefinierte Server-Emojis hochladen (max. 256 KB, png/gif/webp). Name muss kleingeschrieben sein, keine Leerzeichen.",

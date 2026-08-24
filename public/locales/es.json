@@ -886,6 +886,8 @@
       "max_sound_hint": "Tamaño máximo de carga de soundboard (256–10240 KB, predeterminado 1024 / 1 MB)",
       "max_emoji_hint": "Tamaño máximo de carga de emoji personalizado (64–1024 KB, predeterminado 256)",
       "max_poll_hint": "Opciones de respuesta máximas por encuesta (2–25, predeterminado 10)",
+      "max_invite_uses": "Máximo de usos del enlace de invitación",
+      "max_invite_uses_hint": "El número máximo de usos que se puede establecer para un enlace de invitación. Los administradores y usuarios con permiso para gestionar el servidor ignoran este límite. (0 = ilimitado)",
       "sounds_hint": "Subir archivos de audio para sonidos de notificación personalizados",
       "emojis_hint": "Subir imágenes para emojis personalizados del servidor",
       "emojis_upload_hint": "Subir imágenes para emojis personalizados del servidor (máx. 256 KB, png/gif/webp). El nombre debe estar en minúsculas, sin espacios.",

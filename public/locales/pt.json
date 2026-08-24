@@ -1000,6 +1000,8 @@
       "max_emoji_hint": "Tamanho máximo de envio de emoji personalizado (64–1024 KB, padrão: 256)",
       "max_poll_hint": "Máximo de opções de resposta por enquete (2–25, padrão: 10)",
       "max_message_chars_hint": "Máximo de caracteres por mensagem, publicação ou DM (200–100000, padrão: 2000)",
+      "max_invite_uses": "Máximo de utilizações do link de convite",
+      "max_invite_uses_hint": "O número máximo de utilizações que pode ser definido para um link de convite. Administradores e utilizadores com permissão para gerir o servidor ignoram este limite. (0 = ilimitado)",
       "connectivity_title": "Voz e conectividade",
       "connectivity_hint": "Os servidores STUN/TURN permitem que chamadas de voz e compartilhamentos de tela conectem usuários em redes diferentes. Deixe em branco para usar o pool STUN integrado do Haven. Se usuários fora da sua rede local ficarem presos em “ICE: Connecting...”, configure seus próprios servidores aqui.",
       "stun_urls": "Servidores STUN",
