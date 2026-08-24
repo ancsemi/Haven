@@ -4508,7 +4508,7 @@ _setupUI() {
             </select>
           </label>
           <div style="display:flex;gap:4px;margin-top:8px">
-            <button class="btn-sm btn-accent" data-act="save">Save changes</button>
+            <button class="btn-sm btn-accent" data-act="save" style="width: 6.5rem;">Save changes</button>
             <button class="btn-sm" data-act="cancel">Cancel</button>
           </div>
         </div>

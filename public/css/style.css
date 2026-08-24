@@ -10599,7 +10599,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   padding-top: 0;
   border-top: none;
 }
-#invite-new-expiry { width: 5.7rem }
+#invite-new-expiry { width: 6.5rem }
 
 /* Note on a setting that also has a value in the server's environment, so the
    admin can see which of the two is actually live. (#5489) */
