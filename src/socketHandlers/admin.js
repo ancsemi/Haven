@@ -628,6 +628,7 @@ module.exports = function register(socket, ctx) {
         details: { fields: sets.map(s => s.split(' ')[0]) }
       });
     }
+    socket.emit('toast', { message: `Invite link updated`, type: 'success' });
     _emitInviteCodes();
   });
 

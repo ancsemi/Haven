@@ -4608,7 +4608,6 @@ _setupUI() {
       const exp = parseInt(card.querySelector('[data-role="edit-expiry"]')?.value);
       if (Number.isFinite(exp) && exp >= 0) payload.expiresInHours = exp;
       this.socket.emit('update-invite-code', payload);
-      this._showToast?.('Invite link updated', 'success');
     }
   });
 
