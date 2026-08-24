@@ -4497,7 +4497,7 @@ _setupUI() {
             <button class="btn-sm" data-act="edit-none">Select none</button>
           </div>
           <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="${minUsesInput}" max="${maxUsesInput}" value="${ic.max_uses || 1}" class="settings-number-input" data-role="edit-maxuses"></label>
-          <label class="select-row" style="margin-top:4px"><span>Reset expiry</span>
+          <label class="select-row" style="margin-top:4px width: 6.5rem;"><span>Reset expiry</span>
             <select class="settings-number-input" data-role="edit-expiry">
               <option value="-1" selected>Keep current</option>
               <option value="0">Never</option>
@@ -4508,7 +4508,7 @@ _setupUI() {
             </select>
           </label>
           <div style="display:flex;gap:4px;margin-top:8px">
-            <button class="btn-sm btn-accent" data-act="save" style="width: 6.5rem;">Save changes</button>
+            <button class="btn-sm btn-accent" data-act="save">Save changes</button>
             <button class="btn-sm" data-act="cancel">Cancel</button>
           </div>
         </div>
