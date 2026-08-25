@@ -540,19 +540,26 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // make sure maxUses value is defined and valid
+    // to prevent an omission or invalid value from being interpreted as unlimited uses (0)
+    const maxUses = Number(data.maxUses);
+    if (data.maxUses === null || data.maxUses === '' || !Number.isInteger(maxUses) || maxUses < 0) {
+      return socket.emit('error-msg', `maxUses invalid or not defined`);
+    }
+
     // Enforce the server-configured max uses for delegated inviters.
     // 0 = unlimited. Admins and manage_server are uncapped.
     let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
-    if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 1;
+    if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 0;
     const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
-    if (restrictUses && (data.maxUses > maxInvtUsesSetting || data.maxUses <= 0)) {
+    if (restrictUses && (maxUses > maxInvtUsesSetting || maxUses <= 0)) {
       return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
     }
+    if (maxUses > 100000) return socket.emit('error-msg', `maxUses value must be <= 100000.`);
 
     const label = typeof data.label === 'string' ? data.label.trim().slice(0, 60) : '';
     const channels = _normaliseInviteChannels(data.channels);
     if (channels === null) return socket.emit('error-msg', 'Invalid channel selection');
-    const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
     const expiresAt = _inviteExpiryStamp(data.expiresInHours);
 
     // Custom slug (optional) or an auto-generated 8-char hex code.
@@ -592,15 +599,6 @@ module.exports = function register(socket, ctx) {
     const row = _ownedInvite(id);
     if (!row) return socket.emit('error-msg', 'Invite link not found');
 
-    // Enforce the server-configured max uses for delegated inviters.
-    // 0 = unlimited. Admins and manage_server are uncapped.
-    let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
-    if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 1;
-    const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
-    if (restrictUses && (data.maxUses > maxInvtUsesSetting || data.maxUses <= 0)) {
-      return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
-    }
-
     const sets = [];
     const vals = [];
     if (typeof data.label === 'string') { sets.push('label = ?'); vals.push(data.label.trim().slice(0, 60)); }
@@ -610,7 +608,21 @@ module.exports = function register(socket, ctx) {
       sets.push('channels = ?'); vals.push(channels);
     }
     if ('maxUses' in data) {
-      const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
+      // make sure maxUses value is defined and valid
+      // to prevent an omission or invalid value from being interpreted as unlimited uses (0)
+      const maxUses = Number(data.maxUses);
+      if (data.maxUses === null || data.maxUses === '' || !Number.isInteger(maxUses) || maxUses < 0) {
+        return socket.emit('error-msg', `maxUses invalid or not defined`);
+      }
+      // Enforce the server-configured max uses for delegated inviters.
+      // 0 = unlimited. Admins and manage_server are uncapped.
+      let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
+      if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 0;
+      const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
+      if (restrictUses && (maxUses > maxInvtUsesSetting || maxUses <= 0)) {
+        return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
+      }
+      if (maxUses > 100000) return socket.emit('error-msg', `maxUses value must be <= 100000.`);
       sets.push('max_uses = ?'); vals.push(maxUses);
     }
     if ('expiresInHours' in data) {

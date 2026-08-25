@@ -597,7 +597,7 @@ _applyServerSettings() {
   const rlNum = document.getElementById('registration-rate-limit-per-hour');
   if (rlNum) rlNum.value = this.serverSettings.registration_rate_limit_per_hour || '20';
   const maxInvUses = document.getElementById('max-invite-uses');
-  if (maxInvUses) maxInvUses.value = this.serverSettings.max_invite_uses || '1';
+  if (maxInvUses) maxInvUses.value = this.serverSettings.max_invite_uses || '0';
   
 
   // (#5345) Default join channels — re-render when settings or channel list refresh
@@ -896,7 +896,7 @@ _snapshotAdminSettings() {
     turnstile_secret_key: this.serverSettings.turnstile_secret_key || '',
     registration_rate_limit_enabled: this.serverSettings.registration_rate_limit_enabled || 'false',
     registration_rate_limit_per_hour: this.serverSettings.registration_rate_limit_per_hour || '20',
-    max_invite_uses: this.serverSettings.max_invite_uses || '1',
+    max_invite_uses: this.serverSettings.max_invite_uses || '0',
     default_theme: this.serverSettings.default_theme || '',
     default_locale: this.serverSettings.default_locale || '',
     published_themes: this.serverSettings.published_themes || '[]',
@@ -1093,8 +1093,8 @@ _saveAdminSettings() {
     this.socket.emit('update-server-setting', { key: 'registration_rate_limit_per_hour', value: rlPerHour });
     changed = true;
   }
-  const maxInvUses = (document.getElementById('max-invite-uses')?.value || '1').trim();
-  if (maxInvUses !== (snap.max_invite_uses || '1')) {
+  const maxInvUses = (document.getElementById('max-invite-uses')?.value || '0').trim();
+  if (maxInvUses !== (snap.max_invite_uses || '0')) {
     this.socket.emit('update-server-setting', { key: 'max_invite_uses', value: maxInvUses });
     changed = true;
   }
@@ -2229,7 +2229,7 @@ _openInviteLinksModal() {
   // Setup max invite uses input limits.
   // admin and manage_server roles exempt from limitation.
   const parsedMaxInvtUses = parseInt(this.serverSettings?.max_invite_uses, 10);
-  const maxInvtUses = Number.isNaN(parsedMaxInvtUses) ? 1 : parsedMaxInvtUses;
+  const maxInvtUses = Number.isNaN(parsedMaxInvtUses) ? 0 : parsedMaxInvtUses;
   const restrictUses = !this.user?.isAdmin && !this._hasPerm('manage_server') && maxInvtUses > 0;
   const maxUsesInput = document.getElementById('invite-new-maxuses');
   if (maxUsesInput) {
