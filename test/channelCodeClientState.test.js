@@ -174,13 +174,12 @@ test('voice-channel-gone can be repaired by channels-list without delaying rejoi
   voice.inVoice = true;
   voice.deferChannelGone(6000);
   handlers['voice-channel-gone']({ code: '33333333' });
+  const originalDeadline = voice._deferChannelGoneUntil;
+  const originalTimer = voice._deferredChannelGoneTimer;
   voice.deferChannelGone(6000);
-  assert.equal(voice._deferredChannelGone, null);
-  voice.resolveDeferredChannelGone(null);
-  assert.equal(voice.leaveCalls, 0);
-
-  voice.deferChannelGone(6000);
-  handlers['voice-channel-gone']({ code: '33333333' });
+  assert.ok(voice._deferredChannelGone);
+  assert.equal(voice._deferChannelGoneUntil, originalDeadline);
+  assert.equal(voice._deferredChannelGoneTimer, originalTimer);
   voice.resolveDeferredChannelGone(null);
   assert.equal(voice.leaveCalls, 1);
 
@@ -191,6 +190,51 @@ test('voice-channel-gone can be repaired by channels-list without delaying rejoi
   assert.match(connectHandler, /emit\('enter-channel'/);
   assert.match(connectHandler, /emit\('voice-rejoin'/);
   assert.doesNotMatch(connectHandler, /await[^;]+channels-list|_resumeChannelsAfterList/);
+  const channelListHandler = SOCKET_SOURCE.slice(
+    SOCKET_SOURCE.indexOf("this.socket.on('channels-list'"),
+    SOCKET_SOURCE.indexOf("this.socket.on('message-history'")
+  );
+  assert.match(channelListHandler, /voiceRotation[\s\S]+_healPeerConnectionsAfterChannelRotation/);
+});
+
+test('rotation recovery rolls back an unanswered offer sent with the old code', async () => {
+  const context = vm.createContext({
+    module: { exports: {} },
+    navigator: { userAgent: '', platform: '', maxTouchPoints: 0 },
+    localStorage: createStorage(),
+    console: { log() {}, warn() {}, error() {} },
+    setTimeout,
+    clearTimeout,
+    Date
+  });
+  vm.runInContext(`${VOICE_SOURCE}\nmodule.exports = VoiceManager;`, context, { filename: 'voice.js' });
+  const VoiceManager = context.module.exports;
+  const voice = Object.create(VoiceManager.prototype);
+  let rollback;
+  let healCalls = 0;
+  const connection = {
+    signalingState: 'have-local-offer',
+    async setLocalDescription(description) {
+      rollback = description;
+      this.signalingState = 'stable';
+    }
+  };
+  const peer = {
+    connection,
+    _makingOffer: false,
+    _awaitingAnswer: true,
+    _offerIsIceRestart: true,
+    _offerChannelCode: '11111111'
+  };
+  voice.peers = new Map([[7, peer]]);
+  voice._healPeerConnections = () => { healCalls++; };
+
+  await voice._healPeerConnectionsAfterChannelRotation('11111111');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(rollback)), { type: 'rollback' });
+  assert.equal(peer._awaitingAnswer, false);
+  assert.equal(peer._offerChannelCode, null);
+  assert.equal(healCalls, 1);
 });
 
 test('voice joins are single-flight while async setup is pending', async () => {

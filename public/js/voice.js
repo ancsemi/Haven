@@ -319,11 +319,9 @@ class VoiceManager {
   }
 
   deferChannelGone(timeoutMs = 6000) {
-    if (this._deferredChannelGoneTimer) {
-      clearTimeout(this._deferredChannelGoneTimer);
-      this._deferredChannelGoneTimer = null;
-    }
-    this._deferredChannelGone = null;
+    // Once the server has answered, reconnect flaps must not discard that
+    // answer or extend its absolute deadline beyond the original window.
+    if (this._deferredChannelGone) return;
     this._deferChannelGoneUntil = Date.now() + timeoutMs;
   }
 
@@ -539,6 +537,7 @@ class VoiceManager {
         peer._makingOffer = false;
         peer._awaitingAnswer = false;
         peer._offerIsIceRestart = false;
+        peer._offerChannelCode = null;
         if (conn.signalingState !== 'stable') {
           await conn.setLocalDescription({ type: 'rollback' });
         }
@@ -605,6 +604,7 @@ class VoiceManager {
             await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
             peer._awaitingAnswer = false;
             peer._offerIsIceRestart = false;
+            peer._offerChannelCode = null;
             // Flush buffered ICE candidates that arrived before the answer
             if (peer._pendingCandidates && peer._pendingCandidates.length) {
               for (const c of peer._pendingCandidates) {
@@ -1897,12 +1897,13 @@ class VoiceManager {
       }
       await connection.setLocalDescription(offer);
       peer._awaitingAnswer = true;
+      peer._offerChannelCode = this.currentChannel;
       // Remember whether the offer now in flight is an ICE restart, so that if
       // it later yields to glare the restart intent can be re-queued rather
       // than silently downgraded to a plain renegotiation (#5444).
       peer._offerIsIceRestart = iceRestart;
       this.socket.emit('voice-offer', {
-        code: this.currentChannel,
+        code: peer._offerChannelCode,
         targetUserId: userId,
         offer: offer
       });
@@ -2113,6 +2114,7 @@ class VoiceManager {
         if (latestPeer._awaitingAnswer) {
           latestPeer._awaitingAnswer = false;
         }
+        latestPeer._offerChannelCode = null;
         this._drainQueuedRenegotiation(userId);
       }
     });
@@ -2164,6 +2166,7 @@ class VoiceManager {
       _renegotiateQueued: false,
       _queuedIceRestart: false,
       _offerIsIceRestart: false,
+      _offerChannelCode: null,
     });
 
     // If we're the initiator, create and send an offer
@@ -2286,6 +2289,23 @@ class VoiceManager {
         this._restartIce(userId, conn);
       }, delay);
     }
+  }
+
+  async _healPeerConnectionsAfterChannelRotation(oldCode) {
+    const rollbacks = [];
+    for (const [, peer] of this.peers) {
+      const connection = peer?.connection;
+      if (!connection || peer._offerChannelCode !== oldCode) continue;
+      peer._makingOffer = false;
+      peer._awaitingAnswer = false;
+      peer._offerIsIceRestart = false;
+      peer._offerChannelCode = null;
+      if (connection.signalingState === 'have-local-offer') {
+        rollbacks.push(connection.setLocalDescription({ type: 'rollback' }).catch(() => {}));
+      }
+    }
+    if (rollbacks.length) await Promise.all(rollbacks);
+    this._healPeerConnections();
   }
 
   // ── Volume Control ──────────────────────────────────────

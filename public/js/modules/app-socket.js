@@ -837,6 +837,7 @@ _setupSocketListeners() {
       this.socket.emit('voice-rejoin', { code: voiceRotation.newCode });
       if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: voiceRotation.newCode, muted: true });
       if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: voiceRotation.newCode, deafened: true });
+      this.voice._healPeerConnectionsAfterChannelRotation?.(voiceRotation.oldCode);
     }
     // Seed client-side unreadCounts from server-reported values so the
     // desktop badge, tab title, and DM section badge stay in sync.
