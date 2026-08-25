@@ -110,13 +110,11 @@ module.exports = function register(socket, ctx) {
     userHasPermission(socket.user.id, 'manage_sub_channels', parentId);
 
   // ── Get user's channels ─────────────────────────────────
-  socket.on('get-channels', (data) => {
-    const knownCodes = Array.isArray(data?.knownCodes) ? data.knownCodes : [];
+  socket.on('get-channels', () => {
     const channels = getEnrichedChannels(
       socket.user.id,
       socket.user.isAdmin,
-      (room) => socket.join(room),
-      knownCodes
+      (room) => socket.join(room)
     );
     socket.emit('channels-list', channels);
   });
@@ -534,8 +532,11 @@ module.exports = function register(socket, ctx) {
         const newCount = (channel.code_rotation_counter || 0) + 1;
         const threshold = channel.code_rotation_interval || 5;
         if (newCount >= threshold) {
-          const newCode = rotateChannelCode(channel.id, code);
-          channel.code = newCode;
+          try {
+            channel.code = rotateChannelCode(channel.id, code);
+          } catch (err) {
+            console.warn(`[ChannelRotation] Join-triggered rotation failed for channel ${channel.id}:`, err.message);
+          }
         } else {
           db.prepare('UPDATE channels SET code_rotation_counter = ? WHERE id = ?').run(newCount, channel.id);
         }
@@ -1441,7 +1442,12 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND is_dm = 0').get(channelId);
     if (!channel) return;
     const oldCode = channel.code;
-    rotateChannelCode(channelId, oldCode);
+    try {
+      rotateChannelCode(channelId, oldCode);
+    } catch (err) {
+      console.warn(`[ChannelRotation] Manual rotation failed for channel ${channelId}:`, err.message);
+      socket.emit('error-msg', 'Channel code rotation failed — please try again.');
+    }
   });
 
   // ── Invite user to channel ──────────────────────────────

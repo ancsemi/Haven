@@ -258,7 +258,6 @@ module.exports = function register(socket, ctx) {
       if (value) {
         const conflicts =
           db.prepare('SELECT 1 FROM channels WHERE code = ?').get(value) ||
-          db.prepare('SELECT 1 FROM channel_code_history WHERE old_code = ?').get(value) ||
           db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(value) ||
           db.prepare("SELECT 1 FROM server_settings WHERE key = 'server_code' AND value = ?").get(value);
         if (conflicts) return socket.emit('error-msg', 'That code is already in use — pick another.');
@@ -479,7 +478,6 @@ module.exports = function register(socket, ctx) {
   // silently shadow a real channel; reject up front instead.
   const _inviteCodeTaken = (code, excludeId = null) => {
     if (db.prepare('SELECT 1 FROM channels WHERE code = ?').get(code)) return true;
-    if (db.prepare('SELECT 1 FROM channel_code_history WHERE old_code = ?').get(code)) return true;
     const ss = db.prepare("SELECT value FROM server_settings WHERE key IN ('server_code', 'vanity_code')").all();
     if (ss.some(r => r.value && r.value === code)) return true;
     const dup = db.prepare('SELECT id FROM invite_codes WHERE code = ?').get(code);

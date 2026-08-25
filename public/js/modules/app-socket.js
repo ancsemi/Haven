@@ -1,178 +1,5 @@
 export default {
 
-_migrateChannelCodeState(oldCode, newCode) {
-  if (!oldCode || !newCode || oldCode === newCode) return;
-  const migrateObjectKey = store => {
-    if (!store || !Object.prototype.hasOwnProperty.call(store, oldCode)) return false;
-    store[newCode] = store[oldCode];
-    delete store[oldCode];
-    return true;
-  };
-  migrateObjectKey(this.unreadCounts);
-  migrateObjectKey(this.voiceCounts);
-  migrateObjectKey(this.voiceChannelUsers);
-  migrateObjectKey(this._pinnedCountByChannel);
-  migrateObjectKey(this._unreadPinIdByChannel);
-  if (migrateObjectKey(this._threadMentions)) this._persistThreadMentions?.();
-
-  for (const property of [
-    'currentChannel',
-    '_lastVoiceUsersChannel',
-    '_pendingChannelHistoryCode',
-    '_pinsPipChannelCode',
-    '_organizeParentCode'
-  ]) {
-    if (this[property] === oldCode) this[property] = newCode;
-  }
-  if (this.voice?.currentChannel === oldCode) this.voice.currentChannel = newCode;
-  if (this.voice?._softLeftChannel === oldCode) this.voice._softLeftChannel = newCode;
-  for (const channel of this.channels || []) {
-    if (channel.afk_sub_code === oldCode) channel.afk_sub_code = newCode;
-  }
-  const createSubModal = document.getElementById('create-sub-modal');
-  if (createSubModal?._parentCode === oldCode) createSubModal._parentCode = newCode;
-
-  try {
-    if (localStorage.getItem('haven_voice_channel') === oldCode) {
-      localStorage.setItem('haven_voice_channel', newCode);
-    }
-    for (const key of ['haven_muted_channels', 'haven_hidden_channels']) {
-      const values = JSON.parse(localStorage.getItem(key) || '[]');
-      if (!Array.isArray(values) || !values.includes(oldCode)) continue;
-      const migrated = values.map(code => code === oldCode ? newCode : code);
-      localStorage.setItem(key, JSON.stringify([...new Set(migrated)]));
-    }
-    const moveStorageKey = (oldKey, newKey) => {
-      const value = localStorage.getItem(oldKey);
-      if (value === null) return;
-      localStorage.setItem(newKey, value);
-      localStorage.removeItem(oldKey);
-    };
-    for (const prefix of [
-      'haven_seen_pin_max_',
-      'haven_tag_sorts_',
-      'haven_cat_order_',
-      'haven_cat_sort_',
-      'haven_subs_collapsed_'
-    ]) moveStorageKey(`${prefix}${oldCode}`, `${prefix}${newCode}`);
-
-    const subtagPrefix = `haven_subtag_collapsed_${oldCode}_`;
-    const subtagKeys = [];
-    for (let index = 0; index < localStorage.length; index++) {
-      const key = localStorage.key(index);
-      if (key?.startsWith(subtagPrefix)) subtagKeys.push(key);
-    }
-    for (const key of subtagKeys) {
-      moveStorageKey(key, `haven_subtag_collapsed_${newCode}_${key.slice(subtagPrefix.length)}`);
-    }
-  } catch { /* localStorage may be unavailable or contain stale data */ }
-},
-
-_getKnownChannelCodes() {
-  const codes = [this.currentChannel, this.voice?.currentChannel, this.voice?._softLeftChannel];
-  for (const store of [
-    this.unreadCounts,
-    this.voiceCounts,
-    this.voiceChannelUsers,
-    this._pinnedCountByChannel,
-    this._unreadPinIdByChannel,
-    this._threadMentions
-  ]) {
-    if (store && typeof store === 'object') codes.push(...Object.keys(store));
-  }
-  try {
-    codes.push(localStorage.getItem('haven_voice_channel'));
-  } catch {}
-  try {
-    const byId = JSON.parse(localStorage.getItem('haven_channel_codes_by_id') || '{}');
-    if (byId && typeof byId === 'object' && !Array.isArray(byId)) {
-      codes.push(...Object.values(byId));
-    }
-  } catch {}
-  for (const key of ['haven_muted_channels', 'haven_hidden_channels']) {
-    try {
-      const values = JSON.parse(localStorage.getItem(key) || '[]');
-      if (Array.isArray(values)) codes.push(...values);
-    } catch {}
-  }
-  try {
-    for (let index = 0; index < localStorage.length; index++) {
-      const key = localStorage.key(index) || '';
-      const match = key.match(/^haven_(?:seen_pin_max|tag_sorts|cat_order|cat_sort|subs_collapsed)_([a-f0-9]{8})$/i) ||
-        key.match(/^haven_subtag_collapsed_([a-f0-9]{8})_/i);
-      if (match) codes.push(match[1]);
-    }
-  } catch { /* localStorage may be unavailable */ }
-  return [...new Set(codes.filter(code => typeof code === 'string' && /^[a-f0-9]{8}$/i.test(code)))].slice(0, 2000);
-},
-
-_resumeChannelsAfterReconnect({ resetMessages = true, lightVoice = false } = {}) {
-  if (this.currentChannel) {
-    this.socket.emit('enter-channel', { code: this.currentChannel });
-    if (resetMessages) {
-      this._oldestMsgId = null;
-      this._noMoreHistory = false;
-      this._loadingHistory = false;
-      this._historyBefore = null;
-      this._newestMsgId = null;
-      this._noMoreFuture = true;
-      this._loadingFuture = false;
-      this._historyAfter = null;
-      this.socket.emit('get-messages', { code: this.currentChannel });
-    }
-    this.socket.emit('get-channel-members', { code: this.currentChannel });
-    this.socket.emit('request-online-users', { code: this.currentChannel });
-    this.socket.emit('request-voice-users', {
-      code: this.currentChannel,
-      iAmInVoice: !!(this.voice && this.voice.inVoice && this.voice.currentChannel === this.currentChannel)
-    });
-  }
-  if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
-    this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
-    if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: this.voice.currentChannel, muted: true });
-    if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
-    setTimeout(() => {
-      if (this.socket?.connected) this.voice._healPeerConnections?.();
-    }, 1500);
-    if (lightVoice) {
-      try { this._reconcileVoiceUi?.(); } catch {}
-      try { this.voice.reassertScreenStreams?.(); } catch {}
-    }
-  } else if (this.voice && this.voice._softLeftChannel) {
-    const rejoinChannel = this.voice._softLeftChannel;
-    this.voice._softLeftChannel = null;
-    (async () => {
-      try {
-        const ok = await this.voice.join(rejoinChannel);
-        if (ok) {
-          this._updateVoiceButtons(true);
-          this._updateVoiceStatus(true);
-          this._updateVoiceBar();
-        }
-      } catch (e) {
-        console.warn('[Voice] reconnect rejoin failed:', e);
-      }
-    })();
-  } else {
-    try {
-      const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
-      if (savedVoiceChannel && /^[a-f0-9]{8}$/i.test(savedVoiceChannel)) {
-        setTimeout(async () => {
-          if (this.voice && !this.voice.inVoice) {
-            console.log('[Voice] Auto-rejoining saved voice channel:', savedVoiceChannel);
-            const ok = await this.voice.join(savedVoiceChannel);
-            if (ok) {
-              this._updateVoiceButtons(true);
-              this._updateVoiceStatus(true);
-              this._updateVoiceBar();
-            }
-          }
-        }, 1500);
-      }
-    } catch {}
-  }
-},
-
 // ── Socket Event Listeners ────────────────────────────
 
 _setupSocketListeners() {
@@ -327,7 +154,7 @@ _setupSocketListeners() {
 
     // Re-join channel after reconnect (server lost our room membership)
     this.socket.emit('visibility-change', { visible: !document.hidden });
-    this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() });
+    this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
 
     // (#5399 follow-up) Reconcile per-channel mute prefs with the server
@@ -367,7 +194,7 @@ _setupSocketListeners() {
       // Token is valid but channels never came. Retry once before giving up.
       if (!this._channelsListGotResponse && this.socket?.connected) {
         console.warn('[#5391] channels-list missing after 10s, retrying get-channels');
-        this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() });
+        this.socket.emit('get-channels');
         setTimeout(() => {
           if (!this._channelsListGotResponse) {
             // Server clearly can't fulfil get-channels for this session —
@@ -379,9 +206,83 @@ _setupSocketListeners() {
         }, 5000);
       }
     }, 10000);
-    // Wait for channels-list so persisted code aliases are migrated before any
-    // text or voice request can use a stale code that now belongs elsewhere.
-    this._resumeChannelsAfterList = { resetMessages: true };
+    if (this.currentChannel) {
+      this.socket.emit('enter-channel', { code: this.currentChannel });
+      // Reset pagination — reconnect replaces message list
+      this._oldestMsgId = null;
+      this._noMoreHistory = false;
+      this._loadingHistory = false;
+      this._historyBefore = null;
+      this._newestMsgId = null;
+      this._noMoreFuture = true;
+      this._loadingFuture = false;
+      this._historyAfter = null;
+      this.socket.emit('get-messages', { code: this.currentChannel });
+      this.socket.emit('get-channel-members', { code: this.currentChannel });
+      // Request fresh voice list for the channel currently in view.
+      this.socket.emit('request-voice-users', {
+        code: this.currentChannel,
+        iAmInVoice: !!(this.voice && this.voice.inVoice && this.voice.currentChannel === this.currentChannel)
+      });
+    }
+    // Re-join voice if we were in voice before reconnect
+    if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
+      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+      if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: this.voice.currentChannel, muted: true });
+      if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
+      // (#5427) When the socket flaps (common on the web client behind certain
+      // proxies/browsers), this fast-path rejoin keeps the existing peer
+      // connections instead of rebuilding them — but if ICE silently died
+      // during the outage, some peers end up with no audio while others are
+      // fine. The auto-recovery on connectionstatechange can take up to 8s and
+      // can miss an event that fired while we were disconnected. Once signaling
+      // is back, proactively ICE-restart only the peers that are actually
+      // broken so audio comes back without a manual leave/rejoin.
+      setTimeout(() => {
+        if (this.socket?.connected) this.voice._healPeerConnections?.();
+      }, 1500);
+    } else if (this.voice && this.voice._softLeftChannel) {
+      // (#5347 v3.15.4) The socket dropped while we were in voice; _softLeave
+      // tore down local audio but kept the channel intent. Re-init the mic
+      // and announce ourselves via voice-rejoin so peers tear down their
+      // stale RTCPeerConnections via voice-user-left and we get fresh ones.
+      // This is the proper rejoin path — the localStorage setTimeout(1500)
+      // fallback below uses voice.join which doesn't do that, leaving peers
+      // with dead audio paths even after "rejoin".
+      const rejoinChannel = this.voice._softLeftChannel;
+      this.voice._softLeftChannel = null;
+      (async () => {
+        try {
+          const ok = await this.voice.join(rejoinChannel);
+          if (ok) {
+            this._updateVoiceButtons(true);
+            this._updateVoiceStatus(true);
+            this._updateVoiceBar();
+          }
+        } catch (e) {
+          console.warn('[Voice] reconnect rejoin failed:', e);
+        }
+      })();
+    } else {
+      // Check localStorage for saved voice channel (persists across page refreshes / server restarts)
+      try {
+        const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
+        if (savedVoiceChannel && /^[a-f0-9]{8}$/i.test(savedVoiceChannel)) {
+          // Auto-rejoin saved voice channel after delay (wait for channels to load)
+          setTimeout(async () => {
+            if (this.voice && !this.voice.inVoice) {
+              console.log('[Voice] Auto-rejoining saved voice channel:', savedVoiceChannel);
+              const ok = await this.voice.join(savedVoiceChannel);
+              if (ok) {
+                this._updateVoiceButtons(true);
+                this._updateVoiceStatus(true);
+                this._updateVoiceBar();
+              }
+            }
+          }, 1500);
+        }
+      } catch {}
+    }
     // Apply any queued status change from when we were disconnected
     if (this._pendingStatus) {
       this.socket.emit('set-status', this._pendingStatus);
@@ -455,11 +356,63 @@ _setupSocketListeners() {
       // Skip heavy refresh if we just handled a 'connect' event (avoids doubled emits)
       const sinceLast = Date.now() - (this._lastConnectTime || 0);
       if (sinceLast < 3000) return;
-      // Resolve persisted aliases before using channel codes after sleep.
-      if (this.socket?.connected) {
-        this._resumeChannelsAfterList = { resetMessages: !!this._coupledToBottom, lightVoice: voiceLive };
-        this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() });
+      // Re-fetch current channel messages + member list to catch anything missed
+      // Only do a full reset if coupled to bottom — if the user was browsing
+      // history before the tab switch, preserve their position by skipping the
+      // reset so _renderMessages doesn't yank them to the latest messages.
+      if (this.currentChannel && this.socket?.connected) {
+        // (#post-sleep-channel-desync) Re-emit enter-channel so the server
+        // re-adds this socket to its channelUsers map for this code. Without
+        // this, subsequent online-users broadcasts compute the roster from
+        // a stale map and the user sees an empty member list — exactly the
+        // symptom reported after a multi-hour PC sleep.
+        this.socket.emit('enter-channel', { code: this.currentChannel });
+        if (this._coupledToBottom) {
+          this._oldestMsgId = null;
+          this._noMoreHistory = false;
+          this._loadingHistory = false;
+          this._historyBefore = null;
+          this._newestMsgId = null;
+          this._noMoreFuture = true;
+          this._loadingFuture = false;
+          this._historyAfter = null;
+          this.socket.emit('get-messages', { code: this.currentChannel });
+        }
+        this.socket.emit('get-channel-members', { code: this.currentChannel });
+        // Pull a fresh online-users + voice roster so the right-side panels
+        // aren't stuck on whatever stale snapshot was rendered before sleep.
+        this.socket.emit('request-online-users', { code: this.currentChannel });
+        this.socket.emit('request-voice-users', {
+          code: this.currentChannel,
+          iAmInVoice: !!(this.voice && this.voice.inVoice && this.voice.currentChannel === this.currentChannel)
+        });
       }
+      // (#5444) We deliberately kept the socket alive above if voice was
+      // live, so rebind the voice slot here instead. This is a no-op on
+      // the server when we're already bound on this socket.
+      if (voiceLive && this.voice?.currentChannel && this.socket?.connected) {
+        this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+      }
+      // Re-fetch channels in case list changed while backgrounded
+      this.socket?.emit('get-channels');
+      
+      // Mobile voice fix: check if we should be in voice but got disconnected
+      try {
+        const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
+        if (savedVoiceChannel && this.voice && !this.voice.inVoice && this.socket?.connected) {
+          console.log('[Voice] Mobile foreground — rejoining voice channel:', savedVoiceChannel);
+          setTimeout(async () => {
+            if (this.voice && !this.voice.inVoice) {
+              const ok = await this.voice.join(savedVoiceChannel);
+              if (ok) {
+                this._updateVoiceButtons(true);
+                this._updateVoiceStatus(true);
+                this._updateVoiceBar();
+              }
+            }
+          }, 500);
+        }
+      } catch {}
     }
   });
 
@@ -696,39 +649,13 @@ _setupSocketListeners() {
       clearTimeout(this._channelsWatchdog);
       this._channelsWatchdog = null;
     }
-    // Detect every code that rotated while this client was disconnected.
-    const previousChannels = this.channels || [];
-    const rotationsByOldCode = new Map();
-    try {
-      const persistedCodes = JSON.parse(localStorage.getItem('haven_channel_codes_by_id') || '{}');
-      if (persistedCodes && typeof persistedCodes === 'object' && !Array.isArray(persistedCodes)) {
-        for (const channel of channels) {
-          const oldCode = persistedCodes[channel.id];
-          if (typeof oldCode === 'string' && oldCode !== channel.code) {
-            rotationsByOldCode.set(oldCode, { channelId: channel.id, oldCode, newCode: channel.code });
-          }
-        }
-      }
-    } catch { /* localStorage may be unavailable or contain stale data */ }
-    for (const previous of previousChannels) {
-      const updated = channels.find(channel => channel.id === previous.id);
-      if (updated && updated.code !== previous.code) {
-        rotationsByOldCode.set(previous.code, {
-          channelId: previous.id,
-          oldCode: previous.code,
-          newCode: updated.code
-        });
-      }
+    // Detect if currentChannel's code was rotated while disconnected (stale code).
+    // Capture the channel's ID from the old list before overwriting it.
+    let rotatedChannelId = null;
+    if (this.currentChannel && !channels.find(c => c.code === this.currentChannel)) {
+      const oldEntry = this.channels.find(c => c.code === this.currentChannel);
+      if (oldEntry) rotatedChannelId = oldEntry.id;
     }
-    for (const channel of channels) {
-      for (const oldCode of channel.previous_codes || []) {
-        if (oldCode !== channel.code) {
-          rotationsByOldCode.set(oldCode, { channelId: channel.id, oldCode, newCode: channel.code });
-        }
-      }
-    }
-    const rotations = [...rotationsByOldCode.values()];
-    const activeRotation = rotations.find(rotation => rotation.oldCode === this.currentChannel) || null;
 
     // Preserve any DM channels that were added client-side (via dm-opened
     // events). The server only sends server channels in channels-list, so
@@ -740,19 +667,6 @@ _setupSocketListeners() {
       if (!this.channels.find(c => c.code === dm.code)) {
         this.channels.push(dm);
       }
-    }
-    for (const rotation of rotations) {
-      this._migrateChannelCodeState(rotation.oldCode, rotation.newCode);
-    }
-    try {
-      localStorage.setItem('haven_channel_codes_by_id', JSON.stringify(
-        Object.fromEntries(channels.map(channel => [channel.id, channel.code]))
-      ));
-    } catch { /* localStorage may be unavailable */ }
-    if (this._resumeChannelsAfterList) {
-      const resumeOptions = this._resumeChannelsAfterList;
-      this._resumeChannelsAfterList = false;
-      this._resumeChannelsAfterReconnect(resumeOptions);
     }
     // Seed client-side unreadCounts from server-reported values so the
     // desktop badge, tab title, and DM section badge stay in sync.
@@ -835,9 +749,10 @@ _setupSocketListeners() {
 
     // If the channel code rotated while we were disconnected, re-enter with the
     // new code so messages, reactions, and presence start working again.
-    if (activeRotation) {
-      const updated = channels.find(c => c.id === activeRotation.channelId);
+    if (rotatedChannelId !== null) {
+      const updated = channels.find(c => c.id === rotatedChannelId);
       if (updated) {
+        this.currentChannel = updated.code;
         const codeDisplay = document.getElementById('channel-code-display');
         if (codeDisplay) codeDisplay.textContent = updated.display_code || updated.code;
         this.socket.emit('enter-channel', { code: this.currentChannel });
@@ -1699,13 +1614,16 @@ _setupSocketListeners() {
   // ── Channel code rotated (dynamic codes) ────────
   this.socket.on('channel-code-rotated', (data) => {
     const ch = this.channels.find(c => c.id === data.channelId);
-    const wasViewing = this.currentChannel === data.oldCode;
-    const wasInVoiceHere = !!(this.voice && this.voice.currentChannel === data.oldCode);
-    this._migrateChannelCodeState(data.oldCode, data.newCode);
     if (ch) {
+      const wasViewing = this.currentChannel === data.oldCode;
+      const wasInVoiceHere = !!(this.voice && this.voice.currentChannel === data.oldCode);
       ch.code = data.newCode;
       // Update display_code too (admins see real code, non-admins see masked)
       if (ch.display_code && ch.display_code !== '••••••••') ch.display_code = data.newCode;
+      // Update currentChannel BEFORE re-rendering so the active highlight is correct
+      if (wasViewing) {
+        this.currentChannel = data.newCode;
+      }
       // CRITICAL (#5347): if we're in voice on the rotated channel, the
       // voice manager is still holding the OLD code as its currentChannel.
       // Without updating it, every voice-rejoin / request-voice-users /
@@ -1713,7 +1631,15 @@ _setupSocketListeners() {
       // the server can't find it (the DB row's code column was just
       // updated), and we get the infinite "server says voice channel is
       // gone" loop. Migrate every voice-side code reference too.
-      if (wasInVoiceHere) console.log(`[Voice] channel code rotated mid-call: ${data.oldCode} -> ${data.newCode}`);
+      if (this.voice) {
+        if (wasInVoiceHere) {
+          this.voice.currentChannel = data.newCode;
+          console.log(`[Voice] channel code rotated mid-call: ${data.oldCode} -> ${data.newCode}`);
+        }
+        if (this.voice._softLeftChannel === data.oldCode) {
+          this.voice._softLeftChannel = data.newCode;
+        }
+      }
       this._renderChannels();
       // If currently viewing this channel, update the header code display
       if (this.currentChannel === data.newCode) {
@@ -2451,12 +2377,18 @@ _forceFullResync(reason) {
   // user at least gets channel data refreshed. (The connect handler is
   // the authoritative path — this is purely a belt-and-braces.)
   setTimeout(() => {
-    if (this.socket?.connected) {
+    if (this.socket?.connected && this.currentChannel) {
       // Only do this if connect handler didn't already run very recently.
       const sinceConnect = Date.now() - (this._lastConnectTime || 0);
       if (sinceConnect > 5000) {
-        this._resumeChannelsAfterList = { resetMessages: true };
-        try { this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() }); } catch {}
+        try { this.socket.emit('enter-channel', { code: this.currentChannel }); } catch {}
+        try { this.socket.emit('get-messages', { code: this.currentChannel }); } catch {}
+        try { this.socket.emit('get-channel-members', { code: this.currentChannel }); } catch {}
+        try { this.socket.emit('request-online-users', { code: this.currentChannel }); } catch {}
+        try { this.socket.emit('request-voice-users', { code: this.currentChannel }); } catch {}
+        if (this.voice?.inVoice && this.voice.currentChannel) {
+          try { this.socket.emit('voice-rejoin', { code: this.voice.currentChannel }); } catch {}
+        }
       }
     }
   }, 6000);
@@ -2471,8 +2403,22 @@ _lightVoiceResync(reason) {
     return;
   }
   try {
-    this._resumeChannelsAfterList = { resetMessages: false, lightVoice: true };
-    this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() });
+    if (this.currentChannel) {
+      this.socket.emit('enter-channel', { code: this.currentChannel });
+      this.socket.emit('request-online-users', { code: this.currentChannel });
+      this.socket.emit('request-voice-users', {
+        code: this.currentChannel,
+        iAmInVoice: !!(this.voice && this.voice.inVoice && this.voice.currentChannel === this.currentChannel)
+      });
+    }
+    if (this.voice?.inVoice && this.voice.currentChannel) {
+      // voice-rejoin is now a no-op on the server when already bound on this
+      // socket (skipRenegotiate). Still safe — used only to refresh roster.
+      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+      // UI may have been flipped to "Join Voice" by a partial desync — restore.
+      try { this._reconcileVoiceUi?.(); } catch {}
+      try { this.voice.reassertScreenStreams?.(); } catch {}
+    }
   } catch (e) {
     console.warn('[light-resync] failed:', e);
   }

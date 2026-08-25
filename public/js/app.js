@@ -344,7 +344,7 @@ class HavenApp {
     document.getElementById('messages')?.addEventListener('error', avatarErrorHandler, true);
     document.getElementById('online-users')?.addEventListener('error', avatarErrorHandler, true);
 
-    this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() });
+    this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
     this.socket.emit('get-preferences');
     this.socket.emit('get-high-scores', { game: 'flappy' });

@@ -22,9 +22,11 @@ const {
   validateCallbackUrl
 } = require('../webhookCallback');
 const {
+  createTempChannelDeleteCallback,
   generateUniqueChannelCode,
   persistChannelCodeRotation,
-  rotateLiveChannelState
+  rotateLiveChannelState,
+  schedulePendingVoiceLeave
 } = require('../channelRotation');
 
 const { createActivity } = require('../activity');
@@ -366,7 +368,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── getEnrichedChannels ─────────────────────────────────
-  function getEnrichedChannels(userId, isAdmin, joinRooms, knownCodes = []) {
+  function getEnrichedChannels(userId, isAdmin, joinRooms) {
     // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
     // same visibility treatment as the admin: every non-DM channel, with
     // membership filled in on the fly — so channels created after the role
@@ -482,29 +484,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       const latestMap = {};
       latestRows.forEach(r => { latestMap[r.channel_id] = r.latest_id; });
 
-      const requestedAliases = [...new Set(knownCodes)]
-        .filter(code => typeof code === 'string' && /^[a-f0-9]{8}$/i.test(code))
-        .slice(0, 2000);
-      let historyRows = [];
-      if (requestedAliases.length > 0) {
-        const authorizedIds = new Set(channelIds);
-        for (let offset = 0; offset < requestedAliases.length; offset += 400) {
-          const batch = requestedAliases.slice(offset, offset + 400);
-          const aliasPlaceholders = batch.map(() => '?').join(',');
-          const rows = db.prepare(
-            `SELECT channel_id, old_code FROM channel_code_history WHERE old_code IN (${aliasPlaceholders}) ORDER BY rotated_at`
-          ).all(...batch);
-          historyRows.push(...rows.filter(row => authorizedIds.has(row.channel_id)));
-        }
-      }
-      const codeHistory = {};
-      for (const row of historyRows) {
-        if (!codeHistory[row.channel_id]) codeHistory[row.channel_id] = [];
-        codeHistory[row.channel_id].push(row.old_code);
-      }
-
       channels.forEach(ch => {
-        ch.previous_codes = codeHistory[ch.id] || [];
         const lastRead = readMap[ch.id] || 0;
         const latestId = latestMap[ch.id] || 0;
         ch.latestMessageId = latestId;
@@ -973,28 +953,12 @@ function setupSocketHandlers(io, db, opts = {}) {
         tempChannel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_temp_voice = 1').get(code);
       } catch { /* column may not exist yet */ }
       if (tempChannel) {
-        const doDeleteTempChannel = () => {
-          try {
-            const ch = db.prepare('SELECT id, code, is_temp_voice FROM channels WHERE id = ?').get(tempChannel.id);
-            if (ch && ch.is_temp_voice) {
-              const deleteCode = ch.code;
-              // Double-check the room is still empty — someone may have rejoined
-              // during the grace period.
-              const currentRoom = voiceUsers.get(deleteCode);
-              if (currentRoom && currentRoom.size > 0) return;
-              db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-              db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-              db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
-              db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
-              db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-              io.emit('channel-deleted', { code: deleteCode, reason: 'temp-empty' });
-              channelUsers.delete(deleteCode);
-              voiceUsers.delete(deleteCode);
-              pendingTempDelete.delete(deleteCode);
-              console.log(`[Temporary] Temp voice channel "${deleteCode}" deleted (everyone left)`);
-            }
-          } catch { /* column may not exist yet */ }
-        };
+        const doDeleteTempChannel = createTempChannelDeleteCallback({
+          db,
+          io,
+          state,
+          channelId: tempChannel.id
+        });
 
         if (softDisconnect) {
           // Grace period: wait 8 s before deleting the temp channel.
@@ -2114,28 +2078,17 @@ function setupSocketHandlers(io, db, opts = {}) {
           // cancel the eviction and just rebind the socketId on the
           // existing entry — peers never see voice-user-left, and the
           // panels never blank.
-          const key = `${socket.user.id}:${code}`;
-          const existingPending = pendingVoiceLeave.get(key);
-          if (existingPending) clearTimeout(existingPending.timer);
           const oldSocketId = socket.id;
-          const pending = { timer: null, oldSocketId, code };
           console.log(`[VoiceDiag] disconnect for ${socket.user.username} (id=${socket.user.id}) on ${code} — scheduling 4s grace eviction (oldSocket=${oldSocketId})`);
-          pending.timer = setTimeout(() => {
-            pendingVoiceLeave.delete(`${socket.user.id}:${pending.code}`);
-            const stillRoom = voiceUsers.get(pending.code);
-            if (!stillRoom) return;
-            const entry = stillRoom.get(socket.user.id);
-            if (!entry) return;
-            // If the entry's socketId has changed, the user reconnected
-            // and rebound — leave them alone.
-            if (entry.socketId !== oldSocketId) {
-              console.log(`[VoiceDiag] grace eviction skipped — ${socket.user.username} rebound to ${entry.socketId}`);
-              return;
-            }
-            console.log(`[VoiceDiag] grace eviction firing for ${socket.user.username} on ${pending.code} — never reconnected`);
-            handleVoiceLeave(socket, pending.code, { softDisconnect: true });
-          }, 4000);
-          pendingVoiceLeave.set(key, pending);
+          schedulePendingVoiceLeave({
+            pendingVoiceLeave,
+            voiceUsers,
+            socket,
+            userId: socket.user.id,
+            code,
+            oldSocketId,
+            handleVoiceLeave
+          });
         } else {
           // Owner-mismatch or no entry: still run a prune pass for this room
           // so any other ghost entries (e.g. from a peer whose disconnect

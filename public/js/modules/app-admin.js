@@ -3833,7 +3833,7 @@ async _importExecute(importId, selectedChannels) {
     }
 
     // Refresh channel list
-    if (this.socket) this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() });
+    if (this.socket) this.socket.emit('get-channels');
   } catch (err) {
     alert(t('settings.admin.import_failed_alert', { error: err.message }));
   } finally {

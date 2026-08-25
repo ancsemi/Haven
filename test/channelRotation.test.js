@@ -5,9 +5,11 @@ const test = require('node:test');
 const Database = require('better-sqlite3');
 
 const {
+  createTempChannelDeleteCallback,
   generateUniqueChannelCode,
   persistChannelCodeRotation,
-  rotateLiveChannelState
+  rotateLiveChannelState,
+  schedulePendingVoiceLeave
 } = require('../src/channelRotation');
 
 test('channel code generation avoids every shared invite namespace', () => {
@@ -17,15 +19,13 @@ test('channel code generation avoids every shared invite namespace', () => {
       CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE);
       CREATE TABLE server_settings (key TEXT PRIMARY KEY, value TEXT);
       CREATE TABLE invite_codes (id INTEGER PRIMARY KEY, code TEXT UNIQUE);
-      CREATE TABLE channel_code_history (old_code TEXT PRIMARY KEY, channel_id INTEGER);
       INSERT INTO channels (id, code) VALUES (1, '22222222');
       INSERT INTO server_settings (key, value) VALUES ('server_code', '33333333'), ('vanity_code', '44444444');
       INSERT INTO invite_codes (id, code) VALUES (1, '55555555');
-      INSERT INTO channel_code_history (old_code, channel_id) VALUES ('66666666', 1);
     `);
-    const candidates = ['invalid!', '11111111', '22222222', '33333333', '44444444', '55555555', '66666666', '77777777'];
+    const candidates = ['invalid!', '11111111', '22222222', '33333333', '44444444', '55555555', '66666666'];
     const generated = generateUniqueChannelCode(db, () => candidates.shift(), '11111111');
-    assert.equal(generated, '77777777');
+    assert.equal(generated, '66666666');
   } finally {
     db.close();
   }
@@ -49,11 +49,6 @@ test('channel rotation updates the channel and durable code references atomicall
         updated_at TEXT,
         PRIMARY KEY (user_id, channel_code)
       );
-      CREATE TABLE channel_code_history (
-        old_code TEXT PRIMARY KEY,
-        channel_id INTEGER,
-        rotated_at TEXT
-      );
       INSERT INTO channels (id, code, code_rotation_counter) VALUES (1, '11111111', 5);
       INSERT INTO channels (id, code, afk_sub_code) VALUES (2, 'aaaaaaaa', '11111111');
       INSERT INTO user_channel_prefs (user_id, channel_code, muted) VALUES (3, '11111111', 1);
@@ -67,8 +62,6 @@ test('channel rotation updates the channel and durable code references atomicall
     assert.ok(rotated.code_last_rotated);
     assert.equal(db.prepare('SELECT afk_sub_code FROM channels WHERE id = 2').get().afk_sub_code, '22222222');
     assert.equal(db.prepare('SELECT channel_code FROM user_channel_prefs WHERE user_id = 3').get().channel_code, '22222222');
-    assert.equal(db.prepare("SELECT channel_id FROM channel_code_history WHERE old_code = '11111111'").get().channel_id, 1);
-
     db.prepare("INSERT INTO user_channel_prefs (user_id, channel_code, muted) VALUES (3, '33333333', 0)").run();
     assert.throws(
       () => persistChannelCodeRotation(db, 1, '22222222', '33333333'),
@@ -76,37 +69,11 @@ test('channel rotation updates the channel and durable code references atomicall
     );
     assert.equal(db.prepare('SELECT code FROM channels WHERE id = 1').get().code, '22222222');
     assert.equal(db.prepare('SELECT afk_sub_code FROM channels WHERE id = 2').get().afk_sub_code, '22222222');
-    assert.equal(db.prepare("SELECT 1 FROM channel_code_history WHERE old_code = '22222222'").get(), undefined);
-
     assert.throws(
       () => persistChannelCodeRotation(db, 1, 'stale-code', '33333333'),
       /changed before rotation completed/
     );
     assert.equal(db.prepare('SELECT code FROM channels WHERE id = 1').get().code, '22222222');
-  } finally {
-    db.close();
-  }
-});
-
-test('channel rotation permanently reserves prior codes', () => {
-  const db = new Database(':memory:');
-  try {
-    db.exec(`
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, code_rotation_counter INTEGER DEFAULT 0, code_last_rotated TEXT, afk_sub_code TEXT);
-      CREATE TABLE user_channel_prefs (user_id INTEGER, channel_code TEXT, updated_at TEXT, PRIMARY KEY (user_id, channel_code));
-      CREATE TABLE channel_code_history (old_code TEXT PRIMARY KEY, channel_id INTEGER, rotated_at TEXT);
-      INSERT INTO channels (id, code) VALUES (1, '00000000');
-    `);
-    let oldCode = '00000000';
-    for (let index = 1; index <= 1025; index++) {
-      const newCode = index.toString(16).padStart(8, '0');
-      persistChannelCodeRotation(db, 1, oldCode, newCode);
-      oldCode = newCode;
-    }
-    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM channel_code_history WHERE channel_id = 1').get().count, 1025);
-    assert.ok(db.prepare("SELECT 1 FROM channel_code_history WHERE old_code = '00000000'").get());
-    assert.ok(db.prepare("SELECT 1 FROM channel_code_history WHERE old_code = '00000001'").get());
   } finally {
     db.close();
   }
@@ -173,7 +140,6 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
   assert.equal(state.streamViewers.has(`${newCode}:1`), true);
   assert.equal(state.pendingVoiceLeave.has(`1:${newCode}`), true);
   assert.equal(pendingVoice.code, newCode);
-  assert.deepEqual(pendingVoice.previousCodes, [oldCode]);
   assert.equal(state.pendingTempDelete.get(newCode), pendingTempTimer);
   assert.deepEqual(emitted, {
     firstRoom: `channel:${newCode}`,
@@ -187,4 +153,85 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
     /must differ/
   );
   assert.equal(state.voiceUsers.has(newCode), true);
+});
+
+test('a pending voice eviction uses the rotated code when its timer fires', () => {
+  const oldCode = '11111111';
+  const newCode = '22222222';
+  let callback;
+  let leave;
+  const socket = { id: 'old-socket', user: { id: 1, username: 'alice' } };
+  const voiceUsers = new Map([[oldCode, new Map([[1, { id: 1, socketId: socket.id }]])]]);
+  const pendingVoiceLeave = new Map();
+  schedulePendingVoiceLeave({
+    pendingVoiceLeave,
+    voiceUsers,
+    socket,
+    userId: 1,
+    code: oldCode,
+    oldSocketId: socket.id,
+    handleVoiceLeave: (_socket, code, options) => { leave = { code, options }; },
+    setTimer: fn => { callback = fn; return { id: 'timer' }; },
+    log: () => {}
+  });
+
+  const io = {
+    sockets: { adapter: { rooms: new Map() }, sockets: new Map() },
+    to() { return { to() { return { emit() {} }; } }; }
+  };
+  const state = {
+    channelUsers: new Map(),
+    voiceUsers,
+    activeMusic: new Map(),
+    musicQueues: new Map(),
+    activeScreenSharers: new Map(),
+    activeWebcamUsers: new Map(),
+    streamViewers: new Map(),
+    pendingVoiceLeave,
+    pendingTempDelete: new Map()
+  };
+  rotateLiveChannelState(io, state, 9, oldCode, newCode);
+  callback();
+
+  assert.deepEqual(leave, { code: newCode, options: { softDisconnect: true } });
+  assert.equal(pendingVoiceLeave.size, 0);
+});
+
+test('a temporary-channel timer deletes by stable id after code rotation', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, is_temp_voice INTEGER);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER);
+      CREATE TABLE reactions (message_id INTEGER);
+      CREATE TABLE pinned_messages (channel_id INTEGER);
+      CREATE TABLE channel_members (channel_id INTEGER);
+      INSERT INTO channels (id, code, is_temp_voice) VALUES (1, '11111111', 1);
+    `);
+    const channelUsers = new Map([['22222222', new Map()]]);
+    const voiceUsers = new Map([['22222222', new Map()]]);
+    const pendingTempDelete = new Map([['22222222', { id: 'timer' }]]);
+    let deleted;
+    const callback = createTempChannelDeleteCallback({
+      db,
+      io: { emit: (event, payload) => { deleted = { event, payload }; } },
+      state: { channelUsers, voiceUsers, pendingTempDelete },
+      channelId: 1,
+      log: () => {}
+    });
+
+    db.prepare("UPDATE channels SET code = '22222222' WHERE id = 1").run();
+    callback();
+
+    assert.equal(db.prepare('SELECT 1 FROM channels WHERE id = 1').get(), undefined);
+    assert.deepEqual(deleted, {
+      event: 'channel-deleted',
+      payload: { code: '22222222', reason: 'temp-empty' }
+    });
+    assert.equal(channelUsers.has('22222222'), false);
+    assert.equal(voiceUsers.has('22222222'), false);
+    assert.equal(pendingTempDelete.has('22222222'), false);
+  } finally {
+    db.close();
+  }
 });
