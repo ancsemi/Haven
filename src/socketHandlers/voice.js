@@ -706,6 +706,12 @@ module.exports = function register(socket, ctx) {
       return;
     }
 
+    if (pendingTempDelete?.has(code)) {
+      clearTimeout(pendingTempDelete.get(code));
+      pendingTempDelete.delete(code);
+      console.log(`[Temporary] Grace-period deletion cancelled — user rejoined "${code}"`);
+    }
+
     // ── FAST PATH: pending grace-period eviction ───────────
     // If this user disconnected within the last few seconds, the
     // disconnect handler scheduled a deferred eviction instead of

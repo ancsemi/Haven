@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const Database = require('better-sqlite3');
 
@@ -49,12 +51,14 @@ test('channel rotation updates the channel and durable code references atomicall
         updated_at TEXT,
         PRIMARY KEY (user_id, channel_code)
       );
+      CREATE TABLE server_settings (key TEXT PRIMARY KEY, value TEXT);
       INSERT INTO channels (id, code, code_rotation_counter) VALUES (1, '11111111', 5);
       INSERT INTO channels (id, code, afk_sub_code) VALUES (2, 'aaaaaaaa', '11111111');
       INSERT INTO user_channel_prefs (user_id, channel_code, muted) VALUES (3, '11111111', 1);
+      INSERT INTO server_settings (key, value) VALUES ('automod_log_channel', '11111111');
     `);
 
-    persistChannelCodeRotation(db, 1, '11111111', '22222222');
+    assert.equal(persistChannelCodeRotation(db, 1, '11111111', '22222222'), true);
 
     const rotated = db.prepare('SELECT code, code_rotation_counter, code_last_rotated FROM channels WHERE id = 1').get();
     assert.equal(rotated.code, '22222222');
@@ -62,6 +66,7 @@ test('channel rotation updates the channel and durable code references atomicall
     assert.ok(rotated.code_last_rotated);
     assert.equal(db.prepare('SELECT afk_sub_code FROM channels WHERE id = 2').get().afk_sub_code, '22222222');
     assert.equal(db.prepare('SELECT channel_code FROM user_channel_prefs WHERE user_id = 3').get().channel_code, '22222222');
+    assert.equal(db.prepare("SELECT value FROM server_settings WHERE key = 'automod_log_channel'").get().value, '22222222');
     db.prepare("INSERT INTO user_channel_prefs (user_id, channel_code, muted) VALUES (3, '33333333', 0)").run();
     assert.throws(
       () => persistChannelCodeRotation(db, 1, '22222222', '33333333'),
@@ -69,6 +74,7 @@ test('channel rotation updates the channel and durable code references atomicall
     );
     assert.equal(db.prepare('SELECT code FROM channels WHERE id = 1').get().code, '22222222');
     assert.equal(db.prepare('SELECT afk_sub_code FROM channels WHERE id = 2').get().afk_sub_code, '22222222');
+    assert.equal(db.prepare("SELECT value FROM server_settings WHERE key = 'automod_log_channel'").get().value, '22222222');
     assert.throws(
       () => persistChannelCodeRotation(db, 1, 'stale-code', '33333333'),
       /changed before rotation completed/
@@ -234,4 +240,95 @@ test('a temporary-channel timer deletes by stable id after code rotation', () =>
   } finally {
     db.close();
   }
+});
+
+test('temporary-channel deletion rolls back completely on failure', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, is_temp_voice INTEGER);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER);
+      CREATE TABLE reactions (message_id INTEGER);
+      CREATE TABLE pinned_messages (channel_id INTEGER);
+      CREATE TABLE channel_members (channel_id INTEGER);
+      INSERT INTO channels (id, code, is_temp_voice) VALUES (1, '11111111', 1);
+      INSERT INTO messages (id, channel_id) VALUES (1, 1);
+      INSERT INTO channel_members (channel_id) VALUES (1);
+      CREATE TRIGGER reject_temp_delete BEFORE DELETE ON channels
+      BEGIN
+        SELECT RAISE(ABORT, 'delete blocked');
+      END;
+    `);
+    const pendingTempDelete = new Map([['11111111', { id: 'timer' }]]);
+    const warnings = [];
+    const callback = createTempChannelDeleteCallback({
+      db,
+      io: { emit() {} },
+      state: {
+        channelUsers: new Map([['11111111', new Map()]]),
+        voiceUsers: new Map([['11111111', new Map()]]),
+        pendingTempDelete
+      },
+      channelId: 1,
+      log: () => {},
+      warn: (...args) => warnings.push(args.join(' '))
+    });
+
+    callback();
+
+    assert.ok(db.prepare('SELECT 1 FROM channels WHERE id = 1').get());
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM messages WHERE channel_id = 1').get().count, 1);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM channel_members WHERE channel_id = 1').get().count, 1);
+    assert.equal(pendingTempDelete.has('11111111'), false);
+    assert.match(warnings[0], /delete blocked/);
+  } finally {
+    db.close();
+  }
+});
+
+test('an expired temp-delete timer clears its marker when the room is occupied', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE channels (id INTEGER PRIMARY KEY, code TEXT UNIQUE, is_temp_voice INTEGER);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER);
+      CREATE TABLE reactions (message_id INTEGER);
+      CREATE TABLE pinned_messages (channel_id INTEGER);
+      CREATE TABLE channel_members (channel_id INTEGER);
+      INSERT INTO channels (id, code, is_temp_voice) VALUES (1, '11111111', 1);
+    `);
+    const pendingTempDelete = new Map([['11111111', { id: 'timer' }]]);
+    const callback = createTempChannelDeleteCallback({
+      db,
+      io: { emit() {} },
+      state: {
+        channelUsers: new Map(),
+        voiceUsers: new Map([['11111111', new Map([[1, { id: 1 }]])]]),
+        pendingTempDelete
+      },
+      channelId: 1,
+      log: () => {}
+    });
+
+    assert.equal(callback(), false);
+    assert.ok(db.prepare('SELECT 1 FROM channels WHERE id = 1').get());
+    assert.equal(pendingTempDelete.has('11111111'), false);
+  } finally {
+    db.close();
+  }
+});
+
+test('temporary-channel grace is armed before stale-user pruning', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/socketHandlers/index.js'), 'utf8');
+  const voiceSource = fs.readFileSync(path.join(__dirname, '../src/socketHandlers/voice.js'), 'utf8');
+  const handleVoiceLeave = source.slice(
+    source.indexOf('function handleVoiceLeave'),
+    source.indexOf('// ── Push notification helper')
+  );
+  assert.ok(handleVoiceLeave.indexOf('pendingTempDelete.set(code, timer)') < handleVoiceLeave.indexOf('broadcastVoiceUsers(code)'));
+  assert.match(source, /ch && ch\.is_temp_voice && !pendingTempDelete\.has\(code\)/);
+  assert.match(source, /if \(pendingTempDelete\.has\(ch\.code\)\) continue/);
+  assert.match(source, /pendingVoiceLeave\.has\(`\$\{userId\}:\$\{ch\.code\}`\)/);
+  assert.match(voiceSource, /if \(pendingTempDelete\?\.has\(code\)\)[\s\S]+Grace-period deletion cancelled/);
+  assert.match(source, /persistChannelCodeRotation\([\s\S]+automod\.invalidate\(\)/);
 });

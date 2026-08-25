@@ -673,15 +673,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       musicQueues.delete(code);
       try {
         const ch = db.prepare('SELECT id, is_temp_voice FROM channels WHERE code = ?').get(code);
-        if (ch && ch.is_temp_voice) {
-          db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-          db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-          io.emit('channel-deleted', { code, reason: 'temp-empty' });
-          channelUsers.delete(code);
-          console.log(`[Temporary] Temp voice channel "${code}" deleted (pruned empty)`);
+        if (ch && ch.is_temp_voice && !pendingTempDelete.has(code)) {
+          createTempChannelDeleteCallback({ db, io, state, channelId: ch.id })();
         }
       } catch { /* column may not exist yet */ }
     }
@@ -941,13 +934,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       });
     }
 
-    broadcastVoiceUsers(code);
-    broadcastStreamInfo(code);
     if (voiceRoom.size === 0) {
-      activeMusic.delete(code);
-      syncMusicActivity(code);
-      musicQueues.delete(code);
-
       let tempChannel = null;
       try {
         tempChannel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_temp_voice = 1').get(code);
@@ -978,6 +965,14 @@ function setupSocketHandlers(io, db, opts = {}) {
           doDeleteTempChannel();
         }
       }
+    }
+
+    broadcastVoiceUsers(code);
+    broadcastStreamInfo(code);
+    if (voiceRoom.size === 0) {
+      activeMusic.delete(code);
+      syncMusicActivity(code);
+      musicQueues.delete(code);
     }
 
     let stillInVoice = false;
@@ -1277,16 +1272,22 @@ function setupSocketHandlers(io, db, opts = {}) {
           try { broadcastChannelLists(); } catch {}
           console.log(`[Temporary] Channel "${ch.code}" messages cleared (auto-clear mode)`);
         } else {
-          db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-          db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
-          db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+          db.transaction(() => {
+            db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
+            db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
+            db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
+          })();
+          if (pendingTempDelete.has(ch.code)) {
+            clearTimeout(pendingTempDelete.get(ch.code));
+            pendingTempDelete.delete(ch.code);
+          }
           io.to(`channel:${ch.code}`).to(`voice:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
           channelUsers.delete(ch.code);
           voiceUsers.delete(ch.code);
           activeMusic.delete(ch.code);
-      syncMusicActivity(ch.code);
+          syncMusicActivity(ch.code);
           musicQueues.delete(ch.code);
           console.log(`[Temporary] Channel "${ch.code}" expired and was deleted`);
         }
@@ -1305,12 +1306,14 @@ function setupSocketHandlers(io, db, opts = {}) {
         "SELECT id, code FROM channels WHERE is_temp_voice = 1"
       ).all();
       for (const ch of tempVoice) {
+        if (pendingTempDelete.has(ch.code)) continue;
         const room = voiceUsers.get(ch.code);
         // Only prune when nobody is in the voice room (or the room is gone).
         if (room && room.size > 0) {
           // Drop stale socket entries first; if all turn out to be dead,
           // pruneStaleVoiceUsers itself deletes the channel. Otherwise skip.
           for (const [userId, entry] of room) {
+            if (pendingVoiceLeave.has(`${userId}:${ch.code}`)) continue;
             const sock = io.sockets.sockets.get(entry.socketId);
             if (!sock || !sock.connected) room.delete(userId);
           }
@@ -1322,25 +1325,19 @@ function setupSocketHandlers(io, db, opts = {}) {
           "SELECT (julianday('now') - julianday(created_at)) * 86400 AS secs FROM channels WHERE id = ?"
         ).get(ch.id);
         if (age && age.secs != null && age.secs < 30) continue;
-        db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(ch.id);
-        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(ch.id);
-        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(ch.id);
-        db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(ch.id);
-        db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-        io.emit('channel-deleted', { code: ch.code, reason: 'temp-empty' });
-        channelUsers.delete(ch.code);
-        voiceUsers.delete(ch.code);
-        activeMusic.delete(ch.code);
-      syncMusicActivity(ch.code);
-        musicQueues.delete(ch.code);
-        console.log(`[Temporary] Empty temp voice channel "${ch.code}" pruned by safety-net sweep`);
+        const deleted = createTempChannelDeleteCallback({ db, io, state, channelId: ch.id })();
+        if (deleted) {
+          activeMusic.delete(ch.code);
+          syncMusicActivity(ch.code);
+          musicQueues.delete(ch.code);
+        }
       }
     } catch { /* column may not exist yet */ }
   }, 60 * 1000);
 
   function rotateChannelCode(channelId, oldCode) {
     const newCode = generateUniqueSharedCode(oldCode);
-    persistChannelCodeRotation(db, channelId, oldCode, newCode);
+    if (persistChannelCodeRotation(db, channelId, oldCode, newCode)) automod.invalidate();
     rotateLiveChannelState(io, state, channelId, oldCode, newCode);
     return newCode;
   }

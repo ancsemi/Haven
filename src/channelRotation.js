@@ -15,8 +15,13 @@ function persistChannelCodeRotation(db, channelId, oldCode, newCode) {
       SET channel_code = ?, updated_at = CURRENT_TIMESTAMP
       WHERE channel_code = ?
     `).run(newCode, oldCode);
+    return db.prepare(`
+      UPDATE server_settings
+      SET value = ?
+      WHERE key = 'automod_log_channel' AND value = ?
+    `).run(newCode, oldCode).changes > 0;
   });
-  rotate();
+  return rotate();
 }
 
 function channelCodeTaken(db, code) {
@@ -68,26 +73,41 @@ function schedulePendingVoiceLeave({
   return pending;
 }
 
-function createTempChannelDeleteCallback({ db, io, state, channelId, log = console.log }) {
+function createTempChannelDeleteCallback({ db, io, state, channelId, log = console.log, warn = console.warn }) {
   const { channelUsers, voiceUsers, pendingTempDelete } = state;
   return () => {
+    let code = null;
     try {
       const channel = db.prepare('SELECT id, code, is_temp_voice FROM channels WHERE id = ?').get(channelId);
-      if (!channel?.is_temp_voice) return;
-      const code = channel.code;
+      if (!channel) return false;
+      code = channel.code;
+      if (!channel.is_temp_voice) {
+        pendingTempDelete.delete(code);
+        return false;
+      }
       const currentRoom = voiceUsers.get(code);
-      if (currentRoom?.size > 0) return;
-      db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(channel.id);
-      db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(channel.id);
-      db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
-      db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
-      db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
-      io.emit('channel-deleted', { code, reason: 'temp-empty' });
+      if (currentRoom?.size > 0) {
+        pendingTempDelete.delete(code);
+        return false;
+      }
+      db.transaction(() => {
+        db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(channel.id);
+        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(channel.id);
+        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
+        db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
+        db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
+      })();
       channelUsers.delete(code);
       voiceUsers.delete(code);
       pendingTempDelete.delete(code);
+      io.emit('channel-deleted', { code, reason: 'temp-empty' });
       log(`[Temporary] Temp voice channel "${code}" deleted (everyone left)`);
-    } catch { /* optional tables or columns may not exist during migration */ }
+      return true;
+    } catch (err) {
+      if (code) pendingTempDelete.delete(code);
+      warn(`[Temporary] Failed to delete temp voice channel ${channelId}:`, err.message);
+      return false;
+    }
   };
 }
 
