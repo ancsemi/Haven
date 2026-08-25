@@ -1914,6 +1914,7 @@ _setupUI() {
   // Logout
   document.getElementById('logout-btn').addEventListener('click', () => {
     if (this.voice && this.voice.inVoice) this.voice.leave();
+    this._clearChannelCodeMap?.();
     localStorage.removeItem('haven_token');
     localStorage.removeItem('haven_user');
     localStorage.removeItem('haven_sync_key');
@@ -3715,6 +3716,7 @@ _setupUI() {
           return;
         }
         // Account deleted — clear local storage and redirect to login
+        this._clearChannelCodeMap?.();
         localStorage.removeItem('haven_token');
         localStorage.removeItem('haven_e2e_privkey');
         localStorage.removeItem('haven_sync_key');

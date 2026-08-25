@@ -304,6 +304,7 @@ class VoiceManager {
       `(peers=${live}, micLive=${micLive}) — restoring session state for`, code);
     this.currentChannel = code;
     this.inVoice = true;
+    this._voiceSessionGeneration = (this._voiceSessionGeneration || 0) + 1;
     this._softLeftChannel = null;
     try { localStorage.setItem('haven_voice_channel', code); } catch { /* ignore */ }
     // Our socket may have been rebound while we thought we were out; rejoin so
@@ -315,6 +316,32 @@ class VoiceManager {
       this.socket.emit('voice-rejoin', { code });
     }
     return true;
+  }
+
+  deferChannelGone(timeoutMs = 6000) {
+    if (this._deferredChannelGoneTimer) {
+      clearTimeout(this._deferredChannelGoneTimer);
+      this._deferredChannelGoneTimer = null;
+    }
+    this._deferredChannelGone = null;
+    this._deferChannelGoneUntil = Date.now() + timeoutMs;
+  }
+
+  resolveDeferredChannelGone(recoveredCode = null) {
+    this._deferChannelGoneUntil = 0;
+    if (this._deferredChannelGoneTimer) {
+      clearTimeout(this._deferredChannelGoneTimer);
+      this._deferredChannelGoneTimer = null;
+    }
+    const pending = this._deferredChannelGone;
+    this._deferredChannelGone = null;
+    const sameSession = pending &&
+      pending.generation === (this._voiceSessionGeneration || 0) &&
+      pending.code === this.currentChannel;
+    if (!recoveredCode && sameSession && this.inVoice) {
+      console.warn('[Voice] Server confirmed voice channel is gone — leaving locally:', pending.code);
+      try { this.leave(); } catch (e) { console.warn('[Voice] leave() during deferred voice-channel-gone failed:', e); }
+    }
   }
 
   /**
@@ -375,6 +402,19 @@ class VoiceManager {
     this.socket.on('voice-channel-gone', (data) => {
       if (!this.inVoice) return;
       if (this.currentChannel && data && data.code && data.code !== this.currentChannel) return;
+      const remaining = (this._deferChannelGoneUntil || 0) - Date.now();
+      if (remaining > 0) {
+        this._deferredChannelGone = {
+          code: data?.code || this.currentChannel,
+          generation: this._voiceSessionGeneration || 0
+        };
+        if (this._deferredChannelGoneTimer) clearTimeout(this._deferredChannelGoneTimer);
+        this._deferredChannelGoneTimer = setTimeout(() => {
+          this._deferredChannelGoneTimer = null;
+          this.resolveDeferredChannelGone(false);
+        }, remaining);
+        return;
+      }
       console.warn('[Voice] Server says voice channel is gone — leaving locally:', data && data.code);
       try { this.leave(); } catch (e) { console.warn('[Voice] leave() during voice-channel-gone failed:', e); }
     });
@@ -955,6 +995,9 @@ class VoiceManager {
   }
 
   async join(channelCode) {
+    if (this._joinInFlight) return false;
+    this._joinInFlight = true;
+    this._joiningChannelCode = channelCode;
     try {
       const preservedMuteState = this.isMuted;
       const preservedDeafenState = this.isDeafened;
@@ -1084,8 +1127,31 @@ class VoiceManager {
         }
       }
 
+      // Do not let Socket.IO buffer a stale voice-join if the connection
+      // dropped while microphone and noise processing were being prepared.
+      if (this.socket && this.socket.connected === false) {
+        this._disableRNNoise();
+        this._stopNoiseGate();
+        this._stopLocalTalkDetection();
+        if (this.rawStream) {
+          this.rawStream.getTracks().forEach(track => track.stop());
+          this.rawStream = null;
+        }
+        if (this.localStream) {
+          this.localStream.getTracks().forEach(track => track.stop());
+          this.localStream = null;
+        }
+        if (this.audioCtx) {
+          this.audioCtx.close().catch(() => {});
+          this.audioCtx = null;
+        }
+        return false;
+      }
+
+      channelCode = this._joiningChannelCode || channelCode;
       this.currentChannel = channelCode;
       this.inVoice = true;
+      this._voiceSessionGeneration = (this._voiceSessionGeneration || 0) + 1;
       // Listener-only is always muted (no audio to send). mute-on-join also forces mute.
       this.isMuted = this.isListenerOnly || muteOnJoin || preservedMuteState;
       this.isDeafened = preservedDeafenState;
@@ -1110,6 +1176,9 @@ class VoiceManager {
     } catch (err) {
       console.error('Voice join failed:', err);
       return false;
+    } finally {
+      this._joinInFlight = false;
+      this._joiningChannelCode = null;
     }
   }
 
