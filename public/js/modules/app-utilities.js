@@ -4038,6 +4038,92 @@ async _loadMediaToken() {
   this._flushPendingMedia();
 },
 
+// The media token carries a day stamp and the server honours only today's and
+// yesterday's, so it goes stale after about two days. It used to be fetched
+// once at startup and never again, which was fine for a tab that gets closed
+// and fatal for one that does not: leave Haven open over a weekend and every
+// remote image posted after the token expired came back 401 and rendered as a
+// blank gap, with no error and no retry. Reloading fixed it, which is why this
+// looked random and unreproducible. Refreshed on a timer, on reconnect, and on
+// a failed image below.
+_renderSessionsList(sessions) {
+  const el = document.getElementById('sessions-list');
+  if (!el) return;
+  if (!sessions.length) {
+    el.innerHTML = `<p class="muted-text">${this._escapeHtml(t('settings.sessions_section.none'))}</p>`;
+    return;
+  }
+  const rel = (ms) => {
+    if (!ms) return '';
+    const mins = Math.floor((Date.now() - ms) / 60000);
+    if (mins < 1) return t('settings.sessions_section.just_now');
+    if (mins < 60) return t('settings.sessions_section.mins', { n: mins });
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return t('settings.sessions_section.hours', { n: hrs });
+    return t('settings.sessions_section.days', { n: Math.floor(hrs / 24) });
+  };
+  el.innerHTML = sessions.map(s => {
+    const tag = s.current
+      ? `<span class="session-current-tag">${this._escapeHtml(t('settings.sessions_section.this_device'))}</span>`
+      : '';
+    const ip = s.ip ? this._escapeHtml(s.ip) : '';
+    return `<div class="session-item${s.current ? ' is-current' : ''}">
+      <span class="session-device">${this._escapeHtml(s.device || '')}</span>${tag}
+      <span class="session-meta">${ip}${ip && s.since ? '<br>' : ''}${this._escapeHtml(rel(s.since))}</span>
+    </div>`;
+  }).join('');
+},
+
+// Ask for the list when the pane is actually on screen. There is no session
+// table behind this, so it is a snapshot of live sockets, not history.
+_refreshSessions() {
+  this.socket?.emit('get-sessions');
+},
+
+_refreshMediaToken() {
+  // One request even when a screen full of images fails at the same moment.
+  if (!this._mediaTokenRefresh) {
+    this._mediaTokenRefresh = Promise.resolve(this._loadMediaToken())
+      .finally(() => { this._mediaTokenRefresh = null; });
+  }
+  return this._mediaTokenRefresh;
+},
+
+// Re-fetch well inside the window rather than near the edge, so a machine that
+// sleeps through the boundary still wakes up with time to spare.
+_startMediaTokenRefresh() {
+  if (this._mediaTokenTimer) return;
+  this._mediaTokenTimer = setInterval(() => {
+    if (this._mediaProxyEnabled !== false) this._refreshMediaToken();
+  }, 6 * 60 * 60 * 1000);
+},
+
+// Last line of defence: an image the proxy refused gets one more go with a
+// fresh token. Covers the cases a timer cannot, like a laptop asleep past the
+// rollover or a clock that disagrees with the server's.
+_setupMediaTokenRetry() {
+  if (this._mediaRetryBound) return;
+  this._mediaRetryBound = true;
+  // Capture phase: `error` from an <img> does not bubble.
+  document.addEventListener('error', (e) => {
+    const el = e.target;
+    if (!el || el.tagName !== 'IMG') return;
+    const src = el.getAttribute('src') || '';
+    if (!src.startsWith('/api/media-proxy?')) return;
+    if (el.dataset.mpRetried) return;       // one retry per image, never a loop
+    el.dataset.mpRetried = '1';
+    const stale = this._mediaToken;
+    this._refreshMediaToken().then(() => {
+      if (!this._mediaToken || this._mediaToken === stale) return;
+      try {
+        const u = new URL(src, location.href);
+        u.searchParams.set('mt', this._mediaToken);
+        el.setAttribute('src', u.pathname + u.search);
+      } catch { /* malformed src, leave it alone */ }
+    });
+  }, true);
+},
+
 // Returns a URL safe to put in a src attribute, or null when proxying is on
 // but the token has not arrived yet (caller must defer).
 _proxyMediaUrl(url) {

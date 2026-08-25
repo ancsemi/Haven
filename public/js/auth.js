@@ -67,7 +67,8 @@
   // ── Language switcher ─────────────────────────────────
   const langSelect = document.getElementById('auth-lang-select');
   if (langSelect) {
-    langSelect.value = window.i18n.locale;
+    langSelect.value = window.i18n.preference;
+    window.i18n.buildLocalePicker(langSelect);
     langSelect.addEventListener('change', e => window.i18n.setLocale(e.target.value));
   }
 

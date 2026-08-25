@@ -570,7 +570,9 @@
     "close_panel": "Fechar painel",
     "no_one_in_voice": "Ninguém na chamada de voz",
     "online_title": "Online",
-    "select_channel": "Selecione um canal"
+    "select_channel": "Selecione um canal",
+    "search_members": "Buscar membros...",
+    "search_clear": "Limpar"
   },
   "users": {
     "no_one_here": "Ninguém aqui",
@@ -634,7 +636,8 @@
       "voice_kick_title": "Remover do canal de voz",
       "mute_hint": "Silenciar = você não ouve a pessoa",
       "deafen_hint": "Ensurdecer = ela não ouve você"
-    }
+    },
+    "no_search_matches": "Nenhum membro corresponde a isso"
   },
   "context": {
     "view_profile": "Ver perfil",
@@ -723,11 +726,13 @@
       "import": "Importar",
       "mod_mode": "Modo de layout",
       "security": "Segurança",
-      "moderation": "Moderação"
+      "moderation": "Moderação",
+      "sessions": "Sessões"
     },
     "language_section": {
       "title": "Idioma",
       "label": "Idioma",
+      "auto": "Automático",
       "hint": "As alterações são aplicadas imediatamente"
     },
     "layout_density": {
@@ -813,6 +818,22 @@
       "changed": "Senha alterada!",
       "failed": "Falha",
       "network_error": "Erro de rede"
+    },
+    "sessions_section": {
+      "title": "Sessões ativas",
+      "hint": "Dispositivos com o Haven aberto agora. Um dispositivo conectado mas fechado não aparece na lista, então encerre a sessão em todos se achar que alguém está usando sua conta.",
+      "revoke_btn": "Encerrar sessão nos outros dispositivos",
+      "none": "Nenhum outro dispositivo conectado",
+      "this_device": "Este dispositivo",
+      "confirm_prompt": "Digite sua senha para encerrar a sessão em todos os outros dispositivos.",
+      "need_password": "Senha obrigatória",
+      "working": "Encerrando as outras sessões...",
+      "done": "Sessões encerradas nos outros dispositivos.",
+      "failed": "Não foi possível encerrar as outras sessões.",
+      "just_now": "agora mesmo",
+      "mins": "há {{n}} min",
+      "hours": "há {{n}} h",
+      "days": "há {{n}} d"
     },
     "two_factor_section": {
       "title": "Autenticação de dois fatores",

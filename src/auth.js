@@ -856,6 +856,7 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
       db.prepare('UPDATE users SET password_hash = ?, temp_password_hash = NULL, password_version = ?, must_change_password = 0 WHERE id = ?')
         .run(hash, newPwv, user.id);
     }
+    _forgetPwv(user.id);
     const displayName = user.display_name || user.username;
     const freshToken = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: newPwv },
@@ -1056,6 +1057,7 @@ router.post('/totp/verify-setup', authLimiter, async (req, res) => {
     // Enable TOTP and bump password_version to invalidate all existing sessions
     const newPwv = (user.password_version || 1) + 1;
     db.prepare('UPDATE users SET totp_enabled = 1, password_version = ? WHERE id = ?').run(newPwv, user.id);
+    _forgetPwv(user.id);
 
     // Generate backup codes
     const backupCodes = generateBackupCodes(8);
@@ -1225,6 +1227,7 @@ router.post('/change-password', authLimiter, async (req, res) => {
     const hash = await bcrypt.hash(newPassword, 12);
     const newPwv = (user.password_version || 1) + 1;
     db.prepare('UPDATE users SET password_hash = ?, password_version = ? WHERE id = ?').run(hash, newPwv, user.id);
+    _forgetPwv(user.id);
 
     // Issue a fresh token so the session stays alive
     const freshToken = jwt.sign(
@@ -1259,6 +1262,70 @@ router.post('/change-password', authLimiter, async (req, res) => {
 // ── Helpers ───────────────────────────────────────────────
 
 // ── Verify Password (lightweight, for E2E password prompt) ──
+// Log out every other session. Haven's tokens are stateless, so there is no
+// row to delete per device: the only real lever is password_version, which
+// invalidates every token at once. This bumps it and immediately re-issues one
+// for the caller, so the session doing the revoking survives and all the others
+// stop being valid whether or not they currently have a socket open. That
+// matters, because a stolen token with no tab open never appears in the session
+// list but is still perfectly usable until this runs.
+router.post('/revoke-sessions', authLimiter, async (req, res) => {
+  try {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+
+    const db = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Re-checking the password is the point: it stops someone who walked up to
+    // an unlocked machine from locking the real owner out of their own devices.
+    if (user.oidc_subject && !hasLocalPassword(user)) {
+      return res.status(400).json({ error: 'This account signs in through SSO, so there is no Haven password to confirm with. Sign out from your identity provider instead.' });
+    }
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+    if (!password) return res.status(400).json({ error: 'Password required' });
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Password is incorrect' });
+
+    const newPwv = (user.password_version || 1) + 1;
+    db.prepare('UPDATE users SET password_version = ? WHERE id = ?').run(newPwv, user.id);
+    _forgetPwv(user.id);
+
+    const freshToken = jwt.sign(
+      { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName: user.display_name || user.username, pwv: newPwv },
+      JWT_SECRET,
+      _sessionSignOptions()
+    );
+
+    // Respond before disconnecting so this client stores its new token first,
+    // otherwise it force-logs-out the very person who asked.
+    res.json({ message: 'Other sessions signed out', token: freshToken });
+
+    const io = req.app.get('io');
+    if (io) {
+      setTimeout(() => {
+        // Every socket goes, this one included. Matching a socket back to the
+        // caller by its handshake token does not work, since the handshake
+        // carries the token from before the bump. The client that asked for
+        // this already has the fresh token and skips its own kick, exactly as
+        // the change-password flow does.
+        for (const [, sk] of io.sockets.sockets) {
+          if (sk.user && sk.user.id === user.id) {
+            sk.emit('force-logout', { reason: 'sessions_revoked' });
+            sk.disconnect(true);
+          }
+        }
+      }, 500);
+    }
+  } catch (err) {
+    console.error('Revoke sessions error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.post('/verify-password', authLimiter, async (req, res) => {
   try {
     const username = sanitizeString(req.body.username, 20);
@@ -1282,13 +1349,49 @@ router.post('/verify-password', authLimiter, async (req, res) => {
   }
 });
 
+// Session tokens carry a `pwv` claim matching the account's password_version.
+// Bumping that column is Haven's only way to revoke tokens, since they are
+// stateless. The socket handshake has always rejected a stale pwv, but this
+// function did not, so every HTTP route accepted a token that changing your
+// password was supposed to have killed. Someone whose token had been stolen
+// could change their password, watch the thief get disconnected, and still
+// leave them able to call the API. Checked in one place because all 62 HTTP
+// call sites come through here.
+const _pwvCache = new Map();   // userId -> { pwv, at }
+const _PWV_CACHE_MS = 5000;    // revocation lands within this, and it keeps a
+                               // busy endpoint from hitting the DB per request
+
+function _currentPwv(userId) {
+  const now = Date.now();
+  const hit = _pwvCache.get(userId);
+  if (hit && now - hit.at < _PWV_CACHE_MS) return hit.pwv;
+  let pwv = null;
+  try {
+    const row = getDb().prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
+    // No row means the account is gone. Leave that to the routes, which
+    // already handle a missing user, rather than changing it from here.
+    pwv = row ? (row.password_version || 1) : null;
+  } catch { return null; }
+  _pwvCache.set(userId, { pwv, at: now });
+  return pwv;
+}
+
 function verifyToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded && decoded.id && !decoded.purpose) {
+      const current = _currentPwv(decoded.id);
+      if (current !== null && (decoded.pwv || 1) !== current) return null;
+    }
+    return decoded;
   } catch {
     return null;
   }
 }
+
+// Called right after password_version is written so the change takes effect
+// immediately instead of waiting out the cache.
+function _forgetPwv(userId) { _pwvCache.delete(userId); }
 
 // ── Account Recovery Codes ─────────────────────────────
 // Users generate these in advance. Each is a one-time token that can reset
@@ -1389,6 +1492,7 @@ router.post('/recover-account', authLimiter, async (req, res) => {
         e2e_secret = NULL
       WHERE id = ?
     `).run(newHash, newVersion, user.id);
+    _forgetPwv(user.id);
     db.prepare('DELETE FROM totp_backup_codes WHERE user_id = ?').run(user.id);
     db.prepare('DELETE FROM account_recovery_codes WHERE user_id = ?').run(user.id);
 

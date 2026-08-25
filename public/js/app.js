@@ -259,6 +259,8 @@ class HavenApp {
     this._mediaProxyEnabled = true;   // assume on: fail closed, not open
     this._mediaToken = null;
     this._loadMediaToken?.();
+    this._startMediaTokenRefresh?.();   // the token expires after ~2 days
+    this._setupMediaTokenRetry?.();     // and a stale one used to fail silently
     // Link policy for decrypted DM content (#5483). Requested once the socket
     // exists, below, since it travels over the authenticated connection.
 
@@ -311,6 +313,7 @@ class HavenApp {
     this.modMode?.init();
     this._setupDensityPicker();
     this._setupToggleStylePicker();
+    this._setupAnimatePfpPicker();
     this._setupZoomSlider();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();

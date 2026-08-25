@@ -657,6 +657,7 @@
     "language_section": {
       "title": "Idioma",
       "label": "Idioma",
+      "auto": "Automático",
       "hint": "Los cambios se aplican inmediatamente"
     },
     "layout_density": {

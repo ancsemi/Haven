@@ -5,8 +5,21 @@ export default {
 _renderOnlineUsers(users) {
   this._lastOnlineUsers = users;
   const el = document.getElementById('online-users');
+  const searchWrap = document.getElementById('user-search-wrap');
+  if (searchWrap) searchWrap.style.display = users.length ? '' : 'none';
   if (users.length === 0) {
     el.innerHTML = `<p class="muted-text">${t('users.no_one_here')}</p>`;
+    return;
+  }
+
+  // Member search. Filtering here rather than hiding rows in the DOM keeps the
+  // group counts honest, so "Online 3" means three matches and not three people
+  // of whom you can see one. The roster re-renders on every presence change, so
+  // the term lives on the instance to survive that.
+  const term = (this._userFilter || '').trim().toLowerCase();
+  if (term) users = users.filter(u => (u.username || '').toLowerCase().includes(term));
+  if (users.length === 0) {
+    el.innerHTML = `<p class="muted-text">${t('users.no_search_matches')}</p>`;
     return;
   }
 
@@ -22,11 +35,22 @@ _renderOnlineUsers(users) {
     }
   });
 
-  // Sort: online first, then alphabetical
+  // Sort: online first, then by role level, then alphabetically inside each
+  // level. Straight alphabetical buried whoever is actually in charge somewhere
+  // in the middle of the list, which is the opposite of what you want when you
+  // are looking for someone who can help. (#5470 follow-up, asked by @birdcrazy)
+  //
+  // The level already accounts for the channel you are in: the server sends the
+  // highest role that applies here, merging server-wide and channel-scoped ones.
+  // A user whose role badge is hidden reports no role and sorts as level 0, so
+  // hiding the admin badge does not out them by position either.
+  const levelOf = (u) => (u.role && Number.isFinite(u.role.level)) ? u.role.level : 0;
   const sorted = [...users].sort((a, b) => {
     const aOn = a.online !== false;
     const bOn = b.online !== false;
     if (aOn !== bOn) return aOn ? -1 : 1;
+    const lv = levelOf(b) - levelOf(a);
+    if (lv !== 0) return lv;
     return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
   });
 
@@ -251,11 +275,11 @@ _renderUserItem(u, scoreLookup) {
   const initial = u.username.charAt(0).toUpperCase();
   const shapeClass = 'avatar-' + (u.avatarShape || 'circle');
   const avatarImg = u.avatar
-    ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}" src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
+    ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}"${this._animAttr(u.animateProfile)} src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="user-item-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
   // Wrap avatar + status dot together (Discord-style overlay)
-  const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;
+  const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}${this._pfpBorderMarker(u.border, u.borderTransform, u.animateProfile)}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;
 
   // Role: color dot to the left of name + tooltip on hover
   // Role display mode
@@ -731,7 +755,7 @@ _showProfilePopup(profile) {
   const shapeClass = 'avatar-' + (profile.avatarShape || 'circle');
 
   const avatarHtml = profile.avatar
-    ? `<img class="profile-popup-avatar ${shapeClass}" src="${this._escapeHtml(profile.avatar)}" alt="${initial}">`
+    ? `<img class="profile-popup-avatar ${shapeClass}"${this._animAttr(profile.animateProfile)} src="${this._escapeHtml(profile.avatar)}" alt="${initial}">`
     : `<div class="profile-popup-avatar profile-popup-avatar-fallback ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
   // Status dot
@@ -787,6 +811,7 @@ _showProfilePopup(profile) {
     </div>
     <div class="profile-popup-avatar-wrapper">
       ${avatarHtml}
+      ${this._pfpBorderMarker(profile.border, profile.borderTransform, profile.animateProfile)}
       <span class="profile-popup-status-dot ${statusClass}" title="${statusLabel}"></span>
     </div>
     <div class="profile-popup-body">
@@ -814,6 +839,10 @@ _showProfilePopup(profile) {
   }
 
   document.body.appendChild(popup);
+
+  // Opening the profile card is a trigger context: flag the card so the freeze
+  // observer leaves its animated pfp (avatar and later-folded border) playing.
+  popup.dataset.animPlay = '1';
 
   // Position near the anchor element
   this._positionProfilePopup(popup);
@@ -895,6 +924,7 @@ _showProfilePopup(profile) {
       const bioInput = document.getElementById('edit-profile-bio');
       if (bioInput) bioInput.value = this.user.bio || '';
       this._updateAvatarPreview();
+      this._resetBorderEditState();
       const picker = document.getElementById('avatar-shape-picker');
       if (picker) {
         const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';

@@ -204,6 +204,18 @@ _setupSocketListeners() {
         });
       }
     }
+    // Sync border (pfp overlay) from server, authoritative like avatar shape
+    if (data.border !== undefined) {
+      this.user.border = data.border || null;
+    }
+    // Sync the border fit (op log) so the editor restores it and pfps render it
+    if (data.borderTransform !== undefined) {
+      this.user.borderTransform = Array.isArray(data.borderTransform) ? data.borderTransform : null;
+    }
+    // Sync the animation policy (trigger/disabled) so the editor seeds it and pfps honor it
+    if (data.animateProfile !== undefined) {
+      this.user.animateProfile = data.animateProfile === 'disabled' ? 'disabled' : 'trigger';
+    }
     localStorage.setItem('haven_user', JSON.stringify(this.user));
     // (#5394) Merge server-stored nicknames. Server is authoritative for any
     // key it knows about; localStorage keeps anything the server doesn't have yet.
@@ -236,6 +248,7 @@ _setupSocketListeners() {
     if (loginEl) loginEl.textContent = `@${this.user.username}`;
     // Update avatar preview in settings if present
     this._updateAvatarPreview();
+    this._updateBorderPreview();
     // Show admin/mod controls based on role level
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
     const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
@@ -307,6 +320,11 @@ _setupSocketListeners() {
       clearTimeout(this._voiceDisconnectTimer);
       this._voiceDisconnectTimer = null;
     }
+    // A reconnect usually means the machine slept or the network dropped, which
+    // is the most likely moment for the media token to have expired underneath
+    // us. Cheap to redo and it keeps remote images from silently breaking.
+    this._refreshMediaToken?.();
+
     // Re-join channel after reconnect (server lost our room membership)
     this.socket.emit('visibility-change', { visible: !document.hidden });
     this.socket.emit('get-channels', { knownCodes: this._getKnownChannelCodes() });
@@ -642,6 +660,16 @@ _setupSocketListeners() {
       localStorage.removeItem('haven_token');
       localStorage.removeItem('haven_user');
       window.location.href = '/';
+    } else if (data && data.reason === 'sessions_revoked') {
+      // We are the session that asked for this, so we already hold the fresh
+      // token and stay put. Every other device gets sent back to the login page.
+      if (this._justRevokedSessions) {
+        this._justRevokedSessions = false;
+        return;
+      }
+      localStorage.removeItem('haven_token');
+      localStorage.removeItem('haven_user');
+      window.location.href = '/';
     } else if (data && data.reason === 'totp_enabled') {
       // If WE just enabled TOTP, skip the kick — we already have the fresh token
       if (this._justEnabledTotp) {
@@ -652,6 +680,10 @@ _setupSocketListeners() {
       localStorage.removeItem('haven_user');
       window.location.href = '/';
     }
+  });
+
+  this.socket.on('sessions-list', (data) => {
+    this._renderSessionsList?.(data && data.sessions ? data.sessions : []);
   });
 
   this.socket.on('channels-list', (channels) => {

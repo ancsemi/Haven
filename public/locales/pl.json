@@ -682,6 +682,7 @@
     "language_section": {
       "title": "Język",
       "label": "Język",
+      "auto": "Automatycznie",
       "hint": "Zmiany są stosowane natychmiast"
     },
     "layout_density": {

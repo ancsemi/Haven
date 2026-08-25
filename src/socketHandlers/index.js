@@ -10,7 +10,7 @@ const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
-const { sanitizeText, utcStamp, isString, isInt, isValidUploadPath, VALID_ROLE_PERMS, filterIdleOnline } = require('./helpers');
+const { sanitizeText, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
@@ -748,6 +748,29 @@ function setupSocketHandlers(io, db, opts = {}) {
     });
   }
 
+  // A user agent is long, spoofable and full of history nobody wants to read.
+  // All this needs to do is let you recognise your own devices well enough to
+  // notice one you do not recognise, so it reduces to browser plus platform.
+  function _describeUserAgent(ua) {
+    if (!ua || typeof ua !== 'string') return 'Unknown device';
+    const browser =
+      /Edg\//.test(ua)                        ? 'Edge'
+      : /OPR\/|Opera/.test(ua)            ? 'Opera'
+      : /Firefox\//.test(ua)                  ? 'Firefox'
+      : /Chrome\//.test(ua)                   ? 'Chrome'
+      : /Safari\//.test(ua)                   ? 'Safari'
+      : /Haven|Electron/i.test(ua)              ? 'Haven Desktop'
+      : 'Browser';
+    const platform =
+      /Android/.test(ua)                    ? 'Android'
+      : /iPhone|iPad|iOS/.test(ua)  ? 'iOS'
+      : /Windows/.test(ua)                  ? 'Windows'
+      : /Mac OS X|Macintosh/.test(ua)   ? 'macOS'
+      : /Linux/.test(ua)                    ? 'Linux'
+      : '';
+    return platform ? `${browser} on ${platform}` : browser;
+  }
+
   // ── emitOnlineUsers ─────────────────────────────────────
   function emitOnlineUsers(code) {
     const room = channelUsers.get(code);
@@ -770,8 +793,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const statusMap = {};
     try {
-      const statusRows = db.prepare('SELECT id, status, status_text, avatar, avatar_shape, is_guest FROM users').all();
-      statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', isGuest: !!r.is_guest }; });
+      const statusRows = db.prepare('SELECT id, status, status_text, avatar, avatar_shape, border, border_transform, animate_profile, is_guest FROM users').all();
+      statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', border: r.border || null, borderTransform: parseBorderTransform(r.border_transform), animateProfile: r.animate_profile || 'trigger', isGuest: !!r.is_guest }; });
     } catch { /* columns may not exist yet */ }
 
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
@@ -805,6 +828,9 @@ function setupSocketHandlers(io, db, opts = {}) {
         statusText: statusMap[m.id]?.statusText || '',
         avatar: statusMap[m.id]?.avatar || null,
         avatarShape: statusMap[m.id]?.avatarShape || 'circle',
+        border: statusMap[m.id]?.border || null,
+        borderTransform: statusMap[m.id]?.borderTransform || null,
+        animateProfile: statusMap[m.id]?.animateProfile || 'trigger',
         isGuest: statusMap[m.id]?.isGuest || false,
         role: getUserHighestRole(m.id, channel ? channel.id : null),
         // null unless the user opted in; getPublicActivity applies their
@@ -822,6 +848,9 @@ function setupSocketHandlers(io, db, opts = {}) {
             statusText: statusMap[s.user.id]?.statusText || '',
             avatar: statusMap[s.user.id]?.avatar || s.user.avatar || null,
             avatarShape: statusMap[s.user.id]?.avatarShape || s.user.avatar_shape || 'circle',
+            border: statusMap[s.user.id]?.border || s.user.border || null,
+            borderTransform: statusMap[s.user.id]?.borderTransform || s.user.borderTransform || null,
+            animateProfile: statusMap[s.user.id]?.animateProfile || s.user.animate_profile || 'trigger',
             isGuest: statusMap[s.user.id]?.isGuest || !!s.user.isGuest,
             role: getUserHighestRole(s.user.id, channel ? channel.id : null),
             activity: activity.getPublicActivity(s.user.id)
@@ -1437,7 +1466,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     try {
       // created_at feeds the automod new-account link gate (v3.42.0).
-      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, password_version, is_guest, created_at, oidc_subject FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject FROM users WHERE id = ?').get(user.id);
       if (!uRow || uRow.username !== user.username) {
         return next(new Error('Session expired'));
       }
@@ -1449,6 +1478,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       socket.user.displayName = uRow.display_name || user.username;
       socket.user.avatar = uRow.avatar || null;
       socket.user.avatar_shape = uRow.avatar_shape || 'circle';
+      socket.user.border = uRow.border || null;
+      socket.user.borderTransform = parseBorderTransform(uRow.border_transform);
+      socket.user.animate_profile = uRow.animate_profile || 'trigger';
       socket.user.isGuest = !!uRow.is_guest;
       socket.user.createdAt = uRow.created_at || null;
       // (#12) The client needs this to ask for the right secret: an SSO
@@ -1546,9 +1578,36 @@ function setupSocketHandlers(io, db, opts = {}) {
       return;
     }
 
+    // Stamped here rather than read from the token: the token's iat is when
+    // you signed in, which can be weeks before this tab opened.
+    if (socket.handshake) socket.handshake.issued = Date.now();
     console.log(`✅ ${socket.user.username} connected`);
     socket.currentChannel = null;
     socket.hasFocus = true;
+
+    // (#5518 sibling) Your own open connections, for the session list in
+    // Settings. Haven issues stateless tokens and keeps no session table, so
+    // this is exactly what it says: sockets attached right now. A token with no
+    // tab open does not appear here, which is why the list is paired with a
+    // revoke that invalidates every token rather than individual rows.
+    socket.on('get-sessions', () => {
+      const mine = [];
+      for (const [, s2] of io.of('/').sockets) {
+        if (!s2.user || s2.user.id !== socket.user.id) continue;
+        const ua = (s2.handshake?.headers?.['user-agent']) || '';
+        mine.push({
+          id: s2.id,
+          current: s2.id === socket.id,
+          device: _describeUserAgent(ua),
+          ip: socketClientIp(s2),
+          since: s2.handshake?.issued || null
+        });
+      }
+      // Current session first, then oldest to newest so a new arrival appears
+      // at the bottom where it is easy to spot.
+      mine.sort((a, b) => (b.current - a.current) || ((a.since || 0) - (b.since || 0)));
+      socket.emit('sessions-list', { sessions: mine });
+    });
 
     // (#5505) Admins get their own room so server-health warnings can reach
     // them without walking every socket. An admin joining mid-problem is told
@@ -1585,6 +1644,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       displayName: socket.user.displayName,
       avatar: socket.user.avatar || null,
       avatarShape: socket.user.avatar_shape || 'circle',
+      border: socket.user.border || null,
+      borderTransform: socket.user.borderTransform || null,
+      animateProfile: socket.user.animate_profile || 'trigger',
       version: HAVEN_VERSION,
       roles: socket.user.roles || [],
       effectiveLevel: socket.user.effectiveLevel || 0,
@@ -2092,4 +2154,4 @@ function setupSocketHandlers(io, db, opts = {}) {
   return { activity };
 }
 
-module.exports = { setupSocketHandlers, sanitizeText };
+module.exports = { setupSocketHandlers, sanitizeText, sanitizeBorderTransform };
