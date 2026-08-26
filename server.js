@@ -119,11 +119,13 @@ webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VA
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers, sanitizeText, sanitizeBorderTransform } = require('./src/socketHandlers');
+const { getAccessibleVoiceChannels } = require('./src/botVoice');
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
 const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
 
 const app = express();
+let socketRuntime = null;
 
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 
@@ -3574,6 +3576,33 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   res.status(200).json({ success: true, message_id: result.lastInsertRowid });
 });
 
+// Voice presence is scoped to the bot's assigned channel, channels its
+// creator belongs to, or every non-DM channel when its creator is an admin.
+app.get('/api/webhooks/:token/voice/channels', webhookLimiter, (req, res) => {
+  const webhook = getWebhookByToken(req.params.token);
+  if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
+  if (!webhook.can_use_voice) {
+    return res.status(403).json({ error: 'This bot does not have voice permission' });
+  }
+
+  const { getDb } = require('./src/database');
+  const voiceUsers = socketRuntime?.state?.voiceUsers;
+  const channels = getAccessibleVoiceChannels(getDb(), webhook)
+    .filter(channel => channel.voice_enabled !== 0)
+    .map(channel => {
+      const room = voiceUsers?.get(channel.code);
+      const users = room ? Array.from(room.values()) : [];
+      return {
+        code: channel.code,
+        name: channel.name,
+        members: users.filter(user => !user.isBot).length,
+        bots: users.filter(user => user.isBot).length
+      };
+    })
+    .sort((a, b) => b.members - a.members || a.name.localeCompare(b.name));
+  res.json({ channels });
+});
+
 // ── Bot: Delete a message in the webhook's channel ──────
 app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res) => {
   const { getDb } = require('./src/database');
@@ -3831,7 +3860,7 @@ function getWebhookByToken(token) {
   if (!token || typeof token !== 'string' || token.length !== 64) return null;
   const { getDb } = require('./src/database');
   return getDb().prepare(
-    'SELECT id, name, channel_id, callback_url, can_moderate, created_by FROM webhooks WHERE token = ? AND is_active = 1'
+    'SELECT id, name, channel_id, callback_url, can_moderate, can_use_voice, created_by FROM webhooks WHERE token = ? AND is_active = 1'
   ).get(token);
 }
 
@@ -4701,7 +4730,7 @@ try {
 } catch {}
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
-activityRef.engine = setupSocketHandlers(io, db, {
+socketRuntime = setupSocketHandlers(io, db, {
   invalidateIpBanCache,
   // Share the cached ban matcher so the socket gate and the HTTP gate agree
   // on both normalization and CIDR handling, and the socket path stops
@@ -4712,7 +4741,8 @@ activityRef.engine = setupSocketHandlers(io, db, {
   getUploadUsage,
   // Keep the Referrer-Policy cache in sync when an admin changes it.
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
-}).activity;
+});
+activityRef.engine = socketRuntime.activity;
 registerProcessCleanup();
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────

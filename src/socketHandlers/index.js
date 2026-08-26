@@ -28,6 +28,14 @@ const {
   rotateLiveChannelState,
   schedulePendingVoiceLeave
 } = require('../channelRotation');
+const {
+  disconnectBotVoiceSocket,
+  disconnectDuplicateBotSockets,
+  getBotVoiceWebhookByToken,
+  isolateBotVoiceSocket,
+  reconcileBotVoiceAccess,
+  registerBotVoiceSocket
+} = require('../botVoice');
 
 const { createActivity } = require('../activity');
 
@@ -148,7 +156,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     db,
     getOnlineUserIds: () => {
       const ids = new Set();
-      for (const [, s] of io.of('/').sockets) if (s.user) ids.add(s.user.id);
+      for (const [, s] of io.of('/').sockets) if (s.user && !s.user.isBot) ids.add(s.user.id);
       return Array.from(ids);
     },
     // A user's activity changed → re-broadcast presence for whatever channel
@@ -605,7 +613,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     _broadcastPending = setTimeout(() => {
       _broadcastPending = null;
       for (const [, s] of io.sockets.sockets) {
-        if (s.user) {
+        if (s.user && !s.user.isBot) {
           s.emit('channels-list', getEnrichedChannels(s.user.id, s.user.isAdmin, null));
         }
       }
@@ -710,14 +718,19 @@ function setupSocketHandlers(io, db, opts = {}) {
             roleColor: role ? role.color : null,
             roleName: role ? role.name : null,
             roles,
-            isMuted: u.isMuted || false, isDeafened: u.isDeafened || false
+            isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+            isBot: !!u.isBot, isListening: !!u.isListening
           };
         })
       : [];
     io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', { channelCode: code, users });
-    io.emit('voice-count-update', {
+    io.except('bot-sockets').emit('voice-count-update', {
       code, count: users.length,
-      users: users.map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }))
+      users: users.map(u => ({
+        id: u.id, username: u.username,
+        isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+        isBot: !!u.isBot, isListening: !!u.isListening
+      }))
     });
   }
 
@@ -981,6 +994,18 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
     if (!stillInVoice) voiceLastActivity.delete(socket.user.id);
   }
+
+  function revokeBotVoiceAccess(webhookId, reason = 'Bot voice access was revoked') {
+    for (const [, botSocket] of Array.from(io.sockets.sockets.entries())) {
+      if (!botSocket.user?.isBot || botSocket.user.webhookId !== webhookId) continue;
+      disconnectBotVoiceSocket(botSocket, { state, handleVoiceLeave }, reason);
+    }
+  }
+
+  const botVoiceReconciliationTimer = setInterval(() => {
+    reconcileBotVoiceAccess(io, db, state, revokeBotVoiceAccess);
+  }, 2000);
+  botVoiceReconciliationTimer.unref?.();
 
   // ── Push notification helper ────────────────────────────
   function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent) {
@@ -1414,7 +1439,27 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Auth middleware
   io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
+    const botToken = socket.handshake.auth?.botToken;
+    if (botToken !== undefined) {
+      const webhook = getBotVoiceWebhookByToken(db, botToken);
+      if (!webhook) return next(new Error('Webhook not found or inactive'));
+      if (!webhook.can_use_voice) return next(new Error('Bot voice permission is disabled'));
+      socket.user = {
+        id: -webhook.id,
+        webhookId: webhook.id,
+        botToken,
+        username: `bot-${webhook.id}`,
+        displayName: webhook.name,
+        channelId: webhook.channel_id,
+        channelCode: webhook.channel_code,
+        isBot: true,
+        isAdmin: false,
+        isGuest: false
+      };
+      return next();
+    }
+
+    const token = socket.handshake.auth?.token;
     if (!token || typeof token !== 'string') return next(new Error('Authentication required'));
 
     const user = verifyToken(token);
@@ -1539,6 +1584,16 @@ function setupSocketHandlers(io, db, opts = {}) {
       return;
     }
 
+    if (socket.user.isBot) {
+      console.log(`Bot ${socket.user.displayName} connected to the voice gateway`);
+      disconnectDuplicateBotSockets(socket, { io, state, handleVoiceLeave });
+      isolateBotVoiceSocket(socket);
+      registerBotVoiceSocket(socket, {
+        io, db, state, broadcastVoiceUsers, handleVoiceLeave, revokeBotVoiceAccess
+      });
+      return;
+    }
+
     // Stamped here rather than read from the token: the token's iat is when
     // you signed in, which can be weeks before this tab opened.
     if (socket.handshake) socket.handshake.issued = Date.now();
@@ -1631,7 +1686,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(u => ({
-          id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false
+          id: u.id, username: u.username,
+          isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+          isBot: !!u.isBot, isListening: !!u.isListening
         }));
         socket.emit('voice-count-update', { code, count: room.size, users });
       } else {
@@ -1955,7 +2012,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Transfer admin mutex
       transferAdminRef,
       // Audit log
-      logAudit,
+      logAudit, revokeBotVoiceAccess,
       // Auto-moderation (v3.42.0)
       automod,
       enforceAutomod,
@@ -2101,7 +2158,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity };
+  return { activity, state };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeBorderTransform };

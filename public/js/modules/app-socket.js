@@ -1425,7 +1425,8 @@ _setupSocketListeners() {
     // panel guard above.
     const usersForSidebar = users.map(u => ({
       id: u.id, username: u.username,
-      isMuted: !!u.isMuted, isDeafened: !!u.isDeafened
+      isMuted: !!u.isMuted, isDeafened: !!u.isDeafened,
+      isBot: !!u.isBot, isListening: !!u.isListening
     }));
     const skipEmptyWipe = usersForSidebar.length === 0 && isInVoice &&
       Array.isArray(this.voiceChannelUsers?.[data.channelCode]) &&

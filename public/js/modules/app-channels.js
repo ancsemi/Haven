@@ -1685,7 +1685,9 @@ _renderWebhookList(webhooks, channelCode) {
     return;
   }
   container.innerHTML = webhooks.map(wh => {
-    const maskedToken = wh.token.slice(0, 8) + '••••••••';
+    const maskedToken = typeof wh.token === 'string' && wh.token
+      ? wh.token.slice(0, 8) + '••••••••'
+      : 'Hidden - owner/admin only';
     const statusLabel = wh.is_active ? `🟢 ${t('channels.webhook_active')}` : `🔴 ${t('channels.webhook_disabled')}`;
     const toggleLabel = wh.is_active ? t('channels.webhook_disable') : t('channels.webhook_enable');
     return `
@@ -3068,13 +3070,14 @@ _updateChannelVoiceIndicators() {
         // Self-talking state is driven by the local analyser directly (not
         // server echo), so talkingState.get('self') reflects real-time mic level.
         const isTalking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
-        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}</div>`;
+        const botBadge = u.isBot ? '<span class="bot-badge">BOT</span>' : '';
+        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}${botBadge}</div>`;
       }).join('');
       // Right-click on a left-sidebar voice user → same voice options menu
       userList.querySelectorAll('.channel-voice-user').forEach(item => {
         item.addEventListener('contextmenu', (e) => {
           const userId = parseInt(item.dataset.userId);
-          if (isNaN(userId) || userId === this.user.id) return;
+          if (isNaN(userId) || userId === this.user.id || item.dataset.isBot === 'true') return;
           e.preventDefault();
           e.stopPropagation();
           this._showVoiceUserMenu(item, userId, item.dataset.username || '');

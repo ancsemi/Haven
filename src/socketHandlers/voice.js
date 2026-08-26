@@ -11,6 +11,20 @@ module.exports = function register(socket, ctx) {
           activeScreenSharers, activeWebcamUsers, streamViewers, pendingTempDelete,
           pendingVoiceLeave } = state;
 
+  const serializeVoicePeer = user => ({
+    id: user.id,
+    username: user.username,
+    isMuted: !!user.isMuted,
+    isDeafened: !!user.isDeafened,
+    isBot: !!user.isBot,
+    isListening: !!user.isListening
+  });
+
+  function serializeVoiceRosterUser(user, channelId) {
+    const role = getUserHighestRole(user.id, channelId);
+    return { ...serializeVoicePeer(user), roleColor: role ? role.color : null };
+  }
+
   // ── Local helper: broadcast stream/viewer info ──────────
   function broadcastStreamInfo(code) {
     const voiceRoom = voiceUsers.get(code);
@@ -148,7 +162,7 @@ module.exports = function register(socket, ctx) {
 
     socket.emit('voice-existing-users', {
       channelCode: code,
-      users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+      users: existingUsers.map(serializeVoicePeer),
       voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
     });
 
@@ -512,10 +526,7 @@ module.exports = function register(socket, ctx) {
     const channelId = channel ? channel.id : null;
     const room = voiceUsers.get(code);
     const users = room
-      ? Array.from(room.values()).map(u => {
-          const role = getUserHighestRole(u.id, channelId);
-          return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
-        })
+      ? Array.from(room.values()).map(u => serializeVoiceRosterUser(u, channelId))
       : [];
     // Diagnostic for the recurring "I vanished from my own voice panel"
     // bug. If the client claims to be in voice on this channel but the
@@ -584,7 +595,7 @@ module.exports = function register(socket, ctx) {
             const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
             socket.emit('voice-existing-users', {
               channelCode: code,
-              users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+              users: existingUsers.map(serializeVoicePeer),
               voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
             });
             // Notify existing peers that we're (back) in the room so
@@ -601,10 +612,7 @@ module.exports = function register(socket, ctx) {
             // Re-fetch the room so the response below includes us.
             const healedRoom = voiceUsers.get(code);
             const healedUsers = healedRoom
-              ? Array.from(healedRoom.values()).map(u => {
-                  const role = getUserHighestRole(u.id, vch.id);
-                  return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
-                })
+              ? Array.from(healedRoom.values()).map(u => serializeVoiceRosterUser(u, vch.id))
               : [];
             socket.emit('voice-users-update', { channelCode: code, users: healedUsers });
             return; // We've already sent the update — don't double-send below.
@@ -739,7 +747,7 @@ module.exports = function register(socket, ctx) {
         const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
         socket.emit('voice-existing-users', {
           channelCode: code,
-          users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+          users: existingUsers.map(serializeVoicePeer),
           voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
           // Hint to the client: skip building new RTCPeerConnections —
           // existing ones from before the blip are still live.
@@ -774,7 +782,7 @@ module.exports = function register(socket, ctx) {
       const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
       socket.emit('voice-existing-users', {
         channelCode: code,
-        users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+        users: existingUsers.map(serializeVoicePeer),
         voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
         skipRenegotiate: true
       });
@@ -845,7 +853,7 @@ module.exports = function register(socket, ctx) {
     const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
     socket.emit('voice-existing-users', {
       channelCode: code,
-      users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+      users: existingUsers.map(serializeVoicePeer),
       voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
     });
 
@@ -929,7 +937,7 @@ module.exports = function register(socket, ctx) {
       const removed = pruneStaleVoiceUsers(code);
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
-        const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }));
+        const users = Array.from(room.values()).map(serializeVoicePeer);
         socket.emit('voice-count-update', { code, count: room.size, users });
         if (removed.length) broadcastVoiceUsers(code);
       } else {

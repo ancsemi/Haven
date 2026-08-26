@@ -3484,8 +3484,9 @@ _showBotDetail(botId) {
   if (!wh) return;
   const panel = document.getElementById('bot-detail-panel');
   const baseUrl = window.location.origin;
-  const webhookUrl = `${baseUrl}/api/webhooks/${wh.token}`;
-  const maskedToken = wh.token.slice(0, 12) + '••••••••••••';
+  const tokenVisible = typeof wh.token === 'string' && wh.token.length > 0;
+  const webhookUrl = tokenVisible ? `${baseUrl}/api/webhooks/${wh.token}` : '';
+  const maskedToken = tokenVisible ? wh.token.slice(0, 12) + '••••••••••••' : 'Hidden - bot owner or admin only';
   const channelOptions = this._getBotChannelOptions(wh.channel_id);
 
   panel.innerHTML = `
@@ -3516,8 +3517,8 @@ _showBotDetail(botId) {
 
       <label class="settings-label">${t('modals.bot_mgmt.webhook_url_label')}</label>
       <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-        <code style="flex:1;font-size:0.6875rem;padding:6px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(webhookUrl)}</code>
-        <button class="btn-xs" id="bot-detail-copy-url" title="${t('modals.bot_mgmt.copy_url_title')}">📋</button>
+        <code style="flex:1;font-size:0.6875rem;padding:6px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(webhookUrl || 'Hidden - bot owner or admin only')}</code>
+        <button class="btn-xs" id="bot-detail-copy-url" title="${t('modals.bot_mgmt.copy_url_title')}" ${tokenVisible ? '' : 'disabled'}>📋</button>
       </div>
 
       <label class="settings-label">${t('modals.bot_mgmt.token_label')}</label>
@@ -3533,6 +3534,12 @@ _showBotDetail(botId) {
       <label class="toggle-row" style="margin-bottom:12px">
         <input type="checkbox" id="bot-detail-can-moderate" ${wh.can_moderate ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
         <span>Allow this bot to perform moderation actions</span>
+      </label>
+
+      <label class="settings-label">Voice access <span style="font-size:0.625rem;color:var(--text-muted)">(admin only - lets this bot join voice as a WebRTC peer)</span></label>
+      <label class="toggle-row" style="margin-bottom:12px">
+        <input type="checkbox" id="bot-detail-can-use-voice" ${wh.can_use_voice ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
+        <span>Allow this bot to use voice channels</span>
       </label>
 
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -3563,12 +3570,15 @@ _showBotDetail(botId) {
     const payload = { id: botId, name, channel_id: channelId, callback_url: callbackUrl, callback_secret: callbackSecret };
     const modBox = panel.querySelector('#bot-detail-can-moderate');
     if (modBox && !modBox.disabled) payload.can_moderate = modBox.checked ? 1 : 0;
+    const voiceBox = panel.querySelector('#bot-detail-can-use-voice');
+    if (voiceBox && !voiceBox.disabled) payload.can_use_voice = voiceBox.checked ? 1 : 0;
     this.socket.emit('update-webhook', payload);
   });
   panel.querySelector('#bot-detail-toggle').addEventListener('click', () => {
     this.socket.emit('toggle-webhook', { id: botId });
   });
   panel.querySelector('#bot-detail-copy-url').addEventListener('click', () => {
+    if (!webhookUrl) return;
     const markCopied = () => {
       panel.querySelector('#bot-detail-copy-url').textContent = '✅';
       setTimeout(() => {

@@ -254,7 +254,7 @@ module.exports = function register(socket, ctx) {
       // connected sockets so it appears for them without a refresh. (#5271)
       if (data.addAllMembers && !isPrivate) {
         for (const [, s] of io.sockets.sockets) {
-          if (!s.user || s.user.id === socket.user.id) continue;
+          if (!s.user || s.user.isBot || s.user.id === socket.user.id) continue;
           s.join(`channel:${code}`);
           s.emit('channel-created', channel);
         }
@@ -308,9 +308,9 @@ module.exports = function register(socket, ctx) {
       };
 
       for (const [, s] of io.sockets.sockets) {
-        if (s.user) s.join(`channel:${code}`);
+        if (s.user && !s.user.isBot) s.join(`channel:${code}`);
       }
-      io.emit('temp-channel-created', channel);
+      io.except('bot-sockets').emit('temp-channel-created', channel);
       socket.emit('temp-channel-join-voice', { code });
     } catch (err) {
       console.error('Create temp channel error:', err);

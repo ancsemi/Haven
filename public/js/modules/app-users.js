@@ -1194,13 +1194,15 @@ _renderVoiceUsers(users, channelCode) {
     const statusIconsHtml = statusIcons.length
       ? `<span class="voice-status-icons">${statusIcons.join('')}</span>`
       : '';
+    const botBadge = u.isBot ? '<span class="bot-badge">BOT</span>' : '';
     return `
-      <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
+      <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
+        ${botBadge}
         ${streamBadge}
         ${statusIconsHtml}
-        ${isSelf ? '' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
+        ${isSelf || u.isBot ? '' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
       </div>
     `;
   }).join('');
@@ -1218,7 +1220,7 @@ _renderVoiceUsers(users, channelCode) {
   // Bind voice user names/items to open profile popup (same as sidebar)
   el.querySelectorAll('.voice-user-item').forEach(item => {
     const nameEl = item.querySelector('.user-item-name');
-    if (nameEl) {
+    if (nameEl && item.dataset.isBot !== 'true') {
       nameEl.style.cursor = 'pointer';
       nameEl.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1233,7 +1235,7 @@ _renderVoiceUsers(users, channelCode) {
     // Right-click on voice user → same options as "..." button
     item.addEventListener('contextmenu', (e) => {
       const userId = parseInt(item.dataset.userId);
-      if (isNaN(userId) || userId === this.user.id) return;
+      if (isNaN(userId) || userId === this.user.id || item.dataset.isBot === 'true') return;
       e.preventDefault();
       e.stopPropagation();
       const btn = item.querySelector('.voice-user-menu-btn');

@@ -797,7 +797,7 @@ module.exports = function register(socket, ctx) {
         )
       ORDER BY hs.score DESC LIMIT 50
     `).all(game);
-    io.emit('high-scores', { game, leaderboard });
+    io.except('bot-sockets').emit('high-scores', { game, leaderboard });
   });
 
   socket.on('get-high-scores', (data) => {
