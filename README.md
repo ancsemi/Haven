@@ -121,6 +121,8 @@ docker compose up -d --force-recreate
 
 [![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates?repoURL=https://github.com/ancsemi/Haven)
 
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Haven/)
+
 ---
 
 ## Quick Start — Windows (No Docker)
