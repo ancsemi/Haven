@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform } = require('./helpers');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
@@ -62,7 +62,7 @@ module.exports = function register(socket, ctx) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
-               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
@@ -71,7 +71,7 @@ module.exports = function register(socket, ctx) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
-               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
@@ -81,7 +81,7 @@ module.exports = function register(socket, ctx) {
       const beforeMsgs = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
-               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
@@ -89,14 +89,14 @@ module.exports = function register(socket, ctx) {
       const targetMsg = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
-               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id = ?
       `).all(channel.id, around);
       const afterMsgs = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
-               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
@@ -107,7 +107,7 @@ module.exports = function register(socket, ctx) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
-               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+               COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
@@ -208,6 +208,13 @@ module.exports = function register(socket, ctx) {
 
     const enriched = messages.map(m => {
       const obj = { ...m };
+      // Border fit travels with the message (like avatar) so it renders even when
+      // the author is offline. Parse the stored JSON into the op array the client folds.
+      obj.borderTransform = parseBorderTransform(m.border_transform);
+      delete obj.border_transform;
+      // Animation policy travels with the message too (offline-safe, like the border).
+      obj.animateProfile = m.animate_profile || 'trigger';
+      delete obj.animate_profile;
       if (obj.created_at && !obj.created_at.endsWith('Z')) obj.created_at = utcStamp(obj.created_at);
       if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
       obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
@@ -233,10 +240,12 @@ module.exports = function register(socket, ctx) {
         obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
         obj.avatar_shape = 'square';
         obj.avatar = m.webhook_avatar || webhookAvatarMap.get(m.webhook_username) || null;
+        obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger'; // bot identity, not the user's frame
       }
       if (m.imported_from) {
         obj.imported_from = m.imported_from;
         obj.username = m.webhook_username || 'Unknown';
+        obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger';
       }
       // ── Persona override (#86, #5349) ──
       // Persona display always wins over the real user's avatar/name
@@ -251,6 +260,7 @@ module.exports = function register(socket, ctx) {
         obj.username = m.persona_username || m.real_username || obj.username;
         obj.avatar = m.persona_avatar || null;
         obj.avatar_shape = 'circle';
+        obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger'; // persona identity, not the user's frame
       }
       return obj;
     });
@@ -828,6 +838,9 @@ module.exports = function register(socket, ctx) {
           user_id: socket.user.id,
           avatar: socket.user.avatar || null,
           avatar_shape: socket.user.avatar_shape || 'circle',
+          border: socket.user.border || null,
+          borderTransform: socket.user.borderTransform || null,
+          animateProfile: socket.user.animate_profile || 'trigger',
           reply_to: null,
           replyContext: null,
           reactions: [],
@@ -922,6 +935,9 @@ module.exports = function register(socket, ctx) {
         user_id: socket.user.id,
         avatar: personaAvatar || socket.user.avatar || null,
         avatar_shape: personaId ? 'circle' : (socket.user.avatar_shape || 'circle'),
+        border: personaId ? null : (socket.user.border || null),
+        borderTransform: personaId ? null : (socket.user.borderTransform || null),
+        animateProfile: personaId ? 'trigger' : (socket.user.animate_profile || 'trigger'),
         reply_to: replyTo,
         replyContext: null,
         reactions: [],
@@ -1575,6 +1591,9 @@ module.exports = function register(socket, ctx) {
         user_id: socket.user.id,
         avatar: socket.user.avatar || null,
         avatar_shape: socket.user.avatar_shape || 'circle',
+        border: socket.user.border || null,
+        borderTransform: socket.user.borderTransform || null,
+        animateProfile: socket.user.animate_profile || 'trigger',
         reply_to: null,
         replyContext: null,
         reactions: [],
@@ -1778,7 +1797,7 @@ module.exports = function register(socket, ctx) {
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
+             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
       WHERE m.thread_id = ?
       ORDER BY m.created_at ASC, m.id ASC
@@ -1811,6 +1830,13 @@ module.exports = function register(socket, ctx) {
 
     const enriched = messages.map(m => {
       const obj = { ...m };
+      // Border fit travels with the message (like avatar) so it renders even when
+      // the author is offline. Parse the stored JSON into the op array the client folds.
+      obj.borderTransform = parseBorderTransform(m.border_transform);
+      delete obj.border_transform;
+      // Animation policy travels with the message too (offline-safe, like the border).
+      obj.animateProfile = m.animate_profile || 'trigger';
+      delete obj.animate_profile;
       if (obj.created_at && !obj.created_at.endsWith('Z')) obj.created_at = utcStamp(obj.created_at);
       if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
       obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
@@ -1905,6 +1931,9 @@ module.exports = function register(socket, ctx) {
         user_id: socket.user.id,
         avatar: socket.user.avatar || null,
         avatar_shape: socket.user.avatar_shape || 'circle',
+        border: socket.user.border || null,
+        borderTransform: socket.user.borderTransform || null,
+        animateProfile: socket.user.animate_profile || 'trigger',
         reply_to: replyTo,
         replyContext: null,
         reactions: [],

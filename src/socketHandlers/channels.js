@@ -37,8 +37,9 @@ module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
-    handleVoiceLeave, broadcastVoiceUsers, generateChannelCode,
-    applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod
+    handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
+    applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
+    rotateChannelCode
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -173,7 +174,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Channel name contains invalid characters');
     }
 
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     const isPrivate = data.isPrivate ? 1 : 0;
 
     let expiresAt = null;
@@ -287,7 +288,7 @@ module.exports = function register(socket, ctx) {
       }
     } catch { /* ignore */ }
 
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString();
 
     try {
@@ -531,29 +532,11 @@ module.exports = function register(socket, ctx) {
         const newCount = (channel.code_rotation_counter || 0) + 1;
         const threshold = channel.code_rotation_interval || 5;
         if (newCount >= threshold) {
-          const newCode = generateChannelCode();
-          db.prepare(
-            'UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?'
-          ).run(newCode, channel.id);
-          const oldRoom = `channel:${code}`;
-          const newRoom = `channel:${newCode}`;
-          const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-          if (roomSockets) {
-            for (const sid of [...roomSockets]) {
-              const s = io.sockets.sockets.get(sid);
-              if (s) {
-                s.leave(oldRoom);
-                s.join(newRoom);
-                if (s.currentChannel === code) s.currentChannel = newCode;
-              }
-            }
+          try {
+            channel.code = rotateChannelCode(channel.id, code);
+          } catch (err) {
+            console.warn(`[ChannelRotation] Join-triggered rotation failed for channel ${channel.id}:`, err.message);
           }
-          if (channelUsers.has(code)) {
-            channelUsers.set(newCode, channelUsers.get(code));
-            channelUsers.delete(code);
-          }
-          io.to(newRoom).emit('channel-code-rotated', { channelId: channel.id, oldCode: code, newCode });
-          channel.code = newCode;
         } else {
           db.prepare('UPDATE channels SET code_rotation_counter = ? WHERE id = ?').run(newCount, channel.id);
         }
@@ -807,7 +790,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Cannot create sub-channels inside sub-channels');
     }
 
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     const isPrivate = data.isPrivate ? 1 : 0;
 
     let expiresAt = null;
@@ -1459,30 +1442,12 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND is_dm = 0').get(channelId);
     if (!channel) return;
     const oldCode = channel.code;
-    const newCode = generateChannelCode();
-    db.prepare('UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?').run(newCode, channelId);
-    const oldRoom = `channel:${oldCode}`;
-    const newRoom = `channel:${newCode}`;
-    const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-    if (roomSockets) {
-      for (const sid of [...roomSockets]) {
-        const s = io.sockets.sockets.get(sid);
-        if (s) {
-          s.leave(oldRoom);
-          s.join(newRoom);
-          if (s.currentChannel === oldCode) s.currentChannel = newCode;
-        }
-      }
+    try {
+      rotateChannelCode(channelId, oldCode);
+    } catch (err) {
+      console.warn(`[ChannelRotation] Manual rotation failed for channel ${channelId}:`, err.message);
+      socket.emit('error-msg', 'Channel code rotation failed — please try again.');
     }
-    if (channelUsers.has(oldCode)) {
-      channelUsers.set(newCode, channelUsers.get(oldCode));
-      channelUsers.delete(oldCode);
-    }
-    if (voiceUsers.has(oldCode)) {
-      voiceUsers.set(newCode, voiceUsers.get(oldCode));
-      voiceUsers.delete(oldCode);
-    }
-    io.to(newRoom).emit('channel-code-rotated', { channelId, oldCode, newCode });
   });
 
   // ── Invite user to channel ──────────────────────────────
@@ -1608,7 +1573,7 @@ module.exports = function register(socket, ctx) {
       });
       return;
     }
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     try {
       const result = db.prepare('INSERT INTO channels (name, code, created_by, is_dm) VALUES (?, ?, ?, 1)').run('DM', code, socket.user.id);
       const channelId = result.lastInsertRowid;

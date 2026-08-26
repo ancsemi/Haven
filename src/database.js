@@ -431,6 +431,7 @@ function initDatabase() {
   insertSetting.run('turnstile_secret_key', '');        // Turnstile secret key (server-side verification only, never sent to clients)
   insertSetting.run('registration_rate_limit_enabled', 'false'); // opt-in global cap on new accounts per hour
   insertSetting.run('registration_rate_limit_per_hour', '20');   // the cap value when enabled
+  insertSetting.run('max_invite_uses', '0');            // the maximum uses each non-admin/manage-server invite link can accept
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
@@ -612,6 +613,27 @@ function initDatabase() {
     db.prepare("SELECT avatar_shape FROM users LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE users ADD COLUMN avatar_shape TEXT DEFAULT 'circle'");
+  }
+
+  // ── Migration: animate_profile column (pfp animation policy) ──
+  try {
+    db.prepare("SELECT animate_profile FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN animate_profile TEXT DEFAULT 'trigger'");
+  }
+
+  // ── Migration: border column (pfp overlay, mirrors avatar) ──
+  try {
+    db.prepare("SELECT border FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN border TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: border_transform column (pfp-overlay fit, JSON op log) ──
+  try {
+    db.prepare("SELECT border_transform FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN border_transform TEXT DEFAULT NULL");
   }
 
   // ── Migration: bio column ─────────────────────────────────
@@ -1028,6 +1050,7 @@ function initDatabase() {
       PRIMARY KEY (user_id, channel_code)
     );
     CREATE INDEX IF NOT EXISTS idx_user_channel_prefs_user ON user_channel_prefs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_channel_prefs_channel ON user_channel_prefs(channel_code);
   `);
 
   // ── Migration: channel feature toggles & QoL ────────────

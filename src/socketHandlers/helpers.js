@@ -94,6 +94,73 @@ function normalizeDisplayName(raw) {
   return { value };
 }
 
+// ── Border fit (op log) sanitization ──
+// The pfp-overlay editor produces an ordered list of fraction-based ops that
+// get rendered as inline CSS on every viewer's client. This is the trust gate:
+// coerce every field to a finite number clamped to its documented range and
+// drop anything with an unknown type, so nothing arbitrary reaches a style
+// attribute. Returns a clean array (possibly empty) or null if the input is not
+// an array.
+function sanitizeBorderTransform(raw) {
+  if (!Array.isArray(raw)) return null;
+  const num = (v, lo, hi) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    return Math.min(hi, Math.max(lo, n));
+  };
+  const pair = (p, lo, hi) => {
+    if (!Array.isArray(p) || p.length !== 2) return null;
+    const x = num(p[0], lo, hi), y = num(p[1], lo, hi);
+    return (x === null || y === null) ? null : [x, y];
+  };
+  const out = [];
+  for (const op of raw) {
+    if (out.length >= 200) break; // sane cap on log length
+    if (!op || typeof op !== 'object') continue;
+    if (op.type === 'crop') {
+      const top = num(op.top, 0, 0.49), right = num(op.right, 0, 0.49),
+            bottom = num(op.bottom, 0, 0.49), left = num(op.left, 0, 0.49);
+      if ([top, right, bottom, left].some(v => v === null)) continue;
+      out.push({ type: 'crop', top, right, bottom, left });
+    } else if (op.type === 'move') {
+      const x = num(op.x, -1, 1), y = num(op.y, -1, 1);
+      if (x === null || y === null) continue;
+      out.push({ type: 'move', x, y });
+    } else if (op.type === 'resize') {
+      const scale = num(op.scale, 0.1, 4);
+      if (scale === null) continue;
+      const anchor = op.anchor === 'corner' ? 'corner' : 'center';
+      out.push({ type: 'resize', scale, anchor });
+    } else if (op.type === 'rotate') {
+      const deg = num(op.deg, -360, 360);
+      if (deg === null) continue;
+      out.push({ type: 'rotate', deg });
+    } else if (op.type === 'opacity') {
+      const value = num(op.value, 0.01, 1);
+      if (value === null) continue;
+      out.push({ type: 'opacity', value });
+    } else if (op.type === 'distort') {
+      const tl = pair(op.tl, -2, 2), tr = pair(op.tr, -2, 2),
+            bl = pair(op.bl, -2, 2), br = pair(op.br, -2, 2);
+      if (!tl || !tr || !bl || !br) continue;
+      out.push({ type: 'distort', tl, tr, bl, br });
+    }
+  }
+  return out;
+}
+
+// Parse the JSON border-fit string stored in the DB back into an op array.
+// Returns null on anything malformed so callers can treat it as "no fit".
+function parseBorderTransform(str) {
+  if (!str || typeof str !== 'string') return null;
+  try {
+    const clean = sanitizeBorderTransform(JSON.parse(str));
+    return (clean && clean.length) ? clean : null;
+  } catch {
+    return null;
+  }
+}
+
 // All recognized role permissions. Any permission sent by a client that is not here is silently rejected.
 const VALID_ROLE_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
@@ -132,4 +199,4 @@ function filterIdleOnline(entries, thresholdMs, nowMs) {
   return out;
 }
 
-module.exports = { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, VALID_ROLE_PERMS, filterIdleOnline };
+module.exports = { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline };

@@ -7,7 +7,7 @@ module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserRoles, getUserHighestRole,
-    emitOnlineUsers, broadcastChannelLists, generateChannelCode,
+    emitOnlineUsers, broadcastChannelLists, generateUniqueSharedCode,
     logAudit, fireWebhookEvent, onReferrerPolicyChange, automod, getIdleOnlineUsers,
     getUploadUsage
   } = ctx;
@@ -93,6 +93,7 @@ module.exports = function register(socket, ctx) {
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
+      'max_invite_uses', // invite uses limiter for non-admin/mannage-server invite-links
       'channel_creator_role', // (#5461) role auto-granted to a non-admin who creates a channel
       // (#12) OIDC / SSO. The client secret is NOT here on purpose — it lives
       // in OIDC_CLIENT_SECRET in the environment, so a database backup never
@@ -168,6 +169,7 @@ module.exports = function register(socket, ctx) {
     if ((key === 'turnstile_site_key' || key === 'turnstile_secret_key') && value.length > 200) return;
     if (key === 'registration_rate_limit_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'registration_rate_limit_per_hour') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 100000) return; }
+    if (key === 'max_invite_uses') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
 
     // 'unsafe-url' and 'no-referrer-when-downgrade' are intentionally absent —
     // both leak the full URL cross-origin, and Haven's invite links live in the
@@ -255,6 +257,13 @@ module.exports = function register(socket, ctx) {
     if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
     if (key === 'vanity_code') {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
+      if (value) {
+        const conflicts =
+          db.prepare('SELECT 1 FROM channels WHERE code = ?').get(value) ||
+          db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(value) ||
+          db.prepare("SELECT 1 FROM server_settings WHERE key = 'server_code' AND value = ?").get(value);
+        if (conflicts) return socket.emit('error-msg', 'That code is already in use — pick another.');
+      }
     }
     if (key === 'registration_token_enabled') {
       if (!['true', 'false'].includes(value)) return;
@@ -424,7 +433,7 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', code);
     io.emit('server-setting-changed', { key: 'server_code', value: code });
     socket.emit('error-msg', `Server invite code generated: ${code}`);
@@ -538,10 +547,26 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // make sure maxUses value is defined and valid
+    // to prevent an omission or invalid value from being interpreted as unlimited uses (0)
+    const maxUses = Number(data.maxUses);
+    if (data.maxUses === null || data.maxUses === '' || !Number.isInteger(maxUses) || maxUses < 0) {
+      return socket.emit('error-msg', `maxUses invalid or not defined`);
+    }
+
+    // Enforce the server-configured max uses for delegated inviters.
+    // 0 = unlimited. Admins and manage_server are uncapped.
+    let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
+    if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 0;
+    const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
+    if (restrictUses && (maxUses > maxInvtUsesSetting || maxUses <= 0)) {
+      return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
+    }
+    if (maxUses > 100000) return socket.emit('error-msg', `maxUses value must be <= 100000.`);
+
     const label = typeof data.label === 'string' ? data.label.trim().slice(0, 60) : '';
     const channels = _normaliseInviteChannels(data.channels);
     if (channels === null) return socket.emit('error-msg', 'Invalid channel selection');
-    const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
     const expiresAt = _inviteExpiryStamp(data.expiresInHours);
 
     // Custom slug (optional) or an auto-generated 8-char hex code.
@@ -555,7 +580,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'That code is already in use — pick another.');
       }
     } else {
-      do { code = generateChannelCode(); } while (_inviteCodeTaken(code));
+      code = generateUniqueSharedCode();
     }
 
     const info = db.prepare(
@@ -590,7 +615,21 @@ module.exports = function register(socket, ctx) {
       sets.push('channels = ?'); vals.push(channels);
     }
     if ('maxUses' in data) {
-      const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
+      // make sure maxUses value is defined and valid
+      // to prevent an omission or invalid value from being interpreted as unlimited uses (0)
+      const maxUses = Number(data.maxUses);
+      if (data.maxUses === null || data.maxUses === '' || !Number.isInteger(maxUses) || maxUses < 0) {
+        return socket.emit('error-msg', `maxUses invalid or not defined`);
+      }
+      // Enforce the server-configured max uses for delegated inviters.
+      // 0 = unlimited. Admins and manage_server are uncapped.
+      let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
+      if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 0;
+      const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
+      if (restrictUses && (maxUses > maxInvtUsesSetting || maxUses <= 0)) {
+        return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
+      }
+      if (maxUses > 100000) return socket.emit('error-msg', `maxUses value must be <= 100000.`);
       sets.push('max_uses = ?'); vals.push(maxUses);
     }
     if ('expiresInHours' in data) {
@@ -608,6 +647,7 @@ module.exports = function register(socket, ctx) {
         details: { fields: sets.map(s => s.split(' ')[0]) }
       });
     }
+    socket.emit('toast', { message: `Invite link updated`, type: 'success' });
     _emitInviteCodes();
   });
 

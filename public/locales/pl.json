@@ -682,6 +682,7 @@
     "language_section": {
       "title": "Język",
       "label": "Język",
+      "auto": "Automatycznie",
       "hint": "Zmiany są stosowane natychmiast"
     },
     "layout_density": {
@@ -916,6 +917,8 @@
       "max_emoji_hint": "Maks. rozmiar przesyłania niestandardowego emoji (64–1024 KB, domyślnie 256)",
       "max_poll_hint": "Maksymalna liczba opcji odpowiedzi na ankietę (2–25, domyślnie 10)",
       "max_message_chars_hint": "Maksymalna liczba znaków na wiadomość, post lub DM (200–100000, domyślnie 2000)",
+      "max_invite_uses": "Maksymalna liczba użyć linku zaproszenia",
+      "max_invite_uses_hint": "Maksymalna liczba użyć, jaką można ustawić dla linku zaproszenia. Administratorzy i użytkownicy z uprawnieniem do zarządzania serwerem ignorują ten limit. (0 = bez ograniczeń)",
       "sounds_hint": "Prześlij pliki audio dla niestandardowych dźwięków powiadomień",
       "emojis_hint": "Prześlij obrazy dla niestandardowych emoji serwera",
       "emojis_upload_hint": "Prześlij obrazy dla niestandardowych emoji serwera (maks. 256 KB, png/gif/webp). Nazwa musi być małymi literami, bez spacji.",

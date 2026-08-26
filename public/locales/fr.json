@@ -657,6 +657,7 @@
     "language_section": {
       "title": "Langue",
       "label": "Langue",
+      "auto": "Automatique",
       "hint": "Les changements s'appliquent immédiatement"
     },
     "layout_density": {
@@ -886,6 +887,8 @@
       "max_sound_hint": "Taille max des sons du soundboard (256–10240 Ko, défaut 1024 / 1 Mo)",
       "max_emoji_hint": "Taille max des emojis personnalisés (64–1024 Ko, défaut 256)",
       "max_poll_hint": "Nombre maximum de choix par sondage (2–25, défaut 10)",
+      "max_invite_uses": "Nombre maximal d’utilisations du lien d’invitation",
+      "max_invite_uses_hint": "Le nombre maximal d’utilisations pouvant être défini pour un lien d’invitation. Les administrateurs et les utilisateurs disposant de l’autorisation de gérer le serveur ignorent cette limite. (0 = illimité)",
       "sounds_hint": "Envoyez des fichiers audio pour des sons de notification personnalisés",
       "emojis_hint": "Envoyez des images pour des emojis de serveur personnalisés",
       "emojis_upload_hint": "Envoyez des images pour des emojis de serveur personnalisés (max 256 Ko, png/gif/webp). Le nom doit être en minuscules, sans espaces.",

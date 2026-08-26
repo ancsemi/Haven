@@ -11,6 +11,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [3.50.0] - 2026-08-25
+
+### Fixed
+- **Steam and Spotify account linking works again (#5527).** Clicking Link opened a window that said "Internal server error" and nothing else, on every server. Two files had ended up requiring each other in a loop, so one of them started up holding an empty copy of the other and the token check it needed was simply missing. It has been broken since 3.45.0, which went unnoticed because the failure only appears at the moment somebody clicks Link, not at startup. Existing API keys and settings need no changes. Reported by @birdcrazy.
+- **Images and GIFs stop vanishing on a tab left open for days.** Remote images are fetched through Haven rather than directly, so the sender's link cannot see who viewed it, and that used a pass that expires after about two days. It was collected once when the page loaded and never renewed, so a browser tab left open over a weekend quietly lost the ability to load any new remote image, GIFs from the picker included, leaving a blank gap where the picture should be. Reloading fixed it, which is exactly why it looked random. The pass now renews on a timer, on reconnect, and one more time automatically if an image fails anyway.
+- **Automatic language selection (#5522).** Haven did not reliably pick up the language your browser is set to. Contributed by @bernardokcosta.
+
+### Added
+- **Find someone in the member list without scrolling.** There is now a search box above the member list in the right sidebar. It filters as you type, Escape or the small cross clears it, and the Online and Offline counts show how many people matched rather than the full total.
+- **Members are ordered by role instead of purely alphabetically.** Admins and moderators now sit at the top of the member list, with names ordered alphabetically inside each role level, so the people who can actually help are where you would look for them. Online and offline stay separated as before, and anyone who has hidden their role badge is not given away by their position. Suggested by @birdcrazy.
+- **See what is signed in to your account, and sign the rest out.** Settings has a Sessions pane listing the devices with Haven open right now, showing the browser, the address it is connected from and how long it has been there, with your current one marked. Alongside it is a button that signs out every other device, which asks for your password first so someone at your unlocked screen cannot lock you out of your own account. Because a device that is signed in but closed will not appear in the list, that button is the thing to use if you think somebody else has your account. Suggested by TGS.
+- **Freeze animated images in chat (#5526).** Looping GIFs in a busy channel can be hard to read past. Settings now has Animated Images in Chat, with the same three choices as the animated avatar setting: leave them looping, play only while you point at one, or show the first frame and nothing more. It affects only what you see. It is set to leave them looping unless you change it, on the grounds that a GIF is something a person chose to post rather than background decoration. Requested by @birdcrazy.
+- **Profile picture borders, and a say in whether avatars animate (#5510).** Contributed by @Bo0sted.
+
+### Security
+- **Signing out really signs out.** Changing your password disconnected your other devices and looked like it had worked, but the old sign-in stayed valid for direct requests to the server, so someone who had got hold of it could keep using it. Anyone who changed their password *because* their account was compromised would have watched the intruder disappear and still left them a way in. Both halves are now checked in the same place, so an old sign-in stops working everywhere at once. Found while building the sessions pane above.
+
+### Documentation
+- **Voice over a shared-device Tailscale setup (#5518 follow-up).** The Tailscale method shares one machine, but Haven voice is peer-to-peer and needs a path between every pair of people in the call, not just to the host. The result is one-directional audio: everyone hears the host, the host hears nobody. The guide now explains why and gives the two fixes, adding a TURN server or putting everyone on the same tailnet, along with the tradeoff between them.
+- **Spotify rich presence needs a Premium account (#5528).** Spotify restricted its Web API to paid accounts, and Haven's setup steps still told people a free account was fine, so anyone following them hit a wall several steps in with no explanation. The steps and the README now say so up front. Last.fm remains the recommended music source and has no such requirement. Reported by @birdcrazy.
+
 ## [3.49.0] - 2026-08-22
 
 ### Added

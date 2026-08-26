@@ -1914,6 +1914,7 @@ _setupUI() {
   // Logout
   document.getElementById('logout-btn').addEventListener('click', () => {
     if (this.voice && this.voice.inVoice) this.voice.leave();
+    this._clearChannelCodeMap?.();
     localStorage.removeItem('haven_token');
     localStorage.removeItem('haven_user');
     localStorage.removeItem('haven_sync_key');
@@ -2892,6 +2893,7 @@ _setupUI() {
     // Load personas list (#86, #5349)
     this._loadPersonas?.();
     this._updateAvatarPreview();
+    this._resetBorderEditState();
     // Sync shape picker buttons
     const picker = document.getElementById('avatar-shape-picker');
     if (picker) {
@@ -3113,7 +3115,10 @@ _setupUI() {
     this._switchSettingsTab('user');
     // Sync language select with current locale
     const langSelect = document.getElementById('language-select');
-    if (langSelect && window.i18n) langSelect.value = i18n.locale;
+    if (langSelect && window.i18n) {
+      langSelect.value = i18n.preference;
+      i18n.syncLocalePicker(langSelect);
+    }
     // Show desktop-only sections when running inside Haven Desktop
     if (window.havenDesktop?.isDesktopApp) {
       document.getElementById('desktop-shortcuts-nav')?.style.removeProperty('display');
@@ -3711,6 +3716,7 @@ _setupUI() {
           return;
         }
         // Account deleted — clear local storage and redirect to login
+        this._clearChannelCodeMap?.();
         localStorage.removeItem('haven_token');
         localStorage.removeItem('haven_e2e_privkey');
         localStorage.removeItem('haven_sync_key');
@@ -4448,13 +4454,22 @@ _setupUI() {
       host.innerHTML = '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No invite links yet. Create one below.</p>';
       return;
     }
+    // determine invite usage input limits
+    const parsedMaxInvtUses = parseInt(this.serverSettings?.max_invite_uses, 10);
+    const maxInvtUses = Number.isNaN(parsedMaxInvtUses) ? 0 : parsedMaxInvtUses;
+    const restrictUses = !this.user?.isAdmin && !this._hasPerm('manage_server') && maxInvtUses > 0;
+    const maxUsesInput = restrictUses ? maxInvtUses : 100000;
+    const minUsesInput = restrictUses ? 1 : 0;
+
     const origin = window.location.origin;
     host.innerHTML = this._inviteCodes.map(ic => {
       const status = !ic.enabled
         ? '<span style="color:var(--text-muted)">● Disabled</span>'
-        : ic.is_expired
-          ? '<span style="color:var(--danger,#e84a4a)">● Expired</span>'
-          : '<span style="color:var(--green,#43b581)">● Active</span>';
+        : ic.max_uses > 0 && ic.use_count >= ic.max_uses
+          ? '<span style="color:var(--text-secondary,#9498b3)">● Used</span>'
+          : ic.is_expired
+            ? '<span style="color:var(--danger,#e84a4a)">● Expired</span>'
+            : '<span style="color:var(--green,#43b581)">● Active</span>';
       const link = `${origin}/?invite=${encodeURIComponent(ic.code)}`;
       const chCount = (ic.channels && ic.channels.length)
         ? `${ic.channels.length} channel${ic.channels.length === 1 ? '' : 's'}`
@@ -4488,9 +4503,9 @@ _setupUI() {
             <button class="btn-sm" data-act="edit-all">Select all</button>
             <button class="btn-sm" data-act="edit-none">Select none</button>
           </div>
-          <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="0" max="100000" value="${ic.max_uses || 0}" class="settings-number-input" data-role="edit-maxuses"></label>
+          <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="${minUsesInput}" max="${maxUsesInput}" value="${ic.max_uses || 0}" class="settings-number-input" data-role="edit-maxuses"></label>
           <label class="select-row" style="margin-top:4px"><span>Reset expiry</span>
-            <select class="settings-number-input" data-role="edit-expiry">
+            <select class="settings-number-input" data-role="edit-expiry" style="width: 6.5rem;">
               <option value="-1" selected>Keep current</option>
               <option value="0">Never</option>
               <option value="1">After 1 hour</option>
@@ -4600,7 +4615,6 @@ _setupUI() {
       const exp = parseInt(card.querySelector('[data-role="edit-expiry"]')?.value);
       if (Number.isFinite(exp) && exp >= 0) payload.expiresInHours = exp;
       this.socket.emit('update-invite-code', payload);
-      this._showToast?.('Invite link updated', 'success');
     }
   });
 
@@ -4708,87 +4722,9 @@ _setupUI() {
  */
 _buildLanguagePicker() {
   const select = document.getElementById('language-select');
-  if (!select || select.dataset.havenPicker) return;
-  select.dataset.havenPicker = '1';
-
-  // Locale -> flag SVG. Only ISO country codes with artwork in
-  // public/emoji/flags/ can appear; anything unmapped falls back to a text
-  // badge rather than a broken image.
-  const FLAGS = { en: 'gb', fr: 'fr', de: 'de', es: 'es', pl: 'pl', ru: 'ru', zh: 'cn' };
-
-  const options = Array.from(select.options).map(o => ({
-    value: o.value,
-    // Strip the now-redundant emoji prefix from the label.
-    label: o.textContent.replace(/^[\p{Extended_Pictographic}\p{Regional_Indicator}️\s]+/u, '').trim() || o.value,
-    flag: FLAGS[o.value] || null,
-  }));
-
-  const wrap = document.createElement('div');
-  wrap.className = 'lang-picker';
-
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'lang-picker-btn';
-  button.setAttribute('aria-haspopup', 'listbox');
-  button.setAttribute('aria-expanded', 'false');
-
-  const list = document.createElement('div');
-  list.className = 'lang-picker-list';
-  list.setAttribute('role', 'listbox');
-  list.hidden = true;
-
-  const faceFor = (opt) => {
-    const flag = opt.flag
-      ? `<img class="lang-flag" src="/emoji/flags/${opt.flag}.svg" alt="">`
-      : `<span class="lang-flag lang-flag-text">${this._escapeHtml(opt.value.toUpperCase())}</span>`;
-    return `${flag}<span class="lang-name">${this._escapeHtml(opt.label)}</span>`;
-  };
-
-  const paintButton = () => {
-    const cur = options.find(o => o.value === select.value) || options[0];
-    if (cur) button.innerHTML = faceFor(cur) + '<span class="lang-caret">▾</span>';
-  };
-
-  list.innerHTML = options.map(o =>
-    `<button type="button" class="lang-picker-item" role="option" data-value="${this._escapeHtml(o.value)}">${faceFor(o)}</button>`
-  ).join('');
-
-  const close = () => {
-    list.hidden = true;
-    button.setAttribute('aria-expanded', 'false');
-    document.removeEventListener('click', onOutside, true);
-  };
-  const onOutside = (e) => { if (!wrap.contains(e.target)) close(); };
-
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const opening = list.hidden;
-    list.hidden = !opening;
-    button.setAttribute('aria-expanded', String(opening));
-    if (opening) setTimeout(() => document.addEventListener('click', onOutside, true), 0);
-    else close();
-  });
-
-  list.querySelectorAll('.lang-picker-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      select.value = item.dataset.value;
-      // Drive the real control so the existing listener does the work.
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      paintButton();
-      close();
-    });
-  });
-
-  paintButton();
-  wrap.appendChild(button);
-  wrap.appendChild(list);
-  select.parentElement.insertBefore(wrap, select);
-  // Kept for state + the change event, but no longer the visible control.
-  select.classList.add('lang-select-hidden');
-
-  // Locale changes made elsewhere (or restored on load) must repaint the face.
-  select.addEventListener('change', paintButton);
+  if (!select || !window.i18n) return;
+  select.value = i18n.preference;
+  i18n.buildLocalePicker(select);
 },
 
 _canShareChannelLink(code) {
