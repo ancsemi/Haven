@@ -83,7 +83,7 @@
   // Also fetch server title for login page branding.
   fetch('/api/public-config').then(r => r.json()).then(d => {
     if (d.default_theme && !localStorage.getItem('haven_theme')) {
-      document.documentElement.setAttribute('data-theme', d.default_theme);
+      applyThemeFromServer(d.default_theme);
     }
     if (d.server_title) {
       const titleEl = document.getElementById('server-title');
