@@ -1321,6 +1321,17 @@ DELETE https://your-server.com/api/webhooks/<token>/messages/<message_id>
 
 Bots can delete any message in their assigned channel. Returns `{ "success": true }`.
 
+Bots with moderation permission can delete up to 100 of the most recent messages
+from their assigned channel in one request. Thread replies are removed with their
+parent messages.
+
+```
+DELETE https://your-server.com/api/webhooks/<token>/messages?limit=25
+```
+
+Returns `{ "success": true, "deleted": 25 }`. The `deleted` count includes
+thread replies removed with the selected messages.
+
 ### Playing Soundboard Sounds
 
 ```

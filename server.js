@@ -137,6 +137,7 @@ let botAudioManager = null;
 let socketRuntime = null;
 
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
+const UPLOAD_URL_PATH_RE = /\/uploads\/((?:[A-Za-z0-9_.~%-]+\/)*[A-Za-z0-9_.~%-]+)/g;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;
@@ -162,6 +163,85 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
   } catch { /* file locked or already moved */ }
+}
+
+function collectUploadRelPaths(contents) {
+  const paths = new Set();
+  for (const content of contents) {
+    if (typeof content !== 'string' || !content) continue;
+    UPLOAD_URL_PATH_RE.lastIndex = 0;
+    let match;
+    while ((match = UPLOAD_URL_PATH_RE.exec(content)) !== null) {
+      let relPath;
+      try { relPath = decodeURIComponent(match[1]); } catch { continue; }
+      if (/^(?:deleted-attachments|stickers)\//.test(relPath)) continue;
+      if (isSafeUploadRelPath(relPath)) paths.add(relPath);
+    }
+  }
+  return paths;
+}
+
+function relocateUnreferencedUploads(db, relPaths) {
+  const candidates = new Set(
+    Array.from(relPaths).filter(relPath => fs.existsSync(path.join(UPLOADS_DIR, relPath)))
+  );
+  if (candidates.size === 0) return;
+
+  const survivingMessages = db.prepare(`
+    SELECT content, persona_avatar, webhook_avatar
+    FROM messages
+    WHERE content LIKE '%/uploads/%'
+       OR persona_avatar IS NOT NULL
+       OR webhook_avatar IS NOT NULL
+  `).iterate();
+  for (const message of survivingMessages) {
+    for (const relPath of collectUploadRelPaths([
+      message.content,
+      message.persona_avatar,
+      message.webhook_avatar
+    ])) {
+      candidates.delete(relPath);
+    }
+    if (candidates.size === 0) return;
+  }
+
+  const findOwnership = db.prepare(
+    'SELECT scope, created_at FROM upload_ownership WHERE rel_path = ?'
+  );
+  const latestDmMessage = db.prepare(`
+    SELECT MAX(COALESCE(m.edited_at, m.created_at)) AS referenced_at
+    FROM messages m
+    JOIN channels c ON c.id = m.channel_id
+    WHERE c.is_dm = 1
+  `).get()?.referenced_at || null;
+  const findProtectedUrlReference = db.prepare(`
+    SELECT 1
+    WHERE EXISTS(SELECT 1 FROM users WHERE avatar = ? OR border = ?)
+       OR EXISTS(SELECT 1 FROM user_personas WHERE avatar = ?)
+       OR EXISTS(SELECT 1 FROM webhooks WHERE avatar_url = ?)
+       OR EXISTS(SELECT 1 FROM roles WHERE icon = ?)
+       OR EXISTS(SELECT 1 FROM server_settings WHERE value = ?)
+  `);
+  const findProtectedFilenameReference = db.prepare(`
+    SELECT 1
+    WHERE EXISTS(SELECT 1 FROM custom_sounds WHERE filename = ?)
+       OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = ?)
+       OR EXISTS(SELECT 1 FROM stickers WHERE filename = ?)
+  `);
+
+  for (const relPath of candidates) {
+    const ownership = findOwnership.get(relPath);
+    // Legacy/unattributed files and private/profile uploads cannot be proven
+    // orphaned, so leave them in place. A channel upload is also retained if
+    // a later encrypted DM could contain a reference the server cannot read.
+    if (!ownership || ownership.scope !== 'channel') continue;
+    if (latestDmMessage && latestDmMessage >= ownership.created_at) continue;
+
+    const uploadUrl = `/uploads/${relPath}`;
+    if (findProtectedUrlReference.get(uploadUrl, uploadUrl, uploadUrl, uploadUrl, uploadUrl, uploadUrl)) continue;
+    if (findProtectedFilenameReference.get(relPath, relPath, relPath)) continue;
+    moveUploadToDeleted(relPath);
+  }
 }
 
 // ── Per-member upload accounting (#5521) ─────────────────
@@ -3832,11 +3912,11 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
     return res.status(500).json({ error: 'Failed to delete message' });
   }
 
-  // Move any uploaded attachments to the deleted folder
-  const uploadRe = UPLOAD_PATH_RE;
-  let m;
-  while ((m = uploadRe.exec(msg.content || '')) !== null) {
-    moveUploadToDeleted(m[1], uploadDir);
+  // Move uploaded attachments only after proving no surviving reference uses them.
+  try {
+    relocateUnreferencedUploads(db, collectUploadRelPaths([msg.content]));
+  } catch (err) {
+    console.error('Bot delete message attachment cleanup error:', err);
   }
 
   // Find channel code for broadcasting
@@ -3849,6 +3929,100 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   }
 
   res.json({ success: true });
+});
+
+// ── Bot: Delete recent messages and their replies ─────────
+app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
+  const webhook = requireModBot(req, res);
+  if (!webhook) return;
+
+  const rawLimit = req.query.limit;
+  if (typeof rawLimit !== 'string' || !/^[1-9]\d*$/.test(rawLimit)) {
+    return res.status(400).json({ error: 'limit must be an integer between 1 and 100' });
+  }
+  const limit = Number(rawLimit);
+  if (!Number.isSafeInteger(limit) || limit > 100) {
+    return res.status(400).json({ error: 'limit must be an integer between 1 and 100' });
+  }
+
+  const { getDb } = require('./src/database');
+  const db = getDb();
+  const channel = db.prepare('SELECT id, code FROM channels WHERE id = ?').get(webhook.channel_id);
+  if (!channel) return res.status(404).json({ error: 'Channel not found' });
+
+  const selectMessages = db.prepare(`
+    WITH RECURSIVE
+      roots(id) AS (
+        SELECT id FROM (
+          SELECT id FROM messages
+          WHERE channel_id = ? AND thread_id IS NULL
+          ORDER BY created_at DESC, id DESC
+          LIMIT ?
+        )
+      ),
+      doomed(id) AS (
+        SELECT id FROM roots
+        UNION
+        SELECT m.id
+        FROM messages m
+        JOIN doomed d ON m.reply_to = d.id
+        UNION
+        SELECT m.id
+        FROM messages m
+        JOIN doomed d ON m.thread_id = d.id
+      )
+    SELECT m.id, m.channel_id, m.content
+    FROM messages m
+    JOIN doomed d ON d.id = m.id
+    ORDER BY m.id DESC
+  `);
+  const deletePin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
+  const deleteReactions = db.prepare('DELETE FROM reactions WHERE message_id = ?');
+  const deleteMessage = db.prepare('DELETE FROM messages WHERE id = ? AND channel_id = ?');
+  const purge = db.transaction(() => {
+    const messages = selectMessages.all(channel.id, limit);
+    if (messages.some(message => message.channel_id !== channel.id)) {
+      const error = new Error('Related replies exist in another channel');
+      error.statusCode = 409;
+      throw error;
+    }
+    for (const message of messages) {
+      deletePin.run(message.id);
+      deleteReactions.run(message.id);
+    }
+    for (const message of messages) deleteMessage.run(message.id, channel.id);
+    return messages;
+  });
+
+  let deletedMessages;
+  try {
+    deletedMessages = purge();
+  } catch (err) {
+    console.error('Bot bulk delete messages error:', err);
+    const status = err?.statusCode === 409 ? 409 : 500;
+    const error = status === 409 ? err.message : 'Failed to delete messages';
+    return res.status(status).json({ error });
+  }
+
+  try {
+    relocateUnreferencedUploads(
+      db,
+      collectUploadRelPaths(deletedMessages.map(message => message.content))
+    );
+  } catch (err) {
+    console.error('Bot bulk delete attachment cleanup error:', err);
+  }
+
+  if (io) {
+    for (const message of deletedMessages) {
+      io.to(`channel:${channel.code}`).emit('message-deleted', {
+        channelCode: channel.code,
+        messageId: message.id
+      });
+    }
+  }
+
+  return res.json({ success: true, deleted: deletedMessages.length });
 });
 
 // ── Bot: Play a soundboard sound in the webhook's channel ──
