@@ -316,7 +316,7 @@ module.exports = function register(socket, ctx) {
       const values = [];
 
       if (isString(data.name, 1, 30)) { updates.push('name = ?'); values.push(data.name.trim()); }
-      if (isInt(data.level) && data.level >= 1 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
+      if (isInt(data.level) && data.level >= 0 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
       if (data.color !== undefined) {
         const safeColor = (isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color)) ? data.color : null;
         updates.push('color = ?'); values.push(safeColor);
