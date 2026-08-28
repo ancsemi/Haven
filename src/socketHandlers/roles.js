@@ -262,7 +262,7 @@ module.exports = function register(socket, ctx) {
         'INSERT INTO roles (name, level, scope, color, auto_assign, icon) VALUES (?, ?, ?, ?, ?, ?)'
       ).run(name, level, scope, color, autoAssign, icon);
 
-      const perms = Array.isArray(data.permissions) ? data.permissions : [];
+      const perms = level > 0 && Array.isArray(data.permissions) ? data.permissions : [];
       const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
       const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
       perms.forEach(p => {
@@ -310,7 +310,9 @@ module.exports = function register(socket, ctx) {
         return cb({ error: `A role's level must stay below your own (${myLevel})` });
       }
     }
-
+    const newLevel = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : role.level;
+    let level0PermissionsDeleted = false;
+    
     const updateRoleTx = db.transaction(() => {
       const updates = [];
       const values = [];
@@ -340,7 +342,11 @@ module.exports = function register(socket, ctx) {
         db.prepare(`UPDATE roles SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       }
 
-      if (Array.isArray(data.permissions)) {
+      if (newLevel === 0) {   // Remove all permissions if the new level is 0.
+        const result = db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
+        level0PermissionsDeleted = result.changes > 0;
+      }
+      else if (Array.isArray(data.permissions)) {
         const requested = data.permissions.filter(p => VALID_ROLE_PERMS.includes(p));
 
         // Resolve the final permission set BEFORE deleting anything. The old
@@ -397,6 +403,7 @@ module.exports = function register(socket, ctx) {
     // set just grew — refresh their lists live, like assign-role does.
     if (roleGrantsSeeAll(roleId)) for (const row of affected) pushChannelList(row.user_id);
     else for (const row of affected) syncSeeAllMemberships(row.user_id);
+    const permissionsChanged = (newLevel === 0 && level0PermissionsDeleted) || (newLevel !== 0 && Array.isArray(data.permissions));
 
     socket.broadcast.except('bot-sockets').emit('roles-updated');
     cb({ success: true, roles: freshRoles });
@@ -405,8 +412,8 @@ module.exports = function register(socket, ctx) {
       details: {
         nameChanged: data.name !== undefined,
         levelChanged: data.level !== undefined,
-        permissionsChanged: Array.isArray(data.permissions),
-        permissions: Array.isArray(data.permissions) ? data.permissions : undefined
+        permissionsChanged,
+        permissions: permissionsChanged ? data.permissions : undefined
       } });
   });
 
