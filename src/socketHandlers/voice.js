@@ -6,7 +6,7 @@ module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
           broadcastVoiceUsers, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
           pruneStaleVoiceUsers, getMentionableChannelMembers,
-          getActiveMusicSyncState, getMusicQueuePayload } = ctx;
+          getActiveMusicSyncState, getMusicQueuePayload, botAudioManager } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
           activeScreenSharers, activeWebcamUsers, streamViewers, pendingTempDelete,
           pendingVoiceLeave } = state;
@@ -19,6 +19,12 @@ module.exports = function register(socket, ctx) {
     isBot: !!user.isBot,
     isListening: !!user.isListening
   });
+
+  function sendCurrentBotAudio(code) {
+    const current = botAudioManager?.getCurrent(code);
+    if (current) socket.emit('bot-audio-play', current);
+    else socket.emit('bot-audio-stop', { channelCode: code, reason: 'sync' });
+  }
 
   function serializeVoiceRosterUser(user, channelId) {
     const role = getUserHighestRole(user.id, channelId);
@@ -191,6 +197,7 @@ module.exports = function register(socket, ctx) {
       });
     }
     socket.emit('music-queue-update', getMusicQueuePayload(code));
+    sendCurrentBotAudio(code);
 
     // Send active screen share info — tell screen sharers to renegotiate
     const sharers = activeScreenSharers.get(code);
@@ -321,6 +328,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'You can\'t kick a user with equal or higher rank');
     }
 
+    if (target.isBot) botAudioManager?.stopWebhook(-Number(data.userId));
     voiceRoom.delete(data.userId);
     const targetSocket = io.sockets.sockets.get(target.socketId);
     if (targetSocket) {
@@ -755,6 +763,7 @@ module.exports = function register(socket, ctx) {
         });
         broadcastVoiceUsers(code);
         broadcastStreamInfo(code);
+        sendCurrentBotAudio(code);
         return;
       }
       // No existing entry despite a pending timer — fall through to
@@ -790,6 +799,7 @@ module.exports = function register(socket, ctx) {
       // voice-user-joined (that would play join sounds for everyone).
       broadcastVoiceUsers(code);
       broadcastStreamInfo(code);
+      sendCurrentBotAudio(code);
       return;
     }
 
@@ -881,6 +891,7 @@ module.exports = function register(socket, ctx) {
       });
     }
     socket.emit('music-queue-update', getMusicQueuePayload(code));
+    sendCurrentBotAudio(code);
 
     const sharers = activeScreenSharers.get(code);
     if (sharers && sharers.size > 0) {

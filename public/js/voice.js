@@ -64,6 +64,7 @@ class VoiceManager {
     this._noiseGateGain = null;
     this._noiseGateAnalyser = null;
     this._vcDest = null;             // MediaStreamDestination node for mixing soundboard audio into VC
+    this._botAudio = null;           // Current server-hosted bot audio playback
 
     // Voice audio bitrate cap (0 = auto, otherwise kbps from server)
     this.audioBitrate = 0;
@@ -1203,6 +1204,7 @@ class VoiceManager {
     }
 
     // Stop noise gate and talk detection
+    this.stopBotAudio();
     this._disableRNNoise();
     this._stopNoiseGate();
     this._stopLocalTalkDetection();
@@ -1287,6 +1289,7 @@ class VoiceManager {
    */
   _softLeave() {
     if (!this.inVoice) return;
+    this.stopBotAudio();
 
     // Stop screen share / webcam (local cleanup only)
     if (this.isScreenSharing && this.screenStream) {
@@ -1375,6 +1378,68 @@ class VoiceManager {
     return true;
   }
 
+  playBotAudio(data) {
+    if (!data || !data.playbackId || !data.audioUrl) return false;
+    if (!this.inVoice || this.currentChannel !== data.channelCode) return false;
+    this.stopBotAudio();
+
+    const now = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const receivedAt = now();
+    const reportedOffsetMs = Math.max(0, Number(data.offsetMs) || 0);
+    const durationMs = Number(data.durationMs);
+    if (Number.isFinite(durationMs) && reportedOffsetMs >= durationMs) return false;
+
+    const audio = new Audio(data.audioUrl);
+    const playback = { id: data.playbackId, channelCode: data.channelCode, audio, timer: null };
+    this._botAudio = playback;
+    audio.preload = 'auto';
+    audio.volume = this.isDeafened ? 0 : 1;
+    const savedOutput = localStorage.getItem('haven_output_device');
+    const sinkReady = savedOutput && typeof audio.setSinkId === 'function'
+      ? audio.setSinkId(savedOutput).catch(() => {})
+      : Promise.resolve();
+    audio.addEventListener('ended', () => {
+      if (this._botAudio === playback) this.stopBotAudio(playback.id);
+    }, { once: true });
+    audio.addEventListener('error', () => {
+      if (this._botAudio === playback) this.stopBotAudio(playback.id);
+    }, { once: true });
+
+    if (Number.isFinite(durationMs)) {
+      playback.timer = setTimeout(
+        () => this.stopBotAudio(playback.id),
+        Math.max(1, durationMs - reportedOffsetMs)
+      );
+      playback.timer.unref?.();
+    }
+
+    const start = async () => {
+      await sinkReady;
+      if (this._botAudio !== playback) return;
+      const offsetSeconds = (reportedOffsetMs + Math.max(0, now() - receivedAt)) / 1000;
+      if (offsetSeconds > 0 && Number.isFinite(audio.duration)) {
+        audio.currentTime = Math.min(offsetSeconds, Math.max(0, audio.duration - 0.05));
+      }
+      audio.play().catch(() => {
+        if (this._botAudio === playback) this.stopBotAudio(playback.id);
+      });
+    };
+    if (audio.readyState >= 1) start();
+    else audio.addEventListener('loadedmetadata', start, { once: true });
+    return true;
+  }
+
+  stopBotAudio(playbackId = null) {
+    if (!this._botAudio || (playbackId && this._botAudio.id !== playbackId)) return false;
+    const { audio, timer } = this._botAudio;
+    this._botAudio = null;
+    if (timer) clearTimeout(timer);
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    return true;
+  }
+
   toggleMute() {
     // #5380 — listener-only mode has no mic; force-stay muted.
     if (this.isListenerOnly) { this.isMuted = true; return true; }
@@ -1415,6 +1480,7 @@ class VoiceManager {
         el.volume = parseFloat(el.dataset.prevVolume || 1);
       }
     });
+    if (this._botAudio) this._botAudio.audio.volume = this.isDeafened ? 0 : 1;
     return this.isDeafened;
   }
 
@@ -2506,7 +2572,8 @@ class VoiceManager {
     }
 
     // 2. Also switch any HTMLMediaElements (fallback audio, screen share, etc.)
-    const elements = document.querySelectorAll('audio, video');
+    const elements = Array.from(document.querySelectorAll('audio, video'));
+    if (this._botAudio && !elements.includes(this._botAudio.audio)) elements.push(this._botAudio.audio);
     for (const el of elements) {
       if (typeof el.setSinkId === 'function') {
         try { await el.setSinkId(deviceId || ''); } catch (e) {
@@ -3147,3 +3214,5 @@ class VoiceManager {
     }
   }
 }
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { VoiceManager };
