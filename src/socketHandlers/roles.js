@@ -239,7 +239,7 @@ module.exports = function register(socket, ctx) {
     const name = isString(data.name, 1, 30) ? data.name.trim() : '';
     if (!name) return cb({ error: 'Role name required (1-30 chars)' });
 
-    const level = isInt(data.level) && data.level >= 1 && data.level <= 99 ? data.level : 25;
+    const level = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : 25;
     const scope = data.scope === 'channel' ? 'channel' : 'server';
     const color = isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color) ? data.color : null;
     const autoAssign = data.autoAssign ? 1 : 0;
