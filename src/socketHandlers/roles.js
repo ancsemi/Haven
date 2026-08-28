@@ -407,7 +407,7 @@ module.exports = function register(socket, ctx) {
     
     const nameChanged = data.name !== undefined && isString(data.name, 1, 30) && data.name.trim() !== role.name;
     const levelChanged = data.level !== undefined && newLevel !== role.level;
-    const newPermissions = permissionsChanged ? data.permissions : undefined;
+    const newPermissions = permissionsChanged ? (newLevel === 0 ? [] : data.permissions): undefined;
 
     socket.broadcast.except('bot-sockets').emit('roles-updated');
     cb({ success: true, roles: freshRoles });
