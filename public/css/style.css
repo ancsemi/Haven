@@ -16931,6 +16931,10 @@ ul.chat-list { list-style-type: disc; }
   margin: 0.5rem auto;
 }
 
+.audit-detail-pair {
+  margin-right: 0.5em;
+}
+
 /* ── Channel Roles Modal ─────────────────────── */
 .channel-roles-layout {
   display: flex;
