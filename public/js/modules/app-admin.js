@@ -14,7 +14,7 @@ const ALL_PERMS = [
   // (#5470) Hand out invite links without handing over the server. Holders
   // see and manage only the links they made.
   'create_channel', 'create_temp_channel', 'invite_users',
-  'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'use_ferry', 'mention_everyone', 'view_history',
   'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names'
 ];
@@ -46,6 +46,7 @@ const PERM_LABELS = {
   get use_voice() { return t('permissions.use_voice'); },
   get use_tts() { return t('permissions.use_tts'); },
   get manage_webhooks() { return t('permissions.manage_webhooks'); },
+  get use_ferry() { return t('permissions.use_ferry'); },
   get mention_everyone() { return t('permissions.mention_everyone'); },
   get view_history() { return t('permissions.view_history'); },
   get view_all_members() { return t('permissions.view_all_members'); },
@@ -919,6 +920,13 @@ _snapshotAdminSettings() {
   // Load webhooks list for admin preview
   if (this.user?.isAdmin || this._hasPerm('manage_webhooks')) {
     this.socket.emit('get-webhooks');
+  }
+  // Ferry holds a bot token for an account on another platform, so it is
+  // admin-only rather than following manage_webhooks like the section above.
+  const ferrySection = document.getElementById('section-ferry');
+  if (ferrySection) {
+    ferrySection.style.display = this.user?.isAdmin ? '' : 'none';
+    if (this.user?.isAdmin) this.socket.emit('ferry:get-config');
   }
 },
 

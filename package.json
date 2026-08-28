@@ -1,6 +1,6 @@
 ﻿{
   "name": "haven",
-  "version": "3.50.0",
+  "version": "4.0.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",
@@ -27,6 +27,7 @@
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7",
+    "ws": "^8.18.3",
     "yauzl": "^3.4.0"
   },
   "overrides": {

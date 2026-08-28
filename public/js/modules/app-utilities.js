@@ -342,14 +342,10 @@ _rememberDmAttachments(message) {
   }
 },
 
-// Client-side DM message search — walks _lastRenderedMessages (already decrypted)
-// and renders results into the shared search-results-panel. (#5248)
+// Client-side DM message search — walks _lastRenderedMessages (already
+// decrypted) and hands matches to the search panel. DMs are E2E-encrypted so
+// the server never sees plaintext; each DM keeps its own panel context. (#5248)
 _searchDmCacheLocally(query) {
-  const panel = document.getElementById('search-results-panel');
-  const list  = document.getElementById('search-results-list');
-  const count = document.getElementById('search-results-count');
-  if (!panel || !list || !count) return;
-
   const q = query.toLowerCase();
   // Newest-first so the most recent matches appear at the top
   const msgs = (this._lastRenderedMessages || []).slice().reverse();
@@ -357,30 +353,7 @@ _searchDmCacheLocally(query) {
     .filter(m => m && typeof m.content === 'string' && m.content.toLowerCase().includes(q))
     .slice(0, 50);
 
-  count.innerHTML = `${matches.length} result${matches.length === 1 ? '' : 's'} for "${this._escapeHtml(query)}" <span class="search-filter-tag">DM (local)</span>`;
-
-  if (matches.length === 0) {
-    list.innerHTML = `<p class="muted-text" style="padding:12px">${t('header.search_no_results')}</p>`;
-  } else {
-    list.innerHTML = matches.map(r => `
-      <div class="search-result-item" data-msg-id="${r.id}">
-        <span class="search-result-author" style="color:${this._getUserColor(r.username)}">${this._escapeHtml(this._getNickname(r.user_id, r.username))}</span>
-        <span class="search-result-time">${this._formatTime(r.created_at)}</span>
-        <div class="search-result-content">${this._highlightSearch(this._escapeHtml(r.content), query)}</div>
-      </div>
-    `).join('');
-  }
-  panel.style.display = 'block';
-
-  list.querySelectorAll('.search-result-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const msgId = parseInt(item.dataset.msgId, 10);
-      panel.style.display = 'none';
-      document.getElementById('search-container').style.display = 'none';
-      document.getElementById('search-input').value = '';
-      this._jumpToMessage(msgId);
-    });
-  });
+  this._searchReceiveResults(`dm:${this.currentChannel}`, { results: matches, query, isDM: true });
 },
 
 _highlightSearch(escapedHtml, query) {

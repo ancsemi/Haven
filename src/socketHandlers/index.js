@@ -28,8 +28,17 @@ const {
   rotateLiveChannelState,
   schedulePendingVoiceLeave
 } = require('../channelRotation');
+const {
+  disconnectBotVoiceSocket,
+  disconnectDuplicateBotSockets,
+  getBotVoiceWebhookByToken,
+  isolateBotVoiceSocket,
+  reconcileBotVoiceAccess,
+  registerBotVoiceSocket
+} = require('../botVoice');
 
 const { createActivity } = require('../activity');
+const ferry = require('../ferry');
 
 const registerChannels   = require('./channels');
 const registerMessages   = require('./messages');
@@ -39,6 +48,7 @@ const registerUsers      = require('./users');
 const registerModeration = require('./moderation');
 const registerRoles      = require('./roles');
 const registerAdmin      = require('./admin');
+const registerFerry      = require('./ferry');
 
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -148,7 +158,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     db,
     getOnlineUserIds: () => {
       const ids = new Set();
-      for (const [, s] of io.of('/').sockets) if (s.user) ids.add(s.user.id);
+      for (const [, s] of io.of('/').sockets) if (s.user && !s.user.isBot) ids.add(s.user.id);
       return Array.from(ids);
     },
     // A user's activity changed → re-broadcast presence for whatever channel
@@ -605,7 +615,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     _broadcastPending = setTimeout(() => {
       _broadcastPending = null;
       for (const [, s] of io.sockets.sockets) {
-        if (s.user) {
+        if (s.user && !s.user.isBot) {
           s.emit('channels-list', getEnrichedChannels(s.user.id, s.user.isAdmin, null));
         }
       }
@@ -710,14 +720,19 @@ function setupSocketHandlers(io, db, opts = {}) {
             roleColor: role ? role.color : null,
             roleName: role ? role.name : null,
             roles,
-            isMuted: u.isMuted || false, isDeafened: u.isDeafened || false
+            isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+            isBot: !!u.isBot, isListening: !!u.isListening
           };
         })
       : [];
     io.to(`voice:${code}`).to(`channel:${code}`).emit('voice-users-update', { channelCode: code, users });
-    io.emit('voice-count-update', {
+    io.except('bot-sockets').emit('voice-count-update', {
       code, count: users.length,
-      users: users.map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }))
+      users: users.map(u => ({
+        id: u.id, username: u.username,
+        isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+        isBot: !!u.isBot, isListening: !!u.isListening
+      }))
     });
   }
 
@@ -982,6 +997,18 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (!stillInVoice) voiceLastActivity.delete(socket.user.id);
   }
 
+  function revokeBotVoiceAccess(webhookId, reason = 'Bot voice access was revoked') {
+    for (const [, botSocket] of Array.from(io.sockets.sockets.entries())) {
+      if (!botSocket.user?.isBot || botSocket.user.webhookId !== webhookId) continue;
+      disconnectBotVoiceSocket(botSocket, { state, handleVoiceLeave }, reason);
+    }
+  }
+
+  const botVoiceReconciliationTimer = setInterval(() => {
+    reconcileBotVoiceAccess(io, db, state, revokeBotVoiceAccess);
+  }, 2000);
+  botVoiceReconciliationTimer.unref?.();
+
   // ── Push notification helper ────────────────────────────
   function sendPushNotifications(channelId, channelCode, channelName, senderUserId, senderUsername, messageContent) {
     try {
@@ -1178,6 +1205,105 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
     } catch (err) {
       console.error('Webhook event dispatch error:', err.message);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════
+  // Ferry: outbound relay to Discord
+  // ══════════════════════════════════════════════════════
+  // The pairings in ferry_links are the allowlist, not just a routing table.
+  // A Haven user can only reach Discord channels an admin explicitly paired
+  // with the channel they are standing in, so gaining `use_ferry` never means
+  // "post anywhere the bot can see".
+
+  function ferryLinksFor(channelId) {
+    try {
+      return db.prepare(`
+        SELECT id, channel_id, guild_id, guild_name, discord_channel_id, discord_channel_name,
+               direction, out_mode, webhook_id, webhook_token
+        FROM ferry_links
+        WHERE channel_id = ? AND is_active = 1 AND direction IN ('both', 'to_discord')
+      `).all(channelId);
+    } catch { return []; }
+  }
+
+  /**
+   * Wraps the pure resolver with this server's live settings and the pairings
+   * for one channel. Returns null when Ferry is off, so the prefix stays in the
+   * message body and the user can see their target did not take.
+   */
+  function parseFerryTarget(channelId, content, dmUserId) {
+    const cfg = ferry.getConfig();
+    if (!cfg.enabled) return null;
+    return ferry.resolveFerryTarget({
+      trigger: cfg.trigger,
+      links: ferryLinksFor(channelId),
+      content,
+      dmUserId,
+      allowDms: cfg.allowDms,
+    });
+  }
+
+  /**
+   * Relays one just-sent Haven message onward. Fire and forget: a Discord
+   * outage must never fail or delay the Haven send that already succeeded,
+   * so failures land on the pairing's health row and in a toast to the
+   * author, never as a thrown error in the message path.
+   */
+  function ferryRelay({ channelId, user, body, target, personaUsername, personaAvatar, notify }) {
+    const cfg = ferry.getConfig();
+    if (!cfg.enabled || !cfg.token) return;
+
+    const links = ferryLinksFor(channelId);
+    if (!links.length) return;
+
+    if (!user.isAdmin && !userHasPermission(user.id, 'use_ferry', channelId)) {
+      // Only complain when they actually aimed at Discord. Someone simply
+      // talking in a mirrored channel should not get a permission toast on
+      // every message.
+      if (target) notify("You don't have permission to send to Discord");
+      return;
+    }
+
+    // Personas are an admin decision: with them off, a relayed message always
+    // carries the author's real Haven name so a Discord server cannot be
+    // addressed by an untraceable alias.
+    const usePersona = cfg.allowPersonas && personaUsername;
+    const identity = {
+      username: usePersona ? personaUsername : user.displayName,
+      avatar: usePersona ? personaAvatar : (user.avatar || null),
+    };
+
+    if (target && target.dm) {
+      // The recipient id comes from the client, so being offered in the
+      // autocomplete is not proof of anything. Confirm the person is actually
+      // in a guild this channel is paired with before sending.
+      const guildIds = [...new Set(links.map(l => l.guild_id))];
+      ferry.authorizeDmTarget(guildIds, target.discordUserId)
+        .then(allowed => {
+          if (!allowed) {
+            notify('That Discord user is not in a server this channel is linked to');
+            return null;
+          }
+          return ferry.sendDiscordDm(target.discordUserId, { fromName: identity.username, content: body })
+            .then(() => notify('Sent to Discord'));
+        })
+        .catch(err => notify(err.message));
+      return;
+    }
+
+    // Mirror pairings carry everything. An explicitly addressed pairing is
+    // added on top, deduped so a message aimed at a mirror is not sent twice.
+    const destinations = links.filter(l => l.out_mode === 'all');
+    if (target && target.link && !destinations.some(l => l.id === target.link.id)) {
+      destinations.push(target.link);
+    }
+    if (!destinations.length) return;
+    if (!body.trim()) return;
+
+    for (const link of destinations) {
+      ferry.sendToDiscord(link, { ...identity, content: body })
+        .catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }
 
@@ -1414,7 +1540,27 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Auth middleware
   io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
+    const botToken = socket.handshake.auth?.botToken;
+    if (botToken !== undefined) {
+      const webhook = getBotVoiceWebhookByToken(db, botToken);
+      if (!webhook) return next(new Error('Webhook not found or inactive'));
+      if (!webhook.can_use_voice) return next(new Error('Bot voice permission is disabled'));
+      socket.user = {
+        id: -webhook.id,
+        webhookId: webhook.id,
+        botToken,
+        username: `bot-${webhook.id}`,
+        displayName: webhook.name,
+        channelId: webhook.channel_id,
+        channelCode: webhook.channel_code,
+        isBot: true,
+        isAdmin: false,
+        isGuest: false
+      };
+      return next();
+    }
+
+    const token = socket.handshake.auth?.token;
     if (!token || typeof token !== 'string') return next(new Error('Authentication required'));
 
     const user = verifyToken(token);
@@ -1539,6 +1685,16 @@ function setupSocketHandlers(io, db, opts = {}) {
       return;
     }
 
+    if (socket.user.isBot) {
+      console.log(`Bot ${socket.user.displayName} connected to the voice gateway`);
+      disconnectDuplicateBotSockets(socket, { io, state, handleVoiceLeave });
+      isolateBotVoiceSocket(socket);
+      registerBotVoiceSocket(socket, {
+        io, db, state, broadcastVoiceUsers, handleVoiceLeave, revokeBotVoiceAccess
+      });
+      return;
+    }
+
     // Stamped here rather than read from the token: the token's iat is when
     // you signed in, which can be weeks before this tab opened.
     if (socket.handshake) socket.handshake.issued = Date.now();
@@ -1631,7 +1787,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(u => ({
-          id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false
+          id: u.id, username: u.username,
+          isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
+          isBot: !!u.isBot, isListening: !!u.isListening
         }));
         socket.emit('voice-count-update', { code, count: room.size, users });
       } else {
@@ -1647,6 +1805,18 @@ function setupSocketHandlers(io, db, opts = {}) {
     const FLOOD_LIMITS = {
       message: { max: 10, windowMs: 10000 },
       event:   { max: 60, windowMs: 10000 },
+      // Search is far heavier than the typing/presence traffic the event
+      // bucket was sized for (FTS MATCH + count(*) + joins across every
+      // channel you're in), so it gets its own tighter per-account cap on
+      // top of the shared event budget. Sized just above a heavy-but-legit
+      // 10s of use (refine + a run of pagination + a sort or two); the input
+      // is debounced 400ms so typing can't spam it. (search-overhaul)
+      search:  { max: 10, windowMs: 10000 },
+      // A Ferry member lookup is not a local query: each one fans out to up to
+      // five Discord REST calls. Discord bans tokens that generate a burst of
+      // 429s, so this is the cap that protects the bot, not the database. The
+      // composer debounces at 250ms, so typing cannot reach it.
+      ferrySearch: { max: 8, windowMs: 10000 },
     };
 
     function floodCheck(bucket) {
@@ -1938,6 +2108,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,
+      // Ferry (Discord bridge)
+      ferry, ferryLinksFor, parseFerryTarget, ferryRelay,
       // Slash commands
       processSlashCommand,
       // Music helpers
@@ -1955,7 +2127,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Transfer admin mutex
       transferAdminRef,
       // Audit log
-      logAudit,
+      logAudit, revokeBotVoiceAccess,
       // Auto-moderation (v3.42.0)
       automod,
       enforceAutomod,
@@ -1983,6 +2155,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerModeration(socket, ctx);
     registerRoles(socket, ctx);
     registerAdmin(socket, ctx);
+    registerFerry(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made
@@ -2101,7 +2274,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity };
+  return { activity, state };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeBorderTransform };

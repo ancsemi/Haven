@@ -11,6 +11,64 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.0.0] - 2026-08-27
+
+This is a big release, and the version reflects that. There are no migration steps and
+nothing to reconfigure: the database changes only add to what is already there, and the new
+Discord bridge arrives switched off, so a server that updates keeps working the way it did.
+It does touch shared ground, including the path every message takes on its way out, so take
+a backup before you update (Settings, Server Admin Settings, Backup) the way you would with
+any large release. Ferry in particular is brand new and has not been through a real
+deployment yet, so please report anything that looks off.
+
+### Added
+- **Ferry, a two-way bridge between Haven and Discord.** Haven channels can now be paired
+  with Discord channels, and messages cross in both directions. A relayed message shows up
+  on Discord under the Haven author's own name and picture rather than as one anonymous
+  bot, and Discord messages arrive in Haven with the sender's name and avatar. Each pairing
+  picks its own direction, either two-way or one-way, and whether it mirrors every message
+  in the channel or only the ones a member deliberately addresses with the `=>` prefix, with
+  autocomplete for picking a destination. There is also an opt-in one-way Discord DM. Set it
+  up in Settings, Server Admin Settings, Ferry: it walks you through creating the Discord
+  bot, and the whole thing runs inside Haven, so nothing new has to be exposed to the
+  internet. Sending is gated behind a new Send to Discord role permission which starts off
+  for everyone, so nobody can reach another server's Discord until you say so. Pings are off
+  by default, and `@everyone` stays blocked even when you turn them on. Set `PUBLIC_URL` in
+  your `.env` if you want Haven avatars and images to appear on the Discord side.
+- **Search is now a panel instead of a takeover.** Results open over the member list the way
+  Discord does it, the panel survives channel switches and closes only when you close it,
+  public channels share one panel, and each DM keeps its own.
+- **A secure voice gateway for bots (#5531).** Bots can join voice with access that is
+  scoped and granted deliberately rather than assumed.
+- **A RepoCloud deploy button (#5532).** One more hosting route for people who would rather
+  not run the server themselves.
+
+### Fixed
+- **The welcome screen no longer hides behind the server banner.** On the no-channel-selected
+  view, "Welcome to Haven" was rendering underneath the banner image. It had been that way
+  since banners shipped.
+- **Steam and Spotify linking works for accounts that have changed their password.** Linking
+  failed with "Link session expired" for anyone who had changed their password, had an admin
+  reset it, or used a recovery code. New accounts were unaffected, which is why it looked
+  random rather than broken.
+- **Channel code rotation leaves clients in a working state (#5521, #5525).** Rotating a
+  channel's code could leave the people already in it holding a stale one, and voice now
+  recovers properly afterwards too.
+- **The docked soundboard handle points the right way.** Its arrow was mirrored against the
+  members handle directly above it, and its position on mobile was wrong.
+- **Invite link refinements (#5524).** An invite whose uses are all spent now reads as used
+  rather than sitting there saying Active until it expires, and the expiry dropdown is wide
+  enough for its longest option.
+
+### Changed
+- **Admin settings are grouped.** The admin sidebar was twenty entries in one flat run while
+  the user side already had headings. It is now sorted into Server, People & Access, Content,
+  Integrations, and Maintenance, with related entries sitting together. Nothing was removed.
+- **Admins can clear an integration key, not just overwrite it (#5529).**
+- Added josolanes to the donor credits.
+
+---
+
 ## [3.50.0] - 2026-08-25
 
 ### Fixed

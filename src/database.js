@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const { DB_PATH } = require('./paths');
+const { ensureSearchIndex } = require('./searchIndex');
 
 let db;
 
@@ -823,6 +824,11 @@ function initDatabase() {
   const personaMsgCols = [
     { name: 'persona_id',       sql: "ALTER TABLE messages ADD COLUMN persona_id INTEGER DEFAULT NULL REFERENCES user_personas(id) ON DELETE SET NULL" },
     { name: 'persona_username', sql: "ALTER TABLE messages ADD COLUMN persona_username TEXT DEFAULT NULL" },
+    // Ferry: which Discord destination this message was addressed to, as a
+    // display label ("MyServer#general") or the literal 'dm'. Null for the vast
+    // majority of messages. Stored so channel history can show where a message
+    // went instead of leaving the routing prefix in the body.
+    { name: 'ferry_target', sql: "ALTER TABLE messages ADD COLUMN ferry_target TEXT DEFAULT NULL" },
     { name: 'persona_avatar',   sql: "ALTER TABLE messages ADD COLUMN persona_avatar TEXT DEFAULT NULL" },
   ];
   for (const col of personaMsgCols) {
@@ -874,6 +880,7 @@ function initDatabase() {
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
       'set_channel_topic', 'manage_sub_channels', 'rename_channel',
       'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
+      'use_ferry',
       'upload_files', 'use_voice', 'view_history', 'view_all_members',
       'manage_music_queue',
       'delete_own_messages', 'edit_own_messages'
@@ -996,10 +1003,47 @@ function initDatabase() {
     // 3.18.0 — opt-in moderation actions (kick/ban/mute) for bot webhooks.
     // Defaults to 0 so existing bots cannot suddenly moderate. Per #5397.
     { name: 'can_moderate',         sql: "ALTER TABLE webhooks ADD COLUMN can_moderate INTEGER DEFAULT 0" },
+    // Voice gateway access is also opt-in and can only be granted by admins.
+    { name: 'can_use_voice',        sql: "ALTER TABLE webhooks ADD COLUMN can_use_voice INTEGER DEFAULT 0" },
   ];
   for (const col of webhookCallbackCols) {
     try { db.prepare(`SELECT ${col.name} FROM webhooks LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }
+
+  // ── Migration: Ferry (Haven <-> Discord bridge) pairings ──
+  // One row per Haven channel paired with one Discord channel. A Haven channel
+  // may appear more than once (fan out to several Discord servers) and so may a
+  // Discord channel, so the uniqueness is on the pair.
+  //
+  //   direction  'both' | 'to_discord' | 'to_haven'  — admin-selectable per pair
+  //   out_mode   'all'     mirrors every message in the Haven channel
+  //              'command' only relays messages the author explicitly addressed
+  //
+  // webhook_id/webhook_token are the Discord channel webhook Ferry sends
+  // through. They are filled in lazily on first send, because creating one
+  // needs the bot to already be in that Discord server with Manage Webhooks.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ferry_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      guild_id TEXT NOT NULL,
+      guild_name TEXT,
+      discord_channel_id TEXT NOT NULL,
+      discord_channel_name TEXT,
+      direction TEXT NOT NULL DEFAULT 'both',
+      out_mode TEXT NOT NULL DEFAULT 'command',
+      webhook_id TEXT DEFAULT NULL,
+      webhook_token TEXT DEFAULT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      last_activity_at DATETIME DEFAULT NULL,
+      last_error TEXT DEFAULT NULL,
+      created_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(channel_id, discord_channel_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ferry_links_channel ON ferry_links(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_ferry_links_discord ON ferry_links(discord_channel_id);
+  `);
 
   // ── Migration: mobile FCM push tokens ───────────────────
   db.exec(`
@@ -1516,6 +1560,14 @@ function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_user_connections_provider ON user_connections(provider);
   `);
+
+  // Full-text search index (messages_fts) — created/reconciled here so it runs
+  // synchronously before the server listens. (search-overhaul phase 2)
+  try {
+    ensureSearchIndex(db);
+  } catch (e) {
+    console.warn('[search] Index setup failed:', e.message);
+  }
 
   return db;
 }

@@ -100,7 +100,8 @@ function createTempChannelDeleteCallback({ db, io, state, channelId, log = conso
       channelUsers.delete(code);
       voiceUsers.delete(code);
       pendingTempDelete.delete(code);
-      io.emit('channel-deleted', { code, reason: 'temp-empty' });
+      const audience = typeof io.except === 'function' ? io.except('bot-sockets') : io;
+      audience.emit('channel-deleted', { code, reason: 'temp-empty' });
       log(`[Temporary] Temp voice channel "${code}" deleted (everyone left)`);
       return true;
     } catch (err) {
@@ -135,12 +136,24 @@ function rotateLiveChannelState(io, state, channelId, oldCode, newCode) {
   const oldVoiceRoom = `voice:${oldCode}`;
   const newVoiceRoom = `voice:${newCode}`;
   const voiceSockets = io.sockets.adapter.rooms.get(oldVoiceRoom);
+  const movedVoiceSocketIds = new Set(voiceSockets || []);
   if (voiceSockets) {
     for (const socketId of [...voiceSockets]) {
       const socket = io.sockets.sockets.get(socketId);
       if (!socket) continue;
       socket.leave(oldVoiceRoom);
       socket.join(newVoiceRoom);
+    }
+  }
+
+  const rotation = { channelId, oldCode, newCode };
+  for (const [socketId, socket] of io.sockets.sockets) {
+    if (!socket.user?.isBot) continue;
+    const currentCodeRotated = socket.user.channelCode === oldCode;
+    const assignedChannelRotated = socket.user.channelId === channelId;
+    if (currentCodeRotated) socket.user.channelCode = newCode;
+    if ((currentCodeRotated || assignedChannelRotated) && !movedVoiceSocketIds.has(socketId)) {
+      socket.emit('channel-code-rotated', rotation);
     }
   }
 
@@ -173,7 +186,7 @@ function rotateLiveChannelState(io, state, channelId, oldCode, newCode) {
     state.pendingTempDelete.set(newCode, timer);
   }
 
-  io.to(newRoom).to(newVoiceRoom).emit('channel-code-rotated', { channelId, oldCode, newCode });
+  io.to(newRoom).to(newVoiceRoom).emit('channel-code-rotated', rotation);
 }
 
 module.exports = {

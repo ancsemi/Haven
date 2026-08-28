@@ -119,11 +119,14 @@ webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VA
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers, sanitizeText, sanitizeBorderTransform } = require('./src/socketHandlers');
+const { initFerry, stopFerry } = require('./src/ferry');
+const { getAccessibleVoiceChannels } = require('./src/botVoice');
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
 const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
 
 const app = express();
+let socketRuntime = null;
 
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 
@@ -3574,6 +3577,33 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   res.status(200).json({ success: true, message_id: result.lastInsertRowid });
 });
 
+// Voice presence is scoped to the bot's assigned channel, channels its
+// creator belongs to, or every non-DM channel when its creator is an admin.
+app.get('/api/webhooks/:token/voice/channels', webhookLimiter, (req, res) => {
+  const webhook = getWebhookByToken(req.params.token);
+  if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
+  if (!webhook.can_use_voice) {
+    return res.status(403).json({ error: 'This bot does not have voice permission' });
+  }
+
+  const { getDb } = require('./src/database');
+  const voiceUsers = socketRuntime?.state?.voiceUsers;
+  const channels = getAccessibleVoiceChannels(getDb(), webhook)
+    .filter(channel => channel.voice_enabled !== 0)
+    .map(channel => {
+      const room = voiceUsers?.get(channel.code);
+      const users = room ? Array.from(room.values()) : [];
+      return {
+        code: channel.code,
+        name: channel.name,
+        members: users.filter(user => !user.isBot).length,
+        bots: users.filter(user => user.isBot).length
+      };
+    })
+    .sort((a, b) => b.members - a.members || a.name.localeCompare(b.name));
+  res.json({ channels });
+});
+
 // ── Bot: Delete a message in the webhook's channel ──────
 app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res) => {
   const { getDb } = require('./src/database');
@@ -3831,7 +3861,7 @@ function getWebhookByToken(token) {
   if (!token || typeof token !== 'string' || token.length !== 64) return null;
   const { getDb } = require('./src/database');
   return getDb().prepare(
-    'SELECT id, name, channel_id, callback_url, can_moderate, created_by FROM webhooks WHERE token = ? AND is_active = 1'
+    'SELECT id, name, channel_id, callback_url, can_moderate, can_use_voice, created_by FROM webhooks WHERE token = ? AND is_active = 1'
   ).get(token);
 }
 
@@ -4701,7 +4731,7 @@ try {
 } catch {}
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
-activityRef.engine = setupSocketHandlers(io, db, {
+socketRuntime = setupSocketHandlers(io, db, {
   invalidateIpBanCache,
   // Share the cached ban matcher so the socket gate and the HTTP gate agree
   // on both normalization and CIDR handling, and the socket path stops
@@ -4712,8 +4742,78 @@ activityRef.engine = setupSocketHandlers(io, db, {
   getUploadUsage,
   // Keep the Referrer-Policy cache in sync when an admin changes it.
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
-}).activity;
+});
+activityRef.engine = socketRuntime.activity;
+
+// ── Ferry: Haven <-> Discord bridge ─────────────────────
+// Started after the socket layer so an inbound Discord message always has a
+// live io to broadcast on. Inserting the message is done here rather than
+// inside ferry.js so the bridge reuses the exact same row shape and event
+// payload as the existing bot webhook endpoint above, and Discord messages
+// render in every client with no client-side changes at all.
+initFerry({
+  db,
+  io,
+  sanitizeText,
+  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content }) => {
+    try {
+      const result = db.prepare(
+        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, 1, ?, ?)'
+      ).run(channelId, null, content, username, avatarUrl || null);
+
+      io.to(`channel:${channelCode}`).emit('new-message', {
+        channelCode,
+        message: {
+          id: result.lastInsertRowid,
+          content,
+          created_at: new Date().toISOString(),
+          username: `[BOT] ${username}`,
+          user_id: null,
+          avatar: avatarUrl || null,
+          avatar_shape: 'square',
+          reply_to: null,
+          replyContext: null,
+          reactions: [],
+          is_webhook: true,
+          webhook_name: username,
+          from_discord: true
+        }
+      });
+      return result.lastInsertRowid;
+    } catch (err) {
+      console.error('Ferry could not store an inbound Discord message:', err.message);
+      return null;
+    }
+  },
+
+  // Applied when someone edits a Discord message Ferry already relayed. Reuses
+  // the same `message-edited` event a Haven edit emits, so every open client
+  // updates the message in place instead of showing a stale copy.
+  editHavenMessage: ({ havenMessageId, channelCode, content }) => {
+    try {
+      const info = db.prepare(
+        "UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ? AND is_webhook = 1"
+      ).run(content, havenMessageId);
+      if (!info.changes) return;
+
+      io.to(`channel:${channelCode}`).emit('message-edited', {
+        channelCode,
+        messageId: havenMessageId,
+        content,
+        editedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Ferry could not apply a Discord edit:', err.message);
+    }
+  }
+});
+
 registerProcessCleanup();
+// Close the Discord socket deliberately on shutdown. Without this a container
+// restart leaves Discord holding a session it will keep feeding for a minute.
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { try { stopFerry(); } catch { /* exit cleanup */ } });
+}
 
 // ── Auto-cleanup interval (runs every 15 minutes) ───────
 function runAutoCleanup() {

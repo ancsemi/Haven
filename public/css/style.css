@@ -9382,22 +9382,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-weight: 600;
 }
 
-.search-results-panel {
+/* Search results overlay — fills the right sidebar, sitting over voice +
+   member list (Discord-style). Persists across channel switches. */
+.search-panel {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 21.25rem;
-  max-height: 100%;
+  inset: 0;
   background: var(--bg-card);
   border-left: 1px solid var(--border-light);
-  z-index: 100;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: -4px 0 12px rgba(0,0,0,0.2);
 }
 
-.search-results-header {
+.search-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -9409,9 +9408,276 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   gap: 0.5rem;
 }
 
-.search-results-list {
+.search-panel-list {
   overflow-y: auto;
   flex: 1;
+}
+
+/* Stale banner shown after a channels-list change invalidates cached rows. */
+.search-panel-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-hover);
+}
+
+/* Numbered prev/next pager pinned to the bottom of the panel. */
+.search-panel-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.search-page-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.search-page-input {
+  width: 2.75rem;
+  padding: 0.15rem 0.25rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  background: var(--input-bg, var(--bg-tertiary));
+  border: 1px solid var(--border-light);
+  border-radius: 0.25rem;
+}
+.search-page-input:focus {
+  outline: none;
+  border-color: var(--accent, var(--brand-color));
+}
+
+.search-page-total {
+  color: var(--text-muted);
+}
+
+.search-panel-pager .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.search-panel-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.search-spinner {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: search-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes search-spin { to { transform: rotate(360deg); } }
+
+.sfp-recent {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sfp-recent-item {
+  font-size: 0.75rem;
+  max-width: 12rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sfp-recent-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Search filter picker popover (phase 3) ── */
+.search-container { position: relative; }
+
+.search-filter-popover {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.25);
+  padding: 0.5rem;
+  max-height: 20rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sfp-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sfp-chips,
+.sfp-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.sfp-sort {
+  border-top: 1px solid var(--border-light);
+  padding-top: 0.5rem;
+}
+
+.sfp-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-right: 0.25rem;
+}
+
+.sfp-sort-btn {
+  font-size: 0.75rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.sfp-sort-btn:hover { border-color: var(--text-muted); }
+
+.sfp-sort-btn.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.sfp-date-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1;
+}
+
+.sfp-date-input {
+  flex: 1;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sfp-chip {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.sfp-chip:hover {
+  background: var(--bg-secondary);
+  border-color: var(--text-muted);
+}
+
+.sfp-picker {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sfp-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+}
+
+.sfp-back {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.sfp-filter-input {
+  flex: 1;
+  font-size: 0.8125rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sfp-list {
+  overflow-y: auto;
+}
+
+.sfp-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.sfp-item:hover {
+  background: var(--bg-hover);
+}
+
+.sfp-item-sub {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.sfp-empty {
+  padding: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }
 
 .search-result-item {
@@ -9425,6 +9691,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   background: var(--bg-hover);
 }
 
+.search-result-channel {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-channel-code {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 .search-result-author {
   font-weight: 600;
   font-size: 0.75rem;
@@ -9436,16 +9717,54 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   color: var(--text-muted);
 }
 
+/* Display-only thread badge on results that are thread parents. */
+.search-result-thread {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border-radius: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Per-link "Load embed" button — defers preview fetches until the user opts in. */
+.search-load-embed {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.6875rem;
+  color: var(--accent, var(--brand-color));
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.search-load-embed:hover {
+  background: var(--bg-tertiary);
+}
+
 .search-result-content {
   font-size: 0.8125rem;
   color: var(--text-secondary);
   margin-top: 0.25rem;
   word-break: break-word;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+}
+/* Results now render through the real message formatter (images, video, audio,
+   embeds), so the old 3-line clamp is gone — it would have cropped media.
+   Keep inline media from overflowing the narrow panel. (search-overhaul p3) */
+.search-result-content img.chat-image,
+.search-result-content video,
+.search-result-content .file-video,
+.search-result-content .link-preview {
+  max-width: 100%;
+}
+.search-result-content .file-audio {
+  width: 100%;
 }
 
 .search-result-content mark {
@@ -13239,6 +13558,24 @@ video:-webkit-full-screen {
 .sb-sidebar-toggle-btn:hover {
   color: var(--text-primary);
   background: var(--bg-tertiary);
+}
+/* Stack a small note over the arrow. The members handle sits directly above
+   this one in the same spot at the same size, and with nothing but an arrow on
+   each there was no way to tell them apart short of remembering which was
+   which. Only this one is marked, so one has a note and one does not. (#5534) */
+.sb-sidebar-toggle-btn {
+  flex-direction: column;
+  gap: 0.0625rem;
+  height: 2.75rem;
+}
+.sb-sidebar-toggle-btn .sb-toggle-mark {
+  font-size: 0.625rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+.sb-sidebar-toggle-btn .sb-toggle-arrow {
+  font-size: 0.6875rem;
+  line-height: 1;
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -17042,7 +17379,13 @@ ul.chat-list { list-style-type: disc; }
 
 /* Banner visible — base: header & topic above banner */
 .main.has-banner .channel-header,
-.main.has-banner .channel-topic-bar {
+.main.has-banner .channel-topic-bar,
+/* The banner is absolutely positioned at z-index 0, so it paints over any
+   sibling that is not itself positioned. The header and topic bar were lifted
+   above it; the welcome screen never was, so "Welcome to Haven" rendered
+   underneath the banner image on the no-channel-selected view. .message-area
+   already carries its own position:relative and is unaffected. */
+.main.has-banner .welcome-screen {
   position: relative;
   z-index: 1;
 }
@@ -18706,3 +19049,140 @@ ul.chat-list { list-style-type: disc; }
   align-items: center;
 }
 .persona-edit-row input[type=text] { flex: 1; min-width: 8rem; }
+
+/* ── Ferry: Haven <-> Discord bridge ──────────────────────── */
+.ferry-body { max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+
+/* Each step is a numbered card so the setup reads as a sequence rather than a
+   wall of controls. A locked step stays visible, greyed and non-interactive,
+   so an admin can see the whole path before starting it. */
+.ferry-step {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+/* :first-child, not :first-of-type. The Options block is a <details>, so it is
+   the first element of its own type and :first-of-type matched it too, zeroing
+   the gap that should separate it from the step above. */
+.ferry-step:first-child { margin-top: 0; }
+.ferry-step-done { border-color: var(--success, #2ecc71); }
+.ferry-step-locked { opacity: .5; pointer-events: none; }
+
+.ferry-step-title {
+  margin: 0 0 6px;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ferry-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: .72rem;
+  flex: 0 0 auto;
+}
+.ferry-step-done .ferry-step-num { background: var(--success, #2ecc71); }
+
+.ferry-status-ok  { color: var(--success, #2ecc71); font-size: .78rem; margin: 8px 0 0; }
+.ferry-status-bad { color: var(--danger, #e74c3c);  font-size: .78rem; margin: 8px 0 0; }
+.ferry-warn       { display: block; margin-top: 8px; color: var(--warning, #f39c12); }
+
+.ferry-token-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.ferry-token-row input { flex: 1; min-width: 12rem; }
+.ferry-invite {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  font-size: .75rem;
+  word-break: break-all;
+}
+
+/* Two columns of labelled dropdowns, so every control says what it is instead
+   of being a row of anonymous selects. */
+.ferry-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ferry-add-grid label { display: flex; flex-direction: column; gap: 3px; }
+.ferry-add-grid label > span { font-size: .7rem; color: var(--text-secondary); }
+.ferry-add-grid .form-select { width: 100%; font-size: .78rem; }
+.ferry-add-wide { grid-column: 1 / -1; }
+.ferry-add-btn  { grid-column: 1 / -1; }
+@media (max-width: 520px) { .ferry-add-grid { grid-template-columns: 1fr; } }
+
+.ferry-options { margin-top: 16px; }
+.ferry-options > summary {
+  cursor: pointer;
+  list-style: none;          /* the default marker is dropped by display:flex anyway */
+  margin: 0;
+  user-select: none;
+}
+.ferry-options > summary::-webkit-details-marker { display: none; }
+.ferry-options > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--text-secondary);
+  transition: transform .15s ease;
+}
+.ferry-options[open] > summary::before { transform: rotate(90deg); }
+.ferry-options > summary:hover { color: var(--accent); }
+.ferry-options[open] > summary { margin-bottom: 6px; }
+
+.ferry-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .75rem; }
+.ferry-table th {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.ferry-table td { padding: 6px; border-bottom: 1px solid var(--border-light, var(--border)); vertical-align: top; }
+.ferry-row-off { opacity: .45; }
+.ferry-mini { font-size: .72rem; padding: 3px 4px; max-width: 11rem; }
+/* The td stays a real table cell so its border-bottom lines up with the other
+   cells in the row; flexing the td itself pulled it out of table layout and
+   left the row's underline a pixel off. */
+.ferry-actions-inner { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.ferry-actions-inner .toggle-row { gap: 6px; }
+.ferry-link-error { color: var(--danger, #e74c3c); font-size: .68rem; max-width: 14rem; }
+
+/* Destination badge on a message that was addressed to Discord. The routing
+   prefix is stripped before storage, so without this an on-command channel
+   looks like people talking to nobody. */
+.ferry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: .66rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.ferry-role-dot {
+  display: inline-block;
+  width: .55rem;
+  height: .55rem;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}

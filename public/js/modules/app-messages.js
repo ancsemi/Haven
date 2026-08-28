@@ -111,6 +111,10 @@ async _sendMessage() {
   }
 
   const payload = { code: this.currentChannel, content };
+  // Discord display names are not unique, so a "=>@Name" DM has to carry the
+  // resolved Discord user id rather than leaving the server to guess.
+  const ferryDm = this._ferryPendingDm?.(content);
+  if (ferryDm) payload.ferryDiscordUserId = ferryDm;
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
   }
@@ -921,6 +925,13 @@ _createMessageEl(msg, prevMsg) {
     ? `<span class="persona-msg-badge" title="${this._escapeHtml((window.t && t('app.messages.via_persona', { name: msg.real_username || '' })) || `Sent via ${msg.real_username || 'real account'}`)}">persona</span>`
     : '';
 
+  // Ferry badge: where this message was sent on Discord. The routing prefix
+  // is stripped before storage, so without this the channel would show people
+  // apparently talking to nobody.
+  const ferryBadge = msg.ferry_target
+    ? `<span class="ferry-badge" title="Relayed to Discord">🛶 ${this._escapeHtml(msg.ferry_target === 'dm' ? 'Discord DM' : msg.ferry_target)}</span>`
+    : '';
+
   // (#5381) Guest badge — shown next to the username when the author is
   // an ephemeral guest account.
   const guestBadge = (onlineUser && onlineUser.isGuest)
@@ -971,6 +982,7 @@ _createMessageEl(msg, prevMsg) {
           ${msgRoleIconAfter}
           ${botBadge}
           ${personaBadge}
+          ${ferryBadge}
           ${guestBadge}
           ${msgRoleBadge}
           <span class="message-time">${this._formatTime(msg.created_at)}</span>
@@ -1509,6 +1521,11 @@ _fetchLinkPreviews(containerEl) {
     const url = link.href;
     if (seen.has(url)) return;
     seen.add(url);
+    // Search results defer embeds behind a per-link Load button so a page of
+    // 25 results never fires 25 preview fetches. The button clears this flag on
+    // the one link it owns, then re-runs this pass. Channel/DM views never set
+    // the attribute, so their behaviour is unchanged. (search-overhaul phase 3)
+    if (link.dataset.embedDeferred) return;
     // Skip image URLs (already rendered inline) and internal URLs
     if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url)) return;
     if (/^https:\/\/media\d*\.giphy\.com\//i.test(url)) return;

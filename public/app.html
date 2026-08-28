@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=3.44.4">
+  <link rel="stylesheet" href="/css/style.css?v=3.51.5">
   <script src="/js/theme-init.js?v=3.16.15"></script>
 </head>
 <body>
@@ -309,7 +309,44 @@
           </div>
           <div class="search-container" id="search-container" style="display:none">
             <input type="text" id="search-input" class="search-input" data-i18n-placeholder="header.search_placeholder" placeholder="Search... from:user in:#channel has:image" maxlength="200">
+            <button id="search-filter-btn" class="icon-btn small" data-i18n-title="header.filter_toggle" title="Filters">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            </button>
             <button id="search-close-btn" class="icon-btn small" title="Close search">&times;</button>
+            <!-- Filter picker popover — appears with the search box, appends
+                 filter tokens client-side. Public search only. (phase 3) -->
+            <div id="search-filter-popover" class="search-filter-popover" style="display:none">
+              <div class="sfp-root" id="sfp-root">
+                <div class="sfp-recent" id="sfp-recent" style="display:none"></div>
+                <div class="sfp-chips">
+                  <span class="sfp-label" data-i18n="header.filter_by">Filter by</span>
+                  <button type="button" class="sfp-chip" data-sfp-filter="from">from:</button>
+                  <button type="button" class="sfp-chip" data-sfp-filter="in">in:</button>
+                  <button type="button" class="sfp-chip" data-sfp-filter="has">has:</button>
+                  <button type="button" class="sfp-chip" data-sfp-filter="before">before:</button>
+                  <button type="button" class="sfp-chip" data-sfp-filter="after">after:</button>
+                  <button type="button" class="sfp-chip" data-sfp-filter="during">during:</button>
+                  <button type="button" class="sfp-chip" data-sfp-filter="pinned">pinned</button>
+                </div>
+                <div class="sfp-sort" id="sfp-sort">
+                  <span class="sfp-label" data-i18n="header.sort_by">Sort</span>
+                  <button type="button" class="sfp-sort-btn" data-sort="newest" data-i18n="header.sort_newest">Newest</button>
+                  <button type="button" class="sfp-sort-btn" data-sort="oldest" data-i18n="header.sort_oldest">Oldest</button>
+                  <button type="button" class="sfp-sort-btn" data-sort="relevant" data-i18n="header.sort_relevant">Relevant</button>
+                </div>
+              </div>
+              <div class="sfp-picker" id="sfp-picker" style="display:none">
+                <div class="sfp-picker-head">
+                  <button type="button" class="sfp-back" id="sfp-back" title="Back">‹</button>
+                  <input type="text" class="sfp-filter-input" id="sfp-filter-input" autocomplete="off" spellcheck="false" data-i18n-placeholder="header.filter_placeholder" placeholder="Filter...">
+                  <div class="sfp-date-wrap" id="sfp-date-wrap" style="display:none">
+                    <input type="date" class="sfp-date-input" id="sfp-date-input">
+                    <button type="button" class="sfp-chip" id="sfp-date-apply" data-i18n="header.filter_apply">Apply</button>
+                  </div>
+                </div>
+                <div class="sfp-list" id="sfp-list"></div>
+              </div>
+            </div>
           </div>
           <!-- Update available banner -->
           <a id="update-banner" class="update-banner" href="#" style="display:none" target="_blank" rel="noopener">
@@ -450,13 +487,6 @@
             </div>
             <div id="music-embed-container" class="music-embed-container"></div>
           </div>
-          <div id="search-results-panel" class="search-results-panel" style="display:none">
-            <div class="search-results-header">
-              <span id="search-results-count" data-i18n="header.results">Results</span>
-              <button id="search-results-close" class="icon-btn small">&times;</button>
-            </div>
-            <div id="search-results-list" class="search-results-list"></div>
-          </div>
           <div id="pinned-panel" class="pinned-panel" style="display:none">
             <div class="pinned-panel-header">
               <span id="pinned-count">📌 <span data-i18n="header.pinned_count">Pinned Messages</span></span>
@@ -539,6 +569,7 @@
             <div id="emoji-dropdown" class="emoji-dropdown" style="display:none"></div>
             <div id="slash-dropdown" class="slash-dropdown" style="display:none"></div>
             <div id="persona-dropdown" class="mention-dropdown" style="display:none"></div>
+            <div id="ferry-dropdown" class="mention-dropdown" style="display:none"></div>
             <textarea id="message-input" data-i18n-placeholder="header.message_placeholder_commands" placeholder="Type a message... (/ for commands)"
                       rows="1" maxlength="2000"></textarea>
             <button id="send-btn" class="btn-send" data-i18n-title="media.send_title" title="Send">
@@ -552,8 +583,10 @@
       </main>
 
       <!-- ─── Soundboard Sidebar (twin to voice/users — sits directly LEFT of right-sidebar) ─── -->
-      <!-- Soundboard toggle arrow — fixed, sits at left edge of soundboard panel -->
-      <button id="sb-sidebar-toggle-btn" class="sb-sidebar-toggle-btn" style="display:none" title="Toggle soundboard panel">&#x276F;</button>
+      <!-- Soundboard toggle arrow, fixed, sits at left edge of soundboard panel.
+           The note marks it apart from the members handle right above it, which
+           is otherwise the same little arrow in the same place. (#5534) -->
+      <button id="sb-sidebar-toggle-btn" class="sb-sidebar-toggle-btn" style="display:none" title="Toggle soundboard panel"><span class="sb-toggle-mark" aria-hidden="true">♪</span><span class="sb-toggle-arrow">&#x276E;</span></button>
       <aside id="sb-sidebar-panel" class="sb-sidebar-panel sb-hidden">
         <div id="sb-sidebar-resize-handle" class="sb-sidebar-resize-handle"></div>
         <div class="sb-sidebar-header">&#x1F3B5; Soundboard</div>
@@ -569,6 +602,30 @@
       <!-- ─── Right Sidebar ───────────────────────────── -->
       <aside class="right-sidebar" id="right-sidebar">
         <div class="right-sidebar-resize-handle" id="right-sidebar-resize-handle"></div>
+        <!-- Search results overlay — sits over voice + member list, persists across
+             channel switches, only closes on the X. (search-overhaul phase 1) -->
+        <div id="search-panel" class="search-panel" style="display:none">
+          <div class="search-panel-header">
+            <span id="search-panel-count" data-i18n="header.results">Results</span>
+            <button id="search-panel-close" class="icon-btn small" data-i18n-title="modals.common.close" title="Close">&times;</button>
+          </div>
+          <div id="search-panel-banner" class="search-panel-banner" style="display:none">
+            <span data-i18n="header.search_stale">A channel or role you have has changed, please refresh the search to continue.</span>
+            <button id="search-rerun-btn" class="btn-secondary small" data-i18n="header.search_refresh">Refresh search</button>
+          </div>
+          <div id="search-panel-loading" class="search-panel-loading" style="display:none">
+            <span class="search-spinner"></span><span data-i18n="header.searching">Searching...</span>
+          </div>
+          <div id="search-panel-list" class="search-panel-list"></div>
+          <div id="search-panel-pager" class="search-panel-pager" style="display:none">
+            <button id="search-page-prev" class="icon-btn small" title="Previous page">‹</button>
+            <span class="search-page-label">
+              <input id="search-page-input" class="search-page-input" type="text" inputmode="numeric" value="1" aria-label="Page number">
+              <span id="search-page-total" class="search-page-total"></span>
+            </span>
+            <button id="search-page-next" class="icon-btn small" title="Next page">›</button>
+          </div>
+        </div>
         <!-- Voice users section -->
         <div class="right-sidebar-voice" id="right-sidebar-voice">
           <div class="panel">
@@ -1268,23 +1325,33 @@
           <div class="settings-nav-item" data-target="section-debug">🐞 <span data-i18n="settings.nav.debug">Debug</span></div>
           </div>
           <div class="settings-nav-admin-group" style="display:none">
+          <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_server">Server</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-update" style="display:none">⬆️ <span data-i18n="settings.nav.server_updates">Server Updates</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 <span data-i18n="settings.nav.tunnel">Tunnel</span></div>
+
+          <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_people">People &amp; Access</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-members" style="display:none">👥 <span data-i18n="settings.nav.members">Members</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-roles" style="display:none">👑 <span data-i18n="settings.nav.roles">Roles</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-moderation" style="display:none">🛡️ <span data-i18n="settings.nav.moderation">Moderation</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-security" style="display:none">🔒 <span data-i18n="settings.nav.security">Security</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🛡️ <span data-i18n="settings.nav.whitelist">Whitelist</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-invite" style="display:none">🌐 <span data-i18n="settings.nav.invite">Invite Code</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-cleanup" style="display:none">🗑️ <span data-i18n="settings.nav.cleanup">Cleanup</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-backup" style="display:none">💾 <span data-i18n="settings.nav.backup">Backup</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-uploads" style="display:none">📁 <span data-i18n="settings.nav.limits">Limits</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-sounds-admin" style="display:none">🔊 <span data-i18n="settings.nav.admin_sounds">Sounds</span></div>
+
+          <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_content">Content</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-emojis" style="display:none">😎 <span data-i18n="settings.nav.emojis">Emojis</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-roles" style="display:none">👑 <span data-i18n="settings.nav.roles">Roles</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 <span data-i18n="settings.nav.tunnel">Tunnel</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-sounds-admin" style="display:none">🔊 <span data-i18n="settings.nav.admin_sounds">Sounds</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-uploads" style="display:none">📁 <span data-i18n="settings.nav.limits">Limits</span></div>
+
+          <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_integrations">Integrations</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🤖 <span data-i18n="settings.nav.bots">Bots</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-ferry" style="display:none">🛶 <span data-i18n="settings.nav.ferry">Ferry</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-import" style="display:none">📦 <span data-i18n="settings.nav.import">Import</span></div>
+
+          <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_maintenance">Maintenance</div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-backup" style="display:none">💾 <span data-i18n="settings.nav.backup">Backup</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-cleanup" style="display:none">🗑️ <span data-i18n="settings.nav.cleanup">Cleanup</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-modmode" style="display:none">🔧 <span data-i18n="settings.nav.mod_mode">Mod Mode</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-audit-log" style="display:none">📜 <span data-i18n="settings.nav.audit_log">Audit Log</span></div>
           </div>
@@ -2803,6 +2870,15 @@
             <p class="muted-text" data-i18n="settings.admin.no_bots">No bots configured</p>
           </div>
         </div>
+        <!-- Ferry: Haven <-> Discord bridge (Admin only) -->
+        <div class="admin-settings" id="section-ferry" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🛶 <span data-i18n="settings.admin.ferry_title">Ferry (Discord bridge)</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.ferry_hint">Relay messages between Haven channels and Discord channels. Needs your own Discord bot, which takes about two minutes to create.</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-ferry-btn">🛶 <span data-i18n="settings.admin.manage_ferry_btn">Set up Ferry</span></button>
+          </div>
+          <p class="muted-text" id="ferry-summary" style="margin-top:8px;font-size:.78rem;">Not configured</p>
+        </div>
         <!-- Custom Terms of Service (Admin only) -->
         <div class="admin-settings" id="section-custom-tos" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">⚖️ <span data-i18n="settings.admin.custom_tos_title">Custom Terms of Service</span></h5>
@@ -3238,6 +3314,18 @@
       <div class="modal-actions">
         <button class="btn-sm" id="emoji-crop-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent" id="emoji-crop-confirm-btn" data-i18n="modals.emoji_crop.confirm_btn">Use This Crop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ferry (Discord bridge) Modal -->
+  <div class="modal-overlay" id="ferry-modal" style="display:none">
+    <div class="modal modal-wide">
+      <h3>🛶 <span data-i18n="modals.ferry.title">Ferry (Discord bridge)</span></h3>
+      <div id="ferry-modal-body" class="ferry-body"></div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="ferry-refresh-btn" data-i18n="modals.ferry.refresh">Reconnect</button>
+        <button class="btn-sm btn-accent" id="ferry-close-btn" data-i18n="modals.common.close">Close</button>
       </div>
     </div>
   </div>
@@ -4045,7 +4133,7 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=3.16.15"></script>
+  <script src="/js/theme.js?v=4.0.1"></script>
   <script src="/js/notifications.js?v=3.16.15"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
   <script src="/js/voice.js?v=3.34.0"></script>
@@ -4054,8 +4142,8 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=3.44.3"></script>
-  <script src="/js/plugin-loader.js?v=3.16.15"></script>
+  <script type="module" src="/js/app.js?v=3.51.4"></script>
+  <script src="/js/plugin-loader.js?v=4.0.1"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
 </body>

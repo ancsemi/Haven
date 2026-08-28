@@ -220,7 +220,7 @@ module.exports = function register(socket, ctx) {
     // Refresh every live display: member lists re-read getUserHighestRole and
     // clients re-fetch role-driven UI on roles-updated.
     for (const [code] of channelUsers) { emitOnlineUsers(code); }
-    io.emit('roles-updated');
+    io.except('bot-sockets').emit('roles-updated');
 
     cb({ success: true, display: { name, color, icon, visible } });
     _audit({ actor: socket.user, action: 'admin_role_display_update',
@@ -398,7 +398,7 @@ module.exports = function register(socket, ctx) {
     if (roleGrantsSeeAll(roleId)) for (const row of affected) pushChannelList(row.user_id);
     else for (const row of affected) syncSeeAllMemberships(row.user_id);
 
-    socket.broadcast.emit('roles-updated');
+    socket.broadcast.except('bot-sockets').emit('roles-updated');
     cb({ success: true, roles: freshRoles });
     _audit({ actor: socket.user, action: 'role_update',
       target_type: 'role', target_id: roleId, target_name: role.name,
@@ -451,7 +451,7 @@ module.exports = function register(socket, ctx) {
       const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
 
       const serverMod = insertRole.run('Server Mod', 50, 'server', '#3498db');
-      ['kick_user','mute_user','delete_message','pin_message','set_channel_topic','manage_sub_channels','rename_channel','rename_sub_channel','delete_lower_messages','manage_webhooks','upload_files','use_voice','view_history','view_all_members','manage_music_queue','delete_own_messages','edit_own_messages']
+      ['kick_user','mute_user','delete_message','pin_message','set_channel_topic','manage_sub_channels','rename_channel','rename_sub_channel','delete_lower_messages','manage_webhooks','use_ferry','upload_files','use_voice','view_history','view_all_members','manage_music_queue','delete_own_messages','edit_own_messages']
         .forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
 
       const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
@@ -477,9 +477,9 @@ module.exports = function register(socket, ctx) {
       // the payload-less broadcast below only nudges open role managers.
       const seen = new Set();
       for (const [, s] of io.sockets.sockets) {
-        if (s.user && !seen.has(s.user.id)) { seen.add(s.user.id); pushUserRoleState(s.user.id); }
+        if (s.user && !s.user.isBot && !seen.has(s.user.id)) { seen.add(s.user.id); pushUserRoleState(s.user.id); }
       }
-      io.emit('roles-updated');
+      io.except('bot-sockets').emit('roles-updated');
       cb({ success: true });
     } catch (err) {
       cb({ error: 'Failed to reset roles: ' + err.message });

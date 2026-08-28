@@ -3,11 +3,13 @@
 const path = require('path');
 const fs   = require('fs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform } = require('./helpers');
+const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
-          touchVoiceActivity, floodCheck, enforceAutomod, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
+          touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay,
+          UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
 
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
@@ -60,7 +62,7 @@ module.exports = function register(socket, ctx) {
     let messages;
     if (before) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -69,7 +71,7 @@ module.exports = function register(socket, ctx) {
       `).all(channel.id, before, limit);
     } else if (after) {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -79,7 +81,7 @@ module.exports = function register(socket, ctx) {
     } else if (around) {
       const half = Math.floor(limit / 2);
       const beforeMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -87,14 +89,14 @@ module.exports = function register(socket, ctx) {
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
       `).all(channel.id, around, half);
       const targetMsg = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id = ?
       `).all(channel.id, around);
       const afterMsgs = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -105,7 +107,7 @@ module.exports = function register(socket, ctx) {
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
     } else {
       messages = db.prepare(`
-        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.type,
+        SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -281,68 +283,95 @@ module.exports = function register(socket, ctx) {
     });
   });
 
-  // ── Search messages ─────────────────────────────────────
+  // ── Search messages (global FTS5 across the user's channels) ─────────────
+  // Global by default: scoped to every non-DM channel the user is a member of,
+  // re-checked server-side on every query so results can never include content
+  // they can't access. in:#channel narrows to one channel; from:/has: filter on
+  // top. Paginated 25/page with a total count. DMs are searched client-side
+  // (E2E), so they never reach here. (search-overhaul phase 2)
+  const SEARCH_PAGE_SIZE = 25;
   socket.on('search-messages', (data) => {
     if (!data || typeof data !== 'object') return;
-    const code = typeof data.code === 'string' ? data.code.trim() : '';
     let query = typeof data.query === 'string' ? data.query.trim() : '';
-    if (!code || !query || query.length < 2) return;
+    if (!query) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
-    if (!member) return;
-
-    if (channel.is_dm) {
-      return socket.emit('search-results', { results: [], query, isDM: true });
+    // Per-account rate limit on the expensive FTS path. On trip we tell the
+    // client to stop its spinner and keep the results it already has; the
+    // toast text is rendered client-side for translation. (search-overhaul)
+    if (floodCheck('search')) {
+      return socket.emit('search-throttled', { token: data.token });
     }
 
-    // ── Parse search filters ──
-    const filters = { from: null, in: null, has: null };
-    // Extract from:username
+    const tokenizer = getActiveTokenizer();
+    const page = (Number.isInteger(data.page) && data.page > 0) ? data.page : 1;
+    const sort = ['newest', 'oldest', 'relevant'].includes(data.sort) ? data.sort : 'newest';
+    // Opaque token echoed back so the client can drop stale (out-of-order) responses.
+    const token = data.token;
+
+    // ── Parse filters out of the query text ──
+    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null };
     query = query.replace(/\bfrom:(\S+)/gi, (_, v) => { filters.from = v; return ''; });
-    // Extract in:#channel or in:channel
-    query = query.replace(/\bin:#?(\S+)/gi, (_, v) => { filters.in = v; return ''; });
-    // Extract has:image, has:file, has:link, has:embed
+    // A leading # means "this is a channel code" (unambiguous, what the filter
+    // picker appends); without it, in: is treated as a channel name.
+    query = query.replace(/\bin:(#?)(\S+)/gi, (_, hash, v) => { filters.in = v; filters.inIsCode = !!hash; return ''; });
     query = query.replace(/\bhas:(\S+)/gi, (_, v) => { filters.has = v.toLowerCase(); return ''; });
+    query = query.replace(/\bpinned:(\S+)/gi, (_, v) => { filters.pinned = v.toLowerCase(); return ''; });
+    query = query.replace(/\bbefore:(\S+)/gi, (_, v) => { filters.before = v; return ''; });
+    query = query.replace(/\bafter:(\S+)/gi, (_, v) => { filters.after = v; return ''; });
+    query = query.replace(/\bduring:(\S+)/gi, (_, v) => { filters.during = v; return ''; });
     query = query.trim();
 
-    // Determine target channel(s)
-    let targetChannelId = channel.id;
+    // Only keep well-formed YYYY-MM-DD dates; drop anything else silently.
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    ['before', 'after', 'during'].forEach(k => { if (filters[k] && !DATE_RE.test(filters[k])) filters[k] = null; });
+
+    const empty = { results: [], total: 0, page: 1, query: data.query, filters, token };
+    const conditions = [];
+    const params = [];
+
+    // ── Free-text MATCH (tokenizer-aware; skipped when there's no text) ──
+    let usesFts = false;
+    if (query.length > 0) {
+      if (query.length < minQueryChars(tokenizer)) return socket.emit('search-results', empty);
+      const matchExpr = buildMatchQuery(query, tokenizer);
+      if (matchExpr) { conditions.push('messages_fts MATCH ?'); params.push(matchExpr); usesFts = true; }
+    }
+
+    // Never dump the whole corpus: require free text or at least one filter.
+    const anyFilter = filters.from || filters.has || filters.in || filters.pinned ||
+                      filters.before || filters.after || filters.during;
+    if (!usesFts && !anyFilter) {
+      return socket.emit('search-results', empty);
+    }
+
+    // ── Access scope: non-DM channels the user belongs to ──
     if (filters.in) {
-      const targetChannel = db.prepare('SELECT id FROM channels WHERE name = ? COLLATE NOCASE AND is_dm = 0').get(filters.in);
-      if (!targetChannel) {
-        return socket.emit('search-results', { results: [], query: data.query, filters });
-      }
-      // Verify user is a member of the target channel
-      const targetMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(targetChannel.id, socket.user.id);
-      if (!targetMember) {
-        return socket.emit('search-results', { results: [], query: data.query, filters });
-      }
-      targetChannelId = targetChannel.id;
+      // #code resolves by unique code (unambiguous); a bare name resolves by
+      // name, which is not unique so it takes the first match.
+      const target = filters.inIsCode
+        ? db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(filters.in)
+        : db.prepare('SELECT id FROM channels WHERE name = ? COLLATE NOCASE AND is_dm = 0').get(filters.in);
+      if (!target) return socket.emit('search-results', empty);
+      const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(target.id, socket.user.id);
+      if (!isMember) return socket.emit('search-results', empty);
+      conditions.push('m.channel_id = ?');
+      params.push(target.id);
+    } else {
+      conditions.push(`m.channel_id IN (
+        SELECT cm.channel_id FROM channel_members cm
+        JOIN channels c ON c.id = cm.channel_id
+        WHERE cm.user_id = ? AND c.is_dm = 0
+      )`);
+      params.push(socket.user.id);
     }
 
-    // Build dynamic WHERE conditions
-    const conditions = ['m.channel_id = ?'];
-    const params = [targetChannelId];
-
-    // Text search (only if there's remaining query text after extracting filters)
-    if (query.length >= 1) {
-      const escapedQuery = query.replace(/[%_\\]/g, '\\$&');
-      conditions.push("m.content LIKE ? ESCAPE '\\'");
-      params.push(`%${escapedQuery}%`);
-    }
-
-    // from:username filter
+    // ── from:username filter ──
     if (filters.from) {
       conditions.push('(u.username = ? COLLATE NOCASE OR u.display_name = ? COLLATE NOCASE)');
       params.push(filters.from, filters.from);
     }
 
-    // has: filter
+    // ── has: filter (URL-pattern LIKE on content) ──
     if (filters.has) {
       switch (filters.has) {
         case 'image':
@@ -357,22 +386,76 @@ module.exports = function register(socket, ctx) {
         case 'video':
           conditions.push("(m.content LIKE '%/uploads/%.mp4%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.webm%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.mov%' ESCAPE '\\' OR m.content LIKE '%youtube.com%' ESCAPE '\\' OR m.content LIKE '%youtu.be%' ESCAPE '\\')");
           break;
+        case 'audio':
+          conditions.push("(m.content LIKE '%/uploads/%.mp3%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.wav%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.ogg%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.m4a%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.flac%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.aac%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.opus%' ESCAPE '\\' OR m.content LIKE '%/uploads/%.weba%' ESCAPE '\\')");
+          break;
       }
     }
 
-    const results = db.prepare(`
-      SELECT m.id, m.content, m.created_at,
-             COALESCE(u.display_name, u.username, '[Deleted User]') as username, u.id as user_id
-      FROM messages m LEFT JOIN users u ON m.user_id = u.id
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY m.created_at DESC LIMIT 50
-    `).all(...params);
+    // ── pinned: filter ──
+    if (filters.pinned === 'true') {
+      conditions.push('m.id IN (SELECT message_id FROM pinned_messages)');
+    }
+
+    // ── date filters (created_at). during: is the whole named day. ──
+    if (filters.after)  { conditions.push('m.created_at >= ?'); params.push(filters.after); }
+    if (filters.before) { conditions.push('m.created_at < ?');  params.push(filters.before); }
+    if (filters.during) { conditions.push("m.created_at >= ? AND m.created_at < date(?, '+1 day')"); params.push(filters.during, filters.during); }
+
+    // FTS queries join through messages_fts so bm25() is available for ranking.
+    // Channels are joined so each result carries the channel it came from (the
+    // results now span channels, and the client jumps into that channel).
+    const fromSql = (usesFts
+      ? 'messages_fts JOIN messages m ON m.id = messages_fts.rowid LEFT JOIN users u ON m.user_id = u.id'
+      : 'messages m LEFT JOIN users u ON m.user_id = u.id')
+      + ' LEFT JOIN channels c ON c.id = m.channel_id';
+    const orderSql = sort === 'oldest' ? 'm.created_at ASC'
+      : (sort === 'relevant' && usesFts) ? 'bm25(messages_fts)'
+      : 'm.created_at DESC';
+    const whereSql = conditions.join(' AND ');
+
+    let results = [];
+    let total = 0;
+    try {
+      total = db.prepare(`SELECT count(*) AS n FROM ${fromSql} WHERE ${whereSql}`).get(...params).n;
+      results = db.prepare(`
+        SELECT m.id, m.content, m.created_at,
+               COALESCE(u.display_name, u.username, '[Deleted User]') AS username, u.id AS user_id,
+               c.name AS channel_name, c.code AS channel_code
+        FROM ${fromSql}
+        WHERE ${whereSql}
+        ORDER BY ${orderSql}
+        LIMIT ${SEARCH_PAGE_SIZE} OFFSET ?
+      `).all(...params, (page - 1) * SEARCH_PAGE_SIZE);
+    } catch (e) {
+      console.warn('[search] query failed:', e.message);
+      return socket.emit('search-results', empty);
+    }
 
     results.forEach(r => {
       if (r.created_at && !r.created_at.endsWith('Z')) r.created_at = utcStamp(r.created_at);
     });
-    socket.emit('search-results', { results, query: data.query, filters });
+
+    // Thread reply counts for this page's results. A result is a thread parent
+    // when other messages carry thread_id = its id. One grouped COUNT over the
+    // 25 ids (same idiom as the channel loader) drives a display-only badge on
+    // the client. (search-overhaul phase 3)
+    const resultIds = results.map(r => r.id);
+    if (resultIds.length) {
+      const ph = resultIds.map(() => '?').join(',');
+      const counts = db.prepare(
+        `SELECT thread_id, COUNT(*) AS n FROM messages WHERE thread_id IN (${ph}) GROUP BY thread_id`
+      ).all(...resultIds);
+      const countMap = new Map(counts.map(c => [c.thread_id, c.n]));
+      results.forEach(r => { r.thread_count = countMap.get(r.id) || 0; });
+    }
+
+    socket.emit('search-results', { results, total, page, query: data.query, filters, token });
   });
+
+  // Tell the client the minimum query length for the active tokenizer (trigram
+  // needs 3 chars; word tokenizers 2) so the input gate matches the server.
+  socket.emit('search-config', { minChars: minQueryChars(), tokenizer: getActiveTokenizer() });
 
   // ── Channel media gallery (#5350) ───────────────────────
   // Returns categorized media + links from all messages in a channel.
@@ -922,10 +1005,31 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // ── Ferry target (Discord bridge) ─────────────────────
+    // Runs after persona detection so the two prefixes compose: "::Alter
+    // =>Server#general hi" resolves the persona first and leaves the ferry
+    // prefix for this step. The target is stripped from what Haven stores and
+    // kept in ferry_target instead, so channel history reads as plain messages
+    // with a small destination badge rather than raw routing syntax.
+    let ferryTarget = null;
+    let ferryLabel = null;
+    if (!channel.is_dm) {
+      ferryTarget = parseFerryTarget(channel.id, finalContent, data.ferryDiscordUserId);
+      if (ferryTarget) {
+        finalContent = ferryTarget.body;
+        ferryLabel = ferryTarget.dm
+          ? 'dm'
+          : `${ferryTarget.link.guild_name || 'Discord'}#${ferryTarget.link.discord_channel_name || ''}`;
+        // An addressed message with nothing after the target is a typo, not a
+        // send. Bail before writing an empty row into channel history.
+        if (!finalContent) return socket.emit('error-msg', 'Add a message after the Discord target');
+      }
+    }
+
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel);
 
       const message = {
         id: result.lastInsertRowid,
@@ -949,6 +1053,7 @@ module.exports = function register(socket, ctx) {
         persona_avatar: personaAvatar || undefined,
         real_username: personaId ? socket.user.displayName : undefined,
         break_chain: breakChain || undefined,
+        ferry_target: ferryLabel || undefined,
       };
 
       if (replyTo) {
@@ -965,6 +1070,19 @@ module.exports = function register(socket, ctx) {
       const pushDisplayName = personaUsername || socket.user.displayName;
       sendPushNotifications(channel.id, code, channel.name, socket.user.id, pushDisplayName, pushContent);
       fireWebhookCallbacks(channel.id, code, message);
+
+      // Deliberately after the broadcast: the Haven message is already sent and
+      // stored, so a slow or broken Discord never holds up the channel.
+      if (!channel.is_dm) {
+        ferryRelay({
+          channelId: channel.id,
+          user: socket.user,
+          body: finalContent,
+          target: ferryTarget,
+          personaUsername, personaAvatar,
+          notify: (msg) => socket.emit('error-msg', msg),
+        });
+      }
 
       try {
         db.prepare(`

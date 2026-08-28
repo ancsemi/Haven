@@ -64,6 +64,15 @@
   // ── Theme switching ───────────────────────────────────
   initThemeSwitcher('auth-theme-bar');
 
+  // Themes an admin has published are .theme.css files rather than built-in
+  // data-theme values, and plugin-loader.js (which knows about them) only runs
+  // on the app page. So the login page fetched nothing and showed none of them.
+  // /api/themes is unauthenticated, which is what makes this possible here. (#5537)
+  fetch('/api/themes')
+    .then(r => r.ok ? r.json() : [])
+    .then(themes => { injectPublishedThemeBar('auth-theme-bar', themes); })
+    .catch(() => { /* no custom themes is a fine outcome for a login page */ });
+
   // ── Language switcher ─────────────────────────────────
   const langSelect = document.getElementById('auth-lang-select');
   if (langSelect) {
@@ -83,7 +92,17 @@
   // Also fetch server title for login page branding.
   fetch('/api/public-config').then(r => r.json()).then(d => {
     if (d.default_theme && !localStorage.getItem('haven_theme')) {
-      applyThemeFromServer(d.default_theme);
+      // A published theme is stored as "file:whatever.theme.css". Writing that
+      // straight into data-theme matched no stylesheet at all, so an admin who
+      // picked a custom theme as the server default got an unstyled login page
+      // on a first visit, and only saw the theme once a later page load found
+      // it in localStorage. Not persisted: this is the server's suggestion for
+      // someone who has not chosen, not a choice they made. (#5537)
+      if (d.default_theme.startsWith('file:')) {
+        applyPublishedThemeBase(d.default_theme.slice(5), false);
+      } else {
+        applyThemeFromServer(d.default_theme);
+      }
     }
     if (d.server_title) {
       const titleEl = document.getElementById('server-title');

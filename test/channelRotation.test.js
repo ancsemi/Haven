@@ -95,8 +95,14 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
     join(room) { roomMoves.push(['text-join', room]); }
   };
   const voiceSocket = {
+    user: { isBot: true, channelCode: oldCode },
     leave(room) { roomMoves.push(['voice-leave', room]); },
     join(room) { roomMoves.push(['voice-join', room]); }
+  };
+  const idleBotEvents = [];
+  const idleBotSocket = {
+    user: { isBot: true, channelId: 9, channelCode: oldCode },
+    emit(event, payload) { idleBotEvents.push({ event, payload }); }
   };
   let emitted;
   const io = {
@@ -107,7 +113,8 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
       ]) },
       sockets: new Map([
         ['text-socket', textSocket],
-        ['voice-socket', voiceSocket]
+        ['voice-socket', voiceSocket],
+        ['idle-bot-socket', idleBotSocket]
       ])
     },
     to(firstRoom) {
@@ -139,6 +146,12 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
   assert.equal(textSocket.currentChannel, newCode);
   assert.ok(roomMoves.some(move => move[0] === 'text-join' && move[1] === `channel:${newCode}`));
   assert.ok(roomMoves.some(move => move[0] === 'voice-join' && move[1] === `voice:${newCode}`));
+  assert.equal(voiceSocket.user.channelCode, newCode);
+  assert.equal(idleBotSocket.user.channelCode, newCode);
+  assert.deepEqual(idleBotEvents, [{
+    event: 'channel-code-rotated',
+    payload: { channelId: 9, oldCode, newCode }
+  }]);
   for (const name of ['channelUsers', 'voiceUsers', 'activeMusic', 'musicQueues', 'activeScreenSharers', 'activeWebcamUsers']) {
     assert.equal(state[name].has(oldCode), false, `${name} kept the old code`);
     assert.equal(state[name].has(newCode), true, `${name} missed the new code`);

@@ -445,7 +445,8 @@
     "delete_channel": "Delete Channels",
     "read_only_override": "Read-Only Override",
     "view_audit_log": "View Audit Log",
-    "manage_display_names": "Manage Display Names"
+    "manage_display_names": "Manage Display Names",
+    "use_ferry": "Send to Discord (Ferry)"
   },
   "slowmode": {
     "wait": "Slow mode — wait {{seconds}}s before sending another message",
@@ -487,6 +488,24 @@
     "search_results_one": "{{count}} result for \"{{query}}\"",
     "search_results_other": "{{count}} results for \"{{query}}\"",
     "search_no_results": "No results found",
+    "search_page": "Page {{page}} of {{pages}}",
+    "search_page_of": "/ {{pages}}",
+    "search_stale": "A channel or role you have has changed, please refresh the search to continue.",
+    "search_refresh": "Refresh search",
+    "search_rate_limited": "You are searching too quickly. Please wait a moment.",
+    "search_load_embed": "Load embed",
+    "search_thread_replies": "{{count}} replies",
+    "filter_by": "Filter by",
+    "filter_placeholder": "Filter...",
+    "filter_no_matches": "No matches",
+    "filter_toggle": "Filters",
+    "filter_apply": "Apply",
+    "sort_by": "Sort",
+    "sort_newest": "Newest",
+    "sort_oldest": "Oldest",
+    "sort_relevant": "Relevant",
+    "searching": "Searching...",
+    "recent": "Recent",
     "messages": {
       "edited": "(edited)",
       "edited_at": "Edited at {{date}}",
@@ -728,7 +747,13 @@
       "mod_mode": "Mod Mode",
       "security": "Security",
       "moderation": "Moderation",
-      "sessions": "Sessions"
+      "sessions": "Sessions",
+      "ferry": "Ferry",
+      "group_server": "Server",
+      "group_people": "People & Access",
+      "group_content": "Content",
+      "group_integrations": "Integrations",
+      "group_maintenance": "Maintenance"
     },
     "language_section": {
       "title": "Language",
@@ -1216,7 +1241,10 @@
         "visibility": "Visibility",
         "visibility_hint": "When off, the Admin role is hidden on profiles and its color is not applied to your name anywhere, for everyone. Your admin powers are unaffected.",
         "delete": "Delete"
-      }
+      },
+      "ferry_title": "Ferry (Discord bridge)",
+      "ferry_hint": "Relay messages between Haven channels and Discord channels. Needs your own Discord bot, which takes about two minutes to create.",
+      "manage_ferry_btn": "Set up Ferry"
     }
   },
   "modals": {
@@ -1797,6 +1825,10 @@
     "hidden_channels": {
       "title": "Hidden Channels",
       "desc": "Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back."
+    },
+    "ferry": {
+      "title": "Ferry (Discord bridge)",
+      "refresh": "Reconnect"
     }
   },
   "context_menu": {

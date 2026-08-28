@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Haven: Private Chat That Lives On Your Machine</title>
-  <meta name="description" content="Haven is a free, open-source private chat server you run on your own computer. Voice chat, screen sharing, 25+ themes, sub-channels, direct messages, file sharing, and more. Only the host downloads, friends join from their browser.">
+  <meta name="description" content="Haven is a free, open-source private chat server you run on your own computer. Voice chat, screen sharing, Discord import and bridging, 26 themes, encrypted DMs, bots and more. Join from the desktop app, the Android app, or just a browser link.">
   <meta name="keywords" content="private chat, self-hosted, discord alternative, open source, voice chat, screen sharing, encrypted, no cloud, mobile compatible">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Haven: Private Chat That Lives On Your Machine">
-  <meta property="og:description" content="Free, open-source private chat with voice, screen sharing, and 25+ themes. Only the host downloads, friends join from their browser.">
+  <meta property="og:description" content="Free, open-source private chat with voice, screen sharing, Discord import and 26 themes. Join from the desktop app, the Android app, or a browser link.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://ancsemi.github.io/Haven/">
   <meta property="og:image" content="https://github.com/user-attachments/assets/a3205eb4-7011-4b7b-825e-7aba76aa5c11">
@@ -20,7 +20,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Haven: Private Chat That Lives On Your Machine">
-  <meta name="twitter:description" content="Free, open-source private chat. Voice, streaming, 25+ themes. Only the host downloads.">
+  <meta name="twitter:description" content="Free, open-source private chat. Voice, streaming, Discord bridging, 26 themes. Desktop app, Android app, or any browser.">
   <meta name="twitter:image" content="https://github.com/user-attachments/assets/a3205eb4-7011-4b7b-825e-7aba76aa5c11">
   <meta name="twitter:site" content="@ancsemi">
 
@@ -891,7 +891,7 @@
         </div>
         <h1>Free private chat that lives on <span class="gradient-text">your machine</span></h1>
         <p class="hero-subtitle">
-          Haven is a full-featured chat server you host yourself. Voice chat, screen sharing, 25+ themes, GIFs, sub-channels, E2E encrypted direct messages, file sharing, and more. No cloud, no Big Tech accounts, no one reading your messages.
+          Haven is a full-featured chat server you host yourself. Voice chat, screen sharing, Discord import and two-way bridging, 26 themes, E2E encrypted direct messages, bots, file sharing, and more. No cloud, no Big Tech accounts, no one reading your messages.
         </p>
         <div class="hero-actions">
           <a href="#download" class="btn btn-primary">
@@ -905,7 +905,7 @@
           </a>
         </div>
         <p class="hero-note">
-          <strong>Only the host downloads Haven.</strong> Friends join from their web browser, no download necessary.
+          <strong>Join however you like.</strong> Desktop app, Android app, or just a browser link with nothing to install.
         </p>
       </div>
 
@@ -956,9 +956,12 @@
   <section class="discord-banner fade-in" id="discord-import">
     <div class="discord-banner-inner">
       <div class="container">
-        <h2>📥 Import your <span class="discord-blue">Discord</span> history</h2>
+        <h2>📥 Bring your <span class="discord-blue">Discord</span> with you, or keep both</h2>
         <p>
-          Leaving Discord? Bring everything with you. Haven can import your entire server, every channel, thread, forum post, reaction, pin, attachment, and avatar, directly from the app. No external tools. No command line. Just paste your token, pick a server, and go.
+          Haven imports your whole Discord server: every channel, thread, forum post, reaction, pin and attachment. Paste your token, pick a server, go.
+        </p>
+        <p style="margin-top: 14px;">
+          <strong>Not everyone ready to leave?</strong> Haven passes messages straight to and from your Discord server, both directions, so the friends who stay can still talk to the ones who moved.
         </p>
         <div class="discord-features">
           <span class="discord-feat">💬 Text channels</span>
@@ -970,6 +973,7 @@
           <span class="discord-feat">📎 Attachments</span>
           <span class="discord-feat">🖼️ Avatars</span>
           <span class="discord-feat">↩️ Replies</span>
+          <span class="discord-feat">🛶 Live two-way bridge</span>
         </div>
       </div>
     </div>
@@ -979,10 +983,10 @@
   <section class="desktop-banner fade-in" id="desktop">
     <div class="desktop-banner-inner">
       <div class="container">
-        <h2>🖥️ <span class="desktop-accent">Haven Desktop</span> <span class="beta-badge-inline">BETA</span></h2>
+        <h2>🖥️ <span class="desktop-accent">Haven Desktop</span></h2>
         <p>
-          A native desktop app that connects to any Haven server, with features that go beyond the browser.
-          Per-app audio sharing, device switching mid-call, native notifications, system tray, and a one-click installer.
+          A native app with the things a browser cannot do: per-app audio sharing, device switching mid-call,
+          native notifications, and a system tray. It can also run the Haven server itself.
         </p>
         <div class="discord-features">
           <span class="discord-feat">🎧 Per-App Audio</span>
@@ -990,6 +994,7 @@
           <span class="discord-feat">🔔 Native Notifications</span>
           <span class="discord-feat">📍 System Tray</span>
           <span class="discord-feat">⚡ One-Click Install</span>
+          <span class="discord-feat">🏠 Can Host The Server</span>
           <span class="discord-feat">🖥️ Windows &amp; Linux</span>
         </div>
         <div style="margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
@@ -1009,7 +1014,7 @@
           </a>
         </div>
         <p style="margin-top: 16px; font-size: 0.85rem; color: var(--text-dim);">
-          🧪 Beta release, feedback &amp; bug reports are greatly appreciated. <strong>Requires a <a href="https://github.com/ancsemi/Haven" style="color: var(--accent-bright);">Haven server</a></strong> to connect to.
+          Connects to any <strong><a href="https://github.com/ancsemi/Haven" style="color: var(--accent-bright);">Haven server</a></strong>, or hosts one for you.
         </p>
       </div>
     </div>
@@ -1021,8 +1026,8 @@
       <div class="container">
         <h2>📱 <span class="android-accent">Haven</span> Now on Google Play</h2>
         <p>
-          A native Android app for Haven, built from the ground up. Full chat and voice support,
-          push notifications, and a true mobile-native experience, available now on Google Play.
+          A real Android app, not a web wrapper. Full chat, voice and push notifications,
+          available now on Google Play.
         </p>
         <div class="discord-features">
           <span class="discord-feat">🤖 Native Android</span>
@@ -1036,7 +1041,7 @@
             <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" style="height:60px">
           </a>
         </div>
-        <p class="android-credit">Built with ❤️ by <strong>Amnibro</strong>. Thank you for your incredible work building the Haven Android app from the ground up.</p>
+        <p class="android-credit">Built from the ground up by <strong>Amnibro</strong>. Thank you.</p>
       </div>
     </div>
   </section>
@@ -1106,7 +1111,7 @@
         <div class="step">
           <div class="step-number">3️⃣</div>
           <h3>Share the link</h3>
-          <p>Send your friends your IP address. They open it in their browser. That's it. No download for them.</p>
+          <p>Send your friends the link. They open it in a browser, or use the desktop or Android app. Their choice.</p>
         </div>
       </div>
 
@@ -1122,7 +1127,7 @@
           <div class="s-num">!</div>
           <div>
             <h4>Do my friends need to download anything?</h4>
-            <p>Nope. They open a link in Chrome, Firefox, Edge, Safari, any modern browser. Zero installs on their end. Works on phones too.</p>
+            <p>Only if they want to. A link in any modern browser works with nothing installed, phones included. If they would rather have a real app, there is a desktop app for Windows and Linux and an Android app on Google Play. Same server either way.</p>
           </div>
         </div>
         <div class="setup-step">
@@ -1148,7 +1153,7 @@
     <div class="container">
       <div class="section-header fade-in">
         <span class="overline">Why Haven</span>
-        <h2>Everything you need, nothing you don't</h2>
+        <h2>What makes it worth the switch</h2>
         <p>A Discord-like experience that's completely private, completely free, and yours to control.</p>
       </div>
 
@@ -1156,8 +1161,8 @@
         <div class="sell-card highlight">
           <span class="highlight-tag">Key Differentiator</span>
           <span class="card-icon">🌍</span>
-          <h3>Only the host downloads, friends join from any browser</h3>
-          <p>One person runs Haven on their computer. Everyone else just opens a link. No apps to install, no accounts to create with some company, no app stores. Your non-tech friends can join in 30 seconds, from their laptop or phone.</p>
+          <h3>Friends join however they want, including with nothing installed</h3>
+          <p>One person runs Haven. Everyone else picks: the desktop app, the Android app, or a link in a browser with nothing to install and no account with any company.</p>
         </div>
         <div class="sell-card">
           <span class="card-icon">🎙️</span>
@@ -1172,7 +1177,7 @@
         <div class="sell-card">
           <span class="card-icon">🔒</span>
           <h3>Truly private, with E2E encrypted DMs</h3>
-          <p>No cloud. No telemetry. No analytics. No data collection. Messages live on YOUR computer. Direct messages are end-to-end encrypted with AES-256-GCM. Not even the server host can read them. Haven doesn't phone home, ever.</p>
+          <p>No cloud, no telemetry, no analytics. Messages live on your machine. DMs are end-to-end encrypted, so not even the host can read them. Haven never phones home.</p>
         </div>
         <div class="sell-card">
           <span class="card-icon">📱</span>
@@ -1231,9 +1236,14 @@
           <p>Import your entire Discord server's history directly from Haven, channels, threads, forums, reactions, pins, attachments, and avatars. Paste your token, pick a server, done.</p>
         </div>
         <div class="feature-card">
+          <span class="f-icon">🛶</span>
+          <h3>Ferry: Two-Way Discord Bridge</h3>
+          <p>Messages pass both ways between a Haven channel and a Discord channel, under each person&#39;s real name. Friends who stay on Discord can still talk to the ones who left.</p>
+        </div>
+        <div class="feature-card">
           <span class="f-icon">🎮</span>
           <h3>Rich Presence</h3>
-          <p>See what everyone is playing and listening to, right in the member list and on their profile. Games come from Steam; music comes from Last.fm (which covers Spotify, Apple Music, YouTube Music, Navidrome and Plex in one connection), Spotify directly, or Haven's own player. Optional, hidden while you&rsquo;re Invisible, and never saved to the database.</p>
+          <p>See what everyone is playing and listening to. Steam for games, Last.fm or Spotify for music. Optional, and never saved to the database.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">🎵</span>
@@ -1262,18 +1272,18 @@
         </div>
         <div class="feature-card">
           <span class="f-icon">🎨</span>
-          <h3>25+ Themes</h3>
-          <p>Haven, Discord, Matrix, Tron, HALO, LoTR, Cyberpunk, Dark Souls, Elden Ring, Minecraft, Scripture, Chapel, Gospel, FFX, Zelda, Fallout, CRT, Win95, RGB, and more.</p>
+          <h3>26 Themes, Plus Your Own</h3>
+          <p>Matrix, Tron, HALO, Cyberpunk, Dark Souls, Elden Ring, Minecraft, Win95 and more, plus a colour picker and a plugin system for your own.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">🎞️</span>
           <h3>GIF Search &amp; /gif Command</h3>
-          <p>Search and send GIFs inline, powered by GIPHY. Use the <code>/gif</code> slash command for quick access. One-click admin setup. Star the ones you keep reaching for and they land in a Favorites tab, stored in your own browser.</p>
+          <p>Search and send GIFs inline, powered by Tenor. Free API key, one-click admin setup. Star the ones you reuse.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">📁</span>
           <h3>File Sharing</h3>
-          <p>Share PDFs, docs, audio, video, archives up to 1.5 GB (admin-configurable). Inline audio/video players.</p>
+          <p>PDFs, docs, audio, video and archives, with inline players. 25 MB per file by default, raise it as far as your disk allows.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">🔗</span>
@@ -1298,7 +1308,7 @@
         <div class="feature-card">
           <span class="f-icon">🛡️</span>
           <h3>Moderation Tools</h3>
-          <p>Kick, mute (timed), ban, delete users, manage channels, auto-cleanup old messages.</p>
+          <p>Roles with per-channel permissions. Kick, mute, ban, IP bans, slow mode, automod link filtering, and an audit log.</p>
         </div>
         <div class="feature-card">
           <span class="f-icon">🌐</span>
@@ -1314,6 +1324,51 @@
           <span class="f-icon">🎮</span>
           <h3>Games &amp; Activities</h3>
           <p>Shippy Container, Flight, Learn to Fly 3, Bubble Tanks 3, Tanks, Super Smash Flash 2, and .io games. Server-wide leaderboards. Flash games via Ruffle emulator.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">🧵</span>
+          <h3>Threads</h3>
+          <p>Branch a conversation off any message. One button lists every thread in the channel, with search.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">🔑</span>
+          <h3>Single Sign-On</h3>
+          <p>Sign in with your own identity provider: Authentik, Keycloak, Authelia, Auth0, anything speaking OpenID Connect.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">🤖</span>
+          <h3>Bots &amp; Webhooks</h3>
+          <p>A REST API for bots: send messages, play soundboard sounds, register slash commands, join voice, get signed callbacks.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">⬆️</span>
+          <h3>One-Click Updates &amp; Backups</h3>
+          <p>Update from inside the app. Haven backs itself up first, then restarts. Backups also run on a schedule, with restore.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">📲</span>
+          <h3>Push Notifications</h3>
+          <p>Real-time notifications on mobile and desktop, with UnifiedPush if you would rather leave Google out.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">🎭</span>
+          <h3>Stickers, Personas &amp; Polls</h3>
+          <p>Your own sticker packs and emoji, alternate characters with <code>::Name</code>, polls, and a soundboard.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">🚪</span>
+          <h3>Guests &amp; Invites</h3>
+          <p>Temporary guest logins, invite links, and per-channel join codes that rotate on their own.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">🌐</span>
+          <h3>8 Languages</h3>
+          <p>English, French, German, Spanish, Polish, Russian, Chinese and Brazilian Portuguese, community translated.</p>
+        </div>
+        <div class="feature-card">
+          <span class="f-icon">☁️</span>
+          <h3>Connect Without Port Forwarding</h3>
+          <p>Built-in Cloudflare and LocalTunnel support, plus guides for Tailscale and reverse proxies.</p>
         </div>
       </div>
     </div>
@@ -1460,12 +1515,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>&#x2B21; Haven Server v3.50.0</h2>
+        <h2>&#x2B21; Haven Server v4.0.0</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.50.0.zip" class="btn btn-primary download-main">
-            <span class="icon">&#x2B07;</span> Download v3.50.0 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.0.0.zip" class="btn btn-primary download-main">
+            <span class="icon">&#x2B07;</span> Download v4.0.0 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1482,7 +1537,11 @@
           <div class="version-list">
             <div class="version-list-inner">
               <div class="version-item">
-                <div><span class="v-name">v3.50.0</span><span class="v-tag latest">Latest</span> <strong>Steam and Spotify linking works again, images stop disappearing on a tab left open for days, and you can see what is signed in to your account.</strong> Account linking had been broken since 3.45.0 and failed with nothing but "Internal server error"; it needs no changes to your existing keys once you update. Remote images and GIFs quietly stopped loading on a browser tab left open over a weekend, leaving a blank space where the picture should be, which is fixed and no longer needs a reload. Settings now has a Sessions pane showing the devices with Haven open right now plus a password-protected button to sign the rest out, and signing out now really does invalidate the old sign-in everywhere rather than only disconnecting it. Also adds a search box for the member list, orders members by role so admins and moderators sit at the top, adds profile picture borders, and lets you stop GIFs in chat from looping. Fixes automatic language selection. Thanks to @birdcrazy, @Bo0sted, @bernardokcosta, @josolanes and TGS.</div>
+                <div><span class="v-name">v4.0.0</span><span class="v-tag latest">Latest</span> <strong>Haven now bridges to Discord.</strong> Pair a Haven channel with a Discord channel and messages cross both ways, with each person appearing under their own name and picture rather than as one anonymous bot. Every pairing chooses its own direction and whether it mirrors the whole channel or only messages deliberately addressed to Discord. It runs inside Haven, so nothing new has to be exposed to the internet, and the setup walks you through making the Discord bot. Sending is behind a new permission that starts off for everyone, and pings are off by default. Search moves into a panel over the member list that survives channel switches. Bots get a voice gateway with scoped access, and there is a RepoCloud deploy button. Fixes: the welcome screen no longer hides behind the server banner, Steam and Spotify linking works for accounts that changed their password, channel code rotation leaves clients in a working state, the docked soundboard handle points the right way, and spent invite links stop reading as active. Admin settings are now grouped instead of one flat list of twenty. No migration steps, but take a backup first as with any large release. Thanks to @Raidenphantom, whose own Discord bridge surfaced two real gaps in this one.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.0.0.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v3.50.0</span> <strong>Steam and Spotify linking works again, images stop disappearing on a tab left open for days, and you can see what is signed in to your account.</strong> Account linking had been broken since 3.45.0 and failed with nothing but "Internal server error"; it needs no changes to your existing keys once you update. Remote images and GIFs quietly stopped loading on a browser tab left open over a weekend, leaving a blank space where the picture should be, which is fixed and no longer needs a reload. Settings now has a Sessions pane showing the devices with Haven open right now plus a password-protected button to sign the rest out, and signing out now really does invalidate the old sign-in everywhere rather than only disconnecting it. Also adds a search box for the member list, orders members by role so admins and moderators sit at the top, adds profile picture borders, and lets you stop GIFs in chat from looping. Fixes automatic language selection. Thanks to @birdcrazy, @Bo0sted, @bernardokcosta, @josolanes and TGS.</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v3.50.0.zip">Download &rarr;</a>
               </div>
               <div class="version-item">
@@ -2261,12 +2320,12 @@
       <!-- Desktop App Download Card -->
       <div class="download-card fade-in" style="margin-top: 32px; border-color: rgba(250, 166, 26, 0.25);">
         <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent-dim), var(--warning), var(--green)); box-shadow: 0 0 12px rgba(250, 166, 26, 0.3);"></div>
-        <h2>🖥️ Haven Desktop <span class="beta-badge-inline">BETA</span> v1.4.15</h2>
-        <p class="download-version">Latest beta release &middot; Windows &amp; Linux &middot; Standalone installer</p>
+        <h2>🖥️ Haven Desktop v1.4.28</h2>
+        <p class="download-version">Latest stable release &middot; Windows &amp; Linux &middot; Standalone installer</p>
 
         <div class="download-btn-group">
           <a href="https://github.com/ancsemi/Haven-Desktop/releases/latest" class="btn btn-primary download-main" style="background: var(--warning); box-shadow: 0 4px 24px rgba(250, 166, 26, 0.25), 0 0 0 1px rgba(250, 166, 26, 0.3);">
-            <span class="icon">⬇</span> Download Desktop v1.4.15
+            <span class="icon">⬇</span> Download Desktop v1.4.28
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven-Desktop" target="_blank">&#9965; View on GitHub</a>
@@ -2276,8 +2335,8 @@
         </div>
 
         <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 16px;">
-          🧪 <strong>Beta software</strong>, feedback &amp; bug reports are greatly appreciated.<br>
-          The desktop app is a client. You still need a <a href="https://github.com/ancsemi/Haven" style="color: var(--accent-bright);">Haven server</a> to connect to.
+          Connects to any <a href="https://github.com/ancsemi/Haven" style="color: var(--accent-bright);">Haven server</a>, or hosts one for you.
+          Bug reports and feedback are always welcome.
         </p>
       </div>
 
@@ -2294,7 +2353,7 @@
         </div>
 
         <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 16px; font-style: italic;">
-          Built with ❤️ by <strong>Amnibro</strong>. Thank you for your incredible work building the Haven Android app from the ground up.
+          Built from the ground up by <strong>Amnibro</strong>. Thank you.
         </p>
       </div>
 

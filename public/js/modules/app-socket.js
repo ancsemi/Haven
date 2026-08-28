@@ -143,6 +143,7 @@ _clearChannelCodeMap() {
 // ── Socket Event Listeners ────────────────────────────
 
 _setupSocketListeners() {
+  this._setupFerrySocket();
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };
@@ -237,6 +238,11 @@ _setupSocketListeners() {
     // `data.roles` — that TypeError also aborted every roles-updated listener
     // registered after this one, including the modal's own _loadRoles refresh.
     if (!data) return;
+    // Your own roles/permissions just changed — cached search results may now
+    // include messages you can no longer access. Force-invalidate the panel
+    // (the channel list may be unchanged, so the signature check won't catch
+    // this). Payload-less server-wide nudges bail above and don't trigger it.
+    this._searchMarkStale?.();
     this.user.roles = data.roles || [];
     this.user.effectiveLevel = data.effectiveLevel || 0;
     this.user.permissions = data.permissions || [];
@@ -795,6 +801,10 @@ _setupSocketListeners() {
   this.socket.on('channels-list', (channels) => {
     // (#5391) Cancel the channels-not-arriving watchdog
     this._channelsListGotResponse = true;
+    // A change in the user's channel/role set can make cached search results
+    // show messages they no longer have access to. Invalidate the panel off
+    // this already-broadcast event — no new server plumbing. (search-overhaul)
+    this._searchInvalidate?.(channels);
     // Fresh authoritative state — an optimistic Channel Functions toggle that
     // was still awaiting a verdict has just been accepted, so drop its undo.
     this._cfnPendingToggle = null;
@@ -1425,7 +1435,8 @@ _setupSocketListeners() {
     // panel guard above.
     const usersForSidebar = users.map(u => ({
       id: u.id, username: u.username,
-      isMuted: !!u.isMuted, isDeafened: !!u.isDeafened
+      isMuted: !!u.isMuted, isDeafened: !!u.isDeafened,
+      isBot: !!u.isBot, isListening: !!u.isListening
     }));
     const skipEmptyWipe = usersForSidebar.length === 0 && isInVoice &&
       Array.isArray(this.voiceChannelUsers?.[data.channelCode]) &&
@@ -2025,6 +2036,10 @@ _setupSocketListeners() {
         msgEl.remove();
       });
     }
+    // Drop the row from the search panel too, regardless of which channel is
+    // open — results are cross-channel and this only fires on a confirmed
+    // delete, so removal stays truthful. (search-overhaul phase 3)
+    this._searchRemoveResult?.(data.channelCode, data.messageId);
   });
 
   // ── Low disk warning (admins only, #5505) ────────
@@ -2389,54 +2404,35 @@ _setupSocketListeners() {
   });
 
   // ── Search results ─────────────────────────────────
+  // Global FTS search is server-paged; results belong to the shared public
+  // context (DMs are searched locally). total/page drive the pager. The
+  // panel/pager/cache live in app-search.js. (search-overhaul phase 2)
   this.socket.on('search-results', (data) => {
-    const panel = document.getElementById('search-results-panel');
-    const list = document.getElementById('search-results-list');
-    const count = document.getElementById('search-results-count');
-    if (data.isDM) {
-      count.textContent = t('header.search_results_other', { count: 0, query: this._escapeHtml(data.query) });
-      list.innerHTML = `<p class="muted-text" style="padding:12px">Search is not available in DMs because messages are end-to-end encrypted.</p>`;
-      panel.style.display = 'block';
-      return;
-    }
-
-    // Build header with active filters
-    let filterInfo = '';
-    if (data.filters) {
-      const tags = [];
-      if (data.filters.from) tags.push(`<span class="search-filter-tag">from:${this._escapeHtml(data.filters.from)}</span>`);
-      if (data.filters.in) tags.push(`<span class="search-filter-tag">in:#${this._escapeHtml(data.filters.in)}</span>`);
-      if (data.filters.has) tags.push(`<span class="search-filter-tag">has:${this._escapeHtml(data.filters.has)}</span>`);
-      if (tags.length) filterInfo = `<div class="search-filter-tags">${tags.join(' ')}</div>`;
-    }
-
-    count.innerHTML = t(data.results.length === 1 ? 'header.search_results_one' : 'header.search_results_other', { count: data.results.length, query: this._escapeHtml(data.query) }) + filterInfo;
-
-    // Strip filters from query for highlight
-    const highlightQuery = data.query.replace(/\b(?:from|in|has):\S+/gi, '').trim();
-
-    list.innerHTML = data.results.length === 0
-      ? `<p class="muted-text" style="padding:12px">${t('header.search_no_results')}</p>`
-      : data.results.map(r => `
-        <div class="search-result-item" data-msg-id="${r.id}">
-          <span class="search-result-author" style="color:${this._getUserColor(r.username)}">${this._escapeHtml(this._getNickname(r.user_id, r.username))}</span>
-          <span class="search-result-time">${this._formatTime(r.created_at)}</span>
-          <div class="search-result-content">${highlightQuery ? this._highlightSearch(this._escapeHtml(r.content), highlightQuery) : this._escapeHtml(r.content)}</div>
-        </div>
-      `).join('');
-    panel.style.display = 'block';
-
-    // Click to scroll to message
-    list.querySelectorAll('.search-result-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const msgId = parseInt(item.dataset.msgId, 10);
-        // Close the search panel so the user can see the result
-        panel.style.display = 'none';
-        document.getElementById('search-container').style.display = 'none';
-        document.getElementById('search-input').value = '';
-        this._jumpToMessage(msgId);
-      });
+    // Drop stale responses: only the latest issued query's token counts, so a
+    // slow earlier query can't overwrite newer results. (search-overhaul)
+    if (data.token != null && data.token !== this._searchSeq) return;
+    this._searchReceiveResults('__public__', {
+      results: data.results || [],
+      total: data.total || 0,
+      page: data.page || 1,
+      query: data.query,
+      filters: data.filters || null,
+      isDM: !!data.isDM,
     });
+  });
+
+  // The server refused a search because this account hit the per-account rate
+  // limit. Clear the spinner and toast, but leave the existing results in
+  // place. Token-gated so a stale refusal can't kill a fresher spinner.
+  this.socket.on('search-throttled', (data) => {
+    if (data && data.token != null && data.token !== this._searchSeq) return;
+    this._searchOnThrottled();
+  });
+
+  // Active tokenizer's minimum query length (trigram 3, word tokenizers 2), so
+  // the input gate matches what the server can actually match. (phase 2)
+  this.socket.on('search-config', (d) => {
+    this._searchMinChars = (d && d.minChars) || 2;
   });
 
   // ── High Scores ──────────────────────────────────

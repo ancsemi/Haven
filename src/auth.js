@@ -1568,7 +1568,19 @@ function generateToken(payload) {
  * full session token for a redirect flow.
  */
 function generateConnectToken(userId, provider) {
-  return jwt.sign({ id: userId, scope: 'connect', provider }, JWT_SECRET, { expiresIn: '5m' });
+  // pwv has to be here. verifyToken checks it for every token carrying an id
+  // and no purpose, and reads a missing one as 1, so leaving it out made this
+  // token look like it was minted before the account's first password change.
+  // Anyone whose password_version had moved past 1 (a password change, an
+  // admin reset, a recovery code) could never finish a Steam or Spotify link:
+  // the redirect came back and was rejected as an expired session. (#5527)
+  // Carrying the real value also keeps the property that check is there for,
+  // since a password change mid-flow still invalidates the link in progress.
+  return jwt.sign(
+    { id: userId, scope: 'connect', provider, pwv: _currentPwv(userId) || 1 },
+    JWT_SECRET,
+    { expiresIn: '5m' }
+  );
 }
 
 function generateChannelCode() {

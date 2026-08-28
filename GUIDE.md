@@ -315,7 +315,39 @@ A **Glitch Frequency** slider appears in the theme popup when this effect is act
 
 ## 🌐 Setting Up Remote Access (Friends Over the Internet)
 
-If your friends are **not** on your local WiFi, you need to set up port forwarding so they can reach your PC from the internet.
+If your friends are **not** on your local WiFi, you need a way for them to reach
+your machine. There are three routes here, least safe first:
+
+1. **Port forwarding** (this section): simplest, but it puts your Haven login page
+   in front of the whole internet.
+2. **[Tailscale / WireGuard](#-tailscale--wireguard-no-port-forwarding-no-exposed-ip)**:
+   the safest. Nothing is exposed publicly and you never touch your router.
+3. **[Cloudflare Tunnel](#-cloudflare-tunnel-no-port-forwarding)**: a public URL
+   without opening a port or revealing your home IP.
+
+Haven can also run LocalTunnel or Cloudflared for you from **Settings, Server Admin
+Settings, Tunnel** if you would rather not install anything by hand.
+
+### Before you port forward, know what it costs
+
+Opening a port means anybody on the internet can reach your Haven login page. Some
+of that is not obvious up front:
+
+- **Bot networks.** Automated scanners sweep the whole internet looking for
+  misconfigured services. Within minutes of forwarding a port, your address starts
+  getting probed. Almost all of it bounces off Haven and your firewall, but the risk
+  is not zero, and it uses a little of your bandwidth around the clock.
+- **DHCP drift.** Most home routers hand out addresses dynamically, so the machine
+  running Haven can land on a different local IP after a reboot. Your port forward
+  then points at whatever device took the old address, which means your friends
+  cannot reach Haven and something else on your network is exposed instead. Assign
+  the Haven machine a static IP to prevent this, see the DHCP reservation step below.
+- **Password guessing.** Haven rate-limits sign-in attempts (20 per 15 minutes per
+  IP address) and supports two-factor authentication, so it is not defenceless. But
+  a login page on the open internet will be tried, so use a password you have not
+  used anywhere else and turn on MFA.
+
+If that is acceptable to you, carry on. If not, use Tailscale or a tunnel instead.
 
 ### Find Your Public IP
 
@@ -363,6 +395,92 @@ https://YOUR_PUBLIC_IP:3000
 ```
 
 > ⚠️ **Certificate Warning:** Your friends' browsers will show a security warning because Haven uses a self-signed certificate. This is normal and expected. Tell them to click **"Advanced"** → **"Proceed to site"**. The connection is still encrypted.
+
+---
+
+## 🔐 Tailscale / WireGuard (No Port Forwarding, No Exposed IP)
+
+Port forwarding above opens your Haven login page to the entire internet.
+Tailscale does not: it builds an encrypted tunnel straight between your
+machine and your friend's, so nothing is exposed publicly and you never touch
+your router or firewall. It is the safest of the three methods here.
+
+> #### Voice chat over a *shared device*
+> Text chat, uploads, and everything that flows **through** the Haven server work
+> perfectly with the shared-device setup below. **Voice is the exception.** Haven
+> voice is peer-to-peer: everyone in a call opens a direct connection to every
+> *other* person in the call, not just to the host. Sharing a single device only
+> puts the **host** machine on the shared path, so your friends can reach the host
+> but not each other, and the return path from the host back to a friend isn't
+> guaranteed either. The classic symptom is **one-directional audio**: everyone
+> hears the host, but the host can't hear anyone. This isn't a bug in the
+> shared-device config, it's that a single shared machine can't provide the full
+> mesh of paths a peer-to-peer call needs.
+>
+> Two ways to get voice working, most recommended first:
+> 1. **Add a TURN server** under **Settings, Admin, Voice & Connectivity
+>    (STUN/TURN)**. TURN relays all voice media through one reachable point, so the
+>    peer-to-peer paths are no longer required and the secure single-device sharing
+>    below keeps working exactly as written. You can run your own
+>    [coturn](https://github.com/coturn/coturn) or use a hosted TURN provider.
+> 2. **Put everyone on the same tailnet** instead of sharing one device. Tailnet
+>    members get direct connectivity to one another, so the mesh forms and voice
+>    works both ways. This works, but it gives your friends **broader access than
+>    device-sharing does**, so read **Step 4** below and only do this if you accept
+>    that tradeoff.
+
+- Unlike port forwarding, Tailscale does not require you to touch your router or your computer's firewall. Tailscale uses [Wireguard](https://en.wikipedia.org/wiki/WireGuard) under the hood, which is the same protocol many reputable VPN companies use. Wireguard creates an encrypted, end-to-end tunnel from your computer to your friend's computer. Most firewalls, like the one your router and computer use, allow outbound connections by default. Tailscale establishes a persistent, outbound connection to the Tailscale coordination server, which then allows your friends to connect. This is why configuring your firewall is not a requirement for this method. 
+  
+- Anyone who wants access to your Haven server will first need a **Share link** generated by you, the administrator, via your Tailscale admin dashboard. If you follow this guide correctly, your friend will **only** have access to Haven and strictly nothing else on your device.
+- The obvious tradeoff with this approach is setup. Both you and your friends will need to connect to Tailscale anytime you want to access Haven. But the bright side of this approach is once setup is complete, and you're logged in, connecting to Tailscale is as simple as flipping a switch. Tailscale works on pretty much all devices you can think of, and it's seamless.
+- To be clear, Tailscale does change your device's DNS settings. But unlike a traditional VPN, Tailscale **does not** route your internet traffic through some remote server. Tailscale is **purely** a connection between your computer, and your friend's computer. Your IP does not change and your internet speed doesn't slow down in any meaningful way.
+
+### Step 1 - Make an account
+- Visit https://tailscale.com and make an account. Tailscale will walk you through downloading Tailscale onto your device, you may proceed with that.
+
+- Once Tailscale is running on your machine, it may ask you to add another device, click the "Skip" button at the bottom of the page.
+
+ 
+### Step 2: Navigate to Tailscale admin page
+Click [here](https://console.tailscale.com/admin/machines) to access the admin page. Here, you will see a list of all the devices on your Tailnet. 
+
+### Step 3: Lock down access
+- Currently, if you share access to your Tailscale device, any other ports that are open on your machine will be reachable by your friends. We solve this issue by setting up ACL rules. ACL Rules will ensure only Haven is accessible by your friends, and strictly nothing else.
+- On your Tailscale admin page, click "Access Controls".
+- Click "JSON Editor" and replace everything in that section with the following, secure config:
+   - Please ensure you copy everything, including the trailing comma at the end of the code block 
+  ```
+  {
+  "grants": [
+    // autogroup:member are members of your tailnet. We are sharing a device with your friends, NOT adding them to our tailnet. So you are the only person on your tailnet who should have this permission. And therefore, we are giving members of this tailnet unrestricted access to everything.
+    {
+      "src": ["autogroup:member"],
+      "dst": ["*"],
+      "ip":  ["*"],
+    },
+
+    // autogroup:shared are your friends who are connecting to your shared machine. This control restricts the port your friends may use to connect to your machine. If you changed your Haven port, make sure to change the ports to whatever port you set. Otherwise, leave everything below as default. 
+    {
+      "src": ["autogroup:shared"],
+      "dst": ["*"],
+      "ip":  ["3000", "3001"],
+    },
+  ],
+   }
+  ```
+
+### Step 4: Share, not invite
+- This step is critical. There is a fundamental difference between inviting someone to your tailnet, and simply sharing one machine. The settings above DO NOT apply if you invite someone to your tailnet, and they will get access to your **whole tailnet**. If your Haven computer is running any other web server, or if you add more Tailscale devices down the road, your friends will have access to them. You do not want this. 
+- To **SHARE** a device, go to your Tailscale admin page, click the 3 dot menu next to your device, and click **Share**. If you are sharing a link, make sure **Reusable link** is turned off. This way, each link you use only works once, and you maintain complete control over who can access your shared device.
+
+### Step 5: Sharing the link
+- Once you provide a share link to your friend, he will need to make an account on Tailscale, download the client and connect on his machine. Please note, your friend **does not** need to share anything from his end. Only the person hosting Haven will have to share.
+- Once your friend accepts the link, his device will now be able to reach your shared device.
+
+### Step 6: Usage
+- Once everything is wired up, go to your Tailscale admin page, find your device, and notice the **IP Address** listed next to your device. This is your Tailnet IP address. It is not your actual IP address.
+- Accessing Haven is as simple as going to https://TailscaleIPAddress:3000 (or whatever port you configured in ACL settings)
+- Please note: If you are the one hosting Haven, you may also access Haven from your LAN IP that Haven is running on (typically 192.168.X.X), but your friends **need** to use your Tailscale IP.
 
 ---
 
@@ -770,21 +888,62 @@ Push notifications let you receive alerts when someone messages a channel you're
 
 ## ⚙️ Configuration
 
-All settings are in the `.env` file in your **data directory**:
+Haven creates a `.env` config file automatically on first launch. You do not need
+to create or rename anything. It lives in your **data directory**:
 
 | OS | Data Directory |
 |----|---------------|
 | Windows | `%APPDATA%\Haven\` |
 | Linux / macOS | `~/.haven/` |
 
-| Setting | What it does |
-|---------|-------------|
-| `PORT` | Server port (default: 3000) |
-| `ADMIN_USERNAME` | Which username gets admin powers |
-| `JWT_SECRET` | Auto-generated security key — don't share this |
-| `HAVEN_DATA_DIR` | Override where data is stored |
+| Setting | Default | What it does |
+|---------|---------|-------------|
+| `PORT` | `3000` | Server port |
+| `SERVER_NAME` | `Haven` | Your server's display name |
+| `ADMIN_USERNAME` | `admin` | Register with this name to get admin powers |
+| `JWT_SECRET` | *(auto-generated)* | Security key. Do not share or edit this |
+| `HAVEN_DATA_DIR` | *(see above)* | Override the data directory location |
+| `HAVEN_DISK_RESERVE_MB` | `512` | Disk space Haven keeps free so a full server stays fixable |
+| `SSL_CERT_PATH` | *(auto-detected)* | Path to SSL certificate. With Let's Encrypt, point at `fullchain.pem` rather than `cert.pem`: `cert.pem` leaves out the intermediate certificate, which browsers quietly work around but curl and many other clients reject |
+| `SSL_KEY_PATH` | *(auto-detected)* | Path to SSL private key |
+| `STEAM_API_KEY` | *(empty)* | Steam Web API key for rich presence. Get yours at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) (any domain works) |
+| `OIDC_CLIENT_SECRET` | *(empty)* | Client secret for single sign-on. Kept out of the database on purpose, so backups never carry it |
+| `PUBLIC_URL` | *(auto-detected)* | Your server's public address, including `https://`. Only needed if Haven cannot work it out itself, see below |
+| `HAVEN_ALLOW_PRIVATE_CALLBACKS` | `false` | Let bot callback URLs point at private addresses (`10.x`, `192.168.x`, `localhost`, `.local`). Off by default so a webhook cannot be pointed at your internal network. Turn it on only if your bot really does run on the same LAN or in a sibling Docker container. Cloud metadata addresses (`169.254.x.x`) stay blocked regardless |
 
-> `.env` is created automatically on first launch. If you change it, restart the server.
+After editing `.env`, restart the server.
+
+> **Running Haven as a systemd service?** systemd runs the unit as the user you set
+> in `User=` (often `root`), so `~/.haven/` resolves to that user's home (e.g.
+> `/root/.haven/`), *not* the directory you ran Haven from manually during testing.
+> Set `HAVEN_DATA_DIR` to an absolute path in your `.env` or the unit's
+> `Environment=` line so manual and service runs share the same data, certs, and
+> `.env`. Example:
+> ```
+> Environment=HAVEN_DATA_DIR=/opt/haven-data
+> ```
+
+> **Steam or Spotify linking sending people to the wrong address?** If you run Haven
+> behind Docker port mapping (say `8080:3000`), a reverse proxy that strips the port
+> out of the Host header, or a Cloudflare Tunnel, the server cannot reliably guess
+> its own public address, so those sign-in round-trips fail. Set it explicitly:
+> ```
+> PUBLIC_URL=https://haven.example.com:8443
+> ```
+> For security this one is `.env`-only and deliberately **not** editable from the
+> admin panel. A callback address that could be changed from the web UI would be a
+> way to hijack sign-in redirects.
+
+### Running More Than One Server
+
+You can run several Haven instances on the same machine. Each one needs its own
+copy of Haven, its own port, and its own data directory so the databases do not
+conflict.
+
+1. Copy the Haven folder to a separate directory for each server.
+2. In each copy, set a unique `PORT` in `.env` (e.g. `3000`, `3001`).
+3. Set a unique `HAVEN_DATA_DIR` in each `.env` (e.g. `HAVEN_DATA_DIR=C:\HavenData\server1`).
+4. Start each one independently with `Start Haven.bat` (or `start.sh`).
 
 ---
 
@@ -853,6 +1012,242 @@ In any DM conversation, click the **🔄** button in the channel header to reset
 ### Verifying Encryption
 
 Click the **🔐** button in the DM header to view your **safety number** — a 60-digit code derived from both users' public keys. Compare it with your conversation partner through a separate channel (phone, in person, etc.). If they match, no one is intercepting your conversation.
+
+---
+
+## 🛶 Ferry (Discord Bridge)
+
+Ferry relays messages between your Haven channels and Discord channels. Haven users
+appear on Discord under their own names, and Discord messages show up in Haven.
+
+**Every Haven server needs its own Discord bot.** Haven cannot ship a shared one:
+Discord caps unverified applications at 100 servers and verification requires a company
+review. Setting one up takes a couple of minutes and is free.
+
+### 1. Create the Discord bot
+
+1. Go to [discord.com/developers/applications](https://discord.com/developers/applications) and click **New Application**
+2. Open the **Bot** tab
+3. Turn on **Message Content Intent**. Without it Discord sends every message with an
+   empty body, so nothing reaches Haven
+4. If you want the Discord DM feature, also turn on **Server Members Intent**
+5. Click **Reset Token**, then copy the token. Treat it like a password
+
+### 2. Connect it to Haven
+
+1. In Haven, go to **Settings → Server Admin Settings → Ferry**
+2. Click **Set up Ferry** and paste the token
+3. Haven checks the token with Discord and then shows an invite link
+4. Open the invite link and add the bot to your Discord server. Keep the
+   **Manage Webhooks** permission checked: it is what lets relayed messages carry the
+   Haven author's name and picture instead of all arriving as one anonymous bot
+5. Back in Haven, turn on the **Ferry is on** switch
+
+### 3. Pair some channels
+
+A pairing joins one Haven channel to one Discord channel. Each pairing has two settings:
+
+| Setting | Options |
+|---|---|
+| **Direction** | Two-way, Haven → Discord only, or Discord → Haven only |
+| **Outgoing** | **On command** (only messages addressed with `=>`) or **Mirror everything** (every message in the channel) |
+
+Pairings are also the boundary: members can only send to Discord channels paired with
+the Haven channel they are in. They cannot reach other servers the bot happens to
+belong to.
+
+### 4. Grant the permission
+
+Sending to Discord needs the **Send to Discord (Ferry)** role permission
+(`use_ferry`), granted under **Settings → Roles**. Admins always have it. Without it a
+member's messages stay in Haven even in a mirrored channel.
+
+### Sending a message
+
+In a **mirrored** channel, just talk. Everything crosses.
+
+In an **on command** channel, start the message with `=>` and pick a destination from
+the autocomplete:
+
+```
+=>My Server#general hey everyone
+```
+
+The `=>` prefix is stripped before the message is stored, and a small badge on the
+message shows where it went. If the destination does not match a pairing, the prefix
+stays visible so you can see it did not send.
+
+To DM a Discord user (when the admin has enabled it), type `=>@` and search by name:
+
+```
+=>@Alice quick question
+```
+
+### Things worth knowing
+
+- **DMs are one way.** A bot cannot impersonate in a DM, so the message arrives from the
+  bot with your Haven name in the body. Replies stay in Discord and do not come back to
+  Haven. Discord also flags bots that DM a lot of people, so use it sparingly
+- **Pings are off by default.** Relayed messages do not ping anyone on Discord unless an
+  admin turns on **Allow pings**. Even then `@everyone` and role pings stay blocked
+- **Set `PUBLIC_URL`** in your `.env` if you want Haven avatars and uploaded images to
+  appear on the Discord side. Discord has to be able to reach them over the internet.
+  Without it names still come through, just without pictures
+- **Discord attachments arrive as links**, and Discord's own links expire after about a
+  day. The text of the message is permanent, the pictures are not
+- **Other Discord bots are ignored** unless an admin turns on **Relay other bots**,
+  which can flood a channel
+- **Personas are off by default.** With them off, a relayed message always carries the
+  sender's real Haven name so a Discord server cannot be addressed by an untraceable alias
+
+### If it stops working
+
+The Ferry panel shows the connection state and the last error on each pairing.
+
+| Message | Fix |
+|---|---|
+| Discord refused the Message Content intent | Turn it on in the Developer Portal, Bot tab |
+| Discord rejected the bot token | Reset the token in the portal and paste the new one |
+| The bot needs "Manage Webhooks" | Give the bot that permission in the Discord channel |
+| Discord refused the Server Members intent | Turn it on in the portal, or leave DMs off |
+
+---
+
+## ⌨️ Slash Commands & Shortcuts
+
+Type `/` in the message box to see the full list with descriptions. A selection:
+
+| Command | What it does |
+|---------|-------------|
+| `/gif <query>` | Search and send a GIF inline |
+| `/play <name or url>` | Search and play music in the voice channel |
+| `/poll [question]` | Open the poll creator |
+| `/roll 2d20` | Roll dice (any NdN format) |
+| `/flip` | Flip a coin |
+| `/me does something` | Italic action text |
+| `/spoiler secret text` | Hidden spoiler text |
+| `/tts hello` | Text-to-speech (`/tts:stop` to stop playback) |
+| `/nick NewName` | Change your username |
+| `/hug @user` | Send someone a hug |
+| `/shrug` `/tableflip` `/unflip` `/lenny` `/disapprove` | Text faces |
+| `/afk` `/brb` `/bbs` | Away announcements |
+| `/clear` | Clear your own chat view |
+
+Bots can register their own slash commands too, see the developer guide below.
+
+### Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Shift+Enter` | New line |
+| `Ctrl+F` | Search messages |
+| `@` | Mention autocomplete |
+| `:` | Emoji autocomplete (type 2+ characters) |
+| `/` | Slash command autocomplete |
+| `::` | Persona autocomplete (send as one of your personas) |
+| `Tab` | Accept the highlighted suggestion |
+
+---
+
+## 🛡️ Admin & Moderation
+
+Admin controls live in **Settings** (the gear icon in the sidebar). If you
+registered with the admin username you have all of them; everything below can also
+be handed to others through the role system, one permission at a time.
+
+- **Members**: kick, timed mute, ban, unban, delete an account to free the username
+- **Roles**: granular per-channel permissions, including a server-wide "see every
+  channel" permission that only the owner can grant
+- **Automod**: checks links in messages, edits, DMs, profiles and channel topics
+  against a domain policy you control, and rejects them before they are saved. This
+  matters more than it sounds: Haven renders linked images and previews from the
+  other site, so a hostile link exposes the IP of everyone who scrolls past it
+- **Audit log**: a record of channel changes, role updates, bans, kicks and server
+  setting changes, with who did what
+- **Guests**: an optional "Join as Guest" button on the login page. Guests pick a
+  username, get a temporary account with no password, see only the channels you
+  whitelist, cannot DM, and are deleted when they disconnect
+- **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
+  disk allows), max message length, per-member storage usage
+- **Auto-cleanup**: automatic deletion of messages past a chosen age
+- **Server updates**: check for a new Haven release and apply it in place. Haven
+  takes a pre-update backup and restarts itself
+
+---
+
+## 💾 Backing Up Your Data
+
+All your data lives in a dedicated directory **outside** the Haven code folder:
+
+| OS | Location |
+|----|----------|
+| Windows | `%APPDATA%\Haven\` |
+| Linux / macOS | `~/.haven/` |
+
+Inside you will find `haven.db` (messages, users, channels), `.env`, `certs/`, and
+`uploads/`. Copying that whole folder somewhere safe backs up everything. The Haven
+code directory holds no personal data.
+
+### Built-in backups
+
+You do not have to copy files by hand. **Settings → Server Admin Settings → Backup**
+has:
+
+- **One-click export**: download an archive, with checkboxes for what to include
+  (channels and roles, users, server settings, messages, uploaded files, and
+  optionally DMs)
+- **Scheduled auto-backups**: on a daily or weekly schedule
+- **Restore**: upload a backup to restore a server. The previous database and
+  uploads are kept as `.pre-restore` copies for one cycle as a safety net
+
+Backups stream to and from disk rather than being held in memory, so a large
+uploads folder will not run the server out of RAM.
+
+---
+
+## 🎞️ GIF Search Setup
+
+Haven's GIF picker needs a free API key from a provider. **Tenor** is the default
+and the one to use: GIPHY stopped issuing keys to new servers, so the GIPHY option
+is only useful if you already have one from before.
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and create or
+   pick a project
+2. Enable the **Tenor API**, then open **Credentials → Create credentials → API key**
+3. Copy the key
+4. In Haven, as an admin, click the GIF button (🎞️) in the message box and paste the
+   key into the setup prompt
+
+The key is stored server-side, so only admins can see or change it, and every user
+can search GIFs once it is set. No payment is involved; the free tier is far more
+than a private server will use.
+
+---
+
+## 🌐 Translations
+
+Haven ships in 8 languages: English, French, German, Spanish, Polish, Russian,
+Chinese and Brazilian Portuguese. Users pick one in **Settings → Language** or on
+the login page, and the choice is saved per browser.
+
+English is the reference. Polish, Russian and Brazilian Portuguese have been
+reviewed by native speakers; the rest started as machine translations and still
+need a pass, so corrections are genuinely welcome.
+
+**Improving a language:** edit `public/locales/{code}.json` and open a PR.
+
+**Adding one:**
+
+1. Copy `public/locales/en.json` to `public/locales/{code}.json`
+2. Translate the values, leaving the keys unchanged
+3. Fill in the `_meta` block with the language name and flag
+4. Add the code to the `SUPPORTED` array in `public/js/i18n.js`
+5. Add an `<option>` to the language selectors in `public/index.html` and
+   `public/app.html`
+
+Missing keys fall back to English per phrase, so a partial translation never breaks
+anything. If you would like to own a language and keep it current, say so in an
+issue.
 
 ---
 

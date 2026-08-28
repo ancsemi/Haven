@@ -70,6 +70,19 @@ _handleAutocompleteKeydown(e) {
     }
     if (e.key === 'Escape') { this._hidePersonaDropdown(); return true; }
   }
+  const ferryDd = document.getElementById('ferry-dropdown');
+  if (ferryDd && ferryDd.style.display !== 'none') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      this._navigateFerryDropdown(e.key === 'ArrowDown' ? 1 : -1);
+      return true;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const active = ferryDd.querySelector('.mention-item.active');
+      if (active) { e.preventDefault(); active.click(); return true; }
+    }
+    if (e.key === 'Escape') { this._hideFerryDropdown(); return true; }
+  }
   return false;
 },
 
@@ -164,6 +177,21 @@ _setupUI() {
       if (e.key === 'Escape') { this._hidePersonaDropdown(); return; }
     }
 
+    // Ferry target dropdown takes the same keys as the persona one above.
+    const ferryDd = document.getElementById('ferry-dropdown');
+    if (ferryDd && ferryDd.style.display !== 'none') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this._navigateFerryDropdown(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        const active = ferryDd.querySelector('.mention-item.active');
+        if (active) { e.preventDefault(); active.click(); return; }
+      }
+      if (e.key === 'Escape') { this._hideFerryDropdown(); return; }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       this._sendMessage();
@@ -205,6 +233,8 @@ _setupUI() {
     this._checkSlashTrigger();
     // Check for >>persona trigger (#86, #5349)
     this._checkPersonaTrigger();
+    // Check for =>Discord ferry target trigger
+    this._checkFerryTrigger();
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
@@ -1453,41 +1483,35 @@ _setupUI() {
     };
   }
 
-  // Search
+  // Search — the panel/cache/pager live in app-search.js. Here we just wire
+  // the header input to it. The panel persists across channel switches and
+  // only closes on its own X (or this input's close button).
+  this._searchInit();
   let searchTimeout = null;
   document.getElementById('search-toggle-btn').addEventListener('click', () => {
-    const sc = document.getElementById('search-container');
-    sc.style.display = sc.style.display === 'none' ? 'flex' : 'none';
-    if (sc.style.display === 'flex') document.getElementById('search-input').focus();
+    this._searchToggle();
   });
   document.getElementById('search-close-btn').addEventListener('click', () => {
-    document.getElementById('search-container').style.display = 'none';
-    document.getElementById('search-results-panel').style.display = 'none';
-    document.getElementById('search-input').value = '';
-  });
-  document.getElementById('search-results-close').addEventListener('click', () => {
-    document.getElementById('search-results-panel').style.display = 'none';
+    this._searchClose();
   });
   document.getElementById('search-input').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     const q = e.target.value.trim();
-    if (q.length >= 2 && this.currentChannel) {
-      searchTimeout = setTimeout(() => {
-        const ch = (this.channels || []).find(c => c.code === this.currentChannel);
-        if (ch && ch.is_dm) {
-          this._searchDmCacheLocally(q);
-        } else {
-          this.socket.emit('search-messages', { code: this.currentChannel, query: q });
-        }
-      }, 400);
-    } else {
-      document.getElementById('search-results-panel').style.display = 'none';
+    // DMs match substrings locally (2 chars is fine); public search uses the
+    // server tokenizer's minimum (trigram needs 3). (search-overhaul phase 2)
+    const ch = (this.channels || []).find(c => c.code === this.currentChannel);
+    const min = (ch && ch.is_dm) ? 2 : (this._searchMinChars || 2);
+    if (q.length >= min && this.currentChannel) {
+      searchTimeout = setTimeout(() => this._searchRun(q), 400);
+    } else if (!q) {
+      document.getElementById('search-panel').style.display = 'none';
     }
   });
   document.getElementById('search-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.getElementById('search-container').style.display = 'none';
-      document.getElementById('search-results-panel').style.display = 'none';
+    if (e.key === 'Escape') this._searchClose();
+    else if (e.key === 'Enter') {
+      const q = e.target.value.trim();
+      if (q) { this._searchSaveRecent(q); this._searchRun(q); }
     }
   });
 
@@ -1743,6 +1767,9 @@ _setupUI() {
     sidebarToggle.textContent = collapsed ? '\u276E' : '\u276F'; // ❮ or ❯
     window._updateSbToggleRight?.();
   }
+  // Exposed so the search panel can temporarily un-collapse the sidebar it
+  // overlays, then restore the user's preference on close. (search-overhaul)
+  this._applySidebarCollapsed = applySidebarCollapsed;
 
   // Default is expanded; only collapse if explicitly saved as '1'
   applySidebarCollapsed(localStorage.getItem('haven-sidebar-collapsed') === '1');
@@ -1855,7 +1882,7 @@ _setupUI() {
     // Escape = close modals, search, theme popup, quick switcher
     if (e.key === 'Escape') {
       document.getElementById('search-container').style.display = 'none';
-      document.getElementById('search-results-panel').style.display = 'none';
+      document.getElementById('search-panel').style.display = 'none';
       document.getElementById('theme-popup').style.display = 'none';
       document.getElementById('quick-switcher-overlay')?.remove();
       document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
@@ -1893,9 +1920,9 @@ _setupUI() {
     // context menu is .channel-ctx-menu — there is no .context-menu element.
     const somethingOpen = [...document.querySelectorAll(
       '.modal-overlay, #quick-switcher-overlay, #theme-popup, #search-container, ' +
-      '#search-results-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
+      '#search-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
       '#gif-picker, .channel-ctx-menu, #emoji-dropdown, #slash-dropdown, ' +
-      '#mention-dropdown, #channel-dropdown, #persona-dropdown, #gif-slash-picker, ' +
+      '#mention-dropdown, #channel-dropdown, #persona-dropdown, #ferry-dropdown, #gif-slash-picker, ' +
       '#dm-pip-panel, #thread-panel, #pins-pip-panel'
     )].some(el => el.getClientRects().length > 0);
     if (somethingOpen) return;
@@ -2005,8 +2032,10 @@ _setupUI() {
     }
   });
 
-  // Image click in thread panel and DM PiP — same lightbox with container-aware navigation
-  for (const containerId of ['thread-messages', 'dm-pip-messages']) {
+  // Image click in thread panel, DM PiP, and the search results panel — same
+  // lightbox with container-aware navigation, spoiler reveal, and image
+  // right-click menu. Search reuses this wholesale. (search-overhaul phase 3)
+  for (const containerId of ['thread-messages', 'dm-pip-messages', 'search-panel-list']) {
     const el = document.getElementById(containerId);
     if (el) {
       el.addEventListener('click', (e) => {
@@ -6232,7 +6261,7 @@ _handleMobileBack() {
   const search = document.getElementById('search-container');
   if (search && search.style.display !== 'none' && search.style.display !== '') {
     search.style.display = 'none';
-    document.getElementById('search-results-panel').style.display = 'none';
+    document.getElementById('search-panel').style.display = 'none';
     return;
   }
 

@@ -4,17 +4,19 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=3.44.3';
-import UIBindMethods   from './modules/app-ui.js?v=3.44.3';
-import MediaMethods    from './modules/app-media.js?v=3.16.12';
+import SocketMethods   from './modules/app-socket.js?v=3.51.0';
+import UIBindMethods   from './modules/app-ui.js?v=3.51.0';
+import MediaMethods    from './modules/app-media.js?v=3.51.0';
 import ContextMethods  from './modules/app-context.js?v=3.44.3';
 import ChannelMethods  from './modules/app-channels.js?v=3.44.3';
-import MessageMethods  from './modules/app-messages.js?v=3.16.12';
+import MessageMethods  from './modules/app-messages.js?v=3.51.0';
 import UserMethods     from './modules/app-users.js?v=3.25.3';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.0';
 import UtilityMethods  from './modules/app-utilities.js?v=3.34.0';
-import AdminMethods    from './modules/app-admin.js?v=3.30.1';
+import AdminMethods    from './modules/app-admin.js?v=3.51.0';
 import PlatformMethods from './modules/app-platform.js?v=3.16.12';
+import SearchMethods   from './modules/app-search.js?v=3.49.0';
+import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
 
 class HavenApp {
   constructor() {
@@ -414,6 +416,8 @@ Object.assign(HavenApp.prototype,
   UtilityMethods,
   AdminMethods,
   PlatformMethods,
+  SearchMethods,
+  FerryMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────
