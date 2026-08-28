@@ -500,6 +500,7 @@ class VoiceManager {
 
       try {
         const conn = peer.connection;
+        peer._handlingRemoteOffer = true;
 
         // ── Glare handling (perfect negotiation) ──────────────
         //
@@ -534,13 +535,26 @@ class VoiceManager {
         // if we still have local changes to publish.
         const hadPendingLocalChanges = peer._makingOffer || peer._awaitingAnswer;
         const rolledBackIceRestart = !!peer._offerIsIceRestart;
+        const activeOfferId = peer._activeOfferId;
+        if (conn.signalingState !== 'stable') {
+          this._clearOfferAnswerTimer(peer);
+          try {
+            await conn.setLocalDescription({ type: 'rollback' });
+          } catch (err) {
+            if (conn.signalingState !== 'stable') {
+              if (peer._awaitingAnswer && activeOfferId && conn.signalingState !== 'closed') {
+                this._scheduleOfferAnswerTimeout(from.id, conn, activeOfferId);
+              }
+              throw err;
+            }
+          }
+        }
+        this._clearOfferAnswerTimer(peer);
         peer._makingOffer = false;
         peer._awaitingAnswer = false;
+        peer._activeOfferId = null;
         peer._offerIsIceRestart = false;
         peer._offerChannelCode = null;
-        if (conn.signalingState !== 'stable') {
-          await conn.setLocalDescription({ type: 'rollback' });
-        }
         // Anything we were trying to publish (added screen tracks, an ICE
         // restart) was just discarded with the rollback. Queue it so the drain
         // after this answer re-offers it, rather than silently losing it.
@@ -562,13 +576,15 @@ class VoiceManager {
           }
         }
         await conn.setRemoteDescription(new RTCSessionDescription(offer));
+        if (typeof data.offerId === 'string') peer._supportsOfferIds = true;
         const answer = await conn.createAnswer();
         await conn.setLocalDescription(answer);
 
         this.socket.emit('voice-answer', {
           code: this.currentChannel,
           targetUserId: from.id,
-          answer: answer
+          answer: answer,
+          offerId: typeof data.offerId === 'string' ? data.offerId : undefined
         });
 
         // Flush any ICE candidates that arrived before the remote
@@ -586,6 +602,9 @@ class VoiceManager {
         console.error('Error handling voice offer:', err);
       } finally {
         const latestPeer = this.peers.get(from.id);
+        if (latestPeer && latestPeer.connection === peer?.connection) {
+          latestPeer._handlingRemoteOffer = false;
+        }
         if (latestPeer && latestPeer.connection === peer?.connection && latestPeer.connection.signalingState === 'stable') {
           latestPeer._awaitingAnswer = false;
           this._drainQueuedRenegotiation(from.id);
@@ -597,12 +616,27 @@ class VoiceManager {
     this.socket.on('voice-answer', async (data) => {
       const peer = this.peers.get(data.from.id);
       if (peer) {
+        const answerOfferId = typeof data.offerId === 'string' ? data.offerId : null;
+        if (answerOfferId) peer._supportsOfferIds = true;
+        const staleCorrelatedAnswer = peer._activeOfferId && answerOfferId &&
+          answerOfferId !== peer._activeOfferId;
+        const unsafeLegacyAnswer = peer._activeOfferId && !answerOfferId &&
+          (peer._supportsOfferIds || (peer._offerTimeoutCount || 0) > 0);
+        if (staleCorrelatedAnswer || unsafeLegacyAnswer) {
+          console.warn('[Voice] Ignoring stale answer for peer', data.from.id,
+            `(expected ${peer._activeOfferId}, received ${answerOfferId || 'no offer id'})`);
+          return;
+        }
         try {
           // Only accept answer if we're actually waiting for one
           // (we may have rolled back our offer due to glare)
           if (peer.connection.signalingState === 'have-local-offer') {
             await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            this._clearOfferAnswerTimer(peer);
             peer._awaitingAnswer = false;
+            peer._activeOfferId = null;
+            peer._offerTimeoutCount = 0;
+            peer._offerRecoveryExhausted = false;
             peer._offerIsIceRestart = false;
             peer._offerChannelCode = null;
             // Flush buffered ICE candidates that arrived before the answer
@@ -614,12 +648,16 @@ class VoiceManager {
             }
           } else if (peer._awaitingAnswer && peer.connection.signalingState === 'stable') {
             // Stale answer for a local offer we already rolled back after glare.
+            this._clearOfferAnswerTimer(peer);
             peer._awaitingAnswer = false;
+            peer._activeOfferId = null;
           }
         } catch (err) {
           console.error('Error handling voice answer:', err);
           if (peer._awaitingAnswer && peer.connection.signalingState === 'stable') {
+            this._clearOfferAnswerTimer(peer);
             peer._awaitingAnswer = false;
+            peer._activeOfferId = null;
           }
         } finally {
           if (peer.connection.signalingState === 'stable') {
@@ -1852,6 +1890,70 @@ class VoiceManager {
     });
   }
 
+  _clearOfferAnswerTimer(peer) {
+    if (!peer || !peer._offerAnswerTimer) return;
+    clearTimeout(peer._offerAnswerTimer);
+    peer._offerAnswerTimer = null;
+  }
+
+  _scheduleOfferAnswerTimeout(userId, connection, offerId) {
+    const peer = this.peers.get(userId);
+    if (!peer || peer.connection !== connection) return;
+    this._clearOfferAnswerTimer(peer);
+    const timeoutCount = peer._offerTimeoutCount || 0;
+    const timeoutMs = Math.min(8000 + (timeoutCount * 4000), 20000);
+    peer._offerAnswerTimer = setTimeout(() => {
+      this._recoverTimedOutOffer(userId, connection, offerId).catch(err => {
+        console.warn('[Voice] Failed to recover unanswered offer for peer', userId, err);
+      });
+    }, timeoutMs);
+  }
+
+  async _recoverTimedOutOffer(userId, connection, offerId) {
+    const peer = this.peers.get(userId);
+    if (!peer || peer.connection !== connection ||
+        !peer._awaitingAnswer || peer._activeOfferId !== offerId) return false;
+
+    this._clearOfferAnswerTimer(peer);
+    const alreadyQueued = !!peer._renegotiateQueued;
+    peer._offerTimeoutCount = (peer._offerTimeoutCount || 0) + 1;
+    peer._renegotiateQueued = alreadyQueued || peer._offerTimeoutCount <= 3;
+    peer._recoveringTimedOutOffer = true;
+
+    console.warn('[Voice] Offer answer timed out for peer', userId,
+      '— rolling back and retrying negotiation');
+    if (connection.signalingState === 'have-local-offer') {
+      try {
+        await connection.setLocalDescription({ type: 'rollback' });
+      } catch (err) {
+        if (connection.signalingState !== 'stable') {
+          peer._recoveringTimedOutOffer = false;
+          console.warn('[Voice] Could not roll back timed-out offer for peer', userId, err);
+          if (connection.signalingState !== 'closed') {
+            this._scheduleOfferAnswerTimeout(userId, connection, offerId);
+          }
+          return false;
+        }
+      }
+    }
+    peer._recoveringTimedOutOffer = false;
+    peer._awaitingAnswer = false;
+    peer._activeOfferId = null;
+    peer._offerIsIceRestart = false;
+    peer._offerChannelCode = null;
+    if (connection.signalingState === 'stable') {
+      if (peer._renegotiateQueued) {
+        this._drainQueuedRenegotiation(userId);
+      } else {
+        peer._offerRecoveryExhausted = true;
+        console.warn('[Voice] Automatic offer recovery exhausted for peer', userId,
+          '— waiting for a new media or connection event');
+      }
+      return true;
+    }
+    return false;
+  }
+
   _drainQueuedRenegotiation(userId) {
     const peer = this.peers.get(userId);
     if (!peer || peer._makingOffer || peer._awaitingAnswer || !peer._renegotiateQueued) return;
@@ -1868,6 +1970,10 @@ class VoiceManager {
       peer._renegotiateQueued = true;
       peer._queuedIceRestart = peer._queuedIceRestart || iceRestart;
       return false;
+    }
+    if (peer._offerRecoveryExhausted) {
+      peer._offerRecoveryExhausted = false;
+      peer._offerTimeoutCount = 0;
     }
     // Wait for the signaling state to be stable before issuing a fresh
     // offer. RTCPeerConnection.createOffer() throws if called while a
@@ -1896,16 +2002,21 @@ class VoiceManager {
         return false;
       }
       await connection.setLocalDescription(offer);
+      this._offerSequence = (this._offerSequence || 0) + 1;
+      const offerId = `${this.localUserId ?? 'unknown'}-${Date.now().toString(36)}-${this._offerSequence.toString(36)}`;
       peer._awaitingAnswer = true;
+      peer._activeOfferId = offerId;
       peer._offerChannelCode = this.currentChannel;
       // Remember whether the offer now in flight is an ICE restart, so that if
       // it later yields to glare the restart intent can be re-queued rather
       // than silently downgraded to a plain renegotiation (#5444).
       peer._offerIsIceRestart = iceRestart;
+      this._scheduleOfferAnswerTimeout(userId, connection, offerId);
       this.socket.emit('voice-offer', {
         code: peer._offerChannelCode,
         targetUserId: userId,
-        offer: offer
+        offer: offer,
+        offerId
       });
       return true;
     } catch (err) {
@@ -2111,11 +2222,17 @@ class VoiceManager {
       const latestPeer = this.peers.get(userId);
       if (!latestPeer || latestPeer.connection !== connection) return;
       if (connection.signalingState === 'stable') {
-        if (latestPeer._awaitingAnswer) {
+        if (latestPeer._awaitingAnswer && !latestPeer._recoveringTimedOutOffer) {
+          this._clearOfferAnswerTimer(latestPeer);
           latestPeer._awaitingAnswer = false;
+          latestPeer._activeOfferId = null;
+          latestPeer._offerTimeoutCount = 0;
+          latestPeer._offerRecoveryExhausted = false;
         }
         latestPeer._offerChannelCode = null;
-        this._drainQueuedRenegotiation(userId);
+        if (!latestPeer._recoveringTimedOutOffer && !latestPeer._handlingRemoteOffer) {
+          this._drainQueuedRenegotiation(userId);
+        }
       }
     });
 
@@ -2163,6 +2280,13 @@ class VoiceManager {
       username,
       _makingOffer: false,
       _awaitingAnswer: false,
+      _activeOfferId: null,
+      _offerAnswerTimer: null,
+      _offerTimeoutCount: 0,
+      _offerRecoveryExhausted: false,
+      _recoveringTimedOutOffer: false,
+      _handlingRemoteOffer: false,
+      _supportsOfferIds: false,
       _renegotiateQueued: false,
       _queuedIceRestart: false,
       _offerIsIceRestart: false,
@@ -2185,6 +2309,7 @@ class VoiceManager {
     }
     const peer = this.peers.get(userId);
     if (peer) {
+      this._clearOfferAnswerTimer(peer);
       peer.connection.close();
       const audioEl = document.getElementById(`voice-audio-${userId}`);
       if (audioEl) audioEl.remove();
@@ -2297,7 +2422,12 @@ class VoiceManager {
       const connection = peer?.connection;
       if (!connection || peer._offerChannelCode !== oldCode) continue;
       peer._makingOffer = false;
+      this._clearOfferAnswerTimer(peer);
       peer._awaitingAnswer = false;
+      peer._activeOfferId = null;
+      peer._offerTimeoutCount = 0;
+      peer._offerRecoveryExhausted = false;
+      peer._recoveringTimedOutOffer = false;
       peer._offerIsIceRestart = false;
       peer._offerChannelCode = null;
       if (connection.signalingState === 'have-local-offer') {

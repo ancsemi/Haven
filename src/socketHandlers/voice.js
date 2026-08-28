@@ -240,19 +240,26 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── WebRTC signaling ────────────────────────────────────
-  const MAX_SDP_SIZE = 16384; // 16 KB — generous limit for SDP offers/answers
+  // Renegotiation offers include candidates already gathered by the live
+  // connection. With multiple interfaces or TURN relays, a normal
+  // voice + screen + webcam SDP can exceed 16 KB; silently rejecting it left
+  // that peer stuck waiting for an answer until they rejoined the call.
+  const MAX_SDP_SIZE = 65536;
+  const MAX_OFFER_ID_SIZE = 96;
   const MAX_ICE_SIZE = 2048;  // 2 KB — ICE candidates are small
 
   socket.on('voice-offer', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.offer) return;
     if (typeof data.offer !== 'object' || JSON.stringify(data.offer).length > MAX_SDP_SIZE) return;
+    if (data.offerId != null && !isString(data.offerId, 1, MAX_OFFER_ID_SIZE)) return;
     if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
     const target = voiceUsers.get(data.code)?.get(data.targetUserId);
     if (target) {
       io.to(target.socketId).emit('voice-offer', {
         from: { id: socket.user.id, username: socket.user.displayName },
         offer: data.offer,
+        offerId: data.offerId,
         channelCode: data.code
       });
     }
@@ -262,12 +269,14 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.answer) return;
     if (typeof data.answer !== 'object' || JSON.stringify(data.answer).length > MAX_SDP_SIZE) return;
+    if (data.offerId != null && !isString(data.offerId, 1, MAX_OFFER_ID_SIZE)) return;
     if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
     const target = voiceUsers.get(data.code)?.get(data.targetUserId);
     if (target) {
       io.to(target.socketId).emit('voice-answer', {
         from: { id: socket.user.id, username: socket.user.displayName },
         answer: data.answer,
+        offerId: data.offerId,
         channelCode: data.code
       });
     }
