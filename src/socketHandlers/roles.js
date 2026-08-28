@@ -311,7 +311,7 @@ module.exports = function register(socket, ctx) {
       }
     }
     const newLevel = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : role.level;
-    let level0PermissionsDeleted = false;
+    let permissionsChanged = false;
     
     const updateRoleTx = db.transaction(() => {
       const updates = [];
@@ -344,7 +344,7 @@ module.exports = function register(socket, ctx) {
 
       if (newLevel === 0) {   // Remove all permissions if the new level is 0.
         const result = db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
-        level0PermissionsDeleted = result.changes > 0;
+        permissionsChanged = result.changes > 0;
       }
       else if (Array.isArray(data.permissions)) {
         const requested = data.permissions.filter(p => VALID_ROLE_PERMS.includes(p));
@@ -361,20 +361,21 @@ module.exports = function register(socket, ctx) {
         // they lack) exactly as the role already had them — a non-admin can
         // only add or remove perms they actually hold, and never deletes the
         // rest as a side effect.
+        const currentPerms = db.prepare(
+          'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
+        ).all(roleId).map(r => r.permission);
         let finalPerms;
         if (socket.user.isAdmin) {
           finalPerms = requested;
         } else {
           const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
-          const current = db.prepare(
-            'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
-          ).all(roleId).map(r => r.permission);
           const callerPerms = new Set(getUserPermissions(socket.user.id));
           const controllable = (p) => !adminOnlyPerms.includes(p) && (callerPerms.has('*') || callerPerms.has(p));
-          const lockedKept = current.filter(p => !controllable(p));
+          const lockedKept = currentPerms.filter(p => !controllable(p));
           const controlledChosen = requested.filter(p => controllable(p));
           finalPerms = [...new Set([...lockedKept, ...controlledChosen])];
         }
+         permissionsChanged = currentPerms.length !== finalPerms.length || currentPerms.some(p => !finalPerms.includes(p));
 
         db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
         const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
@@ -403,17 +404,20 @@ module.exports = function register(socket, ctx) {
     // set just grew — refresh their lists live, like assign-role does.
     if (roleGrantsSeeAll(roleId)) for (const row of affected) pushChannelList(row.user_id);
     else for (const row of affected) syncSeeAllMemberships(row.user_id);
-    const permissionsChanged = (newLevel === 0 && level0PermissionsDeleted) || (newLevel !== 0 && Array.isArray(data.permissions));
+    
+    const nameChanged = data.name !== undefined && isString(data.name, 1, 30) && data.name.trim() !== role.name;
+    const levelChanged = data.level !== undefined && newLevel !== role.level;
+    const newPermissions = permissionsChanged ? data.permissions : undefined;
 
     socket.broadcast.except('bot-sockets').emit('roles-updated');
     cb({ success: true, roles: freshRoles });
     _audit({ actor: socket.user, action: 'role_update',
       target_type: 'role', target_id: roleId, target_name: role.name,
       details: {
-        nameChanged: data.name !== undefined,
-        levelChanged: data.level !== undefined,
+        nameChanged,
+        levelChanged,
         permissionsChanged,
-        permissions: permissionsChanged ? data.permissions : undefined
+        permissions: newPermissions
       } });
   });
 
