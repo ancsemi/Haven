@@ -957,7 +957,7 @@
       "roles_create_title": "创建角色",
       "roles_create_hint": "输入角色名称：",
       "roles_level_title": "角色级别",
-      "roles_level_hint": "角色等级（0–99，越高 = 权限越高）：\n默认服务器版主 = 50\n默认频道版主 = 25\nSelf-Serve（无权限） = 0",
+      "roles_level_hint": "角色等级（0–99，越高 = 权限越高）：\n默认服务器版主 = 50\n默认频道版主 = 25\n自助管理（无权限） = 0",
       "roles_created": "角色已创建",
       "roles_saved": "角色已保存",
       "roles_updated": "角色已更新",

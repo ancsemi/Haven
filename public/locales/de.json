@@ -957,7 +957,7 @@
       "roles_create_title": "Rolle erstellen",
       "roles_create_hint": "Rollennamen eingeben:",
       "roles_level_title": "Rollenebene",
-      "roles_level_hint": "Rollenstufe (0–99, höher = mehr Befugnisse):\nServer-Mod standardmäßig = 50\nKanal-Mod standardmäßig = 25\nSelf-Serve (keine Berechtigungen) = 0",
+      "roles_level_hint": "Rollenstufe (0–99, höher = mehr Befugnisse):\nServer-Mod standardmäßig = 50\nKanal-Mod standardmäßig = 25\nSelbstverwaltung (keine Berechtigungen) = 0",
       "roles_created": "Rolle erstellt",
       "roles_saved": "Rolle gespeichert",
       "roles_updated": "Rolle aktualisiert",

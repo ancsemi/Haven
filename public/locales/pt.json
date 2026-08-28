@@ -1138,7 +1138,7 @@
       "roles_create_title": "Criar cargo",
       "roles_create_hint": "Digite o nome do cargo:",
       "roles_level_title": "Nível do cargo",
-      "roles_level_hint": "Nível da função (0–99, maior = mais autoridade):\nModerador do servidor padrão = 50\nModerador do canal padrão = 25\nSelf-Serve (sem permissões) = 0",
+      "roles_level_hint": "Nível da função (0–99, maior = mais autoridade):\nModerador do servidor padrão = 50\nModerador do canal padrão = 25\nAutogestão (sem permissões) = 0",
       "roles_created": "Cargo criado",
       "roles_saved": "Cargo salvo",
       "roles_updated": "Cargo atualizado",

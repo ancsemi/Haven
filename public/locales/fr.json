@@ -957,7 +957,7 @@
       "roles_create_title": "Créer un rôle",
       "roles_create_hint": "Entrez le nom du rôle :",
       "roles_level_title": "Niveau du rôle",
-      "roles_level_hint": "Niveau du rôle (0–99, plus élevé = plus d’autorité) :\nModérateur du serveur par défaut = 50\nModérateur du canal par défaut = 25\nSelf-Serve (aucune permission) = 0",
+      "roles_level_hint": "Niveau du rôle (0–99, plus élevé = plus d’autorité) :\nModérateur du serveur par défaut = 50\nModérateur du canal par défaut = 25\nAuto-gestion (aucune permission) = 0",
       "roles_created": "Rôle créé",
       "roles_saved": "Rôle enregistré",
       "roles_updated": "Rôle mis à jour",
