@@ -1014,6 +1014,8 @@
         "link_channel_access_hint": "Lorsqu'activé, attribuer/révoquer ce rôle accordera/révoquera automatiquement les adhésions aux salons.",
         "reapply_access": "Réappliquer l'accès à tous les utilisateurs",
         "permissions": "Permissions",
+        "admin_only_note": "Les permissions mises en évidence sont réservées aux administrateurs — seul le propriétaire du serveur peut les accorder.",
+        "level_0_role_note": "Les rôles de niveau 0 n’obtiennent aucune permission. Les utilisateurs peuvent s’attribuer ces rôles eux-mêmes. Ils peuvent notamment servir pour : les attributions de canaux, les regroupements et le jeu de rôle.",
         "delete": "Supprimer"
       }
     }

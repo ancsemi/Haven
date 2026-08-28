@@ -1014,6 +1014,8 @@
         "link_channel_access_hint": "Wenn aktiviert, wird beim Zuweisen/Entziehen dieser Rolle automatisch die Kanalmitgliedschaft gewährt/entzogen.",
         "reapply_access": "Zugang auf alle Nutzer erneut anwenden",
         "permissions": "Berechtigungen",
+        "admin_only_note": "Hervorgehobene Berechtigungen sind nur für Administratoren verfügbar – nur der Serverbesitzer kann sie vergeben.",
+        "level_0_role_note": "Rollen der Stufe 0 erhalten keine Berechtigungen. Benutzer können diese Rollen sich selbst zuweisen. Mögliche Verwendungszwecke sind: Kanalzuweisungen, Gruppierungen und Rollenspiele.",
         "delete": "Löschen"
       }
     }

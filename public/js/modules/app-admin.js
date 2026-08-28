@@ -4205,6 +4205,24 @@ _renderAdminRoleDetail() {
   });
 },
 
+_updateRoleLevelPermsVis(levelInputId, permissionsSectionId, permissionsNoteId) {
+  const levelInput = document.getElementById(levelInputId);
+  const permissionsSection = document.getElementById(permissionsSectionId);
+  const permissionsNote = document.getElementById(permissionsNoteId);
+
+  if (!levelInput || (!permissionsSection && !permissionsNote)) return;
+  const update = () => {
+    const level = parseInt(levelInput.value, 10);
+    const isLevelZero = level === 0;
+
+    if(permissionsSection) permissionsSection.style.display = isLevelZero ? 'none' : '';
+    if (permissionsNote) permissionsNote.textContent = isLevelZero ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note');
+  };
+
+  levelInput.addEventListener('input', update);
+  update();
+},
+
 _renderRoleDetail() {
   const panel = document.getElementById('role-detail-panel');
   if (this._selectedRoleId === 'admin') { this._renderAdminRoleDetail(); return; }
@@ -4255,16 +4273,18 @@ _renderRoleDetail() {
         </div>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>
-      <p class="perm-admin-note">${t('settings.admin.role_form.admin_only_note')}</p>
-      ${allPerms.map(p => {
-        const locked = !this._canControlRolePerm(p);
-        const adminOnly = ADMIN_ONLY_PERMS.includes(p);
-        return `
-        <label class="toggle-row${adminOnly ? ' perm-admin-only' : ''}"${locked ? ' style="opacity:.55" title="You can only change permissions you hold"' : ''}>
-          <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
-          <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}${locked ? ' disabled' : ''}>
-        </label>`;
-      }).join('')}
+      <p class="perm-admin-note" id="perm-admin-note">${role.level === 0 ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note')}</p>
+      <div id="role-permissions-list" style="${role.level === 0 ? 'display:none;' : ''}">
+        ${allPerms.map(p => {
+          const locked = !this._canControlRolePerm(p);
+          const adminOnly = ADMIN_ONLY_PERMS.includes(p);
+          return `
+          <label class="toggle-row${adminOnly ? ' perm-admin-only' : ''}"${locked ? ' style="opacity:.55" title="You can only change permissions you hold"' : ''}>
+            <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
+            <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}${locked ? ' disabled' : ''}>
+          </label>`;
+        }).join('')}
+      </div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-sm btn-accent" id="role-members-btn">👥 Members</button>
         <button class="btn-sm" id="duplicate-role-btn">📋 Duplicate</button>
@@ -4272,6 +4292,9 @@ _renderRoleDetail() {
       </div>
     </div>
   `;
+
+  // Toggle permissions visibility based on the current role level.
+  this._updateRoleLevelPermsVis('role-edit-level', 'role-permissions-list', 'perm-admin-note');
 
   // Toggle channel access panel visibility
   const linkCheckbox = document.getElementById('role-edit-link-channel-access');
@@ -4830,7 +4853,7 @@ _renderChannelRolesRoleDetail() {
       <div class="cr-role-form-row cr-role-inline">
         <div>
           <label class="cr-role-label">${t('settings.admin.role_form.level')}</label>
-          <input type="number" class="settings-number-input" id="cr-role-level" value="${role.level}" min="1" max="99" style="width:60px">
+          <input type="number" class="settings-number-input" id="cr-role-level" value="${role.level}" min="0" max="99" style="width:60px">
         </div>
         <div>
           <label class="cr-role-label">${t('settings.admin.role_form.color')}</label>
@@ -4842,8 +4865,8 @@ _renderChannelRolesRoleDetail() {
         <span>${t('settings.admin.role_form.auto_assign')}</span>
       </label>
       <label class="cr-role-label" style="margin-top:4px">${t('settings.admin.role_form.permissions')}</label>
-      <p class="perm-admin-note">${t('settings.admin.role_form.admin_only_note')}</p>
-      <div class="cr-role-perms">
+      <p class="perm-admin-note" id="cr-perm-admin-note">${role.level === 0 ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note')}</p>
+      <div class="cr-role-perms" id="cr-role-permissions-list" style="${role.level === 0 ? 'display:none;' : ''}">
         ${allPerms.map(p => {
           const locked = !this._canControlRolePerm(p);
           const adminOnly = ADMIN_ONLY_PERMS.includes(p);
@@ -4860,6 +4883,9 @@ _renderChannelRolesRoleDetail() {
       </div>
     </div>
   `;
+
+  // Toggle permissions visibility based on the current role level.
+  this._updateRoleLevelPermsVis('cr-role-level', 'cr-role-permissions-list', 'cr-perm-admin-note');
 
   document.getElementById('cr-save-role-btn').addEventListener('click', () => {
     const perms = [...panel.querySelectorAll('.cr-perm-cb:checked')].map(cb => cb.dataset.perm);

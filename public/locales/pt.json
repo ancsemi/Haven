@@ -1211,6 +1211,7 @@
         "reapply_access_tooltip": "Executa novamente as regras de acesso aos canais acima para todos os usuários que já têm este cargo. Útil depois de editar as caixas Conceder/Revogar: alinha os membros existentes à configuração atual sem precisar reatribuir o cargo.",
         "permissions": "Permissões",
         "admin_only_note": "As permissões destacadas são exclusivas de administradores; somente o proprietário do servidor pode concedê-las.",
+        "level_0_role_note": "As funções de nível 0 não recebem quaisquer permissões. Os utilizadores podem atribuir estas funções a si próprios. As utilizações possíveis incluem: atribuições de canais, agrupamentos e representação de papéis.",
         "readonly_note": "Este cargo está no seu nível ou acima dele ({{level}}). Você pode visualizá-lo, mas somente alguém de nível superior pode fazer alterações.",
         "admin_cosmetic_note": "Estas configurações só alteram a aparência do cargo de administrador. Elas não mudam o que ele pode fazer.",
         "visibility": "Visibilidade",

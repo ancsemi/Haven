@@ -1043,6 +1043,8 @@
         "link_channel_access_hint": "Po włączeniu, przypisanie/odebranie tej roli automatycznie przyzna/odbierze przynależność do kanałów.",
         "reapply_access": "Ponownie zastosuj dostęp dla wszystkich użytkowników",
         "permissions": "Uprawnienia",
+        "admin_only_note": "Wyróżnione uprawnienia są dostępne tylko dla administratorów — tylko właściciel serwera może je nadawać.",
+        "level_0_role_note": "Role poziomu 0 nie otrzymują żadnych uprawnień. Użytkownicy mogą przypisywać te role samym sobie. Potencjalne zastosowania obejmują: przypisywanie do kanałów, grupowanie i odgrywanie ról.",
         "delete": "Usuń",
         "reapply_access_tooltip": "Ponownie uruchamia powyższe reguły dostępu do kanałów dla wszystkich użytkowników posiadających tę rolę. Przydatne po edycji pól wyboru Nadaj/Odbierz — dopasowuje istniejących członków do aktualnej konfiguracji bez konieczności ponownego przypisywania roli."
       },

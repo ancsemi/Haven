@@ -1014,6 +1014,8 @@
         "link_channel_access_hint": "Cuando está activado, asignar/revocar este rol otorgará/revocará automáticamente las membresías del canal.",
         "reapply_access": "Reaplicar acceso a todos los usuarios",
         "permissions": "Permisos",
+        "admin_only_note": "Los permisos resaltados son exclusivos de los administradores; solo el propietario del servidor puede otorgarlos.",
+        "level_0_role_note": "Los roles de nivel 0 no reciben ningún permiso. Los usuarios pueden asignarse estos roles a sí mismos. Algunos usos posibles son: asignaciones de canales, agrupaciones y juegos de rol.",
         "delete": "Eliminar"
       }
     }
