@@ -273,6 +273,17 @@ test('dynamic bot audio requires live voice and cleans capabilities, aborts, and
   assert.equal(playback.playbackId, uploaded.playback_id);
   assert.equal((await fetch(`${baseUrl}${playback.audioUrl}`)).status, 200);
 
+  const staticFilename = `${uploaded.playback_id}.wav`;
+  assert.equal(fs.existsSync(path.join(dataDir, 'uploads', 'bot-audio', staticFilename)), true);
+  for (const blockedPath of [
+    `/uploads/bot-audio/${staticFilename}`,
+    `/uploads/bot%2Daudio/${staticFilename}`,
+    `/uploads//bot-audio/${staticFilename}`,
+    `/uploads/bot-audio%2F${staticFilename}`
+  ]) {
+    assert.equal((await fetch(`${baseUrl}${blockedPath}`)).status, 404, blockedPath);
+  }
+
   const skipResponse = await fetch(`${baseUrl}/api/webhooks/${botToken}/audio/skip`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -281,7 +292,6 @@ test('dynamic bot audio requires live voice and cleans capabilities, aborts, and
   assert.equal(skipResponse.status, 200);
   assert.equal((await skipResponse.json()).skipped, true);
   assert.equal((await fetch(`${baseUrl}${playback.audioUrl}`)).status, 404);
-  assert.equal((await fetch(`${baseUrl}/uploads/bot-audio/not-public.wav`)).status, 404);
 
   const audioDir = path.join(dataDir, 'uploads', 'bot-audio');
   await waitForEmptyDirectory(audioDir);
@@ -320,4 +330,13 @@ test('dynamic bot audio requires live voice and cleans capabilities, aborts, and
   assert.equal(revoked.status, 403, revoked.body);
   assert.match(revoked.body, /voice permission/i);
   await waitForEmptyDirectory(audioDir);
+
+  const unavailableCapability = `/api/bot-audio/${'0'.repeat(8)}-${'0'.repeat(4)}-${'0'.repeat(4)}-${'0'.repeat(4)}-${'0'.repeat(12)}/${'0'.repeat(48)}`;
+  let limitedResponse;
+  for (let requestCount = 0; requestCount < 121; requestCount++) {
+    limitedResponse = await fetch(`${baseUrl}${unavailableCapability}`);
+    if (limitedResponse.status === 429) break;
+    assert.equal(limitedResponse.status, 404);
+  }
+  assert.equal(limitedResponse.status, 429, 'Bot audio playback route was not rate limited');
 });

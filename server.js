@@ -3506,6 +3506,7 @@ const rateLimit = require('express-rate-limit');
 const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
 const webhookAudioLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Audio rate limit exceeded' } });
 const webhookAudioControlLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Audio control rate limit exceeded' } });
+const botAudioPlaybackLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Audio playback rate limit exceeded' } });
 app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' }), (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
@@ -3660,7 +3661,7 @@ app.get('/api/webhooks/:token/voice/channels', webhookLimiter, (req, res) => {
   res.json({ channels });
 });
 
-app.get('/api/bot-audio/:playbackId/:accessToken', (req, res) => {
+app.get('/api/bot-audio/:playbackId/:accessToken', botAudioPlaybackLimiter, (req, res) => {
   if (!/^[a-f0-9-]{36}$/i.test(req.params.playbackId) || !/^[a-f0-9]{48}$/i.test(req.params.accessToken)) {
     return res.status(404).end();
   }
@@ -3679,6 +3680,7 @@ app.post(
   requireWebhookVoice,
   uploadDiskGuard,
   (req, res) => {
+    let uploadAborted = false;
     const removeUpload = () => {
       const filePath = req.botAudioTempPath;
       if (!filePath) return;
@@ -3687,7 +3689,12 @@ app.post(
         if (err?.code !== 'ENOENT') console.error('Failed to clean bot audio upload:', err);
       });
     };
-    req.once('aborted', removeUpload);
+    res.on('close', () => {
+      if (!res.writableEnded && req.destroyed) {
+        uploadAborted = true;
+        removeUpload();
+      }
+    });
 
     botAudioUpload.single('audio')(req, res, async uploadError => {
       if (uploadError) {
@@ -3732,7 +3739,7 @@ app.post(
 
         // Nothing asynchronous may occur between this final check and enqueue.
         // That closes leave/revoke/delete/rotation/abort races during rename.
-        if (req.aborted) throw Object.assign(new Error('Audio upload was aborted'), { status: 400 });
+        if (uploadAborted) throw Object.assign(new Error('Audio upload was aborted'), { status: 400 });
         const finalWebhook = getWebhookByToken(req.params.token);
         if (!finalWebhook) throw Object.assign(new Error('Invalid bot token'), { status: 401 });
         if (!finalWebhook.can_use_voice) {
