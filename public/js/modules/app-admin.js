@@ -4087,7 +4087,7 @@ _renderRoleSidebar() {
     `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
       <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
       ${this._escapeHtml(r.name)}
-      <span class=".role-sidebar-level ">Lv.${r.level}</span>
+      <span class="role-sidebar-level ">Lv.${r.level}</span>
     </div>`
   ).join('');
 
