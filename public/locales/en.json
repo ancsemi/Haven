@@ -1714,7 +1714,8 @@
     "role_management": {
       "title": "Role Management",
       "new_role_btn": "+ New Role",
-      "select_to_edit": "Select a role to edit"
+      "select_to_edit": "Select a role to edit",
+      "groups_label": "Groups"
     },
     "assign_role": {
       "title": "Assign Role",

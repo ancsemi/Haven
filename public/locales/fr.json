@@ -1388,7 +1388,8 @@
     "role_management": {
       "title": "Gestion des rôles",
       "new_role_btn": "+ Nouveau rôle",
-      "select_to_edit": "Sélectionnez un rôle à modifier"
+      "select_to_edit": "Sélectionnez un rôle à modifier",
+      "groups_label": "Groupes"
     },
     "assign_role": {
       "title": "Assigner un rôle",

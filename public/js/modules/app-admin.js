@@ -4080,12 +4080,30 @@ _renderRoleSidebar() {
     </div>
     <div class="role-sidebar-divider"></div>`;
   }
-  html += this._allRoles.map(r =>
+
+  // leveled roles
+  const leveledRoles = this._allRoles.filter(r => r.level > 0);
+  html += leveledRoles.map(r =>
+    `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
+      <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
+      <span class="role-sidebar-level">L${r.level}</span>
+      ${this._escapeHtml(r.name)}
+    </div>`
+  ).join('');
+
+  // Groups (level 0) sit below real roles, separated by a divider.
+  const groups = this._allRoles.filter(r => r.level === 0);
+  if (leveledRoles.length && groups.length) {
+    html += '<div class="role-sidebar-divider"></div>';
+    html += '<div class="role-sidebar-section-label">' + t('modals.role_management.groups_label') + '</div>';
+  }
+  html += groups.map(r =>
     `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
       <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
       ${this._escapeHtml(r.name)}
     </div>`
   ).join('');
+
   list.innerHTML = html;
   list.querySelectorAll('.role-sidebar-item').forEach(el => {
     el.addEventListener('click', () => {

@@ -1686,7 +1686,8 @@
     "role_management": {
       "title": "Gerenciamento de cargos",
       "new_role_btn": "+ Novo cargo",
-      "select_to_edit": "Selecione um cargo para editar"
+      "select_to_edit": "Selecione um cargo para editar",
+      "groups_label": "Grupos"
     },
     "assign_role": {
       "title": "Atribuir cargo",

@@ -1436,7 +1436,8 @@
     "role_management": {
       "title": "Zarządzanie rolami",
       "new_role_btn": "+ Nowa rola",
-      "select_to_edit": "Wybierz rolę do edycji"
+      "select_to_edit": "Wybierz rolę do edycji",
+      "groups_label": "Grupy"
     },
     "assign_role": {
       "title": "Przypisz rolę",

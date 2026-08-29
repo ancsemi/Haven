@@ -1388,7 +1388,8 @@
     "role_management": {
       "title": "Rollenverwaltung",
       "new_role_btn": "+ Neue Rolle",
-      "select_to_edit": "Rolle zum Bearbeiten auswählen"
+      "select_to_edit": "Rolle zum Bearbeiten auswählen",
+      "groups_label": "Gruppen"
     },
     "assign_role": {
       "title": "Rolle zuweisen",
