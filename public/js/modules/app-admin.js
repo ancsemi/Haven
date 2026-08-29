@@ -4834,13 +4834,25 @@ _renderChannelRolesRoleList() {
     list.innerHTML = `<p style="font-size:0.82rem;color:var(--text-muted);text-align:center;padding:8px">${t('settings.admin.roles_none_yet')}</p>`;
     return;
   }
-  list.innerHTML = this._allRoles.map(r =>
+
+  const renderRole = r =>
     `<div class="channel-roles-role-item${this._channelRolesSelectedRole === r.id ? ' active' : ''}" data-role-id="${r.id}">
       <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
       <span class="channel-roles-role-name">${this._escapeHtml(r.name)}</span>
       <span class="channel-roles-role-level">Lv.${r.level}</span>
-    </div>`
-  ).join('');
+    </div>`;
+  
+  const leveledRoles = this._allRoles.filter(r => r.level > 0);
+  let html = leveledRoles.map(renderRole).join('');
+
+  const groups = this._allRoles.filter(r => r.level === 0);
+  if (leveledRoles.length && groups.length) {
+    html += '<div class="role-sidebar-divider"></div>';
+    html += `<div class="role-sidebar-section-label">${t('modals.role_management.groups')}</div>`;
+  }
+  html += groups.map(renderRole).join('');
+  
+  list.innerHTML = html;
   list.querySelectorAll('.channel-roles-role-item').forEach(el => {
     el.addEventListener('click', () => {
       this._channelRolesSelectedRole = parseInt(el.dataset.roleId, 10);
