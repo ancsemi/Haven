@@ -15592,6 +15592,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 0.7em;
   font-style: italic;
   opacity: 0.6;
+  margin-left: auto;
 }
 .role-sidebar-item {
   display: flex;
