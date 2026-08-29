@@ -1015,7 +1015,7 @@
         "reapply_access": "Zugang auf alle Nutzer erneut anwenden",
         "permissions": "Berechtigungen",
         "admin_only_note": "Hervorgehobene Berechtigungen sind nur für Administratoren verfügbar – nur der Serverbesitzer kann sie vergeben.",
-        "level_0_role_note": "Rollen der Stufe 0 erhalten keine Berechtigungen. Benutzer können diese Rollen sich selbst zuweisen. Mögliche Verwendungszwecke sind: Kanalzuweisungen, Gruppierungen und Rollenspiele.",
+        "level_0_role_note": "Rollen der Stufe 0 werden als „Gruppen“ bezeichnet. Gruppen gewähren keine Berechtigungen. Benutzer können diesen Gruppen nach Belieben beitreten, ohne erhöhte Berechtigungen zu benötigen. Mögliche Verwendungszwecke sind: Kanalzuweisungen, Gruppierungen und Rollenspiele.",
         "delete": "Löschen"
       }
     }

@@ -1236,7 +1236,7 @@
         "reapply_access_tooltip": "Re-runs the channel-access rules above against every user who already holds this role. Useful after editing the Grant/Revoke checkboxes: it brings existing members in line with the current configuration without you having to re-assign the role.",
         "permissions": "Permissions",
         "admin_only_note": "Highlighted permissions are admin-only — only the server owner can grant them.",
-        "level_0_role_note": "Level 0 roles do not get any permisions. Users can apply these roles to themselves. Potential uses include: channel grants, groupings, and roleplay.",
+        "level_0_role_note": "Level 0 roles are called \"Groups\". Groups do not grant any permissions. Users can join these groups at will without elevated permissions. Potential uses include: channel grants, groupings, and roleplay.",
         "readonly_note": "This role is at or above your level ({{level}}). You can view it, but only someone ranked above it can make changes.",
         "admin_cosmetic_note": "These settings only change how the Admin role looks. They do not affect what it can do.",
         "visibility": "Visibility",

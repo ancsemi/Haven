@@ -1015,7 +1015,7 @@
         "reapply_access": "Réappliquer l'accès à tous les utilisateurs",
         "permissions": "Permissions",
         "admin_only_note": "Les permissions mises en évidence sont réservées aux administrateurs — seul le propriétaire du serveur peut les accorder.",
-        "level_0_role_note": "Les rôles de niveau 0 n’obtiennent aucune permission. Les utilisateurs peuvent s’attribuer ces rôles eux-mêmes. Ils peuvent notamment servir pour : les attributions de canaux, les regroupements et le jeu de rôle.",
+        "level_0_role_note": "Les rôles de niveau 0 sont appelés « Groupes ». Les groupes n’accordent aucune permission. Les utilisateurs peuvent rejoindre ces groupes librement sans disposer de permissions élevées. Ils peuvent notamment servir pour : les attributions de canaux, les regroupements et le jeu de rôle.",
         "delete": "Supprimer"
       }
     }
