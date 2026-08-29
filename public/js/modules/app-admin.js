@@ -4848,10 +4848,10 @@ _renderChannelRolesRoleList() {
   const groups = this._allRoles.filter(r => r.level === 0);
   if (leveledRoles.length && groups.length) {
     html += '<div class="role-sidebar-divider"></div>';
-    html += `<div class="role-sidebar-section-label">${t('modals.role_management.groups')}</div>`;
+    html += '<div class="role-sidebar-section-label">' + t('modals.role_management.groups_label') + '</div>';
   }
   html += groups.map(renderRole).join('');
-  
+
   list.innerHTML = html;
   list.querySelectorAll('.channel-roles-role-item').forEach(el => {
     el.addEventListener('click', () => {
