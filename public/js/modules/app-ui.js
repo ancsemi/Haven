@@ -6877,7 +6877,6 @@ _renderUserProfileGroupsList() {
 
   const groups = (this.user?.roles || []).filter(r => r.level === 0);
   const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
   if (groups.length === 0) {
     list.innerHTML = `<p class="muted-text" style="font-size:.78rem;margin:6px 0">${t('modals.edit_profile.no_groups')}</p>`;
     return;
@@ -6885,15 +6884,8 @@ _renderUserProfileGroupsList() {
 
   list.innerHTML = groups.map(r => {
     const rIcon = r.icon
-      ? `<img class="role-icon" src="${esc(r.icon)}" alt="">`
-      : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
-
-    return `
-      <div class="user-profile-group">
-        ${rIcon}
-        <span>${esc(r.name)}</span>
-      </div>
-    `;
+      ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+      return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>`;
   }).join('');
 },
 

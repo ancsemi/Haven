@@ -1144,7 +1144,8 @@
       "bio_placeholder": "Parlez de vous…",
       "groups_title": "Groupes",
       "manage_groups_btn": "Gérer les groupes",
-      "groups_hint": "Les groupes sont affichés comme des rôles sur votre carte de profil. Ils n’accordent aucune permission, mais peuvent donner accès aux canaux !"
+      "groups_hint": "Les groupes sont affichés comme des rôles sur votre carte de profil. Ils n’accordent aucune permission, mais peuvent donner accès aux canaux !",
+      "no_groups": "Vous ne faites encore partie d’aucun groupe. Cliquez sur « Gérer les groupes » pour en rejoindre un."
     },
     "admin_action": {
       "title": "Modérer l'utilisateur",

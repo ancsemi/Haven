@@ -1408,7 +1408,8 @@
       "bio_placeholder": "Conte um pouco sobre você…",
       "groups_title": "Grupos",
       "manage_groups_btn": "Gerir grupos",
-      "groups_hint": "Os grupos são apresentados como funções no seu cartão de perfil. Não concedem permissões, mas podem conceder acesso a canais!"
+      "groups_hint": "Os grupos são apresentados como funções no seu cartão de perfil. Não concedem permissões, mas podem conceder acesso a canais!",
+      "no_groups": "Ainda não faz parte de nenhum grupo. Clique em «Gerir grupos» para aderir a um."
     },
     "border_crop": {
       "title": "Editar",

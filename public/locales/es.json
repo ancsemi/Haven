@@ -1144,7 +1144,8 @@
       "bio_placeholder": "Cuéntale a la gente sobre ti…",
       "groups_title": "Grupos",
       "manage_groups_btn": "Gestionar grupos",
-      "groups_hint": "Los grupos se muestran como roles en tu tarjeta de perfil. No otorgan permisos, ¡pero pueden otorgar acceso a canales!"
+      "groups_hint": "Los grupos se muestran como roles en tu tarjeta de perfil. No otorgan permisos, ¡pero pueden otorgar acceso a canales!",
+      "no_groups": "Todavía no formas parte de ningún grupo. Haz clic en «Gestionar grupos» para unirte a uno."
     },
     "admin_action": {
       "title": "Moderar usuario",
