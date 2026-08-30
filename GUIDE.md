@@ -691,6 +691,8 @@ To make a bundled theme available to everyone, go to **Settings → Admin → �
 
 Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes/` folder, restart, then publish it in the same place. A theme can also be set as the server **default** from that section, which applies to anyone who has not already picked a theme of their own. It is a default rather than a lock, so a user who chooses a different theme keeps their choice.
 
+Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
+
 ### Background images (wallpapers)
 
 A theme is ordinary CSS, so it can set a background image and not just colours.

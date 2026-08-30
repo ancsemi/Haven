@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-haven-theme-api="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,11 +9,11 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
 </head>
-<body class="auth-page">
+<body class="auth-page" data-haven-page="auth">
 
-  <div class="auth-container">
-    <div class="auth-card">
-      <div class="auth-header">
+  <div class="auth-container" data-haven-region="auth-shell">
+    <div class="auth-card" data-haven-region="auth-card">
+      <div class="auth-header" data-haven-region="auth-header">
         <div class="logo">⬡</div>
         <h1>HAVEN</h1>
         <p class="tagline" data-i18n="auth.tagline">Private chat, your rules</p>
@@ -289,7 +289,7 @@
       </div>
 
       <!-- Theme selector on login page -->
-      <div class="auth-theme-bar" id="auth-theme-bar">
+      <div class="auth-theme-bar" id="auth-theme-bar" data-haven-region="theme-picker">
         <button class="theme-btn active" data-theme="haven" title="Haven"><span class="theme-icon">⬡</span></button>
         <button class="theme-btn" data-theme="discord" title="Discord"><span class="theme-icon">🎮</span></button>
         <button class="theme-btn" data-theme="matrix" title="Matrix"><span class="theme-icon">Ⅿ</span></button>
