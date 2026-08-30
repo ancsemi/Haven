@@ -129,6 +129,8 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
     const { initDatabase } = require('./src/database');
     const db = initDatabase();
     const user = db.prepare("INSERT INTO users (username, password_hash, display_name, is_admin) VALUES ('owner', 'x', 'Owner', 1)").run();
+    const otherUser = db.prepare("INSERT INTO users (username, password_hash, display_name) VALUES ('other', 'x', 'Other')").run();
+    db.prepare("UPDATE users SET avatar = '/UPLOADS/%61vatar-protected.txt' WHERE id = ?").run(user.lastInsertRowid);
     const channel = db.prepare("INSERT INTO channels (name, code, created_by, is_dm) VALUES ('Bots', 'abcd1234', ?, 0)").run(user.lastInsertRowid);
     const otherChannel = db.prepare("INSERT INTO channels (name, code, created_by, is_dm) VALUES ('Other', 'abcd5678', ?, 0)").run(user.lastInsertRowid);
     const dmChannel = db.prepare("INSERT INTO channels (name, code, created_by, is_dm) VALUES ('DM', 'abcd9012', ?, 1)").run(user.lastInsertRowid);
@@ -143,7 +145,7 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
     const parent = insertMessage.run(
       channel.lastInsertRowid,
       user.lastInsertRowid,
-      'remove /uploads/local-shared.txt /uploads/global-shared.txt /uploads/protected.mp3 /uploads/private.txt /uploads/dm-edited.txt',
+      'remove /uploads/local-shared.txt /uploads/global-shared.txt /uploads/slash-shared.txt /uploads/dot-shared.txt /uploads/windows-shared.txt /uploads/../escape-victim.txt /uploads/avatar-protected.txt /uploads/protected.mp3 /uploads/private.txt /uploads/dm-edited.txt',
       '2026-01-03 00:00:00'
     );
     const threadReply = db.prepare('INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
@@ -162,8 +164,10 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
       '2019-01-01 00:00:00'
     );
     const importedOld = insertMessage.run(channel.lastInsertRowid, user.lastInsertRowid, 'imported old message', '2020-01-01 00:00:00');
-    const external = insertMessage.run(otherChannel.lastInsertRowid, user.lastInsertRowid, 'other /uploads/%67lobal-shared.txt', '2026-01-04 00:00:00');
+    const windowsAlias = '/uploads/folder' + String.fromCharCode(92) + '..' + String.fromCharCode(92) + 'windows-shared.txt';
+    const external = insertMessage.run(otherChannel.lastInsertRowid, user.lastInsertRowid, 'other /UPLOADS/%67lobal-shared.txt /uploads//slash-shared.txt /uploads/folder/../dot-shared.txt ' + windowsAlias, '2026-01-04 00:00:00');
     db.prepare("INSERT INTO messages (channel_id, user_id, content, created_at, edited_at) VALUES (?, ?, 'encrypted payload', '2010-01-01 00:00:00', '2019-01-01 00:00:00')").run(dmChannel.lastInsertRowid, user.lastInsertRowid);
+    db.prepare("INSERT INTO messages (channel_id, user_id, content, created_at) VALUES (?, ?, 'unrelated encrypted payload', '2026-06-01 00:00:00')").run(dmChannel.lastInsertRowid, otherUser.lastInsertRowid);
 
     const addReaction = db.prepare("INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, 'ok')");
     const addPin = db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)');
@@ -173,7 +177,7 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
     }
     db.prepare('INSERT INTO custom_sounds (name, filename, uploaded_by) VALUES (?, ?, ?)').run('Protected', 'protected.mp3', user.lastInsertRowid);
     const ownChannelUpload = db.prepare("INSERT INTO upload_ownership (rel_path, user_id, bytes, scope, created_at) VALUES (?, ?, ?, 'channel', '2020-01-01 00:00:00')");
-    for (const relPath of ['local-shared.txt', 'global-shared.txt', 'orphan.txt', 'inline-orphan.txt']) {
+    for (const relPath of ['local-shared.txt', 'global-shared.txt', 'slash-shared.txt', 'dot-shared.txt', 'windows-shared.txt', 'escape-victim.txt', 'avatar-protected.txt', 'protected.mp3', 'orphan.txt', 'inline-orphan.txt']) {
       ownChannelUpload.run(relPath, user.lastInsertRowid, 7);
     }
     db.prepare("INSERT INTO upload_ownership (rel_path, user_id, bytes, scope, created_at) VALUES (?, ?, ?, 'channel', '2018-01-01 00:00:00')").run('dm-edited.txt', user.lastInsertRowid, 7);
@@ -182,6 +186,11 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
     const uploads = path.join(process.env.HAVEN_DATA_DIR, 'uploads');
     fs.writeFileSync(path.join(uploads, 'local-shared.txt'), 'shared');
     fs.writeFileSync(path.join(uploads, 'global-shared.txt'), 'global');
+    fs.writeFileSync(path.join(uploads, 'slash-shared.txt'), 'slash');
+    fs.writeFileSync(path.join(uploads, 'dot-shared.txt'), 'dot');
+    fs.writeFileSync(path.join(uploads, 'windows-shared.txt'), 'windows');
+    fs.writeFileSync(path.join(uploads, 'escape-victim.txt'), 'escape');
+    fs.writeFileSync(path.join(uploads, 'avatar-protected.txt'), 'avatar');
     fs.writeFileSync(path.join(uploads, 'orphan.txt'), 'orphan');
     fs.writeFileSync(path.join(uploads, 'inline-orphan.txt'), 'inline');
     fs.writeFileSync(path.join(uploads, 'protected.mp3'), 'sound');
@@ -287,6 +296,11 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
   assert.equal(fs.existsSync(path.join(uploads, 'local-shared.txt')), true);
   assert.equal(fs.existsSync(path.join(deletedUploads, 'local-shared.txt')), false);
   assert.equal(fs.existsSync(path.join(uploads, 'global-shared.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'slash-shared.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'dot-shared.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'windows-shared.txt')), process.platform === 'win32');
+  assert.equal(fs.existsSync(path.join(uploads, 'escape-victim.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'avatar-protected.txt')), true);
   assert.equal(fs.existsSync(path.join(uploads, 'orphan.txt')), false);
   assert.equal(fs.existsSync(path.join(deletedUploads, 'orphan.txt')), true);
   assert.equal(fs.existsSync(path.join(uploads, 'inline-orphan.txt')), false);
@@ -320,6 +334,11 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
   assert.equal(fs.existsSync(path.join(uploads, 'local-shared.txt')), false);
   assert.equal(fs.existsSync(path.join(deletedUploads, 'local-shared.txt')), true);
   assert.equal(fs.existsSync(path.join(uploads, 'global-shared.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'slash-shared.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'dot-shared.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'windows-shared.txt')), process.platform === 'win32');
+  assert.equal(fs.existsSync(path.join(uploads, 'escape-victim.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'avatar-protected.txt')), true);
   assert.equal(fs.existsSync(path.join(uploads, 'protected.mp3')), true);
   assert.equal(fs.existsSync(path.join(uploads, 'private.txt')), true);
   assert.equal(fs.existsSync(path.join(uploads, 'dm-edited.txt')), true);
@@ -359,10 +378,10 @@ test('webhook bulk delete enforces moderation and cleans related data end to end
   assert.equal(singleDelete.status, 200);
   assert.deepEqual(await singleDelete.json(), { success: true });
   await singleEvent;
-  assert.equal(fs.existsSync(path.join(uploads, 'global-shared.txt')), true);
-  assert.equal(fs.existsSync(path.join(uploads, 'protected.mp3')), true);
-  assert.equal(fs.existsSync(path.join(uploads, 'private.txt')), true);
-  assert.equal(fs.existsSync(path.join(uploads, 'legacy.txt')), true);
+  assert.equal(fs.existsSync(path.join(uploads, 'global-shared.txt')), false);
+  assert.equal(fs.existsSync(path.join(uploads, 'protected.mp3')), false);
+  assert.equal(fs.existsSync(path.join(uploads, 'private.txt')), false);
+  assert.equal(fs.existsSync(path.join(uploads, 'legacy.txt')), false);
 
   const crossParent = db.prepare(
     "INSERT INTO messages (channel_id, user_id, content, created_at) VALUES (?, ?, 'cross parent', '2027-01-01 00:00:00')"

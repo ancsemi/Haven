@@ -137,7 +137,7 @@ let botAudioManager = null;
 let socketRuntime = null;
 
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
-const UPLOAD_URL_PATH_RE = /\/uploads\/((?:[A-Za-z0-9_.~%-]+\/)*[A-Za-z0-9_.~%-]+)/g;
+const UPLOAD_URL_PATH_RE = /\/uploads\/+([-A-Za-z0-9_.~%/\\]+)/gi;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;
@@ -172,9 +172,23 @@ function collectUploadRelPaths(contents) {
     UPLOAD_URL_PATH_RE.lastIndex = 0;
     let match;
     while ((match = UPLOAD_URL_PATH_RE.exec(content)) !== null) {
-      let relPath;
-      try { relPath = decodeURIComponent(match[1]); } catch { continue; }
-      if (/^(?:deleted-attachments|stickers)\//.test(relPath)) continue;
+      let decoded;
+      try { decoded = decodeURIComponent(match[1]); } catch { continue; }
+      const parts = [];
+      let escapesRoot = false;
+      const segments = decoded.split(process.platform === 'win32' ? /[\\/]+/ : /\/+/);
+      for (const segment of segments) {
+        if (!segment || segment === '.') continue;
+        if (segment === '..') {
+          if (parts.length === 0) { escapesRoot = true; break; }
+          parts.pop();
+        } else {
+          parts.push(segment);
+        }
+      }
+      if (escapesRoot) continue;
+      const relPath = parts.join('/');
+      if (/^(?:bot-audio|deleted-attachments|stickers)\//i.test(relPath)) continue;
       if (isSafeUploadRelPath(relPath)) paths.add(relPath);
     }
   }
@@ -205,23 +219,29 @@ function relocateUnreferencedUploads(db, relPaths) {
     if (candidates.size === 0) return;
   }
 
+  const protectedUrlReferences = db.prepare(`
+    SELECT avatar AS reference FROM users WHERE avatar LIKE '%/uploads/%'
+    UNION ALL SELECT border FROM users WHERE border LIKE '%/uploads/%'
+    UNION ALL SELECT avatar FROM user_personas WHERE avatar LIKE '%/uploads/%'
+    UNION ALL SELECT avatar_url FROM webhooks WHERE avatar_url LIKE '%/uploads/%'
+    UNION ALL SELECT icon FROM roles WHERE icon LIKE '%/uploads/%'
+    UNION ALL SELECT value FROM server_settings WHERE value LIKE '%/uploads/%'
+  `).iterate();
+  for (const row of protectedUrlReferences) {
+    for (const relPath of collectUploadRelPaths([row.reference])) candidates.delete(relPath);
+    if (candidates.size === 0) return;
+  }
+
   const findOwnership = db.prepare(
-    'SELECT scope, created_at FROM upload_ownership WHERE rel_path = ?'
+    'SELECT user_id, scope, created_at FROM upload_ownership WHERE rel_path = ?'
   );
-  const latestDmMessage = db.prepare(`
-    SELECT MAX(COALESCE(m.edited_at, m.created_at)) AS referenced_at
+  const latestDmMessageByUser = new Map(db.prepare(`
+    SELECT m.user_id, MAX(COALESCE(m.edited_at, m.created_at)) AS referenced_at
     FROM messages m
     JOIN channels c ON c.id = m.channel_id
-    WHERE c.is_dm = 1
-  `).get()?.referenced_at || null;
-  const findProtectedUrlReference = db.prepare(`
-    SELECT 1
-    WHERE EXISTS(SELECT 1 FROM users WHERE avatar = ? OR border = ?)
-       OR EXISTS(SELECT 1 FROM user_personas WHERE avatar = ?)
-       OR EXISTS(SELECT 1 FROM webhooks WHERE avatar_url = ?)
-       OR EXISTS(SELECT 1 FROM roles WHERE icon = ?)
-       OR EXISTS(SELECT 1 FROM server_settings WHERE value = ?)
-  `);
+    WHERE c.is_dm = 1 AND m.user_id IS NOT NULL
+    GROUP BY m.user_id
+  `).all().map(row => [row.user_id, row.referenced_at]));
   const findProtectedFilenameReference = db.prepare(`
     SELECT 1
     WHERE EXISTS(SELECT 1 FROM custom_sounds WHERE filename = ?)
@@ -233,12 +253,11 @@ function relocateUnreferencedUploads(db, relPaths) {
     const ownership = findOwnership.get(relPath);
     // Legacy/unattributed files and private/profile uploads cannot be proven
     // orphaned, so leave them in place. A channel upload is also retained if
-    // a later encrypted DM could contain a reference the server cannot read.
+    // its owner later sent an encrypted DM that could contain a reference.
     if (!ownership || ownership.scope !== 'channel') continue;
+    const latestDmMessage = latestDmMessageByUser.get(ownership.user_id);
     if (latestDmMessage && latestDmMessage >= ownership.created_at) continue;
 
-    const uploadUrl = `/uploads/${relPath}`;
-    if (findProtectedUrlReference.get(uploadUrl, uploadUrl, uploadUrl, uploadUrl, uploadUrl, uploadUrl)) continue;
     if (findProtectedFilenameReference.get(relPath, relPath, relPath)) continue;
     moveUploadToDeleted(relPath);
   }
@@ -3912,11 +3931,11 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
     return res.status(500).json({ error: 'Failed to delete message' });
   }
 
-  // Move uploaded attachments only after proving no surviving reference uses them.
-  try {
-    relocateUnreferencedUploads(db, collectUploadRelPaths([msg.content]));
-  } catch (err) {
-    console.error('Bot delete message attachment cleanup error:', err);
+  // Move any uploaded attachments to the deleted folder
+  const uploadRe = UPLOAD_PATH_RE;
+  let m;
+  while ((m = uploadRe.exec(msg.content || '')) !== null) {
+    moveUploadToDeleted(m[1], uploadDir);
   }
 
   // Find channel code for broadcasting
