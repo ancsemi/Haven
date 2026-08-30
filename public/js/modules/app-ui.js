@@ -2911,27 +2911,7 @@ _setupUI() {
 
   // Rename username
   document.getElementById('rename-btn').addEventListener('click', () => {
-    document.getElementById('rename-modal').style.display = 'flex';
-    const input = document.getElementById('rename-input');
-    input.value = this.user.displayName || this.user.username;
-    input.focus();
-    input.select();
-    // Populate bio
-    const bioInput = document.getElementById('edit-profile-bio');
-    if (bioInput) bioInput.value = this.user.bio || '';
-    // Load personas list (#86, #5349)
-    this._loadPersonas?.();
-    this._updateAvatarPreview();
-    this._resetBorderEditState();
-    // Sync shape picker buttons
-    const picker = document.getElementById('avatar-shape-picker');
-    if (picker) {
-      const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
-      picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.shape === currentShape);
-      });
-      this._pendingAvatarShape = currentShape;
-    }
+    this._openRenameModal();
   });
 
   // ── Profile popup: click on message author name or avatar ──
@@ -4728,6 +4708,31 @@ _setupUI() {
   document.getElementById('invite-links-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
+},
+
+_openRenameModal() {
+  document.getElementById('rename-modal').style.display = 'flex';
+  const input = document.getElementById('rename-input');
+  input.value = this.user.displayName || this.user.username;
+  input.focus();
+  input.select();
+  // Populate bio
+  const bioInput = document.getElementById('edit-profile-bio');
+  if (bioInput) bioInput.value = this.user.bio || '';
+  // Load personas list (#86, #5349)
+  this._loadPersonas?.();
+  this._renderUserProfileGroupsList()
+  this._updateAvatarPreview();
+  this._resetBorderEditState();
+  // Sync shape picker buttons
+  const picker = document.getElementById('avatar-shape-picker');
+  if (picker) {
+    const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
+    picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.shape === currentShape);
+    });
+    this._pendingAvatarShape = currentShape;
+  }
 },
 
 // ═══════════════════════════════════════════════════════
@@ -6863,6 +6868,33 @@ _openVideoLightbox(src) {
   };
   document.addEventListener('keydown', closeOnEsc);
   document.body.appendChild(overlay);
+},
+
+// user Groups 
+_renderUserProfileGroupsList() {
+  const list = document.getElementById('user-profile-groups-list');
+  if (!list) return;
+
+  const groups = (this.user?.roles || []).filter(r => r.level === 0);
+  const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  if (groups.length === 0) {
+    list.innerHTML = `<p class="muted-text" style="font-size:.78rem;margin:6px 0">${t('modals.edit_profile.no_groups')}</p>`;
+    return;
+  }
+
+  list.innerHTML = groups.map(r => {
+    const rIcon = r.icon
+      ? `<img class="role-icon" src="${esc(r.icon)}" alt="">`
+      : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+
+    return `
+      <div class="user-profile-group">
+        ${rIcon}
+        <span>${esc(r.name)}</span>
+      </div>
+    `;
+  }).join('');
 },
 
 // ── Personas (#86, #5349) ──────────────────────────────

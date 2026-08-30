@@ -1141,7 +1141,10 @@
       "display_name_placeholder": "Nuevo nombre visible...",
       "bio_label": "Biografía",
       "bio_max": "(máx. 190 caracteres)",
-      "bio_placeholder": "Cuéntale a la gente sobre ti…"
+      "bio_placeholder": "Cuéntale a la gente sobre ti…",
+      "groups_title": "Grupos",
+      "manage_groups_btn": "Gestionar grupos",
+      "groups_hint": "Los grupos se muestran como roles en tu tarjeta de perfil. No otorgan permisos, ¡pero pueden otorgar acceso a canales!"
     },
     "admin_action": {
       "title": "Moderar usuario",

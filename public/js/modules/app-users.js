@@ -944,23 +944,7 @@ _showProfilePopup(profile) {
     editBtnEl.addEventListener('click', () => {
       this._closeProfilePopup();
       // Open the Edit Profile (rename) modal which now includes avatar + display name + bio
-      document.getElementById('rename-modal').style.display = 'flex';
-      const input = document.getElementById('rename-input');
-      input.value = this.user.displayName || this.user.username;
-      input.focus();
-      input.select();
-      const bioInput = document.getElementById('edit-profile-bio');
-      if (bioInput) bioInput.value = this.user.bio || '';
-      this._updateAvatarPreview();
-      this._resetBorderEditState();
-      const picker = document.getElementById('avatar-shape-picker');
-      if (picker) {
-        const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
-        picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
-          b.classList.toggle('active', b.dataset.shape === currentShape);
-        });
-        this._pendingAvatarShape = currentShape;
-      }
+      this._openRenameModal();
     });
   }
 

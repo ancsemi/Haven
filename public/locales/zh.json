@@ -1141,7 +1141,10 @@
       "display_name_placeholder": "新显示名称...",
       "bio_label": "简介",
       "bio_max": "（最多190个字符）",
-      "bio_placeholder": "向大家介绍一下自己…"
+      "bio_placeholder": "向大家介绍一下自己…",
+      "groups_title": "群组",
+      "manage_groups_btn": "管理群组",
+      "groups_hint": "群组会以角色的形式显示在你的个人资料卡上。它们不会授予任何权限，但可以授予频道访问权限！"
     },
     "admin_action": {
       "title": "管理用户",

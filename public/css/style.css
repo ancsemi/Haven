@@ -5789,7 +5789,8 @@ details.sound-section:not([open]) .sound-section-label::before {
   letter-spacing: 0.03em;
 }
 
-.profile-popup-roles {
+.profile-popup-roles,
+.user-profile-groups-list {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
@@ -18980,7 +18981,8 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* -- Personas (#86, #5349) ----------------------------- */
-.personas-section-header {
+.personas-section-header,
+.groups-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;

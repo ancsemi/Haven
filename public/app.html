@@ -1136,6 +1136,18 @@
         <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" data-i18n-placeholder="modals.edit_profile.bio_placeholder" placeholder="Tell people about yourself…" rows="2"></textarea>
       </div>
 
+      <!-- Groups -->
+      <div class="groups-section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="groups-section-header">
+          <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.groups_title">Groups</h5>
+          <button type="button" class="btn-sm" id="manage-groups-btn" data-i18n="modals.edit_profile.manage_groups_btn">Manage Groups</button>
+        </div>
+        <p class="muted-text" style="margin:6px 0 8px;font-size:.78rem;line-height:1.35" data-i18n="modals.edit_profile.groups_hint">
+          Groups are displayed as roles on your profile card. They don't grant permissions, but they can grant channel access!
+        </p>
+        <div id="user-profile-groups-list" class="user-profile-groups-list"></div>
+      </div>
+
       <!-- Personas (#86, #5349) -->
       <div class="personas-section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
         <div class="personas-section-header">

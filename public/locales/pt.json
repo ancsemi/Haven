@@ -1405,7 +1405,10 @@
       "display_name_placeholder": "Novo nome de exibição...",
       "bio_label": "Biografia",
       "bio_max": "(máximo de 190 caracteres)",
-      "bio_placeholder": "Conte um pouco sobre você…"
+      "bio_placeholder": "Conte um pouco sobre você…",
+      "groups_title": "Grupos",
+      "manage_groups_btn": "Gerir grupos",
+      "groups_hint": "Os grupos são apresentados como funções no seu cartão de perfil. Não concedem permissões, mas podem conceder acesso a canais!"
     },
     "border_crop": {
       "title": "Editar",

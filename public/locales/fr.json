@@ -1141,7 +1141,10 @@
       "display_name_placeholder": "Nouveau pseudo...",
       "bio_label": "Biographie",
       "bio_max": "(max 190 caractères)",
-      "bio_placeholder": "Parlez de vous…"
+      "bio_placeholder": "Parlez de vous…",
+      "groups_title": "Groupes",
+      "manage_groups_btn": "Gérer les groupes",
+      "groups_hint": "Les groupes sont affichés comme des rôles sur votre carte de profil. Ils n’accordent aucune permission, mais peuvent donner accès aux canaux !"
     },
     "admin_action": {
       "title": "Modérer l'utilisateur",

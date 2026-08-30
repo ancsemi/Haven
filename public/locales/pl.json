@@ -1188,7 +1188,10 @@
       "display_name_placeholder": "Nowa wyświetlana nazwa...",
       "bio_label": "O mnie",
       "bio_max": "(maks. 190 znaków)",
-      "bio_placeholder": "Opowiedz coś o sobie…"
+      "bio_placeholder": "Opowiedz coś o sobie…",
+      "groups_title": "Grupy",
+      "manage_groups_btn": "Zarządzaj grupami",
+      "groups_hint": "Grupy są wyświetlane jako role na karcie profilu. Nie nadają uprawnień, ale mogą przyznawać dostęp do kanałów!"
     },
     "admin_action": {
       "title": "Moderuj użytkownika",

@@ -1141,7 +1141,10 @@
       "display_name_placeholder": "Neuer Anzeigename...",
       "bio_label": "Bio",
       "bio_max": "(max. 190 Zeichen)",
-      "bio_placeholder": "Erzähl den Leuten von dir…"
+      "bio_placeholder": "Erzähl den Leuten von dir…",
+      "groups_title": "Gruppen",
+      "manage_groups_btn": "Gruppen verwalten",
+      "groups_hint": "Gruppen werden auf deiner Profilkarte als Rollen angezeigt. Sie gewähren keine Berechtigungen, können aber Zugriff auf Kanäle gewähren!"
     },
     "admin_action": {
       "title": "Nutzer moderieren",
