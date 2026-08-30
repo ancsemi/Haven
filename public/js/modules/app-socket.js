@@ -2334,7 +2334,7 @@ _setupSocketListeners() {
     this._userPrefs = prefs || {};
     if (prefs.theme) {
       // User has a saved personal theme preference — apply it
-      applyThemeFromServer(prefs.theme);
+      applyThemeFromServer(prefs.theme, true, true);
     } else if (this.serverSettings.default_theme) {
       // No personal preference — apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);

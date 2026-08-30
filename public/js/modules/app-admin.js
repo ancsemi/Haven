@@ -1107,6 +1107,21 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const themeList = document.getElementById('admin-theme-list');
+  if (themeList?.dataset.loaded === '1') {
+    const publishedThemes = JSON.stringify(
+      [...themeList.querySelectorAll('input[type="checkbox"]')]
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.file)
+    );
+    if (publishedThemes !== (snap.published_themes || '[]')) {
+      this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
+      changed = true;
+    }
+  }
+
+  // Publish first so a newly-published file can pass server validation when it
+  // is selected as the default in the same save operation.
   const defaultTheme = document.getElementById('default-theme-select')?.value || '';
   if (defaultTheme !== (snap.default_theme || '')) {
     this.socket.emit('update-server-setting', { key: 'default_theme', value: defaultTheme });
@@ -1116,16 +1131,6 @@ _saveAdminSettings() {
   const defaultLocale = document.getElementById('default-locale-select')?.value || '';
   if (defaultLocale !== (snap.default_locale || '')) {
     this.socket.emit('update-server-setting', { key: 'default_locale', value: defaultLocale });
-    changed = true;
-  }
-
-  const publishedThemes = JSON.stringify(
-    [...document.querySelectorAll('#admin-theme-list input[type="checkbox"]')]
-      .filter(cb => cb.checked)
-      .map(cb => cb.dataset.file)
-  );
-  if (publishedThemes !== (snap.published_themes || '[]')) {
-    this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
     changed = true;
   }
 
@@ -1240,9 +1245,15 @@ _cancelAdminSettings() {
 async _renderAdminThemeList() {
   const container = document.getElementById('admin-theme-list');
   if (!container) return;
+  container.dataset.loaded = '0';
   let themes = [];
   try {
-    themes = await fetch('/api/themes').then(r => r.json());
+    const response = await fetch('/api/themes');
+    if (!response.ok) throw new Error('Theme metadata request failed');
+    const result = await response.json();
+    if (!Array.isArray(result)) throw new Error('Invalid theme metadata response');
+    themes = result;
+    container.dataset.loaded = '1';
   } catch { /* server not ready */ }
 
   if (themes.length === 0) {
@@ -1257,14 +1268,22 @@ async _renderAdminThemeList() {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.dataset.file = theme.file;
-    cb.checked = !!theme.published;
+    cb.checked = !!theme.published && theme.compatible !== false;
+    cb.disabled = theme.compatible === false;
     const nameSpan = document.createElement('span');
     nameSpan.textContent = theme.name || theme.file;
     const descSpan = document.createElement('span');
     descSpan.style.cssText = 'font-size:0.6875rem;color:var(--text-muted)';
-    descSpan.textContent = theme.description || '';
+    const compatibility = theme.compatible === false
+      ? ` [${t('settings.plugins_section.incompatible_theme')}]`
+      : '';
+    descSpan.textContent = `${theme.description || ''}${compatibility}`;
+    if (theme.compatible === false) {
+      label.style.opacity = '0.65';
+      label.title = t('settings.plugins_section.incompatible_theme_hint');
+    }
     label.append(cb, nameSpan);
-    if (theme.description) label.append(descSpan);
+    if (theme.description || theme.compatible === false) label.append(descSpan);
     container.appendChild(label);
   }
 
@@ -1273,7 +1292,7 @@ async _renderAdminThemeList() {
   if (dtSelect) {
     // Remove any previously injected file: options
     dtSelect.querySelectorAll('option[data-custom-theme]').forEach(o => o.remove());
-    const published = themes.filter(t => t.published);
+    const published = themes.filter(theme => theme.published && theme.compatible !== false);
     if (published.length > 0) {
       const sep = document.createElement('option');
       sep.disabled = true;
@@ -1284,6 +1303,19 @@ async _renderAdminThemeList() {
         const opt = document.createElement('option');
         opt.value = `file:${theme.file}`;
         opt.textContent = theme.name || theme.file;
+        opt.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(opt);
+      }
+    }
+    const currentDefault = this.serverSettings.default_theme || '';
+    if (currentDefault.startsWith('file:') && !published.some(theme => `file:${theme.file}` === currentDefault)) {
+      const file = currentDefault.slice(5);
+      const theme = themes.find(item => item.file === file);
+      if (theme) {
+        const opt = document.createElement('option');
+        opt.value = currentDefault;
+        opt.textContent = `${theme.name || file} (${t('settings.plugins_section.incompatible_theme')})`;
+        opt.disabled = true;
         opt.setAttribute('data-custom-theme', '1');
         dtSelect.appendChild(opt);
       }

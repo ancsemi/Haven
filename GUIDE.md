@@ -693,6 +693,8 @@ Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes
 
 Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
 
+If a theme or plugin makes the interface unusable, open `/app.html?haven-safe-mode=1`. Haven will suppress file themes and avoid fetching or evaluating plugins for that tab, allowing the extension choices to be reset from **Settings → Plugins & Themes**.
+
 ### Background images (wallpapers)
 
 A theme is ordinary CSS, so it can set a background image and not just colours.

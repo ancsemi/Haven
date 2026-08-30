@@ -850,7 +850,21 @@
       "hint": "Drop <code>.plugin.js</code> files into the <code>plugins/</code> folder and <code>.theme.css</code> files into the <code>themes/</code> folder, then refresh.",
       "refresh_btn": "Refresh",
       "plugins_label": "Plugins",
-      "themes_label": "Themes"
+      "themes_label": "Themes",
+      "safe_mode_title": "Extension Safe Mode",
+      "safe_mode_desc": "Custom themes and plugins are suppressed for this session. You can reset them or exit without changing your saved choices.",
+      "recovery_pending_title": "Reset waiting for sync",
+      "recovery_pending_desc": "Themes and plugins remain suppressed until Haven saves the base theme preference. Retry the reset when connected.",
+      "reset_customizations": "Reset themes and plugins",
+      "reset_sync_pending": "The local reset is complete, but Haven could not save it to the server. Reconnect and retry.",
+      "exit_safe_mode": "Exit Safe Mode",
+      "legacy_theme": "Legacy theme",
+      "invalid_theme_api": "Invalid Theme API declaration",
+      "unsupported_theme_api": "Unsupported Theme API",
+      "suppressed_safe_mode": "suppressed in Safe Mode",
+      "incompatible_theme": "incompatible theme",
+      "incompatible_theme_hint": "This theme declares an invalid or unsupported Theme API version.",
+      "theme_fallback": "The selected theme is missing or incompatible. Haven was restored."
     },
     "password_section": {
       "title": "Password",

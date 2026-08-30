@@ -1,7 +1,16 @@
 'use strict';
 
 const crypto = require('crypto');
+const path = require('node:path');
 const { utcStamp, isInt, isValidUploadPath, VALID_ROLE_PERMS } = require('./helpers');
+const {
+  compatibleThemeFiles,
+  isThemeFilename,
+  readThemeMetadataFile,
+  validatedThemeDefault,
+} = require('../themeMetadata');
+
+const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -43,6 +52,16 @@ module.exports = function register(socket, ctx) {
       settings[r.key] = r.value;
     });
 
+    let storedPublishedThemes = [];
+    try { storedPublishedThemes = JSON.parse(settings.published_themes || '[]'); } catch {}
+    const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
+    settings.published_themes = JSON.stringify(publishedThemes);
+    settings.default_theme = validatedThemeDefault(
+      THEMES_DIR,
+      settings.default_theme || '',
+      publishedThemes
+    );
+
     // Not a stored setting: the server name actually in effect once
     // SERVER_NAME is taken into account. Without it the sidebar fell back to
     // "HAVEN" on servers whose name only ever came from the environment,
@@ -76,6 +95,8 @@ module.exports = function register(socket, ctx) {
 
     const key = typeof data.key === 'string' ? data.key.trim() : '';
     const value = typeof data.value === 'string' ? data.value.trim() : '';
+    let publishedThemeFiles = null;
+    let clearDefaultTheme = false;
 
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
@@ -238,7 +259,23 @@ module.exports = function register(socket, ctx) {
     if (key === 'default_theme') {
       // Allow built-in names OR "file:name.theme.css" for published custom themes
       const validBuiltin = ['', 'haven', 'discord', 'matrix', 'tron', 'halo', 'lotr', 'cyberpunk', 'nord', 'dracula', 'bloodborne', 'darksouls', 'eldenring', 'ice', 'abyss', 'minecraft', 'ffx', 'zelda', 'fallout', 'scripture', 'chapel', 'gospel', 'midnightpurple', 'crt', 'win95', 'rgb', 'daylight', 'cloudy'];
-      if (!validBuiltin.includes(value) && !/^file:[a-zA-Z0-9_\-. ]+\.theme\.css$/.test(value)) return;
+      if (!validBuiltin.includes(value)) {
+        if (!value.startsWith('file:')) return;
+        const file = value.slice(5);
+        const metadata = readThemeMetadataFile(THEMES_DIR, file);
+        if (!metadata?.compatible) {
+          return socket.emit('error-msg', 'That theme is missing or incompatible with this Haven server.');
+        }
+        try {
+          const row = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
+          const published = row ? JSON.parse(row.value) : [];
+          if (!Array.isArray(published) || !published.includes(file)) {
+            return socket.emit('error-msg', 'Publish that theme before selecting it as the server default.');
+          }
+        } catch {
+          return socket.emit('error-msg', 'Could not verify the published theme list.');
+        }
+      }
     }
     if (key === 'default_locale') {
       const validLocales = ['', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt'];
@@ -247,8 +284,16 @@ module.exports = function register(socket, ctx) {
     if (key === 'published_themes') {
       try {
         const arr = JSON.parse(value);
-        if (!Array.isArray(arr)) return;
-        if (!arr.every(f => typeof f === 'string' && /^[a-zA-Z0-9_\-. ]+\.theme\.css$/.test(f))) return;
+        if (!Array.isArray(arr) || arr.length > 500) return;
+        if (!arr.every(isThemeFilename) || new Set(arr).size !== arr.length) return;
+        if (!arr.every(file => readThemeMetadataFile(THEMES_DIR, file)?.compatible)) {
+          return socket.emit('error-msg', 'Only installed, compatible themes can be published.');
+        }
+        publishedThemeFiles = arr;
+        const defaultRow = db.prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get();
+        const currentDefault = defaultRow?.value || '';
+        clearDefaultTheme = currentDefault.startsWith('file:')
+          && !publishedThemeFiles.includes(currentDefault.slice(5));
       } catch { return; }
     }
     if (key === 'custom_tos') { if (value.length > 50000) return; }
@@ -323,13 +368,23 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
+      const save = () => {
+        db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
+        if (clearDefaultTheme) {
+          db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('default_theme', '');
+        }
+      };
+      if (clearDefaultTheme && typeof db.transaction === 'function') db.transaction(save)();
+      else save();
     } catch (err) {
       console.error('Failed to save server setting:', key, err.message);
       return socket.emit('error-msg', 'Failed to save setting — database write error');
     }
 
     io.except('bot-sockets').emit('server-setting-changed', { key, value });
+    if (clearDefaultTheme) {
+      io.except('bot-sockets').emit('server-setting-changed', { key: 'default_theme', value: '' });
+    }
 
     // Clearing the name hands it back to SERVER_NAME, so tell everyone what
     // the name resolves to now rather than leaving the old one on screen
