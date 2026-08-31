@@ -1928,10 +1928,10 @@ _setupSocketListeners() {
   // ── Username rename ──────────────────────────────
   this.socket.on('renamed', (data) => {
     this.token = data.token;
-    this.user = data.user;
+    this.user = {...this.user, ...data.user};
     if (this.voice && data.user.id) this.voice.localUserId = data.user.id;
     localStorage.setItem('haven_token', data.token);
-    localStorage.setItem('haven_user', JSON.stringify(data.user));
+    localStorage.setItem('haven_user', JSON.stringify(this.user));
     document.getElementById('current-user').textContent = data.user.displayName || data.user.username;
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${data.user.username}`;

@@ -7213,6 +7213,16 @@ details.sound-section:not([open]) .sound-section-label::before {
   font-weight: 600;
 }
 
+.user-profile-groups-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
 /* Read-only banner shown when a non-admin opens a role at or above their own
    level — they can view it but not edit it. */
 .role-readonly-note {

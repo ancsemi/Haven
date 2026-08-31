@@ -6906,7 +6906,7 @@ _renderUserProfileGroupsList() {
   if (!section || !list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
   
   // Hide Groups section if there are no groups available to join.
-  const availableGroups = (this._allRoles || []).filter(r => r.level === 0);
+  const availableGroups = (this._allRoles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   section.style.display = availableGroups.length > 0 ? '' : 'none';
    
   if (availableGroups.length > 0) {
@@ -6939,8 +6939,8 @@ _renderUserProfileGroupsList() {
       const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
 
       return `
-        <label class="toggle-row">
-          <span>${rIcon}${esc(r.name)}</span>
+        <label class="toggle-row user-group-toggle-row">
+          <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>
           <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
         </label>
       `;
