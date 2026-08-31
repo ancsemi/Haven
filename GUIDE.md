@@ -1223,20 +1223,20 @@ uploads folder will not run the server out of RAM.
 
 ## 🎞️ GIF Search Setup
 
-Haven's GIF picker needs a free API key from a provider. **Tenor** is the default
-and the one to use: GIPHY stopped issuing keys to new servers, so the GIPHY option
-is only useful if you already have one from before.
+Haven's GIF picker is powered by **GIPHY** and needs a free API key.
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and create or
-   pick a project
-2. Enable the **Tenor API**, then open **Credentials → Create credentials → API key**
-3. Copy the key
-4. In Haven, as an admin, click the GIF button (🎞️) in the message box and paste the
+1. Go to [developers.giphy.com](https://developers.giphy.com/)
+2. Create an account (or sign in)
+3. Click **Create an App** → choose **API**
+4. Name it anything (e.g. "Haven Chat")
+5. Copy the API key
+6. In Haven, as an admin, click the GIF button (🎞️) in the message box and paste the
    key into the setup prompt
 
 The key is stored server-side, so only admins can see or change it, and every user
-can search GIFs once it is set. No payment is involved; the free tier is far more
-than a private server will use.
+can search GIFs once it is set. No payment is involved; GIPHY's free tier is far more
+than a private server will use. Tenor is no longer supported for new setup; a server
+that already has a Tenor key keeps working until a GIPHY key is set.
 
 ---
 

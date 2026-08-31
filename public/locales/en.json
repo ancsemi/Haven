@@ -1978,7 +1978,7 @@
     "setup": {
       "title": "Set Up GIF Search",
       "provider": "GIF provider",
-      "tenor_powered_by": "GIF search is powered by <strong>Tenor</strong> and needs a free API key. (GIPHY no longer issues new keys — pick it below only if you already have one.)",
+      "tenor_powered_by": "Tenor is no longer supported for new setup. Use a GIPHY API key instead.",
       "tenor_step_1": "Go to <a href=\"https://console.cloud.google.com/\" target=\"_blank\" rel=\"noopener\">console.cloud.google.com</a> and create (or pick) a project",
       "tenor_step_2": "Enable the <b>Tenor API</b>, then open <b>Credentials</b> → <b>Create credentials</b> → <b>API key</b>",
       "tenor_step_3": "Copy the API key and paste it below",
@@ -1993,7 +1993,7 @@
       "note": "No payment required — the free tiers are generous enough for a private server.",
       "saved": "Saved! Loading GIFs…",
       "unavailable_title": "GIF Search Not Available",
-      "unavailable_desc": "An admin needs to set up a GIF provider API key before GIF search can work."
+      "unavailable_desc": "An admin needs to set a GIPHY API key before GIF search can work."
     }
   },
   "thread_list": {

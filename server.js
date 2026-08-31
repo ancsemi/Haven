@@ -2353,10 +2353,9 @@ app.delete('/api/stickers/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
 });
 
-// ── GIF search proxy (Tenor v2 or GIPHY — keeps keys server-side) ──
-// Tenor is the preferred provider: GIPHY stopped issuing API keys to
-// new applications, so fresh installs can no longer configure it.
-// Existing GIPHY keys keep working unchanged.
+// ── GIF search proxy (GIPHY, with a legacy Tenor fallback) ──
+// GIPHY is the supported provider. Tenor is no longer offered for new
+// setup; an existing tenor_api_key still works if no GIPHY key is set.
 function getGifProvider() {
   // Check database first (set via admin panel), fall back to .env
   const readSetting = (key) => {
@@ -2367,10 +2366,10 @@ function getGifProvider() {
     } catch { /* DB not ready yet or no key stored */ }
     return '';
   };
-  const tenorKey = readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '';
-  if (tenorKey) return { provider: 'tenor', key: tenorKey };
   const giphyKey = readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '';
   if (giphyKey) return { provider: 'giphy', key: giphyKey };
+  const tenorKey = readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '';
+  if (tenorKey) return { provider: 'tenor', key: tenorKey };
   return null;
 }
 

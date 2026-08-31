@@ -1820,34 +1820,20 @@ _searchGifs(query) {
 _showGifSetupGuide(grid) {
   const isAdmin = this.user && this.user.isAdmin;
   if (isAdmin) {
-    // Tenor steps render by default — GIPHY stopped issuing API keys to
-    // new applications, so it is kept only as the legacy choice for
-    // admins who already hold a working key.
-    const guides = {
-      tenor: `<p>${t('gifs.setup.tenor_powered_by')}</p>
-        <ol>
-          <li>${t('gifs.setup.tenor_step_1')}</li>
-          <li>${t('gifs.setup.tenor_step_2')}</li>
-          <li>${t('gifs.setup.tenor_step_3')}</li>
-        </ol>`,
-      giphy: `<p>${t('gifs.setup.powered_by')}</p>
+    // GIPHY is the supported provider. Tenor is no longer offered here;
+    // an existing tenor_api_key still works on the server if no GIPHY key is set.
+    grid.innerHTML = `
+      <div class="gif-setup-guide">
+        <h3>🎞️ ${t('gifs.setup.title')}</h3>
+        <p>${t('gifs.setup.powered_by')}</p>
         <ol>
           <li>${t('gifs.setup.step_1')}</li>
           <li>${t('gifs.setup.step_2')}</li>
           <li>${t('gifs.setup.step_3')}</li>
           <li>${t('gifs.setup.step_4')}</li>
           <li>${t('gifs.setup.step_5')}</li>
-        </ol>`,
-    };
-    grid.innerHTML = `
-      <div class="gif-setup-guide">
-        <h3>🎞️ ${t('gifs.setup.title')}</h3>
-        <div id="gif-setup-steps">${guides.tenor}</div>
+        </ol>
         <div class="gif-setup-input-row">
-          <select id="gif-provider-select" title="${t('gifs.setup.provider')}">
-            <option value="tenor">Tenor</option>
-            <option value="giphy">GIPHY</option>
-          </select>
           <input type="text" id="gif-provider-key-input" placeholder="${t('gifs.setup.key_placeholder')}" spellcheck="false" autocomplete="off" />
           <button id="gif-provider-key-save">${t('gifs.setup.save_btn')}</button>
         </div>
@@ -1855,15 +1841,10 @@ _showGifSetupGuide(grid) {
       </div>`;
     const saveBtn = document.getElementById('gif-provider-key-save');
     const input = document.getElementById('gif-provider-key-input');
-    const select = document.getElementById('gif-provider-select');
-    select.addEventListener('change', () => {
-      document.getElementById('gif-setup-steps').innerHTML = guides[select.value] || guides.tenor;
-    });
     saveBtn.addEventListener('click', () => {
       const key = input.value.trim();
       if (!key) return;
-      const settingKey = select.value === 'giphy' ? 'giphy_api_key' : 'tenor_api_key';
-      this.socket.emit('update-server-setting', { key: settingKey, value: key });
+      this.socket.emit('update-server-setting', { key: 'giphy_api_key', value: key });
       grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.setup.saved')}</div>`;
       setTimeout(() => this._loadTrendingGifs(), 500);
     });

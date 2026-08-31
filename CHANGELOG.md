@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **GIF search setup points at GIPHY again, not Tenor.** #5472 made Tenor the
+  preferred provider on the belief that GIPHY had stopped issuing keys. That was
+  backwards: **GIPHY still works**, and Tenor is no longer supported for new setup.
+  The picker guide and `GIPHY_API_KEY` are the path again. An existing
+  `tenor_api_key` is still used if no GIPHY key is set, so servers that already
+  configured Tenor do not go dark overnight. GIFs already posted from Tenor URLs
+  still render.
+
 ## [4.1.0] - 2026-08-30
 
 Mostly hardening and follow-through on 4.0.0, plus bots can play audio in voice now.
