@@ -129,6 +129,7 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
   };
   const pendingVoice = { timer: null, oldSocketId: 'voice-socket', code: oldCode };
   const pendingTempTimer = { id: 'temp-timer' };
+  let botAudioRotation;
   const state = {
     channelUsers: new Map([[oldCode, new Map([[1, { id: 1 }]])]]),
     voiceUsers: new Map([[oldCode, new Map([[1, { id: 1 }]])]]),
@@ -138,7 +139,10 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
     activeWebcamUsers: new Map([[oldCode, new Set([1])]]),
     streamViewers: new Map([[`${oldCode}:1`, new Set([2])]]),
     pendingVoiceLeave: new Map([[`1:${oldCode}`, pendingVoice]]),
-    pendingTempDelete: new Map([[oldCode, pendingTempTimer]])
+    pendingTempDelete: new Map([[oldCode, pendingTempTimer]]),
+    botAudioManager: {
+      renameChannel(from, to) { botAudioRotation = { from, to }; }
+    }
   };
 
   rotateLiveChannelState(io, state, 9, oldCode, newCode);
@@ -160,6 +164,7 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
   assert.equal(state.pendingVoiceLeave.has(`1:${newCode}`), true);
   assert.equal(pendingVoice.code, newCode);
   assert.equal(state.pendingTempDelete.get(newCode), pendingTempTimer);
+  assert.deepEqual(botAudioRotation, { from: oldCode, to: newCode });
   assert.deepEqual(emitted, {
     firstRoom: `channel:${newCode}`,
     secondRoom: `voice:${newCode}`,
@@ -231,10 +236,18 @@ test('a temporary-channel timer deletes by stable id after code rotation', () =>
     const voiceUsers = new Map([['22222222', new Map()]]);
     const pendingTempDelete = new Map([['22222222', { id: 'timer' }]]);
     let deleted;
+    let stoppedAudio;
     const callback = createTempChannelDeleteCallback({
       db,
       io: { emit: (event, payload) => { deleted = { event, payload }; } },
-      state: { channelUsers, voiceUsers, pendingTempDelete },
+      state: {
+        channelUsers,
+        voiceUsers,
+        pendingTempDelete,
+        botAudioManager: {
+          stopChannel(code, reason) { stoppedAudio = { code, reason }; }
+        }
+      },
       channelId: 1,
       log: () => {}
     });
@@ -250,6 +263,7 @@ test('a temporary-channel timer deletes by stable id after code rotation', () =>
     assert.equal(channelUsers.has('22222222'), false);
     assert.equal(voiceUsers.has('22222222'), false);
     assert.equal(pendingTempDelete.has('22222222'), false);
+    assert.deepEqual(stoppedAudio, { code: '22222222', reason: 'channel-deleted' });
   } finally {
     db.close();
   }

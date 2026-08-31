@@ -1706,6 +1706,14 @@ _setupSocketListeners() {
     this._updateMusicQueueState(data);
   });
 
+  this.socket.on('bot-audio-play', (data) => {
+    this.voice?.playBotAudio(data);
+  });
+  this.socket.on('bot-audio-stop', (data) => {
+    if (!data || !this.voice || this.voice.currentChannel !== data.channelCode) return;
+    this.voice.stopBotAudio(data.playbackId);
+  });
+
   // ── Voice kicked ────────────────────────────────
   // NOTE: voice.js also listens for `voice-kicked` and calls leave() +
   // onVoiceKicked (which toasts). Wait a tick so that handler runs first;

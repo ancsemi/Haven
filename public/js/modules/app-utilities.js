@@ -4387,8 +4387,12 @@ _showAdminResetPwReveal(username, tempPassword) {
 },
 
 _confirmTransferAdmin(userId, username) {
-  // Build a custom modal for transfer admin with password verification
+  // Build a custom modal for transfer admin with a confirmation step.
+  // An SSO admin has no Haven password, so they confirm with an authenticator
+  // code instead. The server decides which it will accept and rejects the
+  // wrong one, this only picks which field to put in front of you. (#5539)
   this._closeUserGearMenu();
+  const ssoConfirm = !!this.user?.isSso;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay transfer-admin-overlay';
   overlay.style.display = 'flex';
@@ -4407,8 +4411,8 @@ _confirmTransferAdmin(userId, username) {
         </div>
         <p class="transfer-admin-note">${t('modals.transfer_admin.note')}</p>
         <div class="form-group">
-          <label class="form-label">${t('modals.transfer_admin.password_label')}</label>
-          <input type="password" id="transfer-admin-pw" class="form-input" placeholder="${t('modals.transfer_admin.password_placeholder')}" autocomplete="current-password">
+          <label class="form-label">${ssoConfirm ? t('modals.transfer_admin.totp_label') : t('modals.transfer_admin.password_label')}</label>
+          <input type="${ssoConfirm ? 'text' : 'password'}" id="transfer-admin-pw" class="form-input" placeholder="${ssoConfirm ? t('modals.transfer_admin.totp_placeholder') : t('modals.transfer_admin.password_placeholder')}" ${ssoConfirm ? 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"' : 'autocomplete="current-password"'}>
         </div>
         <p id="transfer-admin-error" class="transfer-admin-error"></p>
       </div>
@@ -4433,16 +4437,19 @@ _confirmTransferAdmin(userId, username) {
   pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmBtn.click(); });
 
   confirmBtn.addEventListener('click', () => {
-    const password = pwInput.value.trim();
-    if (!password) {
-      errorEl.textContent = t('modals.transfer_admin.error_required');
+    const secret = pwInput.value.trim();
+    if (!secret) {
+      errorEl.textContent = ssoConfirm
+        ? t('modals.transfer_admin.error_totp_required')
+        : t('modals.transfer_admin.error_required');
       errorEl.style.display = '';
       pwInput.focus();
       return;
     }
     confirmBtn.disabled = true;
     confirmBtn.textContent = t('modals.transfer_admin.transferring');
-    this.socket.emit('transfer-admin', { userId, password }, (res) => {
+    const payload = ssoConfirm ? { userId, totpCode: secret } : { userId, password: secret };
+    this.socket.emit('transfer-admin', payload, (res) => {
       if (res && res.error) {
         errorEl.textContent = res.error;
         errorEl.style.display = '';

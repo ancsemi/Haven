@@ -2258,10 +2258,24 @@ _enhanceSelectAsCustom(selectEl) {
     else panel.style.display = 'none';
   });
 
-  const docClick = (e) => {
-    if (!wrap.contains(e.target)) panel.style.display = 'none';
-  };
-  document.addEventListener('click', docClick);
+  // Closing on an outside click used to register a document listener per
+  // dropdown, capturing that wrap and panel. Every rebuild of a settings
+  // surface makes fresh <select> elements, so each open left another handler
+  // behind pinning detached DOM. Ten opens, ten listeners, none removed.
+  //
+  // One delegated listener for every custom select instead, installed once and
+  // finding open panels from the DOM rather than from a closure, so nothing is
+  // captured and there is nothing to clean up. (#5426)
+  if (!document._csOutsideClickBound) {
+    document._csOutsideClickBound = true;
+    document.addEventListener('click', (e) => {
+      document.querySelectorAll('.custom-select-panel').forEach(openPanel => {
+        if (openPanel.style.display === 'none') return;
+        const owner = openPanel.closest('.custom-select-wrap');
+        if (!owner || !owner.contains(e.target)) openPanel.style.display = 'none';
+      });
+    });
+  }
 
   selectEl.addEventListener('change', syncLabel);
   wrap._csRebuild = buildPanel;
@@ -3875,6 +3889,28 @@ _setupDebugSection() {
       // Apply immediately to any screen audio that's already playing.
       if (this.voice && typeof this.voice.reapplyScreenAudioRouting === 'function') {
         this.voice.reapplyScreenAudioRouting();
+      }
+    });
+  }
+
+  // #5426 — opt-in gentler screen-share encoding for relayed calls. 3.18.1
+  // raised the bitrate ceilings, pinned maxFramerate and set
+  // degradationPreference to 'maintain-framerate', which is right on a direct
+  // connection and wrong once a TURN relay falls back to TCP: loss is hidden,
+  // so the encoder never backs off, and pinning the framerate takes away its
+  // last lever. This restores the pre-3.18.1 ceilings and unpins both. Off by
+  // default while it is unverified; read live by voice.js on every apply, and
+  // re-applied here so flipping it mid-share works without restarting it.
+  const relayCb = document.getElementById('pref-debug-screen-relay-profile');
+  if (relayCb) {
+    try { relayCb.checked = localStorage.getItem('haven_screen_relay_profile') === '1'; } catch {}
+    relayCb.addEventListener('change', () => {
+      try {
+        if (relayCb.checked) localStorage.setItem('haven_screen_relay_profile', '1');
+        else localStorage.removeItem('haven_screen_relay_profile');
+      } catch {}
+      if (this.voice && typeof this.voice.reapplyScreenBitrate === 'function') {
+        this.voice.reapplyScreenBitrate();
       }
     });
   }

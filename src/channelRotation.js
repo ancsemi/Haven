@@ -97,6 +97,7 @@ function createTempChannelDeleteCallback({ db, io, state, channelId, log = conso
         db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
         db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
       })();
+      state.botAudioManager?.stopChannel(code, 'channel-deleted');
       channelUsers.delete(code);
       voiceUsers.delete(code);
       pendingTempDelete.delete(code);
@@ -186,6 +187,7 @@ function rotateLiveChannelState(io, state, channelId, oldCode, newCode) {
     state.pendingTempDelete.set(newCode, timer);
   }
 
+  state.botAudioManager?.renameChannel(oldCode, newCode);
   io.to(newRoom).to(newVoiceRoom).emit('channel-code-rotated', rotation);
 }
 

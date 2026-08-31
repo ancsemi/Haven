@@ -11,6 +11,71 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.1.0] - 2026-08-30
+
+Mostly hardening and follow-through on 4.0.0, plus bots can play audio in voice now.
+Two of the fixes below are worth updating for on their own: deleted attachments were
+still downloadable, and bot message deletion was throwing where nobody could see it.
+No migration steps.
+
+### Added
+- **Bots can play audio into a voice channel (#5540).** A bot with voice permission can
+  upload an MP3, WAV or OGG through the webhook API and have it played to everyone in the
+  channel it is sitting in, with a queue, skip and stop. Files are checked by their actual
+  bytes rather than their extension, capped at 10 MB and 5 minutes, served only through a
+  short-lived link tied to the current track, and deleted as soon as they finish playing.
+  Nothing is kept across a restart. Thanks to @bernardokcosta.
+- **Gentler screen share for relay connections (Settings, Debug).** For the long-running
+  screen-share desync over TURN in #5426. Lowers the video bitrate and lets the encoder
+  drop frames rather than hold framerate and build a backlog, which is the wrong tradeoff
+  once a relay falls back to TCP. Off by default and only the person sharing needs it, so
+  please try it and say whether it holds.
+- **eturnal documented as a TURN alternative,** with the setting people miss called out in
+  both it and coturn (#5542).
+
+### Security
+- **Deleted attachments were still downloadable (#5540 review).** Moving a file into
+  deleted-attachments is how Haven takes it away, and the guard could be walked past with
+  three different spellings of the same path. Filenames do not change when a file is moved
+  there, so anyone who saw an attachment while it was posted could still fetch it
+  afterwards. Deleting a message now actually revokes the file.
+- **Registration could hand out admin on a server that already had one (#5539).**
+  `ADMIN_USERNAME` is meant to bootstrap the first admin and nothing more, which is how
+  login already treated it, but registration promoted on the username alone. Rename the
+  admin account or remove it while another admin holds the server, and the next person to
+  register the old name arrived as a second admin. First-run setup and genuine
+  re-bootstrapping are unchanged.
+
+### Fixed
+- **Attachment cleanup was throwing on every path that ran it from `server.js`.** A missing
+  import meant the retention sweep and the orphaned-channel cleanup silently never
+  relocated anything, and a bot deleting one of its own messages with an attachment
+  returned a 500 with the message already gone from the database but still on everyone's
+  screen until they reloaded.
+- **Screen shares that stopped reaching other people (#5543).** Renegotiation offers above
+  16 KB were rejected without a word, and a sender whose answer went missing stayed stuck
+  until it rejoined the call. Offers and answers are now correlated, an unanswered one
+  rolls back and retries with a budget, and the size limit is raised while staying clear of
+  the transport's own frame limit. Thanks to @bernardokcosta.
+- **An SSO admin could not hand over admin at all (#5539).** Transfer Admin asks for a
+  Haven password, and an account that signs in through OIDC has none, so on an SSO-only
+  server the feature was closed rather than awkward. Those accounts confirm with their
+  authenticator code instead, with two-factor required first.
+- **Two memory leaks in the client (#5426).** Decrypted images in DMs never released their
+  blobs, so scrolling a media-heavy conversation locked up memory for the life of the tab,
+  and the custom dropdowns added a document listener per open that was never removed. Both
+  found by @RCCore.
+- **Ferry relayed image-bot posts as links instead of pictures.** SaucyBot and similar post
+  the image as an embed, and only the summary was coming across, so Haven had a link to
+  unfurl rather than a picture to show. Reported by Raidenphantom.
+- **Theme picker inconsistencies (#5536, #5537).** Several bundled themes were missing from
+  the admin Default Theme list, the login page showed a different set again, and the button
+  for the active theme did not read as active. Thanks to @birdcrazy. The login page also
+  stopped pinning whichever default a visitor happened to see first, so changing the server
+  default now reaches people who have not signed in.
+- **"Automatic" in the language picker now names the language it resolved to (#5538),** so
+  a server default that is being applied correctly no longer looks like it is being ignored.
+
 ## [4.0.0] - 2026-08-27
 
 This is a big release, and the version reflects that. There are no migration steps and

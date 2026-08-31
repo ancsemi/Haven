@@ -56,6 +56,7 @@ const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 // setupSocketHandlers — called once from server.js
 // ══════════════════════════════════════════════════════════════
 function setupSocketHandlers(io, db, opts = {}) {
+  const botAudioManager = opts.botAudioManager || null;
   const invalidateIpBanCache = (typeof opts.invalidateIpBanCache === 'function') ? opts.invalidateIpBanCache : () => {};
   const onReferrerPolicyChange = (typeof opts.onReferrerPolicyChange === 'function') ? opts.onReferrerPolicyChange : () => {};
   // Per-member upload totals, computed by the HTTP layer that owns the
@@ -147,7 +148,8 @@ function setupSocketHandlers(io, db, opts = {}) {
     channelUsers, voiceUsers, voiceLastActivity,
     activeMusic, musicQueues,
     activeScreenSharers, activeWebcamUsers, streamViewers,
-    slowModeTracker, pendingTempDelete, pendingVoiceLeave
+    slowModeTracker, pendingTempDelete, pendingVoiceLeave,
+    botAudioManager
   };
 
   // ── Rich presence ───────────────────────────────────────
@@ -671,6 +673,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (pendingVoiceLeave.has(`${userId}:${code}`)) continue;
       const sock = io.sockets.sockets.get(entry.socketId);
       if (!sock || !sock.connected) {
+        if (entry.isBot) botAudioManager?.stopWebhook(-Number(userId));
         room.delete(userId);
         removed.push({ id: userId, username: entry.username });
         console.log(`[Voice] Pruned stale voice entry for user ${userId} (socket ${entry.socketId} gone)`);
@@ -924,6 +927,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       return;
     }
 
+    if (socket.user.isBot) botAudioManager?.stopWebhook(socket.user.webhookId);
     voiceRoom.delete(socket.user.id);
     socket.leave(`voice:${code}`);
 
@@ -998,6 +1002,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   function revokeBotVoiceAccess(webhookId, reason = 'Bot voice access was revoked') {
+    botAudioManager?.stopWebhook(webhookId);
     for (const [, botSocket] of Array.from(io.sockets.sockets.entries())) {
       if (!botSocket.user?.isBot || botSocket.user.webhookId !== webhookId) continue;
       disconnectBotVoiceSocket(botSocket, { state, handleVoiceLeave }, reason);
@@ -1409,6 +1414,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             clearTimeout(pendingTempDelete.get(ch.code));
             pendingTempDelete.delete(ch.code);
           }
+          botAudioManager?.stopChannel(ch.code, 'channel-expired');
           io.to(`channel:${ch.code}`).to(`voice:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
           channelUsers.delete(ch.code);
           voiceUsers.delete(ch.code);
@@ -1441,7 +1447,10 @@ function setupSocketHandlers(io, db, opts = {}) {
           for (const [userId, entry] of room) {
             if (pendingVoiceLeave.has(`${userId}:${ch.code}`)) continue;
             const sock = io.sockets.sockets.get(entry.socketId);
-            if (!sock || !sock.connected) room.delete(userId);
+            if (!sock || !sock.connected) {
+              if (entry.isBot) botAudioManager?.stopWebhook(-Number(userId));
+              room.delete(userId);
+            }
           }
           if (room.size > 0) continue;
         }
@@ -2135,7 +2144,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       getIdleOnlineUsers,
       onReferrerPolicyChange,
       // Per-member upload storage totals (#5521)
-      getUploadUsage,
+      getUploadUsage, botAudioManager,
       // Ban-filtered channel roster used by @mention autocomplete
       getMentionableChannelMembers,
       // IP-ban cache invalidator (server.js HTTP-side cache)

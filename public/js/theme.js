@@ -538,7 +538,7 @@ function _deactivateAllEffects() {
   [..._activeFx].forEach(_deactivateEffect);
 }
 
-function applyEffects(mode) {
+function applyEffects(mode, themeOverride) {
   _deactivateAllEffects();
 
   // Always strip theme pseudo-element effects — JS manages all overlays now
@@ -547,7 +547,7 @@ function applyEffects(mode) {
   if (mode === 'none') return;
 
   if (mode === 'auto') {
-    const theme = localStorage.getItem('haven_theme') || 'haven';
+    const theme = themeOverride || localStorage.getItem('haven_theme') || 'haven';
     const defaults = THEME_DEFAULT_FX[theme];
     if (defaults) defaults.forEach(_activateEffect);
     return;
@@ -1552,7 +1552,11 @@ function initThemeSwitcher(containerId, socket) {
   showEffectEditorIfDynamic(saved);
 }
 
-function applyThemeFromServer(theme) {
+// `persist` is on by default because the app page applies the server default
+// on every connect, so re-storing it there keeps the two in step. The login
+// page passes false: it re-reads the default on each visit, and storing it
+// would freeze the first default a visitor ever saw. (#5536)
+function applyThemeFromServer(theme, persist = true) {
   if (!theme) return;
 
   // File theme — delegate to plugin-loader if available; otherwise fall back to haven
@@ -1568,7 +1572,7 @@ function applyThemeFromServer(theme) {
   }
 
   document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('haven_theme', theme);
+  if (persist) localStorage.setItem('haven_theme', theme);
   document.querySelectorAll('.theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === theme);
   });
@@ -1592,6 +1596,81 @@ function applyThemeFromServer(theme) {
   }
   // Re-apply effects for new theme
   const fxMode = _getStoredEffectMode();
-  applyEffects(fxMode);
+  applyEffects(fxMode, theme);
   showEffectEditorIfDynamic(theme);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Published (file:) themes — shared with the login page
+// ═══════════════════════════════════════════════════════════
+// A theme an admin publishes is a .theme.css file rather than one of the
+// built-in data-theme values, so applying it means injecting a stylesheet.
+// plugin-loader.js already did that, but the loader only runs on the app page,
+// which left the login page with no custom themes in its picker and no way to
+// honour one that the admin had set as the server default. These two helpers
+// live in theme.js because theme.js is the file every page loads. (#5537)
+
+// Inject a published theme's stylesheet and make it the active theme.
+// Deliberately the minimum: no plugin bookkeeping, no effect re-run, no socket.
+// plugin-loader's applyFileTheme() calls this for the shared half and then does
+// its own extra work on top, so the injection itself cannot drift between them.
+function applyPublishedThemeBase(file, persist = true) {
+  if (!file) return;
+  document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
+
+  const linkEl = document.createElement('link');
+  linkEl.rel = 'stylesheet';
+  linkEl.href = `/themes/${encodeURIComponent(file)}?_=${Date.now()}`;
+  linkEl.id = `haven-theme-${file}`;
+  document.head.appendChild(linkEl);
+
+  // 'haven' is the stable layout base; the injected sheet loads after it and
+  // overrides the :root variables.
+  document.documentElement.setAttribute('data-theme', 'haven');
+
+  if (persist) {
+    try { localStorage.setItem('haven_theme', `file:${file}`); } catch {}
+  }
+
+  document.querySelectorAll('.theme-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.theme === `file:${file}`);
+  });
+  return linkEl;
+}
+
+// Draw a button for every published theme into an existing theme bar.
+// `onPick` lets the caller add its own behaviour (the app page tells the
+// server about the choice; the login page has no socket to tell).
+function injectPublishedThemeBar(container, themes, onPick) {
+  const el = typeof container === 'string' ? document.getElementById(container) : container;
+  if (!el || !Array.isArray(themes)) return;
+
+  const published = themes.filter(t => t && t.published);
+  if (!published.length) return;
+
+  el.querySelectorAll('.theme-btn[data-custom-theme]').forEach(b => b.remove());
+
+  for (const theme of published) {
+    const btn = document.createElement('button');
+    btn.className = 'theme-btn';
+    btn.dataset.theme = `file:${theme.file}`;
+    btn.dataset.customTheme = '1';
+    btn.title = theme.name || theme.file;
+    const icon = document.createElement('span');
+    icon.className = 'theme-icon';
+    icon.textContent = theme.icon || '🎨';
+    btn.appendChild(icon);
+    btn.addEventListener('click', () => {
+      applyPublishedThemeBase(theme.file);
+      if (typeof onPick === 'function') onPick(theme);
+    });
+    el.appendChild(btn);
+  }
+
+  const saved = (() => { try { return localStorage.getItem('haven_theme') || ''; } catch { return ''; } })();
+  if (saved.startsWith('file:')) {
+    el.querySelectorAll('.theme-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.theme === saved);
+    });
+  }
 }

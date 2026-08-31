@@ -586,35 +586,72 @@ function relayEditToHaven(msg) {
  * admin, not something a bridge should do silently.
  */
 function buildHavenContent(msg) {
-  const parts = [];
+  // What the Discord author actually typed, and what Discord itself attached,
+  // are kept apart on purpose. Only the typed half is content somebody chose to
+  // write, so only that half is worth filtering. See the automod note below.
+  const authored = [];
+  const media = [];
+
   const text = translateDiscordEmotes(translateDiscordMentions(msg.content || '', msg)).trim();
-  if (text) parts.push(text);
+  if (text) authored.push(text);
 
   for (const att of msg.attachments || []) {
-    if (att.url) parts.push(att.url);
+    if (att.url) media.push(att.url);
   }
   for (const sticker of msg.sticker_items || []) {
-    parts.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
+    media.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
   }
   // A link-only message arrives with an empty body and one embed. Without this
-  // it would relay as nothing at all.
-  if (!parts.length && (msg.embeds || []).length) {
-    const e = msg.embeds[0];
-    const summary = [e.title, e.url, e.description].filter(Boolean).join(' ');
-    if (summary) parts.push(summary.slice(0, 500));
+  // it would relay as nothing at all. This counts as authored: the person chose
+  // to post the link, Discord only unfurled it.
+  //
+  // Image bots (SaucyBot and friends) are the other shape here: the picture is
+  // the point of the message and it lives in embed.image, with the source page
+  // in embed.url. Relaying the summary alone gave Haven a link to unfurl, and a
+  // link preview is the fragile path, so a channel full of them ends up with
+  // dead previews. Carrying the image URL instead lets it render as an ordinary
+  // chat image, which is what was asked for.
+  //
+  // The image goes in media rather than authored for the same reason
+  // attachments do: Ferry builds it out of Discord's own response instead of
+  // anyone typing it, and running it through the link filter would throw the
+  // whole message away on an allowlist server. Nothing is loosened by that,
+  // because whether a viewer's browser actually fetches the image is decided by
+  // the preview allowlist at render time, which is the control that exists to
+  // stop a third-party host seeing everyone who scrolls past.
+  if (!authored.length && !media.length && (msg.embeds || []).length) {
+    const embeds = msg.embeds.slice(0, 10);
+    for (const e of embeds) {
+      const image = (e.image && e.image.url) || (e.thumbnail && e.thumbnail.url);
+      if (image) media.push(image);
+    }
+    const e = embeds[0];
+    // Once the image is coming through, e.url is the link that would be
+    // unfurled, so it is dropped and the readable parts are kept for context.
+    const parts = media.length ? [e.title, e.description] : [e.title, e.url, e.description];
+    const summary = parts.filter(Boolean).join(' ');
+    if (summary) authored.push(summary.slice(0, 500));
   }
 
-  const joined = parts.join('\n').slice(0, 4000);
-  const clean = deps?.sanitizeText ? deps.sanitizeText(joined) : joined;
+  const cleanOf = (str) => (deps?.sanitizeText ? deps.sanitizeText(str) : str);
+  const authoredText = cleanOf(authored.join('\n'));
 
   // A bridge is an excellent spam vector, and a relayed message would otherwise
   // skip the link controls every Haven member is held to. Checked with no user
   // context: there is no Haven account to strike, so this filters content only.
+  //
+  // Only the authored text goes through the filter. Attachment and sticker URLs
+  // are built by Ferry out of Discord's own API response rather than typed by
+  // anyone, and they live on cdn.discordapp.com / media.discordapp.net, which
+  // are not on the default allowlist. Checking them meant a stock server threw
+  // away every Discord message carrying an image, the text along with it. Adding
+  // Discord's CDN to the allowlist instead would have opened that domain to
+  // everybody on the server rather than just to the bridge.
   try {
-    if (automod.checkText(clean, { surface: 'message' }).ok === false) return '';
+    if (authoredText && automod.checkText(authoredText, { surface: 'message' }).ok === false) return '';
   } catch { /* an automod fault must never take the bridge down */ }
 
-  return clean;
+  return cleanOf([...authored, ...media].join('\n').slice(0, 4000));
 }
 
 /**

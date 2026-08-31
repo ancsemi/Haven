@@ -493,31 +493,16 @@ window.HavenPluginLoader = (function () {
     document.getElementById('custom-theme-editor')?._hide?.();
     document.getElementById('rgb-theme-editor')?._hide?.();
 
-    // Remove all previously injected file-theme links
-    document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
     loadedThemes.forEach((t, f) => { t.enabled = false; t.linkEl = null; });
 
-    // Inject the chosen file
-    const linkEl = document.createElement('link');
-    linkEl.rel = 'stylesheet';
-    linkEl.href = `/themes/${file}?_=${Date.now()}`;
-    linkEl.id = `haven-theme-${file}`;
-    document.head.appendChild(linkEl);
+    // The link injection, the 'haven' layout base, persistence and the button
+    // active state are shared with the login page, so they live in theme.js and
+    // are called from here rather than written out twice. Everything below this
+    // point is plugin-loader's own bookkeeping, which the login page has no use
+    // for. (#5537)
+    const linkEl = applyPublishedThemeBase(file, persist);
     const t = loadedThemes.get(file);
     if (t) { t.enabled = true; t.linkEl = linkEl; }
-
-    // Use 'haven' as the base data-theme so layout CSS is stable;
-    // the injected stylesheet overrides the :root vars since it loads later.
-    document.documentElement.setAttribute('data-theme', 'haven');
-
-    if (persist) {
-      localStorage.setItem('haven_theme', `file:${file}`);
-    }
-
-    // Update active state on all theme buttons
-    document.querySelectorAll('.theme-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.theme === `file:${file}`);
-    });
 
     // Selecting a published theme deselects any other one, so drop the others
     // from the enabled list — otherwise the Settings toggles claim a theme is

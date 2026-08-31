@@ -230,6 +230,21 @@ const I18n = (() => {
       flag: FLAGS[option.value] || null,
       automatic: option.value === 'auto' || option.value === ''
     }));
+
+    // "Automatic" on its own does not tell you which language you actually got,
+    // and on a server whose admin has set a default language that is the entry
+    // every first-time visitor is sitting on. It read as though the server
+    // setting was being ignored when in fact it had been applied. So name the
+    // resolved locale on the Automatic row: "Automatic (Portugues)". (#5538)
+    const autoLabelFor = option => {
+      if (!option.automatic) return option.label;
+      const resolved = options.find(o => o.value === _locale);
+      if (!resolved || resolved.value === option.value) return option.label;
+      // "Portugues (Brasil)" inside another bracket reads badly, so the
+      // language's own parenthetical is dropped for this one use.
+      const short = resolved.label.split(' (')[0].trim() || resolved.label;
+      return `${option.label} (${short})`;
+    };
     const wrap = document.createElement('div');
     wrap.className = 'lang-picker';
     const button = document.createElement('button');
@@ -246,7 +261,7 @@ const I18n = (() => {
       const icon = option.flag
         ? `<img class="lang-flag" src="/emoji/flags/${option.flag}.svg" alt="">`
         : `<span class="lang-flag lang-flag-text${option.automatic ? ' lang-flag-auto' : ''}" aria-hidden="true">${option.automatic ? 'A' : _escapeHtml(option.value.toUpperCase())}</span>`;
-      return `${icon}<span class="lang-name">${_escapeHtml(option.label)}</span>`;
+      return `${icon}<span class="lang-name">${_escapeHtml(autoLabelFor(option))}</span>`;
     };
     list.innerHTML = options.map(option =>
       `<button type="button" class="lang-picker-item" role="option" data-value="${_escapeHtml(option.value)}">${faceFor(option)}</button>`
