@@ -4747,7 +4747,7 @@ _openRenameModal() {
   if (bioInput) bioInput.value = this.user.bio || '';
   // Load personas list (#86, #5349)
   this._loadPersonas?.();
-  this._renderUserProfileGroupsList()
+  this._loadRoles(() => this._renderUserProfileGroupsList());
   this._updateAvatarPreview();
   this._resetBorderEditState();
   // Sync shape picker buttons
@@ -6908,7 +6908,7 @@ _renderUserProfileGroupsList() {
   // Hide Groups section if there are no groups available to join.
   const availableGroups = (this._allRoles || []).filter(r => r.level === 0);
   section.style.display = availableGroups.length > 0 ? '' : 'none';
-  
+   
   if (availableGroups.length > 0) {
     // Make Sure non manager parts are visible:
     manageGroupsBtn.style.display = '';
