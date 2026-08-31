@@ -1144,8 +1144,10 @@
       "bio_placeholder": "向大家介绍一下自己…",
       "groups_title": "群组",
       "manage_groups_btn": "管理群组",
+      "save_groups_btn": "保存群组",
       "groups_hint": "群组会以角色的形式显示在你的个人资料卡上。它们不会授予任何权限，但可以授予频道访问权限！",
-      "no_groups": "你还没有加入任何群组，点击“管理群组”即可加入群组。"
+      "no_groups": "你还没有加入任何群组，点击“管理群组”即可加入群组。",
+      "groups_saved": "群组已保存！"
     },
     "admin_action": {
       "title": "管理用户",

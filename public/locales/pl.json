@@ -1191,8 +1191,10 @@
       "bio_placeholder": "Opowiedz coś o sobie…",
       "groups_title": "Grupy",
       "manage_groups_btn": "Zarządzaj grupami",
+      "save_groups_btn": "Zapisz grupy",
       "groups_hint": "Grupy są wyświetlane jako role na karcie profilu. Nie nadają uprawnień, ale mogą przyznawać dostęp do kanałów!",
-      "no_groups": "Nie należysz jeszcze do żadnej grupy. Kliknij „Zarządzaj grupami”, aby dołączyć do jednej z nich."
+      "no_groups": "Nie należysz jeszcze do żadnej grupy. Kliknij „Zarządzaj grupami”, aby dołączyć do jednej z nich.",
+      "groups_saved": "Grupy zapisane!"
     },
     "admin_action": {
       "title": "Moderuj użytkownika",

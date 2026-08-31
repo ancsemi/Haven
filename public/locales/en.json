@@ -1436,8 +1436,10 @@
       "bio_placeholder": "Tell people about yourself…",
       "groups_title": "Groups",
       "manage_groups_btn": "Manage Groups",
+      "save_groups_btn": "Save Groups",
       "groups_hint": "Groups are displayed as roles on your profile card. They don't grant permissions, but they can grant channel access!",
-      "no_groups": "You are not a part of any groups yet, click \"Manage Groups\" to join one."
+      "no_groups": "You are not a part of any groups yet, click \"Manage Groups\" to join one.",
+      "groups_saved": "Groups Saved!"
     },
     "border_crop": {
       "title": "Edit",

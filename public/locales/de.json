@@ -1144,8 +1144,10 @@
       "bio_placeholder": "Erzähl den Leuten von dir…",
       "groups_title": "Gruppen",
       "manage_groups_btn": "Gruppen verwalten",
+      "save_groups_btn": "Gruppen speichern",
       "groups_hint": "Gruppen werden auf deiner Profilkarte als Rollen angezeigt. Sie gewähren keine Berechtigungen, können aber Zugriff auf Kanäle gewähren!",
-      "no_groups": "Du bist noch keiner Gruppe beigetreten. Klicke auf „Gruppen verwalten“, um einer Gruppe beizutreten."
+      "no_groups": "Du bist noch keiner Gruppe beigetreten. Klicke auf „Gruppen verwalten“, um einer Gruppe beizutreten.",
+      "groups_saved": "Gruppen gespeichert!"
     },
     "admin_action": {
       "title": "Nutzer moderieren",

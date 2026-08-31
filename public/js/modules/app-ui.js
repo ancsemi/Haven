@@ -3076,6 +3076,32 @@ _setupUI() {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
 
+  // manage groups buttons
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (manageGroupsBtn) manageGroupsBtn.addEventListener('click', () => this._showGroupManager());
+
+  const saveGroupsBtn = document.getElementById('save-groups-btn');
+  if (saveGroupsBtn) saveGroupsBtn.addEventListener('click', () => {
+    const selectedGroupIds = Array.from(document.querySelectorAll('.user-group-checkbox:checked')).map(el => parseInt(el.dataset.role, 10)).filter(Number.isInteger);
+
+    this._roleEmit('update-groups', {groupIds: selectedGroupIds}, (res) => {
+      if (res.error) {
+        return this._showToast(res.error, 'error');
+      }
+
+      // Update local user roles with the groups returned by the server.
+      if (Array.isArray(res.groups)) {
+        this.user.roles = [
+          ...(this.user.roles || []).filter(r => r.level !== 0),
+          ...res.groups
+        ];
+      }
+
+      this._showToast(t('modals.edit_profile.groups_saved'), 'success');
+      this._renderUserProfileGroupsList();
+    });
+  });
+
   // ── Admin moderation bindings ───────────────────────
   document.getElementById('cancel-admin-action-btn').addEventListener('click', () => {
     document.getElementById('admin-action-modal').style.display = 'none';
@@ -6872,21 +6898,68 @@ _openVideoLightbox(src) {
 
 // user Groups 
 _renderUserProfileGroupsList() {
+  const section = document.getElementById('rename-modal-groups-section');
   const list = document.getElementById('user-profile-groups-list');
-  if (!list) return;
+  const manager = document.getElementById('user-profile-groups-manager');
+  const managerSaveBtn = document.getElementById('save-groups-btn');
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (!section || !list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
+  
+  // Hide Groups section if there are no groups available to join.
+  const availableGroups = (this._allRoles || []).filter(r => r.level === 0);
+  section.style.display = availableGroups.length > 0 ? '' : 'none';
+  
+  if (availableGroups.length > 0) {
+    // Make Sure non manager parts are visible:
+    manageGroupsBtn.style.display = '';
+    list.style.display = '';
 
-  const groups = (this.user?.roles || []).filter(r => r.level === 0);
-  const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  if (groups.length === 0) {
-    list.innerHTML = `<p class="muted-text" style="font-size:.78rem;margin:6px 0">${t('modals.edit_profile.no_groups')}</p>`;
-    return;
+    // Make sure manager is hidden.
+    manager.style.display = 'none';
+    managerSaveBtn.style.display = 'none';
+
+    const groups = (this.user?.roles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    if (groups.length === 0) {
+      // display tip when user is not a part of any groups
+      list.innerHTML = `<p class="muted-text" style="font-size:.78rem;margin:6px 0">${t('modals.edit_profile.no_groups')}</p>`;
+    }
+    else {
+      // render list of user's current groups
+      list.innerHTML = groups.map(r => {
+        const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+          return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>`;
+      }).join('');
+    }
+
+    // render html list of selectable groups for the user groups-manager
+    const userGroupIds = new Set(groups.map(g => g.id));
+    manager.innerHTML = availableGroups.map(r => {
+      const isMember = userGroupIds.has(r.id);
+      const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+
+      return `
+        <label class="toggle-row">
+          <span>${rIcon}${esc(r.name)}</span>
+          <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
+        </label>
+      `;
+    }).join('');
   }
+},
 
-  list.innerHTML = groups.map(r => {
-    const rIcon = r.icon
-      ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
-      return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>`;
-  }).join('');
+_showGroupManager() {
+  const list = document.getElementById('user-profile-groups-list');
+  const manager = document.getElementById('user-profile-groups-manager');
+  const managerSaveBtn = document.getElementById('save-groups-btn');
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (!list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
+
+  list.style.display = 'none';
+  manageGroupsBtn.style.display = 'none';
+
+  manager.style.display = '';
+  managerSaveBtn.style.display = '';
 },
 
 // ── Personas (#86, #5349) ──────────────────────────────
