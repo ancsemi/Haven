@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-haven-theme-api="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
@@ -13,13 +13,13 @@
   <link rel="stylesheet" href="/css/style.css?v=3.51.5">
   <script src="/js/theme-init.js?v=3.16.15"></script>
 </head>
-<body>
+<body data-haven-page="app">
 
-  <div id="app">
-    <div id="app-body">
+  <div id="app" data-haven-region="app-shell">
+    <div id="app-body" data-haven-region="workspace">
 
       <!-- ─── Server Bar (far left — like Discord) ─────── -->
-      <nav class="server-bar" id="server-bar">
+      <nav class="server-bar" id="server-bar" data-haven-region="server-rail">
         <div class="server-icon home active" id="home-server" data-i18n-title="app.sidebar.this_server" title="This Server">
           <span class="server-icon-text">⬡</span>
           <span class="server-status-dot online"></span>
@@ -38,7 +38,7 @@
       </nav>
 
       <!-- ─── Left Sidebar ────────────────────────────── -->
-      <aside class="sidebar">
+      <aside class="sidebar" data-haven-region="navigation-sidebar">
         <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
         <div class="sidebar-header">
           <div class="brand">
@@ -46,7 +46,7 @@
             <span class="brand-text">HAVEN</span>
           </div>
           <button id="mobile-sidebar-close" class="mobile-panel-close" data-i18n-title="modals.common.close" data-i18n-aria-label="app.actions.close_sidebar" title="Close" aria-label="Close sidebar">&times;</button>
-          <div class="user-bar">
+          <div class="user-bar" data-haven-region="account">
             <span class="led on" id="connection-led" data-i18n-title="app.status.server_connection" title="Server connection"></span>
             <div class="user-names">
               <span class="current-user" id="current-user"></span>
@@ -63,7 +63,7 @@
           </div>
         </div>
 
-        <div class="sidebar-mod-container" id="sidebar-mod-container">
+        <div class="sidebar-mod-container" id="sidebar-mod-container" data-haven-region="sidebar-content">
           <!-- Mobile server bubbles (visible only on mobile) -->
           <div class="sidebar-section mobile-servers-section" id="mobile-servers-section">
             <h5 class="section-label mobile-servers-toggle" id="mobile-servers-toggle" style="cursor:pointer;user-select:none">
@@ -76,7 +76,7 @@
             </div>
           </div>
 
-          <div class="sidebar-section" data-mod-id="join">
+          <div class="sidebar-section" data-mod-id="join" data-haven-region="join-channel">
             <h5 class="section-label collapsible-section-toggle" id="join-section-toggle" style="cursor:pointer;user-select:none">
               <span class="collapse-toggle-arrow" id="join-section-arrow">▾</span>
               <span class="section-label-text" style="flex:1" data-i18n="app.sidebar.join_channel">Join a Channel</span>
@@ -90,7 +90,7 @@
             </div>
           </div>
 
-          <div class="sidebar-section" id="admin-controls" data-mod-id="create" style="display:none">
+          <div class="sidebar-section" id="admin-controls" data-mod-id="create" data-haven-region="create-channel" style="display:none">
             <h5 class="section-label collapsible-section-toggle" id="create-section-toggle" style="cursor:pointer;user-select:none">
               <span class="collapse-toggle-arrow" id="create-section-arrow">▾</span>
               <span class="section-label-text" style="flex:1" data-i18n="app.sidebar.create_channel">Create Channel</span>
@@ -123,12 +123,12 @@
           </div>
 
           <div class="sidebar-split" id="sidebar-split" data-mod-id="channels">
-          <div class="sidebar-section channel-section" id="channels-pane">
+          <div class="sidebar-section channel-section" id="channels-pane" data-haven-region="channels">
             <h5 class="section-label channels-toggle" id="channels-toggle" style="cursor:pointer;user-select:none"><span class="channels-toggle-arrow" id="channels-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.channels">Channels</span><button class="icon-btn small" id="sub-channel-panel-btn" data-i18n-title="app.actions.sub_channel_subscriptions" title="Sub-channel subscriptions" style="font-size:0.85rem;padding:2px 6px;opacity:0.6;position:relative;z-index:2;display:none">📡</button><button class="icon-btn small" id="organize-channels-btn" data-i18n-title="app.actions.organize_channels" title="Organize channels" style="display:none;font-size:0.85rem;padding:2px 6px;opacity:0.6;position:relative;z-index:2">📋</button></h5>
             <div class="channel-list" id="channel-list"></div>
           </div>
           <div class="sidebar-split-handle" id="sidebar-split-handle" data-i18n-title="app.actions.drag_to_resize" title="Drag to resize"></div>
-          <div class="sidebar-section dm-section-pane" id="dm-pane">
+          <div class="sidebar-section dm-section-pane" id="dm-pane" data-haven-region="direct-messages">
             <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
             <div class="dm-list-scroll" id="dm-list"></div>
           </div>
@@ -136,14 +136,14 @@
         </div>
 
         <!-- Pinned bottom area (never pushed off screen) -->
-        <div class="sidebar-bottom">
+        <div class="sidebar-bottom" data-haven-region="sidebar-footer">
           <!-- Theme popup (floats above bottom bar) -->
           <div id="theme-popup" class="theme-popup" style="display:none">
             <div class="theme-popup-header">
               <span class="theme-popup-title" data-i18n="app.theme.title">Theme</span>
               <button id="theme-popup-close" class="icon-btn small" data-i18n-title="app.theme.close" title="Close">&times;</button>
             </div>
-            <div class="theme-selector" id="theme-selector">
+            <div class="theme-selector" id="theme-selector" data-haven-region="theme-picker">
               <button class="theme-btn active" data-theme="haven" title="Haven"><span class="theme-icon">⬡</span></button>
               <button class="theme-btn" data-theme="discord" title="Discord"><span class="theme-icon">🎮</span></button>
               <button class="theme-btn" data-theme="matrix" title="Matrix"><span class="theme-icon">Ⅿ</span></button>
@@ -263,12 +263,12 @@
       </aside>
 
       <!-- ─── Main Content ────────────────────────────── -->
-      <main class="main">
+      <main class="main" data-haven-region="main">
         <!-- Server Banner (always behind all content) -->
         <div id="server-banner-display" class="server-banner-display" style="display:none">
           <img id="server-banner-img" class="server-banner-img" src="" alt="Server banner">
         </div>
-        <header class="channel-header">
+        <header class="channel-header" data-haven-region="channel-header">
           <button id="mobile-menu-btn" class="mobile-menu-btn" data-i18n-title="header.mobile_menu" data-i18n-aria-label="header.mobile_menu" title="Menu" aria-label="Menu">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
               <line x1="3" y1="6" x2="21" y2="6"/>
@@ -402,7 +402,7 @@
         </header>
 
         <!-- Welcome Screen -->
-        <div id="no-channel-msg" class="welcome-screen">
+        <div id="no-channel-msg" class="welcome-screen" data-haven-region="welcome">
           <div class="welcome-content">
             <div class="welcome-icon">⬡</div>
             <h2 data-i18n="welcome.title">Welcome to Haven</h2>
@@ -412,9 +412,9 @@
         </div>
 
         <!-- Chat Area -->
-        <div id="message-area" class="message-area" style="display:none">
+        <div id="message-area" class="message-area" data-haven-region="message-area" style="display:none">
           <!-- Webcam Grid -->
-          <div id="webcam-container" class="webcam-container" style="display:none">
+          <div id="webcam-container" class="webcam-container" data-haven-region="webcams" style="display:none">
             <div class="webcam-header">
               <span id="webcam-label">📷 <span data-i18n="media.cameras">Cameras</span></span>
               <div class="webcam-header-controls">
@@ -438,7 +438,7 @@
             <div id="webcam-grid" class="webcam-grid"></div>
           </div>
           <!-- Screen Share Viewer (multi-stream) -->
-          <div id="screen-share-container" class="screen-share-container" style="display:none">
+          <div id="screen-share-container" class="screen-share-container" data-haven-region="screen-shares" style="display:none">
             <div class="screen-share-header">
               <span id="screen-share-label">🖥️ <span data-i18n="media.streams">Streams</span></span>
               <div class="screen-share-header-controls">
@@ -462,7 +462,7 @@
             <div id="screen-share-grid" class="screen-share-grid"></div>
           </div>
           <!-- Music Player Panel -->
-          <div id="music-panel" class="music-panel" style="display:none">
+          <div id="music-panel" class="music-panel" data-haven-region="music-player" style="display:none">
             <div class="music-panel-header">
               <div class="music-panel-header-left">
                 <button id="music-popout-btn" class="icon-btn small" data-i18n-title="media.music_popout" title="Pop out player">⧉</button>
@@ -487,7 +487,7 @@
             </div>
             <div id="music-embed-container" class="music-embed-container"></div>
           </div>
-          <div id="pinned-panel" class="pinned-panel" style="display:none">
+          <div id="pinned-panel" class="pinned-panel" data-haven-region="pinned-messages" style="display:none">
             <div class="pinned-panel-header">
               <span id="pinned-count">📌 <span data-i18n="header.pinned_count">Pinned Messages</span></span>
               <div class="pinned-panel-actions">
@@ -498,7 +498,7 @@
             </div>
             <div id="pinned-list" class="pinned-list"></div>
           </div>
-          <div class="messages" id="messages">
+          <div class="messages" id="messages" data-haven-region="message-list">
             <!-- Floating "⋯" button for touch-device message actions fallback -->
             <button id="msg-more-btn" aria-label="Message actions">⋯</button>
           </div>
@@ -518,7 +518,7 @@
             <span class="upload-progress-text" id="upload-progress-text" data-i18n="header.uploading">Uploading...</span>
             <button class="upload-progress-cancel" id="upload-cancel-btn" data-i18n-title="common.cancel_upload" data-i18n-aria-label="common.cancel_upload" title="Cancel upload" aria-label="Cancel upload">&times;</button>
           </div>
-          <div id="message-input-area" class="message-input-area">
+          <div id="message-input-area" class="message-input-area" data-haven-region="composer">
             <div class="pip-input-resizer" aria-hidden="true"></div>
             <div class="input-actions-box">
               <button id="upload-btn" class="btn-upload" data-i18n-title="media.upload_file_title" title="Upload File">
@@ -587,7 +587,7 @@
            The note marks it apart from the members handle right above it, which
            is otherwise the same little arrow in the same place. (#5534) -->
       <button id="sb-sidebar-toggle-btn" class="sb-sidebar-toggle-btn" style="display:none" title="Toggle soundboard panel"><span class="sb-toggle-mark" aria-hidden="true">♪</span><span class="sb-toggle-arrow">&#x276E;</span></button>
-      <aside id="sb-sidebar-panel" class="sb-sidebar-panel sb-hidden">
+      <aside id="sb-sidebar-panel" class="sb-sidebar-panel sb-hidden" data-haven-region="soundboard">
         <div id="sb-sidebar-resize-handle" class="sb-sidebar-resize-handle"></div>
         <div class="sb-sidebar-header">&#x1F3B5; Soundboard</div>
         <div class="sb-sidebar-body">
@@ -600,11 +600,11 @@
       <button id="sidebar-toggle-btn" class="sidebar-collapse-btn" data-i18n-title="app.actions.toggle_members_panel" data-i18n-aria-label="app.actions.toggle_members_panel" title="Toggle members panel" aria-label="Toggle members panel">&#x276F;</button>
 
       <!-- ─── Right Sidebar ───────────────────────────── -->
-      <aside class="right-sidebar" id="right-sidebar">
+      <aside class="right-sidebar" id="right-sidebar" data-haven-region="context-sidebar">
         <div class="right-sidebar-resize-handle" id="right-sidebar-resize-handle"></div>
         <!-- Search results overlay — sits over voice + member list, persists across
              channel switches, only closes on the X. (search-overhaul phase 1) -->
-        <div id="search-panel" class="search-panel" style="display:none">
+        <div id="search-panel" class="search-panel" data-haven-region="search-results" style="display:none">
           <div class="search-panel-header">
             <span id="search-panel-count" data-i18n="header.results">Results</span>
             <button id="search-panel-close" class="icon-btn small" data-i18n-title="modals.common.close" title="Close">&times;</button>
@@ -627,7 +627,7 @@
           </div>
         </div>
         <!-- Voice users section -->
-        <div class="right-sidebar-voice" id="right-sidebar-voice">
+        <div class="right-sidebar-voice" id="right-sidebar-voice" data-haven-region="voice-roster">
           <div class="panel">
             <div class="voice-panel-header">
               <h5 class="panel-title" style="margin-bottom:0"><span class="title-emoji">🔊 </span><span data-i18n="right_sidebar.voice_title">Voice</span></h5>
@@ -644,7 +644,7 @@
           </div>
         </div>
         <!-- Scrollable users section -->
-        <div class="right-sidebar-users" id="right-sidebar-users">
+        <div class="right-sidebar-users" id="right-sidebar-users" data-haven-region="member-list">
           <div class="panel">
             <h5 class="panel-title"><span class="title-emoji">👥 </span><span data-i18n="right_sidebar.online_title">Online</span></h5>
             <div class="user-search-wrap" id="user-search-wrap" style="display:none">
@@ -672,7 +672,7 @@
           </button>
         </div>
         <!-- Voice settings sub-panel (slides up above controls) -->
-        <div id="voice-settings-panel" class="voice-settings-panel" style="display:none">
+        <div id="voice-settings-panel" class="voice-settings-panel" data-haven-region="voice-settings" style="display:none">
           <div class="voice-settings-section-label">🎧 <span data-i18n="voice_settings.audio_devices">Audio Devices</span></div>
           <div class="voice-settings-row">
             <label class="voice-settings-label" data-i18n="voice_settings.input">Input</label>
@@ -733,7 +733,7 @@
           </div>
         </div>
         <!-- Voice controls bar (pinned above settings) -->
-        <div id="voice-panel" class="voice-panel" style="display:none">
+        <div id="voice-panel" class="voice-panel" data-haven-region="voice-controls" style="display:none">
           <button id="voice-cam-btn" class="voice-panel-btn" data-i18n-title="voice.panel.camera" title="Camera">📷</button>
           <button id="screen-share-btn" class="voice-panel-btn" data-i18n-title="voice.screen_share" title="Share Screen">🖥️</button>
           <button id="voice-soundboard-btn" class="voice-panel-btn" data-i18n-title="voice.panel.soundboard" title="Soundboard">🎵</button>
@@ -759,7 +759,7 @@
     </div>
 
     <!-- ─── Status Bar (bottom) ───────────────────────── -->
-    <div class="status-bar" id="status-bar" style="display:none">
+    <div class="status-bar" id="status-bar" data-haven-region="status-bar" style="display:none">
       <div class="status-item">
         <span class="led on" id="status-server-led"></span>
         <span class="label" data-i18n="status_bar.server">Server</span>
@@ -875,7 +875,7 @@
     </div>
   </div>
 
-  <div id="thread-panel" class="thread-panel" style="display:none">
+  <div id="thread-panel" class="thread-panel" data-haven-region="thread-panel" style="display:none">
     <div class="thread-panel-resizer" id="thread-panel-resizer" aria-hidden="true"></div>
     <div class="thread-panel-header">
       <div class="thread-panel-header-top">
@@ -1287,7 +1287,7 @@
 
   <!-- Settings Popout Modal -->
   <div class="modal-overlay" id="settings-modal" style="display:none">
-    <div class="modal modal-settings">
+    <div class="modal modal-settings" data-haven-region="settings">
       <div class="settings-header">
         <h3>⚙️ <span data-i18n="settings.title">Settings</span></h3>
         <div class="settings-tab-bar" id="settings-tab-bar">
@@ -2128,6 +2128,14 @@
           <p class="settings-hint" data-i18n="settings.debug_section.screen_audio_webaudio_hint">By default Haven plays incoming screen-share audio straight through the audio element, which keeps it in sync with the video over a TURN/relay connection. Turn this on to route it through Haven's Web Audio mixer instead, which unlocks the per-stream volume boost above 100% but can cause audio stutter and audio/video desync over a relay (it's fine on a local network). Leave it off if a screen share's audio stutters or drifts out of sync. (#5426)</p>
         </div>
 
+        <div class="settings-group">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-screen-relay-profile">
+            <span class="toggle-label" data-i18n="settings.debug_section.screen_relay_profile">Gentler screen share for relay connections</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.screen_relay_profile_hint">Turn this on if your screen share stutters and drifts out of sync for viewers, but only when the call goes through a TURN server and never on your local network. It lowers the video bitrate back to the pre-3.18.1 values and lets the encoder drop frames when the connection is struggling, instead of holding the framerate and letting the backlog grow. Picture quality will be lower. Only the person sharing needs it on. (#5426)</p>
+        </div>
+
         <div class="desktop-pref-row">
           <label class="toggle-row">
             <input type="checkbox" id="pref-debug-voice-glare-ice-fix">
@@ -2242,23 +2250,30 @@
                 <option value="haven">Haven</option>
                 <option value="discord">Discord</option>
                 <option value="matrix">Matrix</option>
-                <option value="fallout">Fallout</option>
-                <option value="ffx">Final Fantasy</option>
-                <option value="ice">Ice</option>
+                <option value="tron">Tron</option>
+                <option value="halo">Halo</option>
+                <option value="lotr">Lord of the Rings</option>
+                <option value="cyberpunk">Cyberpunk</option>
                 <option value="nord">Nord</option>
+                <option value="dracula">Dracula</option>
+                <option value="bloodborne">Bloodborne</option>
                 <option value="darksouls">Dark Souls</option>
                 <option value="eldenring">Elden Ring</option>
-                <option value="bloodborne">Bloodborne</option>
-                <option value="cyberpunk">Cyberpunk</option>
-                <option value="lotr">Lord of the Rings</option>
+                <option value="ice">Ice</option>
                 <option value="abyss">Abyss</option>
+                <option value="minecraft">Minecraft</option>
+                <option value="ffx">Final Fantasy</option>
+                <option value="zelda">Zelda</option>
+                <option value="fallout">Fallout</option>
                 <option value="scripture">Scripture</option>
                 <option value="chapel">Chapel</option>
                 <option value="gospel">Gospel</option>
-                <option value="tron">Tron</option>
-                <option value="halo">Halo</option>
-                <option value="dracula">Dracula</option>
+                <option value="midnightpurple">Midnight Purple</option>
+                <option value="crt">CRT</option>
                 <option value="win95">Windows 95</option>
+                <option value="rgb">RGB</option>
+                <option value="daylight">Daylight (Light)</option>
+                <option value="cloudy">Cloudy (Light)</option>
               </select>
             </label>
             <small class="settings-hint" data-i18n="settings.admin.default_theme_hint">New users see this theme on first visit. They can still pick their own.</small>
@@ -4141,17 +4156,17 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=3.16.15"></script>
+  <script src="/js/theme.js?v=4.0.1"></script>
   <script src="/js/notifications.js?v=3.16.15"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=3.34.0"></script>
+  <script src="/js/voice.js?v=3.34.3"></script>
   <script src="/js/modmode.js?v=3.16.15"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
   <script type="module" src="/js/app.js?v=3.51.4"></script>
-  <script src="/js/plugin-loader.js?v=3.16.15"></script>
+  <script src="/js/plugin-loader.js?v=4.0.1"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
 </body>

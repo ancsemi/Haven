@@ -1,6 +1,7 @@
 'use strict';
 
 const bcrypt = require('bcryptjs');
+const OTPAuth = require('otpauth');
 const { isString, isInt, VALID_ROLE_PERMS } = require('./helpers');
 
 module.exports = function register(socket, ctx) {
@@ -1000,20 +1001,61 @@ module.exports = function register(socket, ctx) {
     transferAdminRef.value = true;
 
     try {
-      const password = typeof data.password === 'string' ? data.password : '';
-      if (!password) { transferAdminRef.value = false; return cb({ error: 'Password is required for this action' }); }
-
-      const adminUser = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(socket.user.id);
+      const adminUser = db.prepare(
+        'SELECT username, password_hash, oidc_subject, totp_secret, totp_enabled FROM users WHERE id = ?'
+      ).get(socket.user.id);
       if (!adminUser) { transferAdminRef.value = false; return cb({ error: 'Admin user not found' }); }
 
-      let validPw;
-      try {
-        validPw = await bcrypt.compare(password, adminUser.password_hash);
-        if (!validPw) { transferAdminRef.value = false; return cb({ error: 'Incorrect password' }); }
-      } catch (err) {
-        console.error('Password verification error:', err);
-        transferAdminRef.value = false;
-        return cb({ error: 'Password verification failed' });
+      // An admin who signed in through OIDC has no Haven password, so asking
+      // for one did not merely inconvenience them, it closed the door: on a
+      // server where everybody arrives through SSO, admin could not be handed
+      // to anyone at all. Those accounts confirm with their authenticator code
+      // instead. Two-factor has to be switched on for that, and deliberately
+      // so, because the whole point of the prompt is a second factor and
+      // "you are already signed in" is not one. Anything holding a real bcrypt
+      // hash, which is every local account, still takes the password path.
+      // (#5539)
+      const ssoOnly = !!adminUser.oidc_subject &&
+        !(typeof adminUser.password_hash === 'string' && adminUser.password_hash.startsWith('$2'));
+
+      if (ssoOnly) {
+        if (!adminUser.totp_secret || !adminUser.totp_enabled) {
+          transferAdminRef.value = false;
+          return cb({
+            error: 'Your account signs in through SSO, so there is no Haven password to confirm with. Turn on two-factor authentication in Settings, then transfer admin.',
+            code: 'mfa_required'
+          });
+        }
+        const code = typeof data.totpCode === 'string' ? data.totpCode.replace(/[\s-]/g, '') : '';
+        if (!code) { transferAdminRef.value = false; return cb({ error: 'Authenticator code is required for this action' }); }
+        let validCode;
+        try {
+          const totp = new OTPAuth.TOTP({
+            issuer: 'Haven',
+            label: adminUser.username,
+            algorithm: 'SHA1',
+            digits: 6,
+            period: 30,
+            secret: OTPAuth.Secret.fromBase32(adminUser.totp_secret)
+          });
+          validCode = totp.validate({ token: code, window: 1 }) !== null;
+        } catch (err) {
+          console.error('Transfer admin code verification error:', err);
+          transferAdminRef.value = false;
+          return cb({ error: 'Code verification failed' });
+        }
+        if (!validCode) { transferAdminRef.value = false; return cb({ error: 'Incorrect code' }); }
+      } else {
+        const password = typeof data.password === 'string' ? data.password : '';
+        if (!password) { transferAdminRef.value = false; return cb({ error: 'Password is required for this action' }); }
+        try {
+          const validPw = await bcrypt.compare(password, adminUser.password_hash);
+          if (!validPw) { transferAdminRef.value = false; return cb({ error: 'Incorrect password' }); }
+        } catch (err) {
+          console.error('Password verification error:', err);
+          transferAdminRef.value = false;
+          return cb({ error: 'Password verification failed' });
+        }
       }
 
       const stillAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(socket.user.id);

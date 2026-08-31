@@ -1751,8 +1751,11 @@
       "note": "This action cannot be undone by you.",
       "password_label": "Enter your password to confirm",
       "password_placeholder": "Your password",
+      "totp_label": "Enter your authenticator code to confirm",
+      "totp_placeholder": "6-digit code",
       "confirm_btn": "Transfer Admin",
       "error_required": "Password is required.",
+      "error_totp_required": "Authenticator code is required.",
       "transferring": "Transferring…"
     },
     "bot_mgmt": {

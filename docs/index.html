@@ -1515,12 +1515,12 @@
       </div>
 
       <div class="download-card fade-in">
-        <h2>&#x2B21; Haven Server v4.0.0</h2>
+        <h2>&#x2B21; Haven Server v4.1.0</h2>
         <p class="download-version">Latest stable release &middot; Windows, macOS &amp; Linux &middot; ~5 MB</p>
 
         <div class="download-btn-group">
-          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.0.0.zip" class="btn btn-primary download-main">
-            <span class="icon">&#x2B07;</span> Download v4.0.0 (.zip)
+          <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.1.0.zip" class="btn btn-primary download-main">
+            <span class="icon">&#x2B07;</span> Download v4.1.0 (.zip)
           </a>
           <div class="download-alt-links">
             <a href="https://github.com/ancsemi/Haven" target="_blank">&#9965; View on GitHub</a>
@@ -1537,7 +1537,11 @@
           <div class="version-list">
             <div class="version-list-inner">
               <div class="version-item">
-                <div><span class="v-name">v4.0.0</span><span class="v-tag latest">Latest</span> <strong>Haven now bridges to Discord.</strong> Pair a Haven channel with a Discord channel and messages cross both ways, with each person appearing under their own name and picture rather than as one anonymous bot. Every pairing chooses its own direction and whether it mirrors the whole channel or only messages deliberately addressed to Discord. It runs inside Haven, so nothing new has to be exposed to the internet, and the setup walks you through making the Discord bot. Sending is behind a new permission that starts off for everyone, and pings are off by default. Search moves into a panel over the member list that survives channel switches. Bots get a voice gateway with scoped access, and there is a RepoCloud deploy button. Fixes: the welcome screen no longer hides behind the server banner, Steam and Spotify linking works for accounts that changed their password, channel code rotation leaves clients in a working state, the docked soundboard handle points the right way, and spent invite links stop reading as active. Admin settings are now grouped instead of one flat list of twenty. No migration steps, but take a backup first as with any large release. Thanks to @Raidenphantom, whose own Discord bridge surfaced two real gaps in this one.</div>
+                <div><span class="v-name">v4.1.0</span><span class="v-tag latest">Latest</span> <strong>Deleted attachments really are deleted now, and bots can play audio in voice.</strong> A file moved out of a channel by deleting its message could still be fetched by anyone who had seen it, which is fixed, and registration can no longer hand out admin on a server that already has one. Bots with voice permission can upload an MP3, WAV or OGG and have it played to the channel, with a queue and a skip. Screen shares that quietly stopped reaching other people now recover on their own, and there is a new opt-in setting for people whose screen share drifts out of sync over a TURN relay. Also fixed: attachment cleanup was failing silently everywhere it ran from the server, an admin who signs in through SSO could not hand over admin at all, two memory leaks in the client, several themes missing from the admin theme list, and the Discord bridge relaying image-bot posts as links instead of pictures. No migration steps. Thanks to @bernardokcosta, @birdcrazy, @RCCore and @Raidenphantom.</div>
+                <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.1.0.zip">Download &rarr;</a>
+              </div>
+              <div class="version-item">
+                <div><span class="v-name">v4.0.0</span> <strong>Haven now bridges to Discord.</strong> Pair a Haven channel with a Discord channel and messages cross both ways, with each person appearing under their own name and picture rather than as one anonymous bot. Every pairing chooses its own direction and whether it mirrors the whole channel or only messages deliberately addressed to Discord. It runs inside Haven, so nothing new has to be exposed to the internet, and the setup walks you through making the Discord bot. Sending is behind a new permission that starts off for everyone, and pings are off by default. Search moves into a panel over the member list that survives channel switches. Bots get a voice gateway with scoped access, and there is a RepoCloud deploy button. Fixes: the welcome screen no longer hides behind the server banner, Steam and Spotify linking works for accounts that changed their password, channel code rotation leaves clients in a working state, the docked soundboard handle points the right way, and spent invite links stop reading as active. Admin settings are now grouped instead of one flat list of twenty. No migration steps, but take a backup first as with any large release. Thanks to @Raidenphantom, whose own Discord bridge surfaced two real gaps in this one.</div>
                 <a href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.0.0.zip">Download &rarr;</a>
               </div>
               <div class="version-item">

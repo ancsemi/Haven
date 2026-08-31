@@ -1,6 +1,6 @@
 ﻿{
   "name": "haven",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",
@@ -22,7 +22,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "localtunnel": "^2.0.2",
-    "multer": "^2.0.2",
+    "multer": "^2.3.0",
+    "music-metadata": "^11.15.0",
     "otpauth": "^9.5.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",

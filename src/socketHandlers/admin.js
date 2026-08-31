@@ -237,7 +237,7 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'default_theme') {
       // Allow built-in names OR "file:name.theme.css" for published custom themes
-      const validBuiltin = ['', 'haven', 'discord', 'matrix', 'fallout', 'ffx', 'ice', 'nord', 'darksouls', 'eldenring', 'bloodborne', 'cyberpunk', 'lotr', 'abyss', 'scripture', 'chapel', 'gospel', 'tron', 'halo', 'dracula', 'win95'];
+      const validBuiltin = ['', 'haven', 'discord', 'matrix', 'tron', 'halo', 'lotr', 'cyberpunk', 'nord', 'dracula', 'bloodborne', 'darksouls', 'eldenring', 'ice', 'abyss', 'minecraft', 'ffx', 'zelda', 'fallout', 'scripture', 'chapel', 'gospel', 'midnightpurple', 'crt', 'win95', 'rgb', 'daylight', 'cloudy'];
       if (!validBuiltin.includes(value) && !/^file:[a-zA-Z0-9_\-. ]+\.theme\.css$/.test(value)) return;
     }
     if (key === 'default_locale') {

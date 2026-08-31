@@ -691,6 +691,8 @@ To make a bundled theme available to everyone, go to **Settings → Admin → �
 
 Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes/` folder, restart, then publish it in the same place. A theme can also be set as the server **default** from that section, which applies to anyone who has not already picked a theme of their own. It is a default rather than a lock, so a user who chooses a different theme keeps their choice.
 
+Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
+
 ### Background images (wallpapers)
 
 A theme is ordinary CSS, so it can set a background image and not just colours.
@@ -762,6 +764,10 @@ tls-listening-port=5349
 realm=your-domain.com
 use-auth-secret
 static-auth-secret=YOUR_RANDOM_SECRET_HERE
+
+# Only if coturn is behind a router (home server, NAT'd VM, Docker bridge).
+# Leave this out when the machine holds its public IP directly.
+external-ip=YOUR_PUBLIC_IP
 ```
 
 Then add to your Haven `.env`:
@@ -780,6 +786,16 @@ Restart Haven, and voice/screen sharing will work across any network.
 > **Docker users:** Add `TURN_URL` and `TURN_SECRET` as environment variables in your `docker-compose.yml`. See the commented example in the default compose file.
 
 > **Oracle Cloud / cloud VMs:** Make sure ports 3478 (UDP+TCP) and 49152–65535 (UDP) are open in your security group / firewall rules. These are needed for TURN relay traffic.
+
+> **Home server behind a router:** this is where TURN most often looks configured but silently does nothing, because coturn has no idea it is behind NAT and hands out its LAN address as the relay. Three things to get right:
+>
+> - Set `external-ip=YOUR_PUBLIC_IP` in `turnserver.conf`. Without it every relay candidate points at a private address that nobody outside your network can reach. It wants a literal IP, not a hostname, so if yours is dynamic you have to update the line and restart coturn when it changes.
+> - Forward **UDP**, not just TCP. TURN media is UDP: port 3478 plus the whole `min-port` to `max-port` range. A TCP-only forward lets coturn start up, answer, and relay nothing.
+> - Turn on NAT reflection (also called hairpin NAT) on your router, or people on your own LAN cannot reach `turn:your-domain.com`, because that name resolves to your public IP. pfSense and OPNsense call it NAT Reflection. Some routers do not support it at all, in which case split DNS pointing the name at the LAN address is the way round it.
+>
+> To check the relay by itself, put your TURN URL and credentials into the WebRTC project's Trickle ICE page (https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/). If it never produces a candidate of type `relay`, the problem is coturn or the firewall in front of it, not Haven.
+
+> **coturn is not the only option.** [eturnal](https://eturnal.net/) does the same job and several people running Haven at home have found it easier to get working. The setting that matters is the same one under a different name: `relay_ipv4_addr` in `eturnal.yml` is coturn's `external-ip`, and its autodetection does not reliably find your public address behind NAT, so set it explicitly there too. Everything else on this page (UDP forwarding, the relay port range, NAT reflection) applies unchanged, and Haven does not care which one you point `TURN_URL` at.
 
 ---
 
@@ -1306,6 +1322,17 @@ DELETE https://your-server.com/api/webhooks/<token>/messages/<message_id>
 ```
 
 Bots can delete any message in their assigned channel. Returns `{ "success": true }`.
+
+Bots with moderation permission can delete up to 100 of the most recent messages
+from their assigned channel in one request. Thread replies are removed with their
+parent messages.
+
+```
+DELETE https://your-server.com/api/webhooks/<token>/messages?limit=25
+```
+
+Returns `{ "success": true, "deleted": 25 }`. The `deleted` count includes
+thread replies removed with the selected messages.
 
 ### Playing Soundboard Sounds
 

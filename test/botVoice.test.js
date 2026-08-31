@@ -483,6 +483,58 @@ test('human voice snapshots preserve bot identity and listening state', t => {
   assert.equal(count.isListening, true);
 });
 
+test('kicking a bot from voice clears its dynamic audio queue', t => {
+  const db = createDb();
+  t.after(() => db.close());
+  const handlers = new Map();
+  const moderator = {
+    id: 'human-socket',
+    user: { id: 10, username: 'human', displayName: 'Human', isAdmin: true },
+    on(event, handler) { handlers.set(event, handler); },
+    emit() {}
+  };
+  const botSocket = { leave() {} };
+  const state = {
+    channelUsers: new Map(),
+    voiceUsers: new Map([['11111111', new Map([
+      [10, { id: 10, username: 'Human', socketId: 'human-socket' }],
+      [-7, { id: -7, username: 'Listener', socketId: 'bot-socket', isBot: true }]
+    ])]]),
+    voiceLastActivity: new Map(),
+    activeMusic: new Map(),
+    activeScreenSharers: new Map(),
+    activeWebcamUsers: new Map(),
+    streamViewers: new Map(),
+    pendingTempDelete: new Map(),
+    pendingVoiceLeave: new Map()
+  };
+  const stopped = [];
+  registerVoice(moderator, {
+    io: {
+      sockets: { sockets: new Map([['bot-socket', botSocket]]) },
+      to() { return { emit() {}, to() { return { emit() {} }; } }; }
+    },
+    db,
+    state,
+    userHasPermission: () => true,
+    getUserEffectiveLevel: userId => userId === 10 ? 10 : 0,
+    getUserHighestRole: () => null,
+    broadcastVoiceUsers() {},
+    emitOnlineUsers() {},
+    handleVoiceLeave() {},
+    touchVoiceActivity() {},
+    pruneStaleVoiceUsers: () => [],
+    getMentionableChannelMembers: () => [],
+    getActiveMusicSyncState: () => null,
+    getMusicQueuePayload: () => ({}),
+    botAudioManager: { stopWebhook(webhookId) { stopped.push(webhookId); } }
+  });
+
+  handlers.get('voice-kick')({ code: '11111111', userId: -7 });
+  assert.deepEqual(stopped, [7]);
+  assert.equal(state.voiceUsers.get('11111111').has(-7), false);
+});
+
 test('administrative global broadcasts explicitly exclude bot sockets', t => {
   const db = createDb();
   t.after(() => db.close());

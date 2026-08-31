@@ -569,7 +569,15 @@ router.post('/register', authLimiter, async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 12);
-    const isAdmin = username.toLowerCase() === ADMIN_USERNAME ? 1 : 0;
+    // ADMIN_USERNAME is a bootstrap, not a standing claim on the name. Login
+    // and the socket handshake both promote it only while the server has no
+    // admin at all; registration skipped that check, so once the original
+    // admin renamed themselves or their account was removed, whoever
+    // registered the freed username next walked in as a second admin over the
+    // top of the real one. First run and a genuine re-bootstrap still work,
+    // because in both of those there is no admin to find. (#5539)
+    const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+    const isAdmin = (!anyAdmin && username.toLowerCase() === ADMIN_USERNAME) ? 1 : 0;
 
     // SSO profile picture: download from home server if provided
     const ssoProfilePicture = typeof req.body.ssoProfilePicture === 'string' ? req.body.ssoProfilePicture.trim().slice(0, 500) : null;

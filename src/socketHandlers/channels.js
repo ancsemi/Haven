@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 
-const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
-const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
+const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
+const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;
@@ -39,7 +39,7 @@ module.exports = function register(socket, ctx) {
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
-    rotateChannelCode
+    rotateChannelCode, botAudioManager
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -670,6 +670,9 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    const deletedCodes = [code, ...db.prepare(
+      'SELECT code FROM channels WHERE parent_channel_id = ?'
+    ).all(channel.id).map(row => row.code)];
 
     // Collect the attachments this channel's messages point at, before the
     // rows go away. Deleting a channel dropped the messages but left every
@@ -697,6 +700,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
     });
     deleteAll(channel.id);
+    for (const deletedCode of deletedCodes) botAudioManager?.stopChannel(deletedCode, 'channel-deleted');
     broadcastChannelLists();
 
     // The same file can be linked from more than one message (a copy-pasted
@@ -876,6 +880,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
+      botAudioManager?.stopChannel(code, 'channel-deleted');
       broadcastChannelLists();
       socket.emit('error-msg', 'Sub-channel deleted');
     } catch (err) {
@@ -910,6 +915,7 @@ module.exports = function register(socket, ctx) {
     try {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
       if (permission === 'voice' && newVal === 0) {
+        botAudioManager?.stopChannel(code, 'voice-disabled');
         db.prepare('UPDATE channels SET streams_enabled = 0, music_enabled = 0 WHERE id = ?').run(channel.id);
         const room = voiceUsers.get(code);
         if (room && room.size > 0) {

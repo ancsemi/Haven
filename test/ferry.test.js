@@ -114,6 +114,58 @@ test('Discord mentions become readable names', () => {
   );
 });
 
+test('an image bot embed relays the picture instead of a link to unfurl', () => {
+  // The SaucyBot shape: no body, the picture in embed.image, the source page in
+  // embed.url. Relaying the summary alone left Haven a link to preview, which is
+  // the path that dies in bulk. (#5426-adjacent, reported against Ferry)
+  const saucy = {
+    content: '',
+    embeds: [{
+      title: 'Sonic and Amy',
+      url: 'https://www.pixiv.net/artworks/12345678',
+      description: 'by someone',
+      image: { url: 'https://i.pximg.net/img-master/img/12345678_p0.jpg' },
+    }],
+  };
+  const out = buildHavenContent(saucy);
+  // The image is carried so Haven renders it as a chat image.
+  assert.ok(out.includes('https://i.pximg.net/img-master/img/12345678_p0.jpg'));
+  // The source link is dropped, because that is the thing that would be unfurled.
+  assert.ok(!out.includes('pixiv.net/artworks'));
+  // The readable parts survive as context.
+  assert.ok(out.includes('Sonic and Amy'));
+
+  // A thumbnail-only embed is still an image.
+  assert.ok(buildHavenContent({
+    content: '',
+    embeds: [{ thumbnail: { url: 'https://example.test/thumb.png' } }],
+  }).includes('https://example.test/thumb.png'));
+
+  // Multi-image posts carry every picture, not just the first.
+  const multi = buildHavenContent({
+    content: '',
+    embeds: [
+      { image: { url: 'https://example.test/a.png' } },
+      { image: { url: 'https://example.test/b.png' } },
+    ],
+  });
+  assert.ok(multi.includes('a.png') && multi.includes('b.png'));
+
+  // An embed with no image at all keeps the old summary, link included, so a
+  // plain shared link still relays as before.
+  const linkOnly = buildHavenContent({
+    content: '',
+    embeds: [{ title: 'A page', url: 'https://example.test/page', description: 'about things' }],
+  });
+  assert.ok(linkOnly.includes('https://example.test/page'));
+
+  // A message the author actually typed is untouched by any of this.
+  assert.equal(
+    buildHavenContent({ content: 'hello', embeds: [{ image: { url: 'https://example.test/x.png' } }] }),
+    'hello'
+  );
+});
+
 test('Discord custom emotes become readable shortcodes', () => {
   // Relayed raw these read as "<:blue_heart:1178833036244652178>" mid-sentence.
   assert.equal(buildHavenContent({ content: 'hi <:wave:1178833036244652178> there' }), 'hi :wave: there');
