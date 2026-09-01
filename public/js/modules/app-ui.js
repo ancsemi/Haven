@@ -3082,24 +3082,7 @@ _setupUI() {
 
   const saveGroupsBtn = document.getElementById('save-groups-btn');
   if (saveGroupsBtn) saveGroupsBtn.addEventListener('click', () => {
-    const selectedGroupIds = Array.from(document.querySelectorAll('.user-group-checkbox:checked')).map(el => parseInt(el.dataset.role, 10)).filter(Number.isInteger);
-
-    this._roleEmit('update-groups', {groupIds: selectedGroupIds}, (res) => {
-      if (res.error) {
-        return this._showToast(res.error, 'error');
-      }
-
-      // Update local user roles with the groups returned by the server.
-      if (Array.isArray(res.groups)) {
-        this.user.roles = [
-          ...(this.user.roles || []).filter(r => r.level !== 0),
-          ...res.groups
-        ];
-      }
-
-      this._showToast(t('modals.edit_profile.groups_saved'), 'success');
-      this._renderUserProfileGroupsList();
-    });
+    this._GroupManagerSaveGroups();
   });
 
   // ── Admin moderation bindings ───────────────────────
@@ -6370,8 +6353,9 @@ _saveRename() {
   if (bioInput) {
     this.socket.emit('set-bio', { bio: bioInput.value });
   }
-  // Also commit any pending avatar changes
+  // Also commit any pending avatar and groups changes
   this._commitAvatarSettings();
+  this._GroupManagerSaveGroups();
   document.getElementById('rename-modal').style.display = 'none';
 },
 
@@ -7024,6 +7008,26 @@ _showGroupManager() {
       });
     }
   );
+},
+
+_GroupManagerSaveGroups() {
+  const selectedGroupIds = Array.from(document.querySelectorAll('.user-group-checkbox:checked')).map(el => parseInt(el.dataset.role, 10)).filter(Number.isInteger);
+  this._roleEmit('update-groups', {groupIds: selectedGroupIds}, (res) => {
+    if (res.error) {
+      return this._showToast(res.error, 'error');
+    }
+
+    // Update local user roles with the groups returned by the server.
+    if (Array.isArray(res.groups)) {
+      this.user.roles = [
+        ...(this.user.roles || []).filter(r => r.level !== 0),
+        ...res.groups
+      ];
+    }
+
+    this._showToast(t('modals.edit_profile.groups_saved'), 'success');
+    this._renderUserProfileGroupsList();
+  });
 },
 
 _showGroupChannelInfo(info, persistent = false) {
