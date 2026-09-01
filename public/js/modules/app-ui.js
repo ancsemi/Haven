@@ -7039,24 +7039,11 @@ _showGroupChannelInfo(info, persistent = false) {
   const channelMap = new Map(channels.map(ch => [ch.id, ch]));
   const children = new Map();
 
-  // Channels the user already has access to.
-  const userChannelIds = new Set(
-    (this.user?.channels || []).map(ch => typeof ch === 'object' ? ch.id : ch)
-  );
-
-  // Determine which channels should actually be displayed.
+  // Only display subchannels when their parent is also granted
+  // by this group.
   const visibleChannels = channels.filter(ch => {
-    // Top-level channel: always show if the group grants it.
     if (!ch.parent_channel_id) return true;
-
-    const parent = channelMap.get(ch.parent_channel_id);
-    // Parent isn't included in the group's granted channels.
-    // Only show the subchannel if the user already has the parent.
-    if (!parent) {
-      return userChannelIds.has(ch.parent_channel_id);
-    }
-
-    return true;
+    return channelMap.has(ch.parent_channel_id);
   });
 
   // Build hierarchy from the channels we're actually displaying.
@@ -7080,14 +7067,8 @@ _showGroupChannelInfo(info, persistent = false) {
     const prefix = isChild ? '↳ ' : '# ';
     const lock = ch.is_private ? ' 🔒' : '';
 
-    // Parent is already accessible to the user but isn't granted
-    // by this group, so show it as contextual/greyed-out.
-    const alreadyHasChannel =
-      !channels.some(granted => granted.id === ch.id) &&
-      userChannelIds.has(ch.id);
-
     return `
-      <div class="group-channel-info-row${isChild ? ' sub' : ''}${alreadyHasChannel ? ' already-accessible' : ''}">
+      <div class="group-channel-info-row${isChild ? ' sub' : ''}">
         ${prefix}${this._escapeHtml(ch.name)}${lock}
       </div>
       ${(children.get(ch.id) || [])

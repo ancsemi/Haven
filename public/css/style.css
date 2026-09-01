@@ -7289,10 +7289,6 @@ details.sound-section:not([open]) .sound-section-label::before {
     padding-left: 0.75rem;
     color: var(--text-muted);
   }
-
-  &.already-accessible {
-    opacity: 0.6;
-  }
 }
 
 /* Read-only banner shown when a non-admin opens a role at or above their own
