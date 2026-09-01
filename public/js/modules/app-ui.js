@@ -7026,7 +7026,6 @@ _showGroupManager() {
   );
 },
 
-
 _showGroupChannelInfo(info, persistent = false) {
   const channels = JSON.parse(info.dataset.channels || '[]');
   if (!channels.length) return;
@@ -7040,7 +7039,28 @@ _showGroupChannelInfo(info, persistent = false) {
   const channelMap = new Map(channels.map(ch => [ch.id, ch]));
   const children = new Map();
 
-  channels.forEach(ch => {
+  // Channels the user already has access to.
+  const userChannelIds = new Set(
+    (this.user?.channels || []).map(ch => typeof ch === 'object' ? ch.id : ch)
+  );
+
+  // Determine which channels should actually be displayed.
+  const visibleChannels = channels.filter(ch => {
+    // Top-level channel: always show if the group grants it.
+    if (!ch.parent_channel_id) return true;
+
+    const parent = channelMap.get(ch.parent_channel_id);
+    // Parent isn't included in the group's granted channels.
+    // Only show the subchannel if the user already has the parent.
+    if (!parent) {
+      return userChannelIds.has(ch.parent_channel_id);
+    }
+
+    return true;
+  });
+
+  // Build hierarchy from the channels we're actually displaying.
+  visibleChannels.forEach(ch => {
     if (ch.parent_channel_id && channelMap.has(ch.parent_channel_id)) {
       if (!children.has(ch.parent_channel_id)) {
         children.set(ch.parent_channel_id, []);
@@ -7049,20 +7069,32 @@ _showGroupChannelInfo(info, persistent = false) {
     }
   });
 
-  const roots = channels.filter(ch =>
-    !ch.parent_channel_id || !channelMap.has(ch.parent_channel_id)
+  const visibleIds = new Set(visibleChannels.map(ch => ch.id));
+
+  const roots = visibleChannels.filter(ch =>
+    !ch.parent_channel_id ||
+    !visibleIds.has(ch.parent_channel_id)
   );
 
   const renderChannel = (ch, isChild = false) => {
     const prefix = isChild ? '↳ ' : '# ';
     const lock = ch.is_private ? ' 🔒' : '';
 
+    // Parent is already accessible to the user but isn't granted
+    // by this group, so show it as contextual/greyed-out.
+    const alreadyHasChannel =
+      !channels.some(granted => granted.id === ch.id) &&
+      userChannelIds.has(ch.id);
+
     return `
-      <div class="group-channel-info-row${isChild ? ' sub' : ''}">
+      <div class="group-channel-info-row${isChild ? ' sub' : ''}${alreadyHasChannel ? ' already-accessible' : ''}">
         ${prefix}${this._escapeHtml(ch.name)}${lock}
       </div>
       ${(children.get(ch.id) || [])
-        .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+        .sort((a, b) =>
+          a.position - b.position ||
+          a.name.localeCompare(b.name)
+        )
         .map(child => renderChannel(child, true))
         .join('')}
     `;
@@ -7077,7 +7109,10 @@ _showGroupChannelInfo(info, persistent = false) {
     </div>
     <div class="group-channel-info-list">
       ${roots
-        .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+        .sort((a, b) =>
+          a.position - b.position ||
+          a.name.localeCompare(b.name)
+        )
         .map(ch => renderChannel(ch))
         .join('')}
     </div>
@@ -7086,9 +7121,35 @@ _showGroupChannelInfo(info, persistent = false) {
   document.body.appendChild(popup);
 
   const rect = info.getBoundingClientRect();
+  const popupRect = popup.getBoundingClientRect();
+  const margin = 8;
+  const gap = 6;
 
-  popup.style.left = `${rect.left}px`;
-  popup.style.top = `${rect.bottom + 6}px`;
+  let left = rect.left;
+  let top = rect.bottom + gap;
+
+  // Keep popup within the horizontal viewport.
+  if (left + popupRect.width > window.innerWidth - margin) {
+    left = window.innerWidth - popupRect.width - margin;
+  }
+  left = Math.max(margin, left);
+
+  // Prefer below; move above if necessary.
+  if (top + popupRect.height > window.innerHeight - margin) {
+    const aboveTop = rect.top - popupRect.height - gap;
+    top = (aboveTop >= margin) ? aboveTop : margin;
+  }
+
+  top = Math.max(margin, top);
+  const availableHeight = window.innerHeight - top - margin;
+  const channelList = popup.querySelector('.group-channel-info-list');
+  if (channelList) {
+    channelList.style.maxHeight =
+      `${Math.max(4 * 16, availableHeight - 55)}px`;
+  }
+
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
 
   if (persistent) {
     this._groupChannelInfoPopup = popup;
@@ -7105,7 +7166,6 @@ _showGroupChannelInfo(info, persistent = false) {
       }
     };
 
-    // Delay so the click that opened it doesn't immediately close it.
     setTimeout(() => {
       document.addEventListener('click', this._groupChannelInfoOutsideHandler);
     }, 0);

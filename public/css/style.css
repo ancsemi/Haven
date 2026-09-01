@@ -7241,7 +7241,8 @@ details.sound-section:not([open]) .sound-section-label::before {
   position: fixed;
   z-index: 100010;
   min-width: 12rem;
-  max-width: 20rem;
+  max-width: min(20rem, calc(100vw - 1rem));
+  max-height: calc(100vh - 1rem);
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--border-light);
   border-radius: 0.4rem;
@@ -7283,11 +7284,15 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .group-channel-info-row {
   color: var(--text-secondary);
-}
 
-.group-channel-info-row.sub {
-  padding-left: 0.75rem;
-  color: var(--text-muted);
+  &.sub {
+    padding-left: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  &.already-accessible {
+    opacity: 0.6;
+  }
 }
 
 /* Read-only banner shown when a non-admin opens a role at or above their own
