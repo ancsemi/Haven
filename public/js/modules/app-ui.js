@@ -6979,7 +6979,7 @@ _showGroupManager() {
     return `
       <label class="toggle-row user-group-toggle-row">
         <span class="user-group-name">
-          <span class="user-group-channel-info" data-role="${r.id}" style="visibility:hidden" title="">#i</span>
+          <button class="user-group-channel-info" data-role="${r.id}" style="visibility:hidden" title="">#i</button>
           <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>
         </span>
         <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
@@ -6998,14 +6998,137 @@ _showGroupManager() {
         const info = manager.querySelector(`.user-group-channel-info[data-role="${r.id}"]`);
         if (!info) return;
 
-        info.title = `Joining this group gives you access to: ${
-          channels.map(ch => `# ${ch.name}`).join(', ')
-        }`;
+        info.dataset.channels = JSON.stringify(channels);
         info.style.visibility = 'visible';
-        info.addEventListener('click', (e) => e.preventDefault());
+
+        info.addEventListener('mouseenter', () => {
+          // Don't show a hover tooltip while the persistent popup is open.
+          if (this._groupChannelInfoPopup) return;
+
+          this._showGroupChannelInfo(info, false);
+        });
+
+        info.addEventListener('mouseleave', () => {
+          // Persistent popup is intentionally unaffected.
+          if (!this._groupChannelInfoPopup) {
+            this._closeGroupChannelInfo();
+          }
+        });
+
+        info.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          this._showGroupChannelInfo(info, true);
+        });
       });
     }
   );
+},
+
+
+_showGroupChannelInfo(info, persistent = false) {
+  const channels = JSON.parse(info.dataset.channels || '[]');
+  if (!channels.length) return;
+
+  // Remove any existing group-channel popup.
+  this._closeGroupChannelInfo();
+
+  const popup = document.createElement('div');
+  popup.className = `group-channel-info-popup${persistent ? ' persistent' : ''}`;
+
+  const channelMap = new Map(channels.map(ch => [ch.id, ch]));
+  const children = new Map();
+
+  channels.forEach(ch => {
+    if (ch.parent_channel_id && channelMap.has(ch.parent_channel_id)) {
+      if (!children.has(ch.parent_channel_id)) {
+        children.set(ch.parent_channel_id, []);
+      }
+      children.get(ch.parent_channel_id).push(ch);
+    }
+  });
+
+  const roots = channels.filter(ch =>
+    !ch.parent_channel_id || !channelMap.has(ch.parent_channel_id)
+  );
+
+  const renderChannel = (ch, isChild = false) => {
+    const prefix = isChild ? '↳ ' : '# ';
+    const lock = ch.is_private ? ' 🔒' : '';
+
+    return `
+      <div class="group-channel-info-row${isChild ? ' sub' : ''}">
+        ${prefix}${this._escapeHtml(ch.name)}${lock}
+      </div>
+      ${(children.get(ch.id) || [])
+        .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+        .map(child => renderChannel(child, true))
+        .join('')}
+    `;
+  };
+
+  popup.innerHTML = `
+    <div class="group-channel-info-title">
+      ${persistent
+        ? `<span>Channel access</span>
+           <button type="button" class="group-channel-info-close" title="Close">&times;</button>`
+        : `<span>Channel access</span>`}
+    </div>
+    <div class="group-channel-info-list">
+      ${roots
+        .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+        .map(ch => renderChannel(ch))
+        .join('')}
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  const rect = info.getBoundingClientRect();
+
+  popup.style.left = `${rect.left}px`;
+  popup.style.top = `${rect.bottom + 6}px`;
+
+  if (persistent) {
+    this._groupChannelInfoPopup = popup;
+
+    const closeBtn = popup.querySelector('.group-channel-info-close');
+    closeBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._closeGroupChannelInfo();
+    });
+
+    this._groupChannelInfoOutsideHandler = (e) => {
+      if (!popup.contains(e.target) && e.target !== info) {
+        this._closeGroupChannelInfo();
+      }
+    };
+
+    // Delay so the click that opened it doesn't immediately close it.
+    setTimeout(() => {
+      document.addEventListener('click', this._groupChannelInfoOutsideHandler);
+    }, 0);
+  } else {
+    this._groupChannelInfoTooltip = popup;
+  }
+},
+
+_closeGroupChannelInfo() {
+  if (this._groupChannelInfoTooltip) {
+    this._groupChannelInfoTooltip.remove();
+    this._groupChannelInfoTooltip = null;
+  }
+
+  if (this._groupChannelInfoPopup) {
+    this._groupChannelInfoPopup.remove();
+    this._groupChannelInfoPopup = null;
+  }
+
+  if (this._groupChannelInfoOutsideHandler) {
+    document.removeEventListener('click', this._groupChannelInfoOutsideHandler);
+    this._groupChannelInfoOutsideHandler = null;
+  }
 },
 
 // ── Personas (#86, #5349) ──────────────────────────────

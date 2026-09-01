@@ -5808,8 +5808,13 @@ details.sound-section:not([open]) .sound-section-label::before {
   background: var(--bg-secondary);
 }
 
+.user-group-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .user-group-channel-info {
-  margin-right: 0.5rem;
   padding: 0.1rem 0.3rem;
   border: 1px solid;
   border-radius: 50%;
@@ -7230,6 +7235,59 @@ details.sound-section:not([open]) .sound-section-label::before {
   padding-right: 0.5rem;
   max-height: 20rem;
   overflow-y: auto;
+}
+
+.group-channel-info-popup {
+  position: fixed;
+  z-index: 100010;
+  min-width: 12rem;
+  max-width: 20rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 0.4rem;
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  font-size: 0.8rem;
+}
+
+.group-channel-info-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.group-channel-info-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.group-channel-info-close:hover {
+  color: var(--text-primary);
+}
+
+.group-channel-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.group-channel-info-row {
+  color: var(--text-secondary);
+}
+
+.group-channel-info-row.sub {
+  padding-left: 0.75rem;
+  color: var(--text-muted);
 }
 
 /* Read-only banner shown when a non-admin opens a role at or above their own
