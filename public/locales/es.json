@@ -1147,7 +1147,8 @@
       "save_groups_btn": "Guardar grupos",
       "groups_hint": "Los grupos se muestran como roles en tu tarjeta de perfil. No otorgan permisos, ¡pero pueden otorgar acceso a canales!",
       "no_groups": "Todavía no formas parte de ningún grupo. Haz clic en «Gestionar grupos» para unirte a uno.",
-      "groups_saved": "¡Grupos guardados!"
+      "groups_saved": "¡Grupos guardados!",
+      "group_channels_granted": "Accesos a canales otorgados"
     },
     "admin_action": {
       "title": "Moderar usuario",

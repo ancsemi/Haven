@@ -1411,7 +1411,8 @@
       "save_groups_btn": "Guardar grupos",
       "groups_hint": "Os grupos são apresentados como funções no seu cartão de perfil. Não concedem permissões, mas podem conceder acesso a canais!",
       "no_groups": "Ainda não faz parte de nenhum grupo. Clique em «Gerir grupos» para aderir a um.",
-      "groups_saved": "Grupos guardados!"
+      "groups_saved": "Grupos guardados!",
+      "group_channels_granted": "Acessos a canais concedidos"
     },
     "border_crop": {
       "title": "Editar",

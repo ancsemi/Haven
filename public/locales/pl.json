@@ -1194,7 +1194,8 @@
       "save_groups_btn": "Zapisz grupy",
       "groups_hint": "Grupy są wyświetlane jako role na karcie profilu. Nie nadają uprawnień, ale mogą przyznawać dostęp do kanałów!",
       "no_groups": "Nie należysz jeszcze do żadnej grupy. Kliknij „Zarządzaj grupami”, aby dołączyć do jednej z nich.",
-      "groups_saved": "Grupy zapisane!"
+      "groups_saved": "Grupy zapisane!",
+      "group_channels_granted": "Przyznany dostęp do kanałów"
     },
     "admin_action": {
       "title": "Moderuj użytkownika",

@@ -1147,7 +1147,8 @@
       "save_groups_btn": "保存群组",
       "groups_hint": "群组会以角色的形式显示在你的个人资料卡上。它们不会授予任何权限，但可以授予频道访问权限！",
       "no_groups": "你还没有加入任何群组，点击“管理群组”即可加入群组。",
-      "groups_saved": "群组已保存！"
+      "groups_saved": "群组已保存！",
+      "group_channels_granted": "已授予的频道访问权限"
     },
     "admin_action": {
       "title": "管理用户",

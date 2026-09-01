@@ -7083,10 +7083,10 @@ _showGroupChannelInfo(info, persistent = false) {
 
   popup.innerHTML = `
     <div class="group-channel-info-title">
+      <span>${this._escapeHtml(t('modals.edit_profile.group_channels_granted'))}</span>
       ${persistent
-        ? `<span>Channel access</span>
-           <button type="button" class="group-channel-info-close" title="Close">&times;</button>`
-        : `<span>Channel access</span>`}
+        ? `<button type="button" class="group-channel-info-close" title="Close">&times;</button>`
+        : ''}
     </div>
     <div class="group-channel-info-list">
       ${roots

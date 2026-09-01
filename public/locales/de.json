@@ -1147,7 +1147,8 @@
       "save_groups_btn": "Gruppen speichern",
       "groups_hint": "Gruppen werden auf deiner Profilkarte als Rollen angezeigt. Sie gewähren keine Berechtigungen, können aber Zugriff auf Kanäle gewähren!",
       "no_groups": "Du bist noch keiner Gruppe beigetreten. Klicke auf „Gruppen verwalten“, um einer Gruppe beizutreten.",
-      "groups_saved": "Gruppen gespeichert!"
+      "groups_saved": "Gruppen gespeichert!",
+      "group_channels_granted": "Gewährte Kanalzugriffe"
     },
     "admin_action": {
       "title": "Nutzer moderieren",
