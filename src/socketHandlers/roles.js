@@ -962,14 +962,6 @@ module.exports = function register(socket, ctx) {
       const toRemove = [...currentGroupIds].filter(id => !selectedGroupIds.has(id));
 
       const txn = db.transaction(() => {
-        for (const roleId of toAdd) {
-          db.prepare(`
-            INSERT INTO user_roles
-              (user_id, role_id, channel_id, granted_by, custom_level)
-            VALUES (?, ?, NULL, ?, NULL)
-          `).run(socket.user.id, roleId, socket.user.id);
-        }
-
         for (const roleId of toRemove) {
           db.prepare(`
             DELETE FROM user_roles
@@ -978,15 +970,23 @@ module.exports = function register(socket, ctx) {
               AND channel_id IS NULL
           `).run(socket.user.id, roleId);
         }
+
+        for (const roleId of toAdd) {
+          db.prepare(`
+            INSERT INTO user_roles
+              (user_id, role_id, channel_id, granted_by, custom_level)
+            VALUES (?, ?, NULL, ?, NULL)
+          `).run(socket.user.id, roleId, socket.user.id);
+        }
       });
       txn();
 
       // Apply linked channel access after the role changes have committed.
-      for (const roleId of toAdd) {
-        applyRoleChannelAccess(roleId, socket.user.id, 'grant');
-      }
       for (const roleId of toRemove) {
         applyRoleChannelAccess(roleId, socket.user.id, 'revoke');
+      }
+      for (const roleId of toAdd) {
+        applyRoleChannelAccess(roleId, socket.user.id, 'grant');
       }
       refreshUserRoles(socket.user.id);
 
