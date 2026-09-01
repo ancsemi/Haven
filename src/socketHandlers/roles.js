@@ -790,16 +790,36 @@ module.exports = function register(socket, ctx) {
   socket.on('get-role-channel-access', (data, callback) => {
     if (!data || typeof data !== 'object') return;
     const cb = typeof callback === 'function' ? callback : () => {};
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_roles')) {
-      return cb({ error: 'Only admins can view role channel access' });
+
+    // Accept single roleId or multiple roleIds.
+    let roleIds;
+    if (isInt(data.roleId)) {
+      roleIds = [data.roleId];
+    } 
+    else if (Array.isArray(data.roleIds)) {
+      roleIds = [...new Set(data.roleIds.map(id => isInt(id) ? id : null).filter(id => id !== null))];
+    } 
+    else {
+      return cb({ error: 'Invalid role ID' });
     }
 
-    const roleId = isInt(data.roleId) ? data.roleId : null;
-    if (!roleId) return cb({ error: 'Invalid role ID' });
+    if (!roleIds.length) return cb({ error: 'Invalid role ID' });
 
-    const rows = db.prepare('SELECT channel_id, grant_on_promote, revoke_on_demote FROM role_channel_access WHERE role_id = ?').all(roleId);
-    const channels = db.prepare('SELECT id, name, parent_channel_id, is_dm, is_private, position FROM channels WHERE is_dm = 0 ORDER BY parent_channel_id IS NOT NULL, position, name').all();
-    cb({ success: true, access: rows, channels });
+    const canManageRoles = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles');
+    // Non-role-managers may only inspect level-0 groups.
+    if (!canManageRoles) {
+      const placeholders = roleIds.map(() => '?').join(',');
+      const validRoles = db.prepare(`SELECT id FROM roles WHERE id IN (${placeholders}) AND level = 0`).all(...roleIds);
+
+      if (validRoles.length !== roleIds.length) {
+        return cb({ error: 'You cannot view this role' });
+      }
+    }
+
+    const placeholders = roleIds.map(() => '?').join(',');
+    const rows = db.prepare(`SELECT role_id, channel_id, grant_on_promote, revoke_on_demote FROM role_channel_access WHERE role_id IN (${placeholders})`).all(...roleIds);
+    const channels = db.prepare(`SELECT id, name, parent_channel_id, is_dm, is_private, position FROM channels WHERE is_dm = 0 ORDER BY parent_channel_id IS NOT NULL, position, name`).all();
+    cb({success: true, access: rows, channels});
   });
 
   socket.on('update-role-channel-access', (data, callback) => {

@@ -6896,6 +6896,25 @@ _openVideoLightbox(src) {
   document.body.appendChild(overlay);
 },
 
+_loadGroupChannelAccess(roleIds, callback) {
+  this._roleEmit('get-role-channel-access', { roleIds }, (res) => {
+    if (!res || res.error) return callback?.({});
+
+    const channelMap = new Map((res.channels || []).map(ch => [ch.id, ch]));
+    const accessMap = {};
+    (res.access || []).forEach(a => {
+      if (!a.grant_on_promote) return;
+
+      const channel = channelMap.get(a.channel_id);
+      if (!channel) return;
+      if (!accessMap[a.role_id]) accessMap[a.role_id] = [];
+
+      accessMap[a.role_id].push(channel);
+    });
+    callback?.(accessMap);
+  });
+},
+
 // user Groups 
 _renderUserProfileGroupsList() {
   const section = document.getElementById('rename-modal-groups-section');
@@ -6931,20 +6950,6 @@ _renderUserProfileGroupsList() {
           return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>`;
       }).join('');
     }
-
-    // render html list of selectable groups for the user groups-manager
-    const userGroupIds = new Set(groups.map(g => g.id));
-    manager.innerHTML = availableGroups.map(r => {
-      const isMember = userGroupIds.has(r.id);
-      const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
-
-      return `
-        <label class="toggle-row user-group-toggle-row">
-          <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>
-          <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
-        </label>
-      `;
-    }).join('');
   }
 },
 
@@ -6955,11 +6960,52 @@ _showGroupManager() {
   const manageGroupsBtn = document.getElementById('manage-groups-btn');
   if (!list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
 
+  const availableGroups = (this._allRoles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const groups = (this.user?.roles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  
   list.style.display = 'none';
   manageGroupsBtn.style.display = 'none';
 
   manager.style.display = '';
   managerSaveBtn.style.display = '';
+
+  // render html list of selectable groups for the user groups-manager
+  const userGroupIds = new Set(groups.map(g => g.id));
+  manager.innerHTML = availableGroups.map(r => {
+    const isMember = userGroupIds.has(r.id);
+    const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+
+    return `
+      <label class="toggle-row user-group-toggle-row">
+        <span class="user-group-name">
+          <span class="user-group-channel-info" data-role="${r.id}" style="visibility:hidden" title="">#i</span>
+          <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>
+        </span>
+        <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
+      </label>
+    `;
+  }).join('');
+
+  // Load channel access for all groups and show info icons
+  this._loadGroupChannelAccess(
+    availableGroups.map(r => r.id),
+    (accessMap) => {
+      availableGroups.forEach(r => {
+        const channels = accessMap[r.id] || [];
+        if (!channels.length) return;
+
+        const info = manager.querySelector(`.user-group-channel-info[data-role="${r.id}"]`);
+        if (!info) return;
+
+        info.title = `Joining this group gives you access to: ${
+          channels.map(ch => `# ${ch.name}`).join(', ')
+        }`;
+        info.style.visibility = 'visible';
+        info.addEventListener('click', (e) => e.preventDefault());
+      });
+    }
+  );
 },
 
 // ── Personas (#86, #5349) ──────────────────────────────

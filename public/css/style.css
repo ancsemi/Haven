@@ -5808,6 +5808,15 @@ details.sound-section:not([open]) .sound-section-label::before {
   background: var(--bg-secondary);
 }
 
+.user-group-channel-info {
+  margin-right: 0.5rem;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid;
+  border-radius: 50%;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .profile-role-dot {
   width: 0.5rem; height: 0.5rem;
   border-radius: 50%;
