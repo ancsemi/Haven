@@ -80,8 +80,11 @@
 
   /* ── Status colors ─────────────────────────────── */
   --success:       #43b581;
+  --success-text:  #ffffff;   /* text on success-filled controls */
   --danger:        #f04747;
+  --danger-text:   #ffffff;   /* text on danger-filled controls */
   --warning:       #faa61a;
+  --warning-text:  #1a1a2e;   /* text on warning-filled controls */
 
   /* ── Online indicator LED ──────────────────────── */
   --led-on:        #43b581;

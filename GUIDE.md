@@ -277,6 +277,11 @@ Click **Clear** to remove your avatar and revert to the default initial-letter a
 
 Haven includes 20+ visual themes. Click the **🎨** button at the bottom of the sidebar to open the theme picker. Themes change colors, fonts, and overall aesthetic. Your choice is saved per browser.
 
+Servers also include the optional **Compact** Theme API v1 file theme. An admin
+can publish it from **Settings → Admin → Branding → Custom Themes**. Compact
+tightens the desktop chrome while preserving the user's separate message-density
+choice under **Settings → Layout**.
+
 ### Effect Overlays
 
 Effects are stackable visual layers on top of any theme. Choose from the effect selector in the theme popup:
@@ -682,6 +687,7 @@ Haven also ships a couple of extras that are **installed but switched off by def
 
 | File | What it is |
 |------|-----------|
+| `themes/compact.theme.css` | Compact, a dense graphite Theme API v1 theme |
 | `themes/braid.theme.css` | Braid, a dark mint theme |
 | `themes/braid-light.theme.css` | Braid Light |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |

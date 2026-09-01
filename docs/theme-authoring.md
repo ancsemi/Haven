@@ -74,6 +74,11 @@ per browser as an additive CSS tweak from Plugins & Themes.
 Themes are server-managed files. Haven does not download themes from arbitrary
 URLs or provide a per-user raw CSS editor.
 
+`themes/compact.theme.css` is a shipped Theme API v1 example that uses only
+public tokens, page markers, and layout regions. It deliberately leaves message
+geometry to the user's Layout Density setting; structural compaction belongs in
+a plugin.
+
 ## Scoping a theme
 
 Both the login page and the main application expose the API version:
@@ -127,8 +132,8 @@ from the Haven base theme.
 | `--text-link` | Links |
 
 Always check the contrast between `--accent` and `--accent-text`. A light accent
-usually needs dark accent text. Some specialised media and voice controls still
-define their own foreground colours, so verify those surfaces as well.
+usually needs dark accent text. A few specialised media controls use a fixed
+foreground for compatibility with existing themes, so verify those too.
 
 ### Borders and semantic states
 
@@ -137,11 +142,17 @@ define their own foreground colours, so verify those surfaces as well.
 | `--border` | Default border |
 | `--border-light` | Stronger or raised border |
 | `--success` | Positive and connected states |
+| `--success-text` | Foreground on success-filled controls |
 | `--danger` | Destructive and error states |
+| `--danger-text` | Foreground on danger-filled controls |
 | `--warning` | Warning states |
+| `--warning-text` | Foreground on warning-filled controls |
 | `--led-on` | Connected presence indicator |
 | `--led-off` | Disconnected presence indicator |
 | `--led-glow` | Connected indicator glow |
+
+Semantic colours can also appear as text or icons on Haven surfaces. Check each
+state colour against your backgrounds as well as against its paired foreground.
 
 ### Typography and geometry
 

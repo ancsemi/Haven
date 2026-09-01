@@ -70,8 +70,11 @@
   --border-light:  #383b5e;
 
   --success:       #43b581;
+  --success-text:  #fff;
   --danger:        #f04747;
+  --danger-text:   #fff;
   --warning:       #faa61a;
+  --warning-text:  #1a1a2e;
 
   --led-on:        #43b581;
   --led-off:       #555;
@@ -3396,7 +3399,7 @@ html.rgb-cycling *::after {
 .btn-sm:disabled:hover { background: var(--bg-tertiary); color: var(--text-secondary); }
 .btn-sm.btn-accent { background: var(--accent); color: var(--accent-text); font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
 .btn-sm.btn-accent:hover { background: var(--accent-hover); }
-.btn-sm.btn-danger { background: var(--danger, #e74c3c); color: white; font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
+.btn-sm.btn-danger { background: var(--danger, #e74c3c); color: var(--danger-text); font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
 .btn-sm.btn-danger:hover { filter: brightness(1.15); }
 
 /* ── Channel List ──────────────────────────────────────── */
@@ -3443,7 +3446,7 @@ html.rgb-cycling *::after {
 
 .channel-badge {
   background: var(--danger);
-  color: white;
+  color: var(--danger-text);
   font-size: 0.625rem;
   font-weight: 700;
   min-width: 1.125rem;
@@ -3807,7 +3810,7 @@ html.rgb-cycling *::after {
 }
 .dm-pip-send {
   background: var(--accent, #5865f2);
-  color: #fff;
+  color: var(--accent-text);
   border: none;
   border-radius: 0.375rem;
   padding: 0 0.625rem;
@@ -3987,7 +3990,7 @@ html.rgb-cycling *::after {
   gap: 0.375rem;
   padding: 0.25rem 0.75rem;
   background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  color: #fff;
+  color: var(--accent-text);
   font-size: 0.75rem;
   font-weight: 600;
   border-radius: 1.25rem;
@@ -4001,7 +4004,7 @@ html.rgb-cycling *::after {
 .update-banner:hover {
   transform: scale(1.05);
   box-shadow: 0 2px 12px rgba(var(--accent-rgb, 88, 101, 242), 0.4);
-  color: #fff;
+  color: var(--accent-text);
 }
 /* Low disk warning, admins only (#5505). Amber rather than red: uploads are
    refused but the server is still working, so this is a "go clear some space"
@@ -4028,7 +4031,7 @@ html.rgb-cycling *::after {
   padding: 0.0625rem 0.375rem;
   border-radius: 1rem;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 /* Member search in the right sidebar. Sits above the roster and filters it as
@@ -4455,7 +4458,7 @@ html.rgb-cycling *::after {
 }
 .desktop-promo-install:hover {
   background: var(--accent-hover);
-  color: #fff;
+  color: var(--accent-text);
   transform: scale(1.03);
 }
 .desktop-promo-later {
@@ -4968,7 +4971,7 @@ select.cfn-select.cfn-input {
   font-size: 0.8125rem; font-weight: 600;
 }
 .border-crop-mode-btn:last-child { border-right: none; }
-.border-crop-mode-btn.active { background: var(--accent, #7aa2ff); color: #fff; }
+.border-crop-mode-btn.active { background: var(--accent, #7aa2ff); color: var(--accent-text); }
 
 /* Shown only for the Crop tool (toggled in _renderBorderEditor). Auto-positions
    the crop handles around the border's opaque pixels; user edits/keeps from there. */
@@ -6107,7 +6110,7 @@ details.sound-section:not([open]) .sound-section-label::before {
   height: 1rem;
   border-radius: 50%;
   background: var(--danger);
-  color: white;
+  color: var(--danger-text);
   font-size: 0.75rem;
   line-height: 1;
   display: none;
@@ -6566,7 +6569,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 .wizard-indicator.active {
   background: var(--accent, #7c5cfc);
   border-color: var(--accent, #7c5cfc);
-  color: #fff;
+  color: var(--accent-text);
   box-shadow: 0 0 12px var(--accent-glow, rgba(124,92,252,0.4));
 }
 
@@ -6694,7 +6697,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .wizard-btn-small:hover {
   background: var(--accent, #7c5cfc);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 .wizard-steps-list {
@@ -6721,7 +6724,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .wizard-btn-primary {
   background: var(--accent, #7c5cfc);
-  color: #fff;
+  color: var(--accent-text);
   border: none;
   border-radius: 0.375rem;
   padding: 0.625rem 1.5rem;
@@ -8971,6 +8974,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 .image-queue-remove:hover {
   background: var(--danger);
+  color: var(--danger-text);
 }
 
 /* Custom dropdown wrapper for native <select> (#5418).
@@ -9948,7 +9952,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .btn-danger {
   background: var(--danger, #f44);
-  color: #fff;
+  color: var(--danger-text);
   border: none;
   padding: 0.375rem 1.125rem;
   border-radius: var(--radius-sm);
@@ -10446,7 +10450,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 .btn-danger-fill {
   background: var(--danger) !important;
-  color: white !important;
+  color: var(--danger-text) !important;
 }
 
 .btn-danger-fill:hover {
@@ -11294,7 +11298,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   padding: 0.0625rem 0.3125rem;
   border-radius: 0.1875rem;
   background: var(--danger);
-  color: #fff;
+  color: var(--danger-text);
   font-weight: 600;
 }
 
@@ -11558,7 +11562,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .btn-unban {
   flex-shrink: 0;
   background: var(--success) !important;
-  color: white !important;
+  color: var(--success-text) !important;
 }
 
 .btn-unban:hover { opacity: 0.85; }
@@ -11573,7 +11577,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .btn-delete-user {
   flex-shrink: 0;
   background: var(--danger) !important;
-  color: white !important;
+  color: var(--danger-text) !important;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem !important;
 }
@@ -12991,7 +12995,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
   padding: 0.3125rem 0.625rem; border-radius: 0.25rem; text-align: left; font-size: 0.75rem; white-space: nowrap;
 }
 .stream-layout-opt:hover { background: rgba(255,255,255,0.08); color: #fff; }
-.stream-layout-opt.active { background: var(--accent, #7c5cfc); color: #fff; }
+.stream-layout-opt.active { background: var(--accent, #7c5cfc); color: var(--accent-text); }
 
 .screen-share-tile {
   position: relative;
@@ -13634,7 +13638,7 @@ video:-webkit-full-screen {
   padding: 0.125rem 0.5rem !important;
   font-size: 0.6875rem;
   background: var(--danger) !important;
-  color: #fff !important;
+  color: var(--danger-text) !important;
   border-radius: var(--radius-sm);
   cursor: pointer;
   min-height: 0;
@@ -14754,7 +14758,7 @@ ul.chat-list { list-style-type: disc; }
 }
 .connection-setup-actions .btn-sm.btn-accent {
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
 }
 .connection-block { margin-bottom: 0.5rem; }
 .connection-block .connection-row { margin-bottom: 0; }
@@ -15372,7 +15376,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 0.65rem;
   font-weight: 700;
   background: var(--accent, #7289da);
-  color: #fff;
+  color: var(--accent-text);
   padding: 0.0625rem 0.3125rem;
   border-radius: 0.5rem;
   flex-shrink: 0;
@@ -15603,7 +15607,7 @@ ul.chat-list { list-style-type: disc; }
 }
 .role-sidebar-item.active {
   background: var(--accent, #5865f2);
-  color: #fff;
+  color: var(--accent-text);
 }
 /* Separates the synthetic Admin role from the real roles in the sidebar. */
 .role-sidebar-divider {
@@ -18530,7 +18534,7 @@ ul.chat-list { list-style-type: disc; }
 .qs-badge {
   margin-left: auto;
   background: var(--danger, #ed4245);
-  color: #fff;
+  color: var(--danger-text);
   font-size: 0.6875rem;
   font-weight: 700;
   padding: 0.0625rem 0.375rem;
@@ -19087,11 +19091,11 @@ ul.chat-list { list-style-type: disc; }
   height: 1.3rem;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   font-size: .72rem;
   flex: 0 0 auto;
 }
-.ferry-step-done .ferry-step-num { background: var(--success, #2ecc71); }
+.ferry-step-done .ferry-step-num { background: var(--success, #2ecc71); color: var(--success-text); }
 
 .ferry-status-ok  { color: var(--success, #2ecc71); font-size: .78rem; margin: 8px 0 0; }
 .ferry-status-bad { color: var(--danger, #e74c3c);  font-size: .78rem; margin: 8px 0 0; }

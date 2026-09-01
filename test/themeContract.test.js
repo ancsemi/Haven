@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const { parseThemeMetadata } = require('../src/themeMetadata');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -19,6 +20,64 @@ function attributeValues(html, attribute) {
 function declaredProperties(css) {
   const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
   return new Set([...withoutComments.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map(match => match[1]));
+}
+
+function cssRules(css) {
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const stack = [];
+  const rules = [];
+  let tokenStart = 0;
+
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '{') {
+      const prelude = source.slice(tokenStart, i).trim();
+      const entry = prelude.startsWith('@')
+        ? { type: 'at-rule', prelude }
+        : {
+            type: 'rule',
+            selector: prelude,
+            bodyStart: i + 1,
+            atRules: stack.filter(item => item.type === 'at-rule').map(item => item.prelude),
+          };
+      stack.push(entry);
+      tokenStart = i + 1;
+      continue;
+    }
+    if (source[i] === '}') {
+      const entry = stack.pop();
+      if (entry?.type === 'rule') {
+        entry.declarations = source.slice(entry.bodyStart, i);
+        rules.push(entry);
+      }
+      tokenStart = i + 1;
+      continue;
+    }
+    if (source[i] === ';') tokenStart = i + 1;
+  }
+  return rules;
+}
+
+function declarationNames(block) {
+  return [...block.matchAll(/(?:^|;)\s*([a-z-]+)\s*:/gi)].map(match => match[1]);
+}
+
+function declarationMap(block) {
+  return Object.fromEntries(
+    [...block.matchAll(/(?:^|;)\s*([a-z-]+)\s*:\s*([^;]+)/gi)]
+      .map(match => [match[1], match[2].trim()])
+  );
+}
+
+function contrastRatio(first, second) {
+  const luminance = hex => {
+    const channels = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255);
+    const linear = channels.map(value => value <= 0.04045
+      ? value / 12.92
+      : ((value + 0.055) / 1.055) ** 2.4);
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  };
+  const values = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
 const APP_REGIONS = [
@@ -82,8 +141,11 @@ const PUBLIC_TOKENS = [
   '--border',
   '--border-light',
   '--success',
+  '--success-text',
   '--danger',
+  '--danger-text',
   '--warning',
+  '--warning-text',
   '--led-on',
   '--led-off',
   '--led-glow',
@@ -196,6 +258,170 @@ test('the theme template targets Theme API v1 and stable layout regions', () => 
   assert.match(template, /\[data-haven-region="navigation-sidebar"\]/);
   assert.match(template, /\[data-haven-region="context-sidebar"\]/);
   assert.doesNotMatch(template, /(?:^|\n)\s*\.main\s*\{/);
+});
+
+test('the Compact theme stays inside the Theme API v1 contract', () => {
+  const theme = read('themes/compact.theme.css');
+  const metadata = parseThemeMetadata(theme);
+  const properties = declaredProperties(theme);
+  const rules = cssRules(theme);
+  const regions = new Set();
+  const pages = new Set();
+  const publicRegions = new Set([...APP_REGIONS, ...AUTH_REGIONS]);
+  const geometryProperties = new Set([
+    'align-content', 'align-items', 'align-self', 'bottom', 'column-gap',
+    'display', 'flex', 'flex-basis', 'flex-direction', 'flex-flow', 'flex-grow',
+    'flex-shrink', 'flex-wrap', 'gap', 'grid', 'grid-area', 'grid-auto-columns',
+    'grid-auto-flow', 'grid-auto-rows', 'grid-column', 'grid-column-end',
+    'grid-column-gap', 'grid-column-start', 'grid-gap', 'grid-row',
+    'grid-row-end', 'grid-row-gap', 'grid-row-start', 'grid-template',
+    'grid-template-areas', 'grid-template-columns', 'grid-template-rows',
+    'height', 'inset', 'inset-block', 'inset-block-end', 'inset-block-start',
+    'inset-inline', 'inset-inline-end', 'inset-inline-start', 'justify-content',
+    'justify-items', 'justify-self', 'left', 'margin', 'margin-block',
+    'margin-block-end', 'margin-block-start', 'margin-inline',
+    'margin-inline-end', 'margin-inline-start', 'max-height', 'max-width',
+    'min-height', 'min-width', 'order', 'overflow', 'overflow-x', 'overflow-y',
+    'padding', 'padding-block', 'padding-block-end', 'padding-block-start',
+    'padding-inline', 'padding-inline-end', 'padding-inline-start',
+    'place-content', 'place-items', 'place-self', 'position', 'right',
+    'row-gap', 'top', 'transform', 'translate', 'width', 'z-index'
+  ]);
+  const geometryTokens = new Set(['--right-width', '--sidebar-width']);
+
+  assert.equal(metadata.name, 'Compact');
+  assert.equal(metadata.themeApi, 1);
+  assert.equal(metadata.compatibility, 'compatible');
+  assert.match(theme, /@media\s*\(min-width:\s*901px\)/);
+  assert.doesNotMatch(theme, /--msg-(?:pad|avatar|gap|gutter)/);
+  assert.doesNotMatch(theme, /!important/);
+
+  for (const property of properties) {
+    assert.ok(PUBLIC_TOKENS.includes(property), `Compact uses non-public token ${property}`);
+  }
+  for (const token of theme.matchAll(/var\((--[a-z0-9-]+)/gi)) {
+    assert.ok(PUBLIC_TOKENS.includes(token[1]), `Compact reads non-public token ${token[1]}`);
+  }
+
+  for (const rule of rules) {
+    const names = declarationNames(rule.declarations);
+    if (names.some(name => geometryTokens.has(name))) {
+      assert.ok(
+        rule.atRules.some(atRule => /^@media\s*\(min-width:\s*901px\)$/.test(atRule)),
+        'Compact geometry tokens must only change at the desktop breakpoint'
+      );
+    }
+    for (const selector of rule.selector.split(',').map(value => value.trim())) {
+      if (selector === ':root') continue;
+      if (selector === 'html[data-haven-theme-api="1"]') continue;
+      const match = selector.match(/^html\[data-haven-theme-api="1"\] body\[data-haven-page="(app|auth)"\] \[data-haven-region="([a-z-]+)"\]$/);
+      assert.ok(match, `Compact uses selector outside Theme API v1: ${selector}`);
+      pages.add(match[1]);
+      regions.add(match[2]);
+      assert.ok(publicRegions.has(match[2]), `Compact uses non-public region ${match[2]}`);
+
+      if (match[1] === 'app' && names.some(name => geometryProperties.has(name))) {
+        assert.ok(
+          rule.atRules.some(atRule => /^@media\s*\(min-width:\s*901px\)$/.test(atRule)),
+          `Compact changes app geometry outside the desktop breakpoint: ${selector}`
+        );
+      }
+      if (match[2] === 'message-list') {
+        assert.ok(
+          !names.some(name => ['column-gap', 'gap', 'row-gap'].includes(name)),
+          'Compact must preserve message-list density'
+        );
+      }
+    }
+  }
+  assert.deepEqual([...pages].sort(), ['app', 'auth']);
+  assert.ok(regions.size > 0);
+});
+
+test('core semantic fills use their paired foreground tokens', () => {
+  const tokenPairs = new Map([
+    ['--accent', '--accent-text'],
+    ['--accent-hover', '--accent-text'],
+    ['--success', '--success-text'],
+    ['--danger', '--danger-text'],
+    ['--warning', '--warning-text']
+  ]);
+  const fixedMediaForegrounds = new Set([
+    'music.css:.music-search-picker-more',
+    'music.css:.music-search-picker-play'
+  ]);
+  const statePairs = [
+    ['style.css', '.update-banner:hover', '--accent-text'],
+    ['style.css', '.image-queue-remove:hover', '--danger-text'],
+    ['style.css', '.ferry-step-done .ferry-step-num', '--success-text']
+  ];
+  const cssDirectory = path.join(ROOT, 'public/css');
+  const stylesheets = fs.readdirSync(cssDirectory).filter(file => file.endsWith('.css'));
+  const rulesByStylesheet = new Map();
+
+  for (const stylesheet of stylesheets) {
+    const rules = cssRules(fs.readFileSync(path.join(cssDirectory, stylesheet), 'utf8'));
+    rulesByStylesheet.set(stylesheet, rules);
+    for (const rule of rules) {
+      const declarations = declarationMap(rule.declarations);
+      const background = declarations.background || declarations['background-color'];
+      if (!background || !declarations.color) continue;
+
+      for (const [fill, foreground] of tokenPairs) {
+        const fillPattern = new RegExp(`var\\(${fill}(?=[,)])`);
+        const isDirectFill = new RegExp(`^var\\(${fill}(?=[,)])`).test(background);
+        const isGradientFill = /^(?:linear|radial)-gradient\(/.test(background) && fillPattern.test(background);
+        if (!isDirectFill && !isGradientFill) continue;
+        const ruleKey = `${stylesheet}:${rule.selector}`;
+        if (fixedMediaForegrounds.has(ruleKey)) {
+          assert.equal(declarations.color, '#000', `${ruleKey} must preserve its compatible media foreground`);
+          continue;
+        }
+        assert.match(
+          declarations.color,
+          new RegExp(`var\\(${foreground}(?=[,)])`),
+          `${stylesheet}: ${rule.selector} must pair ${fill} with ${foreground}`
+        );
+      }
+    }
+  }
+
+  for (const [stylesheet, selector, foreground] of statePairs) {
+    const rule = rulesByStylesheet.get(stylesheet).find(candidate => candidate.selector === selector);
+    assert.ok(rule, `${stylesheet}: missing semantic state ${selector}`);
+    assert.match(
+      declarationMap(rule.declarations).color || '',
+      new RegExp(`var\\(${foreground}(?=[,)])`),
+      `${stylesheet}: ${selector} must use ${foreground}`
+    );
+  }
+});
+
+test('the Compact palette keeps status text and filled controls readable', () => {
+  const theme = read('themes/compact.theme.css');
+  const rootRule = cssRules(theme).find(rule => rule.selector === ':root' && rule.atRules.length === 0);
+  assert.ok(rootRule, 'Compact is missing its root token rule');
+  const colors = Object.fromEntries(
+    [...rootRule.declarations.matchAll(/(--[a-z-]+)\s*:\s*(#[0-9a-f]{6})\s*;/gi)]
+      .map(match => [match[1], match[2]])
+  );
+
+  const tokenPairs = [
+    ['--accent', '--accent-text'],
+    ['--accent-hover', '--accent-text'],
+    ['--success', '--success-text'],
+    ['--danger', '--danger-text'],
+    ['--warning', '--warning-text']
+  ];
+  for (const [fill, foreground] of tokenPairs) {
+    assert.ok(contrastRatio(colors[fill], colors[foreground]) >= 4.5, `${fill} fails filled-control contrast`);
+  }
+  for (const token of ['--accent', '--success', '--danger', '--warning']) {
+    assert.ok(contrastRatio(colors[token], colors['--bg-secondary']) >= 4.5, `${token} fails secondary-surface contrast`);
+    assert.ok(contrastRatio(colors[token], colors['--bg-card']) >= 4.5, `${token} fails card-surface contrast`);
+  }
+  assert.ok(contrastRatio(colors['--text-muted'], colors['--bg-secondary']) >= 4.5);
+  assert.ok(contrastRatio(colors['--text-muted'], colors['--bg-card']) >= 4.5);
 });
 
 test('the authoring reference covers every public region and token', () => {
