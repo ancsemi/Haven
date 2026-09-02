@@ -237,6 +237,48 @@ test('rotation recovery rolls back an unanswered offer sent with the old code', 
   assert.equal(healCalls, 1);
 });
 
+test('live channel rotation invokes voice recovery with the old code', () => {
+  const handlers = new Map();
+  const storage = createStorage();
+  const methods = loadSocketMethods({
+    localStorage: storage,
+    document: { getElementById: () => null, addEventListener() {} },
+    window: { addEventListener() {} },
+    console: { log() {}, warn() {}, error() {} },
+    setInterval: () => 1,
+    clearInterval() {},
+  });
+  const calls = [];
+  const app = Object.assign({
+    socket: { on: (event, handler) => handlers.set(event, handler), emit() {} },
+    _setupFerrySocket() {},
+    user: { id: 7 },
+    channels: [{ id: 1, code: '11111111', name: 'Voice' }],
+    currentChannel: null,
+    unreadCounts: {},
+    voiceCounts: {},
+    voiceChannelUsers: {},
+    voice: {
+      inVoice: true,
+      currentChannel: '11111111',
+      resolveDeferredChannelGone: code => calls.push(['resolve', code]),
+      _healPeerConnectionsAfterChannelRotation: code => calls.push(['heal', code]),
+    },
+    _renderChannels() {},
+    _refreshVoiceSidebar() {},
+  }, methods);
+  app._setupSocketListeners();
+
+  handlers.get('channel-code-rotated')({
+    channelId: 1,
+    oldCode: '11111111',
+    newCode: '22222222',
+  });
+
+  assert.equal(app.voice.currentChannel, '22222222');
+  assert.deepEqual(calls, [['heal', '11111111']]);
+});
+
 test('voice joins are single-flight while async setup is pending', async () => {
   const context = vm.createContext({
     module: { exports: {} },
@@ -312,7 +354,7 @@ test('an async voice join uses a rotated code and does not emit while disconnect
     emissions.find(item => item.event === 'voice-join')
   )), {
     event: 'voice-join',
-    data: { code: '22222222' }
+    data: { code: '22222222', nativeScreenVersion: 1 }
   });
 
   emissions.length = 0;

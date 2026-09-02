@@ -1451,6 +1451,15 @@ _setupUI() {
   this.voice.onConnectivityWarning = (msg) => {
     this._showToast(msg, 'error', null, 12000);
   };
+  this.voice.onScreenShareWarning = () => {
+    const button = document.getElementById('screen-share-btn');
+    if (button) {
+      button.textContent = '🖥️';
+      button.title = t('voice.screen_share');
+      button.classList.remove('sharing');
+    }
+    this._showToast(t('voice.screen_share_cancelled'), 'error', null, 12000);
+  };
 
   // Wire up talking indicator
   this.voice.onTalkingChange = (userId, isTalking) => {

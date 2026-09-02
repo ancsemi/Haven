@@ -32,6 +32,7 @@ function moveUploadToDeleted(relPath) {
   } catch { /* file locked or already moved */ }
 }
 const { isString, isInt } = require('./helpers');
+const { clearChannelRuntimeState } = require('../channelRotation');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -718,10 +719,7 @@ module.exports = function register(socket, ctx) {
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
 
-    channelUsers.delete(code);
-    voiceUsers.delete(code);
-    activeMusic.delete(code);
-    musicQueues.delete(code);
+    clearChannelRuntimeState(state, code);
 
     _audit({ actor: socket.user, action: 'channel_delete',
       target_type: 'channel', target_id: channel.id, target_name: channel.name,
@@ -881,6 +879,8 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
       botAudioManager?.stopChannel(code, 'channel-deleted');
+      io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
+      clearChannelRuntimeState(state, code);
       broadcastChannelLists();
       socket.emit('error-msg', 'Sub-channel deleted');
     } catch (err) {
@@ -1649,6 +1649,7 @@ module.exports = function register(socket, ctx) {
 
     for (const name of filenames) moveUploadToDeleted(name);
 
-    io.to(`channel:${code}`).emit('channel-deleted', { code });
+    io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
+    clearChannelRuntimeState(state, code);
   });
 };
