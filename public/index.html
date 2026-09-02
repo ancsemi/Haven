@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-haven-theme-api="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,13 +7,14 @@
   <title>Haven — Login</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-compat.js"></script>
   <script src="/js/theme-init.js"></script>
 </head>
-<body class="auth-page">
+<body class="auth-page" data-haven-page="auth">
 
-  <div class="auth-container">
-    <div class="auth-card">
-      <div class="auth-header">
+  <div class="auth-container" data-haven-region="auth-shell">
+    <div class="auth-card" data-haven-region="auth-card">
+      <div class="auth-header" data-haven-region="auth-header">
         <div class="logo">⬡</div>
         <h1>HAVEN</h1>
         <p class="tagline" data-i18n="auth.tagline">Private chat, your rules</p>
@@ -289,7 +290,7 @@
       </div>
 
       <!-- Theme selector on login page -->
-      <div class="auth-theme-bar" id="auth-theme-bar">
+      <div class="auth-theme-bar" id="auth-theme-bar" data-haven-region="theme-picker">
         <button class="theme-btn active" data-theme="haven" title="Haven"><span class="theme-icon">⬡</span></button>
         <button class="theme-btn" data-theme="discord" title="Discord"><span class="theme-icon">🎮</span></button>
         <button class="theme-btn" data-theme="matrix" title="Matrix"><span class="theme-icon">Ⅿ</span></button>
@@ -307,25 +308,29 @@
         <button class="theme-btn" data-theme="minecraft" title="Minecraft"><span class="theme-icon">⛏️</span></button>
         <button class="theme-btn" data-theme="ffx" title="Final Fantasy X"><span class="theme-icon">⚔️</span></button>
         <button class="theme-btn" data-theme="zelda" title="Zelda"><span class="theme-icon">🗡️</span></button>
-        <button class="theme-btn" data-theme="fallout" title="Fallout"><span class="theme-icon">☢️</span></button>
+        <button class="theme-btn" data-theme="fallout" title="Fallout (PIP Boy)"><span class="theme-icon">☢️</span></button>
         <button class="theme-btn" data-theme="scripture" title="Scripture"><span class="theme-icon">✝️</span></button>
         <button class="theme-btn" data-theme="chapel" title="Chapel"><span class="theme-icon">⛪</span></button>
         <button class="theme-btn" data-theme="gospel" title="Gospel"><span class="theme-icon">🕊️</span></button>
         <button class="theme-btn" data-theme="midnightpurple" title="Midnight Purple"><span class="theme-icon">🔮</span></button>
         <button class="theme-btn" data-theme="crt" title="CRT"><span class="theme-icon">📺</span></button>
         <button class="theme-btn" data-theme="win95" title="Windows 95"><span class="theme-icon">🪟</span></button>
-        <button class="theme-btn" data-theme="custom" title="Custom"><span class="theme-icon">🎨</span></button>
+        <button class="theme-btn" data-theme="custom" title="Custom"><span class="theme-icon" id="custom-theme-swatch">🎨</span></button>
         <button class="theme-btn" data-theme="rgb" title="RGB"><span class="theme-icon">🌈</span></button>
+        <button class="theme-btn" data-theme="daylight" title="Daylight (Light)"><span class="theme-icon">☀️</span></button>
+        <button class="theme-btn" data-theme="cloudy" title="Cloudy (Light)"><span class="theme-icon">☁️</span></button>
       </div>
       <div class="auth-lang-bar">
         <select id="auth-lang-select" class="settings-select">
-          <option value="en">🇬🇧 English</option>
-          <option value="fr">🇫🇷 Français</option>
-          <option value="de">🇩🇪 Deutsch</option>
-          <option value="es">🇪🇸 Español</option>
-          <option value="pl">🇵🇱 Polski</option>
-          <option value="ru">🇷🇺 Русский</option>
-          <option value="zh">🇨🇳 中文</option>
+          <option value="auto" data-i18n="settings.language_section.auto">Automatic</option>
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+          <option value="pl">Polski</option>
+          <option value="ru">Русский</option>
+          <option value="zh">中文</option>
+          <option value="pt">Português (Brasil)</option>
         </select>
       </div>
       <p class="auth-version" id="auth-version"></p>

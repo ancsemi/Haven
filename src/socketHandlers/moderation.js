@@ -6,7 +6,7 @@ const { utcStamp, isInt } = require('./helpers');
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit,
-          invalidateIpBanCache } = ctx;
+          invalidateIpBanCache, getMentionableChannelMembers } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
   const _invalidateIpCache = (typeof invalidateIpBanCache === 'function') ? invalidateIpBanCache : () => {};
@@ -198,6 +198,26 @@ module.exports = function register(socket, ctx) {
 
     for (const [code] of channelUsers) {
       emitOnlineUsers(code);
+    }
+
+    // Clients cache the member list per channel and only refetch on a channel
+    // switch, so without this push the banned name stayed in @mention
+    // autocomplete for everyone already sitting in the channel. The list is
+    // identical for every viewer, so one query per channel covers the room.
+    try {
+      const affected = db.prepare(`
+        SELECT c.id, c.code FROM channel_members cm
+        JOIN channels c ON c.id = cm.channel_id
+        WHERE cm.user_id = ? AND c.is_dm = 0
+      `).all(data.userId);
+      for (const ch of affected) {
+        io.to(`channel:${ch.code}`).emit('channel-members', {
+          channelCode: ch.code,
+          members: getMentionableChannelMembers(ch.id)
+        });
+      }
+    } catch (err) {
+      console.warn('[ban] member list refresh failed:', err.message);
     }
 
     if (data.scrubMessages) {

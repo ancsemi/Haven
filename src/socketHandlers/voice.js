@@ -5,11 +5,31 @@ const { isString, isInt } = require('./helpers');
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
           broadcastVoiceUsers, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
-          pruneStaleVoiceUsers,
-          getActiveMusicSyncState, getMusicQueuePayload } = ctx;
+          pruneStaleVoiceUsers, getMentionableChannelMembers,
+          getActiveMusicSyncState, getMusicQueuePayload, botAudioManager } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
           activeScreenSharers, activeWebcamUsers, streamViewers, pendingTempDelete,
           pendingVoiceLeave } = state;
+
+  const serializeVoicePeer = user => ({
+    id: user.id,
+    username: user.username,
+    isMuted: !!user.isMuted,
+    isDeafened: !!user.isDeafened,
+    isBot: !!user.isBot,
+    isListening: !!user.isListening
+  });
+
+  function sendCurrentBotAudio(code) {
+    const current = botAudioManager?.getCurrent(code);
+    if (current) socket.emit('bot-audio-play', current);
+    else socket.emit('bot-audio-stop', { channelCode: code, reason: 'sync' });
+  }
+
+  function serializeVoiceRosterUser(user, channelId) {
+    const role = getUserHighestRole(user.id, channelId);
+    return { ...serializeVoicePeer(user), roleColor: role ? role.color : null };
+  }
 
   // ── Local helper: broadcast stream/viewer info ──────────
   function broadcastStreamInfo(code) {
@@ -148,7 +168,7 @@ module.exports = function register(socket, ctx) {
 
     socket.emit('voice-existing-users', {
       channelCode: code,
-      users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+      users: existingUsers.map(serializeVoicePeer),
       voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
     });
 
@@ -177,6 +197,7 @@ module.exports = function register(socket, ctx) {
       });
     }
     socket.emit('music-queue-update', getMusicQueuePayload(code));
+    sendCurrentBotAudio(code);
 
     // Send active screen share info — tell screen sharers to renegotiate
     const sharers = activeScreenSharers.get(code);
@@ -226,19 +247,33 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── WebRTC signaling ────────────────────────────────────
-  const MAX_SDP_SIZE = 16384; // 16 KB — generous limit for SDP offers/answers
+  // Renegotiation offers include candidates already gathered by the live
+  // connection. With multiple interfaces or TURN relays, a normal
+  // voice + screen + webcam SDP can exceed 16 KB; silently rejecting it left
+  // that peer stuck waiting for an answer until they rejoined the call.
+  //
+  // Deliberately below socket.io's maxHttpBufferSize (64 KB). The frame also
+  // carries the event name, channel code, target id and offer id, so an SDP
+  // sized at the transport limit puts the frame over it, and socket.io does
+  // not drop those, it closes the connection. Measured: a 65536 byte offer
+  // disconnected the sender outright. Rejecting an oversized SDP has to stay a
+  // clean application-level refusal, not a dropped call.
+  const MAX_SDP_SIZE = 49152;
+  const MAX_OFFER_ID_SIZE = 96;
   const MAX_ICE_SIZE = 2048;  // 2 KB — ICE candidates are small
 
   socket.on('voice-offer', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.offer) return;
     if (typeof data.offer !== 'object' || JSON.stringify(data.offer).length > MAX_SDP_SIZE) return;
+    if (data.offerId != null && !isString(data.offerId, 1, MAX_OFFER_ID_SIZE)) return;
     if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
     const target = voiceUsers.get(data.code)?.get(data.targetUserId);
     if (target) {
       io.to(target.socketId).emit('voice-offer', {
         from: { id: socket.user.id, username: socket.user.displayName },
         offer: data.offer,
+        offerId: data.offerId,
         channelCode: data.code
       });
     }
@@ -248,12 +283,14 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8) || !isInt(data.targetUserId) || !data.answer) return;
     if (typeof data.answer !== 'object' || JSON.stringify(data.answer).length > MAX_SDP_SIZE) return;
+    if (data.offerId != null && !isString(data.offerId, 1, MAX_OFFER_ID_SIZE)) return;
     if (!voiceUsers.get(data.code)?.has(socket.user.id)) return;
     const target = voiceUsers.get(data.code)?.get(data.targetUserId);
     if (target) {
       io.to(target.socketId).emit('voice-answer', {
         from: { id: socket.user.id, username: socket.user.displayName },
         answer: data.answer,
+        offerId: data.offerId,
         channelCode: data.code
       });
     }
@@ -307,6 +344,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'You can\'t kick a user with equal or higher rank');
     }
 
+    if (target.isBot) botAudioManager?.stopWebhook(-Number(data.userId));
     voiceRoom.delete(data.userId);
     const targetSocket = io.sockets.sockets.get(target.socketId);
     if (targetSocket) {
@@ -512,10 +550,7 @@ module.exports = function register(socket, ctx) {
     const channelId = channel ? channel.id : null;
     const room = voiceUsers.get(code);
     const users = room
-      ? Array.from(room.values()).map(u => {
-          const role = getUserHighestRole(u.id, channelId);
-          return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
-        })
+      ? Array.from(room.values()).map(u => serializeVoiceRosterUser(u, channelId))
       : [];
     // Diagnostic for the recurring "I vanished from my own voice panel"
     // bug. If the client claims to be in voice on this channel but the
@@ -584,7 +619,7 @@ module.exports = function register(socket, ctx) {
             const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
             socket.emit('voice-existing-users', {
               channelCode: code,
-              users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+              users: existingUsers.map(serializeVoicePeer),
               voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
             });
             // Notify existing peers that we're (back) in the room so
@@ -601,10 +636,7 @@ module.exports = function register(socket, ctx) {
             // Re-fetch the room so the response below includes us.
             const healedRoom = voiceUsers.get(code);
             const healedUsers = healedRoom
-              ? Array.from(healedRoom.values()).map(u => {
-                  const role = getUserHighestRole(u.id, vch.id);
-                  return { id: u.id, username: u.username, roleColor: role ? role.color : null, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false };
-                })
+              ? Array.from(healedRoom.values()).map(u => serializeVoiceRosterUser(u, vch.id))
               : [];
             socket.emit('voice-users-update', { channelCode: code, users: healedUsers });
             return; // We've already sent the update — don't double-send below.
@@ -706,6 +738,12 @@ module.exports = function register(socket, ctx) {
       return;
     }
 
+    if (pendingTempDelete?.has(code)) {
+      clearTimeout(pendingTempDelete.get(code));
+      pendingTempDelete.delete(code);
+      console.log(`[Temporary] Grace-period deletion cancelled — user rejoined "${code}"`);
+    }
+
     // ── FAST PATH: pending grace-period eviction ───────────
     // If this user disconnected within the last few seconds, the
     // disconnect handler scheduled a deferred eviction instead of
@@ -733,7 +771,7 @@ module.exports = function register(socket, ctx) {
         const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
         socket.emit('voice-existing-users', {
           channelCode: code,
-          users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+          users: existingUsers.map(serializeVoicePeer),
           voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
           // Hint to the client: skip building new RTCPeerConnections —
           // existing ones from before the blip are still live.
@@ -741,6 +779,7 @@ module.exports = function register(socket, ctx) {
         });
         broadcastVoiceUsers(code);
         broadcastStreamInfo(code);
+        sendCurrentBotAudio(code);
         return;
       }
       // No existing entry despite a pending timer — fall through to
@@ -768,7 +807,7 @@ module.exports = function register(socket, ctx) {
       const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
       socket.emit('voice-existing-users', {
         channelCode: code,
-        users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+        users: existingUsers.map(serializeVoicePeer),
         voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
         skipRenegotiate: true
       });
@@ -776,6 +815,7 @@ module.exports = function register(socket, ctx) {
       // voice-user-joined (that would play join sounds for everyone).
       broadcastVoiceUsers(code);
       broadcastStreamInfo(code);
+      sendCurrentBotAudio(code);
       return;
     }
 
@@ -839,7 +879,7 @@ module.exports = function register(socket, ctx) {
     const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
     socket.emit('voice-existing-users', {
       channelCode: code,
-      users: existingUsers.map(u => ({ id: u.id, username: u.username })),
+      users: existingUsers.map(serializeVoicePeer),
       voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
     });
 
@@ -867,6 +907,7 @@ module.exports = function register(socket, ctx) {
       });
     }
     socket.emit('music-queue-update', getMusicQueuePayload(code));
+    sendCurrentBotAudio(code);
 
     const sharers = activeScreenSharers.get(code);
     if (sharers && sharers.size > 0) {
@@ -923,7 +964,7 @@ module.exports = function register(socket, ctx) {
       const removed = pruneStaleVoiceUsers(code);
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
-        const users = Array.from(room.values()).map(u => ({ id: u.id, username: u.username, isMuted: u.isMuted || false, isDeafened: u.isDeafened || false }));
+        const users = Array.from(room.values()).map(serializeVoicePeer);
         socket.emit('voice-count-update', { code, count: room.size, users });
         if (removed.length) broadcastVoiceUsers(code);
       } else {
@@ -952,12 +993,7 @@ module.exports = function register(socket, ctx) {
       if (!(socket.user.isAdmin && chRow && !chRow.is_dm)) return;
     }
 
-    const members = db.prepare(`
-      SELECT u.id, COALESCE(u.display_name, u.username) as username, u.username as loginName FROM users u
-      JOIN channel_members cm ON u.id = cm.user_id
-      WHERE cm.channel_id = ?
-      ORDER BY COALESCE(u.display_name, u.username)
-    `).all(channel.id);
+    const members = getMentionableChannelMembers(channel.id);
 
     socket.emit('channel-members', { channelCode: code, members });
   });

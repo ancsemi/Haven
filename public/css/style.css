@@ -2,9 +2,44 @@
    HAVEN — Multi-Theme Stylesheet
    Themes: Haven (default), Discord, Matrix, Tron, HALO, LoTR
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 @import url('/css/voice.css?v=3.34.0');
 @import url('/css/music.css?v=1');
+
+/* Self hosted fonts. Formerly pulled from Google Fonts, now bundled so Haven
+   never contacts a third party to render text. Files live in /public/fonts and
+   are served with a long immutable cache, so each client downloads them once. */
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/share-tech-mono-latin.woff2?v=1') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/vt323-latin.woff2?v=1') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/vt323-latin-ext.woff2?v=1') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/vt323-vietnamese.woff2?v=1') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
 
 /* ─── THEME: Haven (Default) ───────────────────────────── */
 :root, [data-theme="haven"] {
@@ -35,8 +70,11 @@
   --border-light:  #383b5e;
 
   --success:       #43b581;
+  --success-text:  #fff;
   --danger:        #f04747;
+  --danger-text:   #fff;
   --warning:       #faa61a;
+  --warning-text:  #1a1a2e;
 
   --led-on:        #43b581;
   --led-off:       #555;
@@ -1349,13 +1387,19 @@
 [data-theme="win95"] .icon-btn:active { border: 2px inset #808080; }
 
 /* Win95 settings button */
-[data-theme="win95"] .btn-settings-popout {
+[data-theme="win95"] .btn-settings-popout,
+[data-theme="win95"] .btn-invite-popout {
   background: #bfbfbf; color: #000; border: 3px outset #fff;
   border-radius: 0 !important;
 }
-[data-theme="win95"] .btn-settings-popout:hover { background: #dfdfdf; color: #000; }
-[data-theme="win95"] .btn-settings-popout:active { border: 3px inset #808080; }
-[data-theme="win95"] .btn-settings-popout svg { color: #000; }
+[data-theme="win95"] .btn-settings-popout:hover,
+[data-theme="win95"] .btn-invite-popout:hover {background: #dfdfdf; color: #000; }
+
+[data-theme="win95"] .btn-settings-popout:active,
+[data-theme="win95"] .btn-invite-popout:active { border: 3px inset #808080; }
+
+[data-theme="win95"] .btn-settings-popout svg,
+[data-theme="win95"] .btn-invite-popout svg { color: #000; }
 
 /* Win95 status picker dot — beveled */
 [data-theme="win95"] .status-picker-dot { border: 2px outset #fff; border-radius: 0 !important; }
@@ -3351,9 +3395,11 @@ html.rgb-cycling *::after {
 }
 
 .btn-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-sm:disabled:hover { background: var(--bg-tertiary); color: var(--text-secondary); }
 .btn-sm.btn-accent { background: var(--accent); color: var(--accent-text); font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
 .btn-sm.btn-accent:hover { background: var(--accent-hover); }
-.btn-sm.btn-danger { background: var(--danger, #e74c3c); color: white; font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
+.btn-sm.btn-danger { background: var(--danger, #e74c3c); color: var(--danger-text); font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
 .btn-sm.btn-danger:hover { filter: brightness(1.15); }
 
 /* ── Channel List ──────────────────────────────────────── */
@@ -3400,7 +3446,7 @@ html.rgb-cycling *::after {
 
 .channel-badge {
   background: var(--danger);
-  color: white;
+  color: var(--danger-text);
   font-size: 0.625rem;
   font-weight: 700;
   min-width: 1.125rem;
@@ -3764,7 +3810,7 @@ html.rgb-cycling *::after {
 }
 .dm-pip-send {
   background: var(--accent, #5865f2);
-  color: #fff;
+  color: var(--accent-text);
   border: none;
   border-radius: 0.375rem;
   padding: 0 0.625rem;
@@ -3944,7 +3990,7 @@ html.rgb-cycling *::after {
   gap: 0.375rem;
   padding: 0.25rem 0.75rem;
   background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  color: #fff;
+  color: var(--accent-text);
   font-size: 0.75rem;
   font-weight: 600;
   border-radius: 1.25rem;
@@ -3958,8 +4004,99 @@ html.rgb-cycling *::after {
 .update-banner:hover {
   transform: scale(1.05);
   box-shadow: 0 2px 12px rgba(var(--accent-rgb, 88, 101, 242), 0.4);
-  color: #fff;
+  color: var(--accent-text);
 }
+/* Low disk warning, admins only (#5505). Amber rather than red: uploads are
+   refused but the server is still working, so this is a "go clear some space"
+   nudge and not an outage. */
+/* Active session rows. Deliberately plain: this is a list you scan for
+   something you do not recognise, not something you interact with. */
+.sessions-list { margin: 0.5rem 0; }
+.session-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.375rem;
+  font-size: 0.8125rem;
+}
+.session-item.is-current { border-color: var(--accent); }
+.session-device { font-weight: 600; color: var(--text-primary); }
+.session-meta { color: var(--text-muted); font-size: 0.75rem; margin-left: auto; text-align: right; }
+.session-current-tag {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 1rem;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* Member search in the right sidebar. Sits above the roster and filters it as
+   you type; the clear button only appears once there is something to clear. */
+.user-search-wrap {
+  position: relative;
+  padding: 0 0.5rem 0.5rem;
+}
+.user-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.375rem 1.75rem 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+}
+.user-search-input:focus {
+  border-color: var(--accent);
+}
+.user-search-input::placeholder { color: var(--text-muted); }
+/* The native search clear button is inconsistent across browsers, so it is
+   hidden and replaced with one that matches the theme. */
+.user-search-input::-webkit-search-cancel-button { display: none; }
+.user-search-clear {
+  position: absolute;
+  right: 0.875rem;
+  top: 50%;
+  transform: translateY(-60%);
+  padding: 0 0.25rem;
+  line-height: 1;
+  font-size: 1rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.user-search-clear:hover { color: var(--text-primary); }
+
+.disk-low-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #b45309, #d97706);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 1.25rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: help;
+  animation: updateFadeIn 0.4s ease;
+}
+.disk-low-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #fff;
+  border-radius: 50%;
+  animation: updatePulse 1.5s ease-in-out infinite;
+}
+
 .update-pulse {
   width: 0.5rem;
   height: 0.5rem;
@@ -4321,7 +4458,7 @@ html.rgb-cycling *::after {
 }
 .desktop-promo-install:hover {
   background: var(--accent-hover);
-  color: #fff;
+  color: var(--accent-text);
   transform: scale(1.03);
 }
 .desktop-promo-later {
@@ -4681,6 +4818,20 @@ select.cfn-select.cfn-input {
   margin-top: 0.125rem;
 }
 
+/* pfp border overlay: the saved fit rendered on top of a real avatar. The host
+   is a positioning context sized to the avatar; the marker (.pfp-border) is
+   folded into .bce-op wrappers by _foldPfpBorder. Reuses .bce-op. */
+/* align-self stops the flex row from stretching the host to full row height
+   (tallest on emoji-only jumbo rows); block avatar drops the inline descender,
+   so the host is exactly the avatar box and the overlay stays centered on it. */
+.pfp-host { position: relative; display: inline-block; flex-shrink: 0; align-self: flex-start; margin-top: 0.125rem; }
+.pfp-host .message-avatar, .pfp-host .message-avatar-img { margin-top: 0; }
+.pfp-host .message-avatar-img { display: block; }
+/* No clip net: _computeMatrix3d refuses any distort whose perspective could fling
+   the border past the frame, so nothing here needs cropping. */
+.pfp-border { position: absolute; inset: 0; pointer-events: none; }
+.pfp-border-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+
 /* User list avatars */
 /* Discord-style avatar wrapper with overlaid status dot */
 .user-avatar-wrapper {
@@ -4767,6 +4918,108 @@ select.cfn-select.cfn-input {
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* Border edit modal: shaped avatar as the base layer, border image on top.
+   Both layers fill the same square so the shape and frame stay aligned. The
+   tool group (modes + stage) sits left, the edit history list sits right. */
+/* Wider than a default modal so the stage and history list sit comfortably. */
+#border-crop-modal .modal { width: min(92%, 36rem); }
+.border-crop-body { display: flex; gap: 0.75rem; align-items: stretch; }
+.border-crop-main { flex: 1; min-width: 0; }
+.border-crop-stage { display: flex; align-items: center; justify-content: center; padding: 1.5rem 0; }
+.border-crop-preview { position: relative; width: 14.4rem; height: 14.4rem; }
+/* Purely visual: all interaction goes through .border-crop-box. Without this, a
+   scaled/moved op wrapper's hit area overflows the stage and swallows clicks on
+   the tool tabs above it. */
+.border-crop-layers { position: absolute; inset: 0; pointer-events: none; }
+.border-crop-avatar {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 3rem; color: #fff;
+}
+.border-crop-border {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; pointer-events: none;
+}
+/* One folded op = one nested wrapper. The transform/clip is set inline in JS;
+   every wrapper fills its parent so ops compose cleanly from image outward. */
+.bce-op { position: absolute; inset: 0; }
+
+/* Edit history (the op log), newest at the bottom, each row undoes itself + later. */
+.border-crop-side { width: 8.5rem; display: flex; flex-direction: column; }
+.border-crop-side-title { margin: 0 0 0.4rem; font-size: 0.8125rem; color: var(--text-secondary); }
+.border-crop-history { flex: 1; overflow-y: auto; max-height: 15rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.bce-hist-empty { color: var(--text-muted); font-size: 0.8125rem; padding: 0.35rem 0; }
+.bce-hist-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+  padding: 0.3rem 0.45rem; border: 1px solid var(--border); border-radius: 0.4rem;
+  background: var(--bg-tertiary, #2a2a2e); font-size: 0.8125rem;
+}
+.bce-hist-label { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bce-hist-undo {
+  flex: none; border: none; background: none; cursor: pointer; padding: 0 0.15rem;
+  color: var(--text-muted); font-size: 1rem; line-height: 1;
+}
+.bce-hist-undo:hover { color: var(--accent, #7aa2ff); }
+
+/* Segmented mode selector: pick one tool. */
+.border-crop-modes { display: flex; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.75rem; }
+.border-crop-mode-btn {
+  flex: 1; padding: 0.4rem 0.5rem; border: none; border-right: 1px solid var(--border);
+  background: var(--bg-tertiary, #2a2a2e); color: var(--text-secondary); cursor: pointer;
+  font-size: 0.8125rem; font-weight: 600;
+}
+.border-crop-mode-btn:last-child { border-right: none; }
+.border-crop-mode-btn.active { background: var(--accent, #7aa2ff); color: var(--accent-text); }
+
+/* Shown only for the Crop tool (toggled in _renderBorderEditor). Auto-positions
+   the crop handles around the border's opaque pixels; user edits/keeps from there. */
+.border-crop-autocrop-btn {
+  display: none; width: 100%; padding: 0.4rem 0.5rem; margin-bottom: 0.75rem;
+  border: 1px solid var(--border); border-radius: 0.5rem;
+  background: var(--bg-tertiary, #2a2a2e); color: var(--text-secondary); cursor: pointer;
+  font-size: 0.8125rem; font-weight: 600;
+}
+.border-crop-autocrop-btn:hover { color: var(--text-primary); border-color: var(--accent, #7aa2ff); }
+.border-crop-autocrop-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.border-crop-autocrop-btn:disabled:hover { color: var(--text-secondary); border-color: var(--border); }
+
+/* Shown only for the Rotate tool (toggled in _renderBorderEditor). Quarter-turn
+   nudges that wrap through the same 0..360 logic as the manual rotate handle. */
+.border-crop-rotate-actions { display: none; gap: 0.5rem; margin-bottom: 0.75rem; }
+.border-crop-rotate-actions .btn-sm { flex: 1; text-align: center; }
+
+/* Shown only for the Opacity tool (toggled in _renderBorderEditor). */
+.border-crop-resize-actions { display: none; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.border-crop-resize-actions #border-resize-anchor { flex: 1; }
+.border-resize-anchor-label { font-size: 0.8125rem; color: var(--text-secondary); white-space: nowrap; }
+.border-crop-opacity-actions { display: none; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.border-crop-opacity-actions #border-opacity-slider { flex: 1; }
+.border-opacity-value { min-width: 3ch; text-align: right; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); }
+
+/* Drag handles overlaid on the border. All are positioned in JS (so they follow
+   the border) and hidden by default; only the active mode's handles show. */
+.border-crop-box { position: absolute; inset: 0; touch-action: none; }
+/* Move is the only tool that drags the image body, so it owns the move cursor. */
+.border-crop-preview.mode-move .border-crop-box { cursor: move; }
+.border-crop-handle {
+  position: absolute; width: 0.875rem; height: 0.875rem;
+  border-radius: 50%; background: var(--accent, #7aa2ff); border: 2px solid #fff;
+  box-sizing: border-box; touch-action: none; transform: translate(-50%, -50%);
+  display: none; align-items: center; justify-content: center;
+}
+.crop-edge { cursor: crosshair; }
+.corner-handle { background: var(--bg-secondary, #26262b); cursor: grab; }
+.corner-handle:active { cursor: grabbing; }
+.scale-handle, .rotate-handle { width: 1.25rem; height: 1.25rem; font-size: 0.8rem; color: #fff; line-height: 1; }
+.scale-handle { cursor: nwse-resize; }
+.rotate-handle { background: var(--bg-secondary, #26262b); cursor: grab; }
+.rotate-handle:active { cursor: grabbing; }
+.border-crop-preview.mode-crop .crop-edge,
+.border-crop-preview.mode-distort .corner-handle,
+.border-crop-preview.mode-resize .scale-handle,
+.border-crop-preview.mode-rotate .rotate-handle { display: flex; }
 
 /* Avatar Shape Picker */
 .avatar-shape-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -5430,7 +5683,6 @@ details.sound-section:not([open]) .sound-section-label::before {
 .profile-popup-avatar {
   width: 4.5rem; height: 4.5rem;
   border-radius: 50%;
-  border: 4px solid var(--bg-primary);
   object-fit: cover;
   display: flex;
   align-items: center;
@@ -5540,7 +5792,8 @@ details.sound-section:not([open]) .sound-section-label::before {
   letter-spacing: 0.03em;
 }
 
-.profile-popup-roles {
+.profile-popup-roles,
+.user-profile-groups-list {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
@@ -5556,6 +5809,20 @@ details.sound-section:not([open]) .sound-section-label::before {
   border: 1px solid;
   border-radius: 0.75rem;
   background: var(--bg-secondary);
+}
+
+.user-group-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.user-group-channel-info {
+  padding: 0.1rem 0.3rem;
+  border: 1px solid;
+  border-radius: 50%;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .profile-role-dot {
@@ -5858,7 +6125,7 @@ details.sound-section:not([open]) .sound-section-label::before {
   height: 1rem;
   border-radius: 50%;
   background: var(--danger);
-  color: white;
+  color: var(--danger-text);
   font-size: 0.75rem;
   line-height: 1;
   display: none;
@@ -6317,7 +6584,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 .wizard-indicator.active {
   background: var(--accent, #7c5cfc);
   border-color: var(--accent, #7c5cfc);
-  color: #fff;
+  color: var(--accent-text);
   box-shadow: 0 0 12px var(--accent-glow, rgba(124,92,252,0.4));
 }
 
@@ -6445,7 +6712,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .wizard-btn-small:hover {
   background: var(--accent, #7c5cfc);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 .wizard-steps-list {
@@ -6472,7 +6739,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .wizard-btn-primary {
   background: var(--accent, #7c5cfc);
-  color: #fff;
+  color: var(--accent-text);
   border: none;
   border-radius: 0.375rem;
   padding: 0.625rem 1.5rem;
@@ -6961,6 +7228,70 @@ details.sound-section:not([open]) .sound-section-label::before {
 .cr-perm-toggle.perm-admin-only > span {
   color: var(--warning);
   font-weight: 600;
+}
+
+.user-profile-groups-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.group-channel-info-popup {
+  position: fixed;
+  z-index: 100010;
+  min-width: 12rem;
+  max-width: min(20rem, calc(100vw - 1rem));
+  max-height: calc(100vh - 1rem);
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 0.4rem;
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  font-size: 0.8rem;
+}
+
+.group-channel-info-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.group-channel-info-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.group-channel-info-close:hover {
+  color: var(--text-primary);
+}
+
+.group-channel-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.group-channel-info-row {
+  color: var(--text-secondary);
+}
+
+.group-channel-info-row.sub {
+  padding-left: 0.75rem;
+  color: var(--text-muted);
 }
 
 /* Read-only banner shown when a non-admin opens a role at or above their own
@@ -8634,6 +8965,23 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   color: var(--text-muted);
   white-space: nowrap;
 }
+.upload-progress-cancel {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+.upload-progress-cancel:hover { color: var(--danger); background: var(--bg-secondary); }
 
 .image-queue-thumb {
   position: relative;
@@ -8705,6 +9053,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 .image-queue-remove:hover {
   background: var(--danger);
+  color: var(--danger-text);
 }
 
 /* Custom dropdown wrapper for native <select> (#5418).
@@ -9116,22 +9465,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-weight: 600;
 }
 
-.search-results-panel {
+/* Search results overlay — fills the right sidebar, sitting over voice +
+   member list (Discord-style). Persists across channel switches. */
+.search-panel {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 21.25rem;
-  max-height: 100%;
+  inset: 0;
   background: var(--bg-card);
   border-left: 1px solid var(--border-light);
-  z-index: 100;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: -4px 0 12px rgba(0,0,0,0.2);
 }
 
-.search-results-header {
+.search-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -9143,9 +9491,276 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   gap: 0.5rem;
 }
 
-.search-results-list {
+.search-panel-list {
   overflow-y: auto;
   flex: 1;
+}
+
+/* Stale banner shown after a channels-list change invalidates cached rows. */
+.search-panel-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-hover);
+}
+
+/* Numbered prev/next pager pinned to the bottom of the panel. */
+.search-panel-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.search-page-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.search-page-input {
+  width: 2.75rem;
+  padding: 0.15rem 0.25rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  background: var(--input-bg, var(--bg-tertiary));
+  border: 1px solid var(--border-light);
+  border-radius: 0.25rem;
+}
+.search-page-input:focus {
+  outline: none;
+  border-color: var(--accent, var(--brand-color));
+}
+
+.search-page-total {
+  color: var(--text-muted);
+}
+
+.search-panel-pager .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.search-panel-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.search-spinner {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: search-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes search-spin { to { transform: rotate(360deg); } }
+
+.sfp-recent {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sfp-recent-item {
+  font-size: 0.75rem;
+  max-width: 12rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sfp-recent-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Search filter picker popover (phase 3) ── */
+.search-container { position: relative; }
+
+.search-filter-popover {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.25);
+  padding: 0.5rem;
+  max-height: 20rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sfp-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sfp-chips,
+.sfp-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.sfp-sort {
+  border-top: 1px solid var(--border-light);
+  padding-top: 0.5rem;
+}
+
+.sfp-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-right: 0.25rem;
+}
+
+.sfp-sort-btn {
+  font-size: 0.75rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.sfp-sort-btn:hover { border-color: var(--text-muted); }
+
+.sfp-sort-btn.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.sfp-date-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1;
+}
+
+.sfp-date-input {
+  flex: 1;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sfp-chip {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.sfp-chip:hover {
+  background: var(--bg-secondary);
+  border-color: var(--text-muted);
+}
+
+.sfp-picker {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sfp-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+}
+
+.sfp-back {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.sfp-filter-input {
+  flex: 1;
+  font-size: 0.8125rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sfp-list {
+  overflow-y: auto;
+}
+
+.sfp-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.sfp-item:hover {
+  background: var(--bg-hover);
+}
+
+.sfp-item-sub {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.sfp-empty {
+  padding: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }
 
 .search-result-item {
@@ -9159,6 +9774,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   background: var(--bg-hover);
 }
 
+.search-result-channel {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-channel-code {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 .search-result-author {
   font-weight: 600;
   font-size: 0.75rem;
@@ -9170,16 +9800,54 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   color: var(--text-muted);
 }
 
+/* Display-only thread badge on results that are thread parents. */
+.search-result-thread {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border-radius: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Per-link "Load embed" button — defers preview fetches until the user opts in. */
+.search-load-embed {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.6875rem;
+  color: var(--accent, var(--brand-color));
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.search-load-embed:hover {
+  background: var(--bg-tertiary);
+}
+
 .search-result-content {
   font-size: 0.8125rem;
   color: var(--text-secondary);
   margin-top: 0.25rem;
   word-break: break-word;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+}
+/* Results now render through the real message formatter (images, video, audio,
+   embeds), so the old 3-line clamp is gone — it would have cropped media.
+   Keep inline media from overflowing the narrow panel. (search-overhaul p3) */
+.search-result-content img.chat-image,
+.search-result-content video,
+.search-result-content .file-video,
+.search-result-content .link-preview {
+  max-width: 100%;
+}
+.search-result-content .file-audio {
+  width: 100%;
 }
 
 .search-result-content mark {
@@ -9363,7 +10031,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .btn-danger {
   background: var(--danger, #f44);
-  color: #fff;
+  color: var(--danger-text);
   border: none;
   padding: 0.375rem 1.125rem;
   border-radius: var(--radius-sm);
@@ -9861,7 +10529,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 .btn-danger-fill {
   background: var(--danger) !important;
-  color: white !important;
+  color: var(--danger-text) !important;
 }
 
 .btn-danger-fill:hover {
@@ -10515,6 +11183,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   padding-top: 0;
   border-top: none;
 }
+#invite-new-expiry { width: 6.5rem }
 
 /* Note on a setting that also has a value in the server's environment, so the
    admin can see which of the two is actually live. (#5489) */
@@ -10582,14 +11251,16 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-color: var(--accent);
 }
 
-.sidebar-settings-panel {
+.sidebar-settings-panel,
+.sidebar-invite-panel {
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   border-bottom: none;
   padding: 0.625rem 1rem;
 }
 
-.btn-settings-popout {
+.btn-settings-popout,
+.btn-invite-popout {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -10604,16 +11275,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-weight: 500;
   transition: all 0.15s ease;
 }
-.btn-settings-popout:hover {
+.btn-settings-popout:hover,
+.btn-invite-popout:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--accent);
 }
-.btn-settings-popout svg {
+.btn-settings-popout svg,
+.btn-invite-popout svg {
   flex-shrink: 0;
   opacity: 0.7;
 }
-.btn-settings-popout:hover svg { opacity: 1; }
+.btn-settings-popout:hover svg,
+.btn-invite-popout:hover svg { 
+  opacity: 1;
+}
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ADMIN MEMBER LIST
@@ -10701,7 +11377,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   padding: 0.0625rem 0.3125rem;
   border-radius: 0.1875rem;
   background: var(--danger);
-  color: #fff;
+  color: var(--danger-text);
   font-weight: 600;
 }
 
@@ -10750,6 +11426,16 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-size: 0.625rem;
   color: var(--text-muted);
   opacity: 0.7;
+}
+
+/* Upload storage per member. Deliberately a touch stronger than the other
+   meta chips: it is the one number an admin scans this list looking for. */
+.aml-member-storage {
+  font-size: 0.625rem;
+  color: var(--text-secondary, var(--text-muted));
+  opacity: 0.85;
+  white-space: nowrap;
+  cursor: help;
 }
 
 /* ── Channel Picker (Add/Remove user from channels) ── */
@@ -10955,7 +11641,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .btn-unban {
   flex-shrink: 0;
   background: var(--success) !important;
-  color: white !important;
+  color: var(--success-text) !important;
 }
 
 .btn-unban:hover { opacity: 0.85; }
@@ -10970,7 +11656,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .btn-delete-user {
   flex-shrink: 0;
   background: var(--danger) !important;
-  color: white !important;
+  color: var(--danger-text) !important;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem !important;
 }
@@ -11515,6 +12201,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
   /* Update banner — compact on phone */
   .update-banner { padding: 0.1875rem 0.5rem; font-size: 0.6875rem; }
+  .disk-low-banner { padding: 0.1875rem 0.5rem; font-size: 0.6875rem; }
+  .disk-low-dot { width: 0.375rem; height: 0.375rem; }
   .update-pulse { width: 0.375rem; height: 0.375rem; }
 
   /* Desktop app banner — hide on mobile (they have Haven-Android) */
@@ -12386,7 +13074,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
   padding: 0.3125rem 0.625rem; border-radius: 0.25rem; text-align: left; font-size: 0.75rem; white-space: nowrap;
 }
 .stream-layout-opt:hover { background: rgba(255,255,255,0.08); color: #fff; }
-.stream-layout-opt.active { background: var(--accent, #7c5cfc); color: #fff; }
+.stream-layout-opt.active { background: var(--accent, #7c5cfc); color: var(--accent-text); }
 
 .screen-share-tile {
   position: relative;
@@ -12954,6 +13642,24 @@ video:-webkit-full-screen {
   color: var(--text-primary);
   background: var(--bg-tertiary);
 }
+/* Stack a small note over the arrow. The members handle sits directly above
+   this one in the same spot at the same size, and with nothing but an arrow on
+   each there was no way to tell them apart short of remembering which was
+   which. Only this one is marked, so one has a note and one does not. (#5534) */
+.sb-sidebar-toggle-btn {
+  flex-direction: column;
+  gap: 0.0625rem;
+  height: 2.75rem;
+}
+.sb-sidebar-toggle-btn .sb-toggle-mark {
+  font-size: 0.625rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+.sb-sidebar-toggle-btn .sb-toggle-arrow {
+  font-size: 0.6875rem;
+  line-height: 1;
+}
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    WHITELIST PANEL
@@ -13011,7 +13717,7 @@ video:-webkit-full-screen {
   padding: 0.125rem 0.5rem !important;
   font-size: 0.6875rem;
   background: var(--danger) !important;
-  color: #fff !important;
+  color: var(--danger-text) !important;
   border-radius: var(--radius-sm);
   cursor: pointer;
   min-height: 0;
@@ -14131,7 +14837,7 @@ ul.chat-list { list-style-type: disc; }
 }
 .connection-setup-actions .btn-sm.btn-accent {
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
 }
 .connection-block { margin-bottom: 0.5rem; }
 .connection-block .connection-row { margin-bottom: 0; }
@@ -14269,6 +14975,11 @@ ul.chat-list { list-style-type: disc; }
   text-align: left;
 }
 .lang-picker-btn:hover { border-color: var(--accent); }
+.lang-picker-btn:focus-visible,
+.lang-picker-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .lang-caret { margin-left: auto; opacity: 0.6; font-size: 0.625rem; }
 
 .lang-picker-list {
@@ -14302,6 +15013,7 @@ ul.chat-list { list-style-type: disc; }
   text-align: left;
 }
 .lang-picker-item:hover { background: var(--bg-tertiary); }
+.lang-picker-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
 .lang-flag {
   width: 1.25rem;
@@ -14320,6 +15032,13 @@ ul.chat-list { list-style-type: disc; }
   font-weight: 700;
   background: var(--bg-secondary);
   color: var(--text-muted);
+}
+.lang-flag-auto { border-radius: 50%; }
+
+/* The auth picker sits near the bottom edge, so open it upward. */
+.auth-lang-bar .lang-picker-list {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .file-attachment {
@@ -14736,7 +15455,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 0.65rem;
   font-weight: 700;
   background: var(--accent, #7289da);
-  color: #fff;
+  color: var(--accent-text);
   padding: 0.0625rem 0.3125rem;
   border-radius: 0.5rem;
   flex-shrink: 0;
@@ -14952,6 +15671,12 @@ ul.chat-list { list-style-type: disc; }
   max-height: 100%;
   overflow-y: auto;
 }
+.role-sidebar-level {
+  font-size: 0.7em;
+  font-style: italic;
+  opacity: 0.6;
+  margin-left: auto;
+}
 .role-sidebar-item {
   display: flex;
   align-items: center;
@@ -14967,13 +15692,19 @@ ul.chat-list { list-style-type: disc; }
 }
 .role-sidebar-item.active {
   background: var(--accent, #5865f2);
-  color: #fff;
+  color: var(--accent-text);
 }
 /* Separates the synthetic Admin role from the real roles in the sidebar. */
 .role-sidebar-divider {
   height: 1px;
   margin: 0.375rem 0.25rem;
   background: var(--border, rgba(255,255,255,0.12));
+}
+.role-sidebar-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-style: italic;
+  opacity: 0.65;
 }
 .role-color-dot {
   width: 0.625rem;
@@ -16295,6 +17026,10 @@ ul.chat-list { list-style-type: disc; }
   margin: 0.5rem auto;
 }
 
+.audit-detail-pair {
+  margin-right: 0.5em;
+}
+
 /* ── Channel Roles Modal ─────────────────────── */
 .channel-roles-layout {
   display: flex;
@@ -16743,7 +17478,13 @@ ul.chat-list { list-style-type: disc; }
 
 /* Banner visible — base: header & topic above banner */
 .main.has-banner .channel-header,
-.main.has-banner .channel-topic-bar {
+.main.has-banner .channel-topic-bar,
+/* The banner is absolutely positioned at z-index 0, so it paints over any
+   sibling that is not itself positioned. The header and topic bar were lifted
+   above it; the welcome screen never was, so "Welcome to Haven" rendered
+   underneath the banner image on the no-channel-selected view. .message-area
+   already carries its own position:relative and is unaffected. */
+.main.has-banner .welcome-screen {
   position: relative;
   z-index: 1;
 }
@@ -17551,7 +18292,7 @@ ul.chat-list { list-style-type: disc; }
     flex-wrap: wrap;
   }
   .aml-role-badge { font-size: 0.5625rem; padding: 0 0.3125rem; }
-  .aml-member-joined, .aml-member-channels { font-size: 0.5625rem; }
+  .aml-member-joined, .aml-member-channels, .aml-member-storage { font-size: 0.5625rem; }
 
   /* Actions: always visible on mobile (no hover), compact */
   .aml-actions {
@@ -17888,7 +18629,7 @@ ul.chat-list { list-style-type: disc; }
 .qs-badge {
   margin-left: auto;
   background: var(--danger, #ed4245);
-  color: #fff;
+  color: var(--danger-text);
   font-size: 0.6875rem;
   font-weight: 700;
   padding: 0.0625rem 0.375rem;
@@ -18062,6 +18803,62 @@ ul.chat-list { list-style-type: disc; }
   text-align: center;
   padding: 2.5rem 1.25rem;
   font-size: 0.9rem;
+}
+
+/* ── Thread list (#5506) ── reuses the gallery shell, own row styling ── */
+.thread-list-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.375rem 0.625rem;
+}
+.thread-list-search:focus { outline: none; border-color: var(--accent); }
+.thread-list-count { font-size: 0.75rem; white-space: nowrap; }
+.thread-list-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  font: inherit;
+  padding: 0.625rem 0.5rem;
+  cursor: pointer;
+  transition: background .12s;
+}
+.thread-list-row:hover { background: var(--bg-tertiary, var(--bg-secondary)); }
+.thread-list-row:last-child { border-bottom: 0; }
+.thread-list-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.thread-list-author { font-weight: 600; font-size: 0.85rem; }
+.thread-list-replies {
+  background: var(--bg-tertiary, var(--bg-secondary));
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.625rem;
+}
+.thread-list-when { color: var(--text-muted); font-size: 0.72rem; margin-left: auto; }
+.thread-list-preview {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .media-gallery-grid {
   display: grid;
@@ -18266,7 +19063,8 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* -- Personas (#86, #5349) ----------------------------- */
-.personas-section-header {
+.personas-section-header,
+.groups-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -18350,4 +19148,141 @@ ul.chat-list { list-style-type: disc; }
   flex-wrap: wrap;
   align-items: center;
 }
-.persona-edit-row input[type=tex
+.persona-edit-row input[type=text] { flex: 1; min-width: 8rem; }
+
+/* ── Ferry: Haven <-> Discord bridge ──────────────────────── */
+.ferry-body { max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+
+/* Each step is a numbered card so the setup reads as a sequence rather than a
+   wall of controls. A locked step stays visible, greyed and non-interactive,
+   so an admin can see the whole path before starting it. */
+.ferry-step {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+/* :first-child, not :first-of-type. The Options block is a <details>, so it is
+   the first element of its own type and :first-of-type matched it too, zeroing
+   the gap that should separate it from the step above. */
+.ferry-step:first-child { margin-top: 0; }
+.ferry-step-done { border-color: var(--success, #2ecc71); }
+.ferry-step-locked { opacity: .5; pointer-events: none; }
+
+.ferry-step-title {
+  margin: 0 0 6px;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ferry-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: .72rem;
+  flex: 0 0 auto;
+}
+.ferry-step-done .ferry-step-num { background: var(--success, #2ecc71); color: var(--success-text); }
+
+.ferry-status-ok  { color: var(--success, #2ecc71); font-size: .78rem; margin: 8px 0 0; }
+.ferry-status-bad { color: var(--danger, #e74c3c);  font-size: .78rem; margin: 8px 0 0; }
+.ferry-warn       { display: block; margin-top: 8px; color: var(--warning, #f39c12); }
+
+.ferry-token-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.ferry-token-row input { flex: 1; min-width: 12rem; }
+.ferry-invite {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  font-size: .75rem;
+  word-break: break-all;
+}
+
+/* Two columns of labelled dropdowns, so every control says what it is instead
+   of being a row of anonymous selects. */
+.ferry-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ferry-add-grid label { display: flex; flex-direction: column; gap: 3px; }
+.ferry-add-grid label > span { font-size: .7rem; color: var(--text-secondary); }
+.ferry-add-grid .form-select { width: 100%; font-size: .78rem; }
+.ferry-add-wide { grid-column: 1 / -1; }
+.ferry-add-btn  { grid-column: 1 / -1; }
+@media (max-width: 520px) { .ferry-add-grid { grid-template-columns: 1fr; } }
+
+.ferry-options { margin-top: 16px; }
+.ferry-options > summary {
+  cursor: pointer;
+  list-style: none;          /* the default marker is dropped by display:flex anyway */
+  margin: 0;
+  user-select: none;
+}
+.ferry-options > summary::-webkit-details-marker { display: none; }
+.ferry-options > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--text-secondary);
+  transition: transform .15s ease;
+}
+.ferry-options[open] > summary::before { transform: rotate(90deg); }
+.ferry-options > summary:hover { color: var(--accent); }
+.ferry-options[open] > summary { margin-bottom: 6px; }
+
+.ferry-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .75rem; }
+.ferry-table th {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.ferry-table td { padding: 6px; border-bottom: 1px solid var(--border-light, var(--border)); vertical-align: top; }
+.ferry-row-off { opacity: .45; }
+.ferry-mini { font-size: .72rem; padding: 3px 4px; max-width: 11rem; }
+/* The td stays a real table cell so its border-bottom lines up with the other
+   cells in the row; flexing the td itself pulled it out of table layout and
+   left the row's underline a pixel off. */
+.ferry-actions-inner { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.ferry-actions-inner .toggle-row { gap: 6px; }
+.ferry-link-error { color: var(--danger, #e74c3c); font-size: .68rem; max-width: 14rem; }
+
+/* Destination badge on a message that was addressed to Discord. The routing
+   prefix is stripped before storage, so without this an on-command channel
+   looks like people talking to nobody. */
+.ferry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: .66rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.ferry-role-dot {
+  display: inline-block;
+  width: .55rem;
+  height: .55rem;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}

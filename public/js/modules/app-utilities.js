@@ -342,14 +342,10 @@ _rememberDmAttachments(message) {
   }
 },
 
-// Client-side DM message search — walks _lastRenderedMessages (already decrypted)
-// and renders results into the shared search-results-panel. (#5248)
+// Client-side DM message search — walks _lastRenderedMessages (already
+// decrypted) and hands matches to the search panel. DMs are E2E-encrypted so
+// the server never sees plaintext; each DM keeps its own panel context. (#5248)
 _searchDmCacheLocally(query) {
-  const panel = document.getElementById('search-results-panel');
-  const list  = document.getElementById('search-results-list');
-  const count = document.getElementById('search-results-count');
-  if (!panel || !list || !count) return;
-
   const q = query.toLowerCase();
   // Newest-first so the most recent matches appear at the top
   const msgs = (this._lastRenderedMessages || []).slice().reverse();
@@ -357,30 +353,7 @@ _searchDmCacheLocally(query) {
     .filter(m => m && typeof m.content === 'string' && m.content.toLowerCase().includes(q))
     .slice(0, 50);
 
-  count.innerHTML = `${matches.length} result${matches.length === 1 ? '' : 's'} for "${this._escapeHtml(query)}" <span class="search-filter-tag">DM (local)</span>`;
-
-  if (matches.length === 0) {
-    list.innerHTML = `<p class="muted-text" style="padding:12px">${t('header.search_no_results')}</p>`;
-  } else {
-    list.innerHTML = matches.map(r => `
-      <div class="search-result-item" data-msg-id="${r.id}">
-        <span class="search-result-author" style="color:${this._getUserColor(r.username)}">${this._escapeHtml(this._getNickname(r.user_id, r.username))}</span>
-        <span class="search-result-time">${this._formatTime(r.created_at)}</span>
-        <div class="search-result-content">${this._highlightSearch(this._escapeHtml(r.content), query)}</div>
-      </div>
-    `).join('');
-  }
-  panel.style.display = 'block';
-
-  list.querySelectorAll('.search-result-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const msgId = parseInt(item.dataset.msgId, 10);
-      panel.style.display = 'none';
-      document.getElementById('search-container').style.display = 'none';
-      document.getElementById('search-input').value = '';
-      this._jumpToMessage(msgId);
-    });
-  });
+  this._searchReceiveResults(`dm:${this.currentChannel}`, { results: matches, query, isDM: true });
 },
 
 _highlightSearch(escapedHtml, query) {
@@ -4038,6 +4011,92 @@ async _loadMediaToken() {
   this._flushPendingMedia();
 },
 
+// The media token carries a day stamp and the server honours only today's and
+// yesterday's, so it goes stale after about two days. It used to be fetched
+// once at startup and never again, which was fine for a tab that gets closed
+// and fatal for one that does not: leave Haven open over a weekend and every
+// remote image posted after the token expired came back 401 and rendered as a
+// blank gap, with no error and no retry. Reloading fixed it, which is why this
+// looked random and unreproducible. Refreshed on a timer, on reconnect, and on
+// a failed image below.
+_renderSessionsList(sessions) {
+  const el = document.getElementById('sessions-list');
+  if (!el) return;
+  if (!sessions.length) {
+    el.innerHTML = `<p class="muted-text">${this._escapeHtml(t('settings.sessions_section.none'))}</p>`;
+    return;
+  }
+  const rel = (ms) => {
+    if (!ms) return '';
+    const mins = Math.floor((Date.now() - ms) / 60000);
+    if (mins < 1) return t('settings.sessions_section.just_now');
+    if (mins < 60) return t('settings.sessions_section.mins', { n: mins });
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return t('settings.sessions_section.hours', { n: hrs });
+    return t('settings.sessions_section.days', { n: Math.floor(hrs / 24) });
+  };
+  el.innerHTML = sessions.map(s => {
+    const tag = s.current
+      ? `<span class="session-current-tag">${this._escapeHtml(t('settings.sessions_section.this_device'))}</span>`
+      : '';
+    const ip = s.ip ? this._escapeHtml(s.ip) : '';
+    return `<div class="session-item${s.current ? ' is-current' : ''}">
+      <span class="session-device">${this._escapeHtml(s.device || '')}</span>${tag}
+      <span class="session-meta">${ip}${ip && s.since ? '<br>' : ''}${this._escapeHtml(rel(s.since))}</span>
+    </div>`;
+  }).join('');
+},
+
+// Ask for the list when the pane is actually on screen. There is no session
+// table behind this, so it is a snapshot of live sockets, not history.
+_refreshSessions() {
+  this.socket?.emit('get-sessions');
+},
+
+_refreshMediaToken() {
+  // One request even when a screen full of images fails at the same moment.
+  if (!this._mediaTokenRefresh) {
+    this._mediaTokenRefresh = Promise.resolve(this._loadMediaToken())
+      .finally(() => { this._mediaTokenRefresh = null; });
+  }
+  return this._mediaTokenRefresh;
+},
+
+// Re-fetch well inside the window rather than near the edge, so a machine that
+// sleeps through the boundary still wakes up with time to spare.
+_startMediaTokenRefresh() {
+  if (this._mediaTokenTimer) return;
+  this._mediaTokenTimer = setInterval(() => {
+    if (this._mediaProxyEnabled !== false) this._refreshMediaToken();
+  }, 6 * 60 * 60 * 1000);
+},
+
+// Last line of defence: an image the proxy refused gets one more go with a
+// fresh token. Covers the cases a timer cannot, like a laptop asleep past the
+// rollover or a clock that disagrees with the server's.
+_setupMediaTokenRetry() {
+  if (this._mediaRetryBound) return;
+  this._mediaRetryBound = true;
+  // Capture phase: `error` from an <img> does not bubble.
+  document.addEventListener('error', (e) => {
+    const el = e.target;
+    if (!el || el.tagName !== 'IMG') return;
+    const src = el.getAttribute('src') || '';
+    if (!src.startsWith('/api/media-proxy?')) return;
+    if (el.dataset.mpRetried) return;       // one retry per image, never a loop
+    el.dataset.mpRetried = '1';
+    const stale = this._mediaToken;
+    this._refreshMediaToken().then(() => {
+      if (!this._mediaToken || this._mediaToken === stale) return;
+      try {
+        const u = new URL(src, location.href);
+        u.searchParams.set('mt', this._mediaToken);
+        el.setAttribute('src', u.pathname + u.search);
+      } catch { /* malformed src, leave it alone */ }
+    });
+  }, true);
+},
+
 // Returns a URL safe to put in a src attribute, or null when proxying is on
 // but the token has not arrived yet (caller must defer).
 _proxyMediaUrl(url) {
@@ -4328,8 +4387,12 @@ _showAdminResetPwReveal(username, tempPassword) {
 },
 
 _confirmTransferAdmin(userId, username) {
-  // Build a custom modal for transfer admin with password verification
+  // Build a custom modal for transfer admin with a confirmation step.
+  // An SSO admin has no Haven password, so they confirm with an authenticator
+  // code instead. The server decides which it will accept and rejects the
+  // wrong one, this only picks which field to put in front of you. (#5539)
   this._closeUserGearMenu();
+  const ssoConfirm = !!this.user?.isSso;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay transfer-admin-overlay';
   overlay.style.display = 'flex';
@@ -4348,8 +4411,8 @@ _confirmTransferAdmin(userId, username) {
         </div>
         <p class="transfer-admin-note">${t('modals.transfer_admin.note')}</p>
         <div class="form-group">
-          <label class="form-label">${t('modals.transfer_admin.password_label')}</label>
-          <input type="password" id="transfer-admin-pw" class="form-input" placeholder="${t('modals.transfer_admin.password_placeholder')}" autocomplete="current-password">
+          <label class="form-label">${ssoConfirm ? t('modals.transfer_admin.totp_label') : t('modals.transfer_admin.password_label')}</label>
+          <input type="${ssoConfirm ? 'text' : 'password'}" id="transfer-admin-pw" class="form-input" placeholder="${ssoConfirm ? t('modals.transfer_admin.totp_placeholder') : t('modals.transfer_admin.password_placeholder')}" ${ssoConfirm ? 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"' : 'autocomplete="current-password"'}>
         </div>
         <p id="transfer-admin-error" class="transfer-admin-error"></p>
       </div>
@@ -4374,16 +4437,19 @@ _confirmTransferAdmin(userId, username) {
   pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmBtn.click(); });
 
   confirmBtn.addEventListener('click', () => {
-    const password = pwInput.value.trim();
-    if (!password) {
-      errorEl.textContent = t('modals.transfer_admin.error_required');
+    const secret = pwInput.value.trim();
+    if (!secret) {
+      errorEl.textContent = ssoConfirm
+        ? t('modals.transfer_admin.error_totp_required')
+        : t('modals.transfer_admin.error_required');
       errorEl.style.display = '';
       pwInput.focus();
       return;
     }
     confirmBtn.disabled = true;
     confirmBtn.textContent = t('modals.transfer_admin.transferring');
-    this.socket.emit('transfer-admin', { userId, password }, (res) => {
+    const payload = ssoConfirm ? { userId, totpCode: secret } : { userId, password: secret };
+    this.socket.emit('transfer-admin', payload, (res) => {
       if (res && res.error) {
         errorEl.textContent = res.error;
         errorEl.style.display = '';

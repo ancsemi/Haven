@@ -1,6 +1,7 @@
 'use strict';
 
 const bcrypt = require('bcryptjs');
+const OTPAuth = require('otpauth');
 const { isString, isInt, VALID_ROLE_PERMS } = require('./helpers');
 
 module.exports = function register(socket, ctx) {
@@ -40,6 +41,55 @@ module.exports = function register(socket, ctx) {
 
   // Expose on ctx so other modules can use it if needed
   ctx.applyRoleChannelAccess = applyRoleChannelAccess;
+
+  // ── Helper: live-refresh for 'view_all_channels' ────────
+  // A role that grants view_all_channels changes what its holder can SEE, so
+  // push them a rebuilt channel list (joining the new rooms) the same way
+  // applyRoleChannelAccess does, instead of it only appearing on next login.
+  function roleGrantsSeeAll(roleId) {
+    return !!db.prepare(
+      "SELECT 1 FROM role_permissions WHERE role_id = ? AND permission = 'view_all_channels' AND allowed = 1"
+    ).get(roleId);
+  }
+  function pushChannelList(userId) {
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === userId) {
+        s.emit('channels-list', getEnrichedChannels(userId, s.user.isAdmin, (room) => s.join(room)));
+      }
+    }
+  }
+
+  // ── Helper: undo view_all_channels auto-joins ───────────
+  // Granting the permission writes a real membership row for every channel, so
+  // losing it has to take those rows back. Without this, demoting a mod leaves
+  // them sitting in every private channel on the server, which is the opposite
+  // of what demoting someone means. No-ops when they still hold the permission
+  // through some other role, and never touches memberships they got another
+  // way. (#5512)
+  function syncSeeAllMemberships(userId) {
+    const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+    if (row && row.is_admin) return;
+    if (userHasPermission(userId, 'view_all_channels')) return;
+
+    const losing = db.prepare(`
+      SELECT c.code FROM channel_members cm
+      JOIN channels c ON c.id = cm.channel_id
+      WHERE cm.user_id = ? AND cm.auto_all_channels = 1
+    `).all(userId);
+    if (!losing.length) return;
+
+    db.prepare('DELETE FROM channel_members WHERE user_id = ? AND auto_all_channels = 1').run(userId);
+
+    // Leaving the rooms matters as much as the rows do: a socket still in
+    // channel:<code> keeps receiving live messages from a channel the user can
+    // no longer open.
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === userId) {
+        losing.forEach(ch => s.leave(`channel:${ch.code}`));
+        s.emit('channels-list', getEnrichedChannels(userId, s.user.isAdmin, (room) => s.join(room)));
+      }
+    }
+  }
 
   // ── Notify helper: push one user's recomputed role state to their sockets ──
   // Recomputes from the DB, so it's correct whether the change was to the
@@ -171,7 +221,7 @@ module.exports = function register(socket, ctx) {
     // Refresh every live display: member lists re-read getUserHighestRole and
     // clients re-fetch role-driven UI on roles-updated.
     for (const [code] of channelUsers) { emitOnlineUsers(code); }
-    io.emit('roles-updated');
+    io.except('bot-sockets').emit('roles-updated');
 
     cb({ success: true, display: { name, color, icon, visible } });
     _audit({ actor: socket.user, action: 'admin_role_display_update',
@@ -190,7 +240,7 @@ module.exports = function register(socket, ctx) {
     const name = isString(data.name, 1, 30) ? data.name.trim() : '';
     if (!name) return cb({ error: 'Role name required (1-30 chars)' });
 
-    const level = isInt(data.level) && data.level >= 1 && data.level <= 99 ? data.level : 25;
+    const level = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : 25;
     const scope = data.scope === 'channel' ? 'channel' : 'server';
     const color = isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color) ? data.color : null;
     const autoAssign = data.autoAssign ? 1 : 0;
@@ -213,8 +263,8 @@ module.exports = function register(socket, ctx) {
         'INSERT INTO roles (name, level, scope, color, auto_assign, icon) VALUES (?, ?, ?, ?, ?, ?)'
       ).run(name, level, scope, color, autoAssign, icon);
 
-      const perms = Array.isArray(data.permissions) ? data.permissions : [];
-      const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+      const perms = level > 0 && Array.isArray(data.permissions) ? data.permissions : [];
+      const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
       const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
       perms.forEach(p => {
         if (!VALID_ROLE_PERMS.includes(p)) return;
@@ -261,13 +311,15 @@ module.exports = function register(socket, ctx) {
         return cb({ error: `A role's level must stay below your own (${myLevel})` });
       }
     }
+    const newLevel = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : role.level;
+    let permissionsChanged = false;
 
     const updateRoleTx = db.transaction(() => {
       const updates = [];
       const values = [];
 
       if (isString(data.name, 1, 30)) { updates.push('name = ?'); values.push(data.name.trim()); }
-      if (isInt(data.level) && data.level >= 1 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
+      if (isInt(data.level) && data.level >= 0 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
       if (data.color !== undefined) {
         const safeColor = (isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color)) ? data.color : null;
         updates.push('color = ?'); values.push(safeColor);
@@ -291,7 +343,11 @@ module.exports = function register(socket, ctx) {
         db.prepare(`UPDATE roles SET ${updates.join(', ')} WHERE id = ?`).run(...values);
       }
 
-      if (Array.isArray(data.permissions)) {
+      if (newLevel === 0) {   // Remove all permissions if the new level is 0.
+        const result = db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
+        permissionsChanged = result.changes > 0;
+      }
+      else if (Array.isArray(data.permissions)) {
         const requested = data.permissions.filter(p => VALID_ROLE_PERMS.includes(p));
 
         // Resolve the final permission set BEFORE deleting anything. The old
@@ -306,20 +362,21 @@ module.exports = function register(socket, ctx) {
         // they lack) exactly as the role already had them — a non-admin can
         // only add or remove perms they actually hold, and never deletes the
         // rest as a side effect.
+        const currentPerms = db.prepare(
+          'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
+        ).all(roleId).map(r => r.permission);
         let finalPerms;
         if (socket.user.isAdmin) {
           finalPerms = requested;
         } else {
-          const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
-          const current = db.prepare(
-            'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
-          ).all(roleId).map(r => r.permission);
+          const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
           const callerPerms = new Set(getUserPermissions(socket.user.id));
           const controllable = (p) => !adminOnlyPerms.includes(p) && (callerPerms.has('*') || callerPerms.has(p));
-          const lockedKept = current.filter(p => !controllable(p));
+          const lockedKept = currentPerms.filter(p => !controllable(p));
           const controlledChosen = requested.filter(p => controllable(p));
           finalPerms = [...new Set([...lockedKept, ...controlledChosen])];
         }
+        permissionsChanged = currentPerms.length !== finalPerms.length || currentPerms.some(p => !finalPerms.includes(p));
 
         db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
         const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
@@ -344,16 +401,24 @@ module.exports = function register(socket, ctx) {
     // (and the hidden IP-ban option) until they reconnected.
     const affected = db.prepare('SELECT DISTINCT user_id FROM user_roles WHERE role_id = ?').all(roleId);
     for (const row of affected) pushUserRoleState(row.user_id);
+    // If the edit granted view_all_channels, every holder's visible channel
+    // set just grew — refresh their lists live, like assign-role does.
+    if (roleGrantsSeeAll(roleId)) for (const row of affected) pushChannelList(row.user_id);
+    else for (const row of affected) syncSeeAllMemberships(row.user_id);
 
-    socket.broadcast.emit('roles-updated');
+    const nameChanged = data.name !== undefined && isString(data.name, 1, 30) && data.name.trim() !== role.name;
+    const levelChanged = data.level !== undefined && newLevel !== role.level;
+    const newPermissions = permissionsChanged ? (newLevel === 0 ? [] : data.permissions): undefined;
+
+    socket.broadcast.except('bot-sockets').emit('roles-updated');
     cb({ success: true, roles: freshRoles });
     _audit({ actor: socket.user, action: 'role_update',
       target_type: 'role', target_id: roleId, target_name: role.name,
       details: {
-        nameChanged: data.name !== undefined,
-        levelChanged: data.level !== undefined,
-        permissionsChanged: Array.isArray(data.permissions),
-        permissions: Array.isArray(data.permissions) ? data.permissions : undefined
+        nameChanged,
+        levelChanged,
+        permissionsChanged,
+        permissions: newPermissions
       } });
   });
 
@@ -368,10 +433,14 @@ module.exports = function register(socket, ctx) {
     const roleId = isInt(data.roleId) ? data.roleId : null;
     if (!roleId) return;
 
+    // Read the holders first: after the delete there is nothing left to ask.
+    const heldBy = db.prepare('SELECT DISTINCT user_id FROM user_roles WHERE role_id = ?').all(roleId);
+    const deletedSeeAll = roleGrantsSeeAll(roleId);
     db.prepare('DELETE FROM user_roles WHERE role_id = ?').run(roleId);
     db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
     db.prepare('DELETE FROM role_channel_access WHERE role_id = ?').run(roleId);
     db.prepare('DELETE FROM roles WHERE id = ?').run(roleId);
+    if (deletedSeeAll) for (const r of heldBy) syncSeeAllMemberships(r.user_id);
     for (const [code] of channelUsers) { emitOnlineUsers(code); }
     cb({ success: true });
     _audit({ actor: socket.user, action: 'role_delete',
@@ -394,7 +463,7 @@ module.exports = function register(socket, ctx) {
       const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
 
       const serverMod = insertRole.run('Server Mod', 50, 'server', '#3498db');
-      ['kick_user','mute_user','delete_message','pin_message','set_channel_topic','manage_sub_channels','rename_channel','rename_sub_channel','delete_lower_messages','manage_webhooks','upload_files','use_voice','view_history','view_all_members','manage_music_queue','delete_own_messages','edit_own_messages']
+      ['kick_user','mute_user','delete_message','pin_message','set_channel_topic','manage_sub_channels','rename_channel','rename_sub_channel','delete_lower_messages','manage_webhooks','use_ferry','upload_files','use_voice','view_history','view_all_members','manage_music_queue','delete_own_messages','edit_own_messages']
         .forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
 
       const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
@@ -420,9 +489,9 @@ module.exports = function register(socket, ctx) {
       // the payload-less broadcast below only nudges open role managers.
       const seen = new Set();
       for (const [, s] of io.sockets.sockets) {
-        if (s.user && !seen.has(s.user.id)) { seen.add(s.user.id); pushUserRoleState(s.user.id); }
+        if (s.user && !s.user.isBot && !seen.has(s.user.id)) { seen.add(s.user.id); pushUserRoleState(s.user.id); }
       }
-      io.emit('roles-updated');
+      io.except('bot-sockets').emit('roles-updated');
       cb({ success: true });
     } catch (err) {
       cb({ error: 'Failed to reset roles: ' + err.message });
@@ -624,7 +693,7 @@ module.exports = function register(socket, ctx) {
         // is admin, and drop any perm the caller doesn't currently hold.
         // This prevents a non-admin promoter from escalating perms via a
         // crafted customPerms payload.
-        const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel'];
+        const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
         const callerPermsSet = socket.user.isAdmin ? null : new Set(getUserPermissions(socket.user.id));
         const customPerms = data.customPerms.filter(p => {
           if (typeof p !== 'string') return false;
@@ -652,6 +721,7 @@ module.exports = function register(socket, ctx) {
       }
 
       applyRoleChannelAccess(roleId, userId, 'grant');
+      if (roleGrantsSeeAll(roleId)) pushChannelList(userId);
       refreshUserRoles(userId);
       cb({ success: true });
       try {
@@ -713,21 +783,49 @@ module.exports = function register(socket, ctx) {
     } catch {}
 
     refreshUserRoles(userId);
+    syncSeeAllMemberships(userId);
   });
 
   // ── Role channel access ─────────────────────────────────
   socket.on('get-role-channel-access', (data, callback) => {
     if (!data || typeof data !== 'object') return;
     const cb = typeof callback === 'function' ? callback : () => {};
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_roles')) {
-      return cb({ error: 'Only admins can view role channel access' });
+
+    // Accept single roleId or multiple roleIds.
+    let roleIds;
+    if (isInt(data.roleId)) {
+      roleIds = [data.roleId];
+    } else if (Array.isArray(data.roleIds)) {
+      roleIds = [...new Set(data.roleIds.map(id => isInt(id) ? id : null).filter(id => id !== null))];
+    } else {
+      return cb({ error: 'Invalid role ID' });
     }
 
-    const roleId = isInt(data.roleId) ? data.roleId : null;
-    if (!roleId) return cb({ error: 'Invalid role ID' });
+    if (!roleIds.length) return cb({ error: 'Invalid role ID' });
 
-    const rows = db.prepare('SELECT channel_id, grant_on_promote, revoke_on_demote FROM role_channel_access WHERE role_id = ?').all(roleId);
-    const channels = db.prepare('SELECT id, name, parent_channel_id, is_dm, is_private, position FROM channels WHERE is_dm = 0 ORDER BY parent_channel_id IS NOT NULL, position, name').all();
+    const canManageRoles = socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles');
+    // Non-role-managers may only inspect level-0 groups.
+    if (!canManageRoles) {
+      const placeholders = roleIds.map(() => '?').join(',');
+      const validRoles = db.prepare(`SELECT id FROM roles WHERE id IN (${placeholders}) AND level = 0`).all(...roleIds);
+
+      if (validRoles.length !== roleIds.length) {
+        return cb({ error: 'You cannot view this role' });
+      }
+    }
+
+    const placeholders = roleIds.map(() => '?').join(',');
+    let rows = db.prepare(`SELECT role_id, channel_id, grant_on_promote, revoke_on_demote FROM role_channel_access WHERE role_id IN (${placeholders})`).all(...roleIds);
+    let channels = db.prepare(`SELECT id, name, parent_channel_id, is_dm, is_private, position FROM channels WHERE is_dm = 0 ORDER BY parent_channel_id IS NOT NULL, position, name`).all();
+    // A regular member asking what a group would give them only needs the
+    // channels that group grants. The full channel table would hand them the
+    // name of every private channel on the server, which the channel list
+    // itself deliberately keeps from non-members.
+    if (!canManageRoles) {
+      rows = rows.filter(r => r.grant_on_promote);
+      const granted = new Set(rows.map(r => r.channel_id));
+      channels = channels.filter(c => granted.has(c.id));
+    }
     cb({ success: true, access: rows, channels });
   });
 
@@ -833,6 +931,92 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // ── Update own Groups ─────────────────────────────────────
+  socket.on('update-groups', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    if (!Array.isArray(data.groupIds)) return cb({ error: 'Invalid group data' });
+
+    const groupIds = [...new Set(data.groupIds.map(id => isInt(id) ? id : null).filter(id => id !== null))];
+    try {
+      // Only level-0 roles may be self-selected.
+      const groups = groupIds.length
+        ? db.prepare(`
+            SELECT *
+            FROM roles
+            WHERE id IN (${groupIds.map(() => '?').join(',')})
+              AND level = 0
+          `).all(...groupIds)
+        : [];
+
+      // Reject any IDs that weren't valid level-0 groups.
+      if (groups.length !== groupIds.length) return cb({ error: 'Invalid group selection' });
+
+      const currentGroups = db.prepare(`
+        SELECT role_id
+        FROM user_roles
+        WHERE user_id = ?
+          AND channel_id IS NULL
+          AND role_id IN (
+            SELECT id FROM roles WHERE level = 0
+          )
+      `).all(socket.user.id);
+
+      const currentGroupIds = new Set(currentGroups.map(r => r.role_id));
+      const selectedGroupIds = new Set(groupIds);
+
+      const toAdd = groupIds.filter(id => !currentGroupIds.has(id));
+      const toRemove = [...currentGroupIds].filter(id => !selectedGroupIds.has(id));
+
+      const txn = db.transaction(() => {
+        for (const roleId of toRemove) {
+          db.prepare(`
+            DELETE FROM user_roles
+            WHERE user_id = ?
+              AND role_id = ?
+              AND channel_id IS NULL
+          `).run(socket.user.id, roleId);
+        }
+
+        for (const roleId of toAdd) {
+          db.prepare(`
+            INSERT INTO user_roles
+              (user_id, role_id, channel_id, granted_by, custom_level)
+            VALUES (?, ?, NULL, ?, NULL)
+          `).run(socket.user.id, roleId, socket.user.id);
+        }
+      });
+      txn();
+
+      // Apply linked channel access after the role changes have committed.
+      for (const roleId of toRemove) {
+        applyRoleChannelAccess(roleId, socket.user.id, 'revoke');
+      }
+      for (const roleId of toAdd) {
+        applyRoleChannelAccess(roleId, socket.user.id, 'grant');
+      }
+      refreshUserRoles(socket.user.id);
+
+      const updatedGroups = db.prepare(`
+        SELECT r.*
+        FROM roles r
+        JOIN user_roles ur ON ur.role_id = r.id
+        WHERE ur.user_id = ?
+          AND ur.channel_id IS NULL
+          AND r.level = 0
+        ORDER BY r.name COLLATE NOCASE
+      `).all(socket.user.id);
+
+      cb({
+        success: true,
+        groups: updatedGroups
+      });
+    } catch (err) {
+      console.error('Update groups error:', err);
+      cb({ error: 'Failed to update groups' });
+    }
+  });
+
   // ── Transfer admin ──────────────────────────────────────
   socket.on('transfer-admin', async (data, callback) => {
     if (!data || typeof data !== 'object') return;
@@ -844,20 +1028,61 @@ module.exports = function register(socket, ctx) {
     transferAdminRef.value = true;
 
     try {
-      const password = typeof data.password === 'string' ? data.password : '';
-      if (!password) { transferAdminRef.value = false; return cb({ error: 'Password is required for this action' }); }
-
-      const adminUser = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(socket.user.id);
+      const adminUser = db.prepare(
+        'SELECT username, password_hash, oidc_subject, totp_secret, totp_enabled FROM users WHERE id = ?'
+      ).get(socket.user.id);
       if (!adminUser) { transferAdminRef.value = false; return cb({ error: 'Admin user not found' }); }
 
-      let validPw;
-      try {
-        validPw = await bcrypt.compare(password, adminUser.password_hash);
-        if (!validPw) { transferAdminRef.value = false; return cb({ error: 'Incorrect password' }); }
-      } catch (err) {
-        console.error('Password verification error:', err);
-        transferAdminRef.value = false;
-        return cb({ error: 'Password verification failed' });
+      // An admin who signed in through OIDC has no Haven password, so asking
+      // for one did not merely inconvenience them, it closed the door: on a
+      // server where everybody arrives through SSO, admin could not be handed
+      // to anyone at all. Those accounts confirm with their authenticator code
+      // instead. Two-factor has to be switched on for that, and deliberately
+      // so, because the whole point of the prompt is a second factor and
+      // "you are already signed in" is not one. Anything holding a real bcrypt
+      // hash, which is every local account, still takes the password path.
+      // (#5539)
+      const ssoOnly = !!adminUser.oidc_subject &&
+        !(typeof adminUser.password_hash === 'string' && adminUser.password_hash.startsWith('$2'));
+
+      if (ssoOnly) {
+        if (!adminUser.totp_secret || !adminUser.totp_enabled) {
+          transferAdminRef.value = false;
+          return cb({
+            error: 'Your account signs in through SSO, so there is no Haven password to confirm with. Turn on two-factor authentication in Settings, then transfer admin.',
+            code: 'mfa_required'
+          });
+        }
+        const code = typeof data.totpCode === 'string' ? data.totpCode.replace(/[\s-]/g, '') : '';
+        if (!code) { transferAdminRef.value = false; return cb({ error: 'Authenticator code is required for this action' }); }
+        let validCode;
+        try {
+          const totp = new OTPAuth.TOTP({
+            issuer: 'Haven',
+            label: adminUser.username,
+            algorithm: 'SHA1',
+            digits: 6,
+            period: 30,
+            secret: OTPAuth.Secret.fromBase32(adminUser.totp_secret)
+          });
+          validCode = totp.validate({ token: code, window: 1 }) !== null;
+        } catch (err) {
+          console.error('Transfer admin code verification error:', err);
+          transferAdminRef.value = false;
+          return cb({ error: 'Code verification failed' });
+        }
+        if (!validCode) { transferAdminRef.value = false; return cb({ error: 'Incorrect code' }); }
+      } else {
+        const password = typeof data.password === 'string' ? data.password : '';
+        if (!password) { transferAdminRef.value = false; return cb({ error: 'Password is required for this action' }); }
+        try {
+          const validPw = await bcrypt.compare(password, adminUser.password_hash);
+          if (!validPw) { transferAdminRef.value = false; return cb({ error: 'Incorrect password' }); }
+        } catch (err) {
+          console.error('Password verification error:', err);
+          transferAdminRef.value = false;
+          return cb({ error: 'Password verification failed' });
+        }
       }
 
       const stillAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(socket.user.id);

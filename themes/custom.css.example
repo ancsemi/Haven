@@ -4,6 +4,7 @@
  * @author      YourName
  * @version     1.0
  * @icon        🎨
+ * @haven-theme-api 1
  */
 
 /*
@@ -18,8 +19,37 @@
   The @icon line above sets the emoji shown on the theme picker button.
   You can use any emoji or a short text character (e.g. ★, ♦, 🌙).
 
+  The @haven-theme-api line declares which public token and region contract
+  this theme targets. See docs/theme-authoring.md for the complete reference.
+
   All variables are optional — omit the ones you want to inherit from the
   base Haven theme. Only override what you actually want to change.
+*/
+
+/*
+  BACKGROUND IMAGE
+  ────────────────
+  Drop an image into this same themes/ folder and uncomment the block below.
+  The path is relative to this file, so no leading slash is needed.
+
+  The main region is the chat area; the message list and the messages themselves
+  are transparent, so the image sits behind all of them. The gradient on top is
+  a scrim that keeps text readable over a bright or busy image: raise 0.55 to
+  dim the image more, lower it to show more, or remove that line if the image
+  is already dark. Use white instead of black on a light theme.
+
+  The navigation sidebar keeps its own colour. Add its data-haven-region
+  selector to cover it too, or use body to cover the whole window.
+*/
+
+/*
+[data-haven-region="main"] {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
+    url("wallpaper.jpg");
+  background-size: cover;
+  background-position: center;
+}
 */
 
 :root {
@@ -35,8 +65,8 @@
   /* ── Accent (buttons, links, highlights) ───────── */
   --accent:        #7c5cfc;
   --accent-hover:  #9478ff;
-  --accent-dim:    #5a3fd4;
   --accent-glow:   rgba(124, 92, 252, 0.25);
+  --accent-text:   #ffffff;   /* preferred text for core accent controls */
 
   /* ── Text ──────────────────────────────────────── */
   --text-primary:  #e2e4f0;   /* main message text */
@@ -50,8 +80,11 @@
 
   /* ── Status colors ─────────────────────────────── */
   --success:       #43b581;
+  --success-text:  #ffffff;   /* text on success-filled controls */
   --danger:        #f04747;
+  --danger-text:   #ffffff;   /* text on danger-filled controls */
   --warning:       #faa61a;
+  --warning-text:  #1a1a2e;   /* text on warning-filled controls */
 
   /* ── Online indicator LED ──────────────────────── */
   --led-on:        #43b581;
@@ -66,23 +99,31 @@
   /* ── Layout ────────────────────────────────────── */
   --radius:        8px;       /* default border radius */
   --radius-sm:     4px;
-  --sidebar-width: 270px;
-  --right-width:   260px;
+  --sidebar-width: 16.875rem; /* 270px at the default interface scale */
+  --right-width:   16.25rem;  /* 260px at the default interface scale */
   --transition:    0.15s ease;
 
-  /* ── Message gutter ────────────────────────────── */
-  /* Resize the avatar column with these, NOT by restyling .message-row or
-     .message-avatar. The first message of a group shows an avatar; the ones
-     that follow it don't, and they indent by (pad-x + avatar + gap) to keep
-     one left edge with it. Set the parts here and both sides stay in step —
-     override the rules directly and follow-up messages end up misaligned. */
-  --msg-pad-x:     0.5rem;    /* message row horizontal padding */
-  --msg-pad-y:     0.25rem;   /* message row vertical padding */
-  --msg-avatar:    2.25rem;   /* avatar column width/height */
-  --msg-gap:       0.75rem;   /* avatar → text gap */
-
   /* ── Theme-specific decorative vars ────────────── */
-  --theme-logo:    "⬡";      /* text shown in logo area */
   --msg-glow:      none;      /* glow on messages, e.g. 0 0 8px #7c5cfc */
   --scanline:      none;      /* scanline effect overlay (CRT-style) */
 }
+
+/*
+  STABLE LAYOUT REGIONS
+  ─────────────────────
+  Use data-haven-region selectors for major layout areas instead of internal
+  classes or IDs. Keep deep desktop-only layout changes above 900px so Haven's
+  tablet and mobile overlay behaviour remains intact.
+
+  @media (min-width: 901px) {
+    [data-haven-region="navigation-sidebar"] {
+      width: var(--sidebar-width);
+    }
+
+    [data-haven-region="context-sidebar"] {
+      width: var(--right-width);
+    }
+  }
+
+  See docs/theme-authoring.md for every public region and token.
+*/

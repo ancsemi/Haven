@@ -120,6 +120,7 @@
     },
     "actions": {
       "logout": "Logout",
+      "invite": "Invite Users",
       "change_display_name": "Change display name",
       "close_sidebar": "Close sidebar",
       "message_actions": "Message actions",
@@ -174,6 +175,7 @@
   },
   "toasts": {
     "roles_updated": "Your roles have been updated",
+    "role_server_no_response": "No response from the server. It may be running an older Haven version. Update the server files and fully restart it, then try again.",
     "status_pending_reconnect": "Status will update when reconnected",
     "channel_created": "Channel \"#{{name}}\" created!\nCode: {{code}}",
     "channel_deleted": "Channel was deleted",
@@ -207,10 +209,13 @@
     "2fa_disabled": "Two-factor authentication disabled",
     "plugins_refreshing": "Refreshing plugins & themes…",
     "upload_failed": "Upload failed",
+    "upload_cancelled": "Upload cancelled",
     "image_too_large": "Image too large (max {{max}} MB)",
+    "not_an_image": "Not an image file",
     "encrypted_image_failed": "Encrypted image upload failed",
     "display_name_too_short": "Display name must be at least 2 characters",
     "display_name_invalid_chars": "Letters, numbers, underscores, and spaces only",
+    "display_name_too_many_marks": "Too many stacked accent marks",
     "select_channel_first": "Select a channel first",
     "searching": "Searching…",
     "encryption_key_unavailable": "Encryption key unavailable — message sent without E2E",
@@ -227,6 +232,10 @@
     "burn_armed": "🔥 Burn-after-read armed — next message will self-destruct 30s after viewing",
     "burn_disarmed": "Burn-after-read disabled",
     "channel_hidden": "Channel \"{{name}}\" hidden"
+  },
+  "banners": {
+    "disk_low": "Server disk almost full",
+    "disk_low_detail": "Only {{free}} MB free on the data volume, under the {{reserve}} MB reserve. Uploads are paused so the database can still be written to. Free some space to start them again."
   },
   "messages": {
     "burn_reveal": "Tap to view",
@@ -424,6 +433,7 @@
     "mention_everyone": "Mention @everyone",
     "view_history": "View Message History",
     "view_all_members": "View All Server Members",
+    "view_all_channels": "See All Channels (Auto-Join)",
     "view_channel_members": "View Channel Members",
     "manage_emojis": "Manage Custom Emojis",
     "manage_stickers": "Manage Stickers",
@@ -435,7 +445,8 @@
     "delete_channel": "Delete Channels",
     "read_only_override": "Read-Only Override",
     "view_audit_log": "View Audit Log",
-    "manage_display_names": "Manage Display Names"
+    "manage_display_names": "Manage Display Names",
+    "use_ferry": "Send to Discord (Ferry)"
   },
   "slowmode": {
     "wait": "Slow mode — wait {{seconds}}s before sending another message",
@@ -477,6 +488,24 @@
     "search_results_one": "{{count}} result for \"{{query}}\"",
     "search_results_other": "{{count}} results for \"{{query}}\"",
     "search_no_results": "No results found",
+    "search_page": "Page {{page}} of {{pages}}",
+    "search_page_of": "/ {{pages}}",
+    "search_stale": "A channel or role you have has changed, please refresh the search to continue.",
+    "search_refresh": "Refresh search",
+    "search_rate_limited": "You are searching too quickly. Please wait a moment.",
+    "search_load_embed": "Load embed",
+    "search_thread_replies": "{{count}} replies",
+    "filter_by": "Filter by",
+    "filter_placeholder": "Filter...",
+    "filter_no_matches": "No matches",
+    "filter_toggle": "Filters",
+    "filter_apply": "Apply",
+    "sort_by": "Sort",
+    "sort_newest": "Newest",
+    "sort_oldest": "Oldest",
+    "sort_relevant": "Relevant",
+    "searching": "Searching...",
+    "recent": "Recent",
     "messages": {
       "edited": "(edited)",
       "edited_at": "Edited at {{date}}",
@@ -487,7 +516,8 @@
       "message_unpinned": "A message was unpinned",
       "protected_by": "{{name}} protected a message from cleanup",
       "message_unprotected": "A message was unprotected"
-    }
+    },
+    "thread_list": "View threads"
   },
   "media": {
     "upload_file_title": "Upload File",
@@ -560,7 +590,9 @@
     "close_panel": "Close panel",
     "no_one_in_voice": "No one in voice",
     "online_title": "Online",
-    "select_channel": "Select a channel"
+    "select_channel": "Select a channel",
+    "search_members": "Search members...",
+    "search_clear": "Clear"
   },
   "users": {
     "no_one_here": "No one here",
@@ -624,7 +656,8 @@
       "voice_kick_title": "Remove from voice channel",
       "mute_hint": "Mute = you can't hear them",
       "deafen_hint": "Deafen = they can't hear you"
-    }
+    },
+    "no_search_matches": "No members match that"
   },
   "context": {
     "view_profile": "View Profile",
@@ -713,11 +746,19 @@
       "import": "Import",
       "mod_mode": "Mod Mode",
       "security": "Security",
-      "moderation": "Moderation"
+      "moderation": "Moderation",
+      "sessions": "Sessions",
+      "ferry": "Ferry",
+      "group_server": "Server",
+      "group_people": "People & Access",
+      "group_content": "Content",
+      "group_integrations": "Integrations",
+      "group_maintenance": "Maintenance"
     },
     "language_section": {
       "title": "Language",
       "label": "Language",
+      "auto": "Automatic",
       "hint": "Changes apply immediately"
     },
     "layout_density": {
@@ -728,6 +769,26 @@
       "cozy_hint": "Cozy — default balanced layout",
       "spacious": "Spacious",
       "spacious_hint": "Spacious — more breathing room"
+    },
+    "animate_pfp": {
+      "title": "Animated Profile Pictures",
+      "always": "Always",
+      "always_hint": "Always: animated avatars loop constantly",
+      "hover": "On hover",
+      "hover_hint": "On hover: play while you hover a message or open a profile",
+      "never": "Never",
+      "never_hint": "Never: show the first frame only",
+      "hint": "Applies to everyone's avatars and borders as you see them. Anyone who has turned animation off for their own profile stays still regardless."
+    },
+    "animate_chat": {
+      "title": "Animated Images in Chat",
+      "always": "Always",
+      "hover": "On hover",
+      "never": "Never",
+      "always_hint": "Always: GIFs loop constantly",
+      "hover_hint": "On hover: play only while you point at the image",
+      "never_hint": "Never: show the first frame only",
+      "hint": "Applies to GIFs and other animated images posted in messages, for you only. Nobody else's view changes."
     },
     "toggle_style": {
       "title": "Toggle Style",
@@ -789,7 +850,21 @@
       "hint": "Drop <code>.plugin.js</code> files into the <code>plugins/</code> folder and <code>.theme.css</code> files into the <code>themes/</code> folder, then refresh.",
       "refresh_btn": "Refresh",
       "plugins_label": "Plugins",
-      "themes_label": "Themes"
+      "themes_label": "Themes",
+      "safe_mode_title": "Extension Safe Mode",
+      "safe_mode_desc": "Custom themes and plugins are suppressed for this session. You can reset them or exit without changing your saved choices.",
+      "recovery_pending_title": "Reset waiting for sync",
+      "recovery_pending_desc": "Themes and plugins remain suppressed until Haven saves the base theme preference. Retry the reset when connected.",
+      "reset_customizations": "Reset themes and plugins",
+      "reset_sync_pending": "The local reset is complete, but Haven could not save it to the server. Reconnect and retry.",
+      "exit_safe_mode": "Exit Safe Mode",
+      "legacy_theme": "Legacy theme",
+      "invalid_theme_api": "Invalid Theme API declaration",
+      "unsupported_theme_api": "Unsupported Theme API",
+      "suppressed_safe_mode": "suppressed in Safe Mode",
+      "incompatible_theme": "incompatible theme",
+      "incompatible_theme_hint": "This theme declares an invalid or unsupported Theme API version.",
+      "theme_fallback": "The selected theme is missing or incompatible. Haven was restored."
     },
     "password_section": {
       "title": "Password",
@@ -803,6 +878,22 @@
       "changed": "Password changed!",
       "failed": "Failed",
       "network_error": "Network error"
+    },
+    "sessions_section": {
+      "title": "Active Sessions",
+      "hint": "Devices with Haven open right now. A device that is signed in but closed will not be listed, so sign out everywhere if you think someone else has your account.",
+      "revoke_btn": "Sign out all other devices",
+      "none": "No other devices connected",
+      "this_device": "This device",
+      "confirm_prompt": "Enter your password to sign out every other device.",
+      "need_password": "Password required",
+      "working": "Signing out other devices...",
+      "done": "Other devices signed out.",
+      "failed": "Could not sign out other devices.",
+      "just_now": "just now",
+      "mins": "{{n}} min ago",
+      "hours": "{{n}} h ago",
+      "days": "{{n}} d ago"
     },
     "two_factor_section": {
       "title": "Two-Factor Authentication",
@@ -895,6 +986,10 @@
       "referrer_policy_opt_same": "<strong>Same-Origin (default):</strong> within this server, shares the full address; to other sites, shares nothing.",
       "referrer_policy_opt_none": "<strong>No-Referrer:</strong> shares nothing anywhere — not even within this server.",
       "referrer_policy_note": "Same-Origin and No-Referrer send nothing to other sites, so either one fixes embeds whose CDN rejects a cross-origin referrer, such as Twitter/X video. If an image or embed somewhere else stops loading after this change, that host wants a referrer: switch to Strict-Origin-When-Cross-Origin to restore the pre-3.41.0 behaviour.",
+      "fcm_privacy_group": "FCM Privacy",
+      "fcm_desc": "FCM (Firebase Cloud Messaging) is Google's system for delivering push notifications to Android phones. It's what wakes your phone when you receive a new message while Haven is closed. This means that all notifications (including your Haven username, channel name and message content) sent to your Android phone have to pass through Google's servers to reach your phone.<br><br>While this may be fine for most users, some may prefer to keep Google completely out of the equation. <a href=\"https://unifiedpush.org\" target=\"_blank\" rel=\"noopener\">UnifiedPush</a> is a decentralized notification standard that supports several notification apps, and if a UnifiedPush compatible app is installed on your phone, Haven Mobile will prioritize it over FCM.",
+      "fcm_note": "<strong>Dangerous Action Warning: Before disabling this, please ensure every member in your Haven server including yourself has a UnifiedPush compatible app installed on their phone. Otherwise, some members of your server will not receive any mobile notifications.</strong>",
+      "fcm_enabled_label": "Enable Google FCM Push Notifications",
       "branding_title": "Server Branding",
       "server_name": "Server Name",
       "login_title": "Login Title",
@@ -907,6 +1002,7 @@
       "members_online_only": "Online Only",
       "members_all": "All Members",
       "members_hidden": "Hidden",
+      "view_invite_btn": "Invite Users",
       "view_bans_btn": "View Bans",
       "view_deleted_btn": "View Deleted Users",
       "bulk_cleanup_btn": "Cleanup",
@@ -985,6 +1081,8 @@
       "max_emoji_hint": "Max custom emoji upload size (64–1024 KB, default 256)",
       "max_poll_hint": "Maximum answer choices per poll (2–25, default 10)",
       "max_message_chars_hint": "Maximum characters per message, post, or DM (200–100000, default 2000)",
+      "max_invite_uses": "Max invite link uses",
+      "max_invite_uses_hint": "The maximum number of uses an invite link can be set to. Admin and manage-server permission ignore this limit. (0 = unlimited)",
       "connectivity_title": "Voice & Connectivity",
       "connectivity_hint": "STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on \"ICE: Connecting...\", set your own servers here.",
       "stun_urls": "STUN servers",
@@ -992,6 +1090,22 @@
       "turn_url": "TURN server (optional)",
       "turn_username": "TURN username",
       "turn_password": "TURN password",
+      "test_connectivity_btn": "Test voice connectivity",
+      "test_connectivity_hint": "Checks the servers above the same way a call does, and says in plain English what works and what doesn't. Save your changes first.",
+      "test_connectivity_running": "Testing, this takes a few seconds...",
+      "test_connectivity_failed": "Could not run the test: {{error}}",
+      "test_none_configured": "No STUN or TURN servers are configured, so Haven is using its built-in ones.",
+      "test_ok_relay": "Voice should work for everyone. People on different networks can connect, and your relay is there for the ones who can't connect directly.",
+      "test_ok_stun": "Voice should work for most people on different networks.",
+      "test_fail_nothing": "Voice will only work between people on the same local network. Nothing here can tell two people on different networks how to reach each other.",
+      "test_stun_ok": "{{server}} answered.",
+      "test_stun_dead": "{{server}} did not answer.",
+      "test_turn_ok": "{{server}} relayed successfully.",
+      "test_turn_dead": "{{server}} did not relay anything.",
+      "test_tip_turn": "A relay that doesn't answer is usually a wrong port, UDP not forwarded to it, or a username and password that don't match the server's.",
+      "test_tip_no_turn": "You have no relay set. Most people will be fine, but anyone behind a strict router or on some mobile networks won't connect without one.",
+      "test_tip_partial": "The working servers cover for the dead ones, so calls still connect, but it's worth removing or fixing the dead entries.",
+      "test_caveat": "This ran from your browser on your network. A server that only answers on your local network passes here and still fails for everyone else.",
       "turn_hint": "A TURN server relays traffic for users behind strict NATs that STUN alone can't connect. Only needed if some users still can't connect after setting STUN. Username/password apply to static-credential TURN servers.",
       "env_in_use": "In use from this server's environment ({{var}}): {{value}}. Saving something here replaces it.",
       "env_in_use_secret": "In use from this server's environment ({{var}}). Saving something here replaces it.",
@@ -1031,6 +1145,12 @@
       "joined_date": "Joined {{date}}",
       "channel_count_one": "{{count}} ch",
       "channel_count_other": "{{count}} ch",
+      "storage_public": "{{size}} in channels",
+      "storage_private": "{{size}} in DMs",
+      "storage_profile": "{{size}} in avatars",
+      "storage_tooltip": "Uploads still on the server: {{files}} files ({{breakdown}}). DM attachments are encrypted, so only their size is known.",
+      "storage_summary": "Uploads on disk: {{total}} across {{files}} files.",
+      "storage_summary_unattributed": "{{size}} of that predates per-member tracking and has no owner on record.",
       "already_in_all_channels": "{{name}} is already in all channels",
       "not_in_any_channels": "{{name}} isn't in any channels",
       "picker_add_title": "Add {{name}} to Channel",
@@ -1069,11 +1189,11 @@
       "import_reused": "{{count}} existing channel(s) updated.",
       "import_failed_alert": "Import failed: {{error}}",
       "roles_no_custom": "No custom roles",
-      "roles_level_invalid": "Level must be 1–99",
+      "roles_level_invalid": "Level must be 0–99",
       "roles_create_title": "Create Role",
       "roles_create_hint": "Enter role name:",
       "roles_level_title": "Role Level",
-      "roles_level_hint": "Role level (1-99, higher = more authority):\nServer Mod default = 50, Channel Mod default = 25",
+      "roles_level_hint": "Role level (0-99, higher = more authority):\nServer Mod default = 50\nChannel Mod default = 25\nSelf-Serve (no permissions) = 0",
       "roles_created": "Role created",
       "roles_saved": "Role saved",
       "roles_updated": "Role updated",
@@ -1135,7 +1255,7 @@
       "roles_multi_hint": "Users may hold multiple roles per scope. Effective permissions are the union of every held role; the highest role drives display color.",
       "role_form": {
         "name": "Name",
-        "level": "Level (1-99)",
+        "level": "Level (0-99)",
         "color": "Color",
         "auto_assign": "Auto-assign to new members",
         "auto_assign_hint": "New users will automatically receive this role when they register or join a channel.",
@@ -1146,12 +1266,16 @@
         "reapply_access_tooltip": "Re-runs the channel-access rules above against every user who already holds this role. Useful after editing the Grant/Revoke checkboxes: it brings existing members in line with the current configuration without you having to re-assign the role.",
         "permissions": "Permissions",
         "admin_only_note": "Highlighted permissions are admin-only — only the server owner can grant them.",
+        "level_0_role_note": "Level 0 roles are called \"Groups\". Groups do not grant any permissions. Users can join these groups at will without elevated permissions. Potential uses include: channel grants, groupings, and roleplay.",
         "readonly_note": "This role is at or above your level ({{level}}). You can view it, but only someone ranked above it can make changes.",
         "admin_cosmetic_note": "These settings only change how the Admin role looks. They do not affect what it can do.",
         "visibility": "Visibility",
         "visibility_hint": "When off, the Admin role is hidden on profiles and its color is not applied to your name anywhere, for everyone. Your admin powers are unaffected.",
         "delete": "Delete"
-      }
+      },
+      "ferry_title": "Ferry (Discord bridge)",
+      "ferry_hint": "Relay messages between Haven channels and Discord channels. Needs your own Discord bot, which takes about two minutes to create.",
+      "manage_ferry_btn": "Set up Ferry"
     }
   },
   "modals": {
@@ -1323,13 +1447,54 @@
       "upload_btn": "Upload",
       "clear_btn": "Clear",
       "avatar_hint": "JPG, PNG, GIF (animated!), WebP · Max 2 MB",
+      "border_title": "Border",
+      "border_hint": "JPG, PNG, GIF (animated!), WebP · Max 2 MB",
+      "crop_btn": "Crop",
+      "edit_btn": "Edit",
+      "animate_title": "Animated profile",
+      "animate_trigger": "Trigger",
+      "animate_disabled": "Disabled",
+      "animate_note_intro": "Controls how animations on your profile will appear for every user on Haven. This applies to both your avatar and border, assuming you upload an animated image such as a GIF or APNG.",
+      "animate_note_trigger": "Trigger — Animations on your profile will loop when a user puts their cursor over your message, or opens your profile card.",
+      "animate_note_disabled": "Disabled — Animations will be completely disabled for your profile. Existing animated images uploaded to your profile will remain untouched, however, only the first frame of the image will be displayed on your profile.",
       "shape_title": "Shape",
       "display_name_desc": "Letters, numbers, underscores, and spaces (2–20 chars)",
       "display_name_label": "Display Name",
       "display_name_placeholder": "New display name...",
       "bio_label": "Bio",
       "bio_max": "(max 190 chars)",
-      "bio_placeholder": "Tell people about yourself…"
+      "bio_placeholder": "Tell people about yourself…",
+      "groups_title": "Groups",
+      "manage_groups_btn": "Manage Groups",
+      "save_groups_btn": "Save Groups",
+      "groups_hint": "Groups are displayed as roles on your profile card. They don't grant permissions, but they can grant channel access!",
+      "no_groups": "You are not a part of any groups yet, click \"Manage Groups\" to join one.",
+      "groups_saved": "Groups Saved!",
+      "group_channels_granted": "Channels Granted"
+    },
+    "border_crop": {
+      "title": "Edit",
+      "mode_crop": "Crop",
+      "mode_move": "Move",
+      "mode_distort": "Distort",
+      "mode_resize": "Resize",
+      "mode_rotate": "Rotate",
+      "mode_opacity": "Opacity",
+      "history_title": "Edits",
+      "autocrop": "Crop out invisible pixels",
+      "crop_top": "Crop top",
+      "crop_right": "Crop right",
+      "crop_bottom": "Crop bottom",
+      "crop_left": "Crop left",
+      "distort_corner": "Distort corner",
+      "anchor_label": "Resize anchor",
+      "anchor_center": "Center",
+      "anchor_corner": "Corner",
+      "exceeds_frame": "The border exceeds the avatar frame, discarded changes",
+      "no_edits": "No edits yet",
+      "undo": "Undo this and later edits",
+      "discard": "Discard",
+      "reset": "Reset"
     },
     "admin_action": {
       "title": "Moderate User",
@@ -1580,12 +1745,14 @@
       "filter_online": "Online",
       "filter_offline": "Offline",
       "filter_new": "New (7 days)",
-      "filter_banned": "Banned"
+      "filter_banned": "Banned",
+      "filter_storage": "Most storage used"
     },
     "role_management": {
       "title": "Role Management",
       "new_role_btn": "+ New Role",
-      "select_to_edit": "Select a role to edit"
+      "select_to_edit": "Select a role to edit",
+      "groups_label": "Groups"
     },
     "assign_role": {
       "title": "Assign Role",
@@ -1615,8 +1782,11 @@
       "note": "This action cannot be undone by you.",
       "password_label": "Enter your password to confirm",
       "password_placeholder": "Your password",
+      "totp_label": "Enter your authenticator code to confirm",
+      "totp_placeholder": "6-digit code",
       "confirm_btn": "Transfer Admin",
       "error_required": "Password is required.",
+      "error_totp_required": "Authenticator code is required.",
       "transferring": "Transferring…"
     },
     "bot_mgmt": {
@@ -1697,6 +1867,10 @@
     "hidden_channels": {
       "title": "Hidden Channels",
       "desc": "Hidden channels are removed from your sidebar but you still have full access to them. Unhide one to bring it back."
+    },
+    "ferry": {
+      "title": "Ferry (Discord bridge)",
+      "refresh": "Reconnect"
     }
   },
   "context_menu": {
@@ -1789,7 +1963,8 @@
   "common": {
     "copy": "Copy",
     "copied": "Copied",
-    "uploading": "Uploading..."
+    "uploading": "Uploading...",
+    "cancel_upload": "Cancel upload"
   },
   "reactions": {
     "search_placeholder": "Search emojis..."
@@ -1859,5 +2034,14 @@
       "unavailable_title": "GIF Search Not Available",
       "unavailable_desc": "An admin needs to set up a GIF provider API key before GIF search can work."
     }
+  },
+  "thread_list": {
+    "title": "Threads",
+    "search_placeholder": "Search threads…",
+    "loading": "Loading…",
+    "empty": "No threads in this channel yet",
+    "no_matches": "No threads match that search",
+    "reply_one": "1 reply",
+    "reply_other": "{{count}} replies"
   }
 }

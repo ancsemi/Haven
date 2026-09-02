@@ -124,7 +124,7 @@ function clearEnvValue(key) {
     return !(m && m[1] === key);
   });
   try {
-    fs.writeFileSync(ENV_PATH, lines.join('\n'), { mode: 0o600 });
+    fs.writeFileSync(ENV_PATH, lines.join('\n') + '\n', { mode: 0o600 });
   } catch {
     return { ok: false, reason: 'could not write .env — check file permissions' };
   }

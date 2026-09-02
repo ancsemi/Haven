@@ -2,9 +2,9 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform } = require('./helpers');
 const { generateConnectToken } = require('../auth');
-const { setEnvValue, isWritableKey } = require('../envStore');
+const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
@@ -16,14 +16,9 @@ module.exports = function register(socket, ctx) {
   // ── Rename (display name) ───────────────────────────────
   socket.on('rename-user', (data) => {
     if (!data || typeof data !== 'object') return;
-    const newName = typeof data.username === 'string' ? data.username.trim().replace(/\s+/g, ' ') : '';
-
-    if (!newName || newName.length < 2 || newName.length > 20) {
-      return socket.emit('error-msg', 'Display name must be 2-20 characters');
-    }
-    if (!/^[a-zA-Z0-9_ ]+$/.test(newName)) {
-      return socket.emit('error-msg', 'Letters, numbers, underscores, and spaces only');
-    }
+    const checked = normalizeDisplayName(typeof data.username === 'string' ? data.username : '');
+    if (checked.error) return socket.emit('error-msg', checked.error);
+    const newName = checked.value;
 
     // (#5482) A moderator-set display name holds. Otherwise the whole
     // Manage Display Names permission is decorative — the moderated user
@@ -37,9 +32,10 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    // The charset above already rules out dots, so a display name cannot carry
-    // a working URL. Run it through automod anyway so the deny-list can be
-    // used to reserve impersonation-prone names (e.g. "Admin", "Moderator").
+    // The charset still rules out dots, so a display name cannot carry a
+    // working URL. Run it through automod anyway so the deny-list can be
+    // used to reserve impersonation-prone names (e.g. "Admin", "Moderator"),
+    // which is also the only answer to homoglyph lookalikes (#5509).
     if (enforceAutomod(newName, { surface: 'profile' })) return;
 
     // Reject if another user on this server already uses this display name
@@ -149,6 +145,38 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // Border is a pfp overlay saved like the avatar; broadcast so live views
+  // can pick it up without a reconnect.
+  socket.on('set-border', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const url = typeof data.url === 'string' ? data.url.trim() : '';
+    if (url && !isValidUploadPath(url)) return;
+    socket.user.border = url || null;
+    console.log(`[Border] ${socket.user.username} broadcast border: ${url || '(removed)'}`);
+    for (const [code, users] of channelUsers) {
+      if (users.has(socket.user.id)) {
+        users.get(socket.user.id).border = url || null;
+        emitOnlineUsers(code);
+      }
+    }
+  });
+
+  // Border fit (op log) broadcast, so live views re-render the overlay without
+  // a reconnect. The DB is already written by /api/set-border-transform; this
+  // just fans the sanitized value out to open channels.
+  socket.on('set-border-transform', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const transform = sanitizeBorderTransform(data.transform);
+    const value = (transform && transform.length) ? transform : null;
+    socket.user.borderTransform = value;
+    for (const [code, users] of channelUsers) {
+      if (users.has(socket.user.id)) {
+        users.get(socket.user.id).borderTransform = value;
+        emitOnlineUsers(code);
+      }
+    }
+  });
+
   socket.on('set-avatar-shape', (data) => {
     if (!data || typeof data !== 'object') return;
     const validShapes = ['circle', 'rounded', 'squircle', 'hex', 'diamond'];
@@ -166,6 +194,25 @@ module.exports = function register(socket, ctx) {
       socket.emit('avatar-shape-updated', { shape });
     } catch (err) {
       console.error('Set avatar shape error:', err);
+    }
+  });
+
+  socket.on('set-animate-profile', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const valid = ['trigger', 'disabled'];
+    const mode = valid.includes(data.mode) ? data.mode : 'trigger';
+    try {
+      db.prepare('UPDATE users SET animate_profile = ? WHERE id = ?').run(mode, socket.user.id);
+      socket.user.animate_profile = mode;
+      for (const [code, users] of channelUsers) {
+        if (users.has(socket.user.id)) {
+          users.get(socket.user.id).animate_profile = mode;
+          emitOnlineUsers(code);
+        }
+      }
+      socket.emit('animate-profile-updated', { mode });
+    } catch (err) {
+      console.error('Set animate profile error:', err);
     }
   });
 
@@ -208,7 +255,7 @@ module.exports = function register(socket, ctx) {
     try {
       const row = db.prepare(
         `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
-                u.avatar, u.avatar_shape, u.status, u.status_text, u.bio, u.created_at
+                u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at
          FROM users u WHERE u.id = ?`
       ).get(data.userId);
       if (!row) return;
@@ -270,6 +317,9 @@ module.exports = function register(socket, ctx) {
         displayName: row.displayName,
         avatar: row.avatar || null,
         avatarShape: row.avatar_shape || 'circle',
+        border: row.border || null,
+        borderTransform: parseBorderTransform(row.border_transform),
+        animateProfile: row.animate_profile || 'trigger',
         status: row.status || 'online',
         statusText: row.status_text || '',
         bio: row.bio || '',
@@ -576,6 +626,53 @@ module.exports = function register(socket, ctx) {
    * envStore.setEnvValue, which allow-lists the writable keys — a text field
    * that could write arbitrary .env entries would be a server takeover.
    */
+  /**
+   * Admin-only: forget an integration's credentials (#5529).
+   *
+   * The setup form could only ever replace a key, never remove one, because
+   * envStore.validate rejects an empty value. That left an admin who had set
+   * Steam or Spotify up with no way to turn it back off short of editing .env
+   * by hand, which is exactly the audience the setup form exists to spare.
+   *
+   * Takes a provider's keys together so Spotify's id and secret go at once and
+   * it cannot be left half-configured.
+   */
+  socket.on('clear-integration-key', (data) => {
+    if (!activity) return;
+    if (!socket.user.isAdmin) return socket.emit('error-msg', 'Admin only');
+    if (!data || typeof data !== 'object') return;
+
+    const keys = Array.isArray(data.keys) ? data.keys.filter(k => typeof k === 'string') : [];
+    if (!keys.length) return;
+    if (!keys.every(isWritableKey)) return socket.emit('error-msg', 'Unknown setting');
+
+    const cleared = [];
+    for (const key of keys) {
+      const result = clearEnvValue(key);
+      if (!result.ok) return socket.emit('error-msg', result.reason || 'Could not remove');
+      cleared.push(key);
+    }
+
+    _audit({
+      actor: socket.user,
+      action: 'integration_key_cleared',
+      target_type: 'server',
+      target_name: cleared.join(', '),
+      // Same rule as saving: record which keys changed, never their values.
+      details: { keys: cleared },
+    });
+
+    socket.emit('toast', { message: `${cleared.join(' and ')} removed`, type: 'success' });
+    socket.emit('connections', {
+      connections: activity.listConnections(socket.user.id),
+      available: {
+        steam: activity.isSteamConfigured(),
+        spotify: activity.isSpotifyConfigured(),
+        lastfm: activity.isLastfmConfigured(),
+      },
+    });
+  });
+
   socket.on('set-integration-key', (data) => {
     if (!activity) return;
     if (!socket.user.isAdmin) return socket.emit('error-msg', 'Admin only');
@@ -700,7 +797,7 @@ module.exports = function register(socket, ctx) {
         )
       ORDER BY hs.score DESC LIMIT 50
     `).all(game);
-    io.emit('high-scores', { game, leaderboard });
+    io.except('bot-sockets').emit('high-scores', { game, leaderboard });
   });
 
   socket.on('get-high-scores', (data) => {
@@ -805,17 +902,19 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    const raw = typeof data.displayName === 'string' ? data.displayName.trim().replace(/\s+/g, ' ') : '';
+    // Blank still means "reset to the login username", so only a non-empty
+    // value goes through validation.
+    const submitted = typeof data.displayName === 'string' ? data.displayName.trim() : '';
+    let raw = '';
+    if (submitted) {
+      const checked = normalizeDisplayName(submitted);
+      if (checked.error) return socket.emit('error-msg', checked.error);
+      raw = checked.value;
+    }
     const oldName = target.display_name || target.username;
 
     let newName, newDisplayCol;
     if (raw) {
-      if (raw.length < 2 || raw.length > 20) {
-        return socket.emit('error-msg', 'Display name must be 2-20 characters');
-      }
-      if (!/^[a-zA-Z0-9_ ]+$/.test(raw)) {
-        return socket.emit('error-msg', 'Letters, numbers, underscores, and spaces only');
-      }
       // (#5482) Same automod pass a self-rename gets. The deny-list is what
       // reserves impersonation-prone names like "Admin" / "Moderator", and
       // holding this permission is no reason to be able to hand one out.

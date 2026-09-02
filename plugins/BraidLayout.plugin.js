@@ -2,7 +2,7 @@
  * @name Braid Layout
  * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, docks the full voice controls bottom-left, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. One-key toggle (Ctrl+Shift+B) between Braid and the classic layout. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes, and respects every other theme: cosmetic shape rules use :where() so any [data-theme] override wins.
  * @author Amnibro
- * @version 1.6
+ * @version 1.8
  */
 class BraidLayout {
   start() {
@@ -298,9 +298,13 @@ class BraidLayout {
   _collapseJoinCreate() {
     if (localStorage.getItem('haven_join_collapsed') === null) this._setLS('haven_join_collapsed', '1');
     if (localStorage.getItem('haven_create_collapsed') === null) this._setLS('haven_create_collapsed', '1');
+    // Only the stock `.collapsed` class may drive visibility here. A second,
+    // Braid-owned class used to hide the body as well, and because nothing ever
+    // removed it, the stock toggle could flip `.collapsed` all it liked and the
+    // section stayed shut — Join a Channel and Create Channel were unreachable
+    // for as long as the layout was on.
     document.querySelectorAll('#join-section-body, #create-section-body').forEach((el) => this._addClass(el, 'collapsed'));
     document.querySelectorAll('#join-section-arrow, #create-section-arrow').forEach((el) => this._addClass(el, 'collapsed'));
-    document.querySelectorAll('.sidebar-section[data-mod-id="join"], #admin-controls').forEach((s) => this._addClass(s, 'braid-collapsed'));
   }
 
   _hideEdgeChrome() {
@@ -444,7 +448,18 @@ class BraidLayout {
     addProxy('gallery-toggle-btn', I.media, 'Files & media');
     addProxy('copy-code-btn', I.copy, 'Copy code');
     addProxy('channel-code-settings-btn', I.code, 'Code settings');
-    addProxy('e2e-menu-btn', I.lock, 'Encryption');
+    // Not `e2e-menu-btn`: that only opens a dropdown living inside the header
+    // wrapper, which is display:none outside a DM and hidden by this layout
+    // inside one — so the entry did nothing at all. Proxy the three actions
+    // instead; each opens its own modal. They are marked so the open handler
+    // can show them only where encryption applies.
+    ['e2e-verify-btn::Verify encryption', 'e2e-recover-btn::Recover keys', 'e2e-reset-btn::Reset keys'].forEach((spec) => {
+      const [id, label] = spec.split('::');
+      const src = document.getElementById(id);
+      if (!src) return;
+      addItem(I.lock, label, () => src.click());
+      menu.lastElementChild.dataset.braidE2e = '1';
+    });
     addLabel('View');
     addItem(I.people, 'People & voice', () => this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open')));
     addItem(I.sound, 'Soundboard', () => toggleHtmlClass('braid-sound-open'));
@@ -479,6 +494,13 @@ class BraidLayout {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const opening = !menu.classList.contains('open');
+      // The menu is built once, so anything channel-dependent has to be
+      // resolved here rather than at build time.
+      if (opening) {
+        const wrapper = document.getElementById('e2e-menu-wrapper');
+        const e2eOn = !!wrapper && getComputedStyle(wrapper).display !== 'none';
+        menu.querySelectorAll('[data-braid-e2e]').forEach((el) => { el.style.display = e2eOn ? '' : 'none'; });
+      }
       menu.classList.toggle('open', opening);
       wrap.classList.toggle('open', opening);
       btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
@@ -730,11 +752,27 @@ class BraidLayout {
       if (cont) { if (el.getAttribute('data-braid-cont') !== '1') el.setAttribute('data-braid-cont', '1'); }
       else if (el.hasAttribute('data-braid-cont')) el.removeAttribute('data-braid-cont');
     }
+    const famOf = (el) => {
+      if (!el || !el.classList || !el.classList.contains('channel-item')) return null;
+      if (el.classList.contains('dm-item')) return 'dm';
+      return el.classList.contains('sub-channel-item') ? `sub:${el.dataset.parentId || ''}` : 'main';
+    };
+    const joinsRun = (a, b) => {
+      const fa = famOf(a), fb = famOf(b);
+      if (!fa || !fb) return false;
+      if (fa === 'dm' && fb === 'dm') return true;
+      if (fb.slice(0, 4) !== 'sub:') return false;
+      return fa === fb || fa === 'main';
+    };
     document.querySelectorAll('.channel-item').forEach((el) => {
-      const prev = el.previousElementSibling;
-      const next = el.nextElementSibling;
-      const v = runOf(!prev || !prev.classList.contains('channel-item'), !next || !next.classList.contains('channel-item'));
+      const v = runOf(!joinsRun(el.previousElementSibling, el), !joinsRun(el, el.nextElementSibling));
       if (el.getAttribute('data-braid-run') !== v) el.setAttribute('data-braid-run', v);
+    });
+    document.querySelectorAll('.channel-item.sub-channel-item').forEach((el) => {
+      const hash = el.querySelector('.channel-hash');
+      const flat = el.hasAttribute('data-sub-tag') && hash && hash.textContent.trim() === '↳';
+      if (flat) { if (el.getAttribute('data-braid-flat') !== '1') el.setAttribute('data-braid-flat', '1'); }
+      else if (el.hasAttribute('data-braid-flat')) el.removeAttribute('data-braid-flat');
     });
   }
 
@@ -810,8 +848,6 @@ html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{font-size:.71875rem!important;letter-spacing:0!important;text-transform:none!important;font-weight:550!important;color:var(--text-muted)!important;margin:2px 0!important;padding:.4375rem .5rem;border-radius:.625rem}
 html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label:hover,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label:hover{background:var(--bg-hover);color:var(--text-primary)}
-html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"].braid-collapsed .collapsible-section-body,
-html[data-braid-layout="1"] .sidebar-section#admin-controls.braid-collapsed .collapsible-section-body,
 html[data-braid-layout="1"] #join-section-body.collapsed,
 html[data-braid-layout="1"] #create-section-body.collapsed{display:none!important}
 html[data-braid-layout="1"] .sidebar-split{flex:1;min-height:0;display:flex;flex-direction:column;border:0!important}
@@ -990,6 +1026,8 @@ html[data-braid-form="1"] .channel-item[data-braid-run="end"],
 html[data-braid-form="1"] .channel-item[data-braid-run="solo"]{border-bottom-left-radius:.75rem!important;border-bottom-right-radius:.75rem!important;margin-bottom:.25rem!important}
 html[data-braid-form="1"] .channel-item[data-braid-run="mid"]::before,
 html[data-braid-form="1"] .channel-item[data-braid-run="end"]::before{content:'';position:absolute;left:.75rem;right:.75rem;top:0;border-top:1px dashed var(--braid-seam);pointer-events:none}
+html[data-braid-form="1"] .channel-item[data-braid-flat="1"] .channel-hash{visibility:hidden;position:relative}
+html[data-braid-form="1"] .channel-item[data-braid-flat="1"] .channel-hash::after{content:'#';visibility:visible;position:absolute;left:0;top:0}
 html[data-braid-form="1"] .channel-item:hover{background:color-mix(in srgb,var(--text-primary) 10%,var(--bg-secondary))}
 html[data-braid-form="1"] .channel-item.active{background:color-mix(in srgb,var(--accent) 16%,var(--bg-secondary));border-color:var(--accent)!important}
 html[data-braid-form="1"] .channel-item.active::before,

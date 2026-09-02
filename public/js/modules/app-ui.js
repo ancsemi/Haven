@@ -70,6 +70,19 @@ _handleAutocompleteKeydown(e) {
     }
     if (e.key === 'Escape') { this._hidePersonaDropdown(); return true; }
   }
+  const ferryDd = document.getElementById('ferry-dropdown');
+  if (ferryDd && ferryDd.style.display !== 'none') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      this._navigateFerryDropdown(e.key === 'ArrowDown' ? 1 : -1);
+      return true;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const active = ferryDd.querySelector('.mention-item.active');
+      if (active) { e.preventDefault(); active.click(); return true; }
+    }
+    if (e.key === 'Escape') { this._hideFerryDropdown(); return true; }
+  }
   return false;
 },
 
@@ -164,6 +177,21 @@ _setupUI() {
       if (e.key === 'Escape') { this._hidePersonaDropdown(); return; }
     }
 
+    // Ferry target dropdown takes the same keys as the persona one above.
+    const ferryDd = document.getElementById('ferry-dropdown');
+    if (ferryDd && ferryDd.style.display !== 'none') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this._navigateFerryDropdown(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        const active = ferryDd.querySelector('.mention-item.active');
+        if (active) { e.preventDefault(); active.click(); return; }
+      }
+      if (e.key === 'Escape') { this._hideFerryDropdown(); return; }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       this._sendMessage();
@@ -205,6 +233,8 @@ _setupUI() {
     this._checkSlashTrigger();
     // Check for >>persona trigger (#86, #5349)
     this._checkPersonaTrigger();
+    // Check for =>Discord ferry target trigger
+    this._checkFerryTrigger();
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
@@ -1453,41 +1483,35 @@ _setupUI() {
     };
   }
 
-  // Search
+  // Search — the panel/cache/pager live in app-search.js. Here we just wire
+  // the header input to it. The panel persists across channel switches and
+  // only closes on its own X (or this input's close button).
+  this._searchInit();
   let searchTimeout = null;
   document.getElementById('search-toggle-btn').addEventListener('click', () => {
-    const sc = document.getElementById('search-container');
-    sc.style.display = sc.style.display === 'none' ? 'flex' : 'none';
-    if (sc.style.display === 'flex') document.getElementById('search-input').focus();
+    this._searchToggle();
   });
   document.getElementById('search-close-btn').addEventListener('click', () => {
-    document.getElementById('search-container').style.display = 'none';
-    document.getElementById('search-results-panel').style.display = 'none';
-    document.getElementById('search-input').value = '';
-  });
-  document.getElementById('search-results-close').addEventListener('click', () => {
-    document.getElementById('search-results-panel').style.display = 'none';
+    this._searchClose();
   });
   document.getElementById('search-input').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     const q = e.target.value.trim();
-    if (q.length >= 2 && this.currentChannel) {
-      searchTimeout = setTimeout(() => {
-        const ch = (this.channels || []).find(c => c.code === this.currentChannel);
-        if (ch && ch.is_dm) {
-          this._searchDmCacheLocally(q);
-        } else {
-          this.socket.emit('search-messages', { code: this.currentChannel, query: q });
-        }
-      }, 400);
-    } else {
-      document.getElementById('search-results-panel').style.display = 'none';
+    // DMs match substrings locally (2 chars is fine); public search uses the
+    // server tokenizer's minimum (trigram needs 3). (search-overhaul phase 2)
+    const ch = (this.channels || []).find(c => c.code === this.currentChannel);
+    const min = (ch && ch.is_dm) ? 2 : (this._searchMinChars || 2);
+    if (q.length >= min && this.currentChannel) {
+      searchTimeout = setTimeout(() => this._searchRun(q), 400);
+    } else if (!q) {
+      document.getElementById('search-panel').style.display = 'none';
     }
   });
   document.getElementById('search-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.getElementById('search-container').style.display = 'none';
-      document.getElementById('search-results-panel').style.display = 'none';
+    if (e.key === 'Escape') this._searchClose();
+    else if (e.key === 'Enter') {
+      const q = e.target.value.trim();
+      if (q) { this._searchSaveRecent(q); this._searchRun(q); }
     }
   });
 
@@ -1584,6 +1608,51 @@ _setupUI() {
       this.socket.emit('get-channel-media', { code: this.currentChannel });
     });
   }
+  // ── Channel thread list (#5506) ──
+  const threadsBtn = document.getElementById('threads-toggle-btn');
+  if (threadsBtn) {
+    threadsBtn.addEventListener('click', () => {
+      if (!this.currentChannel) return;
+      const modal = document.getElementById('threads-list-modal');
+      const body = document.getElementById('threads-list-body');
+      const search = document.getElementById('threads-list-search');
+      this._threadListData = null;
+      if (search) search.value = '';
+      body.innerHTML = `<div class="media-gallery-empty muted-text">${(window.t && t('thread_list.loading')) || 'Loading…'}</div>`;
+      modal.style.display = 'flex';
+      this.socket.emit('get-channel-threads', { code: this.currentChannel });
+      // Opened by pointer, so focusing the filter is a convenience, not a trap.
+      if (search) setTimeout(() => search.focus(), 50);
+    });
+  }
+  const threadsClose = document.getElementById('threads-list-close');
+  if (threadsClose) threadsClose.addEventListener('click', () => {
+    document.getElementById('threads-list-modal').style.display = 'none';
+  });
+  const threadsModal = document.getElementById('threads-list-modal');
+  if (threadsModal) threadsModal.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+  const threadsSearch = document.getElementById('threads-list-search');
+  if (threadsSearch) threadsSearch.addEventListener('input', () => {
+    // Filtering client-side: the list is already capped server-side, and a
+    // round trip per keystroke would be worse than filtering 500 rows.
+    this._renderThreadList(threadsSearch.value);
+  });
+  const threadsBody = document.getElementById('threads-list-body');
+  if (threadsBody) threadsBody.addEventListener('click', (e) => {
+    const row = e.target.closest('.thread-list-row');
+    if (!row) return;
+    const parentId = parseInt(row.dataset.parentId, 10);
+    if (!parentId) return;
+    document.getElementById('threads-list-modal').style.display = 'none';
+    // Jump first: _openThread reads the parent's author and preview out of the
+    // rendered message, so opening a thread whose root sits far up the channel
+    // would otherwise show an empty header.
+    this._jumpToMessage?.(parentId);
+    setTimeout(() => this._openThread?.(parentId), 150);
+  });
+
   const galleryClose = document.getElementById('media-gallery-close');
   if (galleryClose) galleryClose.addEventListener('click', () => {
     document.getElementById('media-gallery-modal').style.display = 'none';
@@ -1698,6 +1767,9 @@ _setupUI() {
     sidebarToggle.textContent = collapsed ? '\u276E' : '\u276F'; // ❮ or ❯
     window._updateSbToggleRight?.();
   }
+  // Exposed so the search panel can temporarily un-collapse the sidebar it
+  // overlays, then restore the user's preference on close. (search-overhaul)
+  this._applySidebarCollapsed = applySidebarCollapsed;
 
   // Default is expanded; only collapse if explicitly saved as '1'
   applySidebarCollapsed(localStorage.getItem('haven-sidebar-collapsed') === '1');
@@ -1810,7 +1882,7 @@ _setupUI() {
     // Escape = close modals, search, theme popup, quick switcher
     if (e.key === 'Escape') {
       document.getElementById('search-container').style.display = 'none';
-      document.getElementById('search-results-panel').style.display = 'none';
+      document.getElementById('search-panel').style.display = 'none';
       document.getElementById('theme-popup').style.display = 'none';
       document.getElementById('quick-switcher-overlay')?.remove();
       document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
@@ -1848,9 +1920,9 @@ _setupUI() {
     // context menu is .channel-ctx-menu — there is no .context-menu element.
     const somethingOpen = [...document.querySelectorAll(
       '.modal-overlay, #quick-switcher-overlay, #theme-popup, #search-container, ' +
-      '#search-results-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
+      '#search-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
       '#gif-picker, .channel-ctx-menu, #emoji-dropdown, #slash-dropdown, ' +
-      '#mention-dropdown, #channel-dropdown, #persona-dropdown, #gif-slash-picker, ' +
+      '#mention-dropdown, #channel-dropdown, #persona-dropdown, #ferry-dropdown, #gif-slash-picker, ' +
       '#dm-pip-panel, #thread-panel, #pins-pip-panel'
     )].some(el => el.getClientRects().length > 0);
     if (somethingOpen) return;
@@ -1869,6 +1941,7 @@ _setupUI() {
   // Logout
   document.getElementById('logout-btn').addEventListener('click', () => {
     if (this.voice && this.voice.inVoice) this.voice.leave();
+    this._clearChannelCodeMap?.();
     localStorage.removeItem('haven_token');
     localStorage.removeItem('haven_user');
     localStorage.removeItem('haven_sync_key');
@@ -1959,8 +2032,10 @@ _setupUI() {
     }
   });
 
-  // Image click in thread panel and DM PiP — same lightbox with container-aware navigation
-  for (const containerId of ['thread-messages', 'dm-pip-messages']) {
+  // Image click in thread panel, DM PiP, and the search results panel — same
+  // lightbox with container-aware navigation, spoiler reveal, and image
+  // right-click menu. Search reuses this wholesale. (search-overhaul phase 3)
+  for (const containerId of ['thread-messages', 'dm-pip-messages', 'search-panel-list']) {
     const el = document.getElementById(containerId);
     if (el) {
       el.addEventListener('click', (e) => {
@@ -2504,6 +2579,11 @@ _setupUI() {
     this._clearReply();
   });
 
+  // Cancel whatever is currently uploading
+  document.getElementById('upload-cancel-btn')?.addEventListener('click', () => {
+    this._cancelUploads();
+  });
+
   // Messages container — move-selection mode intercept (supports Shift+click range)
   document.getElementById('messages').addEventListener('click', (e) => {
     if (!this._moveSelectionActive) return;
@@ -2831,26 +2911,7 @@ _setupUI() {
 
   // Rename username
   document.getElementById('rename-btn').addEventListener('click', () => {
-    document.getElementById('rename-modal').style.display = 'flex';
-    const input = document.getElementById('rename-input');
-    input.value = this.user.displayName || this.user.username;
-    input.focus();
-    input.select();
-    // Populate bio
-    const bioInput = document.getElementById('edit-profile-bio');
-    if (bioInput) bioInput.value = this.user.bio || '';
-    // Load personas list (#86, #5349)
-    this._loadPersonas?.();
-    this._updateAvatarPreview();
-    // Sync shape picker buttons
-    const picker = document.getElementById('avatar-shape-picker');
-    if (picker) {
-      const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
-      picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.shape === currentShape);
-      });
-      this._pendingAvatarShape = currentShape;
-    }
+    this._openRenameModal();
   });
 
   // ── Profile popup: click on message author name or avatar ──
@@ -3015,6 +3076,15 @@ _setupUI() {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
 
+  // manage groups buttons
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (manageGroupsBtn) manageGroupsBtn.addEventListener('click', () => this._showGroupManager());
+
+  const saveGroupsBtn = document.getElementById('save-groups-btn');
+  if (saveGroupsBtn) saveGroupsBtn.addEventListener('click', () => {
+    this._GroupManagerSaveGroups();
+  });
+
   // ── Admin moderation bindings ───────────────────────
   document.getElementById('cancel-admin-action-btn').addEventListener('click', () => {
     document.getElementById('admin-action-modal').style.display = 'none';
@@ -3063,7 +3133,10 @@ _setupUI() {
     this._switchSettingsTab('user');
     // Sync language select with current locale
     const langSelect = document.getElementById('language-select');
-    if (langSelect && window.i18n) langSelect.value = i18n.locale;
+    if (langSelect && window.i18n) {
+      langSelect.value = i18n.preference;
+      i18n.syncLocalePicker(langSelect);
+    }
     // Show desktop-only sections when running inside Haven Desktop
     if (window.havenDesktop?.isDesktopApp) {
       document.getElementById('desktop-shortcuts-nav')?.style.removeProperty('display');
@@ -3124,14 +3197,7 @@ _setupUI() {
     if (tab === 'admin') {
       // Defensive gate: refuse switching to the admin tab if the user has no
       // admin/manage permissions, regardless of where the call came from.
-      const isAdmin = !!(this.user && this.user.isAdmin);
-      const hasAdminAccess = isAdmin
-        || this._hasPerm?.('manage_emojis')
-        || this._hasPerm?.('manage_stickers')
-        || this._hasPerm?.('manage_soundboard')
-        || this._hasPerm?.('manage_roles')
-        || this._hasPerm?.('manage_server')
-        || this._hasPerm?.('view_audit_log');
+      const hasAdminAccess = !!this.user && this._hasAnyAdminSettingsAccess();
       if (!hasAdminAccess) return this._switchSettingsTab('user');
       if (userBody) userBody.style.display = 'none';
       if (adminBody) adminBody.style.display = '';
@@ -3340,6 +3406,7 @@ _setupUI() {
     settingsNav.addEventListener('click', (e) => {
       const item = e.target.closest('.settings-nav-item');
       if (item && item.dataset.target === 'section-2fa') loadTotpStatus();
+      if (item && item.dataset.target === 'section-sessions') this._refreshSessions();
       if (item && item.dataset.target === 'section-desktop-shortcuts') this._setupDesktopShortcuts();
       if (item && item.dataset.target === 'section-desktop-app') this._setupDesktopAppPrefs();
     });
@@ -3660,6 +3727,7 @@ _setupUI() {
           return;
         }
         // Account deleted — clear local storage and redirect to login
+        this._clearChannelCodeMap?.();
         localStorage.removeItem('haven_token');
         localStorage.removeItem('haven_e2e_privkey');
         localStorage.removeItem('haven_sync_key');
@@ -4196,6 +4264,15 @@ _setupUI() {
       value: e.target.checked ? 'true' : 'false'
     });
   });
+  document.getElementById('invites-bypass-registration-token')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', {
+      key: 'invites_bypass_registration_token',
+      value: e.target.checked ? 'true' : 'false'
+    });
+  });
+  document.getElementById('test-connectivity-btn')?.addEventListener('click', () => {
+    this._runConnectivityTest();
+  });
   document.getElementById('generate-registration-token-btn')?.addEventListener('click', () => {
     this.socket.emit('generate-registration-token');
   });
@@ -4391,13 +4468,22 @@ _setupUI() {
       host.innerHTML = '<p class="muted-text" style="margin:4px 0;font-size:0.85rem">No invite links yet. Create one below.</p>';
       return;
     }
+    // determine invite usage input limits
+    const parsedMaxInvtUses = parseInt(this.serverSettings?.max_invite_uses, 10);
+    const maxInvtUses = Number.isNaN(parsedMaxInvtUses) ? 0 : parsedMaxInvtUses;
+    const restrictUses = !this.user?.isAdmin && !this._hasPerm('manage_server') && maxInvtUses > 0;
+    const maxUsesInput = restrictUses ? maxInvtUses : 100000;
+    const minUsesInput = restrictUses ? 1 : 0;
+
     const origin = window.location.origin;
     host.innerHTML = this._inviteCodes.map(ic => {
       const status = !ic.enabled
         ? '<span style="color:var(--text-muted)">● Disabled</span>'
-        : ic.is_expired
-          ? '<span style="color:var(--danger,#e84a4a)">● Expired</span>'
-          : '<span style="color:var(--green,#43b581)">● Active</span>';
+        : ic.max_uses > 0 && ic.use_count >= ic.max_uses
+          ? '<span style="color:var(--text-secondary,#9498b3)">● Used</span>'
+          : ic.is_expired
+            ? '<span style="color:var(--danger,#e84a4a)">● Expired</span>'
+            : '<span style="color:var(--green,#43b581)">● Active</span>';
       const link = `${origin}/?invite=${encodeURIComponent(ic.code)}`;
       const chCount = (ic.channels && ic.channels.length)
         ? `${ic.channels.length} channel${ic.channels.length === 1 ? '' : 's'}`
@@ -4431,9 +4517,9 @@ _setupUI() {
             <button class="btn-sm" data-act="edit-all">Select all</button>
             <button class="btn-sm" data-act="edit-none">Select none</button>
           </div>
-          <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="0" max="100000" value="${ic.max_uses || 0}" class="settings-number-input" data-role="edit-maxuses"></label>
+          <label class="select-row" style="margin-top:8px"><span>Max uses (0 = unlimited)</span><input type="number" min="${minUsesInput}" max="${maxUsesInput}" value="${ic.max_uses || 0}" class="settings-number-input" data-role="edit-maxuses"></label>
           <label class="select-row" style="margin-top:4px"><span>Reset expiry</span>
-            <select class="settings-number-input" data-role="edit-expiry">
+            <select class="settings-number-input" data-role="edit-expiry" style="width: 6.5rem;">
               <option value="-1" selected>Keep current</option>
               <option value="0">Never</option>
               <option value="1">After 1 hour</option>
@@ -4468,8 +4554,13 @@ _setupUI() {
     const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
     // All checked → [] = "grant all public" (future-proof as new channels appear).
     const channels = (total > 0 && picked.length === total) ? [] : picked;
-    const maxUses = parseInt(document.getElementById('invite-new-maxuses')?.value) || 0;
-    const expiresInHours = parseInt(document.getElementById('invite-new-expiry')?.value) || 0;
+
+    const maxUsesValue = document.getElementById('invite-new-maxuses')?.value;
+    const maxUses = maxUsesValue === '' ? 1 : parseInt(maxUsesValue);
+
+    const expiryValue = document.getElementById('invite-new-expiry')?.value;
+    const expiresInHours = expiryValue === '' ? 720 : parseInt(expiryValue);
+
     const slug = document.getElementById('invite-new-slug')?.value.trim() || '';
     const payload = { label, channels, maxUses, expiresInHours };
     if (slug) payload.code = slug;
@@ -4477,8 +4568,8 @@ _setupUI() {
     // Reset the form fields (channel checks reset on the next list render).
     const lblEl = document.getElementById('invite-new-label'); if (lblEl) lblEl.value = '';
     const slugEl = document.getElementById('invite-new-slug'); if (slugEl) slugEl.value = '';
-    const muEl = document.getElementById('invite-new-maxuses'); if (muEl) muEl.value = '0';
-    const expEl = document.getElementById('invite-new-expiry'); if (expEl) expEl.value = '0';
+    const muEl = document.getElementById('invite-new-maxuses'); if (muEl) muEl.value = '1';
+    const expEl = document.getElementById('invite-new-expiry'); if (expEl) expEl.value = '720';
   });
 
   // One delegated handler for all per-card actions (the list re-renders often).
@@ -4538,20 +4629,82 @@ _setupUI() {
       const exp = parseInt(card.querySelector('[data-role="edit-expiry"]')?.value);
       if (Number.isFinite(exp) && exp >= 0) payload.expiresInHours = exp;
       this.socket.emit('update-invite-code', payload);
-      this._showToast?.('Invite link updated', 'success');
     }
   });
 
   // Invite Links popout — open/close. Refresh the list and create-form channels
   // on open so the modal always reflects current state.
-  document.getElementById('open-invite-links-btn')?.addEventListener('click', () => {
-    const modal = document.getElementById('invite-links-modal');
-    if (!modal) return;
-    if (typeof this._renderInviteCreateChannels === 'function') {
-      try { this._renderInviteCreateChannels(true); } catch { /* non-critical */ }
+  // Active sessions. Refreshed whenever the Account settings pane is opened
+  // rather than polled, since the list is only interesting while you look at it.
+  document.getElementById('revoke-sessions-btn')?.addEventListener('click', async () => {
+    const status = document.getElementById('sessions-status');
+    const pw = prompt(t('settings.sessions_section.confirm_prompt'));
+    if (pw === null) return;                       // cancelled
+    if (!pw) { status.textContent = t('settings.sessions_section.need_password'); return; }
+    status.classList.remove('error', 'success');
+    status.textContent = t('settings.sessions_section.working');
+    // Set before the request: the server disconnects every socket including
+    // ours, and this is what tells our own force-logout handler to sit still.
+    this._justRevokedSessions = true;
+    try {
+      const res = await fetch('/api/auth/revoke-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
+        body: JSON.stringify({ password: pw })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        this._justRevokedSessions = false;
+        status.textContent = data.error || t('settings.sessions_section.failed');
+        status.classList.add('error');
+        return;
+      }
+      this.token = data.token;
+      localStorage.setItem('haven_token', data.token);
+      this.socket.auth.token = data.token;         // so the auto-reconnect authenticates
+      status.textContent = t('settings.sessions_section.done');
+      status.classList.add('success');
+    } catch {
+      this._justRevokedSessions = false;
+      status.textContent = t('settings.sessions_section.failed');
+      status.classList.add('error');
     }
-    if (this.socket?.connected) { try { this.socket.emit('get-invite-codes'); } catch { /* non-critical */ } }
-    modal.style.display = 'flex';
+  });
+
+  // Member search in the right sidebar. Re-rendering the roster from the last
+  // payload rather than asking the server keeps typing instant and costs the
+  // server nothing.
+  const userSearch = document.getElementById('user-search');
+  const userSearchClear = document.getElementById('user-search-clear');
+  const applyUserFilter = (value) => {
+    this._userFilter = value;
+    if (userSearchClear) userSearchClear.style.display = value ? '' : 'none';
+    if (this._lastOnlineUsers) this._renderOnlineUsers(this._lastOnlineUsers);
+  };
+  userSearch?.addEventListener('input', (e) => applyUserFilter(e.target.value));
+  userSearch?.addEventListener('keydown', (e) => {
+    // Escape clears rather than just blurring, which is what the key does in
+    // every other search box in the app.
+    if (e.key === 'Escape' && userSearch.value) {
+      e.stopPropagation();
+      userSearch.value = '';
+      applyUserFilter('');
+    }
+  });
+  userSearchClear?.addEventListener('click', () => {
+    if (userSearch) userSearch.value = '';
+    applyUserFilter('');
+    userSearch?.focus();
+  });
+
+  document.getElementById('open-invite-links-btn')?.addEventListener('click', () => {
+    this._openInviteLinksModal();
+  });
+  document.getElementById('right-btn-invite-popout')?.addEventListener('click', () => {
+    this._openInviteLinksModal();
+  });
+  document.getElementById('aml-view-invite-btn')?.addEventListener('click', () => {
+    this._openInviteLinksModal();
   });
   document.getElementById('close-invite-links-btn')?.addEventListener('click', () => {
     const modal = document.getElementById('invite-links-modal');
@@ -4560,6 +4713,31 @@ _setupUI() {
   document.getElementById('invite-links-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
+},
+
+_openRenameModal() {
+  document.getElementById('rename-modal').style.display = 'flex';
+  const input = document.getElementById('rename-input');
+  input.value = this.user.displayName || this.user.username;
+  input.focus();
+  input.select();
+  // Populate bio
+  const bioInput = document.getElementById('edit-profile-bio');
+  if (bioInput) bioInput.value = this.user.bio || '';
+  // Load personas list (#86, #5349)
+  this._loadPersonas?.();
+  this._loadRoles(() => this._renderUserProfileGroupsList());
+  this._updateAvatarPreview();
+  this._resetBorderEditState();
+  // Sync shape picker buttons
+  const picker = document.getElementById('avatar-shape-picker');
+  if (picker) {
+    const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
+    picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.shape === currentShape);
+    });
+    this._pendingAvatarShape = currentShape;
+  }
 },
 
 // ═══════════════════════════════════════════════════════
@@ -4583,87 +4761,9 @@ _setupUI() {
  */
 _buildLanguagePicker() {
   const select = document.getElementById('language-select');
-  if (!select || select.dataset.havenPicker) return;
-  select.dataset.havenPicker = '1';
-
-  // Locale -> flag SVG. Only ISO country codes with artwork in
-  // public/emoji/flags/ can appear; anything unmapped falls back to a text
-  // badge rather than a broken image.
-  const FLAGS = { en: 'gb', fr: 'fr', de: 'de', es: 'es', pl: 'pl', ru: 'ru', zh: 'cn' };
-
-  const options = Array.from(select.options).map(o => ({
-    value: o.value,
-    // Strip the now-redundant emoji prefix from the label.
-    label: o.textContent.replace(/^[\p{Extended_Pictographic}\p{Regional_Indicator}️\s]+/u, '').trim() || o.value,
-    flag: FLAGS[o.value] || null,
-  }));
-
-  const wrap = document.createElement('div');
-  wrap.className = 'lang-picker';
-
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'lang-picker-btn';
-  button.setAttribute('aria-haspopup', 'listbox');
-  button.setAttribute('aria-expanded', 'false');
-
-  const list = document.createElement('div');
-  list.className = 'lang-picker-list';
-  list.setAttribute('role', 'listbox');
-  list.hidden = true;
-
-  const faceFor = (opt) => {
-    const flag = opt.flag
-      ? `<img class="lang-flag" src="/emoji/flags/${opt.flag}.svg" alt="">`
-      : `<span class="lang-flag lang-flag-text">${this._escapeHtml(opt.value.toUpperCase())}</span>`;
-    return `${flag}<span class="lang-name">${this._escapeHtml(opt.label)}</span>`;
-  };
-
-  const paintButton = () => {
-    const cur = options.find(o => o.value === select.value) || options[0];
-    if (cur) button.innerHTML = faceFor(cur) + '<span class="lang-caret">▾</span>';
-  };
-
-  list.innerHTML = options.map(o =>
-    `<button type="button" class="lang-picker-item" role="option" data-value="${this._escapeHtml(o.value)}">${faceFor(o)}</button>`
-  ).join('');
-
-  const close = () => {
-    list.hidden = true;
-    button.setAttribute('aria-expanded', 'false');
-    document.removeEventListener('click', onOutside, true);
-  };
-  const onOutside = (e) => { if (!wrap.contains(e.target)) close(); };
-
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const opening = list.hidden;
-    list.hidden = !opening;
-    button.setAttribute('aria-expanded', String(opening));
-    if (opening) setTimeout(() => document.addEventListener('click', onOutside, true), 0);
-    else close();
-  });
-
-  list.querySelectorAll('.lang-picker-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      select.value = item.dataset.value;
-      // Drive the real control so the existing listener does the work.
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      paintButton();
-      close();
-    });
-  });
-
-  paintButton();
-  wrap.appendChild(button);
-  wrap.appendChild(list);
-  select.parentElement.insertBefore(wrap, select);
-  // Kept for state + the change event, but no longer the visible control.
-  select.classList.add('lang-select-hidden');
-
-  // Locale changes made elsewhere (or restored on load) must repaint the face.
-  select.addEventListener('change', paintButton);
+  if (!select || !window.i18n) return;
+  select.value = i18n.preference;
+  i18n.buildLocalePicker(select);
 },
 
 _canShareChannelLink(code) {
@@ -6171,7 +6271,7 @@ _handleMobileBack() {
   const search = document.getElementById('search-container');
   if (search && search.style.display !== 'none' && search.style.display !== '') {
     search.style.display = 'none';
-    document.getElementById('search-results-panel').style.display = 'none';
+    document.getElementById('search-panel').style.display = 'none';
     return;
   }
 
@@ -6231,12 +6331,17 @@ _reportThemeColor() {
 
 _saveRename() {
   const input = document.getElementById('rename-input');
-  const newName = input.value.trim().replace(/\s+/g, ' ');
-  if (!newName || newName.length < 2) {
+  // Mirrors normalizeDisplayName on the server (#5509) so a name in any
+  // script gets an instant answer here rather than a bare error-msg back.
+  const newName = input.value.normalize('NFC').trim().replace(/\s+/g, ' ');
+  if (!newName || [...newName].length < 2) {
     return this._showToast(t('toasts.display_name_too_short'), 'error');
   }
-  if (!/^[a-zA-Z0-9_ ]+$/.test(newName)) {
+  if (!/^[\p{L}\p{N}\p{M}_ ]+$/u.test(newName)) {
     return this._showToast(t('toasts.display_name_invalid_chars'), 'error');
+  }
+  if (/\p{M}{4,}/u.test(newName)) {
+    return this._showToast(t('toasts.display_name_too_many_marks'), 'error');
   }
   this.socket.emit('rename-user', { username: newName });
   // Save bio
@@ -6244,12 +6349,17 @@ _saveRename() {
   if (bioInput) {
     this.socket.emit('set-bio', { bio: bioInput.value });
   }
-  // Also commit any pending avatar changes
+  // Also commit any pending avatar and groups changes
   this._commitAvatarSettings();
+  this._GroupManagerSaveGroups();
   document.getElementById('rename-modal').style.display = 'none';
 },
 
 // ── Upload with progress bar ───────────────────────────
+// Every in-flight request is kept in _activeUploads so the bar's × can abort
+// them. The general file queue fires its uploads without awaiting, so there
+// can be several at once — hence a set, and hence hiding the bar only once
+// the last one settles rather than whenever any single one does.
 _uploadWithProgress(url, formData) {
   return new Promise((resolve, reject) => {
     const bar = document.getElementById('upload-progress-bar');
@@ -6259,9 +6369,16 @@ _uploadWithProgress(url, formData) {
     if (fill) { fill.style.width = '0%'; }
     if (text) { text.textContent = t('common.uploading'); }
 
+    if (!this._activeUploads) this._activeUploads = new Set();
+
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
     xhr.setRequestHeader('Authorization', `Bearer ${this.token}`);
+
+    const settle = () => {
+      this._activeUploads.delete(xhr);
+      if (bar && this._activeUploads.size === 0) bar.style.display = 'none';
+    };
 
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable) {
@@ -6272,7 +6389,7 @@ _uploadWithProgress(url, formData) {
     });
 
     xhr.addEventListener('load', () => {
-      if (bar) bar.style.display = 'none';
+      settle();
       if (xhr.status >= 200 && xhr.status < 300) {
         try { resolve(JSON.parse(xhr.responseText)); }
         catch { reject(new Error('Invalid JSON response')); }
@@ -6284,17 +6401,33 @@ _uploadWithProgress(url, formData) {
     });
 
     xhr.addEventListener('error', () => {
-      if (bar) bar.style.display = 'none';
+      settle();
       reject(new Error('Upload failed — check your connection'));
     });
 
     xhr.addEventListener('abort', () => {
-      if (bar) bar.style.display = 'none';
-      reject(new Error('Upload cancelled'));
+      settle();
+      // Flagged so the callers can skip their own "upload failed" toast —
+      // cancelling on purpose isn't an error, and the cancel already toasts.
+      const err = new Error('Upload cancelled');
+      err.aborted = true;
+      reject(err);
     });
 
+    this._activeUploads.add(xhr);
     xhr.send(formData);
   });
+},
+
+// The × on the progress bar. Aborts everything currently in flight and tells
+// the queue loops to stop, since cancelling one file out of a batch and then
+// watching the rest go up anyway isn't what the button looks like it does.
+_cancelUploads() {
+  const active = this._activeUploads ? [...this._activeUploads] : [];
+  if (active.length === 0) return;
+  this._uploadsCancelled = true;
+  active.forEach(xhr => { try { xhr.abort(); } catch { /* already settled */ } });
+  this._showToast(t('toasts.upload_cancelled'), 'info');
 },
 
 // Intercept clicks on concealed media. Returns true when the click was
@@ -6349,6 +6482,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       const encrypted = await this.e2e.encryptBytes(arrayBuffer, partner.userId, partner.publicKeyJwk);
       const blob = new Blob([encrypted], { type: 'application/octet-stream' });
       const formData = new FormData();
+      formData.append('scope', 'dm');
       formData.append('file', blob, 'e2e-image.enc');
       const data = await this._uploadWithProgress('/api/upload-file', formData);
       const mime = file.type || 'image/png';
@@ -6362,6 +6496,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       });
       this.notifications.play('sent');
     } catch (err) {
+      if (err?.aborted) return;
       console.error('[E2E] Image encryption failed:', err);
       const detail = err?.message ? ` — ${err.message}` : '';
       this._showToast(`${t('toasts.encrypted_image_failed')}${detail}`, 'error');
@@ -6372,12 +6507,15 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   try {
     // SVG must use /api/upload-file (the raster-only /api/upload rejects it)
     let data;
+    const uploadScope = isDm ? 'dm' : 'channel';
     if (file.type === 'image/svg+xml') {
       const fd = new FormData();
+      fd.append('scope', uploadScope);
       fd.append('file', file);
       data = await this._uploadWithProgress('/api/upload-file', fd);
     } else {
       const formData = new FormData();
+      formData.append('scope', uploadScope);
       formData.append('image', file);
       data = await this._uploadWithProgress('/api/upload', formData);
     }
@@ -6392,11 +6530,63 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
     });
     this.notifications.play('sent');
   } catch (err) {
+    if (err?.aborted) return;
     this._showToast(err.message || t('toasts.upload_failed'), 'error');
   }
 },
 
 // ── Channel Media Gallery (#5350) ─────────────────────
+_renderThreadList(filter = '') {
+  const body = document.getElementById('threads-list-body');
+  const countEl = document.getElementById('threads-list-count');
+  if (!body) return;
+
+  const all = this._threadListData || [];
+  const needle = String(filter || '').trim().toLowerCase();
+  const rows = needle
+    ? all.filter(th =>
+        String(th.content || '').toLowerCase().includes(needle) ||
+        String(th.username || '').toLowerCase().includes(needle))
+    : all;
+
+  if (countEl) {
+    countEl.textContent = needle
+      ? `${rows.length} / ${all.length}`
+      : (all.length ? String(all.length) : '');
+  }
+
+  if (!rows.length) {
+    const key = all.length ? 'thread_list.no_matches' : 'thread_list.empty';
+    const fallback = all.length
+      ? 'No threads match that search'
+      : 'No threads in this channel yet';
+    body.innerHTML = `<div class="media-gallery-empty muted-text">${(window.t && t(key)) || fallback}</div>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(th => {
+    const replies = Number(th.reply_count) || 0;
+    const label = replies === 1
+      ? ((window.t && t('thread_list.reply_one')) || '1 reply')
+      : ((window.t && t('thread_list.reply_other', { count: replies })) || `${replies} replies`);
+    // Strip attachment markdown so a thread started with a file reads as its
+    // filename rather than a wall of markup.
+    const preview = String(th.content || '')
+      .replace(/\[file:([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/!\[[^\]]*\]\(([^)\s]+)\)/g, '$1')
+      .trim();
+    return `
+      <button class="thread-list-row" data-parent-id="${th.id}">
+        <span class="thread-list-row-top">
+          <span class="thread-list-author">${this._escapeHtml(th.username || '')}</span>
+          <span class="thread-list-replies">${this._escapeHtml(label)}</span>
+          <span class="thread-list-when">${this._escapeHtml(this._formatTime?.(th.last_reply_at) || '')}</span>
+        </span>
+        <span class="thread-list-preview">${this._escapeHtml(preview)}</span>
+      </button>`;
+  }).join('');
+},
+
 _renderMediaGallery(data) {
   this._mediaGalleryData = data;
   ['photos','videos','audios','files','links'].forEach(k => {
@@ -6684,6 +6874,312 @@ _openVideoLightbox(src) {
   };
   document.addEventListener('keydown', closeOnEsc);
   document.body.appendChild(overlay);
+},
+
+_loadGroupChannelAccess(roleIds, callback) {
+  this._roleEmit('get-role-channel-access', { roleIds }, (res) => {
+    if (!res || res.error) return callback?.({});
+
+    const channelMap = new Map((res.channels || []).map(ch => [ch.id, ch]));
+    const accessMap = {};
+    (res.access || []).forEach(a => {
+      if (!a.grant_on_promote) return;
+
+      const channel = channelMap.get(a.channel_id);
+      if (!channel) return;
+      if (!accessMap[a.role_id]) accessMap[a.role_id] = [];
+
+      accessMap[a.role_id].push(channel);
+    });
+    callback?.(accessMap);
+  });
+},
+
+// user Groups
+_renderUserProfileGroupsList() {
+  const section = document.getElementById('rename-modal-groups-section');
+  const list = document.getElementById('user-profile-groups-list');
+  const manager = document.getElementById('user-profile-groups-manager');
+  const managerSaveBtn = document.getElementById('save-groups-btn');
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (!section || !list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
+
+  // Hide Groups section if there are no groups available to join.
+  const availableGroups = (this._allRoles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  section.style.display = availableGroups.length > 0 ? '' : 'none';
+
+  // Always start from the read-only view. Clearing the manager's checkboxes
+  // matters: Save Profile calls _GroupManagerSaveGroups too, and stale
+  // checkboxes from an earlier visit would otherwise be replayed as the
+  // user's current choice.
+  manager.style.display = 'none';
+  manager.innerHTML = '';
+  managerSaveBtn.style.display = 'none';
+
+  if (availableGroups.length > 0) {
+    // Make Sure non manager parts are visible:
+    manageGroupsBtn.style.display = '';
+    list.style.display = '';
+
+    const groups = (this.user?.roles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    if (groups.length === 0) {
+      // display tip when user is not a part of any groups
+      list.innerHTML = `<p class="muted-text" style="font-size:.78rem;margin:6px 0">${t('modals.edit_profile.no_groups')}</p>`;
+    }
+    else {
+      // render list of user's current groups
+      list.innerHTML = groups.map(r => {
+        const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+          return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>`;
+      }).join('');
+    }
+  }
+},
+
+_showGroupManager() {
+  const list = document.getElementById('user-profile-groups-list');
+  const manager = document.getElementById('user-profile-groups-manager');
+  const managerSaveBtn = document.getElementById('save-groups-btn');
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (!list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
+
+  const availableGroups = (this._allRoles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const groups = (this.user?.roles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  list.style.display = 'none';
+  manageGroupsBtn.style.display = 'none';
+
+  manager.style.display = '';
+  managerSaveBtn.style.display = '';
+
+  // render html list of selectable groups for the user groups-manager
+  const userGroupIds = new Set(groups.map(g => g.id));
+  manager.innerHTML = availableGroups.map(r => {
+    const isMember = userGroupIds.has(r.id);
+    const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+
+    return `
+      <label class="toggle-row user-group-toggle-row">
+        <span class="user-group-name">
+          <button class="user-group-channel-info" data-role="${r.id}" style="visibility:hidden" title="">#i</button>
+          <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>
+        </span>
+        <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
+      </label>
+    `;
+  }).join('');
+
+  // Load channel access for all groups and show info icons
+  this._loadGroupChannelAccess(
+    availableGroups.map(r => r.id),
+    (accessMap) => {
+      availableGroups.forEach(r => {
+        const channels = accessMap[r.id] || [];
+        if (!channels.length) return;
+
+        const info = manager.querySelector(`.user-group-channel-info[data-role="${r.id}"]`);
+        if (!info) return;
+
+        info.dataset.channels = JSON.stringify(channels);
+        info.style.visibility = 'visible';
+
+        info.addEventListener('mouseenter', () => {
+          // Don't show a hover tooltip while the persistent popup is open.
+          if (this._groupChannelInfoPopup) return;
+
+          this._showGroupChannelInfo(info, false);
+        });
+
+        info.addEventListener('mouseleave', () => {
+          // Persistent popup is intentionally unaffected.
+          if (!this._groupChannelInfoPopup) {
+            this._closeGroupChannelInfo();
+          }
+        });
+
+        info.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          this._showGroupChannelInfo(info, true);
+        });
+      });
+    }
+  );
+},
+
+_GroupManagerSaveGroups() {
+  // Only send a selection while the group manager is open. Save Profile calls
+  // this unconditionally, and with the manager closed there are no checkboxes
+  // in the DOM, so an empty list would go out and the server would read it as
+  // "leave every group".
+  const manager = document.getElementById('user-profile-groups-manager');
+  if (!manager || manager.style.display === 'none') return;
+  const selectedGroupIds = Array.from(manager.querySelectorAll('.user-group-checkbox:checked')).map(el => parseInt(el.dataset.role, 10)).filter(Number.isInteger);
+  this._roleEmit('update-groups', {groupIds: selectedGroupIds}, (res) => {
+    if (res.error) {
+      return this._showToast(res.error, 'error');
+    }
+
+    // Update local user roles with the groups returned by the server.
+    if (Array.isArray(res.groups)) {
+      this.user.roles = [
+        ...(this.user.roles || []).filter(r => r.level !== 0),
+        ...res.groups
+      ];
+    }
+
+    this._showToast(t('modals.edit_profile.groups_saved'), 'success');
+    this._renderUserProfileGroupsList();
+  });
+},
+
+_showGroupChannelInfo(info, persistent = false) {
+  const channels = JSON.parse(info.dataset.channels || '[]');
+  if (!channels.length) return;
+
+  // Remove any existing group-channel popup.
+  this._closeGroupChannelInfo();
+
+  const popup = document.createElement('div');
+  popup.className = `group-channel-info-popup${persistent ? ' persistent' : ''}`;
+
+  const channelMap = new Map(channels.map(ch => [ch.id, ch]));
+  const children = new Map();
+
+  // Only display subchannels when their parent is also granted
+  // by this group.
+  const visibleChannels = channels.filter(ch => {
+    if (!ch.parent_channel_id) return true;
+    return channelMap.has(ch.parent_channel_id);
+  });
+
+  // Build hierarchy from the channels we're actually displaying.
+  visibleChannels.forEach(ch => {
+    if (ch.parent_channel_id && channelMap.has(ch.parent_channel_id)) {
+      if (!children.has(ch.parent_channel_id)) {
+        children.set(ch.parent_channel_id, []);
+      }
+      children.get(ch.parent_channel_id).push(ch);
+    }
+  });
+
+  const visibleIds = new Set(visibleChannels.map(ch => ch.id));
+
+  const roots = visibleChannels.filter(ch =>
+    !ch.parent_channel_id ||
+    !visibleIds.has(ch.parent_channel_id)
+  );
+
+  const renderChannel = (ch, isChild = false) => {
+    const prefix = isChild ? '↳ ' : '# ';
+    const lock = ch.is_private ? ' 🔒' : '';
+
+    return `
+      <div class="group-channel-info-row${isChild ? ' sub' : ''}">
+        ${prefix}${this._escapeHtml(ch.name)}${lock}
+      </div>
+      ${(children.get(ch.id) || [])
+        .sort((a, b) =>
+          a.position - b.position ||
+          a.name.localeCompare(b.name)
+        )
+        .map(child => renderChannel(child, true))
+        .join('')}
+    `;
+  };
+
+  popup.innerHTML = `
+    <div class="group-channel-info-title">
+      <span>${this._escapeHtml(t('modals.edit_profile.group_channels_granted'))}</span>
+      ${persistent
+        ? `<button type="button" class="group-channel-info-close" title="Close">&times;</button>`
+        : ''}
+    </div>
+    <div class="group-channel-info-list">
+      ${roots
+        .sort((a, b) =>
+          a.position - b.position ||
+          a.name.localeCompare(b.name)
+        )
+        .map(ch => renderChannel(ch))
+        .join('')}
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  const rect = info.getBoundingClientRect();
+  const popupRect = popup.getBoundingClientRect();
+  const margin = 8;
+  const gap = 6;
+
+  let left = rect.left;
+  let top = rect.bottom + gap;
+
+  // Keep popup within the horizontal viewport.
+  if (left + popupRect.width > window.innerWidth - margin) {
+    left = window.innerWidth - popupRect.width - margin;
+  }
+  left = Math.max(margin, left);
+
+  // Prefer below; move above if necessary.
+  if (top + popupRect.height > window.innerHeight - margin) {
+    const aboveTop = rect.top - popupRect.height - gap;
+    top = (aboveTop >= margin) ? aboveTop : margin;
+  }
+
+  top = Math.max(margin, top);
+  const availableHeight = window.innerHeight - top - margin;
+  const channelList = popup.querySelector('.group-channel-info-list');
+  if (channelList) {
+    channelList.style.maxHeight =
+      `${Math.max(4 * 16, availableHeight - 55)}px`;
+  }
+
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+
+  if (persistent) {
+    this._groupChannelInfoPopup = popup;
+
+    const closeBtn = popup.querySelector('.group-channel-info-close');
+    closeBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._closeGroupChannelInfo();
+    });
+
+    this._groupChannelInfoOutsideHandler = (e) => {
+      if (!popup.contains(e.target) && e.target !== info) {
+        this._closeGroupChannelInfo();
+      }
+    };
+
+    setTimeout(() => {
+      document.addEventListener('click', this._groupChannelInfoOutsideHandler);
+    }, 0);
+  } else {
+    this._groupChannelInfoTooltip = popup;
+  }
+},
+
+_closeGroupChannelInfo() {
+  if (this._groupChannelInfoTooltip) {
+    this._groupChannelInfoTooltip.remove();
+    this._groupChannelInfoTooltip = null;
+  }
+
+  if (this._groupChannelInfoPopup) {
+    this._groupChannelInfoPopup.remove();
+    this._groupChannelInfoPopup = null;
+  }
+
+  if (this._groupChannelInfoOutsideHandler) {
+    document.removeEventListener('click', this._groupChannelInfoOutsideHandler);
+    this._groupChannelInfoOutsideHandler = null;
+  }
 },
 
 // ── Personas (#86, #5349) ──────────────────────────────

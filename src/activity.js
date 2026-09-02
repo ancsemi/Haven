@@ -114,6 +114,7 @@ const ALLOWED_IMAGE_HOSTS = new Set([
   'i.ytimg.com',
   'img.youtube.com',
   'lastfm.freetls.fastly.net',
+  'lastfm-img.freetls.fastly.net',
 ]);
 
 function safeImage(url) {
