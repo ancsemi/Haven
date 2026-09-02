@@ -237,6 +237,11 @@ _setupUI() {
     this._checkFerryTrigger();
   });
 
+  // insert a markdown link when a link is pasted over selected text
+  msgInput.addEventListener('paste', (event) => {
+    this._handleMarkdownLinkPaste(msgInput, event); 
+  });
+
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
 
   // Join channel
@@ -5630,9 +5635,6 @@ _setupImageUpload() {
         return;
       }
     }
-
-    // insert a markdown link when a link is pasted over selected text
-    this._handleMarkdownLinkPaste(msgInput, e);
   });
 
   // Drag & drop — QUEUE instead of uploading immediately
