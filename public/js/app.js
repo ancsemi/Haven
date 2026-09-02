@@ -13,7 +13,7 @@ import MessageMethods  from './modules/app-messages.js?v=3.51.0';
 import UserMethods     from './modules/app-users.js?v=3.25.3';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.0';
 import UtilityMethods  from './modules/app-utilities.js?v=4.1.1';
-import AdminMethods    from './modules/app-admin.js?v=3.51.0';
+import AdminMethods    from './modules/app-admin.js?v=4.1.1';
 import PlatformMethods from './modules/app-platform.js?v=3.16.12';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
@@ -141,6 +141,15 @@ class HavenApp {
     this._canModerate = () => this.user.isAdmin || (this.user.effectiveLevel || 0) >= 25;
     this._isServerMod = () => this.user.isAdmin || (this.user.effectiveLevel || 0) >= 50;
     this._hasPerm = (p) => this.user.isAdmin || (this.user.permissions || []).includes('*') || (this.user.permissions || []).includes(p);
+    // Whether Settings should offer the Admin tab at all. One list, shared by
+    // the tab switch, the admin panel container and the settings nav, so a
+    // permission added in one place cannot be missed in the others. (#5470:
+    // invite_users was in the nav but not in the tab gate, so holders saw an
+    // Admin tab that did nothing when clicked.)
+    this._hasAnyAdminSettingsAccess = () => this.user.isAdmin || [
+      'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_roles',
+      'manage_server', 'manage_webhooks', 'view_audit_log', 'invite_users'
+    ].some(p => this._hasPerm(p));
     // Global-only variant: excludes permissions granted via a channel-scoped
     // role assignment, for gating UI that always performs a server-wide
     // action (e.g. the sidebar "Create Channel" section always creates a

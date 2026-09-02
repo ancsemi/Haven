@@ -1134,11 +1134,11 @@
       "import_reused": "{{count}} canal(is) existente(s) atualizado(s).",
       "import_failed_alert": "Falha na importação: {{error}}",
       "roles_no_custom": "Nenhum cargo personalizado",
-      "roles_level_invalid": "O nível deve estar entre 1 e 99",
+      "roles_level_invalid": "O nível deve estar entre 0 e 99",
       "roles_create_title": "Criar cargo",
       "roles_create_hint": "Digite o nome do cargo:",
       "roles_level_title": "Nível do cargo",
-      "roles_level_hint": "Nível do cargo (1–99; quanto maior, mais autoridade):\nModerador do servidor: padrão = 50; moderador do canal: padrão = 25",
+      "roles_level_hint": "Nível da função (0–99, maior = mais autoridade):\nModerador do servidor padrão = 50\nModerador do canal padrão = 25\nAutogestão (sem permissões) = 0",
       "roles_created": "Cargo criado",
       "roles_saved": "Cargo salvo",
       "roles_updated": "Cargo atualizado",
@@ -1200,7 +1200,7 @@
       "roles_multi_hint": "Os usuários podem ter vários cargos por escopo. As permissões efetivas são a união de todos os cargos atribuídos; o cargo mais alto define a cor exibida.",
       "role_form": {
         "name": "Nome",
-        "level": "Nível (1–99)",
+        "level": "Nível (0–99)",
         "color": "Cor",
         "auto_assign": "Atribuir automaticamente a novos membros",
         "auto_assign_hint": "Novos usuários receberão automaticamente este cargo ao se cadastrar ou entrar em um canal.",
@@ -1211,6 +1211,7 @@
         "reapply_access_tooltip": "Executa novamente as regras de acesso aos canais acima para todos os usuários que já têm este cargo. Útil depois de editar as caixas Conceder/Revogar: alinha os membros existentes à configuração atual sem precisar reatribuir o cargo.",
         "permissions": "Permissões",
         "admin_only_note": "As permissões destacadas são exclusivas de administradores; somente o proprietário do servidor pode concedê-las.",
+        "level_0_role_note": "As funções de nível 0 são chamadas de «Grupos». Os grupos não concedem quaisquer permissões. Os utilizadores podem aderir livremente a estes grupos sem necessitarem de permissões elevadas. As utilizações possíveis incluem: atribuições de canais, agrupamentos e representação de papéis.",
         "readonly_note": "Este cargo está no seu nível ou acima dele ({{level}}). Você pode visualizá-lo, mas somente alguém de nível superior pode fazer alterações.",
         "admin_cosmetic_note": "Estas configurações só alteram a aparência do cargo de administrador. Elas não mudam o que ele pode fazer.",
         "visibility": "Visibilidade",
@@ -1404,7 +1405,14 @@
       "display_name_placeholder": "Novo nome de exibição...",
       "bio_label": "Biografia",
       "bio_max": "(máximo de 190 caracteres)",
-      "bio_placeholder": "Conte um pouco sobre você…"
+      "bio_placeholder": "Conte um pouco sobre você…",
+      "groups_title": "Grupos",
+      "manage_groups_btn": "Gerir grupos",
+      "save_groups_btn": "Guardar grupos",
+      "groups_hint": "Os grupos são apresentados como funções no seu cartão de perfil. Não concedem permissões, mas podem conceder acesso a canais!",
+      "no_groups": "Ainda não faz parte de nenhum grupo. Clique em «Gerir grupos» para aderir a um.",
+      "groups_saved": "Grupos guardados!",
+      "group_channels_granted": "Acessos a canais concedidos"
     },
     "border_crop": {
       "title": "Editar",
@@ -1685,7 +1693,8 @@
     "role_management": {
       "title": "Gerenciamento de cargos",
       "new_role_btn": "+ Novo cargo",
-      "select_to_edit": "Selecione um cargo para editar"
+      "select_to_edit": "Selecione um cargo para editar",
+      "groups_label": "Grupos"
     },
     "assign_role": {
       "title": "Atribuir cargo",

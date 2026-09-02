@@ -221,11 +221,7 @@ _setupSocketListeners() {
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
     const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
     document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
-    if (this.user.isAdmin) {
-      document.getElementById('admin-mod-panel').style.display = 'block';
-    } else {
-      document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_stickers') || this._hasPerm('manage_soundboard') || this._hasPerm('view_audit_log')) ? 'block' : 'none';
-    }
+    document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
   });
 
@@ -253,7 +249,7 @@ _setupSocketListeners() {
     const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
     const canCreateInvites = this.user.isAdmin || this._hasGlobalPerm('manage_server') || this._hasGlobalPerm('invite_users');
     document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
-    document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasPerm('manage_emojis') || this._hasPerm('manage_stickers') || this._hasPerm('manage_soundboard') || this._hasPerm('view_audit_log')) ? 'block' : 'none';
+    document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
     document.getElementById('sidebar-invite-panel').style.display = canCreateInvites ? 'block' : 'none';
     this._showToast(t('toasts.roles_updated'), 'info');
@@ -1928,10 +1924,10 @@ _setupSocketListeners() {
   // ── Username rename ──────────────────────────────
   this.socket.on('renamed', (data) => {
     this.token = data.token;
-    this.user = data.user;
+    this.user = {...this.user, ...data.user};
     if (this.voice && data.user.id) this.voice.localUserId = data.user.id;
     localStorage.setItem('haven_token', data.token);
-    localStorage.setItem('haven_user', JSON.stringify(data.user));
+    localStorage.setItem('haven_user', JSON.stringify(this.user));
     document.getElementById('current-user').textContent = data.user.displayName || data.user.username;
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${data.user.username}`;
@@ -1941,11 +1937,10 @@ _setupSocketListeners() {
     this.user.globalPermissions = data.user.globalPermissions || this.user.globalPermissions || [];
     const canCreate = data.user.isAdmin || this._hasGlobalPerm('create_channel');
     document.getElementById('admin-controls').style.display = canCreate ? 'block' : 'none';
-    if (data.user.isAdmin) {
-      document.getElementById('admin-mod-panel').style.display = 'block';
-    } else {
-      document.getElementById('admin-mod-panel').style.display = 'none';
-    }
+    // Same gate as login and roles-updated, so a moderator who changes their
+    // display name keeps the Admin tab instead of losing it until reload.
+    const canModerate = data.user.isAdmin || (this.user.effectiveLevel || 0) >= 25;
+    document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
   });
 
   this.socket.on('user-renamed', (data) => {
@@ -2334,7 +2329,7 @@ _setupSocketListeners() {
     this._userPrefs = prefs || {};
     if (prefs.theme) {
       // User has a saved personal theme preference — apply it
-      applyThemeFromServer(prefs.theme);
+      applyThemeFromServer(prefs.theme, true, true);
     } else if (this.serverSettings.default_theme) {
       // No personal preference — apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);

@@ -1,6 +1,6 @@
 ﻿{
   "name": "haven",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",
@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",

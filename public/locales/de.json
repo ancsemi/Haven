@@ -953,11 +953,11 @@
       "import_reused": "{{count}} vorhandener Kanal (Kanäle) aktualisiert.",
       "import_failed_alert": "Import fehlgeschlagen: {{error}}",
       "roles_no_custom": "Keine benutzerdefinierten Rollen",
-      "roles_level_invalid": "Ebene muss 1–99 sein",
+      "roles_level_invalid": "Ebene muss 0–99 sein",
       "roles_create_title": "Rolle erstellen",
       "roles_create_hint": "Rollennamen eingeben:",
       "roles_level_title": "Rollenebene",
-      "roles_level_hint": "Rollenebene (1–99, höher = mehr Autorität):\nServer-Mod Standard = 50, Kanal-Mod Standard = 25",
+      "roles_level_hint": "Rollenstufe (0–99, höher = mehr Befugnisse):\nServer-Mod standardmäßig = 50\nKanal-Mod standardmäßig = 25\nSelbstverwaltung (keine Berechtigungen) = 0",
       "roles_created": "Rolle erstellt",
       "roles_saved": "Rolle gespeichert",
       "roles_updated": "Rolle aktualisiert",
@@ -1005,7 +1005,7 @@
       "roles_changes_saved_other": "{{count}} Rollenänderungen gespeichert",
       "role_form": {
         "name": "Name",
-        "level": "Ebene (1–99)",
+        "level": "Ebene (0–99)",
         "color": "Farbe",
         "auto_assign": "Neuen Mitgliedern automatisch zuweisen",
         "auto_assign_hint": "Neue Nutzer erhalten diese Rolle automatisch, wenn sie sich registrieren oder einem Kanal beitreten.",
@@ -1014,6 +1014,8 @@
         "link_channel_access_hint": "Wenn aktiviert, wird beim Zuweisen/Entziehen dieser Rolle automatisch die Kanalmitgliedschaft gewährt/entzogen.",
         "reapply_access": "Zugang auf alle Nutzer erneut anwenden",
         "permissions": "Berechtigungen",
+        "admin_only_note": "Hervorgehobene Berechtigungen sind nur für Administratoren verfügbar – nur der Serverbesitzer kann sie vergeben.",
+        "level_0_role_note": "Rollen der Stufe 0 werden als „Gruppen“ bezeichnet. Gruppen gewähren keine Berechtigungen. Benutzer können diesen Gruppen nach Belieben beitreten, ohne erhöhte Berechtigungen zu benötigen. Mögliche Verwendungszwecke sind: Kanalzuweisungen, Gruppierungen und Rollenspiele.",
         "delete": "Löschen"
       }
     }
@@ -1139,7 +1141,14 @@
       "display_name_placeholder": "Neuer Anzeigename...",
       "bio_label": "Bio",
       "bio_max": "(max. 190 Zeichen)",
-      "bio_placeholder": "Erzähl den Leuten von dir…"
+      "bio_placeholder": "Erzähl den Leuten von dir…",
+      "groups_title": "Gruppen",
+      "manage_groups_btn": "Gruppen verwalten",
+      "save_groups_btn": "Gruppen speichern",
+      "groups_hint": "Gruppen werden auf deiner Profilkarte als Rollen angezeigt. Sie gewähren keine Berechtigungen, können aber Zugriff auf Kanäle gewähren!",
+      "no_groups": "Du bist noch keiner Gruppe beigetreten. Klicke auf „Gruppen verwalten“, um einer Gruppe beizutreten.",
+      "groups_saved": "Gruppen gespeichert!",
+      "group_channels_granted": "Gewährte Kanalzugriffe"
     },
     "admin_action": {
       "title": "Nutzer moderieren",
@@ -1386,7 +1395,8 @@
     "role_management": {
       "title": "Rollenverwaltung",
       "new_role_btn": "+ Neue Rolle",
-      "select_to_edit": "Rolle zum Bearbeiten auswählen"
+      "select_to_edit": "Rolle zum Bearbeiten auswählen",
+      "groups_label": "Gruppen"
     },
     "assign_role": {
       "title": "Rolle zuweisen",

@@ -22,6 +22,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   configured Tenor do not go dark overnight. GIFs already posted from Tenor URLs
   still render.
 
+---
+
+## [4.2.0] - 2026-09-01
+
+Voice connectivity is the theme. A server whose admin had set their own STUN server
+could lose calls between browsers entirely from one typo, with nothing anywhere saying
+why, and it took the people who reported it days to work out what was happening. Also
+a written contract for theme authors, a way for bots to clear messages in bulk, and a
+dependency sweep that clears everything npm audit was flagging. No migration steps.
+
+### Added
+- **Themes have a written contract now (#5544).** Custom themes kept breaking on Haven
+  updates because nothing said which parts were safe to build on. Theme API v1 names the
+  variables and hooks that will not change without a major version, with an authoring
+  guide and a test that fails the build if the contract drifts.
+- **Bots can clear messages in bulk (#5541).** One call deletes up to 100 recent messages
+  in the bot's channel instead of a request per message, with attachments and thread
+  replies cleaned up properly. Thanks to @bernardokcosta.
+- **Haven checks the STUN servers an admin configures (#5542).** Only the built-in ones
+  were ever tested, so a list of your own was taken on trust. Dead entries are named in
+  the browser console, and if every one is unreachable with no TURN set, the existing
+  connectivity warning says so.
+
+### Fixed
+- **One wrong STUN server no longer takes out voice between browsers (#5542).** Setting
+  your own STUN servers replaces Haven's built-in ones rather than adding to them, so a
+  single bad entry left browsers unable to find each other across networks while phone
+  clients carried on working. That combination reads as Haven breaking web calls rather
+  than as a wrong address, which is exactly how it was reported. If every configured
+  server is unreachable and there is no TURN relay, Haven now falls back to its own for
+  that session. Your setting is left exactly as you saved it, and the warning still names
+  what to fix. Found by @Vinylwalk3r, @birdcrazy and @dronostyka between them.
+- **eturnal and coturn setup notes,** with the one setting people miss called out in both.
+
+### Security
+- **Cleared 12 dependency advisories, 7 of them high.** Two sit directly under the chat
+  transport rather than off in build tooling: the websocket library could disclose
+  uninitialised memory and be driven to exhaust memory, and the Socket.IO parser could be
+  exhausted through binary attachments. Every Haven message travels through both. Lockfile
+  only, and nothing crossed a major version.
+
+---
+
 ## [4.1.0] - 2026-08-30
 
 Mostly hardening and follow-through on 4.0.0, plus bots can play audio in voice now.

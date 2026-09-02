@@ -11,7 +11,8 @@
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
   <link rel="stylesheet" href="/css/style.css?v=3.51.5">
-  <script src="/js/theme-init.js?v=3.16.15"></script>
+  <script src="/js/theme-compat.js?v=4.1.1"></script>
+  <script src="/js/theme-init.js?v=4.1.1"></script>
 </head>
 <body data-haven-page="app">
 
@@ -1136,6 +1137,20 @@
         <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" data-i18n-placeholder="modals.edit_profile.bio_placeholder" placeholder="Tell people about yourself…" rows="2"></textarea>
       </div>
 
+      <!-- Groups -->
+      <div class="groups-section" id="rename-modal-groups-section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="groups-section-header">
+          <h5 class="settings-section-subtitle" style="margin:0" data-i18n="modals.edit_profile.groups_title">Groups</h5>
+          <button type="button" class="btn-sm" id="manage-groups-btn" data-i18n="modals.edit_profile.manage_groups_btn">Manage Groups</button>
+          <button type="button" class="btn-sm btn-accent" id="save-groups-btn" data-i18n="modals.edit_profile.save_groups_btn" style="display:none">Manage Groups</button>
+        </div>
+        <p class="muted-text" style="margin:6px 0 8px;font-size:.78rem;line-height:1.35" data-i18n="modals.edit_profile.groups_hint">
+          Groups are displayed as roles on your profile card. They don't grant permissions, but they can grant channel access!
+        </p>
+        <div id="user-profile-groups-list" class="user-profile-groups-list"></div>
+        <div id="user-profile-groups-manager" class="user-profile-groups-manager" style="display:none"></div>
+      </div>
+
       <!-- Personas (#86, #5349) -->
       <div class="personas-section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
         <div class="personas-section-header">
@@ -1979,6 +1994,14 @@
       <div class="settings-section" id="section-plugins">
         <h5 class="settings-section-title">🧩 <span data-i18n="settings.plugins_section.title">Plugins & Themes</span></h5>
         <p class="settings-hint" data-i18n-html="settings.plugins_section.hint">Drop <code>.plugin.js</code> files into the <code>plugins/</code> folder and <code>.theme.css</code> files into the <code>themes/</code> folder, then refresh.</p>
+        <div id="extension-safe-mode-notice" style="display:none;margin:10px 0 12px;padding:10px;border:1px solid var(--warning);border-radius:var(--radius);background:var(--bg-tertiary)">
+          <strong id="extension-safe-mode-title" data-i18n="settings.plugins_section.safe_mode_title">Extension Safe Mode</strong>
+          <p id="extension-safe-mode-desc" class="settings-hint" style="margin:4px 0 10px" data-i18n="settings.plugins_section.safe_mode_desc">Custom themes and plugins are suppressed for this session. You can reset them or exit without changing your saved choices.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sm btn-danger-fill" id="extension-reset-btn" data-i18n="settings.plugins_section.reset_customizations">Reset themes and plugins</button>
+            <button class="btn-sm" id="extension-safe-mode-exit-btn" data-i18n="settings.plugins_section.exit_safe_mode">Exit Safe Mode</button>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;margin-bottom:12px;">
           <button class="btn-sm btn-accent" id="plugin-refresh-btn">🔄 <span data-i18n="settings.plugins_section.refresh_btn">Refresh</span></button>
         </div>
@@ -2785,6 +2808,11 @@
             <input type="password" id="turn-password-input" class="settings-text-input" autocomplete="new-password" style="flex:1">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.turn_hint">A TURN server relays traffic for users behind strict NATs that STUN alone can't connect. Only needed if some users still can't connect after setting STUN. Username/password apply to static-credential TURN servers.</small>
+          <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border)">
+            <button class="btn-sm btn-accent" id="test-connectivity-btn">🩺 <span data-i18n="settings.admin.test_connectivity_btn">Test voice connectivity</span></button>
+            <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.test_connectivity_hint">Checks the servers above the same way a call does, and says in plain English what works and what doesn't. Save your changes first.</small>
+            <div id="connectivity-test-result" style="display:none;margin-top:10px"></div>
+          </div>
         </div>
         <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔊 <span data-i18n="settings.admin.sounds_title">Custom Sounds</span></h5>
@@ -4142,17 +4170,17 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=4.0.1"></script>
+  <script src="/js/theme.js?v=4.1.1"></script>
   <script src="/js/notifications.js?v=3.16.15"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=3.34.3"></script>
+  <script src="/js/voice.js?v=3.34.5"></script>
   <script src="/js/modmode.js?v=3.16.15"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=3.51.4"></script>
-  <script src="/js/plugin-loader.js?v=4.0.1"></script>
+  <script type="module" src="/js/app.js?v=4.1.1"></script>
+  <script src="/js/plugin-loader.js?v=4.1.1"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
 </body>

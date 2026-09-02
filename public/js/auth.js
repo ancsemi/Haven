@@ -68,10 +68,17 @@
   // data-theme values, and plugin-loader.js (which knows about them) only runs
   // on the app page. So the login page fetched nothing and showed none of them.
   // /api/themes is unauthenticated, which is what makes this possible here. (#5537)
-  fetch('/api/themes')
-    .then(r => r.ok ? r.json() : [])
-    .then(themes => { injectPublishedThemeBar('auth-theme-bar', themes); })
-    .catch(() => { /* no custom themes is a fine outcome for a login page */ });
+  const publishedThemesPromise = (window.HavenThemeCompat?.fetchThemes?.(fetch) || fetch('/api/themes')
+    .then(r => {
+      if (!r.ok) throw new Error(`Theme metadata request failed (${r.status})`);
+      return r.json();
+    }))
+    .then(themes => {
+      if (!Array.isArray(themes)) throw new Error('Invalid theme metadata response');
+      injectPublishedThemeBar('auth-theme-bar', themes);
+      return themes;
+    })
+    .catch(() => null); // Preserve saved choices when theme metadata is temporarily unavailable.
 
   // ── Language switcher ─────────────────────────────────
   const langSelect = document.getElementById('auth-lang-select');
@@ -90,7 +97,7 @@
   // ── Apply server default theme for first-time visitors ──
   // Only applies when the user has no personal theme preference stored locally.
   // Also fetch server title for login page branding.
-  fetch('/api/public-config').then(r => r.json()).then(d => {
+  fetch('/api/public-config').then(r => r.json()).then(async d => {
     if (d.default_theme && !localStorage.getItem('haven_theme')) {
       // A published theme is stored as "file:whatever.theme.css". Writing that
       // straight into data-theme matched no stylesheet at all, so an admin who
@@ -101,7 +108,10 @@
       // storing it would stop a later change to the default from ever reaching
       // a returning visitor who has not signed in. (#5537, #5536)
       if (d.default_theme.startsWith('file:')) {
-        applyPublishedThemeBase(d.default_theme.slice(5), false);
+        const file = d.default_theme.slice(5);
+        const themes = await publishedThemesPromise;
+        const meta = themes?.find(theme => theme?.file === file);
+        if (meta) applyPublishedThemeBase(file, false, meta);
       } else {
         applyThemeFromServer(d.default_theme, false);
       }

@@ -2911,27 +2911,7 @@ _setupUI() {
 
   // Rename username
   document.getElementById('rename-btn').addEventListener('click', () => {
-    document.getElementById('rename-modal').style.display = 'flex';
-    const input = document.getElementById('rename-input');
-    input.value = this.user.displayName || this.user.username;
-    input.focus();
-    input.select();
-    // Populate bio
-    const bioInput = document.getElementById('edit-profile-bio');
-    if (bioInput) bioInput.value = this.user.bio || '';
-    // Load personas list (#86, #5349)
-    this._loadPersonas?.();
-    this._updateAvatarPreview();
-    this._resetBorderEditState();
-    // Sync shape picker buttons
-    const picker = document.getElementById('avatar-shape-picker');
-    if (picker) {
-      const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
-      picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.shape === currentShape);
-      });
-      this._pendingAvatarShape = currentShape;
-    }
+    this._openRenameModal();
   });
 
   // ── Profile popup: click on message author name or avatar ──
@@ -3096,6 +3076,15 @@ _setupUI() {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
 
+  // manage groups buttons
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (manageGroupsBtn) manageGroupsBtn.addEventListener('click', () => this._showGroupManager());
+
+  const saveGroupsBtn = document.getElementById('save-groups-btn');
+  if (saveGroupsBtn) saveGroupsBtn.addEventListener('click', () => {
+    this._GroupManagerSaveGroups();
+  });
+
   // ── Admin moderation bindings ───────────────────────
   document.getElementById('cancel-admin-action-btn').addEventListener('click', () => {
     document.getElementById('admin-action-modal').style.display = 'none';
@@ -3208,14 +3197,7 @@ _setupUI() {
     if (tab === 'admin') {
       // Defensive gate: refuse switching to the admin tab if the user has no
       // admin/manage permissions, regardless of where the call came from.
-      const isAdmin = !!(this.user && this.user.isAdmin);
-      const hasAdminAccess = isAdmin
-        || this._hasPerm?.('manage_emojis')
-        || this._hasPerm?.('manage_stickers')
-        || this._hasPerm?.('manage_soundboard')
-        || this._hasPerm?.('manage_roles')
-        || this._hasPerm?.('manage_server')
-        || this._hasPerm?.('view_audit_log');
+      const hasAdminAccess = !!this.user && this._hasAnyAdminSettingsAccess();
       if (!hasAdminAccess) return this._switchSettingsTab('user');
       if (userBody) userBody.style.display = 'none';
       if (adminBody) adminBody.style.display = '';
@@ -4288,6 +4270,9 @@ _setupUI() {
       value: e.target.checked ? 'true' : 'false'
     });
   });
+  document.getElementById('test-connectivity-btn')?.addEventListener('click', () => {
+    this._runConnectivityTest();
+  });
   document.getElementById('generate-registration-token-btn')?.addEventListener('click', () => {
     this.socket.emit('generate-registration-token');
   });
@@ -4728,6 +4713,31 @@ _setupUI() {
   document.getElementById('invite-links-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
+},
+
+_openRenameModal() {
+  document.getElementById('rename-modal').style.display = 'flex';
+  const input = document.getElementById('rename-input');
+  input.value = this.user.displayName || this.user.username;
+  input.focus();
+  input.select();
+  // Populate bio
+  const bioInput = document.getElementById('edit-profile-bio');
+  if (bioInput) bioInput.value = this.user.bio || '';
+  // Load personas list (#86, #5349)
+  this._loadPersonas?.();
+  this._loadRoles(() => this._renderUserProfileGroupsList());
+  this._updateAvatarPreview();
+  this._resetBorderEditState();
+  // Sync shape picker buttons
+  const picker = document.getElementById('avatar-shape-picker');
+  if (picker) {
+    const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
+    picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.shape === currentShape);
+    });
+    this._pendingAvatarShape = currentShape;
+  }
 },
 
 // ═══════════════════════════════════════════════════════
@@ -6339,8 +6349,9 @@ _saveRename() {
   if (bioInput) {
     this.socket.emit('set-bio', { bio: bioInput.value });
   }
-  // Also commit any pending avatar changes
+  // Also commit any pending avatar and groups changes
   this._commitAvatarSettings();
+  this._GroupManagerSaveGroups();
   document.getElementById('rename-modal').style.display = 'none';
 },
 
@@ -6863,6 +6874,312 @@ _openVideoLightbox(src) {
   };
   document.addEventListener('keydown', closeOnEsc);
   document.body.appendChild(overlay);
+},
+
+_loadGroupChannelAccess(roleIds, callback) {
+  this._roleEmit('get-role-channel-access', { roleIds }, (res) => {
+    if (!res || res.error) return callback?.({});
+
+    const channelMap = new Map((res.channels || []).map(ch => [ch.id, ch]));
+    const accessMap = {};
+    (res.access || []).forEach(a => {
+      if (!a.grant_on_promote) return;
+
+      const channel = channelMap.get(a.channel_id);
+      if (!channel) return;
+      if (!accessMap[a.role_id]) accessMap[a.role_id] = [];
+
+      accessMap[a.role_id].push(channel);
+    });
+    callback?.(accessMap);
+  });
+},
+
+// user Groups
+_renderUserProfileGroupsList() {
+  const section = document.getElementById('rename-modal-groups-section');
+  const list = document.getElementById('user-profile-groups-list');
+  const manager = document.getElementById('user-profile-groups-manager');
+  const managerSaveBtn = document.getElementById('save-groups-btn');
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (!section || !list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
+
+  // Hide Groups section if there are no groups available to join.
+  const availableGroups = (this._allRoles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  section.style.display = availableGroups.length > 0 ? '' : 'none';
+
+  // Always start from the read-only view. Clearing the manager's checkboxes
+  // matters: Save Profile calls _GroupManagerSaveGroups too, and stale
+  // checkboxes from an earlier visit would otherwise be replayed as the
+  // user's current choice.
+  manager.style.display = 'none';
+  manager.innerHTML = '';
+  managerSaveBtn.style.display = 'none';
+
+  if (availableGroups.length > 0) {
+    // Make Sure non manager parts are visible:
+    manageGroupsBtn.style.display = '';
+    list.style.display = '';
+
+    const groups = (this.user?.roles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    if (groups.length === 0) {
+      // display tip when user is not a part of any groups
+      list.innerHTML = `<p class="muted-text" style="font-size:.78rem;margin:6px 0">${t('modals.edit_profile.no_groups')}</p>`;
+    }
+    else {
+      // render list of user's current groups
+      list.innerHTML = groups.map(r => {
+        const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+          return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>`;
+      }).join('');
+    }
+  }
+},
+
+_showGroupManager() {
+  const list = document.getElementById('user-profile-groups-list');
+  const manager = document.getElementById('user-profile-groups-manager');
+  const managerSaveBtn = document.getElementById('save-groups-btn');
+  const manageGroupsBtn = document.getElementById('manage-groups-btn');
+  if (!list || !manager || !managerSaveBtn || !manageGroupsBtn) return;
+
+  const availableGroups = (this._allRoles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const groups = (this.user?.roles || []).filter(r => r.level === 0).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  list.style.display = 'none';
+  manageGroupsBtn.style.display = 'none';
+
+  manager.style.display = '';
+  managerSaveBtn.style.display = '';
+
+  // render html list of selectable groups for the user groups-manager
+  const userGroupIds = new Set(groups.map(g => g.id));
+  manager.innerHTML = availableGroups.map(r => {
+    const isMember = userGroupIds.has(r.id);
+    const rIcon = r.icon ? `<img class="role-icon" src="${esc(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
+
+    return `
+      <label class="toggle-row user-group-toggle-row">
+        <span class="user-group-name">
+          <button class="user-group-channel-info" data-role="${r.id}" style="visibility:hidden" title="">#i</button>
+          <span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${esc(r.name)}</span>
+        </span>
+        <input type="checkbox" class="user-group-checkbox" data-role="${r.id}"${isMember ? ' checked' : ''}>
+      </label>
+    `;
+  }).join('');
+
+  // Load channel access for all groups and show info icons
+  this._loadGroupChannelAccess(
+    availableGroups.map(r => r.id),
+    (accessMap) => {
+      availableGroups.forEach(r => {
+        const channels = accessMap[r.id] || [];
+        if (!channels.length) return;
+
+        const info = manager.querySelector(`.user-group-channel-info[data-role="${r.id}"]`);
+        if (!info) return;
+
+        info.dataset.channels = JSON.stringify(channels);
+        info.style.visibility = 'visible';
+
+        info.addEventListener('mouseenter', () => {
+          // Don't show a hover tooltip while the persistent popup is open.
+          if (this._groupChannelInfoPopup) return;
+
+          this._showGroupChannelInfo(info, false);
+        });
+
+        info.addEventListener('mouseleave', () => {
+          // Persistent popup is intentionally unaffected.
+          if (!this._groupChannelInfoPopup) {
+            this._closeGroupChannelInfo();
+          }
+        });
+
+        info.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          this._showGroupChannelInfo(info, true);
+        });
+      });
+    }
+  );
+},
+
+_GroupManagerSaveGroups() {
+  // Only send a selection while the group manager is open. Save Profile calls
+  // this unconditionally, and with the manager closed there are no checkboxes
+  // in the DOM, so an empty list would go out and the server would read it as
+  // "leave every group".
+  const manager = document.getElementById('user-profile-groups-manager');
+  if (!manager || manager.style.display === 'none') return;
+  const selectedGroupIds = Array.from(manager.querySelectorAll('.user-group-checkbox:checked')).map(el => parseInt(el.dataset.role, 10)).filter(Number.isInteger);
+  this._roleEmit('update-groups', {groupIds: selectedGroupIds}, (res) => {
+    if (res.error) {
+      return this._showToast(res.error, 'error');
+    }
+
+    // Update local user roles with the groups returned by the server.
+    if (Array.isArray(res.groups)) {
+      this.user.roles = [
+        ...(this.user.roles || []).filter(r => r.level !== 0),
+        ...res.groups
+      ];
+    }
+
+    this._showToast(t('modals.edit_profile.groups_saved'), 'success');
+    this._renderUserProfileGroupsList();
+  });
+},
+
+_showGroupChannelInfo(info, persistent = false) {
+  const channels = JSON.parse(info.dataset.channels || '[]');
+  if (!channels.length) return;
+
+  // Remove any existing group-channel popup.
+  this._closeGroupChannelInfo();
+
+  const popup = document.createElement('div');
+  popup.className = `group-channel-info-popup${persistent ? ' persistent' : ''}`;
+
+  const channelMap = new Map(channels.map(ch => [ch.id, ch]));
+  const children = new Map();
+
+  // Only display subchannels when their parent is also granted
+  // by this group.
+  const visibleChannels = channels.filter(ch => {
+    if (!ch.parent_channel_id) return true;
+    return channelMap.has(ch.parent_channel_id);
+  });
+
+  // Build hierarchy from the channels we're actually displaying.
+  visibleChannels.forEach(ch => {
+    if (ch.parent_channel_id && channelMap.has(ch.parent_channel_id)) {
+      if (!children.has(ch.parent_channel_id)) {
+        children.set(ch.parent_channel_id, []);
+      }
+      children.get(ch.parent_channel_id).push(ch);
+    }
+  });
+
+  const visibleIds = new Set(visibleChannels.map(ch => ch.id));
+
+  const roots = visibleChannels.filter(ch =>
+    !ch.parent_channel_id ||
+    !visibleIds.has(ch.parent_channel_id)
+  );
+
+  const renderChannel = (ch, isChild = false) => {
+    const prefix = isChild ? '↳ ' : '# ';
+    const lock = ch.is_private ? ' 🔒' : '';
+
+    return `
+      <div class="group-channel-info-row${isChild ? ' sub' : ''}">
+        ${prefix}${this._escapeHtml(ch.name)}${lock}
+      </div>
+      ${(children.get(ch.id) || [])
+        .sort((a, b) =>
+          a.position - b.position ||
+          a.name.localeCompare(b.name)
+        )
+        .map(child => renderChannel(child, true))
+        .join('')}
+    `;
+  };
+
+  popup.innerHTML = `
+    <div class="group-channel-info-title">
+      <span>${this._escapeHtml(t('modals.edit_profile.group_channels_granted'))}</span>
+      ${persistent
+        ? `<button type="button" class="group-channel-info-close" title="Close">&times;</button>`
+        : ''}
+    </div>
+    <div class="group-channel-info-list">
+      ${roots
+        .sort((a, b) =>
+          a.position - b.position ||
+          a.name.localeCompare(b.name)
+        )
+        .map(ch => renderChannel(ch))
+        .join('')}
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  const rect = info.getBoundingClientRect();
+  const popupRect = popup.getBoundingClientRect();
+  const margin = 8;
+  const gap = 6;
+
+  let left = rect.left;
+  let top = rect.bottom + gap;
+
+  // Keep popup within the horizontal viewport.
+  if (left + popupRect.width > window.innerWidth - margin) {
+    left = window.innerWidth - popupRect.width - margin;
+  }
+  left = Math.max(margin, left);
+
+  // Prefer below; move above if necessary.
+  if (top + popupRect.height > window.innerHeight - margin) {
+    const aboveTop = rect.top - popupRect.height - gap;
+    top = (aboveTop >= margin) ? aboveTop : margin;
+  }
+
+  top = Math.max(margin, top);
+  const availableHeight = window.innerHeight - top - margin;
+  const channelList = popup.querySelector('.group-channel-info-list');
+  if (channelList) {
+    channelList.style.maxHeight =
+      `${Math.max(4 * 16, availableHeight - 55)}px`;
+  }
+
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+
+  if (persistent) {
+    this._groupChannelInfoPopup = popup;
+
+    const closeBtn = popup.querySelector('.group-channel-info-close');
+    closeBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._closeGroupChannelInfo();
+    });
+
+    this._groupChannelInfoOutsideHandler = (e) => {
+      if (!popup.contains(e.target) && e.target !== info) {
+        this._closeGroupChannelInfo();
+      }
+    };
+
+    setTimeout(() => {
+      document.addEventListener('click', this._groupChannelInfoOutsideHandler);
+    }, 0);
+  } else {
+    this._groupChannelInfoTooltip = popup;
+  }
+},
+
+_closeGroupChannelInfo() {
+  if (this._groupChannelInfoTooltip) {
+    this._groupChannelInfoTooltip.remove();
+    this._groupChannelInfoTooltip = null;
+  }
+
+  if (this._groupChannelInfoPopup) {
+    this._groupChannelInfoPopup.remove();
+    this._groupChannelInfoPopup = null;
+  }
+
+  if (this._groupChannelInfoOutsideHandler) {
+    document.removeEventListener('click', this._groupChannelInfoOutsideHandler);
+    this._groupChannelInfoOutsideHandler = null;
+  }
 },
 
 // ── Personas (#86, #5349) ──────────────────────────────

@@ -277,6 +277,11 @@ Click **Clear** to remove your avatar and revert to the default initial-letter a
 
 Haven includes 20+ visual themes. Click the **🎨** button at the bottom of the sidebar to open the theme picker. Themes change colors, fonts, and overall aesthetic. Your choice is saved per browser.
 
+Servers also include the optional **Compact** Theme API v1 file theme. An admin
+can publish it from **Settings → Admin → Branding → Custom Themes**. Compact
+tightens the desktop chrome while preserving the user's separate message-density
+choice under **Settings → Layout**.
+
 ### Effect Overlays
 
 Effects are stackable visual layers on top of any theme. Choose from the effect selector in the theme popup:
@@ -682,6 +687,7 @@ Haven also ships a couple of extras that are **installed but switched off by def
 
 | File | What it is |
 |------|-----------|
+| `themes/compact.theme.css` | Compact, a dense graphite Theme API v1 theme |
 | `themes/braid.theme.css` | Braid, a dark mint theme |
 | `themes/braid-light.theme.css` | Braid Light |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
@@ -692,6 +698,8 @@ To make a bundled theme available to everyone, go to **Settings → Admin → �
 Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes/` folder, restart, then publish it in the same place. A theme can also be set as the server **default** from that section, which applies to anyone who has not already picked a theme of their own. It is a default rather than a lock, so a user who chooses a different theme keeps their choice.
 
 Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
+
+If a theme or plugin makes the interface unusable, open `/app.html?haven-safe-mode=1`. Haven will suppress file themes and avoid fetching or evaluating plugins for that tab, allowing the extension choices to be reset from **Settings → Plugins & Themes**.
 
 ### Background images (wallpapers)
 
@@ -793,7 +801,9 @@ Restart Haven, and voice/screen sharing will work across any network.
 > - Forward **UDP**, not just TCP. TURN media is UDP: port 3478 plus the whole `min-port` to `max-port` range. A TCP-only forward lets coturn start up, answer, and relay nothing.
 > - Turn on NAT reflection (also called hairpin NAT) on your router, or people on your own LAN cannot reach `turn:your-domain.com`, because that name resolves to your public IP. pfSense and OPNsense call it NAT Reflection. Some routers do not support it at all, in which case split DNS pointing the name at the LAN address is the way round it.
 >
-> To check the relay by itself, put your TURN URL and credentials into the WebRTC project's Trickle ICE page (https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/). If it never produces a candidate of type `relay`, the problem is coturn or the firewall in front of it, not Haven.
+> The quickest check is inside Haven: Settings, Voice & Connectivity, **Test voice connectivity**. It runs your STUN and TURN the same way a call does and tells you which one is not answering and why. Bear in mind it runs from your browser, so a server that only answers on your own network passes there and still fails for everyone else.
+>
+> To check the relay outside Haven entirely, put your TURN URL and credentials into the WebRTC project's Trickle ICE page (https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/). If it never produces a candidate of type `relay`, the problem is coturn or the firewall in front of it, not Haven.
 
 > **coturn is not the only option.** [eturnal](https://eturnal.net/) does the same job and several people running Haven at home have found it easier to get working. The setting that matters is the same one under a different name: `relay_ipv4_addr` in `eturnal.yml` is coturn's `external-ip`, and its autodetection does not reliably find your public address behind NAT, so set it explicitly there too. Everything else on this page (UDP forwarding, the relay port range, NAT reflection) applies unchanged, and Haven does not care which one you point `TURN_URL` at.
 

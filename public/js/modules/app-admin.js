@@ -748,7 +748,7 @@ _syncSettingsNav() {
   const canManageServer = isAdmin || this._hasPerm('manage_server');
   const canManageWebhooks = isAdmin || this._hasPerm('manage_webhooks');
   const canInviteUsers = isAdmin || this._hasPerm('invite_users'); // (#5470)
-  const hasAnyAdminAccess = isAdmin || canManageEmojis || canManageStickers || canManageSounds || canManageRoles || canManageServer || canManageWebhooks || canInviteUsers;
+  const hasAnyAdminAccess = this._hasAnyAdminSettingsAccess();
 
   // Show/hide individual admin nav items (default: hidden for non-admins)
   document.querySelectorAll('.settings-nav-admin').forEach(el => {
@@ -1107,6 +1107,21 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const themeList = document.getElementById('admin-theme-list');
+  if (themeList?.dataset.loaded === '1') {
+    const publishedThemes = JSON.stringify(
+      [...themeList.querySelectorAll('input[type="checkbox"]')]
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.file)
+    );
+    if (publishedThemes !== (snap.published_themes || '[]')) {
+      this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
+      changed = true;
+    }
+  }
+
+  // Publish first so a newly-published file can pass server validation when it
+  // is selected as the default in the same save operation.
   const defaultTheme = document.getElementById('default-theme-select')?.value || '';
   if (defaultTheme !== (snap.default_theme || '')) {
     this.socket.emit('update-server-setting', { key: 'default_theme', value: defaultTheme });
@@ -1116,16 +1131,6 @@ _saveAdminSettings() {
   const defaultLocale = document.getElementById('default-locale-select')?.value || '';
   if (defaultLocale !== (snap.default_locale || '')) {
     this.socket.emit('update-server-setting', { key: 'default_locale', value: defaultLocale });
-    changed = true;
-  }
-
-  const publishedThemes = JSON.stringify(
-    [...document.querySelectorAll('#admin-theme-list input[type="checkbox"]')]
-      .filter(cb => cb.checked)
-      .map(cb => cb.dataset.file)
-  );
-  if (publishedThemes !== (snap.published_themes || '[]')) {
-    this.socket.emit('update-server-setting', { key: 'published_themes', value: publishedThemes });
     changed = true;
   }
 
@@ -1240,9 +1245,15 @@ _cancelAdminSettings() {
 async _renderAdminThemeList() {
   const container = document.getElementById('admin-theme-list');
   if (!container) return;
+  container.dataset.loaded = '0';
   let themes = [];
   try {
-    themes = await fetch('/api/themes').then(r => r.json());
+    const response = await fetch('/api/themes');
+    if (!response.ok) throw new Error('Theme metadata request failed');
+    const result = await response.json();
+    if (!Array.isArray(result)) throw new Error('Invalid theme metadata response');
+    themes = result;
+    container.dataset.loaded = '1';
   } catch { /* server not ready */ }
 
   if (themes.length === 0) {
@@ -1257,14 +1268,22 @@ async _renderAdminThemeList() {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.dataset.file = theme.file;
-    cb.checked = !!theme.published;
+    cb.checked = !!theme.published && theme.compatible !== false;
+    cb.disabled = theme.compatible === false;
     const nameSpan = document.createElement('span');
     nameSpan.textContent = theme.name || theme.file;
     const descSpan = document.createElement('span');
     descSpan.style.cssText = 'font-size:0.6875rem;color:var(--text-muted)';
-    descSpan.textContent = theme.description || '';
+    const compatibility = theme.compatible === false
+      ? ` [${t('settings.plugins_section.incompatible_theme')}]`
+      : '';
+    descSpan.textContent = `${theme.description || ''}${compatibility}`;
+    if (theme.compatible === false) {
+      label.style.opacity = '0.65';
+      label.title = t('settings.plugins_section.incompatible_theme_hint');
+    }
     label.append(cb, nameSpan);
-    if (theme.description) label.append(descSpan);
+    if (theme.description || theme.compatible === false) label.append(descSpan);
     container.appendChild(label);
   }
 
@@ -1273,7 +1292,7 @@ async _renderAdminThemeList() {
   if (dtSelect) {
     // Remove any previously injected file: options
     dtSelect.querySelectorAll('option[data-custom-theme]').forEach(o => o.remove());
-    const published = themes.filter(t => t.published);
+    const published = themes.filter(theme => theme.published && theme.compatible !== false);
     if (published.length > 0) {
       const sep = document.createElement('option');
       sep.disabled = true;
@@ -1284,6 +1303,19 @@ async _renderAdminThemeList() {
         const opt = document.createElement('option');
         opt.value = `file:${theme.file}`;
         opt.textContent = theme.name || theme.file;
+        opt.setAttribute('data-custom-theme', '1');
+        dtSelect.appendChild(opt);
+      }
+    }
+    const currentDefault = this.serverSettings.default_theme || '';
+    if (currentDefault.startsWith('file:') && !published.some(theme => `file:${theme.file}` === currentDefault)) {
+      const file = currentDefault.slice(5);
+      const theme = themes.find(item => item.file === file);
+      if (theme) {
+        const opt = document.createElement('option');
+        opt.value = currentDefault;
+        opt.textContent = `${theme.name || file} (${t('settings.plugins_section.incompatible_theme')})`;
+        opt.disabled = true;
         opt.setAttribute('data-custom-theme', '1');
         dtSelect.appendChild(opt);
       }
@@ -2223,6 +2255,93 @@ _openMemberChannelPicker(userId, username, mode) {
 // ═══════════════════════════════════════════════════════
 // INVITE LINKS
 // ═══════════════════════════════════════════════════════
+
+// Run the configured STUN/TURN through a real ICE gathering and say, in words
+// an admin can act on, what works and what does not.
+//
+// Every voice thread has run the same course: it fails for users, the admin has
+// no way to see why, and it only gets solved when someone walks them through a
+// third-party ICE test page and reads the candidate list back to them. The
+// browser knows all of this the moment it gathers candidates. #5542 cost three
+// people several days between them, and the answer in the end was a mistyped
+// port that this would have named in ten seconds.
+async _runConnectivityTest() {
+  const btn = document.getElementById('test-connectivity-btn');
+  const box = document.getElementById('connectivity-test-result');
+  if (!btn || !box || !this.voice) return;
+
+  const line = (icon, text, muted) =>
+    `<div style="display:flex;gap:6px;align-items:flex-start;margin:3px 0${muted ? ';opacity:0.75' : ''}">` +
+    `<span style="flex:none">${icon}</span><span>${text}</span></div>`;
+
+  btn.disabled = true;
+  box.style.display = '';
+  box.innerHTML = `<small class="settings-hint">${t('settings.admin.test_connectivity_running')}</small>`;
+
+  try {
+    // Deliberately the live endpoint rather than the values in the boxes, so
+    // this tests what users are actually handed, including unsaved edits being
+    // absent. Saying "save first" in the hint is cheaper than guessing here.
+    const res = await fetch('/api/ice-servers', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('haven_token')}` }
+    });
+    if (!res.ok) throw new Error('could not read the server list');
+    const cfg = await res.json();
+    const report = await this.voice.diagnoseConnectivity(cfg.iceServers || []);
+
+    const out = [];
+
+    if (!report.stunTotal && !report.turnTotal) {
+      out.push(line('⚠️', t('settings.admin.test_none_configured')));
+    }
+
+    // Headline first: can two people on different networks reach each other.
+    if (report.hasRelay) {
+      out.push(line('✅', t('settings.admin.test_ok_relay')));
+    } else if (report.canCrossNetworks) {
+      out.push(line('✅', t('settings.admin.test_ok_stun')));
+    } else if (report.stunTotal || report.turnTotal) {
+      out.push(line('❌', t('settings.admin.test_fail_nothing')));
+    }
+
+    // Then the specifics, naming each server, because "one of them is wrong"
+    // is the part that takes days to find by hand.
+    for (const r of report.results) {
+      const name = this._escapeHtml(r.urls);
+      const why = r.error ? ` <span style="opacity:0.8">(${this._escapeHtml(r.error)})</span>` : '';
+      if (r.isTurn) {
+        out.push(r.relay
+          ? line('✅', t('settings.admin.test_turn_ok', { server: name }), true)
+          : line('❌', t('settings.admin.test_turn_dead', { server: name }) + why));
+      } else {
+        out.push(r.srflx
+          ? line('✅', t('settings.admin.test_stun_ok', { server: name }), true)
+          : line('❌', t('settings.admin.test_stun_dead', { server: name }) + why));
+      }
+    }
+
+    // Advice, only where it applies.
+    if (report.deadTurn.length) {
+      out.push(line('💡', t('settings.admin.test_tip_turn')));
+    } else if (report.canCrossNetworks && !report.turnTotal) {
+      out.push(line('💡', t('settings.admin.test_tip_no_turn')));
+    }
+    if (report.deadStun.length && report.stunLive) {
+      out.push(line('💡', t('settings.admin.test_tip_partial')));
+    }
+
+    // The caveat that actually bit people: this ran from wherever the admin is
+    // sitting. A server reachable only on the LAN passes here and fails for
+    // everyone else, which is precisely how #5542 stayed hidden for days.
+    out.push(line('ℹ️', t('settings.admin.test_caveat'), true));
+
+    box.innerHTML = `<div style="font-size:0.8125rem;line-height:1.45">${out.join('')}</div>`;
+  } catch (err) {
+    box.innerHTML = `<small class="settings-hint">${this._escapeHtml(t('settings.admin.test_connectivity_failed', { error: err.message || 'unknown error' }))}</small>`;
+  } finally {
+    btn.disabled = false;
+  }
+},
 
 _openInviteLinksModal() {
   const modal = document.getElementById('invite-links-modal');
@@ -3905,7 +4024,7 @@ _initRoleManagement() {
     const levelStr = await this._showPromptModal(t('settings.admin.roles_level_title'), t('settings.admin.roles_level_hint'), '25');
     if (levelStr === null) return;
     const level = parseInt(levelStr, 10);
-    if (isNaN(level) || level < 1 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
+    if (isNaN(level) || level < 0 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
     this._roleEmit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_created'), 'success');
@@ -4080,12 +4199,30 @@ _renderRoleSidebar() {
     </div>
     <div class="role-sidebar-divider"></div>`;
   }
-  html += this._allRoles.map(r =>
+
+  // leveled roles
+  const leveledRoles = this._allRoles.filter(r => r.level > 0);
+  html += leveledRoles.map(r =>
+    `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
+      <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
+      ${this._escapeHtml(r.name)}
+      <span class="role-sidebar-level">Lv.${r.level}</span>
+    </div>`
+  ).join('');
+
+  // Groups (level 0) sit below real roles, separated by a divider.
+  const groups = this._allRoles.filter(r => r.level === 0);
+  if (leveledRoles.length && groups.length) {
+    html += '<div class="role-sidebar-divider"></div>';
+    html += '<div class="role-sidebar-section-label">' + t('modals.role_management.groups_label') + '</div>';
+  }
+  html += groups.map(r =>
     `<div class="role-sidebar-item${this._selectedRoleId === r.id ? ' active' : ''}" data-role-id="${r.id}">
       <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
       ${this._escapeHtml(r.name)}
     </div>`
   ).join('');
+
   list.innerHTML = html;
   list.querySelectorAll('.role-sidebar-item').forEach(el => {
     el.addEventListener('click', () => {
@@ -4205,6 +4342,24 @@ _renderAdminRoleDetail() {
   });
 },
 
+_updateRoleLevelPermsVis(levelInputId, permissionsSectionId, permissionsNoteId) {
+  const levelInput = document.getElementById(levelInputId);
+  const permissionsSection = document.getElementById(permissionsSectionId);
+  const permissionsNote = document.getElementById(permissionsNoteId);
+
+  if (!levelInput || (!permissionsSection && !permissionsNote)) return;
+  const update = () => {
+    const level = parseInt(levelInput.value, 10);
+    const isLevelZero = level === 0;
+
+    if(permissionsSection) permissionsSection.style.display = isLevelZero ? 'none' : '';
+    if (permissionsNote) permissionsNote.textContent = isLevelZero ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note');
+  };
+
+  levelInput.addEventListener('input', update);
+  update();
+},
+
 _renderRoleDetail() {
   const panel = document.getElementById('role-detail-panel');
   if (this._selectedRoleId === 'admin') { this._renderAdminRoleDetail(); return; }
@@ -4224,7 +4379,7 @@ _renderRoleDetail() {
       <label class="settings-label">${t('settings.admin.role_form.name')}</label>
       <input type="text" class="settings-text-input" id="role-edit-name" value="${this._escapeHtml(role.name)}" maxlength="30">
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.level')}</label>
-      <input type="number" class="settings-number-input" id="role-edit-level" value="${role.level}" min="1" max="99">
+      <input type="number" class="settings-number-input" id="role-edit-level" value="${role.level}" min="0" max="99">
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.color')}</label>
       <input type="color" id="role-edit-color" value="${role.color || '#aaaaaa'}" style="width:50px;height:30px;border:none;cursor:pointer">
       <label class="settings-label" style="margin-top:8px;">Role Icon</label>
@@ -4255,16 +4410,18 @@ _renderRoleDetail() {
         </div>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>
-      <p class="perm-admin-note">${t('settings.admin.role_form.admin_only_note')}</p>
-      ${allPerms.map(p => {
-        const locked = !this._canControlRolePerm(p);
-        const adminOnly = ADMIN_ONLY_PERMS.includes(p);
-        return `
-        <label class="toggle-row${adminOnly ? ' perm-admin-only' : ''}"${locked ? ' style="opacity:.55" title="You can only change permissions you hold"' : ''}>
-          <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
-          <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}${locked ? ' disabled' : ''}>
-        </label>`;
-      }).join('')}
+      <p class="perm-admin-note" id="perm-admin-note">${role.level === 0 ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note')}</p>
+      <div id="role-permissions-list" style="${role.level === 0 ? 'display:none;' : ''}">
+        ${allPerms.map(p => {
+          const locked = !this._canControlRolePerm(p);
+          const adminOnly = ADMIN_ONLY_PERMS.includes(p);
+          return `
+          <label class="toggle-row${adminOnly ? ' perm-admin-only' : ''}"${locked ? ' style="opacity:.55" title="You can only change permissions you hold"' : ''}>
+            <span>${permLabels[p] || p.replace(/_/g, ' ')}</span>
+            <input type="checkbox" class="role-perm-checkbox" data-perm="${p}" ${rolePerms.includes(p) ? 'checked' : ''}${locked ? ' disabled' : ''}>
+          </label>`;
+        }).join('')}
+      </div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-sm btn-accent" id="role-members-btn">👥 Members</button>
         <button class="btn-sm" id="duplicate-role-btn">📋 Duplicate</button>
@@ -4272,6 +4429,9 @@ _renderRoleDetail() {
       </div>
     </div>
   `;
+
+  // Toggle permissions visibility based on the current role level.
+  this._updateRoleLevelPermsVis('role-edit-level', 'role-permissions-list', 'perm-admin-note');
 
   // Toggle channel access panel visibility
   const linkCheckbox = document.getElementById('role-edit-link-channel-access');
@@ -4793,13 +4953,25 @@ _renderChannelRolesRoleList() {
     list.innerHTML = `<p style="font-size:0.82rem;color:var(--text-muted);text-align:center;padding:8px">${t('settings.admin.roles_none_yet')}</p>`;
     return;
   }
-  list.innerHTML = this._allRoles.map(r =>
+
+  const renderRole = r =>
     `<div class="channel-roles-role-item${this._channelRolesSelectedRole === r.id ? ' active' : ''}" data-role-id="${r.id}">
       <span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span>
       <span class="channel-roles-role-name">${this._escapeHtml(r.name)}</span>
       <span class="channel-roles-role-level">Lv.${r.level}</span>
-    </div>`
-  ).join('');
+    </div>`;
+
+  const leveledRoles = this._allRoles.filter(r => r.level > 0);
+  let html = leveledRoles.map(renderRole).join('');
+
+  const groups = this._allRoles.filter(r => r.level === 0);
+  if (leveledRoles.length && groups.length) {
+    html += '<div class="role-sidebar-divider"></div>';
+    html += '<div class="role-sidebar-section-label">' + t('modals.role_management.groups_label') + '</div>';
+  }
+  html += groups.map(renderRole).join('');
+
+  list.innerHTML = html;
   list.querySelectorAll('.channel-roles-role-item').forEach(el => {
     el.addEventListener('click', () => {
       this._channelRolesSelectedRole = parseInt(el.dataset.roleId, 10);
@@ -4830,7 +5002,7 @@ _renderChannelRolesRoleDetail() {
       <div class="cr-role-form-row cr-role-inline">
         <div>
           <label class="cr-role-label">${t('settings.admin.role_form.level')}</label>
-          <input type="number" class="settings-number-input" id="cr-role-level" value="${role.level}" min="1" max="99" style="width:60px">
+          <input type="number" class="settings-number-input" id="cr-role-level" value="${role.level}" min="0" max="99" style="width:60px">
         </div>
         <div>
           <label class="cr-role-label">${t('settings.admin.role_form.color')}</label>
@@ -4842,8 +5014,8 @@ _renderChannelRolesRoleDetail() {
         <span>${t('settings.admin.role_form.auto_assign')}</span>
       </label>
       <label class="cr-role-label" style="margin-top:4px">${t('settings.admin.role_form.permissions')}</label>
-      <p class="perm-admin-note">${t('settings.admin.role_form.admin_only_note')}</p>
-      <div class="cr-role-perms">
+      <p class="perm-admin-note" id="cr-perm-admin-note">${role.level === 0 ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note')}</p>
+      <div class="cr-role-perms" id="cr-role-permissions-list" style="${role.level === 0 ? 'display:none;' : ''}">
         ${allPerms.map(p => {
           const locked = !this._canControlRolePerm(p);
           const adminOnly = ADMIN_ONLY_PERMS.includes(p);
@@ -4861,10 +5033,13 @@ _renderChannelRolesRoleDetail() {
     </div>
   `;
 
+  // Toggle permissions visibility based on the current role level.
+  this._updateRoleLevelPermsVis('cr-role-level', 'cr-role-permissions-list', 'cr-perm-admin-note');
+
   document.getElementById('cr-save-role-btn').addEventListener('click', () => {
     const perms = [...panel.querySelectorAll('.cr-perm-cb:checked')].map(cb => cb.dataset.perm);
     const newLevel = parseInt(document.getElementById('cr-role-level').value, 10);
-    if (isNaN(newLevel) || newLevel < 1 || newLevel > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
+    if (isNaN(newLevel) || newLevel < 0 || newLevel > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
     this._roleEmit('update-role', {
       roleId: role.id,
       name: document.getElementById('cr-role-name').value.trim(),
@@ -4918,7 +5093,7 @@ async _createChannelRole() {
   const levelStr = await this._showPromptModal(t('settings.admin.roles_level_title'), t('settings.admin.roles_level_hint'), '25');
   if (levelStr === null) return;
   const level = parseInt(levelStr, 10);
-  if (isNaN(level) || level < 1 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
+  if (isNaN(level) || level < 0 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
   this._roleEmit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
     if (res.error) { this._showToast(res.error, 'error'); return; }
     this._showToast(t('settings.admin.roles_created'), 'success');

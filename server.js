@@ -604,10 +604,17 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
 // ── Plugin & Theme file serving ─────────────────────────
 const PLUGINS_DIR = path.join(__dirname, 'plugins');
 const THEMES_DIR  = path.join(__dirname, 'themes');
+const {
+  compatibleThemeFiles,
+  createThemeFileMiddleware,
+  readThemeMetadataSnapshot,
+  validatedThemeDefault,
+} = require('./src/themeMetadata');
 if (!fs.existsSync(PLUGINS_DIR)) fs.mkdirSync(PLUGINS_DIR, { recursive: true });
 if (!fs.existsSync(THEMES_DIR))  fs.mkdirSync(THEMES_DIR, { recursive: true });
 
 app.use('/plugins', express.static(PLUGINS_DIR, { dotfiles: 'deny', maxAge: 0 }));
+app.use('/themes', createThemeFileMiddleware(THEMES_DIR));
 app.use('/themes',  express.static(THEMES_DIR,  { dotfiles: 'deny', maxAge: 0 }));
 
 // API: list available plugins (*.plugin.js files)
@@ -639,33 +646,21 @@ app.get('/api/plugins', (req, res) => {
 // API: list available themes (*.theme.css files)
 app.get('/api/themes', (req, res) => {
   try {
-    const files = fs.readdirSync(THEMES_DIR).filter(f => f.endsWith('.theme.css'));
     let published = [];
     try {
       const row = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
-      if (row) published = JSON.parse(row.value);
-    } catch { /* DB not ready yet or parse error — default to empty */ }
-    const themes = files.map(f => {
-      const content = fs.readFileSync(path.join(THEMES_DIR, f), 'utf8');
-      const meta = {};
-      const metaMatch = content.match(/\/\*\*[\s\S]*?\*\//);
-      if (metaMatch) {
-        const block = metaMatch[0];
-        const nameM = block.match(/@name\s+(.+)/);
-        const descM = block.match(/@description\s+(.+)/);
-        const authM = block.match(/@author\s+(.+)/);
-        const verM  = block.match(/@version\s+(.+)/);
-        const iconM = block.match(/@icon\s+(.+)/);
-        if (nameM) meta.name = nameM[1].trim();
-        if (descM) meta.description = descM[1].trim();
-        if (authM) meta.author = authM[1].trim();
-        if (verM)  meta.version = verM[1].trim();
-        if (iconM) meta.icon = iconM[1].trim();
+      if (row) {
+        const stored = JSON.parse(row.value);
+        if (Array.isArray(stored)) published = stored;
       }
-      return { file: f, ...meta, published: published.includes(f) };
-    });
+    } catch { /* DB not ready yet or parse error — default to empty */ }
+    const themes = readThemeMetadataSnapshot(THEMES_DIR)
+      .map(theme => ({ ...theme, published: theme.compatible && published.includes(theme.file) }));
     res.json(themes);
-  } catch { res.json([]); }
+  } catch (err) {
+    console.error('Failed to list themes:', err.message);
+    res.status(500).json({ error: 'Failed to list themes' });
+  }
 });
 
 // ── File uploads (DB-configurable limit, avatar max 5 MB) ──
@@ -1631,6 +1626,7 @@ app.get('/api/public-config', (req, res) => {
     const { getDb } = require('./src/database');
     const db = getDb();
     const themeRow = db.prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get();
+    const publishedThemesRow = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
     const localeRow = db.prepare("SELECT value FROM server_settings WHERE key = 'default_locale'").get();
     const titleRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_title'").get();
     const tosRow = db.prepare("SELECT value FROM server_settings WHERE key = 'custom_tos'").get();
@@ -1638,8 +1634,11 @@ app.get('/api/public-config', (req, res) => {
     const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
     const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
     const oidcConfig = require('./src/oidc').getOidcConfig();
+    let storedPublishedThemes = [];
+    try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch {}
+    const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
     res.json({
-      default_theme: themeRow?.value || '',
+      default_theme: validatedThemeDefault(THEMES_DIR, themeRow?.value || '', publishedThemes),
       default_locale: localeRow?.value || '',
       server_title: titleRow?.value || '',
       custom_tos: tosRow?.value || '',
