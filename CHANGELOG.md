@@ -17,6 +17,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Three Braid spacing levels, either side of the shipped one.** Settings → Braid spacing (and Menu → Braid spacing, which cycles) offers Compact, Cozy, and Spacious. Cozy is exactly what shipped; the other two take roughly a fifth off or add a fifth on. Message runs and channel rows move together, and the rounded card shapes are identical at all three levels — only padding, gutters, avatar size, and sidebar width change. The continuation gutter is derived from inset + avatar + row gap, so a smaller avatar can't drift a run out of alignment with its own leader.
 
 ### Fixed
+- **GIF search setup points at GIPHY again, not Tenor.** #5472 made Tenor the
+  preferred provider on the belief that GIPHY had stopped issuing keys. That was
+  backwards: **GIPHY still works**, and Tenor is no longer supported for new setup.
+  The picker guide and `GIPHY_API_KEY` are the path again. An existing
+  `tenor_api_key` is still used if no GIPHY key is set, so servers that already
+  configured Tenor do not go dark overnight. GIFs already posted from Tenor URLs
+  still render.
+- **Images visible on Haven Mobile were missing on desktop/web.** Two things stacked.
+  Ferry (and any bot) posts Discord CDN photos as a URL with a signed query string
+  (`?ex=…&is=…&hm=…`). The desktop client HTML-escaped the message *before* turning
+  that URL into an `<img>`, so `&` became `&amp;` and the media proxy requested a
+  URL Discord has never heard of — blank bubble, no broken-image icon. Mobile never
+  escapes the URL, which is why the same photo rendered there. Remote image-only
+  messages now use the raw URL, and auto-linked / markdown images decode entities
+  first. Separately, `_formatContent` required a stricter `/uploads/` filename than
+  `_isImageUrl`, so a classified-as-image message with a dot in the basename (or an
+  extra path segment) emitted no `<img>` at all. The two regexes now match. The
+  media proxy also speaks a browser User-Agent (Discord 403'd `HavenBot`) and
+  accepts `application/octet-stream` when the bytes are actually JPEG/PNG/GIF/WebP.
 - **The Android App badge was white on light green.** Accent-filled controls now read `--accent-text`, but this badge paints itself with a fixed Android-green gradient in every theme, so it kept its hardcoded white label at 1.78:1. It and its dismiss button now use a dark ink that measures 9.65:1 at the light end of the gradient and 6.46:1 at the dark end.
 
 ---

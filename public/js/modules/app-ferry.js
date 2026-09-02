@@ -15,14 +15,14 @@
 // admin-only information and never reaches a normal member's client.
 
 const FERRY_DIRECTIONS = [
-  ['both',       'Two-way'],
-  ['to_discord', 'Haven → Discord only'],
-  ['to_haven',   'Discord → Haven only'],
+  ['both',       'modals.ferry.direction_both'],
+  ['to_discord', 'modals.ferry.direction_to_discord'],
+  ['to_haven',   'modals.ferry.direction_to_haven'],
 ];
 
 const FERRY_MODES = [
-  ['command', 'On command, only messages addressed with the prefix'],
-  ['all',     'Mirror everything, every message in the channel'],
+  ['command', 'modals.ferry.mode_command'],
+  ['all',     'modals.ferry.mode_all'],
 ];
 
 // Option-list builders. Written with plain concatenation rather than nested
@@ -57,7 +57,7 @@ function buildChannelOptions(parents, subsByParent, orphans, esc) {
   // A sub-channel whose parent is not visible to this admin would otherwise
   // vanish from the list entirely.
   if (orphans.length) {
-    html += group('Other', orphans.map(c => opt(esc(c.code), '#' + esc(c.name))).join(''));
+    html += group(t('modals.ferry.other'), orphans.map(c => opt(esc(c.code), '#' + esc(c.name))).join(''));
   }
   return html;
 }
@@ -66,11 +66,11 @@ function buildChannelOptions(parents, subsByParent, orphans, esc) {
 function buildDiscordChannelOptions(guild, esc) {
   const byCategory = new Map();
   for (const c of (guild && guild.channels) || []) {
-    const key = c.category || 'No category';
+    const key = c.category || t('modals.ferry.no_category');
     if (!byCategory.has(key)) byCategory.set(key, []);
     byCategory.get(key).push(c);
   }
-  let html = opt('', 'Pick one...');
+  let html = opt('', t('modals.ferry.pick_one'));
   for (const [cat, chans] of byCategory) {
     html += group(esc(cat), chans.map(c => opt(esc(c.id), '#' + esc(c.name))).join(''));
   }
@@ -95,7 +95,7 @@ export default {
 
     this.socket.on('ferry:token-ok', (data) => {
       this._ferryInvite = data.inviteUrl;
-      this._showToast(`Connected as ${data.bot?.username || 'the bot'}. Invite it to your Discord server next.`, 'success');
+      this._showToast(t('modals.ferry.connected_toast', { bot: data.bot?.username || t('modals.ferry.the_bot') }), 'success');
     });
 
     this.socket.on('ferry:targets', (data) => {
@@ -190,14 +190,14 @@ export default {
     const esc = (s) => this._escapeHtml(String(s ?? ''));
 
     if (!data) {
-      dropdown.innerHTML = `<div class="mention-item"><span class="mention-item-handle">Loading Discord destinations...</span></div>`;
+      dropdown.innerHTML = `<div class="mention-item"><span class="mention-item-handle">${esc(t('modals.ferry.dropdown_loading'))}</span></div>`;
       dropdown.style.display = 'block';
       this._ferryOpen = true;
       return;
     }
 
     if (!data.enabled || !data.targets?.length) {
-      dropdown.innerHTML = `<div class="mention-item"><strong>No Discord destinations</strong> <span class="mention-item-handle">an admin pairs channels in Settings → Ferry</span></div>`;
+      dropdown.innerHTML = `<div class="mention-item"><strong>${esc(t('modals.ferry.no_destinations'))}</strong> <span class="mention-item-handle">${esc(t('modals.ferry.pair_hint'))}</span></div>`;
       dropdown.style.display = 'block';
       this._ferryOpen = true;
       return;
@@ -207,24 +207,24 @@ export default {
 
     if (this._ferryMode === 'dm') {
       if (!data.allowDms) {
-        dropdown.innerHTML = `<div class="mention-item"><span class="mention-item-handle">Discord DMs are turned off on this server</span></div>`;
+        dropdown.innerHTML = `<div class="mention-item"><span class="mention-item-handle">${esc(t('modals.ferry.dms_disabled'))}</span></div>`;
         dropdown.style.display = 'block';
         this._ferryOpen = true;
         return;
       }
       const q = (this._ferryQuery || '').trim();
       if (q.length < 2) {
-        rows = [`<div class="mention-item"><span class="mention-item-handle">Keep typing a Discord name to search</span></div>`];
+        rows = [`<div class="mention-item"><span class="mention-item-handle">${esc(t('modals.ferry.type_name'))}</span></div>`];
       } else if (this._ferryUserResults === null || this._ferryUserResults === undefined) {
-        rows = [`<div class="mention-item"><span class="mention-item-handle">Searching Discord...</span></div>`];
+        rows = [`<div class="mention-item"><span class="mention-item-handle">${esc(t('modals.ferry.searching'))}</span></div>`];
       } else if (!this._ferryUserResults.length) {
-        rows = [`<div class="mention-item"><span class="mention-item-handle">No Discord members matched "${esc(q)}"</span></div>`];
+        rows = [`<div class="mention-item"><span class="mention-item-handle">${esc(t('modals.ferry.no_members', { query: q }))}</span></div>`];
       } else {
         rows = this._ferryUserResults.slice(0, 8).map((u, i) => `
           <div class="mention-item${i === 0 ? ' active' : ''}" data-ferry-dm-id="${esc(u.id)}" data-ferry-dm-name="${esc(u.name)}">
             <img src="${esc(u.avatar)}" class="persona-dd-avatar" alt="">
             <strong>${esc(u.name)}</strong>
-            <span class="mention-item-handle">DM on Discord</span>
+            <span class="mention-item-handle">${esc(t('modals.ferry.dm_on_discord'))}</span>
           </div>`);
       }
     } else {
@@ -237,7 +237,7 @@ export default {
       rows = matches.slice(0, 8).map((t, i) => `
         <div class="mention-item${i === 0 ? ' active' : ''}" data-ferry-label="${esc(t.guild_name)}#${esc(t.discord_channel_name)}">
           <strong>#${esc(t.discord_channel_name)}</strong>
-          <span class="mention-item-handle">${esc(t.guild_name)}${t.out_mode === 'all' ? ' · mirrored' : ''}</span>
+          <span class="mention-item-handle">${esc(t.guild_name)}${t.out_mode === 'all' ? ` · ${esc(window.t('modals.ferry.mirrored'))}` : ''}</span>
         </div>`);
 
       // Offer the DM path only when it can actually work, so nobody discovers
@@ -245,13 +245,13 @@ export default {
       if (data.allowDms && (!q || '@'.startsWith(q))) {
         rows.push(`
           <div class="mention-item${rows.length === 0 ? ' active' : ''}" data-ferry-dm-start="1">
-            <strong>@ Direct message</strong>
-            <span class="mention-item-handle">send to one Discord user</span>
+            <strong>@ ${esc(t('modals.ferry.direct_message'))}</strong>
+            <span class="mention-item-handle">${esc(t('modals.ferry.direct_message_hint'))}</span>
           </div>`);
       }
 
       if (!rows.length) {
-        rows = [`<div class="mention-item"><span class="mention-item-handle">No destination matches "${esc(this._ferryQuery)}"</span></div>`];
+        rows = [`<div class="mention-item"><span class="mention-item-handle">${esc(t('modals.ferry.no_destination', { query: this._ferryQuery }))}</span></div>`];
       }
     }
 
@@ -378,12 +378,12 @@ export default {
     const el = document.getElementById('ferry-summary');
     if (!el) return;
     const s = this._ferryConfig?.state;
-    if (!s || !s.hasToken) { el.textContent = 'Not configured'; return; }
-    if (!s.enabled) { el.textContent = 'Configured, currently off'; return; }
+    if (!s || !s.hasToken) { el.textContent = t('modals.ferry.not_configured'); return; }
+    if (!s.enabled) { el.textContent = t('modals.ferry.configured_off'); return; }
     const links = this._ferryConfig.links?.length || 0;
     el.textContent = s.connected
-      ? `Connected · ${s.guildCount} Discord server${s.guildCount === 1 ? '' : 's'} · ${links} pairing${links === 1 ? '' : 's'}`
-      : (s.lastError || 'Connecting to Discord...');
+      ? t('modals.ferry.summary_connected', { guilds: s.guildCount, pairings: links })
+      : (s.lastError || t('modals.ferry.connecting'));
   },
 
   /**
@@ -397,7 +397,7 @@ export default {
     if (!body) return;
 
     const cfg = this._ferryConfig;
-    if (!cfg) { body.innerHTML = `<p class="muted-text">Loading...</p>`; return; }
+    if (!cfg) { body.innerHTML = `<p class="muted-text">${t('modals.common.loading')}</p>`; return; }
 
     const esc = (v) => this._escapeHtml(String(v ?? ''));
     const st = cfg.state;
@@ -417,11 +417,11 @@ export default {
 
     let step1Status;
     if (!st.hasToken) {
-      step1Status = `<p class="muted-text">No token saved yet.</p>`;
+      step1Status = `<p class="muted-text">${esc(t('modals.ferry.no_token'))}</p>`;
     } else if (st.connected) {
-      step1Status = `<p class="ferry-status-ok">Connected as <strong>${esc(st.bot && st.bot.username)}</strong>, in ${st.guildCount} Discord server${st.guildCount === 1 ? '' : 's'}.</p>`;
+      step1Status = `<p class="ferry-status-ok">${t('modals.ferry.connected_status', { bot: `<strong>${esc(st.bot && st.bot.username)}</strong>`, guilds: st.guildCount })}</p>`;
     } else {
-      step1Status = `<p class="ferry-status-bad">${esc(st.lastError || 'Connecting to Discord...')}</p>`;
+      step1Status = `<p class="ferry-status-bad">${esc(st.lastError || t('modals.ferry.connecting'))}</p>`;
     }
 
     const linkRows = (cfg.links || []).map(l => `
@@ -430,17 +430,17 @@ export default {
         <td>${esc(l.guild_name)}<br><span class="muted-text">#${esc(l.discord_channel_name)}</span></td>
         <td>
           <select class="form-select ferry-mini" data-ferry-field="direction">
-            ${FERRY_DIRECTIONS.map(([v, t]) => `<option value="${v}"${l.direction === v ? ' selected' : ''}>${t}</option>`).join('')}
+            ${FERRY_DIRECTIONS.map(([v, key]) => `<option value="${v}"${l.direction === v ? ' selected' : ''}>${esc(t(key))}</option>`).join('')}
           </select>
         </td>
         <td>
           <select class="form-select ferry-mini" data-ferry-field="outMode"${l.direction === 'to_haven' ? ' disabled' : ''}>
-            ${FERRY_MODES.map(([v, t]) => `<option value="${v}"${l.out_mode === v ? ' selected' : ''}>${t}</option>`).join('')}
+            ${FERRY_MODES.map(([v, key]) => `<option value="${v}"${l.out_mode === v ? ' selected' : ''}>${esc(t(key))}</option>`).join('')}
           </select>
         </td>
         <td class="ferry-actions-cell"><div class="ferry-actions-inner">
-          <label class="toggle-row"><span>On</span><input type="checkbox" data-ferry-field="isActive"${l.is_active ? ' checked' : ''}></label>
-          <button class="btn-sm btn-danger" data-ferry-delete="${l.id}">Remove</button>
+          <label class="toggle-row"><span>${esc(t('modals.ferry.on'))}</span><input type="checkbox" data-ferry-field="isActive"${l.is_active ? ' checked' : ''}></label>
+          <button class="btn-sm btn-danger" data-ferry-delete="${l.id}">${esc(t('modals.ferry.remove'))}</button>
           ${l.last_error ? `<div class="ferry-link-error">${esc(l.last_error)}</div>` : ''}
         </div></td>
       </tr>`).join('');
@@ -461,49 +461,49 @@ export default {
     const guildOptions = (cfg.guilds || []).map(g => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
 
     const inviteBlock = this._ferryInvite
-      ? `<small class="settings-hint">Open this link, pick your server, and leave the permissions as they are.</small>
+      ? `<small class="settings-hint">${esc(t('modals.ferry.invite_ready_hint'))}</small>
          <div class="ferry-invite"><a href="${esc(this._ferryInvite)}" target="_blank" rel="noopener noreferrer">${esc(this._ferryInvite)}</a></div>`
       : st.connected
-        ? `<small class="settings-hint">The bot is already in ${st.guildCount} server${st.guildCount === 1 ? '' : 's'}. To add it to another, press Reconnect below to regenerate the invite link.</small>`
-        : `<small class="settings-hint">The invite link appears here once a token is saved.</small>`;
+        ? `<small class="settings-hint">${esc(t('modals.ferry.invite_existing', { guilds: st.guildCount }))}</small>`
+        : `<small class="settings-hint">${esc(t('modals.ferry.invite_pending'))}</small>`;
 
     const pairForm = st.connected
       ? `<div class="ferry-add-grid">
-           <label><span>Haven channel</span>
+            <label><span>${esc(t('modals.ferry.haven_channel'))}</span>
              <select id="ferry-add-channel" class="form-select">
-               <option value="">Pick one...</option>
+                <option value="">${esc(t('modals.ferry.pick_one'))}</option>
                 ${channelOptions}
              </select>
            </label>
-           <label><span>Discord server</span>
+            <label><span>${esc(t('modals.ferry.discord_server'))}</span>
              <select id="ferry-add-guild" class="form-select">
-               <option value="">Pick one...</option>
+                <option value="">${esc(t('modals.ferry.pick_one'))}</option>
                ${guildOptions}
              </select>
            </label>
-           <label><span>Discord channel</span>
-             <select id="ferry-add-dchannel" class="form-select"><option value="">Pick a server first...</option></select>
+            <label><span>${esc(t('modals.ferry.discord_channel'))}</span>
+              <select id="ferry-add-dchannel" class="form-select"><option value="">${esc(t('modals.ferry.pick_server_first'))}</option></select>
            </label>
-           <label><span>Direction</span>
+            <label><span>${esc(t('modals.ferry.direction'))}</span>
              <select id="ferry-add-direction" class="form-select">
-               ${FERRY_DIRECTIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
+                ${FERRY_DIRECTIONS.map(([v, key]) => `<option value="${v}">${esc(t(key))}</option>`).join('')}
              </select>
            </label>
-           <label class="ferry-add-wide"><span>Outgoing messages</span>
+            <label class="ferry-add-wide"><span>${esc(t('modals.ferry.outgoing_messages'))}</span>
              <select id="ferry-add-mode" class="form-select">
-               ${FERRY_MODES.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}
+                ${FERRY_MODES.map(([v, key]) => `<option value="${v}">${esc(t(key))}</option>`).join('')}
              </select>
            </label>
-           <button class="btn-sm btn-accent ferry-add-btn" id="ferry-add-btn">Add pairing</button>
+            <button class="btn-sm btn-accent ferry-add-btn" id="ferry-add-btn">${esc(t('modals.ferry.add_pairing'))}</button>
          </div>`
-      : `<p class="muted-text">Connect the bot first.</p>`;
+      : `<p class="muted-text">${esc(t('modals.ferry.connect_first'))}</p>`;
 
     const pairTable = (cfg.links || []).length
       ? `<table class="ferry-table">
-           <thead><tr><th>Haven</th><th>Discord</th><th>Direction</th><th>Outgoing</th><th></th></tr></thead>
+            <thead><tr><th>Haven</th><th>Discord</th><th>${esc(t('modals.ferry.direction'))}</th><th>${esc(t('modals.ferry.outgoing'))}</th><th></th></tr></thead>
            <tbody>${linkRows}</tbody>
          </table>`
-      : `<p class="muted-text" style="margin-top:10px">No pairings yet.</p>`;
+      : `<p class="muted-text" style="margin-top:10px">${esc(t('modals.ferry.no_pairings'))}</p>`;
 
     // No role holds use_ferry by default, so without this an admin sets Ferry
     // up, tests it successfully as an admin, and it silently does nothing for
@@ -515,63 +515,60 @@ export default {
           + esc(r.name) + '</span>'
           + '<input type="checkbox" data-ferry-role="' + r.id + '"' + (r.can_ferry ? ' checked' : '') + '>'
           + '</label>').join('')
-      : '<p class="muted-text">No roles exist yet.</p>';
+      : `<p class="muted-text">${esc(t('modals.ferry.no_roles'))}</p>`;
 
     const publicUrlWarning = st.publicUrlSet
       ? ''
-      : `<small class="settings-hint ferry-warn">PUBLIC_URL is not set in your .env, so Haven avatars and uploaded images will not show on the Discord side. Names still come through.</small>`;
+      : `<small class="settings-hint ferry-warn">${esc(t('modals.ferry.public_url_warning'))}</small>`;
 
     body.innerHTML = `
       <div class="ferry-step${done(st.hasToken)}">
-        <h5 class="ferry-step-title"><span class="ferry-step-num">1</span> Connect your Discord bot</h5>
+        <h5 class="ferry-step-title"><span class="ferry-step-num">1</span> ${esc(t('modals.ferry.step_connect'))}</h5>
         <small class="settings-hint">
-          At <strong>discord.com/developers/applications</strong>: New Application, then the
-          <strong>Bot</strong> tab. Turn on <strong>Message Content Intent</strong>, press Reset Token, and paste it here.
+          ${t('modals.ferry.step_connect_hint')}
         </small>
         <div class="ferry-token-row">
           <input type="password" id="ferry-token-input" class="settings-input"
-                 placeholder="${st.hasToken ? esc(cfg.tokenHint) : 'Paste your bot token'}" autocomplete="off">
-          <button class="btn-sm btn-accent" id="ferry-token-save">${st.hasToken ? 'Replace' : 'Save'}</button>
-          ${st.hasToken ? `<button class="btn-sm btn-danger" id="ferry-token-clear">Remove</button>` : ''}
+                  placeholder="${st.hasToken ? esc(cfg.tokenHint) : esc(t('modals.ferry.token_placeholder'))}" autocomplete="off">
+          <button class="btn-sm btn-accent" id="ferry-token-save">${esc(t(st.hasToken ? 'modals.ferry.replace' : 'modals.ferry.save'))}</button>
+          ${st.hasToken ? `<button class="btn-sm btn-danger" id="ferry-token-clear">${esc(t('modals.ferry.remove'))}</button>` : ''}
         </div>
         ${step1Status}
       </div>
 
       <div class="ferry-step${lock(st.hasToken)}">
-        <h5 class="ferry-step-title"><span class="ferry-step-num">2</span> Invite the bot to your Discord server</h5>
+        <h5 class="ferry-step-title"><span class="ferry-step-num">2</span> ${esc(t('modals.ferry.step_invite'))}</h5>
         ${inviteBlock}
       </div>
 
       <div class="ferry-step${lock(st.hasToken)}">
-        <h5 class="ferry-step-title"><span class="ferry-step-num">3</span> Turn Ferry on</h5>
-        ${toggle('ferry_enabled', 'Ferry is on', 'Master switch. Nothing crosses in either direction while this is off.', st.enabled, !st.hasToken)}
+        <h5 class="ferry-step-title"><span class="ferry-step-num">3</span> ${esc(t('modals.ferry.step_enable'))}</h5>
+        ${toggle('ferry_enabled', t('modals.ferry.enabled'), t('modals.ferry.enabled_hint'), st.enabled, !st.hasToken)}
       </div>
 
       <div class="ferry-step${lock(st.connected)}">
-        <h5 class="ferry-step-title"><span class="ferry-step-num">4</span> Pair your channels</h5>
+        <h5 class="ferry-step-title"><span class="ferry-step-num">4</span> ${esc(t('modals.ferry.step_pair'))}</h5>
         <small class="settings-hint">
-          Members can only reach Discord channels paired with the Haven channel they are standing in, and
-          only if their role has the <strong>Send to Discord</strong> permission.
+          ${t('modals.ferry.step_pair_hint')}
         </small>
         ${pairForm}
         ${pairTable}
       </div>
 
       <div class="ferry-step${lock(st.connected)}">
-        <h5 class="ferry-step-title"><span class="ferry-step-num">5</span> Choose who can send</h5>
+        <h5 class="ferry-step-title"><span class="ferry-step-num">5</span> ${esc(t('modals.ferry.step_roles'))}</h5>
         <small class="settings-hint">
-          Ferry does nothing for a member until one of their roles is switched on here. Admins can always
-          send. This is the same <strong>Send to Discord</strong> permission that appears under Roles.
+          ${t('modals.ferry.step_roles_hint')}
         </small>
         ${roleRows}
       </div>
 
       <details class="ferry-step ferry-options">
-        <summary class="ferry-step-title">Options</summary>
-        ${toggle('ferry_allow_personas', 'Allow persona names', 'Off means a relayed message always carries the sender&#39;s real Haven name.', st.allowPersonas, false)}
-        ${toggle('ferry_allow_dms', 'Allow Discord DMs', 'Lets members send a one-way DM to a Discord user. Replies stay in Discord. Needs the Server Members Intent.', st.allowDms, false)}
-        ${toggle('ferry_allow_mentions', 'Allow pings', 'Off means relayed messages never ping anyone on Discord.', st.allowMentions, false)}
-        ${toggle('ferry_relay_bots', 'Relay other bots', 'Off means messages from Discord bots are ignored. On can flood a Haven channel.', st.relayBots, false)}
+        <summary class="ferry-step-title">${esc(t('modals.ferry.options'))}</summary>
+        ${toggle('ferry_allow_personas', t('modals.ferry.allow_personas'), t('modals.ferry.allow_personas_hint'), st.allowPersonas, false)}
+        ${toggle('ferry_allow_dms', t('modals.ferry.allow_dms'), t('modals.ferry.allow_dms_hint'), st.allowDms, false)}
+        ${toggle('ferry_allow_mentions', t('modals.ferry.allow_mentions'), t('modals.ferry.allow_mentions_hint'), st.allowMentions, false)}
+        ${toggle('ferry_relay_bots', t('modals.ferry.relay_bots'), t('modals.ferry.relay_bots_hint'), st.relayBots, false)}
         ${publicUrlWarning}
       </details>
     `;
@@ -587,13 +584,13 @@ export default {
     body.querySelector('#ferry-token-save')?.addEventListener('click', () => {
       const input = document.getElementById('ferry-token-input');
       const token = (input?.value || '').trim();
-      if (!token) return this._showToast('Paste a bot token first', 'warning');
+      if (!token) return this._showToast(t('modals.ferry.token_required'), 'warning');
       this.socket.emit('ferry:set-token', { token });
       input.value = '';
     });
 
     body.querySelector('#ferry-token-clear')?.addEventListener('click', () => {
-      if (!confirm('Remove the Discord bot token? Ferry stops immediately. Your pairings are kept.')) return;
+      if (!confirm(t('modals.ferry.remove_token_confirm'))) return;
       this.socket.emit('ferry:clear-token');
     });
 
@@ -627,7 +624,7 @@ export default {
 
     body.querySelectorAll('[data-ferry-delete]').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (!confirm('Remove this pairing? Messages stop crossing between those two channels.')) return;
+        if (!confirm(t('modals.ferry.remove_pairing_confirm'))) return;
         this.socket.emit('ferry:delete-link', { id: parseInt(btn.dataset.ferryDelete) });
       });
     });
@@ -646,7 +643,7 @@ export default {
       const guildId = guildSel?.value;
       const discordChannelId = dChanSel?.value;
       if (!channelCode || !guildId || !discordChannelId) {
-        return this._showToast('Pick a Haven channel, a Discord server, and a Discord channel', 'warning');
+        return this._showToast(t('modals.ferry.pairing_required'), 'warning');
       }
       this.socket.emit('ferry:create-link', {
         channelCode, guildId, discordChannelId,

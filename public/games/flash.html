@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flash Game — Haven</title>
+  <title data-i18n="games.flash.page_title">Flash Game — Haven</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -87,20 +87,21 @@
 </head>
 <body>
   <div class="flash-header">
-    <h2 id="game-title">Loading...</h2>
+    <h2 id="game-title" data-i18n="games.flash.loading">Loading...</h2>
     <div class="volume-control">
       <label>🔊</label>
-      <input type="range" id="volume-slider" min="0" max="100" value="80">
+      <input type="range" id="volume-slider" min="0" max="100" value="80" data-i18n-aria-label="games.flash.volume" aria-label="Volume">
       <span class="volume-pct" id="volume-pct">80%</span>
     </div>
   </div>
   <div id="ruffle-container">
     <div class="loading-msg" id="loading-msg">
       <div class="spinner"></div>
-      <div>Loading Ruffle Flash emulator...</div>
+      <div data-i18n="games.flash.loading_emulator">Loading Ruffle Flash emulator...</div>
     </div>
   </div>
 
+  <script src="/js/i18n.js"></script>
   <script src="/games/flash-game.js"></script>
 </body>
 </html>

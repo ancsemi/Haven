@@ -9,6 +9,98 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 const I18N_SOURCE = fs.readFileSync(path.join(ROOT, 'public/js/i18n.js'), 'utf8');
 
+function flattenLocale(value, prefix = '', result = new Map()) {
+  for (const [key, child] of Object.entries(value)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (child && typeof child === 'object' && !Array.isArray(child)) {
+      flattenLocale(child, fullKey, result);
+    } else {
+      result.set(fullKey, child);
+    }
+  }
+  return result;
+}
+
+function filesUnder(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = path.join(directory, entry.name);
+    return entry.isDirectory() ? filesUnder(file) : [file];
+  });
+}
+
+function placeholders(value) {
+  return [...String(value).matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)].map(match => match[1]).sort();
+}
+
+function duplicateJsonKeys(source) {
+  const scopes = [];
+  const duplicates = [];
+  const tokens = /"(?:\\.|[^"\\])*"\s*:|"(?:\\.|[^"\\])*"|[{}[\]]/g;
+
+  for (const match of source.matchAll(tokens)) {
+    const token = match[0];
+    if (token === '{') scopes.push(new Set());
+    else if (token === '[') scopes.push(null);
+    else if (token === '}' || token === ']') scopes.pop();
+    else if (token.endsWith(':')) {
+      const key = JSON.parse(token.replace(/\s*:$/, ''));
+      const scope = scopes.at(-1);
+      if (scope?.has(key)) duplicates.push(key);
+      scope?.add(key);
+    }
+  }
+
+  return duplicates;
+}
+
+function literalTranslationKeys(source) {
+  const keys = [];
+
+  for (const call of source.matchAll(/\bt\s*\(/g)) {
+    const start = call.index + call[0].length;
+    let end = start;
+    let depth = 1;
+
+    while (end < source.length && depth > 0) {
+      const char = source[end];
+      const next = source[end + 1];
+      if (char === '/' && next === '/') {
+        end = source.indexOf('\n', end + 2);
+        if (end === -1) end = source.length;
+        continue;
+      }
+      if (char === '/' && next === '*') {
+        const close = source.indexOf('*/', end + 2);
+        end = close === -1 ? source.length : close + 2;
+        continue;
+      }
+      if (char === '"' || char === "'" || char === '`') {
+        const quote = char;
+        for (end++; end < source.length; end++) {
+          if (source[end] === '\\') end++;
+          else if (source[end] === quote) break;
+        }
+      } else if (char === '(') {
+        depth++;
+      } else if (char === ')') {
+        depth--;
+        if (depth === 0) break;
+      } else if (char === ',' && depth === 1) {
+        break;
+      }
+      end++;
+    }
+
+    const firstArgument = source.slice(start, end);
+    for (const literal of firstArgument.matchAll(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g)) {
+      const value = literal[0].slice(1, -1);
+      if (value.includes('.')) keys.push(value);
+    }
+  }
+
+  return keys;
+}
+
 function jsonResponse(value) {
   return { ok: true, status: 200, json: async () => value };
 }
@@ -145,6 +237,79 @@ test('language controls use bundled Brazilian artwork instead of OS flag emoji',
   assert.match(appSelect, /value="auto"/);
   assert.doesNotMatch(authSelect + appSelect, /[\u{1F1E6}-\u{1F1FF}]/u);
   assert.match(fs.readFileSync(path.join(ROOT, 'public/js/auth.js'), 'utf8'), /buildLocalePicker\(langSelect\)/);
+});
+
+test('password visibility controls remain translatable after early initialization', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'public/js/password-eye.js'), 'utf8');
+  assert.match(source, /btn\.dataset\.i18nAriaLabel = 'auth\.aria\.show_password'/);
+  assert.match(source, /btn\.dataset\.i18nAriaLabel = ariaKey/);
+});
+
+test('English and Portuguese catalogs have matching keys and placeholders', () => {
+  const localeDir = path.join(ROOT, 'public/locales');
+  const english = flattenLocale(JSON.parse(fs.readFileSync(path.join(localeDir, 'en.json'), 'utf8')));
+  const portuguese = flattenLocale(JSON.parse(fs.readFileSync(path.join(localeDir, 'pt.json'), 'utf8')));
+
+  assert.deepEqual([...portuguese.keys()].sort(), [...english.keys()].sort());
+  for (const [key, value] of english) {
+    assert.deepEqual(placeholders(portuguese.get(key)), placeholders(value), `placeholder mismatch for ${key}`);
+  }
+});
+
+test('maintained locale catalogs do not contain duplicate object keys', () => {
+  assert.deepEqual(duplicateJsonKeys('{"a":1,"a":2}'), ['a']);
+  assert.deepEqual(duplicateJsonKeys('{"a":1,"nested":{"a":2}}'), []);
+
+  const localeDir = path.join(ROOT, 'public/locales');
+  for (const locale of ['en', 'pt']) {
+    const source = fs.readFileSync(path.join(localeDir, `${locale}.json`), 'utf8');
+    assert.deepEqual(duplicateJsonKeys(source), [], `${locale}.json contains duplicate object keys`);
+  }
+});
+
+test('literal translation references exist in both maintained catalogs', () => {
+  const publicDir = path.join(ROOT, 'public');
+  const localeDir = path.join(publicDir, 'locales');
+  const english = flattenLocale(JSON.parse(fs.readFileSync(path.join(localeDir, 'en.json'), 'utf8')));
+  const portuguese = flattenLocale(JSON.parse(fs.readFileSync(path.join(localeDir, 'pt.json'), 'utf8')));
+  const references = new Map();
+
+  for (const file of filesUnder(publicDir).filter(name => /\.(?:html|js)$/.test(name))) {
+    const source = fs.readFileSync(file, 'utf8');
+    const relative = path.relative(ROOT, file);
+    for (const match of source.matchAll(/data-i18n(?:-(?:html|placeholder|title|aria-label|alt|label))?="([^"]+)"/g)) {
+      references.set(match[1], relative);
+    }
+    for (const key of literalTranslationKeys(source)) {
+      references.set(key, relative);
+    }
+  }
+
+  for (const [key, file] of references) {
+    assert.equal(english.has(key), true, `missing English key ${key}, referenced by ${file}`);
+    assert.equal(portuguese.has(key), true, `missing Portuguese key ${key}, referenced by ${file}`);
+  }
+});
+
+test('HTML translations preserve required code and emphasis markup', () => {
+  const appHtml = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
+  const keys = [
+    ['modals.edit_profile.personas_hint', { code: 2, strong: 0 }],
+    ['settings.admin.oidc_desc', { code: 1, strong: 0 }],
+    ['settings.admin.backup_restore_warning', { code: 1, strong: 1 }]
+  ];
+
+  for (const locale of ['en', 'pt']) {
+    const catalog = flattenLocale(JSON.parse(fs.readFileSync(path.join(ROOT, `public/locales/${locale}.json`), 'utf8')));
+    for (const [key, expectedTags] of keys) {
+      assert.match(appHtml, new RegExp(`data-i18n-html="${key.replaceAll('.', '\\.')}"`));
+      const value = catalog.get(key);
+      for (const [tag, count] of Object.entries(expectedTags)) {
+        assert.equal((value.match(new RegExp(`<${tag}>`, 'g')) || []).length, count, `${locale}.${key} has the wrong number of <${tag}> tags`);
+        assert.equal((value.match(new RegExp(`</${tag}>`, 'g')) || []).length, count, `${locale}.${key} has the wrong number of </${tag}> tags`);
+      }
+    }
+  }
 });
 
 test('the custom language picker preserves visible focus and listbox keyboard navigation', () => {

@@ -234,9 +234,16 @@ let _fxSpeedMult = 1.0;
 
 // Human-readable labels for effect speed sliders
 const _FX_LABELS = {
-  crt: '📺 CRT', ffx: '⚔️ Water', ice: '🧊 Frost', nord: '❄ Snow',
-  darksouls: '🔥 Embers', bloodborne: '🩸 Blood', matrix: 'Ⅿ Matrix',
-  cyberpunk: '⚡ Glitch', lotr: '⚜ Candle', eldenring: '✨ Golden Grace'
+  crt: () => `📺 ${t('theme_effects.crt')}`,
+  ffx: () => `⚔️ ${t('theme_effects.water')}`,
+  ice: () => `🧊 ${t('theme_effects.frost')}`,
+  nord: () => `❄ ${t('theme_effects.snow')}`,
+  darksouls: () => `🔥 ${t('theme_effects.embers')}`,
+  bloodborne: () => `🩸 ${t('theme_effects.blood')}`,
+  matrix: () => `Ⅿ ${t('theme_effects.matrix')}`,
+  cyberpunk: () => `⚡ ${t('theme_effects.glitch')}`,
+  lotr: () => `⚜ ${t('theme_effects.candle')}`,
+  eldenring: () => `✨ ${t('theme_effects.golden_grace')}`
 };
 
 // Get speed for a specific effect (per-effect → global fallback → 1.0)
@@ -280,7 +287,7 @@ function _rebuildEffectSpeedSliders() {
   if (active.length === 0) return;
 
   active.forEach(fx => {
-    const label = _FX_LABELS[fx] || fx;
+    const label = _FX_LABELS[fx]?.() || fx;
     const currentSpeed = _fxSpeedMap[fx] !== undefined ? _fxSpeedMap[fx] : 1.0;
     const sliderVal = Math.round(currentSpeed * 100);
 

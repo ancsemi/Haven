@@ -6,11 +6,11 @@ _queueImage(file) {
   if (!file || !file.type.startsWith('image/')) return;
   const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
   if (file.size > _maxMb * 1024 * 1024) {
-    return this._showToast(`Image too large (max ${_maxMb} MB)`, 'error');
+    return this._showToast(t('media.image_too_large', { maxMb: _maxMb }), 'error');
   }
   if (!this._imageQueue) this._imageQueue = [];
   if (this._imageQueue.length >= 5) {
-    return this._showToast('Max 5 images at once', 'error');
+    return this._showToast(t('media.max_images'), 'error');
   }
   this._imageQueue.push(file);
   this._renderImageQueue();
@@ -39,7 +39,7 @@ _renderImageQueue() {
       img.onload = () => URL.revokeObjectURL(img.src);
       const removeBtn = document.createElement('button');
       removeBtn.className = 'image-queue-remove';
-      removeBtn.title = 'Remove';
+      removeBtn.title = t('media.remove');
       removeBtn.textContent = '×';
       removeBtn.addEventListener('click', () => {
         this._imageQueue.splice(idx, 1);
@@ -67,7 +67,7 @@ _renderImageQueue() {
       size.textContent = this._formatFileSize(file.size);
       const removeBtn = document.createElement('button');
       removeBtn.className = 'image-queue-remove';
-      removeBtn.title = 'Remove';
+      removeBtn.title = t('media.remove');
       removeBtn.textContent = '×';
       removeBtn.addEventListener('click', () => {
         this._fileQueue.splice(idx, 1);
@@ -85,7 +85,7 @@ _renderImageQueue() {
   if (totalQueued > 1) {
     const clearAll = document.createElement('button');
     clearAll.className = 'image-queue-clear-all';
-    clearAll.textContent = 'Clear All';
+    clearAll.textContent = t('media.clear_all');
     clearAll.addEventListener('click', () => {
       this._clearImageQueue();
       this._clearFileQueue();
@@ -111,9 +111,7 @@ _makeSpoilerToggle(file, isPip = false) {
     // Open eye when the image will send normally; closed (slashed) eye once
     // it's marked as a spoiler.
     btn.innerHTML = this._eyeIcon(on, 12);
-    btn.title = on
-      ? ((typeof t === 'function' && t('app.messages.spoiler_on')) || 'Spoiler on — click to send normally')
-      : ((typeof t === 'function' && t('app.messages.mark_spoiler')) || 'Mark as spoiler');
+    btn.title = t(on ? 'app.messages.spoiler_on' : 'app.messages.mark_spoiler');
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   };
   sync();
@@ -155,7 +153,7 @@ _queueGeneralFile(file) {
   }
   if (!this._fileQueue) this._fileQueue = [];
   if (this._fileQueue.length >= 5) {
-    return this._showToast('Max 5 files at once', 'error');
+    return this._showToast(t('media.max_files'), 'error');
   }
   this._fileQueue.push(file);
   this._renderImageQueue();
@@ -182,12 +180,12 @@ _queueImageForPiP(file, targetCode) {
   if (!file || !file.type.startsWith('image/')) return;
   const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
   if (file.size > _maxMb * 1024 * 1024) {
-    return this._showToast(`Image too large (max ${_maxMb} MB)`, 'error');
+    return this._showToast(t('media.image_too_large', { maxMb: _maxMb }), 'error');
   }
   if (!this._pipImageQueue) this._pipImageQueue = [];
   if (!this._pipImageQueueTarget) this._pipImageQueueTarget = targetCode;
   if (this._pipImageQueue.length >= 5) {
-    return this._showToast('Max 5 images at once', 'error');
+    return this._showToast(t('media.max_images'), 'error');
   }
   this._pipImageQueue.push(file);
   this._pipImageQueueTarget = targetCode;
@@ -214,7 +212,7 @@ _renderPiPImageQueue() {
     img.onload = () => URL.revokeObjectURL(img.src);
     const removeBtn = document.createElement('button');
     removeBtn.className = 'image-queue-remove';
-    removeBtn.title = 'Remove';
+    removeBtn.title = t('media.remove');
     removeBtn.textContent = '×';
     removeBtn.addEventListener('click', () => {
       this._pipImageQueue.splice(idx, 1);
@@ -228,7 +226,7 @@ _renderPiPImageQueue() {
   if (this._pipImageQueue.length > 1) {
     const clearAll = document.createElement('button');
     clearAll.className = 'image-queue-clear-all';
-    clearAll.textContent = 'Clear All';
+    clearAll.textContent = t('media.clear_all');
     clearAll.addEventListener('click', () => {
       this._pipImageQueue = [];
       this._renderPiPImageQueue();
@@ -260,11 +258,11 @@ _queueThreadFile(file) {
   if (!file) return;
   const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
   if (file.size > _maxMb * 1024 * 1024) {
-    return this._showToast(`File too large (max ${_maxMb} MB)`, 'error');
+    return this._showToast(t('media.file_too_large', { maxMb: _maxMb }), 'error');
   }
   if (!this._threadPending) this._threadPending = [];
   if (this._threadPending.length >= 5) {
-    return this._showToast('Max 5 attachments at once', 'error');
+    return this._showToast(t('media.max_attachments'), 'error');
   }
   this._threadPending.push(file);
   this._renderThreadPending();
@@ -299,7 +297,7 @@ _renderThreadPending() {
     }
     const removeBtn = document.createElement('button');
     removeBtn.className = 'image-queue-remove';
-    removeBtn.title = 'Remove';
+    removeBtn.title = t('media.remove');
     removeBtn.textContent = '×';
     removeBtn.addEventListener('click', () => {
       this._threadPending.splice(idx, 1);
@@ -311,7 +309,7 @@ _renderThreadPending() {
   if (this._threadPending.length > 1) {
     const clearAll = document.createElement('button');
     clearAll.className = 'image-queue-clear-all';
-    clearAll.textContent = 'Clear All';
+    clearAll.textContent = t('media.clear_all');
     clearAll.addEventListener('click', () => {
       this._threadPending = [];
       this._renderThreadPending();
@@ -336,7 +334,7 @@ async _flushThreadPending(parentId) {
       formData.append('scope', threadCh && threadCh.is_dm ? 'dm' : 'channel');
       formData.append('file', file);
       const data = await this._uploadWithProgress('/api/upload-file', formData);
-      if (!data || data.error) { this._showToast(data?.error || 'Upload failed', 'error'); continue; }
+      if (!data || data.error) { this._showToast(data?.error || t('media.upload_failed'), 'error'); continue; }
       let content;
       if (data.isImage) {
         content = data.url;
@@ -347,7 +345,7 @@ async _flushThreadPending(parentId) {
       this.socket.emit('send-thread-message', { parentId, content });
     } catch (err) {
       if (err?.aborted) break;
-      this._showToast(err.message || 'Upload failed', 'error');
+      this._showToast(err.message || t('media.upload_failed'), 'error');
     }
   }
 },
@@ -360,7 +358,7 @@ _updateAvatarPreview() {
   const preview = document.getElementById('avatar-upload-preview');
   if (!preview) return;
   if (this.user.avatar) {
-    preview.innerHTML = `<img src="${this._escapeHtml(this.user.avatar)}" alt="avatar">`;
+    preview.innerHTML = `<img src="${this._escapeHtml(this.user.avatar)}" alt="${t('media_runtime.avatar.alt')}">`;
   } else {
     const color = this._getUserColor(this.user.username);
     const initial = this.user.username.charAt(0).toUpperCase();
@@ -374,9 +372,9 @@ _updateBorderPreview() {
   const preview = document.getElementById('border-upload-preview');
   if (!preview) return;
   if (this.user.border) {
-    preview.innerHTML = `<img src="${this._escapeHtml(this.user.border)}" alt="border">`;
+    preview.innerHTML = `<img src="${this._escapeHtml(this.user.border)}" alt="${t('media_runtime.avatar.border_alt')}">`;
   } else {
-    preview.innerHTML = `<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--text-muted)">None</div>`;
+    preview.innerHTML = `<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--text-muted)">${t('media_runtime.none')}</div>`;
   }
 },
 
@@ -896,7 +894,7 @@ _renderBorderEditor() {
 
   let avatarLayer;
   if (avatarUrl) {
-    avatarLayer = `<img class="border-crop-avatar ${shapeClass}" src="${this._escapeHtml(avatarUrl)}" alt="avatar">`;
+    avatarLayer = `<img class="border-crop-avatar ${shapeClass}" src="${this._escapeHtml(avatarUrl)}" alt="${t('media_runtime.avatar.alt')}">`;
   } else {
     const color = this._getUserColor(this.user.username);
     const initial = this.user.username.charAt(0).toUpperCase();
@@ -905,7 +903,7 @@ _renderBorderEditor() {
 
   if (borderUrl) {
     const W = stage.clientWidth || 192, H = stage.clientHeight || 192;
-    let stack = `<img class="border-crop-border" src="${this._escapeHtml(borderUrl)}" alt="border">`;
+    let stack = `<img class="border-crop-border" src="${this._escapeHtml(borderUrl)}" alt="${t('media_runtime.avatar.border_alt')}">`;
     let cb = { left: 0, top: 0, right: 1, bottom: 1 };
     // An opacity draft is the single source of truth for opacity, so hide the
     // committed opacity op(s) while editing instead of multiplying with them.
@@ -1077,13 +1075,13 @@ _positionBorderHandles() {
 _renderBorderHistory() {
   const list = document.getElementById('border-crop-history');
   if (!list) return;
-  const tr = (k, f) => (window.t ? window.t(k) : f);
+  const tr = (key) => t(key);
   if (!this._borderOps.length) {
-    list.innerHTML = `<div class="bce-hist-empty">${tr('modals.border_crop.no_edits', 'No edits yet')}</div>`;
+    list.innerHTML = `<div class="bce-hist-empty">${tr('modals.border_crop.no_edits')}</div>`;
     return;
   }
   const glyph = { crop: '▣', move: '✥', resize: '⤢', rotate: '⟳', opacity: '◐', distort: '◇' };
-  const undoTitle = tr('modals.border_crop.undo', 'Undo this and later edits');
+  const undoTitle = tr('modals.border_crop.undo');
   list.innerHTML = this._borderOps.map((op, i) =>
     `<div class="bce-hist-row"><span class="bce-hist-label">${glyph[op.type] || ''} ${tr('modals.border_crop.mode_' + op.type, op.type)}</span>` +
     `<button type="button" class="bce-hist-undo" data-index="${i}" title="${undoTitle}">↶</button></div>`
@@ -1121,8 +1119,7 @@ _commitBorderDraft() {
   // can drift it out of frame. Rather than persist an out-of-frame fit, discard the
   // change and tell the user (this runs at the commit a tool switch / Done triggers).
   if (this._borderBoxExceeds(d)) {
-    const msg = (window.t && window.t('modals.border_crop.exceeds_frame')) || 'The border exceeds the avatar frame, discarded changes';
-    this._showToast(msg, 'error');
+    this._showToast(t('modals.border_crop.exceeds_frame'), 'error');
     return;
   }
   this._borderOps.push(d);
@@ -1501,7 +1498,7 @@ _setupAvatarUpload() {
       this._borderOps = [];
       this._borderDraft = null;
       const preview = document.getElementById('border-upload-preview');
-      if (preview) preview.innerHTML = `<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--text-muted)">None</div>`;
+      if (preview) preview.innerHTML = `<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--text-muted)">${t('media_runtime.none')}</div>`;
       this._updateBorderEditButton();
       this._markAvatarUnsaved();
       return;
@@ -1526,8 +1523,8 @@ _setupAvatarUpload() {
     if (e.target && e.target.id === 'avatar-file-input') {
       const file = e.target.files[0];
       if (!file) return;
-      if (file.size > 5 * 1024 * 1024) return this._showToast('Image too large (max 5 MB)', 'error');
-      if (!file.type.startsWith('image/')) return this._showToast('Not an image file', 'error');
+      if (file.size > 5 * 1024 * 1024) return this._showToast(t('toasts.image_too_large', { max: 5 }), 'error');
+      if (!file.type.startsWith('image/')) return this._showToast(t('toasts.not_an_image'), 'error');
 
       this._pendingAvatarFile = file;
       this._pendingAvatarRemoved = false;
@@ -1540,7 +1537,7 @@ _setupAvatarUpload() {
         if (preview) {
           const img = document.createElement('img');
           img.src = ev.target.result;
-          img.alt = 'avatar preview';
+          img.alt = t('media_runtime.avatar.preview_alt');
           preview.innerHTML = '';
           preview.appendChild(img);
         }
@@ -1552,8 +1549,8 @@ _setupAvatarUpload() {
     if (e.target && e.target.id === 'border-file-input') {
       const file = e.target.files[0];
       if (!file) return;
-      if (file.size > 5 * 1024 * 1024) return this._showToast((window.t && window.t('toasts.image_too_large', { max: 5 })) || 'Image too large (max 5 MB)', 'error');
-      if (!file.type.startsWith('image/')) return this._showToast((window.t && window.t('toasts.not_an_image')) || 'Not an image file', 'error');
+      if (file.size > 5 * 1024 * 1024) return this._showToast(t('toasts.image_too_large', { max: 5 }), 'error');
+      if (!file.type.startsWith('image/')) return this._showToast(t('toasts.not_an_image'), 'error');
 
       this._pendingBorderFile = file;
       this._pendingBorderRemoved = false;
@@ -1568,7 +1565,7 @@ _setupAvatarUpload() {
         if (preview) {
           const img = document.createElement('img');
           img.src = ev.target.result;
-          img.alt = 'border preview';
+          img.alt = t('media_runtime.avatar.border_preview_alt');
           preview.innerHTML = '';
           preview.appendChild(img);
         }
@@ -1586,13 +1583,13 @@ _setupAvatarUpload() {
 
 _markAvatarUnsaved() {
   const status = document.getElementById('avatar-save-status');
-  if (status) { status.textContent = 'Unsaved changes'; status.style.color = 'var(--warning, orange)'; }
+  if (status) { status.textContent = t('media_runtime.avatar.unsaved'); status.style.color = 'var(--warning, orange)'; }
 },
 
 // Commit pending avatar + shape to the server via HTTP (not socket!)
 async _commitAvatarSettings() {
   const status = document.getElementById('avatar-save-status');
-  if (status) { status.textContent = 'Saving...'; status.style.color = 'var(--text-secondary)'; }
+  if (status) { status.textContent = t('media_runtime.avatar.saving'); status.style.color = 'var(--text-secondary)'; }
 
   try {
     // 1. Upload avatar image via HTTP if a new file was chosen
@@ -1605,7 +1602,7 @@ async _commitAvatarSettings() {
         body: formData
       });
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Upload failed');
+      if (!resp.ok) throw new Error(data.error || t('toasts.upload_failed'));
 
       // Server stored the file and returned the URL path
       this.user.avatar = data.url;
@@ -1618,7 +1615,7 @@ async _commitAvatarSettings() {
       if (preview) {
         const img = document.createElement('img');
         img.src = data.url;
-        img.alt = 'avatar';
+        img.alt = t('media_runtime.avatar.alt');
         preview.innerHTML = '';
         preview.appendChild(img);
       }
@@ -1636,7 +1633,7 @@ async _commitAvatarSettings() {
           'Content-Type': 'application/json'
         }
       });
-      if (!resp.ok) throw new Error('Failed to remove avatar');
+      if (!resp.ok) throw new Error(t('media_runtime.avatar.remove_failed'));
 
       this.user.avatar = null;
       localStorage.setItem('haven_user', JSON.stringify(this.user));
@@ -1655,7 +1652,7 @@ async _commitAvatarSettings() {
         body: formData
       });
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Upload failed');
+      if (!resp.ok) throw new Error(data.error || t('toasts.upload_failed'));
 
       this.user.border = data.url;
       localStorage.setItem('haven_user', JSON.stringify(this.user));
@@ -1675,7 +1672,7 @@ async _commitAvatarSettings() {
           'Content-Type': 'application/json'
         }
       });
-      if (!resp.ok) throw new Error('Failed to remove border');
+      if (!resp.ok) throw new Error(t('media_runtime.avatar.border_remove_failed'));
 
       this.user.border = null;
       localStorage.setItem('haven_user', JSON.stringify(this.user));
@@ -1697,7 +1694,7 @@ async _commitAvatarSettings() {
           headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ transform })
         });
-        if (!resp.ok) throw new Error('Failed to save border fit');
+        if (!resp.ok) throw new Error(t('media_runtime.avatar.border_fit_failed'));
         const data = await resp.json();
         this.user.borderTransform = data.transform || null;
         localStorage.setItem('haven_user', JSON.stringify(this.user));
@@ -1719,7 +1716,7 @@ async _commitAvatarSettings() {
         },
         body: JSON.stringify({ shape: this._pendingAvatarShape })
       });
-      if (!resp.ok) throw new Error('Failed to save shape');
+      if (!resp.ok) throw new Error(t('media_runtime.avatar.shape_failed'));
 
       this._avatarShape = this._pendingAvatarShape;
       this.user.avatarShape = this._pendingAvatarShape;
@@ -1739,7 +1736,7 @@ async _commitAvatarSettings() {
         },
         body: JSON.stringify({ mode: this._pendingAnimateProfile })
       });
-      if (!resp.ok) throw new Error('Failed to save animation policy');
+      if (!resp.ok) throw new Error(t('media_runtime.avatar.animation_failed'));
 
       this._animateProfile = this._pendingAnimateProfile;
       this.user.animateProfile = this._pendingAnimateProfile;
@@ -1748,14 +1745,14 @@ async _commitAvatarSettings() {
       if (this.socket) this.socket.emit('set-animate-profile', { mode: this._pendingAnimateProfile });
     }
 
-    if (status) { status.textContent = '✅ Saved!'; status.style.color = 'var(--success, #6f6)'; }
-    this._showToast('Avatar settings saved!', 'success');
+    if (status) { status.textContent = t('media_runtime.avatar.saved'); status.style.color = 'var(--success, #6f6)'; }
+    this._showToast(t('media_runtime.avatar.saved_toast'), 'success');
     setTimeout(() => { if (status) status.textContent = ''; }, 3000);
 
   } catch (err) {
     console.error('[Avatar] Save failed:', err);
     if (status) { status.textContent = '❌ ' + err.message; status.style.color = 'var(--danger, red)'; }
-    this._showToast('Failed to save: ' + err.message, 'error');
+    this._showToast(t('media_runtime.avatar.save_failed', { error: err.message }), 'error');
   }
 },
 
@@ -1862,33 +1859,33 @@ _setupSoundManagement() {
     uploadBtn.addEventListener('click', async () => {
       const file = fileInput.files[0];
       const name = nameInput ? nameInput.value.trim() : '';
-      if (!file) return this._showToast('Select an audio file', 'error');
-      if (!name) return this._showToast('Enter a sound name', 'error');
+      if (!file) return this._showToast(t('media_runtime.sound.select_file'), 'error');
+      if (!name) return this._showToast(t('media_runtime.sound.enter_name'), 'error');
       const maxSoundKb = parseInt(this.serverSettings?.max_sound_kb) || 1024;
-      if (file.size > maxSoundKb * 1024) return this._showToast(`Sound file too large (max ${maxSoundKb >= 1024 ? (maxSoundKb / 1024) + ' MB' : maxSoundKb + ' KB'})`, 'error');
+      if (file.size > maxSoundKb * 1024) return this._showToast(t('media_runtime.sound.too_large', { max: maxSoundKb >= 1024 ? (maxSoundKb / 1024) + ' MB' : maxSoundKb + ' KB' }), 'error');
 
       const formData = new FormData();
       formData.append('sound', file);
       formData.append('name', name);
 
       try {
-        this._showToast('Uploading sound...', 'info');
+        this._showToast(t('media_runtime.sound.uploading'), 'info');
         const res = await fetch('/api/upload-sound', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${this.token}` },
           body: formData
         });
         if (!res.ok) {
-          let errMsg = `Upload failed (${res.status})`;
+          let errMsg = t('toasts.upload_failed_status', { status: res.status });
           try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
           return this._showToast(errMsg, 'error');
         }
-        this._showToast(`Sound "${name}" uploaded!`, 'success');
+        this._showToast(t('media_runtime.sound.uploaded', { name }), 'success');
         fileInput.value = '';
         nameInput.value = '';
         this._loadCustomSounds();
       } catch {
-        this._showToast('Upload failed', 'error');
+        this._showToast(t('toasts.upload_failed'), 'error');
       }
     });
   }
@@ -2091,7 +2088,7 @@ _setupSoundManagement() {
       });
       this._soundHotkeys[hk] = this._recordingHotkeyFor;
       localStorage.setItem('haven_sound_hotkeys', JSON.stringify(this._soundHotkeys));
-      this._showToast(`Hotkey [${hk}] set for "${this._recordingHotkeyFor}"`, 'success');
+      this._showToast(t('media_runtime.sound.hotkey_set', { hotkey: hk, name: this._recordingHotkeyFor }), 'success');
       this._recordingHotkeyFor = null;
       this._renderSoundboard();
       return;
@@ -2160,7 +2157,7 @@ _openSoundModal(tab = 'soundboard') {
   modal.style.display = 'flex';
   // Sync popout button state
   const popoutBtn = document.getElementById('soundboard-popout-btn');
-  if (popoutBtn) { popoutBtn.textContent = '\u29c9'; popoutBtn.title = 'Pop out soundboard'; }
+  if (popoutBtn) { popoutBtn.textContent = '\u29c9'; popoutBtn.title = t('media_runtime.sound.popout'); }
   this._renderSoundboard();
   this._renderAssignTab();
 },
@@ -2339,7 +2336,7 @@ _renderSoundboardSidebar(filter = '') {
   Object.entries(this._soundHotkeys).forEach(([hk, name]) => { hotkeyMap[name] = hk; });
 
   if (all.length === 0) {
-    grid.innerHTML = `<p class="muted-text">${filter ? 'No matching sounds' : 'No sounds available'}</p>`;
+    grid.innerHTML = `<p class="muted-text">${t(filter ? 'media_runtime.sound.no_matches' : 'modals.sound_manager.no_sounds')}</p>`;
     return;
   }
 
@@ -2396,13 +2393,13 @@ _popOutSoundboard() {
   pip.className = 'sb-pip-overlay';
   pip.innerHTML = `
     <div class="music-pip-header" id="sb-pip-drag">
-      <button class="music-pip-btn" id="sb-pip-popin" title="Pop back in">\u29c8</button>
+      <button class="music-pip-btn" id="sb-pip-popin" title="${t('media_runtime.sound.pop_back_in')}">\u29c8</button>
       <span class="music-pip-label">\uD83C\uDFB5 Soundboard</span>
-      <button class="music-pip-btn" id="sb-pip-close" title="Close">\u2715</button>
+      <button class="music-pip-btn" id="sb-pip-close" title="${t('modals.common.close')}">\u2715</button>
     </div>
     <div class="sb-pip-body">
       <div class="sound-search-row" style="padding:0;margin-bottom:0">
-        <input type="text" id="sb-pip-search" placeholder="Search sounds..." class="settings-text-input" style="flex:1;font-size:0.75rem">
+        <input type="text" id="sb-pip-search" placeholder="${t('modals.sound_manager.search_placeholder')}" class="settings-text-input" style="flex:1;font-size:0.75rem">
       </div>
       <div id="sb-pip-grid" class="sb-pip-grid"></div>
     </div>
@@ -2644,10 +2641,10 @@ _renderSoundList(sounds) {
               if (this._soundHotkeys[k] === oldName) this._soundHotkeys[k] = newName;
             });
             localStorage.setItem('haven_sound_hotkeys', JSON.stringify(this._soundHotkeys));
-            this._showToast(`Renamed to "${newName}"`, 'success');
+            this._showToast(t('media_runtime.sound.renamed', { name: newName }), 'success');
             this._loadCustomSounds();
           } else {
-            let errMsg = 'Rename failed';
+            let errMsg = t('media_runtime.sound.rename_failed');
             try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
             this._showToast(errMsg, 'error');
             const span = document.createElement('span');
@@ -2656,7 +2653,7 @@ _renderSoundList(sounds) {
             input.replaceWith(span);
           }
         } catch {
-          this._showToast('Rename failed', 'error');
+          this._showToast(t('media_runtime.sound.rename_failed'), 'error');
         }
       };
 
@@ -2678,7 +2675,7 @@ _renderSoundList(sounds) {
           headers: { 'Authorization': `Bearer ${this.token}` }
         });
         if (res.ok) {
-          this._showToast(`Sound "${name}" deleted`, 'success');
+          this._showToast(t('media_runtime.sound.deleted', { name }), 'success');
           // Clean up hotkey
           Object.keys(this._soundHotkeys).forEach(k => {
             if (this._soundHotkeys[k] === name) delete this._soundHotkeys[k];
@@ -2686,10 +2683,10 @@ _renderSoundList(sounds) {
           localStorage.setItem('haven_sound_hotkeys', JSON.stringify(this._soundHotkeys));
           this._loadCustomSounds();
         } else {
-          this._showToast('Delete failed', 'error');
+          this._showToast(t('media_runtime.delete_failed'), 'error');
         }
       } catch {
-        this._showToast('Delete failed', 'error');
+        this._showToast(t('media_runtime.delete_failed'), 'error');
       }
     });
   });
@@ -2716,16 +2713,16 @@ _renderSoundboard(filter = '') {
   Object.entries(this._soundHotkeys).forEach(([hk, name]) => { hotkeyMap[name] = hk; });
 
   const html = sounds.length === 0
-    ? `<p class="muted-text" style="grid-column:1/-1">${filter ? 'No matching sounds' : 'No sounds available'}</p>`
+    ? `<p class="muted-text" style="grid-column:1/-1">${t(filter ? 'media_runtime.sound.no_matches' : 'modals.sound_manager.no_sounds')}</p>`
     : sounds.map(s => {
         const hk = hotkeyMap[s.name];
         const hotkeyHtml = hk
           ? `<span class="sb-hotkey-row">
                <span class="sb-hotkey">${this._escapeHtml(hk)}</span>
-               <span class="sb-hotkey-clear" data-sound="${this._escapeHtml(s.name)}" title="Remove hotkey">&times;</span>
+               <span class="sb-hotkey-clear" data-sound="${this._escapeHtml(s.name)}" title="${t('media_runtime.sound.remove_hotkey')}">&times;</span>
              </span>`
-          : `<span class="sb-hotkey-set" data-sound="${this._escapeHtml(s.name)}">Set hotkey</span>`;
-        return `<button class="soundboard-btn${this._soundPrefs[s.name]?.hidden ? ' hidden-sound' : ''}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-hide-btn" data-sound="${this._escapeHtml(s.name)}" title="${this._soundPrefs[s.name]?.hidden ? 'Show' : 'Hide'} this sound">👁️</span><span class="sb-name">${this._escapeHtml(s.name)}</span>
+           : `<span class="sb-hotkey-set" data-sound="${this._escapeHtml(s.name)}">${t('media_runtime.sound.set_hotkey')}</span>`;
+        return `<button class="soundboard-btn${this._soundPrefs[s.name]?.hidden ? ' hidden-sound' : ''}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-hide-btn" data-sound="${this._escapeHtml(s.name)}" title="${t(this._soundPrefs[s.name]?.hidden ? 'media_runtime.sound.show' : 'media_runtime.sound.hide')}">👁️</span><span class="sb-name">${this._escapeHtml(s.name)}</span>
           ${hotkeyHtml}
         </button>`;
       }).join('');
@@ -2754,7 +2751,7 @@ _renderSoundboard(filter = '') {
         this._recordingHotkeyFor = name;
         const btn = el.closest('.soundboard-btn');
         if (btn) btn.classList.add('hotkey-recording');
-        this._showToast(`Press a key combo for "${name}" (Esc to cancel)`, 'info');
+        this._showToast(t('media_runtime.sound.press_hotkey', { name }), 'info');
       });
     });
 
@@ -2767,7 +2764,7 @@ _renderSoundboard(filter = '') {
         if (hk) {
           delete this._soundHotkeys[hk];
           localStorage.setItem('haven_sound_hotkeys', JSON.stringify(this._soundHotkeys));
-          this._showToast(`Hotkey removed for "${name}"`, 'info');
+          this._showToast(t('media_runtime.sound.hotkey_removed', { name }), 'info');
           this._renderSoundboard(
             this._soundboardPip
               ? (document.getElementById('sb-pip-search')?.value?.trim() || '')
@@ -2800,7 +2797,7 @@ _renderSoundboard(filter = '') {
         const name = btn.dataset.name;
         this._recordingHotkeyFor = name;
         btn.classList.add('hotkey-recording');
-        this._showToast(`Press a key combo for "${name}" (Esc to cancel)`, 'info');
+        this._showToast(t('media_runtime.sound.press_hotkey', { name }), 'info');
       });
     });
   });
@@ -2814,7 +2811,7 @@ _renderAssignTab() {
     { value: 'blip', label: 'Blip' }, { value: 'bell', label: 'Bell' },
     { value: 'drop', label: 'Drop' }, { value: 'alert', label: 'Alert' },
     { value: 'chord', label: 'Chord' }, { value: 'swoosh', label: 'Swoosh' },
-    { value: 'none', label: 'None' },
+    { value: 'none', label: t('media_runtime.none') },
   ];
   const customs = (this.customSounds || []).map(s => ({
     value: `custom:${s.name}`, label: s.name, url: s.url, builtin: !!s.builtin
@@ -2936,33 +2933,33 @@ _setupEmojiManagement() {
   uploadBtn.addEventListener('click', async () => {
     const file = fileInput.files[0];
     const name = nameInput ? nameInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() : '';
-    if (!file) return this._showToast('Select an image file', 'error');
-    if (!name) return this._showToast('Enter an emoji name (lowercase, no spaces)', 'error');
+    if (!file) return this._showToast(t('media_runtime.emoji.select_file'), 'error');
+    if (!name) return this._showToast(t('media_runtime.emoji.enter_name'), 'error');
 
     // Use cropped blob for non-GIF uploads, otherwise raw file
     const uploadBlob = (this._croppedEmojiBlob && file.type !== 'image/gif')
       ? this._croppedEmojiBlob
       : file;
     const maxEmojiKb = parseInt(this.serverSettings?.max_emoji_kb) || 256;
-    if (uploadBlob.size > maxEmojiKb * 1024) return this._showToast(`Emoji file too large (max ${maxEmojiKb} KB)`, 'error');
+    if (uploadBlob.size > maxEmojiKb * 1024) return this._showToast(t('media_runtime.emoji.too_large', { max: maxEmojiKb }), 'error');
 
     const formData = new FormData();
     formData.append('emoji', uploadBlob, file.name);
     formData.append('name', name);
 
     try {
-      this._showToast('Uploading emoji...', 'info');
+      this._showToast(t('media_runtime.emoji.uploading'), 'info');
       const res = await fetch('/api/upload-emoji', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${this.token}` },
         body: formData
       });
       if (!res.ok) {
-        let errMsg = `Upload failed (${res.status})`;
+        let errMsg = t('toasts.upload_failed_status', { status: res.status });
         try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
         return this._showToast(errMsg, 'error');
       }
-      this._showToast(`Emoji :${name}: uploaded!`, 'success');
+      this._showToast(t('media_runtime.emoji.uploaded', { name }), 'success');
       fileInput.value = '';
       if (nameInput) nameInput.value = '';
       this._croppedEmojiBlob = null;
@@ -2972,7 +2969,7 @@ _setupEmojiManagement() {
       if (previewRow) previewRow.style.display = 'none';
       this._loadCustomEmojis();
     } catch {
-      this._showToast('Upload failed', 'error');
+      this._showToast(t('toasts.upload_failed'), 'error');
     }
   });
 
@@ -2991,29 +2988,30 @@ _setupEmojiManagement() {
       }
       if ([...formData.entries()].length === 0) {
         bulkInput.value = '';
-        return this._showToast(`All files exceeded the ${maxEmojiKb} KB limit`, 'error');
+        return this._showToast(t('media_runtime.all_files_too_large', { max: maxEmojiKb }), 'error');
       }
       try {
-        this._showToast(`Uploading ${files.length - skipped} emoji${files.length - skipped > 1 ? 's' : ''}...`, 'info');
+        const uploadCount = files.length - skipped;
+        this._showToast(t(uploadCount === 1 ? 'media_runtime.emoji.uploading_one' : 'media_runtime.emoji.uploading_other', { count: uploadCount }), 'info');
         const res = await fetch('/api/upload-emojis', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${this.token}` },
           body: formData
         });
         if (!res.ok) {
-          let errMsg = `Upload failed (${res.status})`;
+          let errMsg = t('toasts.upload_failed_status', { status: res.status });
           try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
           return this._showToast(errMsg, 'error');
         }
         const data = await res.json();
         const count = data.uploaded?.length || 0;
         const errCount = (data.errors?.length || 0) + skipped;
-        let msg = `${count} emoji${count !== 1 ? 's' : ''} uploaded`;
-        if (errCount) msg += ` (${errCount} skipped)`;
+        let msg = t(count === 1 ? 'media_runtime.emoji.uploaded_one' : 'media_runtime.emoji.uploaded_other', { count });
+        if (errCount) msg += ' ' + t('media_runtime.skipped', { count: errCount });
         this._showToast(msg, count ? 'success' : 'error');
         this._loadCustomEmojis();
       } catch {
-        this._showToast('Bulk upload failed', 'error');
+        this._showToast(t('media_runtime.bulk_upload_failed'), 'error');
       }
       bulkInput.value = '';
     });
@@ -3240,7 +3238,7 @@ _renderEmojiList(emojis) {
   if (!list) return;
 
   if (emojis.length === 0) {
-    list.innerHTML = '<p class="muted-text">No custom emojis uploaded</p>';
+    list.innerHTML = `<p class="muted-text">${t('modals.emoji_mgmt.no_emojis')}</p>`;
     return;
   }
 
@@ -3248,7 +3246,7 @@ _renderEmojiList(emojis) {
     <div class="custom-sound-item">
       <img src="${this._escapeHtml(e.url)}" alt=":${this._escapeHtml(e.name)}:" class="custom-emoji-preview" style="width:24px;height:24px;vertical-align:middle;margin-right:6px;">
       <span class="custom-sound-name">:${this._escapeHtml(e.name)}:</span>
-      <button class="btn-xs emoji-delete-btn" data-name="${this._escapeHtml(e.name)}" title="Delete">&#x1F5D1;</button>
+      <button class="btn-xs emoji-delete-btn" data-name="${this._escapeHtml(e.name)}" title="${t('media_runtime.delete')}">&#x1F5D1;</button>
     </div>
   `).join('');
 
@@ -3261,13 +3259,13 @@ _renderEmojiList(emojis) {
           headers: { 'Authorization': `Bearer ${this.token}` }
         });
         if (res.ok) {
-          this._showToast(`Emoji :${name}: deleted`, 'success');
+          this._showToast(t('media_runtime.emoji.deleted', { name }), 'success');
           this._loadCustomEmojis();
         } else {
-          this._showToast('Delete failed', 'error');
+          this._showToast(t('media_runtime.delete_failed'), 'error');
         }
       } catch {
-        this._showToast('Delete failed', 'error');
+        this._showToast(t('media_runtime.delete_failed'), 'error');
       }
     });
   });
@@ -3293,13 +3291,13 @@ _renderStickerList(stickers) {
   const list = document.getElementById('stickers-list');
   if (!list) return;
   if (!stickers || stickers.length === 0) {
-    list.innerHTML = '<p class="muted-text" data-i18n="modals.sticker_mgmt.no_stickers">No stickers uploaded</p>';
+    list.innerHTML = `<p class="muted-text">${t('modals.sticker_mgmt.no_stickers')}</p>`;
     return;
   }
   // Group by pack for display
   const packs = {};
   stickers.forEach(s => {
-    const p = s.pack_name || 'General';
+    const p = s.pack_name || t('media_runtime.sticker.general_pack');
     (packs[p] = packs[p] || []).push(s);
   });
   list.innerHTML = Object.keys(packs).sort().map(pack => `
@@ -3309,7 +3307,7 @@ _renderStickerList(stickers) {
         <div class="custom-sound-item">
           <img src="${this._escapeHtml(s.url)}" alt=":${this._escapeHtml(s.name)}:" style="width:48px;height:48px;vertical-align:middle;margin-right:8px;object-fit:contain;border-radius:4px;background:var(--bg-secondary)">
           <span class="custom-sound-name">:${this._escapeHtml(s.name)}:</span>
-          <button class="btn-xs sticker-delete-btn" data-name="${this._escapeHtml(s.name)}" title="Delete">&#x1F5D1;</button>
+          <button class="btn-xs sticker-delete-btn" data-name="${this._escapeHtml(s.name)}" title="${t('media_runtime.delete')}">&#x1F5D1;</button>
         </div>
       `).join('')}
     </div>
@@ -3324,13 +3322,13 @@ _renderStickerList(stickers) {
           headers: { 'Authorization': `Bearer ${this.token}` }
         });
         if (res.ok) {
-          this._showToast(`Sticker :${name}: deleted`, 'success');
+          this._showToast(t('media_runtime.sticker.deleted', { name }), 'success');
           this._loadStickers();
         } else {
-          this._showToast('Delete failed', 'error');
+          this._showToast(t('media_runtime.delete_failed'), 'error');
         }
       } catch {
-        this._showToast('Delete failed', 'error');
+        this._showToast(t('media_runtime.delete_failed'), 'error');
       }
     });
   });
@@ -3359,9 +3357,9 @@ _setupStickerManagement() {
   if (uploadBtn && fileInput) {
     uploadBtn.addEventListener('click', async () => {
       const file = fileInput.files[0];
-      if (!file) return this._showToast('Choose a file first', 'error');
+      if (!file) return this._showToast(t('media_runtime.sticker.choose_file'), 'error');
       const maxKb = parseInt(this.serverSettings?.max_sticker_kb) || 1024;
-      if (file.size > maxKb * 1024) return this._showToast(`File exceeds ${maxKb} KB limit`, 'error');
+      if (file.size > maxKb * 1024) return this._showToast(t('media_runtime.sticker.too_large', { max: maxKb }), 'error');
 
       const formData = new FormData();
       formData.append('sticker', file, file.name);
@@ -3377,17 +3375,17 @@ _setupStickerManagement() {
           body: formData
         });
         if (!res.ok) {
-          let errMsg = `Upload failed (${res.status})`;
+          let errMsg = t('toasts.upload_failed_status', { status: res.status });
           try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
           return this._showToast(errMsg, 'error');
         }
         const data = await res.json();
-        this._showToast(`Sticker :${data.name}: uploaded`, 'success');
+        this._showToast(t('media_runtime.sticker.uploaded', { name: data.name }), 'success');
         if (nameInput) nameInput.value = '';
         fileInput.value = '';
         this._loadStickers();
       } catch {
-        this._showToast('Upload failed', 'error');
+        this._showToast(t('toasts.upload_failed'), 'error');
       }
     });
   }
@@ -3409,21 +3407,22 @@ _setupStickerManagement() {
       }
       if ([...formData.entries()].length === 0) {
         bulkInput.value = '';
-        return this._showToast(`All files exceeded the ${maxKb} KB limit`, 'error');
+        return this._showToast(t('media_runtime.all_files_too_large', { max: maxKb }), 'error');
       }
 
       const pack = (packInput?.value || '').trim();
       if (pack) formData.append('pack_name', pack);
 
       try {
-        this._showToast(`Uploading ${files.length - skipped} sticker${files.length - skipped !== 1 ? 's' : ''}...`, 'info');
+        const uploadCount = files.length - skipped;
+        this._showToast(t(uploadCount === 1 ? 'media_runtime.sticker.uploading_one' : 'media_runtime.sticker.uploading_other', { count: uploadCount }), 'info');
         const res = await fetch('/api/upload-stickers', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${this.token}` },
           body: formData
         });
         if (!res.ok) {
-          let errMsg = `Upload failed (${res.status})`;
+          let errMsg = t('toasts.upload_failed_status', { status: res.status });
           try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
           return this._showToast(errMsg, 'error');
         }
@@ -3431,12 +3430,12 @@ _setupStickerManagement() {
         const data = await res.json();
         const count = data.uploaded?.length || 0;
         const errCount = (data.errors?.length || 0) + skipped;
-        let msg = `${count} sticker${count !== 1 ? 's' : ''} uploaded`;
-        if (errCount) msg += ` (${errCount} skipped)`;
+        let msg = t(count === 1 ? 'media_runtime.sticker.uploaded_one' : 'media_runtime.sticker.uploaded_other', { count });
+        if (errCount) msg += ' ' + t('media_runtime.skipped', { count: errCount });
         this._showToast(msg, count ? 'success' : 'error');
         this._loadStickers();
       } catch {
-        this._showToast('Bulk upload failed', 'error');
+        this._showToast(t('media_runtime.bulk_upload_failed'), 'error');
       }
 
       bulkInput.value = '';
@@ -3456,7 +3455,7 @@ _setupWebhookManagement() {
   document.getElementById('ferry-close-btn')?.addEventListener('click', () => this._closeFerryModal());
   document.getElementById('ferry-refresh-btn')?.addEventListener('click', () => {
     this.socket.emit('ferry:reconnect');
-    this._showToast('Reconnecting to Discord...', 'info');
+    this._showToast(t('media_runtime.ferry_reconnecting'), 'info');
   });
   document.getElementById('ferry-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) this._closeFerryModal();
@@ -3527,7 +3526,7 @@ _showBotDetail(botId) {
   const baseUrl = window.location.origin;
   const tokenVisible = typeof wh.token === 'string' && wh.token.length > 0;
   const webhookUrl = tokenVisible ? `${baseUrl}/api/webhooks/${wh.token}` : '';
-  const maskedToken = tokenVisible ? wh.token.slice(0, 12) + '••••••••••••' : 'Hidden - bot owner or admin only';
+  const maskedToken = tokenVisible ? wh.token.slice(0, 12) + '••••••••••••' : t('media_runtime.bot.hidden');
   const channelOptions = this._getBotChannelOptions(wh.channel_id);
 
   panel.innerHTML = `
@@ -3558,29 +3557,29 @@ _showBotDetail(botId) {
 
       <label class="settings-label">${t('modals.bot_mgmt.webhook_url_label')}</label>
       <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-        <code style="flex:1;font-size:0.6875rem;padding:6px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(webhookUrl || 'Hidden - bot owner or admin only')}</code>
+        <code style="flex:1;font-size:0.6875rem;padding:6px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(webhookUrl || t('media_runtime.bot.hidden'))}</code>
         <button class="btn-xs" id="bot-detail-copy-url" title="${t('modals.bot_mgmt.copy_url_title')}" ${tokenVisible ? '' : 'disabled'}>📋</button>
       </div>
 
       <label class="settings-label">${t('modals.bot_mgmt.token_label')}</label>
       <div style="font-size:0.6875rem;font-family:monospace;padding:4px 8px;background:var(--bg-input);border-radius:4px;color:var(--text-muted);margin-bottom:12px">${maskedToken}</div>
 
-      <label class="settings-label">📡 Callback URL <span style="font-size:0.625rem;color:var(--text-muted)">(optional — Haven will POST messages to this URL)</span></label>
+      <label class="settings-label">📡 ${t('media_runtime.bot.callback_url')} <span style="font-size:0.625rem;color:var(--text-muted)">${t('media_runtime.bot.callback_url_hint')}</span></label>
       <input type="url" id="bot-detail-callback-url" value="${this._escapeHtml(wh.callback_url || '')}" placeholder="https://mybot.example.com/haven-events" class="settings-text-input" style="width:100%;margin-bottom:8px">
 
-      <label class="settings-label">🔑 Callback Secret <span style="font-size:0.625rem;color:var(--text-muted)">(optional — used to sign payloads via X-Haven-Signature)</span></label>
+      <label class="settings-label">🔑 ${t('media_runtime.bot.callback_secret')} <span style="font-size:0.625rem;color:var(--text-muted)">${t('media_runtime.bot.callback_secret_hint')}</span></label>
       <input type="text" id="bot-detail-callback-secret" value="${this._escapeHtml(wh.callback_secret || '')}" placeholder="my-secret-key" class="settings-text-input" style="width:100%;margin-bottom:12px">
 
-      <label class="settings-label">🛡️ Moderation <span style="font-size:0.625rem;color:var(--text-muted)">(admin only — let this bot kick / ban / mute users via REST API)</span></label>
+      <label class="settings-label">🛡️ ${t('media_runtime.bot.moderation')} <span style="font-size:0.625rem;color:var(--text-muted)">${t('media_runtime.bot.moderation_hint')}</span></label>
       <label class="toggle-row" style="margin-bottom:12px">
         <input type="checkbox" id="bot-detail-can-moderate" ${wh.can_moderate ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
-        <span>Allow this bot to perform moderation actions</span>
+        <span>${t('media_runtime.bot.allow_moderation')}</span>
       </label>
 
-      <label class="settings-label">Voice access <span style="font-size:0.625rem;color:var(--text-muted)">(admin only - lets this bot join voice as a WebRTC peer)</span></label>
+      <label class="settings-label">${t('media_runtime.bot.voice_access')} <span style="font-size:0.625rem;color:var(--text-muted)">${t('media_runtime.bot.voice_access_hint')}</span></label>
       <label class="toggle-row" style="margin-bottom:12px">
         <input type="checkbox" id="bot-detail-can-use-voice" ${wh.can_use_voice ? 'checked' : ''} ${this.user && this.user.isAdmin ? '' : 'disabled'}>
-        <span>Allow this bot to use voice channels</span>
+        <span>${t('media_runtime.bot.allow_voice')}</span>
       </label>
 
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -3607,7 +3606,7 @@ _showBotDetail(botId) {
     const channelId = parseInt(panel.querySelector('#bot-detail-channel').value);
     const callbackUrl = panel.querySelector('#bot-detail-callback-url').value.trim();
     const callbackSecret = panel.querySelector('#bot-detail-callback-secret').value.trim();
-    if (!name) return this._showToast('Name is required', 'error');
+    if (!name) return this._showToast(t('media_runtime.bot.name_required'), 'error');
     const payload = { id: botId, name, channel_id: channelId, callback_url: callbackUrl, callback_secret: callbackSecret };
     const modBox = panel.querySelector('#bot-detail-can-moderate');
     if (modBox && !modBox.disabled) payload.can_moderate = modBox.checked ? 1 : 0;
@@ -3641,7 +3640,7 @@ _showBotDetail(botId) {
     });
   });
   panel.querySelector('#bot-detail-delete').addEventListener('click', () => {
-    if (confirm(`Delete bot "${wh.name}"? This cannot be undone.`)) {
+    if (confirm(t('media_runtime.bot.delete_confirm', { name: wh.name }))) {
       this._selectedBotId = null;
       this.socket.emit('delete-webhook', { id: botId });
     }
@@ -3683,12 +3682,12 @@ async _uploadBotAvatar(botId, file) {
     const json = await resp.json();
     if (json.url) {
       this.socket.emit('update-webhook', { id: botId, avatar_url: json.url });
-      this._showToast('Bot avatar updated', 'success');
+      this._showToast(t('media_runtime.bot.avatar_updated'), 'success');
     } else {
-      this._showToast(json.error || 'Upload failed', 'error');
+      this._showToast(json.error || t('toasts.upload_failed'), 'error');
     }
   } catch (err) {
-    this._showToast('Upload failed', 'error');
+    this._showToast(t('toasts.upload_failed'), 'error');
   }
 },
 
@@ -4012,7 +4011,7 @@ _applyEmbedSize(mode) {
   localStorage.setItem('haven-embed-size', mode);
   document.body.classList.remove('embed-size-off', 'embed-size-small', 'embed-size-medium', 'embed-size-full');
   document.body.classList.add(`embed-size-${mode}`);
-  const label = `⤢ ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+  const label = `⤢ ${t(`settings.embed_display.${mode}`)}`;
   document.querySelectorAll('.lp-size').forEach(b => { b.textContent = label; });
   const picker = document.getElementById('embed-size-picker');
   if (picker) picker.querySelectorAll('[data-embed-size]').forEach(b => b.classList.toggle('active', b.dataset.embedSize === mode));
@@ -4055,14 +4054,14 @@ _setupToolbarIconPicker() {
 
   const defaultOrder = ['react', 'reply', 'quote', 'thread', 'pin', 'archive', 'edit', 'delete'];
   const actionLabels = {
-    react: 'React',
-    reply: 'Reply',
-    quote: 'Quote',
-    thread: 'Thread',
-    pin: 'Pin / Unpin',
-    archive: 'Protect / Unprotect',
-    edit: 'Edit',
-    delete: 'Delete'
+    react: t('msg_toolbar.react'),
+    reply: t('msg_toolbar.reply'),
+    quote: t('msg_toolbar.quote'),
+    thread: t('msg_toolbar.thread'),
+    pin: t('media_runtime.toolbar.pin'),
+    archive: t('media_runtime.toolbar.protect'),
+    edit: t('msg_toolbar.edit'),
+    delete: t('msg_toolbar.delete')
   };
 
   const normalizeOrder = (value) => {
@@ -4115,8 +4114,8 @@ _setupToolbarIconPicker() {
       row.innerHTML = `
         <span class="toolbar-order-item-label">${actionLabels[key] || key}</span>
         <div class="toolbar-order-item-controls">
-          <button type="button" class="toolbar-order-move" data-dir="up" data-key="${key}" ${index === 0 ? 'disabled' : ''} title="Move up">▲</button>
-          <button type="button" class="toolbar-order-move" data-dir="down" data-key="${key}" ${index === currentOrder.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
+          <button type="button" class="toolbar-order-move" data-dir="up" data-key="${key}" ${index === 0 ? 'disabled' : ''} title="${t('media_runtime.move_up')}">▲</button>
+          <button type="button" class="toolbar-order-move" data-dir="down" data-key="${key}" ${index === currentOrder.length - 1 ? 'disabled' : ''} title="${t('media_runtime.move_down')}">▼</button>
         </div>
       `;
       orderList.appendChild(row);
@@ -4299,13 +4298,13 @@ _setupModalExpand() {
       const expandBtn = document.createElement('button');
       expandBtn.type = 'button';
       expandBtn.className = 'modal-expand-btn';
-      expandBtn.title = 'Expand / Restore';
+      expandBtn.title = t('media_runtime.modal.expand_restore');
       expandBtn.textContent = '⛶';
       expandBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isMax = modal.classList.toggle('modal-maximized');
         expandBtn.textContent = isMax ? '⊖' : '⛶';
-        expandBtn.title = isMax ? 'Restore size' : 'Expand';
+        expandBtn.title = t(isMax ? 'media_runtime.modal.restore_size' : 'media_runtime.modal.expand');
       });
 
       // When a settings-style header is present, slot the expand button
@@ -4323,7 +4322,7 @@ _setupModalExpand() {
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'modal-expand-btn';
-        closeBtn.title = 'Close';
+        closeBtn.title = t('modals.common.close');
         closeBtn.textContent = '✕';
         closeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -4332,7 +4331,7 @@ _setupModalExpand() {
           if (modal.classList.contains('modal-maximized')) {
             modal.classList.remove('modal-maximized');
             expandBtn.textContent = '⛶';
-            expandBtn.title = 'Expand / Restore';
+            expandBtn.title = t('media_runtime.modal.expand_restore');
           }
         });
         group.appendChild(closeBtn);
@@ -4395,8 +4394,8 @@ _eyeIcon(off, size = 14) {
 
 _hiddenImagePlaceholder(u) {
   const abs = this._escapeHtml(this._normalizeImgSrc(u));
-  const label = (typeof t === 'function' && t('app.messages.image_hidden')) || 'Image hidden';
-  const hint = (typeof t === 'function' && t('app.messages.click_to_show')) || 'click to show';
+  const label = t('app.messages.image_hidden');
+  const hint = t('app.messages.click_to_show');
   return `<span class="hidden-image" role="button" tabindex="0" data-hidden-src="${abs}" title="${this._escapeHtml(hint)}">${this._eyeIcon(true)} ${this._escapeHtml(label)} — ${this._escapeHtml(hint)}</span>`;
 },
 
@@ -4413,7 +4412,7 @@ _revealHiddenImage(ph) {
   if (proxied === null) img.setAttribute('data-mp-src', src);
   else img.src = proxied;
   img.className = 'chat-image';
-  img.alt = 'image';
+  img.alt = t('media_runtime.image.alt');
   ph.replaceWith(img);
 },
 
@@ -4423,10 +4422,10 @@ _showImageContextMenu(e, src) {
   menu.id = 'image-context-menu';
   menu.className = 'image-context-menu';
   menu.innerHTML = `
-    <button data-action="save">💾 Save Image</button>
-    <button data-action="copy">📋 Copy Image</button>
-    <button data-action="open">🔗 Open in New Tab</button>
-    <button data-action="hide">🙈 ${this._escapeHtml((typeof t === 'function' && t('app.messages.hide_image')) || 'Hide Image')}</button>
+    <button data-action="save">💾 ${t('media_runtime.image.save')}</button>
+    <button data-action="copy">📋 ${t('media_runtime.image.copy')}</button>
+    <button data-action="open">🔗 ${t('media_runtime.image.open_new_tab')}</button>
+    <button data-action="hide">🙈 ${this._escapeHtml(t('app.messages.hide_image'))}</button>
   `;
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
@@ -4552,7 +4551,7 @@ _showImageContextMenu(e, src) {
             const png = await resolvePngBlob();
             const b64 = await blobToBase64(png);
             const res = await window.havenDesktop.clipboardWriteImage(b64);
-            if (res?.ok) { this._showToast('Image copied to clipboard', 'success'); return; }
+            if (res?.ok) { this._showToast(t('media_runtime.image.copied'), 'success'); return; }
             console.warn('[Haven] IPC clipboard write failed:', res?.reason);
             // Fall through — still try web/desktop text fallbacks.
           } catch (err) {
@@ -4581,7 +4580,7 @@ _showImageContextMenu(e, src) {
           await navigator.clipboard.write([
             new ClipboardItem({ 'image/png': blobPromise })
           ]);
-          this._showToast('Image copied to clipboard', 'success');
+          this._showToast(t('media_runtime.image.copied'), 'success');
           return;
         } catch (err) {
           console.error('[Haven] Web clipboard.write failed:', err);
@@ -4593,15 +4592,13 @@ _showImageContextMenu(e, src) {
             if (window.havenDesktop?.clipboardWriteText) {
               const res = await window.havenDesktop.clipboardWriteText(src);
               if (res?.ok) {
-                this._showToast('Copied image URL (image bytes unavailable)', 'warning');
+                this._showToast(t('media_runtime.image.url_copied_bytes_unavailable'), 'warning');
                 return;
               }
             }
             await navigator.clipboard.writeText(src);
             this._showToast(
-              isDesktop
-                ? 'Copied image URL (could not copy image pixels)'
-                : 'Copied image URL (browser blocked image copy)',
+              t(isDesktop ? 'media_runtime.image.url_copied_desktop' : 'media_runtime.image.url_copied_browser'),
               'warning'
             );
             return;
@@ -4613,10 +4610,8 @@ _showImageContextMenu(e, src) {
             const denied = /denied|NotAllowed/i.test(String(err2?.name) + String(err2?.message));
             this._showToast(
               denied
-                ? (isDesktop
-                    ? 'Could not access clipboard — click inside Haven and try Copy Image again'
-                    : 'Clipboard blocked by the browser — click the page first, then retry')
-                : 'Failed to copy image: ' + (err2?.message || err2),
+                ? t(isDesktop ? 'media_runtime.image.clipboard_denied_desktop' : 'media_runtime.image.clipboard_denied_browser')
+                : t('media_runtime.image.copy_failed', { error: err2?.message || err2 }),
               'error'
             );
           }

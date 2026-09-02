@@ -53,7 +53,34 @@ const EXT_FOR_TYPE = {
   'image/x-icon': 'ico', 'image/vnd.microsoft.icon': 'ico'
 };
 
-const UA = 'Mozilla/5.0 (compatible; HavenBot/2.1; +https://github.com/ancsemi/Haven)';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+
+function _isDiscordMediaHost(hostname) {
+  return /(?:^|\.)(?:discordapp\.com|discord\.com|discordapp\.net)$/i.test(hostname || '');
+}
+
+// Discord (and a few CDNs) lie with application/octet-stream. Magic bytes
+// still prove it is raster data, which is what we actually serve.
+function sniffImageType(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) {
+    return 'image/webp';
+  }
+  return null;
+}
+
+function _typeForBuffer(declared, buf) {
+  const raw = (declared || '').split(';')[0].trim().toLowerCase();
+  if (ALLOWED_TYPES.has(raw)) return raw;
+  if (raw === 'application/octet-stream' || raw === 'binary/octet-stream' || !raw) {
+    return sniffImageType(buf);
+  }
+  return null;
+}
 
 // ── Media token ─────────────────────────────────────────────────────
 // Format: "<userId>.<hmac>", where the HMAC covers the user id and the current
@@ -177,15 +204,18 @@ async function fetchAndCache(url, validateUrlSafe) {
   const job = (async () => {
     await validateUrlSafe(url);
 
+    const headers = { 'User-Agent': UA, 'Accept': 'image/*,*/*;q=0.8' };
+    try {
+      const host = new URL(url).hostname;
+      if (_isDiscordMediaHost(host)) headers.Referer = 'https://discord.com/';
+    } catch { /* malformed URL — validateUrlSafe already ran */ }
+
     const res = await fetch(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { 'User-Agent': UA, 'Accept': 'image/*' },
+      headers,
       redirect: 'follow'
     });
     if (!res.ok) throw new Error(`upstream ${res.status}`);
-
-    const rawType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    if (!ALLOWED_TYPES.has(rawType)) throw new Error(`unsupported content-type: ${rawType || 'none'}`);
 
     const declared = parseInt(res.headers.get('content-length') || '0', 10);
     if (Number.isFinite(declared) && declared > MAX_BYTES) throw new Error('too large');
@@ -193,6 +223,9 @@ async function fetchAndCache(url, validateUrlSafe) {
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length > MAX_BYTES) throw new Error('too large');
     if (buf.length === 0) throw new Error('empty response');
+
+    const rawType = _typeForBuffer(res.headers.get('content-type'), buf);
+    if (!rawType) throw new Error(`unsupported content-type: ${(res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() || 'none'}`);
 
     const file = `${key}.${EXT_FOR_TYPE[rawType] || 'bin'}`;
     const meta = { file, size: buf.length, type: rawType, ts: Date.now(), url };
@@ -225,5 +258,6 @@ function clear() {
 module.exports = {
   issueToken, verifyToken,
   get, fetchAndCache, loadIndex, stats, clear,
+  sniffImageType,
   CACHE_DIR, MAX_BYTES, ALLOWED_TYPES
 };

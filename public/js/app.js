@@ -12,7 +12,7 @@ import ChannelMethods  from './modules/app-channels.js?v=3.44.3';
 import MessageMethods  from './modules/app-messages.js?v=3.51.0';
 import UserMethods     from './modules/app-users.js?v=3.25.3';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.0';
-import UtilityMethods  from './modules/app-utilities.js?v=3.34.0';
+import UtilityMethods  from './modules/app-utilities.js?v=4.2.1';
 import AdminMethods    from './modules/app-admin.js?v=4.1.1';
 import PlatformMethods from './modules/app-platform.js?v=3.16.12';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
@@ -68,30 +68,30 @@ class HavenApp {
 
     // Slash command definitions for autocomplete
     this.slashCommands = [
-      { cmd: 'shrug',      args: '[text]',   desc: 'Appends ¯\\_(ツ)_/¯' },
-      { cmd: 'tableflip',  args: '[text]',   desc: 'Flip a table (╯°□°)╯︵ ┻━┻' },
-      { cmd: 'unflip',     args: '[text]',   desc: 'Put the table back ┬─┬ ノ( ゜-゜ノ)' },
-      { cmd: 'lenny',      args: '[text]',   desc: 'Lenny face ( ͡° ͜ʖ ͡°)' },
-      { cmd: 'disapprove', args: '[text]',   desc: 'ಠ_ಠ look of disapproval' },
-      { cmd: 'me',         args: '<action>', desc: 'Italic action message' },
-      { cmd: 'spoiler',    args: '<text>',   desc: 'Hidden spoiler text' },
-      { cmd: 'tts',        args: '<text>',   desc: 'Text-to-speech message' },
-      { cmd: 'tts:stop',   args: '',         desc: 'Stop all TTS playback' },
-      { cmd: 'break',      args: '<message>', desc: 'Force a new message group (no compacting with previous)' },
-      { cmd: 'bbs',        args: '',         desc: 'Announce you\'ll be back soon' },
-      { cmd: 'brb',        args: '',         desc: 'Announce you\'ll be right back' },
-      { cmd: 'afk',        args: '',         desc: 'Away from keyboard' },
+      { cmd: 'shrug',      args: t('commands.args.optional_text'),   desc: t('commands.description.shrug') },
+      { cmd: 'tableflip',  args: t('commands.args.optional_text'),   desc: t('commands.description.tableflip') },
+      { cmd: 'unflip',     args: t('commands.args.optional_text'),   desc: t('commands.description.unflip') },
+      { cmd: 'lenny',      args: t('commands.args.optional_text'),   desc: t('commands.description.lenny') },
+      { cmd: 'disapprove', args: t('commands.args.optional_text'),   desc: t('commands.description.disapprove') },
+      { cmd: 'me',         args: t('commands.args.action'),          desc: t('commands.description.me') },
+      { cmd: 'spoiler',    args: t('commands.args.text'),            desc: t('commands.description.spoiler') },
+      { cmd: 'tts',        args: t('commands.args.text'),            desc: t('commands.description.tts') },
+      { cmd: 'tts:stop',   args: '',                                 desc: t('commands.description.tts_stop') },
+      { cmd: 'break',      args: t('commands.args.message'),         desc: t('commands.description.break') },
+      { cmd: 'bbs',        args: '',                                 desc: t('commands.description.bbs') },
+      { cmd: 'brb',        args: '',                                 desc: t('commands.description.brb') },
+      { cmd: 'afk',        args: '',                                 desc: t('commands.description.afk') },
       { cmd: 'boobs',      args: '',         desc: '( . Y . )' },
       { cmd: 'butt',       args: '',         desc: '( . )( . )' },
-      { cmd: 'nick',       args: '<name>',   desc: 'Change your username' },
-      { cmd: 'clear',      args: '',         desc: 'Clear your chat view' },
-      { cmd: 'flip',       args: '',         desc: 'Flip a coin: heads or tails' },
-      { cmd: 'roll',       args: '[NdN]',    desc: 'Roll dice (e.g. /roll 2d6)' },
-      { cmd: 'hug',        args: '<@user>',  desc: 'Send a hug to someone' },
-      { cmd: 'wave',       args: '[text]',   desc: 'Wave at the chat 👋' },
-      { cmd: 'play',       args: '<name or url>',    desc: 'Search & play music (e.g. /play Cut Your Teeth Kygo)' },
-      { cmd: 'gif',        args: '<query>',  desc: 'Search & send a GIF inline (e.g. /gif thumbs up)' },
-      { cmd: 'poll',       args: '[question]',       desc: 'Open the poll creator' },
+      { cmd: 'nick',       args: t('commands.args.name'),              desc: t('commands.description.nick') },
+      { cmd: 'clear',      args: '',                                   desc: t('commands.description.clear') },
+      { cmd: 'flip',       args: '',                                   desc: t('commands.description.flip') },
+      { cmd: 'roll',       args: '[NdN]',                              desc: t('commands.description.roll') },
+      { cmd: 'hug',        args: '<@user>',                            desc: t('commands.description.hug') },
+      { cmd: 'wave',       args: t('commands.args.optional_text'),     desc: t('commands.description.wave') },
+      { cmd: 'play',       args: t('commands.args.name_or_url'),       desc: t('commands.description.play') },
+      { cmd: 'gif',        args: t('commands.args.query'),             desc: t('commands.description.gif') },
+      { cmd: 'poll',       args: t('commands.args.optional_question'), desc: t('commands.description.poll') },
     ];
 
     // Load bot-registered slash commands for autocomplete
@@ -404,7 +404,7 @@ class HavenApp {
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || 'Bot command'}  [${bc.bot_name || 'Bot'}]`
+          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`
         });
       }
     } catch { /* non-critical */ }

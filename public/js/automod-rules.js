@@ -219,23 +219,23 @@
   // Returns { allowed: bool, reason: string }.
   function checkHost(host, policy) {
     var h = normalizeHost(host);
-    if (!h) return { allowed: false, reason: 'unparseable host' };
+    if (!h) return { allowed: false, reason: 'unparseable host', reasonKey: 'unparseable_host' };
     if (!policy) return { allowed: true, reason: '' };
 
-    if (lookup(h, policy.deny)) return { allowed: false, reason: 'domain is blocklisted' };
+    if (lookup(h, policy.deny)) return { allowed: false, reason: 'domain is blocklisted', reasonKey: 'blocklisted' };
     if (lookup(h, policy.allow)) return { allowed: true, reason: '' };
 
-    if (NEVER_ALLOWED_HOSTS[h]) return { allowed: false, reason: 'loopback address' };
+    if (NEVER_ALLOWED_HOSTS[h]) return { allowed: false, reason: 'loopback address', reasonKey: 'loopback' };
     if (isIpLiteral(h) && policy.blockIpUrls !== false) {
-      return { allowed: false, reason: 'links to a raw IP address are not allowed' };
+      return { allowed: false, reason: 'links to a raw IP address are not allowed', reasonKey: 'raw_ip' };
     }
     // A punycode host nobody has explicitly allowed is a strong signal:
     // legitimate IDN domains exist, but in a chat server the overwhelming
     // majority of unapproved xn-- hosts are homoglyph impersonations.
     if (hasPunycodeLabel(h) && policy.blockPunycode !== false) {
-      return { allowed: false, reason: 'internationalized domain that looks like a lookalike' };
+      return { allowed: false, reason: 'internationalized domain that looks like a lookalike', reasonKey: 'lookalike' };
     }
-    if (policy.mode === 'allowlist') return { allowed: false, reason: 'domain is not on the allowlist' };
+    if (policy.mode === 'allowlist') return { allowed: false, reason: 'domain is not on the allowlist', reasonKey: 'not_allowed' };
     return { allowed: true, reason: '' };
   }
 
@@ -260,7 +260,7 @@
       var verdict = checkHost(link.host, policy);
       if (!verdict.allowed) {
         return {
-          rule: 'link_blocked', host: link.host, url: link.url,
+          rule: 'link_blocked', host: link.host, url: link.url, reasonKey: verdict.reasonKey,
           message: 'Links to ' + link.host + ' aren\'t allowed here (' + verdict.reason + ').'
         };
       }
