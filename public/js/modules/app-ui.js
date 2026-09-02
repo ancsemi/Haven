@@ -2203,6 +2203,11 @@ _setupUI() {
     }
   });
 
+  // insert a markdown link when a link is pasted over selected text
+  if (dmPipInput) dmPipInput.addEventListener('paste', (event) => {
+    this._handleMarkdownLinkPaste(dmPipInput, event); 
+  });
+
   // PiP emoji button — positions the picker above the button and targets the PiP input
   const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');
   if (dmPipEmojiBtn) {
@@ -2359,6 +2364,10 @@ _setupUI() {
           return;
         }
       }
+    });
+    // insert a markdown link when a link is pasted over selected text
+    threadInput.addEventListener('paste', (event) => {
+      this._handleMarkdownLinkPaste(threadInput, event); 
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.
