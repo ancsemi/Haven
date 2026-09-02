@@ -237,10 +237,6 @@ _setupUI() {
     this._checkFerryTrigger();
   });
 
-  msgInput.addEventListener('paste', (event) => {
-    this._handleMarkdownLinkPaste(msgInput, event); 
-  });
-
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
 
   // Join channel
@@ -2201,11 +2197,9 @@ _setupUI() {
         return;
       }
     }
-  });
 
-  // insert a markdown link when a link is pasted over selected text
-  if (dmPipInput) dmPipInput.addEventListener('paste', (event) => {
-    this._handleMarkdownLinkPaste(dmPipInput, event); 
+    // insert a markdown link when a link is pasted over selected text
+    this._handleMarkdownLinkPaste(dmPipInput, e);
   });
 
   // PiP emoji button — positions the picker above the button and targets the PiP input
@@ -2364,10 +2358,9 @@ _setupUI() {
           return;
         }
       }
-    });
-    // insert a markdown link when a link is pasted over selected text
-    threadInput.addEventListener('paste', (event) => {
-      this._handleMarkdownLinkPaste(threadInput, event); 
+
+      // insert a markdown link when a link is pasted over selected text
+      this._handleMarkdownLinkPaste(threadInput, e); 
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.
@@ -5637,6 +5630,9 @@ _setupImageUpload() {
         return;
       }
     }
+
+    // insert a markdown link when a link is pasted over selected text
+    this._handleMarkdownLinkPaste(msgInput, e);
   });
 
   // Drag & drop — QUEUE instead of uploading immediately
