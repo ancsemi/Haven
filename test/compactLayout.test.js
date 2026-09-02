@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const BraidLayout = require('../plugins/BraidLayout.plugin.js');
 const CompactLayout = require('../plugins/CompactLayout.plugin.js');
+const ModMode = require('../public/js/modmode.js');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -185,6 +186,7 @@ function createEnvironment(desktop = true) {
   const styles = new Map();
   const data = new Map();
   let layoutOwner = null;
+  let reservedLayoutOwner = null;
   const HavenApi = {
     DOM: {
       addStyle(id, css) { styles.set(id, css); },
@@ -196,7 +198,8 @@ function createEnvironment(desktop = true) {
     },
     Layout: {
       acquire(owner) {
-        if (layoutOwner && layoutOwner !== owner) return false;
+        if ((reservedLayoutOwner && reservedLayoutOwner !== owner)
+            || (layoutOwner && layoutOwner !== owner)) return false;
         if (layoutOwner === owner) return true;
         layoutOwner = owner;
         document.documentElement.setAttribute('data-haven-layout-owner', owner);
@@ -208,6 +211,14 @@ function createEnvironment(desktop = true) {
         layoutOwner = null;
         document.documentElement.removeAttribute('data-haven-layout-owner');
         document.dispatchEvent({ type: 'haven:layout-owner-change', detail: { owner: null } });
+        return true;
+      },
+      _reserve(owner) {
+        reservedLayoutOwner = owner || null;
+      },
+      _clearReservation(owner) {
+        if (reservedLayoutOwner !== (owner || null)) return false;
+        reservedLayoutOwner = null;
         return true;
       },
       get owner() { return layoutOwner; }
@@ -254,7 +265,7 @@ function withEnvironment(desktop, callback) {
   };
   const environment = createEnvironment(desktop);
   global.document = environment.document;
-  global.window = { matchMedia: () => environment.media };
+  global.window = { HavenApi: environment.HavenApi, matchMedia: () => environment.media };
   global.HavenApi = environment.HavenApi;
   try {
     callback(environment);
@@ -432,6 +443,148 @@ test('Compact Layout waits for another structural layout owner and retries after
   });
 });
 
+test('Mod Mode restores the previous layout owner regardless of listener order', () => {
+  withBraidEnvironment(({ document, HavenApi }) => {
+    const compact = new CompactLayout();
+    compact.start();
+    const braid = new BraidLayout();
+    stubBraidVisuals(braid);
+    braid.start();
+
+    compact._control.dispatchEvent({ type: 'click' });
+    assert.equal(HavenApi.Layout.owner, 'BraidLayout');
+    compact._control.dispatchEvent({ type: 'click' });
+    assert.equal(compact._blocked, true);
+
+    document.documentElement.setAttribute('data-haven-layout-editing', '1');
+    document.dispatchEvent({ type: 'haven:layout-editing', detail: { active: true, owner: 'BraidLayout' } });
+    assert.equal(HavenApi.Layout.owner, null);
+
+    document.documentElement.removeAttribute('data-haven-layout-editing');
+    document.dispatchEvent({ type: 'haven:layout-editing', detail: { active: false, owner: 'BraidLayout' } });
+    assert.equal(HavenApi.Layout.owner, 'BraidLayout');
+    assert.equal(braid._suspended, false);
+    assert.equal(compact._blocked, true);
+
+    compact.stop();
+    braid.stop();
+  });
+});
+
+test('Mod Mode reserves the previous owner against legacy layout listeners', () => {
+  const previousCustomEvent = global.CustomEvent;
+  global.CustomEvent = class CustomEvent {
+    constructor(type, init) { this.type = type; this.detail = init?.detail; }
+  };
+  try {
+    withBraidEnvironment(({ document, HavenApi }) => {
+      let legacyAcquired = null;
+      document.addEventListener('haven:layout-editing', event => {
+        if (event.detail?.active === false) {
+          legacyAcquired = HavenApi.Layout.acquire('LegacyLayout');
+        }
+      });
+      const braid = new BraidLayout();
+      stubBraidVisuals(braid);
+      braid.start();
+      const modMode = new ModMode();
+
+      modMode._beginLayoutEditing();
+      assert.equal(HavenApi.Layout.owner, null);
+      modMode._endLayoutEditing();
+
+      assert.equal(legacyAcquired, false);
+      assert.equal(HavenApi.Layout.owner, 'BraidLayout');
+      assert.equal(braid._suspended, false);
+      braid.stop();
+    });
+  } finally {
+    global.CustomEvent = previousCustomEvent;
+  }
+});
+
+test('Mod Mode reset suspends and restores an active structural layout', () => {
+  const previous = {
+    CustomEvent: global.CustomEvent,
+    localStorage: global.localStorage,
+    t: global.t
+  };
+  global.CustomEvent = class CustomEvent {
+    constructor(type, init) { this.type = type; this.detail = init?.detail; }
+  };
+  global.localStorage = { removeItem() {} };
+  global.t = key => key;
+  try {
+    withEnvironment(true, ({ document, HavenApi, nodes }) => {
+      const originalWorkspace = [...nodes.workspace.children];
+      const compact = new CompactLayout();
+      compact.start();
+      const modMode = new ModMode();
+      modMode.container = new FakeElement('mod-container');
+      modMode.container.querySelectorAll = () => [];
+      modMode._showToast = () => {};
+      const editingEvents = [];
+      document.addEventListener('haven:layout-editing', event => editingEvents.push(event.detail));
+
+      modMode.resetLayout();
+
+      assert.deepEqual(editingEvents, [
+        { active: true, owner: 'CompactLayout' },
+        { active: false, owner: 'CompactLayout' }
+      ]);
+      assert.equal(HavenApi.Layout.owner, 'CompactLayout');
+      assert.equal(document.documentElement.getAttribute('data-compact-layout-desktop'), '1');
+      assert.notDeepEqual(nodes.workspace.children, originalWorkspace);
+      compact.stop();
+    });
+  } finally {
+    global.CustomEvent = previous.CustomEvent;
+    global.localStorage = previous.localStorage;
+    global.t = previous.t;
+  }
+});
+
+test('Compact Layout rolls back ownership and DOM when persistence fails', () => {
+  withEnvironment(true, ({ document, HavenApi, data, nodes }) => {
+    const originalWorkspace = [...nodes.workspace.children];
+    const originalHeader = [...nodes.navigationHeader.children];
+    const originalFooter = [...nodes.footer.children];
+    const originalContext = [...nodes.context.children];
+    data.set('CompactLayout:layoutOn', '0');
+    const plugin = new CompactLayout();
+    plugin.start();
+    HavenApi.Data.save = () => { throw new Error('storage full'); };
+
+    assert.throws(() => plugin._control.dispatchEvent({ type: 'click' }), /storage full/);
+    assert.equal(plugin._engaged, false);
+    assert.equal(HavenApi.Layout.owner, null);
+    assert.deepEqual(nodes.workspace.children, originalWorkspace);
+    assert.deepEqual(nodes.navigationHeader.children, originalHeader);
+    assert.deepEqual(nodes.footer.children, originalFooter);
+    assert.deepEqual(nodes.context.children, originalContext);
+    assert.equal(document.documentElement.hasAttribute('data-compact-layout'), false);
+    assert.equal(document.documentElement.hasAttribute('data-compact-layout-desktop'), false);
+    plugin.stop();
+  });
+});
+
+test('Compact Layout cleans partial startup when persisted data cannot load', () => {
+  withEnvironment(true, ({ document, HavenApi, styles, nodes }) => {
+    const originalActions = [...nodes.sidebarActions.children];
+    HavenApi.Data.load = () => { throw new Error('corrupt storage'); };
+    const plugin = new CompactLayout();
+
+    assert.throws(() => plugin.start(), /corrupt storage/);
+    assert.equal(plugin._started, false);
+    assert.equal(plugin._control, null);
+    assert.deepEqual(plugin._listeners, []);
+    assert.deepEqual(nodes.sidebarActions.children, originalActions);
+    assert.equal(styles.has('CompactLayout'), false);
+    assert.equal(HavenApi.Layout.owner, null);
+    assert.equal(document.documentElement.hasAttribute('data-compact-layout'), false);
+  });
+});
+
 test('Braid releases ownership for Mod Mode and resumes after editing finishes', () => {
   withBraidEnvironment(({ document, HavenApi }) => {
     const plugin = new BraidLayout();
@@ -492,7 +645,8 @@ test('public density and layout-editing hooks are wired into core state changes'
   assert.match(media, /haven:density-change/);
   assert.match(modMode, /data-haven-layout-editing/);
   assert.match(modMode, /haven:layout-editing/);
-  assert.match(modMode, /finally\s*\{[\s\S]*?removeAttribute\('data-haven-layout-editing'\)[\s\S]*?active:\s*false/);
+  assert.match(modMode, /finally\s*\{\s*this\._endLayoutEditing\(\)/);
+  assert.match(modMode, /_endLayoutEditing\(\)[\s\S]*?removeAttribute\('data-haven-layout-editing'\)[\s\S]*?active:\s*false/);
   assert.match(pluginLoader, /data-haven-layout-owner/);
   assert.match(pluginLoader, /haven:layout-owner-change/);
   assert.match(braid, /Layout\.acquire\('BraidLayout'\)/);

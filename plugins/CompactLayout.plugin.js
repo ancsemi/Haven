@@ -16,24 +16,33 @@ class CompactLayout {
     this._inlineRestores = [];
     this._media = window.matchMedia('(min-width: 901px)');
 
-    HavenApi.DOM.addStyle('CompactLayout', CompactLayout.CSS);
-    this._buildControl();
-    this._listen(document, 'keydown', (event) => {
-      if (!event.ctrlKey || !event.altKey || event.key.toLowerCase() !== 'c') return;
-      event.preventDefault();
-      this._toggle();
-    }, true);
-    this._listen(document, 'haven:layout-editing', (event) => {
-      this._suspended = event.detail?.active === true;
-      this._syncDesktop();
-    });
-    this._listen(document, 'haven:layout-owner-change', (event) => {
-      if (event.detail?.owner !== 'CompactLayout') this._syncDesktop();
-    });
-    this._listen(this._media, 'change', () => this._syncDesktop());
+    try {
+      HavenApi.DOM.addStyle('CompactLayout', CompactLayout.CSS);
+      this._buildControl();
+      this._listen(document, 'keydown', (event) => {
+        if (!event.ctrlKey || !event.altKey || event.key.toLowerCase() !== 'c') return;
+        event.preventDefault();
+        this._toggle();
+      }, true);
+      this._listen(document, 'haven:layout-editing', (event) => {
+        this._suspended = event.detail?.active === true;
+        if (!this._suspended && event.detail?.owner && event.detail.owner !== 'CompactLayout') {
+          this._restoreDesktop();
+          return;
+        }
+        this._syncDesktop();
+      });
+      this._listen(document, 'haven:layout-owner-change', (event) => {
+        if (event.detail?.owner !== 'CompactLayout') this._syncDesktop();
+      });
+      this._listen(this._media, 'change', () => this._syncDesktop());
 
-    if (HavenApi.Data.load('CompactLayout', 'layoutOn', '1') !== '0') this._engage(false);
-    else this._renderControl();
+      if (HavenApi.Data.load('CompactLayout', 'layoutOn', '1') !== '0') this._engage(false);
+      else this._renderControl();
+    } catch (error) {
+      this.stop();
+      throw error;
+    }
   }
 
   stop() {
@@ -82,9 +91,19 @@ class CompactLayout {
     if (this._engaged) return;
     this._engaged = true;
     document.documentElement.setAttribute('data-compact-layout', '1');
-    if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '1');
-    this._syncDesktop();
-    this._renderControl();
+    try {
+      this._syncDesktop();
+      if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '1');
+      this._renderControl();
+    } catch (error) {
+      this._engaged = false;
+      try { this._restoreDesktop(); }
+      finally {
+        document.documentElement.removeAttribute('data-compact-layout');
+        this._renderControl();
+      }
+      throw error;
+    }
   }
 
   _disengage(persist = true) {
@@ -239,6 +258,9 @@ html[data-compact-layout-desktop="1"] :where([data-haven-region="server-list"]) 
   min-width: 0;
   align-items: center;
   gap: 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 html[data-compact-layout-desktop="1"] :where([data-haven-region="sidebar-footer"]) {

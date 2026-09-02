@@ -45,6 +45,7 @@ class BraidLayout {
         return;
       }
       if (HavenApi.Data.load('BraidLayout', 'layoutOn', '1') === '0') return;
+      if (event.detail?.owner && event.detail.owner !== 'BraidLayout') return;
       if (this._engaged) this._resume();
       else this._engage();
     };

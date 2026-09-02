@@ -269,6 +269,7 @@ document.addEventListener('haven:density-change', (event) => {
 
 document.addEventListener('haven:layout-editing', (event) => {
   if (event.detail.active) restoreNativeLayout();
+  else reapplyLayout();
 });
 
 document.addEventListener('haven:layout-owner-change', (event) => {
@@ -278,7 +279,10 @@ document.addEventListener('haven:layout-owner-change', (event) => {
 
 `haven:layout-editing` fires before Mod Mode starts moving panels and after it
 has restored the saved native arrangement. Structural plugins should suspend
-on the first event and reapply only after the second.
+on the first event and reapply only after the second. `event.detail.owner`
+identifies the owner that was active before editing. Haven reserves ownership
+for that plugin until the second event completes, so other layout plugins
+cannot take its place based on listener order.
 
 Structural layout plugins must also acquire the shared owner before moving
 regions and release it after restoring them:

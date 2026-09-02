@@ -28,6 +28,7 @@ class ModMode {
     this.panelHandles = new Map();
     this.snapZones = [];
     this.draggingPanelKey = null;
+    this.editingLayoutOwner = null;
 
     this._boundDragStart  = this._onDragStart.bind(this);
     this._boundDragOver   = this._onDragOver.bind(this);
@@ -75,9 +76,37 @@ class ModMode {
 
   // ── Enable / Disable ──
 
-  _enable() {
+  _beginLayoutEditing() {
+    if (document.documentElement.hasAttribute('data-haven-layout-editing')) return false;
+    const layout = window.HavenApi?.Layout;
+    this.editingLayoutOwner = layout?.owner || null;
+    layout?._reserve?.(this.editingLayoutOwner);
     document.documentElement.setAttribute('data-haven-layout-editing', '1');
-    document.dispatchEvent(new CustomEvent('haven:layout-editing', { detail: { active: true } }));
+    document.dispatchEvent(new CustomEvent('haven:layout-editing', {
+      detail: { active: true, owner: this.editingLayoutOwner }
+    }));
+    return true;
+  }
+
+  _endLayoutEditing() {
+    const preferredOwner = this.editingLayoutOwner;
+    const layout = window.HavenApi?.Layout;
+    this.editingLayoutOwner = null;
+    document.documentElement.removeAttribute('data-haven-layout-editing');
+    try {
+      document.dispatchEvent(new CustomEvent('haven:layout-editing', {
+        detail: { active: false, owner: preferredOwner }
+      }));
+    } finally {
+      layout?._clearReservation?.(preferredOwner);
+    }
+    if (!layout?.owner) {
+      document.dispatchEvent(new CustomEvent('haven:layout-owner-change', { detail: { owner: null } }));
+    }
+  }
+
+  _enable() {
+    this._beginLayoutEditing();
     this.container.classList.add('mod-mode-active');
     document.body.classList.add('mod-mode-on');
     this._cacheSections();
@@ -113,8 +142,7 @@ class ModMode {
       this._saveLayout();
       this._savePanelLayout();
     } finally {
-      document.documentElement.removeAttribute('data-haven-layout-editing');
-      document.dispatchEvent(new CustomEvent('haven:layout-editing', { detail: { active: false } }));
+      this._endLayoutEditing();
     }
     this._showToast(t('modmode.disabled'));
   }
@@ -336,31 +364,36 @@ class ModMode {
   }
 
   resetLayout() {
-    localStorage.removeItem('haven-layout');
-    localStorage.removeItem('haven-panel-layout');
-    this.savedLayout = null;
-    this.panelLayout = {
-      'server-bar': 'left', 'sidebar': 'left', 'right-sidebar': 'right',
-      'status-bar': 'bottom', 'voice-panel': 'right-sidebar'
-    };
-    const defaultOrder = ['join', 'create', 'channels'];
-    const existing = new Map();
-    this.sections.forEach(s => existing.set(s.dataset.modId, s));
-    defaultOrder.forEach(id => {
-      const el = existing.get(id);
-      if (el) this.container.appendChild(el);
-    });
-    this._cacheSections();
+    const ownsEditingState = this._beginLayoutEditing();
+    try {
+      localStorage.removeItem('haven-layout');
+      localStorage.removeItem('haven-panel-layout');
+      this.savedLayout = null;
+      this.panelLayout = {
+        'server-bar': 'left', 'sidebar': 'left', 'right-sidebar': 'right',
+        'status-bar': 'bottom', 'voice-panel': 'right-sidebar'
+      };
+      const defaultOrder = ['join', 'create', 'channels'];
+      const existing = new Map();
+      this.sections.forEach(s => existing.set(s.dataset.modId, s));
+      defaultOrder.forEach(id => {
+        const el = existing.get(id);
+        if (el) this.container.appendChild(el);
+      });
+      this._cacheSections();
 
-    // Move voice panel back to right sidebar
-    const voicePanel = document.getElementById('voice-panel');
-    const rightSidebar = document.querySelector('.right-sidebar');
-    if (voicePanel && rightSidebar) {
-      rightSidebar.appendChild(voicePanel);
-      voicePanel.classList.remove('mod-float', 'mod-voice-bottom', 'mod-voice-left');
+      // Move voice panel back to right sidebar
+      const voicePanel = document.getElementById('voice-panel');
+      const rightSidebar = document.querySelector('.right-sidebar');
+      if (voicePanel && rightSidebar) {
+        rightSidebar.appendChild(voicePanel);
+        voicePanel.classList.remove('mod-float', 'mod-voice-bottom', 'mod-voice-left');
+      }
+
+      this.applyPanelLayout();
+    } finally {
+      if (ownsEditingState) this._endLayoutEditing();
     }
-
-    this.applyPanelLayout();
     this._showToast(t('modmode.reset'));
   }
 
@@ -373,3 +406,5 @@ class ModMode {
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2200);
   }
 }
+
+if (typeof module !== 'undefined') module.exports = ModMode;

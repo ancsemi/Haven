@@ -260,9 +260,14 @@ test('structural layout ownership is exclusive and releases cleanly', async () =
   assert.equal(result.documentElement.attributes.get('data-haven-layout-owner'), 'FirstLayout');
   assert.equal(result.api.Layout.acquire('SecondLayout'), false);
   assert.equal(result.api.Layout.release('SecondLayout'), false);
+  result.api.Layout._reserve('FirstLayout');
   assert.equal(result.api.Layout.release('FirstLayout'), true);
   assert.equal(result.api.Layout.owner, null);
   assert.equal(result.documentElement.attributes.has('data-haven-layout-owner'), false);
+  assert.equal(result.api.Layout.acquire('SecondLayout'), false);
+  assert.equal(result.api.Layout.acquire('FirstLayout'), true);
+  assert.equal(result.api.Layout._clearReservation('FirstLayout'), true);
+  assert.equal(result.api.Layout.release('FirstLayout'), true);
 });
 
 test('theme metadata classifies current, legacy, future, and invalid API declarations', () => {

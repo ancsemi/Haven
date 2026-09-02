@@ -48,9 +48,11 @@ window.HavenPluginLoader = (function () {
     // each other's temporary DOM as their native restore point.
     Layout: {
       _owner: null,
+      _reservedOwner: null,
       acquire(owner) {
         const id = String(owner || '').trim();
-        if (!id || (this._owner && this._owner !== id)) return false;
+        if (!id || (this._reservedOwner && this._reservedOwner !== id)
+            || (this._owner && this._owner !== id)) return false;
         if (this._owner === id) return true;
         this._owner = id;
         document.documentElement.setAttribute('data-haven-layout-owner', id);
@@ -62,6 +64,15 @@ window.HavenPluginLoader = (function () {
         this._owner = null;
         document.documentElement.removeAttribute('data-haven-layout-owner');
         document.dispatchEvent(new CustomEvent('haven:layout-owner-change', { detail: { owner: null } }));
+        return true;
+      },
+      _reserve(owner) {
+        this._reservedOwner = String(owner || '').trim() || null;
+      },
+      _clearReservation(owner) {
+        const id = String(owner || '').trim() || null;
+        if (this._reservedOwner !== id) return false;
+        this._reservedOwner = null;
         return true;
       },
       get owner() { return this._owner; },
