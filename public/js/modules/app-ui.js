@@ -237,6 +237,10 @@ _setupUI() {
     this._checkFerryTrigger();
   });
 
+  msgInput.addEventListener('paste', (event) => {
+    this._handleMarkdownLinkPaste(msgInput, event); 
+  });
+
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
 
   // Join channel

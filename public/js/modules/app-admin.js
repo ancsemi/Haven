@@ -2372,6 +2372,31 @@ _openInviteLinksModal() {
 },
 
 // ═══════════════════════════════════════════════════════
+// markdown link pasting 
+// ═══════════════════════════════════════════════════════
+
+_handleMarkdownLinkPaste(input, event) {
+  const url = event.clipboardData.getData('text/plain').trim();
+  // Only handle pasted URLs.
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    return;
+  }
+
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  // Nothing selected, so allow normal paste behavior.
+  if (start === end) {
+    return;
+  }
+
+  // hijack the paste event and insert markdown link on highlighted text
+  event.preventDefault();
+  const selectedText = input.value.substring(start, end);
+  const markdownLink = `[${selectedText}](${url})`;
+  input.setRangeText(markdownLink, start, end, 'end');
+},
+
+// ═══════════════════════════════════════════════════════
 // @MENTION AUTOCOMPLETE
 // ═══════════════════════════════════════════════════════
 
