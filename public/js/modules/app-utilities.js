@@ -291,12 +291,33 @@ _isImageUrl(str) {
   // the payload so the message still gets image layout treatment.
   if (trimmed.startsWith('spoiler-img:')) return this._isImageUrl(trimmed.slice(12));
   if (trimmed.startsWith('e2e-img:')) return true;
-  if (/^\/uploads\/(stickers\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
+  // Optional extra path segment (stickers/, images/, …) and dots in the
+  // basename. Must stay in lockstep with the early-return regex in
+  // `_formatContent` or classified-as-image messages render as empty.
+  if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
   if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
   // GIPHY / Tenor GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
   if (/^https:\/\/(media|c)\.tenor\.com\/.+/i.test(trimmed)) return true;
   return false;
+},
+
+// Auto-link and markdown image handlers run after `_escapeHtml`, so query
+// strings arrive as `?ex=…&amp;is=…`. Feed those straight to the media proxy
+// and Discord (Ferry attachments) 404s — the phone client never HTML-escapes
+// the URL, which is why the same photo shows on mobile and vanishes on desktop.
+_rawHttpUrl(escapedOrRaw) {
+  if (typeof escapedOrRaw !== 'string' || !escapedOrRaw) return null;
+  const decoded = this._decodeHtmlEntities(escapedOrRaw).replace(/['"<>]/g, '');
+  try { new URL(decoded); } catch { return null; }
+  return decoded;
+},
+
+_isRemoteImageUrl(url) {
+  if (typeof url !== 'string' || !url) return false;
+  return /\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(url) ||
+    /^https:\/\/media\d*\.giphy\.com\//i.test(url) ||
+    /^https:\/\/(media|c)\.tenor\.com\//i.test(url);
 },
 
 // Extract /uploads/<file> attachment paths from a (decrypted) message's
@@ -551,10 +572,23 @@ _formatContent(str) {
   // No loading="lazy" — content-visibility:auto on .message already skips off-screen
   // rendering; lazy loading on top creates 0→real-height jumps when scrolling history.
   // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
-  if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
+  // Basename allows dots (`photo.edit.jpg`) and one extra path segment so this
+  // matches `_isImageUrl` / Haven Mobile. The previous `[\w\-]+` pattern
+  // classified those as images then emitted no <img>, so the bubble was blank.
+  if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
     const u = str.trim();
     if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
     return `<img src="${this._escapeHtml(u)}" class="chat-image" alt="image">`;
+  }
+
+  // Remote image-only messages (Ferry Discord attachments, pasted CDN URLs).
+  // Must run on the unescaped string so signed query params keep their `&`.
+  {
+    const u = str.trim();
+    if (this._isImageUrl(u) && /^https?:\/\//i.test(u)) {
+      if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
+      return `<img ${this._imgSrcAttr(u)} class="chat-image" alt="image">`;
+    }
   }
 
   // ── Extract fenced code blocks before escaping ──
@@ -571,8 +605,8 @@ _formatContent(str) {
   const mdLinks = [];
   // ![alt](url)
   html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g, (full, alt, url) => {
-    try { new URL(url); } catch { return full; }
-    const safeUrl = url.replace(/['"<>]/g, '');
+    const safeUrl = this._rawHttpUrl(url);
+    if (!safeUrl) return full;
     const idx = mdLinks.length;
     mdLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
       ? this._hiddenImagePlaceholder(safeUrl)
@@ -581,10 +615,10 @@ _formatContent(str) {
   });
   // [text](url)
   html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (full, text, url) => {
-    try { new URL(url); } catch { return full; }
-    const safeUrl = url.replace(/['"<>]/g, '');
+    const safeUrl = this._rawHttpUrl(url);
+    if (!safeUrl) return full;
     const idx = mdLinks.length;
-    mdLinks.push(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer nofollow" title="${safeUrl}" data-masked-link="true">${text}</a>`);
+    mdLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow" title="${this._escapeHtml(safeUrl)}" data-masked-link="true">${text}</a>`);
     return `\x00MDLINK_${idx}\x00`;
   });
 
@@ -594,17 +628,15 @@ _formatContent(str) {
   html = html.replace(
     /\bhttps?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&()*+,;=%]+/g,
     (url) => {
-      try { new URL(url); } catch { return url; }
-      const safeUrl = url.replace(/['"<>]/g, '');
+      const safeUrl = this._rawHttpUrl(url);
+      if (!safeUrl) return url;
       const idx = autoLinks.length;
-      if (/\.(jpg|jpeg|png|gif|webp)(\?[^"'<>]*)?$/i.test(safeUrl) ||
-          /^https:\/\/media\d*\.giphy\.com\//i.test(safeUrl) ||
-          /^https:\/\/(media|c)\.tenor\.com\//i.test(safeUrl)) {
+      if (this._isRemoteImageUrl(safeUrl)) {
         autoLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
           ? this._hiddenImagePlaceholder(safeUrl)
           : `<img ${this._imgSrcAttr(safeUrl)} class="chat-image" alt="image" loading="lazy">`);
       } else {
-        autoLinks.push(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer nofollow">${safeUrl}</a>`);
+        autoLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow">${this._escapeHtml(safeUrl)}</a>`);
       }
       return `\x00AUTOLINK_${idx}\x00`;
     }

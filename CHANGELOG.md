@@ -11,6 +11,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Images visible on Haven Mobile were missing on desktop/web.** Two things stacked.
+  Ferry (and any bot) posts Discord CDN photos as a URL with a signed query string
+  (`?ex=…&is=…&hm=…`). The desktop client HTML-escaped the message *before* turning
+  that URL into an `<img>`, so `&` became `&amp;` and the media proxy requested a
+  URL Discord has never heard of — blank bubble, no broken-image icon. Mobile never
+  escapes the URL, which is why the same photo rendered there. Remote image-only
+  messages now use the raw URL, and auto-linked / markdown images decode entities
+  first. Separately, `_formatContent` required a stricter `/uploads/` filename than
+  `_isImageUrl`, so a classified-as-image message with a dot in the basename (or an
+  extra path segment) emitted no `<img>` at all. The two regexes now match. The
+  media proxy also speaks a browser User-Agent (Discord 403'd `HavenBot`) and
+  accepts `application/octet-stream` when the bytes are actually JPEG/PNG/GIF/WebP.
+
+---
+
 ## [4.2.0] - 2026-09-01
 
 Voice connectivity is the theme. A server whose admin had set their own STUN server
