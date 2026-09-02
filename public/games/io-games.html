@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>.io Games — Haven</title>
+  <title data-i18n="games.io.page_title">.io Games — Haven</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -121,13 +121,14 @@
 </head>
 <body>
   <div class="io-header" id="io-header">
-    <h2>🌐 .io Games</h2>
-    <input type="text" id="io-search" placeholder="Search games...">
+    <h2>🌐 <span data-i18n="games.io.title">.io Games</span></h2>
+    <input type="text" id="io-search" data-i18n-placeholder="games.io.search" placeholder="Search games...">
   </div>
   <div class="io-grid-wrapper" id="io-grid-wrapper">
     <div class="io-grid" id="io-grid"></div>
   </div>
 
+  <script src="/js/i18n.js"></script>
   <script src="/games/io-games.js"></script>
 </body>
 </html>

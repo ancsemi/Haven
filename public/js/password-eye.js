@@ -51,14 +51,17 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'haven-pw-eye';
-    btn.setAttribute('aria-label', 'Show password');
+    btn.dataset.i18nAriaLabel = 'auth.aria.show_password';
+    btn.setAttribute('aria-label', t('auth.aria.show_password'));
     btn.setAttribute('tabindex', '-1');
     btn.innerHTML = SVG_EYE;
     btn.addEventListener('click', () => {
       const showing = input.type === 'text';
       input.type = showing ? 'password' : 'text';
       btn.innerHTML = showing ? SVG_EYE : SVG_EYE_OFF;
-      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+      const ariaKey = showing ? 'auth.aria.show_password' : 'auth.aria.hide_password';
+      btn.dataset.i18nAriaLabel = ariaKey;
+      btn.setAttribute('aria-label', t(ariaKey));
       // Keep focus on input so typing continues smoothly
       input.focus();
     });

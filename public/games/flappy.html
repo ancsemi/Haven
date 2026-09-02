@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shippy Container — Haven</title>
+  <title data-i18n="games.flappy.page_title">Shippy Container — Haven</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/i18n.js"></script>
   <script src="/games/flappy.js"></script>
   <style>
     body {
@@ -206,28 +207,28 @@
   </style>
 </head>
 <body>
-  <button class="lb-toggle-btn" id="lb-toggle-btn" title="Leaderboard">🏆</button>
+  <button class="lb-toggle-btn" id="lb-toggle-btn" data-i18n-title="games.flappy.leaderboard" title="Leaderboard">🏆</button>
   <div class="lb-backdrop" id="lb-backdrop"></div>
   <div class="game-header">
-    <button class="back-btn" id="back-btn">← Back to Haven</button>
+    <button class="back-btn" id="back-btn">← <span data-i18n="games.back_to_haven">Back to Haven</span></button>
     <h1>🚢 Shippy Container</h1>
   </div>
   <div class="game-wrapper">
     <div class="game-left">
       <canvas id="game" width="480" height="640"></canvas>
       <div class="score-bar">
-        Score: <span id="score-display">0</span>
+        <span data-i18n="games.flappy.score">Score:</span> <span id="score-display">0</span>
         &nbsp;|&nbsp;
-        Best: <span id="best-display">0</span>
+        <span data-i18n="games.flappy.best">Best:</span> <span id="best-display">0</span>
       </div>
-      <div class="instructions">Click, tap, or press Space / ↑ to jump</div>
+      <div class="instructions" data-i18n="games.flappy.instructions">Click, tap, or press Space / ↑ to jump</div>
       <div class="plot-bar">
-        <strong>🚢</strong> Drew's shipment got hung up. Help him find his casual clothes from Albany.
+        <strong>🚢</strong> <span data-i18n="games.flappy.plot">Drew's shipment got hung up. Help him find his casual clothes from Albany.</span>
       </div>
     </div>
     <div class="leaderboard-panel" id="leaderboard-panel">
-      <h3>🏆 Leaderboard</h3>
-      <div id="leaderboard-list"><p style="font-size:11px;color:var(--text-muted)">Loading…</p></div>
+      <h3>🏆 <span data-i18n="games.flappy.leaderboard">Leaderboard</span></h3>
+      <div id="leaderboard-list"><p style="font-size:11px;color:var(--text-muted)" data-i18n="games.loading">Loading…</p></div>
     </div>
   </div>
 </body>

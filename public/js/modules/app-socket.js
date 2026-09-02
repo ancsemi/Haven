@@ -277,7 +277,7 @@ _setupSocketListeners() {
   this.socket.on('connect', () => {
     this._setLed('connection-led', 'on');
     this._setLed('status-server-led', 'on');
-    document.getElementById('status-server-text').textContent = 'Connected';
+    document.getElementById('status-server-text').textContent = t('app.status.connected');
     this._lastConnectTime = Date.now();
     this._authErrorStreak = 0;
     this._startPingMonitor();
@@ -688,7 +688,7 @@ _setupSocketListeners() {
   this.socket.on('disconnect', () => {
     this._setLed('connection-led', 'danger pulse');
     this._setLed('status-server-led', 'danger pulse');
-    document.getElementById('status-server-text').textContent = 'Disconnected';
+    document.getElementById('status-server-text').textContent = t('app.status.disconnected');
     document.getElementById('status-ping').textContent = '--';
     // Drop outstanding probes — pairing one with a pong from after the
     // reconnect would report the length of the outage as latency.
@@ -751,7 +751,7 @@ _setupSocketListeners() {
     }
     this._setLed('connection-led', 'danger');
     this._setLed('status-server-led', 'danger');
-    document.getElementById('status-server-text').textContent = 'Error';
+    document.getElementById('status-server-text').textContent = t('app.status.error');
   });
 
   // Password was changed on this or another session — force re-login
@@ -906,7 +906,7 @@ _setupSocketListeners() {
       } else {
         // Do not auto-join by deep link. Message/channel links are for members
         // who already have channel access.
-        this._showToast?.(t('toasts.channel_link_unavailable') || 'Channel not available on this server', 'error');
+        this._showToast?.(t('toasts.channel_link_unavailable'), 'error');
       }
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -1549,7 +1549,7 @@ _setupSocketListeners() {
     if (!data || !data.code) return;
     if (this.currentChannel === data.code) {
       try { this.switchChannel(data.code); } catch (e) { console.warn('[auto-clear] re-switch failed:', e); }
-      this._showToast('🧹 Channel messages were auto-cleared', 'info');
+      this._showToast(t('toasts.channel_auto_cleared'), 'info');
     }
   });
 
@@ -1918,7 +1918,7 @@ _setupSocketListeners() {
 
   this.socket.on('bio-updated', (data) => {
     this.user.bio = data.bio || '';
-    this._showToast('Bio updated', 'success');
+    this._showToast(t('toasts.bio_updated'), 'success');
   });
 
   // ── Username rename ──────────────────────────────
@@ -1931,7 +1931,7 @@ _setupSocketListeners() {
     document.getElementById('current-user').textContent = data.user.displayName || data.user.username;
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${data.user.username}`;
-    this._showToast(`Display name changed to "${data.user.displayName || data.user.username}"`, 'success');
+    this._showToast(t('toasts.display_name_changed', { name: data.user.displayName || data.user.username }), 'success');
     // Refresh admin UI in case admin status changed
     this.user.permissions = data.user.permissions || this.user.permissions || [];
     this.user.globalPermissions = data.user.globalPermissions || this.user.globalPermissions || [];
@@ -2008,7 +2008,7 @@ _setupSocketListeners() {
   // ── Bulk purge: admin replaced all of a user's messages with placeholder text ──
   this.socket.on('user-messages-purged', (data) => {
     if (!data || !data.channelCode) return;
-    const placeholder = data.placeholder || 'User banned.';
+    const placeholder = data.placeholder || t('modals.admin_action.purge_message_placeholder');
     if (data.channelCode === this.currentChannel) {
       const userMsgs = document.querySelectorAll(`[data-user-id="${data.userId}"]`);
       userMsgs.forEach(msgEl => {
@@ -2107,11 +2107,11 @@ _setupSocketListeners() {
         // Add pin tag to header
         const header = msgEl.querySelector('.message-header');
         if (header && !header.querySelector('.pinned-tag')) {
-          header.insertAdjacentHTML('beforeend', '<span class="pinned-tag" title="Pinned message">📌</span>');
+          header.insertAdjacentHTML('beforeend', `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>`);
         }
         // Update toolbar: swap pin → unpin
         const pinBtn = msgEl.querySelector('[data-action="pin"]');
-        if (pinBtn) { pinBtn.dataset.action = 'unpin'; pinBtn.title = 'Unpin'; }
+        if (pinBtn) { pinBtn.dataset.action = 'unpin'; pinBtn.title = t('msg_toolbar.unpin'); }
       }
       this._appendSystemMessage(`📌 ${t('header.messages.pinned_by', { name: data.pinnedBy })}`);
       this._markPinUnread?.(data.messageId);
@@ -2137,7 +2137,7 @@ _setupSocketListeners() {
         if (tag) tag.remove();
         // Update toolbar: swap unpin → pin
         const unpinBtn = msgEl.querySelector('[data-action="unpin"]');
-        if (unpinBtn) { unpinBtn.dataset.action = 'pin'; unpinBtn.title = 'Pin'; }
+        if (unpinBtn) { unpinBtn.dataset.action = 'pin'; unpinBtn.title = t('msg_toolbar.pin'); }
       }
       // Remove from pinned sidebar panel if it's open
       const pinnedItem = document.querySelector(`#pinned-panel .pinned-item[data-msg-id="${data.messageId}"]`);
@@ -2203,16 +2203,16 @@ _setupSocketListeners() {
         msgEl.dataset.archived = '1';
         const header = msgEl.querySelector('.message-header');
         if (header && !header.querySelector('.archived-tag')) {
-          header.insertAdjacentHTML('beforeend', '<span class="archived-tag" title="Protected from cleanup">🛡️</span>');
+          header.insertAdjacentHTML('beforeend', `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
         }
         // For compact messages, add tag to content
         const content = msgEl.querySelector('.message-content');
         if (msgEl.classList.contains('message-compact') && content && !content.querySelector('.archived-tag')) {
-          content.insertAdjacentHTML('afterbegin', '<span class="archived-tag" title="Protected from cleanup">🛡️</span>');
+          content.insertAdjacentHTML('afterbegin', `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
         }
         // Update toolbar: swap archive → unarchive
         const archBtn = msgEl.querySelector('[data-action="archive"]');
-        if (archBtn) { archBtn.dataset.action = 'unarchive'; archBtn.title = 'Unprotect'; }
+        if (archBtn) { archBtn.dataset.action = 'unarchive'; archBtn.title = t('app.messages.unprotect_btn'); }
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.protected_by', { name: data.archivedBy })}`);
     }
@@ -2231,7 +2231,7 @@ _setupSocketListeners() {
         if (contentTag) contentTag.remove();
         // Update toolbar: swap unarchive → archive
         const unarchBtn = msgEl.querySelector('[data-action="unarchive"]');
-        if (unarchBtn) { unarchBtn.dataset.action = 'archive'; unarchBtn.title = 'Protect from cleanup'; }
+        if (unarchBtn) { unarchBtn.dataset.action = 'archive'; unarchBtn.title = t('app.messages.protect_btn'); }
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.message_unprotected')}`);
     }
@@ -2268,7 +2268,9 @@ _setupSocketListeners() {
   // Banned Users modal is open, refresh it so the appeal shows immediately.
   this.socket.on('ban-appeal-received', (data) => {
     if (!this.user?.isAdmin) return;
-    this._showToast(t('toasts.ban_appeal_received', { username: data?.username || 'A banned user' }), 'info');
+    this._showToast(t('toasts.ban_appeal_received', {
+      username: data?.username || t('toasts.banned_user'),
+    }), 'info');
     const bansModal = document.getElementById('bans-modal');
     if (bansModal && bansModal.style.display !== 'none') {
       this.socket.emit('get-bans');
@@ -2360,9 +2362,16 @@ _setupSocketListeners() {
     for (const c of (this._connections.connections || [])) {
       if (!prev.has(c.provider)) {
         const label = c.provider.charAt(0).toUpperCase() + c.provider.slice(1);
-        this._showToast(`${label} linked`, 'success');
+        this._showToast(t('users.connections.link_success', { provider: label }), 'success');
       }
     }
+  });
+
+  // ── Listening presence: webhook token state ───
+  // token is a string when the feature is on, null when off. The full URL is
+  // built client-side from this origin so the server never handles it.
+  this.socket.on('listening-state', (data) => {
+    this._applyListeningState?.(data?.token || null);
   });
 
   // Server issued a short-lived link token — hand off to the provider in a
@@ -2383,7 +2392,7 @@ _setupSocketListeners() {
     const win = window.open(url, 'haven-connect', 'width=820,height=760,menubar=no,toolbar=no');
     if (!win) {
       // Popup blocked — tell the user rather than silently doing nothing.
-      this._showToast('Allow pop-ups for this site to link an account', 'error');
+      this._showToast(t('users.connections.allow_popups'), 'error');
     }
   });
 

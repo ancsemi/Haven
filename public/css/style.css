@@ -6875,10 +6875,14 @@ details.sound-section:not([open]) .sound-section-label::before {
 @keyframes e2eImgPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 .e2e-img-failed { opacity: 0.4; border-color: var(--danger, #e74c3c); }
 
-/* Full inline mode (Discord-style, toggled via client setting) */
+/* Full inline mode (toggled via client setting). The largest setting lets an
+   image use the whole message width; the height cap keeps a tall screenshot
+   from taking over the screen, and scales with the window so a wide image can
+   still fill the row on a big display. Both caps together preserve the aspect
+   ratio, so nothing is letterboxed. */
 .image-mode-full .chat-image {
-  max-width: min(25rem, 70%);
-  max-height: 18.75rem;
+  max-width: 100%;
+  max-height: min(50rem, 75vh);
   object-fit: contain;
 }
 
@@ -14758,6 +14762,74 @@ ul.chat-list { list-style-type: disc; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Titles/artists past 30 chars scroll instead of clipping, so everyone sees the
+   whole text at the same constant pace. Two identical copies scroll as one, and
+   translating by half the track lands copy two exactly where copy one began for
+   a seamless loop. Duration is set inline per length to keep the speed uniform. */
+.pa-marquee {
+  display: block;
+  overflow: hidden;
+}
+.pa-marquee-track {
+  display: inline-flex;
+  width: max-content;
+  animation: pa-marquee-scroll var(--pa-marquee-dur, 12s) linear infinite;
+}
+.pa-marquee-seg {
+  white-space: nowrap;
+  padding-right: 2rem;
+}
+@keyframes pa-marquee-scroll {
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pa-marquee-track { animation: none; }
+}
+
+/* Playback progress: a line with a dot playhead, plus elapsed/total times. */
+.profile-activity-progress {
+  display: block;
+  margin-top: 0.3125rem;
+}
+.pap-track {
+  position: relative;
+  display: block;
+  height: 0.25rem;
+  border-radius: 0.125rem;
+  background: var(--bg-tertiary);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.pap-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 0.125rem;
+  background: var(--accent);
+}
+.pap-dot {
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: -0.25rem;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+.pap-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.1875rem;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.profile-activity-progress.is-paused .pap-fill,
+.profile-activity-progress.is-paused .pap-dot {
+  opacity: 0.5;
 }
 
 /* Settings → Connections */

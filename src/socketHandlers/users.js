@@ -761,6 +761,27 @@ module.exports = function register(socket, ctx) {
     if (socket.currentChannel) emitOnlineUsers(socket.currentChannel);
   });
 
+  // ── Listening presence webhook (any music player) ──
+  // A per-user webhook token a player's plugin or script posts presence to.
+  // Enabling generates and stores a token; disabling removes it. Only the token
+  // travels to the client; it builds the full URL from its own origin, so the
+  // server never needs to know its public address.
+  socket.on('get-listening', () => {
+    if (!activity) return;
+    socket.emit('listening-state', { token: activity.getListeningToken(socket.user.id) });
+  });
+
+  socket.on('set-listening', (data) => {
+    if (!activity) return;
+    let token = null;
+    if (data && data.enabled) {
+      token = activity.enableListening(socket.user.id);
+    } else {
+      activity.disableListening(socket.user.id);
+    }
+    socket.emit('listening-state', { token });
+  });
+
   // ── High Scores ─────────────────────────────────────────
   socket.on('submit-high-score', (data) => {
     if (!data || typeof data !== 'object') return;

@@ -559,8 +559,8 @@ _searchRenderPanel() {
     if (st.filters.during) tags.push(`<span class="search-filter-tag">during:${this._escapeHtml(st.filters.during)}</span>`);
     if (tags.length) filterInfo = `<div class="search-filter-tags">${tags.join(' ')}</div>`;
   }
-  const localTag = st.isDM ? ' <span class="search-filter-tag">DM (local)</span>' : '';
-  count.innerHTML = `${total} result${total === 1 ? '' : 's'} for "${qHtml}"${localTag}${filterInfo}`;
+  const localTag = st.isDM ? ` <span class="search-filter-tag">${t('header.search_dm_local_tag')}</span>` : '';
+  count.innerHTML = `${t(total === 1 ? 'header.search_results_one' : 'header.search_results_other', { count: total, query: qHtml })}${localTag}${filterInfo}`;
 
   // Highlight the plain text (all filter tokens stripped).
   const highlightQuery = (st.query || '').replace(/\b(?:from|in|has|pinned|before|after|during):\S+/gi, '').trim();
@@ -577,7 +577,7 @@ _searchRenderPanel() {
         // server attaches thread_count (a grouped COUNT); users open it by
         // jumping to the message. (search-overhaul phase 3)
         const thread = (r.thread_count > 0)
-          ? `<span class="search-result-thread" title="${t('header.search_thread_replies', { count: r.thread_count }) || (r.thread_count + ' replies')}">🧵 ${r.thread_count}</span>`
+          ? `<span class="search-result-thread" title="${t('header.search_thread_replies', { count: r.thread_count })}">🧵 ${r.thread_count}</span>`
           : '';
         // Render the body through the real message formatter so images, video,
         // audio, spoilers, mentions and links look exactly like chat. The
@@ -617,7 +617,7 @@ _searchRenderPanel() {
       const input = document.getElementById('search-page-input');
       if (input && document.activeElement !== input) input.value = String(st.page);
       const totalEl = document.getElementById('search-page-total');
-      if (totalEl) totalEl.textContent = t('header.search_page_of', { pages }) || `/ ${pages}`;
+      if (totalEl) totalEl.textContent = t('header.search_page_of', { pages });
       document.getElementById('search-page-prev').disabled = st.page <= 1;
       document.getElementById('search-page-next').disabled = st.page >= pages;
     } else {
@@ -686,7 +686,7 @@ _searchDeferEmbeds(item) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'search-load-embed';
-    btn.textContent = t('header.search_load_embed') || 'Load embed';
+    btn.textContent = t('header.search_load_embed');
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       this._searchLoadEmbed(btn, link, item);

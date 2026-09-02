@@ -2,10 +2,7 @@
 // Parse game info from URL params: ?swf=URL&title=NAME
 const params = new URLSearchParams(window.location.search);
 const swfUrl = params.get('swf');
-const title = params.get('title') || 'Flash Game';
-
-document.getElementById('game-title').textContent = title;
-document.title = `${title} — Haven`;
+const title = params.get('title');
 
 // Volume control
 const volSlider = document.getElementById('volume-slider');
@@ -45,23 +42,23 @@ function initRuffle() {
     player.load(swfUrl).then(() => {
       applyVolume(parseInt(volSlider.value));
     }).catch((err) => {
-      container.innerHTML = `<div class="error-msg">Failed to load SWF: ${err.message}<br><br>Make sure the .swf file exists in <code>/games/roms/</code></div>`;
+      container.innerHTML = `<div class="error-msg">${t('games.flash.swf_failed', { error: err.message })}<br><br>${t('games.flash.swf_hint')}</div>`;
     });
 
     setTimeout(() => {
       if (loadingMsg.parentNode) {
-        loadingMsg.innerHTML = '<div class="error-msg">Ruffle took too long to initialize. Try refreshing.</div>';
+        loadingMsg.innerHTML = `<div class="error-msg">${t('games.flash.timeout')}</div>`;
       }
     }, 20000);
   } catch (err) {
     const loadingMsg = document.getElementById('loading-msg');
-    if (loadingMsg) loadingMsg.innerHTML = `<div class="error-msg">Ruffle init error: ${err.message}</div>`;
+    if (loadingMsg) loadingMsg.innerHTML = `<div class="error-msg">${t('games.flash.init_error', { error: err.message })}</div>`;
   }
 }
 
 function loadGame() {
   if (!swfUrl) {
-    document.getElementById('loading-msg').innerHTML = '<div class="error-msg">No SWF file specified</div>';
+    document.getElementById('loading-msg').innerHTML = `<div class="error-msg">${t('games.flash.no_file')}</div>`;
     return;
   }
 
@@ -71,12 +68,17 @@ function loadGame() {
   script.onload = () => initRuffle();
   script.onerror = () => {
     document.getElementById('loading-msg').innerHTML =
-      '<div class="error-msg">Failed to load Ruffle Flash emulator.<br>Check your internet connection.</div>';
+      `<div class="error-msg">${t('games.flash.emulator_failed')}<br>${t('games.flash.check_connection')}</div>`;
   };
   document.head.appendChild(script);
 }
 
-loadGame();
+I18n.init().then(() => {
+  const displayTitle = title || t('games.flash.default_title');
+  document.getElementById('game-title').textContent = displayTitle;
+  document.title = t('games.page_title', { title: displayTitle });
+  loadGame();
+});
 
 // Listen for volume messages from parent (Haven game iframe header)
 window.addEventListener('message', (e) => {
