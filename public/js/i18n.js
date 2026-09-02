@@ -162,6 +162,16 @@ const I18n = (() => {
       const val = t(el.dataset.i18nAriaLabel);
       if (val !== el.dataset.i18nAriaLabel) el.setAttribute('aria-label', val);
     });
+    // Alternative text for meaningful images
+    root.querySelectorAll('[data-i18n-alt]').forEach(el => {
+      const val = t(el.dataset.i18nAlt);
+      if (val !== el.dataset.i18nAlt) el.alt = val;
+    });
+    // Label attributes (for optgroup and similar controls)
+    root.querySelectorAll('[data-i18n-label]').forEach(el => {
+      const val = t(el.dataset.i18nLabel);
+      if (val !== el.dataset.i18nLabel) el.label = val;
+    });
   }
 
   // ── Initialise: detect locale, load file, apply DOM ──────────────────

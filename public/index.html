@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="/manifest.webmanifest">
-  <title>Haven — Login</title>
+  <title data-i18n="auth.page_title">Haven — Login</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-compat.js"></script>
@@ -47,12 +47,12 @@
         </div>
         <!-- (#12) SSO — only shown when the server has OIDC configured -->
         <div id="oidc-login-section" style="display:none;text-align:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#333)">
-          <button type="button" class="btn-secondary" id="oidc-login-btn" style="font-size:0.9rem;padding:8px 18px">Sign in with SSO</button>
+          <button type="button" class="btn-secondary" id="oidc-login-btn" style="font-size:0.9rem;padding:8px 18px" data-i18n="auth.oidc.submit">Sign in with SSO</button>
         </div>
         <!-- (#5381) Guest login — only shown when the server has guests enabled -->
         <div id="guest-login-section" style="display:none;text-align:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#333)">
-          <small style="color:var(--text-muted);display:block;margin-bottom:6px">No account? Just want to look around?</small>
-          <button type="button" class="btn-secondary" id="guest-login-show-btn" style="font-size:0.9rem;padding:8px 18px">Join as Guest</button>
+          <small style="color:var(--text-muted);display:block;margin-bottom:6px" data-i18n="auth.guest.prompt">No account? Just want to look around?</small>
+          <button type="button" class="btn-secondary" id="guest-login-show-btn" style="font-size:0.9rem;padding:8px 18px" data-i18n="auth.guest.submit">Join as Guest</button>
         </div>
       </form>
 
@@ -63,39 +63,39 @@
            here. It never leaves this page: it is stretched with PBKDF2 and only
            the derived key is kept, for this session. -->
       <form id="e2e-pass-form" class="auth-form" style="display:none">
-        <h3 id="e2e-pass-title" style="text-align:center;margin-bottom:6px;font-size:1.05rem">Set an encryption passphrase</h3>
-        <p id="e2e-pass-blurb" style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-bottom:14px">
+        <h3 id="e2e-pass-title" style="text-align:center;margin-bottom:6px;font-size:1.05rem" data-i18n="auth.e2e_pass.title">Set an encryption passphrase</h3>
+        <p id="e2e-pass-blurb" style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-bottom:14px" data-i18n="auth.e2e_pass.desc">
           Your private messages are encrypted with a key only you hold. Signing in with SSO means Haven never sees a
           password to protect it with, so pick a passphrase. You will need it again on any other device.
         </p>
         <div class="form-group">
-          <label for="e2e-pass-input">Passphrase</label>
+          <label for="e2e-pass-input" data-i18n="auth.e2e_pass.label">Passphrase</label>
           <input type="password" id="e2e-pass-input" autocomplete="new-password" minlength="8" maxlength="128" required>
-          <small id="e2e-pass-hint">At least 8 characters. Nobody can reset this for you, including the server admin.</small>
+          <small id="e2e-pass-hint" data-i18n="auth.e2e_pass.hint">At least 8 characters. Nobody can reset this for you, including the server admin.</small>
         </div>
         <div class="form-group" id="e2e-pass-confirm-group">
-          <label for="e2e-pass-confirm">Confirm passphrase</label>
+          <label for="e2e-pass-confirm" data-i18n="auth.e2e_pass.confirm_label">Confirm passphrase</label>
           <input type="password" id="e2e-pass-confirm" autocomplete="new-password" minlength="8" maxlength="128">
         </div>
-        <button type="submit" class="btn-primary" id="e2e-pass-submit">Continue</button>
+        <button type="submit" class="btn-primary" id="e2e-pass-submit" data-i18n="auth.e2e_pass.continue">Continue</button>
         <p style="text-align:center;margin-top:10px">
-          <a href="#" id="e2e-pass-skip" style="font-size:0.85rem;color:var(--text-muted)">Skip for now</a>
+          <a href="#" id="e2e-pass-skip" style="font-size:0.85rem;color:var(--text-muted)" data-i18n="auth.e2e_pass.skip">Skip for now</a>
         </p>
       </form>
 
       <!-- (#5381) Guest username prompt — appears after clicking Join as Guest -->
       <form id="guest-form" class="auth-form" style="display:none">
-        <p style="text-align:center;color:var(--text-muted);font-size:0.9rem;margin-bottom:12px">
+        <p style="text-align:center;color:var(--text-muted);font-size:0.9rem;margin-bottom:12px" data-i18n="auth.guest.desc">
           Pick a temporary username. No password, no recovery. Your account is wiped when you disconnect.
         </p>
         <div class="form-group">
-          <label for="guest-username">Username</label>
+          <label for="guest-username" data-i18n="auth.guest.username_label">Username</label>
           <input type="text" id="guest-username" autocomplete="off" minlength="3" maxlength="20" pattern="[a-zA-Z0-9_]+" required>
-          <small>3-20 characters, letters/numbers/underscores</small>
+          <small data-i18n="auth.guest.username_hint">3-20 characters, letters/numbers/underscores</small>
         </div>
-        <button type="submit" class="btn-primary">Join as Guest</button>
+        <button type="submit" class="btn-primary" data-i18n="auth.guest.submit">Join as Guest</button>
         <p style="text-align:center;margin-top:8px">
-          <a href="#" id="guest-back-btn" style="color:var(--text-muted);font-size:0.8rem;text-decoration:none">← Back to login</a>
+          <a href="#" id="guest-back-btn" style="color:var(--text-muted);font-size:0.8rem;text-decoration:none" data-i18n="auth.guest.back">← Back to login</a>
         </p>
       </form>
 
@@ -118,10 +118,10 @@
         </div>
         <!-- (#5344) Registration token field — shown by auth.js only when the server requires it -->
         <div class="form-group" id="reg-token-group" style="display:none">
-          <label for="reg-token">Invite Token</label>
+          <label for="reg-token" data-i18n="auth.register.token_label">Invite Token</label>
           <input type="text" id="reg-token" autocomplete="off" maxlength="64"
-                 placeholder="Paste the token your admin shared">
-          <small>Required by this server — ask the admin if you don't have one.</small>
+                  placeholder="Paste the token your admin shared" data-i18n-placeholder="auth.register.token_placeholder">
+          <small data-i18n="auth.register.token_hint">Required by this server — ask the admin if you don't have one.</small>
         </div>
         <!-- Opt-in Cloudflare Turnstile CAPTCHA — shown by auth.js only when the server enables it -->
         <div class="form-group" id="reg-captcha-group" style="display:none">
@@ -340,10 +340,11 @@
   <!-- EULA Modal -->
   <div class="modal-overlay" id="eula-modal" style="display:none">
     <div class="modal eula-modal">
-      <h3>⚖️ Terms of Service &amp; Release of Liability Agreement</h3>      <div id="custom-tos-section" style="display:none">
+      <h3>⚖️ <span data-i18n="auth.eula.modal_title_plain">Terms of Service &amp; Release of Liability Agreement</span></h3>      <div id="custom-tos-section" style="display:none">
         <div class="eula-content" id="custom-tos-content" style="margin-bottom:0;border-bottom:1px solid var(--border,#444);padding-bottom:16px;"></div>
-        <p style="text-align:center;font-size:12px;color:var(--text-muted,#888);margin:12px 0;">── Default Haven Terms of Service ──</p>
-      </div>      <div class="eula-content">
+        <p style="text-align:center;font-size:12px;color:var(--text-muted,#888);margin:12px 0;" data-i18n="auth.eula.default_terms">── Default Haven Terms of Service ──</p>
+      </div>
+      <div class="eula-content" data-i18n-html="auth.eula.terms_body">
         <p><strong>HAVEN — TERMS OF SERVICE, END USER LICENSE AGREEMENT &amp; RELEASE OF LIABILITY</strong></p>
         <p><em>Effective Date: February 12, 2026 &nbsp;|&nbsp; Version 2.0</em></p>
 

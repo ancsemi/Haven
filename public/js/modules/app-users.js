@@ -135,7 +135,7 @@ _showUserGearMenu(anchorEl, userId, username) {
   if (isAdmin) items += `<button class="gear-menu-item gear-menu-danger" data-action="delete-user">🗑️ ${t('users.gear_menu.delete_user')}</button>`;
   // Admin password reset (#5300): gated on server setting AND target is not self.
   if (isAdmin && this.serverSettings?.admin_password_reset_enabled === 'true' && userId !== this.user?.id) {
-    items += `<button class="gear-menu-item gear-menu-danger" data-action="reset-password">🔑 ${t('users.gear_menu.reset_password') || 'Reset Password'}</button>`;
+    items += `<button class="gear-menu-item gear-menu-danger" data-action="reset-password">🔑 ${t('users.gear_menu.reset_password')}</button>`;
   }
   if (isAdmin) items += `<div class="gear-menu-divider"></div><button class="gear-menu-item gear-menu-danger" data-action="transfer-admin">🔑 ${t('users.gear_menu.transfer_admin')}</button>`;
 
@@ -203,7 +203,7 @@ _closeUserGearMenu() {
 // toast, so no need to pre-filter by target's current memberships here.
 _openGearMenuChannelPicker(userId, username, channels) {
   if (!channels || channels.length === 0) {
-    this._showToast?.('No channels available to invite to', 'info');
+    this._showToast?.(t('users.no_invite_channels'), 'info');
     return;
   }
   const overlay = document.createElement('div');
@@ -213,7 +213,7 @@ _openGearMenuChannelPicker(userId, username, channels) {
   overlay.innerHTML = `
     <div class="modal aml-ch-picker">
       <div class="aml-ch-picker-header">
-        <h4 class="aml-ch-picker-title">Add ${this._escapeHtml(username)} to channel</h4>
+        <h4 class="aml-ch-picker-title">${t('users.add_to_channel_title', { name: this._escapeHtml(username) })}</h4>
       </div>
       <div class="aml-channel-list">
         ${channels.map(c => `
@@ -308,7 +308,7 @@ _renderUserItem(u, scoreLookup) {
   // (#5381) Mark guest accounts with a small badge so people know not to
   // expect long-term presence.
   const guestBadge = u.isGuest
-    ? `<span class="user-role-badge guest-badge" style="color:#888;border:1px solid #555" title="Temporary guest account">GUEST</span>`
+    ? `<span class="user-role-badge guest-badge" style="color:#888;border:1px solid #555" title="${t('users.guest_hint')}">${t('users.guest_badge')}</span>`
     : '';
 
   // Build tooltip
@@ -318,7 +318,7 @@ _renderUserItem(u, scoreLookup) {
   // Tooltip removed — the full profile popup (hover/click) provides this info.
 
   const dmBtn = u.id === this.user.id
-    ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="Notes to self (DM yourself)">📝</button>`
+    ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="${t('users.notes_to_self_hint')}">📝</button>`
     : `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="${t('users.direct_message')}">💬</button>`;
 
   // Show DM + Gear icon. Gear opens a dropdown with mod actions.
@@ -389,33 +389,29 @@ _renderConnections() {
     { id: 'lastfm', icon: '🎵', name: 'Last.fm',
       // Most people have never heard of Last.fm, so the row has to explain
       // what it is before asking them to link it.
-      blurb: 'A free service that tracks what you listen to. Connect it to Spotify, YouTube Music, Apple Music, Navidrome and more — then Haven can show your music.',
+      blurb: t('users.connections.lastfm_blurb'),
       linkType: 'username',
-      usernameLabel: 'Your Last.fm username',
+      usernameLabel: t('users.connections.lastfm_username'),
       // People reliably assume linking the username is the whole job. It isn't:
       // Last.fm only knows what something sends it ("scrobbling"), and that is
       // set up on Last.fm's side, not here. Spell out both paths.
-      note: 'First time? Sign up free at <b>last.fm</b>, then turn on <b>scrobbling</b> so it knows what you play:'
-          + '<br>• <b>Spotify</b> — last.fm → Settings → Applications → connect Spotify. No install.'
-          + '<br>• <b>YouTube Music, Apple Music, Tidal</b> — install the free <b>Web Scrobbler</b> browser extension.'
-          + '<br>• <b>Navidrome, Plex, Jellyfin</b> — enable Last.fm scrobbling in that server\'s own settings.'
-          + '<br>Without scrobbling set up, Haven will show nothing.',
+      note: t('users.connections.lastfm_note'),
       help: 'https://www.last.fm/api/account/create',
-      helpLabel: 'Get a Last.fm API key',
+      helpLabel: t('users.connections.lastfm_help'),
       steps: [
-        'Sign in with a Last.fm account and fill in the short form (name it "Haven"; the other fields can be anything).',
-        'Copy the <b>API key</b> it shows you and paste it below. Ignore the shared secret — Haven does not need it.',
+        t('users.connections.lastfm_step_1'),
+        t('users.connections.lastfm_step_2'),
       ],
-      fields: [{ key: 'LASTFM_API_KEY', label: 'API Key' }] },
-    { id: 'steam', icon: '🎮', name: 'Steam', blurb: 'Show the game you\'re playing',
+      fields: [{ key: 'LASTFM_API_KEY', label: t('users.connections.api_key') }] },
+    { id: 'steam', icon: '🎮', name: 'Steam', blurb: t('users.connections.steam_blurb'),
       help: 'https://steamcommunity.com/dev/apikey',
-      helpLabel: 'Open the Steam key page',
+      helpLabel: t('users.connections.steam_help'),
       steps: [
-        'Sign in with your Steam account.',
-        'Where it asks for a domain, any value works — Steam does not check it. Put <code>localhost</code>.',
-        'Copy the key it gives you and paste it below.',
+        t('users.connections.steam_step_1'),
+        t('users.connections.steam_step_2'),
+        t('users.connections.steam_step_3'),
       ],
-      fields: [{ key: 'STEAM_API_KEY', label: 'API Key' }] },
+      fields: [{ key: 'STEAM_API_KEY', label: t('users.connections.api_key') }] },
     // Spotify is collapsed behind a disclosure. It needs a registered developer
     // app and its development-mode user allowlist caps it at roughly 25 people,
     // so steering everyone here by default sends them down the hardest path for
@@ -423,9 +419,9 @@ _renderConnections() {
     // Premium accounts (#5528), which makes that even more true: the steps used
     // to say a free account was fine, and following them on one now dead-ends.
     { id: 'spotify', icon: '🎧', name: 'Spotify', advanced: true,
-      blurb: 'Direct connection. Needs a Spotify Premium account, is harder to set up, and is limited to ~25 users. Prefer Last.fm above.',
+      blurb: t('users.connections.spotify_blurb'),
       help: 'https://developer.spotify.com/dashboard',
-      helpLabel: 'Open the Spotify developer dashboard',
+      helpLabel: t('users.connections.spotify_help'),
       // Two things trip people up here, both worth stating outright:
       //  1. developer.spotify.com is a SEPARATE site from Spotify account
       //     settings. "Manage apps" under your account lists apps you've
@@ -434,16 +430,16 @@ _renderConnections() {
       //  2. "Create an app" sounds like software development. It isn't; it's
       //     registering a name so Spotify knows who is asking.
       steps: [
-        'Use the link above — it goes to <b>developer.spotify.com</b>.',
-        'Sign in with your Spotify account. <b>This needs Spotify Premium.</b> As of 2026 the Web API is no longer available on free accounts, so the rest of these steps will not work without it (#5528). Accept the developer terms if it asks.',
-        'Click <b>Create app</b>. You are not building software — this just registers a name. Call it "Haven".',
-        'Paste this into <b>Redirect URI</b>:<code class="setup-uri">' + location.origin + '/connect/spotify/callback</code>',
-        'Tick <b>Web API</b>, save, then open <b>Settings</b> on the app you just made.',
-        'Copy <b>Client ID</b>, then click <b>View client secret</b> and copy that too.',
+        t('users.connections.spotify_step_1'),
+        t('users.connections.spotify_step_2'),
+        t('users.connections.spotify_step_3'),
+        t('users.connections.spotify_step_4', { uri: location.origin + '/connect/spotify/callback' }),
+        t('users.connections.spotify_step_5'),
+        t('users.connections.spotify_step_6'),
       ],
       fields: [
-        { key: 'SPOTIFY_CLIENT_ID',     label: 'Client ID' },
-        { key: 'SPOTIFY_CLIENT_SECRET', label: 'Client Secret' },
+        { key: 'SPOTIFY_CLIENT_ID',     label: t('users.connections.client_id') },
+        { key: 'SPOTIFY_CLIENT_SECRET', label: t('users.connections.client_secret') },
       ] },
   ];
 
@@ -453,9 +449,9 @@ _renderConnections() {
   // Haven name. It was hardcoded to a real username, which meant every user on
   // every Haven server was shown one specific person's handle as the example.
   const placeholderName = this._escapeHtml(
-    (this.user?.username || this.user?.displayName || 'your-username')
+    (this.user?.username || this.user?.displayName || t('users.connections.username_placeholder'))
       .replace(/[^a-zA-Z0-9_-]/g, '')
-      .slice(0, 15) || 'your-username'
+      .slice(0, 15) || t('users.connections.username_placeholder')
   );
 
   // Advanced providers stay collapsed unless already linked/configured —
@@ -471,42 +467,42 @@ _renderConnections() {
       // Admins get an inline setup form — most self-hosters have no idea where
       // .env lives, and telling them to "edit .env and restart" is a dead end.
       // Everyone else just learns the provider is off.
-      sub = isAdmin ? 'Not set up yet' : 'Not enabled on this server — ask an admin';
+      sub = isAdmin ? t('users.connections.not_setup') : t('users.connections.not_enabled');
       if (isAdmin) {
-        btn += `<button class="btn-sm connection-setup" data-provider="${p.id}">Set up</button>`;
+        btn += `<button class="btn-sm connection-setup" data-provider="${p.id}">${t('users.connections.setup')}</button>`;
       }
     } else if (conn) {
-      sub = conn.displayName ? `Linked as ${this._escapeHtml(conn.displayName)}` : 'Linked';
-      btn += `<button class="btn-sm connection-unlink" data-provider="${p.id}">Unlink</button>`;
+      sub = conn.displayName ? t('users.connections.linked_as', { name: this._escapeHtml(conn.displayName) }) : t('users.connections.linked');
+      btn += `<button class="btn-sm connection-unlink" data-provider="${p.id}">${t('users.connections.unlink')}</button>`;
       // A working key can still need rotating (it leaked, or Steam revoked it).
       // Surface a way to paste a fresh one without hand-editing .env.
       if (isAdmin) {
-        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">${t('users.connections.change_key')}</button>`;
         // (#5529) Setting a provider up was one-way: the form could replace a
         // key but never clear one, so an admin had no way to switch an
         // integration back off without editing .env by hand.
-        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">Remove key</button>`;
+        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">${t('users.connections.remove_key')}</button>`;
       }
     } else if (p.linkType === 'username') {
       // No OAuth for this provider — the whole link flow is one text field.
       sub = p.blurb;
-      btn += `<button class="btn-sm btn-accent connection-username-toggle" data-provider="${p.id}">Connect</button>`;
+      btn += `<button class="btn-sm btn-accent connection-username-toggle" data-provider="${p.id}">${t('users.connections.connect')}</button>`;
       if (isAdmin) {
-        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">${t('users.connections.change_key')}</button>`;
         // (#5529) Setting a provider up was one-way: the form could replace a
         // key but never clear one, so an admin had no way to switch an
         // integration back off without editing .env by hand.
-        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">Remove key</button>`;
+        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">${t('users.connections.remove_key')}</button>`;
       }
     } else {
       sub = p.blurb;
-      btn += `<button class="btn-sm btn-accent connection-link" data-provider="${p.id}">Link</button>`;
+      btn += `<button class="btn-sm btn-accent connection-link" data-provider="${p.id}">${t('users.connections.link')}</button>`;
       if (isAdmin) {
-        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+        btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">${t('users.connections.change_key')}</button>`;
         // (#5529) Setting a provider up was one-way: the form could replace a
         // key but never clear one, so an admin had no way to switch an
         // integration back off without editing .env by hand.
-        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">Remove key</button>`;
+        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">${t('users.connections.remove_key')}</button>`;
       }
     }
 
@@ -522,13 +518,13 @@ _renderConnections() {
           <label class="connection-field">
             <span>${f.label}</span>
             <input type="password" autocomplete="off" spellcheck="false"
-                   data-env-key="${f.key}" placeholder="32 hex characters">
+                    data-env-key="${f.key}" placeholder="${t('users.connections.key_placeholder')}">
           </label>`).join('')}
         <div class="connection-setup-actions">
-          <button class="btn-sm btn-accent connection-save" data-provider="${p.id}">Save</button>
-          <button class="btn-sm connection-cancel" data-provider="${p.id}">Cancel</button>
+          <button class="btn-sm btn-accent connection-save" data-provider="${p.id}">${t('modals.common.save')}</button>
+          <button class="btn-sm connection-cancel" data-provider="${p.id}">${t('modals.common.cancel')}</button>
         </div>
-        <small class="settings-hint">Saved to the server's .env automatically${configured ? ' — this replaces the current key' : ''}. No restart needed.</small>
+        <small class="settings-hint">${t(configured ? 'users.connections.save_hint_replace' : 'users.connections.save_hint')}</small>
       </div>` : '';
 
     // Username link form (Last.fm). Collapsed until "Connect" is pressed.
@@ -540,8 +536,8 @@ _renderConnections() {
                  data-username-for="${p.id}" placeholder="${placeholderName}">
         </label>
         <div class="connection-setup-actions">
-          <button class="btn-sm btn-accent connection-username-save" data-provider="${p.id}">Connect</button>
-          <button class="btn-sm connection-username-cancel" data-provider="${p.id}">Cancel</button>
+          <button class="btn-sm btn-accent connection-username-save" data-provider="${p.id}">${t('users.connections.connect')}</button>
+          <button class="btn-sm connection-username-cancel" data-provider="${p.id}">${t('modals.common.cancel')}</button>
         </div>
         ${p.note ? `<small class="settings-hint">${p.note}</small>` : ''}
       </div>` : '';
@@ -567,7 +563,7 @@ _renderConnections() {
   host.innerHTML = primary.map(renderProvider).join('')
     + (advanced.length ? `
       <details class="connection-advanced">
-        <summary>Other options</summary>
+        <summary>${t('users.connections.other_options')}</summary>
         ${advanced.map(renderProvider).join('')}
       </details>` : '');
 
@@ -593,7 +589,7 @@ _renderConnections() {
       const form = userFormFor(btn.dataset.provider);
       const input = form?.querySelector('input');
       const value = input?.value.trim();
-      if (!value) return this._showToast('Enter your Last.fm username', 'error');
+      if (!value) return this._showToast(t('users.connections.enter_lastfm'), 'error');
       // Server verifies the name against the API and pushes a refreshed
       // connections payload, which re-renders this list.
       this.socket?.emit('link-lastfm', { username: value });
@@ -637,7 +633,7 @@ _renderConnections() {
       if (!provider) return;
       const keys = provider.fields.map(f => f.key);
       const label = provider.name;
-      if (!confirm(`Remove the ${label} key from this server? Anyone linked to ${label} will stop showing what they are playing until a new key is set.`)) return;
+      if (!confirm(t('users.connections.remove_key_confirm', { provider: label }))) return;
       this.socket.emit('clear-integration-key', { keys });
     });
   });
@@ -656,7 +652,7 @@ _renderConnections() {
       if (!form) return;
       const inputs = [...form.querySelectorAll('input[data-env-key]')];
       if (inputs.some(i => !i.value.trim())) {
-        this._showToast('Fill in every field first', 'error');
+        this._showToast(t('users.connections.fill_fields'), 'error');
         return;
       }
       // Each key is saved independently; the server validates format and
@@ -694,10 +690,10 @@ _handleConnectRedirect() {
   const [, provider, status] = m;
   const label = provider.charAt(0).toUpperCase() + provider.slice(1);
   if (status === 'ok') {
-    this._showToast(`${label} linked`, 'success');
+    this._showToast(t('users.connections.link_success', { provider: label }), 'success');
     this.socket?.emit('get-connections');
   } else {
-    this._showToast(`Couldn't link ${label} — please try again`, 'error');
+    this._showToast(t('users.connections.link_failed', { provider: label }), 'error');
   }
   try {
     history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -715,7 +711,7 @@ _activityMeta(act) {
   const isGame = act.type === 'playing';
   return {
     icon: isGame ? '🎮' : '🎵',
-    verb: isGame ? 'Playing' : 'Listening to',
+    verb: t(isGame ? 'users.activity_playing' : 'users.activity_listening'),
     // "Track — Artist" reads better than two separate fields in one line.
     label: act.details ? `${act.name} — ${act.details}` : act.name,
   };
@@ -764,7 +760,7 @@ _profileActivityHtml(activity) {
     .filter(Boolean);
 
   if (rows.length === 0) return '';
-  return `<div class="profile-popup-section-label">Activity</div>
+  return `<div class="profile-popup-section-label">${t('users.activity')}</div>
           <div class="profile-popup-activity">${rows.join('')}</div>`;
 },
 
@@ -824,10 +820,10 @@ _showProfilePopup(profile) {
   const canPromote = this._hasPerm('promote_user');
   const gearVisible = !isSelf && (canMod || canPromote || this.user.isAdmin);
   const gearBtnHtml = gearVisible
-    ? `<button class="profile-popup-action-btn profile-gear-btn" title="${this._escapeHtml(t('users.more_actions') || 'Moderation')}">⚙️ ${t('users.more_actions') || 'Moderation'}</button>`
+    ? `<button class="profile-popup-action-btn profile-gear-btn" title="${this._escapeHtml(t('users.more_actions'))}">⚙️ ${t('users.more_actions')}</button>`
     : '';
   const actionsHtml = isSelf
-    ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ ${t('users.edit_profile')}</button><button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}" title="Notes to self">📝 Notes to self</button>`
+    ? `<button class="profile-popup-action-btn profile-edit-btn" id="profile-popup-edit-btn">✏️ ${t('users.edit_profile')}</button><button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}" title="${t('users.notes_to_self')}">📝 ${t('users.notes_to_self')}</button>`
     : `<button class="profile-popup-action-btn profile-dm-btn" data-dm-uid="${profile.id}">💬 ${t('users.message_btn')}</button><button class="profile-popup-action-btn profile-nick-btn" data-nick-uid="${profile.id}" data-nick-uname="${this._escapeHtml(profile.username)}" data-nick-dname="${this._escapeHtml(profile.displayName)}">${nickBtnLabel}</button>${gearBtnHtml}`;
 
   const popup = document.createElement('div');
@@ -835,7 +831,7 @@ _showProfilePopup(profile) {
   popup.className = 'profile-popup';
   popup.innerHTML = `
     <div class="profile-popup-banner" style="background:linear-gradient(135deg, ${color}44, ${color}22)">
-      <button class="profile-popup-close" title="Close">&times;</button>
+      <button class="profile-popup-close" title="${t('modals.common.close')}">&times;</button>
     </div>
     <div class="profile-popup-avatar-wrapper">
       ${avatarHtml}
@@ -1159,7 +1155,7 @@ _renderVoiceUsers(users, channelCode) {
       streamBadge = `<span class="voice-stream-badge live" title="${liveTitle}">🔴${viewerCount ? ' ' + viewerCount : ''}</span>`;
     }
     if (hasWebcam) {
-      streamBadge += `<span class="voice-stream-badge webcam" title="Camera on">📹</span>`;
+      streamBadge += `<span class="voice-stream-badge webcam" title="${t('users.camera_on')}">📹</span>`;
     }
     if (isWatching) {
       const watchNames = watchingStreams.map(s => s.sharerName).join(', ');
@@ -1173,8 +1169,8 @@ _renderVoiceUsers(users, channelCode) {
     // carrying two faded glyphs. The "you" tag is dropped too — people know
     // who they are, and it was just more clutter. (#voice-declutter)
     const statusIcons = [];
-    if (u.isMuted) statusIcons.push(`<span class="voice-status-icon is-muted" title="Muted">🎙️</span>`);
-    if (u.isDeafened) statusIcons.push(`<span class="voice-status-icon is-deafened" title="Deafened">🔊</span>`);
+    if (u.isMuted) statusIcons.push(`<span class="voice-status-icon is-muted" title="${t('voice.status_muted')}">🎙️</span>`);
+    if (u.isDeafened) statusIcons.push(`<span class="voice-status-icon is-deafened" title="${t('voice.status_deafened')}">🔊</span>`);
     const statusIconsHtml = statusIcons.length
       ? `<span class="voice-status-icons">${statusIcons.join('')}</span>`
       : '';

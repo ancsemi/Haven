@@ -90,7 +90,7 @@ class ModMode {
       s.addEventListener('dragend',   this._boundDragEnd);
     });
     this._enablePanelMode();
-    this._showToast('Mod Mode ON \u2014 drag sections or panel handles to rearrange');
+    this._showToast(t('modmode.enabled'));
   }
 
   _disable() {
@@ -109,7 +109,7 @@ class ModMode {
     this._disablePanelMode();
     this._saveLayout();
     this._savePanelLayout();
-    this._showToast('Mod Mode OFF \u2014 layout saved');
+    this._showToast(t('modmode.disabled'));
   }
 
   // ── Section drag events ──
@@ -173,7 +173,7 @@ class ModMode {
         handle.type = 'button';
         handle.className = 'mod-panel-handle';
         handle.textContent = '\u2725';
-        handle.title = `Drag to reposition ${key.replace(/-/g, ' ')}`;
+        handle.title = t('modmode.drag_to_reposition', { panel: key.replace(/-/g, ' ') });
         panel.appendChild(handle);
       }
       handle.setAttribute('draggable', 'true');
@@ -217,9 +217,9 @@ class ModMode {
     this._clearSnapZones();
     const positions = this.panelDefs[key]?.positions || [];
     const labels = {
-      left: '\u2190 Left', right: 'Right \u2192', top: '\u2191 Top',
-      bottom: '\u2193 Bottom', center: '\u2b24 Float',
-      'right-sidebar': 'In right panel', 'left-sidebar': 'In left panel'
+      left: `\u2190 ${t('modmode.positions.left')}`, right: `${t('modmode.positions.right')} \u2192`, top: `\u2191 ${t('modmode.positions.top')}`,
+      bottom: `\u2193 ${t('modmode.positions.bottom')}`, center: `\u2b24 ${t('modmode.positions.float')}`,
+      'right-sidebar': t('modmode.positions.right_panel'), 'left-sidebar': t('modmode.positions.left_panel')
     };
     positions.forEach(pos => {
       const zone = document.createElement('div');
@@ -250,7 +250,7 @@ class ModMode {
     this.applyPanelLayout();
     this._savePanelLayout();
     const label = pos.replace(/-/g, ' ');
-    this._showToast(`Moved ${key.replace(/-/g, ' ')} \u2192 ${label}`);
+    this._showToast(t('modmode.moved', { panel: key.replace(/-/g, ' '), position: label }));
   }
 
   // ── Persistence ──
@@ -354,7 +354,7 @@ class ModMode {
     }
 
     this.applyPanelLayout();
-    this._showToast('Layout reset to default');
+    this._showToast(t('modmode.reset'));
   }
 
   _showToast(msg) {

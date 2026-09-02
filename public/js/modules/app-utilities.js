@@ -203,7 +203,7 @@ _wireBurnMessages(root) {
     if (!el.querySelector('.burn-pending-label')) {
       const label = document.createElement('span');
       label.className = 'burn-pending-label';
-      label.title = `Self-destructs ${burnSeconds}s after the recipient views it`;
+      label.title = t('messages.burn_pending_tooltip', { seconds: burnSeconds });
       label.textContent = '🔥';
       // Attach burn status to the message's own inline status slot so the
       // flame stays visually attached to that row instead of forming a
@@ -233,9 +233,8 @@ _wireBurnMessages(root) {
     if (!content) return;
     const real = content.innerHTML;
     el.dataset.burnRealContent = real;
-    const revealLabel = t('messages.burn_reveal');
-    const revealText = (revealLabel && revealLabel !== 'messages.burn_reveal') ? revealLabel : 'Tap to view';
-    content.innerHTML = `<button type="button" class="burn-reveal-btn">🔥 ${this._escapeHtml(revealText)} <span class="muted-text">(${burnSeconds}s after viewing)</span></button>`;
+    const revealText = t('messages.burn_reveal');
+    content.innerHTML = `<button type="button" class="burn-reveal-btn">🔥 ${this._escapeHtml(revealText)} <span class="muted-text">${t('messages.burn_reveal_hint', { seconds: burnSeconds })}</span></button>`;
     const btn = content.querySelector('.burn-reveal-btn');
     btn.addEventListener('click', () => {
       content.innerHTML = el.dataset.burnRealContent || '';
@@ -277,8 +276,7 @@ _replaceBurnedMessage(el) {
   if (el._burnTimer) { clearInterval(el._burnTimer); el._burnTimer = null; }
   const content = el.querySelector('.message-content');
   if (!content) return;
-  const doneLabel = t('messages.burn_done');
-  const doneText = (doneLabel && doneLabel !== 'messages.burn_done') ? doneLabel : 'Message burned';
+  const doneText = t('messages.burn_done');
   content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
   el.classList.remove('message-burn-pending');
   el.classList.add('message-burned');
@@ -445,7 +443,7 @@ _formatContent(str) {
     const rest = str.slice('spoiler-img:'.length);
     if (this._isImageUrl(rest) || /^\/uploads\//i.test(rest) || rest.startsWith('e2e-img:')) {
       const inner = this._formatContent(rest);
-      const label = this._escapeHtml((typeof t === 'function' && t('app.messages.spoiler')) || 'Spoiler');
+      const label = this._escapeHtml(t('app.messages.spoiler'));
       return `<div class="spoiler-media" role="button" tabindex="0" title="${label}"><span class="spoiler-media-tag">\u{1F441}️ ${label}</span>${inner}</div>`;
     }
   }
@@ -455,7 +453,7 @@ _formatContent(str) {
   if (e2eImgMatch) {
     const mime = this._escapeHtml(e2eImgMatch[1]);
     const url = this._escapeHtml(e2eImgMatch[2]);
-    return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="Encrypted image" title="🔒 End-to-end encrypted image">`;
+    return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="${t('app.messages.e2e_image_alt')}" title="${t('app.messages.e2e_image_title')}">`;
   }
 
   // E2E encrypted file: e2e-file:{"mime":...,"size":N,"url":"/uploads/...","name":"..."}
@@ -465,12 +463,12 @@ _formatContent(str) {
     try {
       const meta = JSON.parse(str.slice(9));
       if (meta && typeof meta.url === 'string' && meta.url.startsWith('/uploads/')) {
-        const name = this._escapeHtml(typeof meta.name === 'string' ? meta.name : 'file');
+        const name = this._escapeHtml(typeof meta.name === 'string' ? meta.name : t('app.messages.file'));
         const url = this._escapeHtml(meta.url);
         const mime = this._escapeHtml(typeof meta.mime === 'string' ? meta.mime : 'application/octet-stream');
         const size = Number(meta.size) || 0;
         const sizeStr = this._escapeHtml(this._formatFileSize ? this._formatFileSize(size) : (size + ' B'));
-        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="🔒 End-to-end encrypted file — click to download">
+        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
           <button type="button" class="file-download-link e2e-file-download">
             <span class="file-icon">🔒</span>
             <span class="file-name">${name}</span>
@@ -480,7 +478,7 @@ _formatContent(str) {
         </div>`;
       }
     } catch {}
-    return `<span class="muted-text">[Encrypted file — unable to parse]</span>`;
+    return `<span class="muted-text">${t('app.messages.e2e_file_parse_error')}</span>`;
   }
 
   // Decode legacy HTML entities from old server-side sanitization.
@@ -1080,13 +1078,13 @@ _showExternalLinkWarning(displayText, url) {
   overlay.innerHTML = `
     <div class="risky-download-modal">
       <div class="risky-download-icon">🔗</div>
-      <h3 style="color:var(--text-primary,#dbdee1)">External Link</h3>
-      <p>You're about to visit:</p>
+      <h3 style="color:var(--text-primary,#dbdee1)">${t('modals.external_link.title')}</h3>
+      <p>${t('modals.external_link.about_to_visit')}</p>
       <p style="background:var(--bg-tertiary,#232428);padding:8px 12px;border-radius:6px;font-size:0.8125rem;word-break:break-all;color:var(--accent,#5865f2)">${this._escapeHtml(url)}</p>
-      <p class="risky-download-desc">Make sure you trust this link before continuing.</p>
+      <p class="risky-download-desc">${t('modals.external_link.trust_warning')}</p>
       <div class="risky-download-actions">
-        <button class="risky-download-cancel">Cancel</button>
-        <button class="risky-download-confirm" style="background:var(--accent,#5865f2)">Open Link</button>
+        <button class="risky-download-cancel">${t('modals.common.cancel')}</button>
+        <button class="risky-download-confirm" style="background:var(--accent,#5865f2)">${t('modals.external_link.open')}</button>
       </div>
     </div>
   `;
@@ -1111,16 +1109,12 @@ _showRiskyDownloadWarning(fileName, ext, url) {
   overlay.innerHTML = `
     <div class="risky-download-modal">
       <div class="risky-download-icon">⚠️</div>
-      <h3>Potentially Harmful File</h3>
+      <h3>${t('modals.risky_download.title')}</h3>
       <p><strong>${this._escapeHtml(fileName)}</strong></p>
-      <p class="risky-download-desc">
-        <strong>.${this._escapeHtml(ext)}</strong> files can be dangerous and may harm your
-        device if they come from an untrusted source. Only download this if
-        you trust the sender.
-      </p>
+      <p class="risky-download-desc">${t('modals.risky_download.warning_html', { ext: this._escapeHtml(ext) })}</p>
       <div class="risky-download-actions">
-        <button class="risky-download-cancel">Cancel</button>
-        <button class="risky-download-confirm">Download Anyway</button>
+        <button class="risky-download-cancel">${t('modals.common.cancel')}</button>
+        <button class="risky-download-confirm">${t('modals.risky_download.download_anyway')}</button>
       </div>
     </div>
   `;
@@ -1226,8 +1220,8 @@ _toggleEmojiPicker(anchorEl) {
     });
     return b;
   };
-  sectionRow.appendChild(mkSectionBtn('emoji', t('emoji.section_emoji') || 'Emoji'));
-  sectionRow.appendChild(mkSectionBtn('sticker', t('emoji.section_sticker') || 'Stickers'));
+  sectionRow.appendChild(mkSectionBtn('emoji', t('emoji.section_emoji')));
+  sectionRow.appendChild(mkSectionBtn('sticker', t('emoji.section_sticker')));
   picker.appendChild(sectionRow);
 
   // ── Sticker section ──
@@ -1237,7 +1231,7 @@ _toggleEmojiPicker(anchorEl) {
     const stickerSearch = document.createElement('input');
     stickerSearch.type = 'text';
     stickerSearch.className = 'emoji-search-input';
-    stickerSearch.placeholder = t('emoji.sticker_search_placeholder') || 'Search stickers';
+    stickerSearch.placeholder = t('emoji.sticker_search_placeholder');
     stickerSearch.maxLength = 30;
     stickerSearchRow.appendChild(stickerSearch);
     picker.appendChild(stickerSearchRow);
@@ -1288,8 +1282,8 @@ _toggleEmojiPicker(anchorEl) {
       if (list.length === 0) {
         grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:0.75rem;width:100%;text-align:center">${
           stickers.length === 0
-            ? (t('emoji.no_stickers') || 'No stickers yet — an admin can upload some from the Manage Stickers panel')
-            : (t('emoji.no_results') || 'No results')
+            ? t('emoji.no_stickers')
+            : t('emoji.no_results')
         }</p>`;
         return;
       }
@@ -1757,12 +1751,12 @@ _switchGifTab(tab) {
 _setGifFooter(provider) {
   if (!provider) return;
   const footer = document.querySelector('.gif-picker-footer');
-  if (footer) footer.textContent = provider === 'tenor' ? 'Powered by Tenor' : 'Powered by GIPHY';
+  if (footer) footer.textContent = t('gifs.powered_by', { provider: provider === 'tenor' ? 'Tenor' : 'GIPHY' });
 },
 
 _loadTrendingGifs() {
   const grid = document.getElementById('gif-grid');
-  grid.innerHTML = '<div class="gif-picker-empty">Loading...</div>';
+  grid.innerHTML = `<div class="gif-picker-empty">${t('thread_list.loading')}</div>`;
   fetch('/api/gif/trending?limit=20', {
     headers: { 'Authorization': `Bearer ${this.token}` }
   })
@@ -1782,7 +1776,7 @@ _loadTrendingGifs() {
     })
     .catch(() => {
       if (this._gifTab === 'favorites') return;
-      grid.innerHTML = '<div class="gif-picker-empty">Failed to load GIFs</div>';
+      grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.load_failed')}</div>`;
     });
 },
 
@@ -2021,7 +2015,7 @@ _showGifSlashResults(query) {
   const picker = document.createElement('div');
   picker.id = 'gif-slash-picker';
   picker.className = 'gif-slash-picker';
-  picker.innerHTML = '<div class="gif-slash-loading">Searching GIFs...</div>';
+  picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.searching')}</div>`;
 
   // Position above the message input
   const inputArea = document.querySelector('.message-input-area');
@@ -2045,12 +2039,12 @@ _showGifSlashResults(query) {
     .then(r => r.json())
     .then(data => {
       if (data.error === 'gif_not_configured') {
-        picker.innerHTML = '<div class="gif-slash-loading">GIF search not configured — an admin needs to set up a Tenor (or GIPHY) API key (use the GIF button 🎞️)</div>';
+        picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.setup.unavailable_desc')}</div>`;
         return;
       }
       if (data.error) { picker.innerHTML = `<div class="gif-slash-loading">${this._escapeHtml(data.error)}</div>`; return; }
       const results = data.results || [];
-      if (results.length === 0) { picker.innerHTML = '<div class="gif-slash-loading">No GIFs found</div>'; return; }
+      if (results.length === 0) { picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.no_results')}</div>`; return; }
 
       picker.innerHTML = `<div class="gif-slash-header"><span>/gif ${this._escapeHtml(query)}</span><button class="icon-btn small gif-slash-close">&times;</button></div><div class="gif-slash-grid"></div>`;
       const grid = picker.querySelector('.gif-slash-grid');
@@ -2073,7 +2067,7 @@ _showGifSlashResults(query) {
       });
     })
     .catch(() => {
-      picker.innerHTML = '<div class="gif-slash-loading">GIF search failed</div>';
+      picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.search_failed')}</div>`;
     });
 },
 
@@ -2101,14 +2095,14 @@ _renderPollWidget(msgId, poll) {
   }).join('');
 
   const settings = [];
-  if (poll.multiVote) settings.push('Multiple votes');
-  if (poll.anonymous) settings.push('Anonymous');
+  if (poll.multiVote) settings.push(t('poll.multiple_votes'));
+  if (poll.anonymous) settings.push(t('poll.anonymous'));
   const settingsHtml = settings.length ? `<div class="poll-settings-info">${settings.join(' · ')}</div>` : '';
 
   return `<div class="poll-widget" data-msg-id="${msgId}">
     <div class="poll-question">${this._escapeHtml(poll.question)}</div>
     <div class="poll-options">${optionsHtml}</div>
-    <div class="poll-footer">${totalVotes} vote${totalVotes !== 1 ? 's' : ''}${settingsHtml ? ' · ' : ''}${settingsHtml}</div>
+    <div class="poll-footer">${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml ? ' · ' : ''}${settingsHtml}</div>
   </div>`;
 },
 
@@ -2142,7 +2136,7 @@ _updatePollVotes(messageId, votes, totalVotes) {
   if (footer) {
     const settingsInfo = footer.querySelector('.poll-settings-info');
     const settingsHtml = settingsInfo ? ' · ' + settingsInfo.outerHTML : '';
-    footer.innerHTML = `${totalVotes} vote${totalVotes !== 1 ? 's' : ''}${settingsHtml}`;
+    footer.innerHTML = `${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml}`;
   }
 
   if (wasAtBottom) this._scrollToBottom(true);
@@ -2712,7 +2706,7 @@ _renderThreadPreview(parentId, thread) {
   return `
     <button class="thread-preview" data-thread-parent="${parentId}">
       ${participantAvatars}
-      <span class="thread-preview-count">${thread.count} ${thread.count === 1 ? 'Reply' : 'Replies'}</span>
+      <span class="thread-preview-count">${t(thread.count === 1 ? 'thread_runtime.reply_one' : 'thread_runtime.reply_other', { count: thread.count })}</span>
       <span class="thread-preview-time">${timeAgo}</span>
       <span class="thread-preview-arrow">›</span>
     </button>
@@ -2723,12 +2717,12 @@ _relativeTime(isoStr) {
   if (!isoStr) return '';
   const diff = Date.now() - new Date(isoStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t('thread_runtime.just_now');
+  if (mins < 60) return t('thread_runtime.minutes_ago', { count: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t('thread_runtime.hours_ago', { count: hours });
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return t('thread_runtime.days_ago', { count: days });
 },
 
 _setThreadParentHeader(meta = {}) {
@@ -2736,7 +2730,7 @@ _setThreadParentHeader(meta = {}) {
   const nameEl = document.getElementById('thread-parent-name');
   if (!wrap || !nameEl) return;
 
-  const baseUsername = (meta.username || '').trim() || 'Thread starter';
+  const baseUsername = (meta.username || '').trim() || t('thread_runtime.starter');
   // Apply the local user's nickname assignment so threads match the rest of
   // the UI (members list, message author, mentions). Falls back to the
   // server-provided display name when no nickname is set. (#5291)
@@ -2761,7 +2755,7 @@ _setThreadParentHeader(meta = {}) {
 _setThreadReply(msgEl, msgId) {
   const author = msgEl.querySelector('.thread-msg-author')?.textContent
     || this._getNickname?.(parseInt(msgEl.dataset.userId, 10), msgEl.dataset.username)
-    || msgEl.dataset.username || 'someone';
+    || msgEl.dataset.username || t('voice.someone');
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
   const preview = rawContent.length > 70 ? rawContent.substring(0, 70) + '…' : rawContent;
   this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
@@ -2770,7 +2764,7 @@ _setThreadReply(msgEl, msgId) {
   const text = document.getElementById('thread-reply-preview-text');
   if (!bar || !text) return;
   bar.style.display = 'flex';
-  text.innerHTML = `Replying to <strong>${this._escapeHtml(author)}</strong>: ${this._escapeHtml(preview)}`;
+  text.innerHTML = t('thread_runtime.replying_to', { author: this._escapeHtml(author), preview: this._escapeHtml(preview) });
 
   const input = document.getElementById('thread-input');
   if (input) input.focus();
@@ -2786,9 +2780,9 @@ _quoteThreadMessage(msgEl) {
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
   const author = msgEl.querySelector('.thread-msg-author')?.textContent
     || this._getNickname?.(parseInt(msgEl.dataset.userId, 10), msgEl.dataset.username)
-    || msgEl.dataset.username || 'someone';
+    || msgEl.dataset.username || t('voice.someone');
   const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
-  const quoteText = `> @${author} wrote:\n${quotedLines}\n`;
+  const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
 
   const input = document.getElementById('thread-input');
   if (!input) return;
@@ -2854,9 +2848,7 @@ _updateThreadMentionsPill() {
   }
   pill.style.display = '';
   cnt.textContent = String(list.length);
-  pill.title = list.length === 1
-    ? `1 mention in a thread — click to open`
-    : `${list.length} mentions in threads — click to open the most recent`;
+  pill.title = t(list.length === 1 ? 'thread_runtime.mention_one' : 'thread_runtime.mention_other', { count: list.length });
 },
 _openMostRecentThreadMention() {
   if (!this._threadMentions) return;
@@ -2916,7 +2908,7 @@ _openDMPiP(code) {
   // Title: partner name
   const partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const titleEl = document.getElementById('dm-pip-title');
-  if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${partnerName} (you)` : `@ ${partnerName}`;
+  if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
 
   // Header avatar — pulled from the partner's online presence (best effort)
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
@@ -2947,10 +2939,10 @@ _openDMPiP(code) {
     } else {
       statusClass = 'away'; // partner not in online list → treat as offline/away
     }
-    const statusLabel = statusClass === 'dnd' ? 'Do Not Disturb'
-      : statusClass === 'away' ? 'Offline / Away'
-      : statusClass === 'invisible' ? 'Invisible'
-      : 'Online';
+    const statusLabel = statusClass === 'dnd' ? t('app.profile.dnd')
+      : statusClass === 'away' ? t('dm_runtime.offline_away')
+      : statusClass === 'invisible' ? t('app.profile.invisible')
+      : t('app.profile.online');
     const statusDot = `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
     if (avatarUrl) {
       avatarWrap.style.backgroundColor = '';
@@ -2983,7 +2975,7 @@ _openDMPiP(code) {
 
   // Clear messages and request fresh
   const msgsEl = document.getElementById('dm-pip-messages');
-  if (msgsEl) msgsEl.innerHTML = '<div class="dm-pip-loading">Loading…</div>';
+  if (msgsEl) msgsEl.innerHTML = `<div class="dm-pip-loading">${t('thread_list.loading')}</div>`;
   // E2E: ensure partner key is loaded before history arrives so messages decrypt.
   // For self-DMs the "partner" is the user themselves, so seed our own public
   // key directly instead of round-tripping through the server. Avoids any
@@ -3004,7 +2996,7 @@ _openDMPiP(code) {
   this._dmPipLoadingTimer = setTimeout(() => {
     const stillLoading = document.querySelector('#dm-pip-messages .dm-pip-loading');
     if (stillLoading && this._activeDMPip === code) {
-      stillLoading.textContent = 'No messages yet.';
+      stillLoading.textContent = t('dm_runtime.no_messages');
     }
   }, 6000);
 
@@ -3168,7 +3160,7 @@ _setDMPiPReply(msgEl, msgId) {
       prev = prev.previousElementSibling;
     }
   }
-  author = author || 'someone';
+  author = author || t('voice.someone');
   const content = msgEl.querySelector('.message-content')?.textContent || '';
   const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
   this._dmPipReplyingTo = { id: msgId, username: author, content };
@@ -3176,7 +3168,7 @@ _setDMPiPReply(msgEl, msgId) {
   if (bar) {
     bar.style.display = 'flex';
     const txt = document.getElementById('dm-pip-reply-preview-text');
-    if (txt) txt.innerHTML = `Replying to <strong>${this._escapeHtml(author)}</strong>: ${this._escapeHtml(preview)}`;
+    if (txt) txt.innerHTML = t('thread_runtime.replying_to', { author: this._escapeHtml(author), preview: this._escapeHtml(preview) });
   }
   document.getElementById('dm-pip-input')?.focus();
 },
@@ -3198,9 +3190,9 @@ _quoteDMPiPMessage(msgEl) {
       prev = prev.previousElementSibling;
     }
   }
-  author = author || 'someone';
+  author = author || t('voice.someone');
   const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
-  const quoteText = `> @${author} wrote:\n${quotedLines}\n`;
+  const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
   const input = document.getElementById('dm-pip-input');
   if (!input) return;
   input.value = input.value ? `${input.value}\n${quoteText}` : quoteText;
@@ -3252,24 +3244,36 @@ _sendDMPiPMessage() {
           unflip:     () => `${arg ? arg + ' ' : ''}┬─┬ ノ( ゜-゜ノ)`,
           lenny:      () => `${arg ? arg + ' ' : ''}( ͡° ͜ʖ ͡°)`,
           disapprove: () => `${arg ? arg + ' ' : ''}ಠ_ಠ`,
-          bbs:        () => `🕐 ${displayName} will be back soon`,
+          bbs:        () => t('commands.output.bbs', { name: displayName }),
           boobs:      () => `( . Y . )`,
           butt:       () => `( . )( . )`,
-          brb:        () => `⏳ ${displayName} will be right back`,
-          afk:        () => `💤 ${displayName} is away from keyboard`,
+          brb:        () => t('commands.output.brb', { name: displayName }),
+          afk:        () => t('commands.output.afk', { name: displayName }),
           me:         () => arg ? `_${displayName} ${arg}_` : null,
-          flip:       () => `🪙 ${displayName} flipped a coin: **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**!`,
+          flip:       () => t('commands.output.flip', {
+            name: displayName,
+            side: t(Math.random() < 0.5 ? 'commands.output.heads' : 'commands.output.tails'),
+          }),
           roll:       () => {
             const m = (arg || '1d6').match(/^(\d{1,2})?d(\d{1,4})$/i);
-            if (!m) return `🎲 ${displayName} rolled: **${Math.floor(Math.random() * 6) + 1}**`;
+            if (!m) return t('commands.output.roll_simple', {
+              name: displayName,
+              result: Math.floor(Math.random() * 6) + 1,
+            });
             const count = Math.min(parseInt(m[1] || '1'), 20);
             const sides = Math.min(parseInt(m[2]), 1000);
             const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
             const total = rolls.reduce((a, b) => a + b, 0);
-            return `🎲 ${displayName} rolled ${count}d${sides}: [${rolls.join(', ')}] = **${total}**`;
+            return t('commands.output.roll', {
+              name: displayName,
+              count,
+              sides,
+              rolls: rolls.join(', '),
+              total,
+            });
           },
-          hug:        () => arg ? `🤗 ${displayName} hugs ${arg}` : null,
-          wave:       () => `👋 ${displayName} waves${arg ? ' ' + arg : ''}`,
+          hug:        () => arg ? t('commands.output.hug', { name: displayName, target: arg }) : null,
+          wave:       () => t('commands.output.wave', { name: displayName, text: arg ? ` ${arg}` : '' }),
         };
         if (clientSlash[cmd]) {
           const transformed = clientSlash[cmd]();
@@ -3317,8 +3321,8 @@ _openThread(parentId) {
 
   // Update header
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
-  const author = msgEl?.querySelector('.message-author')?.textContent || 'Thread starter';
-  document.getElementById('thread-panel-title').textContent = 'Thread';
+  const author = msgEl?.querySelector('.message-author')?.textContent || t('thread_runtime.starter');
+  document.getElementById('thread-panel-title').textContent = t('msg_toolbar.thread');
   const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
   document.getElementById('thread-parent-preview').textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
 
@@ -3343,7 +3347,7 @@ _setThreadPiPEnabled(enabled) {
   const isOn = !!enabled;
   panel.classList.toggle('pip', isOn);
   pipBtn.textContent = isOn ? '▣' : '⧉';
-  pipBtn.title = isOn ? 'Dock thread panel' : 'Pop out thread (PiP)';
+  pipBtn.title = t(isOn ? 'thread_runtime.dock_panel' : 'thread_runtime.pop_out');
   pipBtn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
   localStorage.setItem('haven_thread_panel_pip', isOn ? '1' : '0');
 
@@ -3455,12 +3459,12 @@ _appendThreadMessage(msg) {
   const iEdit = iconPair('✏️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M13.5 6.5l3.5 3.5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
   const iDelete = iconPair('🗑️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 7V5h6v2" stroke-width="1.8" stroke-linecap="round"></path><path d="M7 7l1 12h8l1-12" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
   const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
-  const threadCoreToolbarBtns = `<button data-thread-action="react" title="React" aria-label="React">${iReact}</button><button data-thread-action="reply" title="Reply">${iReply}</button><button data-thread-action="quote" title="Quote">${iQuote}</button>`;
+  const threadCoreToolbarBtns = `<button data-thread-action="react" title="${t('msg_toolbar.react')}" aria-label="${t('msg_toolbar.react')}">${iReact}</button><button data-thread-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button><button data-thread-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>`;
   let threadOverflowToolbarBtns = '';
-  if (canEdit) threadOverflowToolbarBtns += `<button data-thread-action="edit" title="Edit">${iEdit}</button>`;
-  if (canDelete) threadOverflowToolbarBtns += `<button data-thread-action="delete" title="Delete">${iDelete}</button>`;
+  if (canEdit) threadOverflowToolbarBtns += `<button data-thread-action="edit" title="${t('msg_toolbar.edit')}">${iEdit}</button>`;
+  if (canDelete) threadOverflowToolbarBtns += `<button data-thread-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>`;
   const threadOverflowHtml = threadOverflowToolbarBtns
-    ? `<div class="thread-msg-more"><button class="thread-msg-more-btn" type="button" aria-label="More actions">${iMore}</button><div class="thread-msg-overflow">${threadOverflowToolbarBtns}</div></div>`
+    ? `<div class="thread-msg-more"><button class="thread-msg-more-btn" type="button" aria-label="${t('app.actions.message_actions')}">${iMore}</button><div class="thread-msg-overflow">${threadOverflowToolbarBtns}</div></div>`
     : '';
 
   // Group consecutive replies from the same author (within 5 min, no reply
@@ -3625,7 +3629,7 @@ _setReply(msgEl, msgId) {
       prev = prev.previousElementSibling;
     }
   }
-  author = author || 'someone';
+  author = author || t('voice.someone');
   const content = msgEl.querySelector('.message-content')?.textContent || '';
   const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
 
@@ -3634,7 +3638,7 @@ _setReply(msgEl, msgId) {
   const bar = document.getElementById('reply-bar');
   bar.style.display = 'flex';
   document.getElementById('reply-preview-text').innerHTML =
-    `Replying to <strong>${this._escapeHtml(author)}</strong>: ${this._escapeHtml(preview)}`;
+    t('thread_runtime.replying_to', { author: this._escapeHtml(author), preview: this._escapeHtml(preview) });
   document.getElementById('message-input').focus();
 },
 
@@ -3657,11 +3661,11 @@ _quoteMessage(msgEl) {
       prev = prev.previousElementSibling;
     }
   }
-  author = author || 'someone';
+  author = author || t('voice.someone');
 
   // Build the blockquote text — each line prefixed with >
   const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
-  const quoteText = `> @${author} wrote:\n${quotedLines}\n`;
+  const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
 
   const input = document.getElementById('message-input');
   // If there's already text, add a newline before the quote
@@ -3711,7 +3715,7 @@ _startEditMessage(msgEl, msgId) {
 
   const btnRow = document.createElement('div');
   btnRow.className = 'edit-actions';
-  btnRow.innerHTML = `<button class="edit-emoji-btn" title="${t('app.input_bar.emoji_btn') || 'Emoji'}">😀</button><button class="edit-save-btn">${t('modals.common.save')}</button><button class="edit-cancel-btn">${t('modals.common.cancel')}</button>`;
+  btnRow.innerHTML = `<button class="edit-emoji-btn" title="${t('app.input_bar.emoji_btn')}">😀</button><button class="edit-save-btn">${t('modals.common.save')}</button><button class="edit-cancel-btn">${t('modals.common.cancel')}</button>`;
   contentEl.appendChild(btnRow);
 
   // Emoji button in edit bar opens the picker
@@ -3909,8 +3913,8 @@ _maybeShowDmSafetyNotice(container) {
   notice.className = 'dm-safety-notice';
   notice.innerHTML =
     '<span class="dm-safety-icon" aria-hidden="true">🛡️</span>' +
-    '<span class="dm-safety-text">Haven can\'t verify anyone\'s identity. Names aren\'t unique, so make sure you actually know who you\'re talking to before sharing anything.</span>' +
-    '<button type="button" class="dm-safety-dismiss">Got it, don\'t show again</button>';
+    `<span class="dm-safety-text">${t('dm_runtime.safety_notice')}</span>` +
+    `<button type="button" class="dm-safety-dismiss">${t('dm_runtime.safety_dismiss')}</button>`;
 
   notice.querySelector('.dm-safety-dismiss').addEventListener('click', () => {
     try { localStorage.setItem('haven_dm_safety_dismissed', '1'); } catch {}
@@ -3955,11 +3959,11 @@ _enforceDmLinkPolicy(containerEl) {
     try { host = new URL(a.href).hostname; } catch {}
     const span = document.createElement('span');
     span.className = 'blocked-link';
-    span.title = `Links to ${host} are not allowed on this server, so this was not made clickable.`;
+    span.title = t('dm_runtime.blocked_link_tooltip', { host });
     span.textContent = a.textContent;
     const badge = document.createElement('span');
     badge.className = 'blocked-link-badge';
-    badge.textContent = ' ⚠ blocked link';
+    badge.textContent = ` ⚠ ${t('dm_runtime.blocked_link_badge')}`;
     span.appendChild(badge);
     a.replaceWith(span);
   });
@@ -3974,7 +3978,7 @@ _enforceDmLinkPolicy(containerEl) {
     ph.setAttribute('role', 'button');
     ph.tabIndex = 0;
     ph.dataset.hiddenSrc = origin;
-    ph.textContent = '⚠ Image from a blocked domain — click to load anyway';
+    ph.textContent = t('dm_runtime.blocked_image');
     img.replaceWith(ph);
   });
 },
@@ -4256,24 +4260,24 @@ _confirmAdminResetPassword(userId, username) {
   overlay.innerHTML = `
     <div class="modal admin-reset-pw-modal">
       <div class="modal-header">
-        <h4>🔑 ${t('modals.admin_reset_pw.title') || 'Reset Password'}</h4>
+        <h4>🔑 ${t('modals.admin_reset_pw.title')}</h4>
         <button class="modal-close-btn admin-reset-pw-close">&times;</button>
       </div>
       <div class="modal-body">
-        <p>${(t('modals.admin_reset_pw.confirm_prompt') || 'Generate a one-time temporary password for <b>{username}</b>?').replace('{username}', safeName)}</p>
+        <p>${t('modals.admin_reset_pw.confirm_prompt').replace('{username}', safeName)}</p>
         <div style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
-          <strong>⚠️ ${t('modals.admin_reset_pw.dm_warning_title') || 'Encrypted DM history will be lost'}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.dm_warning_body') || "The user's E2E wrap key is derived from their password. Once they finish the forced change-password flow with a new password, their encrypted DM history becomes permanently unreadable on their side. The user can avoid this by signing in with their <em>original</em> password (which we keep on file as an escape hatch) instead of the temp one, which silently cancels this reset."}</p>
+          <strong>⚠️ ${t('modals.admin_reset_pw.dm_warning_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.dm_warning_body')}</p>
         </div>
         <div style="background:rgba(241,196,15,0.12);border:1px solid rgba(241,196,15,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
-          <strong>🔐 ${t('modals.admin_reset_pw.mfa_required_title') || 'Two-factor authentication required'}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_required_body') || 'The target user must have 2FA enabled before an admin can reset their password. Otherwise the temp password alone would be enough to take over the account. If they have not enabled 2FA, this will fail with a clear error.'}</p>
+          <strong>🔐 ${t('modals.admin_reset_pw.mfa_required_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_required_body')}</p>
         </div>
-        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">${t('modals.admin_reset_pw.transmit_hint') || 'You will be shown the temp password once. Deliver it to the user out-of-band (in person, on a phone call, etc.). It is never shown again.'}</p>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">${t('modals.admin_reset_pw.transmit_hint')}</p>
       </div>
       <div class="modal-actions">
-        <button class="btn-sm admin-reset-pw-cancel">${t('modals.common.cancel') || 'Cancel'}</button>
-        <button class="btn-sm btn-accent btn-danger-fill admin-reset-pw-confirm">${t('modals.admin_reset_pw.confirm_btn') || 'Generate Temp Password'}</button>
+        <button class="btn-sm admin-reset-pw-cancel">${t('modals.common.cancel')}</button>
+        <button class="btn-sm btn-accent btn-danger-fill admin-reset-pw-confirm">${t('modals.admin_reset_pw.confirm_btn')}</button>
       </div>
     </div>
   `;
@@ -4285,7 +4289,7 @@ _confirmAdminResetPassword(userId, username) {
   overlay.querySelector('.admin-reset-pw-confirm').addEventListener('click', () => {
     const confirmBtn = overlay.querySelector('.admin-reset-pw-confirm');
     confirmBtn.disabled = true;
-    confirmBtn.textContent = t('modals.admin_reset_pw.working') || 'Working...';
+    confirmBtn.textContent = t('modals.admin_reset_pw.working');
     this.socket.emit('admin-reset-user-password', { userId }, (resp) => {
       close();
       if (!resp || resp.error) {
@@ -4296,7 +4300,7 @@ _confirmAdminResetPassword(userId, username) {
           this._showAdminResetMfaRequired(username);
           return;
         }
-        const msg = resp?.error || t('modals.admin_reset_pw.errors.generic') || 'Failed to reset password';
+        const msg = resp?.error || t('modals.admin_reset_pw.errors.generic');
         if (this._showToast) this._showToast(msg, 'error', 8000);
         else alert(msg);
         return;
@@ -4319,19 +4323,19 @@ _showAdminResetMfaRequired(username) {
   overlay.innerHTML = `
     <div class="modal admin-reset-mfa-modal">
       <div class="modal-header">
-        <h4>🔐 ${t('modals.admin_reset_pw.mfa_required_title') || 'Two-factor authentication required'}</h4>
+        <h4>🔐 ${t('modals.admin_reset_pw.mfa_required_title')}</h4>
         <button class="modal-close-btn admin-reset-mfa-close">&times;</button>
       </div>
       <div class="modal-body">
-        <p>${(t('modals.admin_reset_pw.mfa_blocked_prompt') || "This isn't a bug. Before you can reset <b>{username}</b>'s password, that user needs to turn on two-factor authentication (2FA) on their own account first, under Settings → Account.").replace('{username}', safeName)}</p>
+        <p>${t('modals.admin_reset_pw.mfa_blocked_prompt').replace('{username}', safeName)}</p>
         <div style="background:rgba(52,152,219,0.12);border:1px solid rgba(52,152,219,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
-          <strong>💡 ${t('modals.admin_reset_pw.mfa_blocked_why_title') || 'Why this is required'}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_blocked_why_body') || 'An admin reset hands out a temporary password. If the user has no 2FA, that temp password alone would be enough for anyone who sees it (including a rogue admin) to take over the account. Requiring 2FA means the temp password is useless without their authenticator device.'}</p>
+          <strong>💡 ${t('modals.admin_reset_pw.mfa_blocked_why_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_blocked_why_body')}</p>
         </div>
-        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:8px;">${(t('modals.admin_reset_pw.mfa_blocked_action') || 'Ask {username} to enable 2FA, then run the reset again.').replace('{username}', safeName)}</p>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:8px;">${t('modals.admin_reset_pw.mfa_blocked_action').replace('{username}', safeName)}</p>
       </div>
       <div class="modal-actions">
-        <button class="btn-sm btn-accent admin-reset-mfa-ok" type="button">${t('modals.common.got_it') || 'Got it'}</button>
+        <button class="btn-sm btn-accent admin-reset-mfa-ok" type="button">${t('modals.common.got_it')}</button>
       </div>
     </div>
   `;
@@ -4352,21 +4356,21 @@ _showAdminResetPwReveal(username, tempPassword) {
   overlay.innerHTML = `
     <div class="modal admin-reset-pw-reveal-modal">
       <div class="modal-header">
-        <h4>🔑 ${t('modals.admin_reset_pw.reveal_title') || 'Temp Password Generated'}</h4>
+        <h4>🔑 ${t('modals.admin_reset_pw.reveal_title')}</h4>
       </div>
       <div class="modal-body">
-        <p>${(t('modals.admin_reset_pw.reveal_prompt') || 'One-time temp password for <b>{username}</b>:').replace('{username}', safeName)}</p>
+        <p>${t('modals.admin_reset_pw.reveal_prompt').replace('{username}', safeName)}</p>
         <div style="display:flex;gap:8px;align-items:center;margin:12px 0;">
           <code id="admin-reset-pw-value" style="flex:1;font-family:monospace;font-size:1.2rem;letter-spacing:0.05em;padding:10px 12px;background:var(--bg-secondary,#222);border:1px solid var(--border-color,#444);border-radius:6px;user-select:all;">${safePw}</code>
-          <button class="btn-sm admin-reset-pw-copy" type="button">📋 ${t('modals.common.copy') || 'Copy'}</button>
+          <button class="btn-sm admin-reset-pw-copy" type="button">📋 ${t('modals.common.copy')}</button>
         </div>
         <div style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:8px 12px;font-size:0.85rem;">
-          <strong>⚠️ ${t('modals.admin_reset_pw.reveal_warning_title') || 'Save this now'}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.reveal_warning_body') || 'This password is never shown again. Deliver it to the user out-of-band. The user will be forced to change it on next login (or sign in with their original password to cancel the reset and keep their DM history).'}</p>
+          <strong>⚠️ ${t('modals.admin_reset_pw.reveal_warning_title')}</strong>
+          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.reveal_warning_body')}</p>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-sm btn-accent admin-reset-pw-reveal-close" type="button">${t('modals.common.done') || 'Done'}</button>
+        <button class="btn-sm btn-accent admin-reset-pw-reveal-close" type="button">${t('modals.common.done')}</button>
       </div>
     </div>
   `;
@@ -4378,10 +4382,10 @@ _showAdminResetPwReveal(username, tempPassword) {
       await navigator.clipboard.writeText(tempPassword);
       const btn = overlay.querySelector('.admin-reset-pw-copy');
       const orig = btn.textContent;
-      btn.textContent = '✓ ' + (t('modals.common.copied') || 'Copied');
+      btn.textContent = '✓ ' + t('modals.common.copied');
       setTimeout(() => { btn.textContent = orig; }, 1500);
     } catch {
-      if (this._showToast) this._showToast(t('modals.common.copy_failed') || 'Copy failed', 'error');
+      if (this._showToast) this._showToast(t('modals.common.copy_failed'), 'error');
     }
   });
 },
@@ -4459,7 +4463,7 @@ _confirmTransferAdmin(userId, username) {
         pwInput.focus();
       } else if (res && res.success) {
         close();
-        this._showToast(res.message || 'Admin transferred', 'info');
+        this._showToast(t('modals.transfer_admin.success'), 'info');
       }
     });
   });

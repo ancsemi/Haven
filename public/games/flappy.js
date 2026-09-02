@@ -6,7 +6,8 @@
 const savedTheme = localStorage.getItem('haven_theme');
 if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await I18n.init();
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
@@ -299,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const list = document.getElementById('leaderboard-list');
     if (!list) return;
     if (!data || !data.length) {
-      list.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No scores yet</p>';
+      list.innerHTML = `<p style="font-size:11px;color:var(--text-muted)">${t('games.flappy.no_scores')}</p>`;
       return;
     }
     list.innerHTML = data.slice(0, 20).map((s, i) => {
@@ -335,13 +336,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (state === 'waiting') {
-      drawOverlay('� Shippy Container', 'Click or press Space to start');
+      drawOverlay('🚢 Shippy Container', t('games.flappy.start'));
     } else if (state === 'dead') {
-      drawOverlay('Score: ' + score, 'Click or press Space to retry');
+      drawOverlay(t('games.flappy.score_value', { score }), t('games.flappy.retry'));
       if (score === best && score > 0) {
         ctx.fillStyle = '#ffc107';
         ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('\u2b50 New Best! \u2b50', W / 2, H / 2 + 40);
+        ctx.fillText(t('games.flappy.new_best'), W / 2, H / 2 + 40);
       }
     }
   }
