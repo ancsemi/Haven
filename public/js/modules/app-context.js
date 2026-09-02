@@ -515,6 +515,25 @@ _setupNotifications() {
   // credentials for, so we don't offer a button that can only fail.
   this.socket?.emit('get-connections');
 
+  // ── Listening presence (any music player) ──
+  // A single on/off switch: on generates a webhook token a player posts to,
+  // off removes it. The read-only URL box is only shown once we have a token.
+  const listeningToggle = document.getElementById('listening-enabled');
+  const listeningUrlRow = document.getElementById('listening-url-row');
+  const listeningUrlInput = document.getElementById('listening-url');
+  // Selecting the whole URL on focus makes copy-paste one gesture.
+  listeningUrlInput?.addEventListener('focus', () => listeningUrlInput.select());
+  this._applyListeningState = (token) => {
+    const on = !!token;
+    if (listeningToggle) listeningToggle.checked = on;
+    if (listeningUrlInput) listeningUrlInput.value = on ? `${location.origin}/api/webhooks/listening/${token}` : '';
+    if (listeningUrlRow) listeningUrlRow.hidden = !on;
+  };
+  listeningToggle?.addEventListener('change', () => {
+    this.socket?.emit('set-listening', { enabled: listeningToggle.checked });
+  });
+  this.socket?.emit('get-listening');
+
   // Coming back from a Steam/Spotify redirect? Report the outcome once.
   this._handleConnectRedirect?.();
 

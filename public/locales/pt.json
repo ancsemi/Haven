@@ -943,6 +943,7 @@
     "activity": "Atividade",
     "activity_playing": "Jogando",
     "activity_listening": "Ouvindo",
+    "activity_paused": "Pausado",
     "camera_on": "Câmera ligada",
     "connections": {
       "lastfm_blurb": "Um serviço gratuito que registra o que você ouve. Conecte-o ao Spotify, YouTube Music, Apple Music, Navidrome e outros para o Haven mostrar sua música.",
@@ -1491,6 +1492,13 @@
       "show_music": "Mostrar música",
       "connections": "Conexões",
       "connections_hint": "O reprodutor do Haven não precisa de conexão; a música é compartilhada automaticamente enquanto você ouve em um canal de voz."
+    },
+    "listening": {
+      "title": "Webhook de reprodução",
+      "note": "Consulte a <a href=\"https://github.com/ancsemi/Haven/blob/main/docs/listening-api.md\" target=\"_blank\" rel=\"noopener noreferrer\">API de reprodução</a>.",
+      "toggle": "Mostrar minha música no Haven",
+      "url_label": "URL do seu webhook",
+      "url_hint": "Configure o plugin ou script do seu reprodutor para usar esta URL. Mantenha-a em segredo; qualquer pessoa com ela pode publicar em seu perfil."
     },
     "sounds_section": {
       "title": "Sons",

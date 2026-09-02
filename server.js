@@ -3732,6 +3732,111 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   res.status(200).json({ success: true, message_id: result.lastInsertRowid });
 });
 
+// ── Listening presence webhook (any music player) ──
+// A reserved path, deliberately kept off the generic /api/webhooks/:token bot
+// route (different segment count, so the two never collide). A user generates
+// the token from Settings → Activity → Listening; any player's plugin or a
+// small script posts presence here (title/artist/album/position/duration +
+// optional cover bytes). See docs/listening-api.md for the full contract.
+//
+// Strict on purpose: this is an unauthenticated-by-header endpoint reachable by
+// a user-generated token, and the cover bytes are served back to other users.
+const MAX_LISTENING_DURATION = 24 * 60 * 60; // cap seconds so a phony duration can't linger
+const listeningLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: 'Rate limit exceeded' } });
+// The cover route is viewer-facing (every open profile card fetches it), so it
+// gets a looser cap than the single-poster webhook while still bounding abuse.
+const listeningCoverLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Rate limit exceeded' } });
+const listeningUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 512 * 1024, files: 1, fields: 8, fieldSize: 4096 },
+}).single('cover');
+
+// sniffImageType returns the MIME type from a buffer's magic bytes, or null for
+// anything that isn't one of the accepted image formats.
+function sniffImageType(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+  return null;
+}
+
+app.post('/api/webhooks/listening/:token', listeningLimiter, (req, res) => {
+  // Resolve the token before touching the body, so a post to an unknown or
+  // malformed token is refused without buffering up to 512KB of upload first.
+  const { token } = req.params;
+  if (!token || typeof token !== 'string' || !/^[0-9a-f]{64}$/i.test(token)) {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
+  const row = require('./src/database').getDb()
+    .prepare('SELECT user_id FROM listening_tokens WHERE token = ?')
+    .get(token);
+  if (!row) return res.status(404).json({ error: 'Webhook not found' });
+
+  listeningUpload(req, res, (err) => {
+    if (err) return res.status(400).json({ error: 'Invalid upload' });
+
+    const engine = activityRef.engine;
+    if (!engine) return res.sendStatus(204);
+
+    const b = req.body || {};
+    const state = typeof b.state === 'string' ? b.state : '';
+
+    // Stop/expired clears the profile; no track fields needed.
+    if (state === 'stopped' || state === 'expired') {
+      engine.clearListeningPresence(row.user_id);
+      return res.sendStatus(204);
+    }
+
+    // Cover is optional, but when present the bytes must be a real image.
+    let cover = null, coverType = null;
+    if (req.file && req.file.buffer && req.file.buffer.length) {
+      coverType = sniffImageType(req.file.buffer);
+      if (!coverType) return res.status(400).json({ error: 'Unsupported cover format' });
+      cover = req.file.buffer;
+    }
+
+    const hasTitle = typeof b.title === 'string' && b.title.trim();
+    // An empty body is a reachability ping (or nothing playing); accept it.
+    if (!cover && !hasTitle) return res.sendStatus(204);
+    if (!hasTitle) return res.status(400).json({ error: 'Title required' });
+
+    // Every track has a duration by definition; reject anything without one and
+    // cap it so a track can't schedule a runaway expiry.
+    let duration = parseInt(b.duration, 10);
+    if (!duration || duration <= 0) return res.status(400).json({ error: 'Duration required' });
+    duration = Math.min(duration, MAX_LISTENING_DURATION);
+
+    engine.setListeningPresence(row.user_id, {
+      title: b.title,
+      artist: typeof b.artist === 'string' ? b.artist : '',
+      album: typeof b.album === 'string' ? b.album : '',
+      position: parseInt(b.position, 10) || 0,
+      duration,
+      cover,
+      coverType,
+      paused: state === 'paused',
+      heartbeat: state === 'heartbeat',
+      source: typeof b.source === 'string' ? b.source : '',
+    });
+    return res.sendStatus(204);
+  });
+});
+
+// Serves a user's current listening cover from memory. The opaque version must
+// match, so the URL only works for someone who received the current presence.
+app.get('/api/activity/listening-cover/:userId', listeningCoverLimiter, (req, res) => {
+  const engine = activityRef.engine;
+  const userId = parseInt(req.params.userId, 10);
+  const cover = engine && !isNaN(userId) ? engine.getListeningCover(userId) : null;
+  if (!cover || req.query.v !== cover.version) return res.sendStatus(404);
+  res.setHeader('Content-Type', cover.contentType);
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  return res.end(cover.buf);
+});
+
 // Voice presence is scoped to the bot's assigned channel, channels its
 // creator belongs to, or every non-DM channel when its creator is an admin.
 app.get('/api/webhooks/:token/voice/channels', webhookLimiter, (req, res) => {

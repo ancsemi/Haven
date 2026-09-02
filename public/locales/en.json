@@ -943,6 +943,7 @@
     "activity": "Activity",
     "activity_playing": "Playing",
     "activity_listening": "Listening to",
+    "activity_paused": "Paused",
     "camera_on": "Camera on",
     "connections": {
       "lastfm_blurb": "A free service that tracks what you listen to. Connect it to Spotify, YouTube Music, Apple Music, Navidrome and more — then Haven can show your music.",
@@ -1491,6 +1492,13 @@
       "show_music": "Show music",
       "connections": "Connections",
       "connections_hint": "Haven's own music player needs no connection — it shares automatically while you're listening in a voice channel."
+    },
+    "listening": {
+      "title": "Listening Webhook",
+      "note": "Please refer to the <a href=\"https://github.com/ancsemi/Haven/blob/main/docs/listening-api.md\" target=\"_blank\" rel=\"noopener noreferrer\">Listening API</a>.",
+      "toggle": "Show my music on Haven",
+      "url_label": "Your webhook URL",
+      "url_hint": "Point your player's plugin or script at this URL. Keep it secret; anyone with it can post to your profile."
     },
     "sounds_section": {
       "title": "Sounds",
