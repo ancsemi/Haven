@@ -103,13 +103,36 @@ test('group DM rules', async (t) => {
   });
 
   let code;
-  await t.test('a group DM can be created with three members', async () => {
+  await t.test('a group DM invites rather than silently joining people', async () => {
     const opened = next(A, ['group-dm-opened', 'error-msg']);
+    const bobInvite = next(B, ['group-dm-invite', 'group-dm-opened']);
+    const carolInvite = next(C, ['group-dm-invite', 'group-dm-opened']);
     A.emit('start-group-dm', { userIds: [bob.user.id, carol.user.id], name: 'Test Group' });
     const { event, data } = await opened;
     assert.strictEqual(event, 'group-dm-opened', `expected group-dm-opened, got ${event}`);
-    assert.strictEqual(data.members.length, 3);
+    assert.strictEqual(data.members.length, 1, 'only the creator is a member until others accept');
+    assert.strictEqual(data.pending.length, 2);
     code = data.code;
+    assert.strictEqual((await bobInvite).event, 'group-dm-invite');
+    assert.strictEqual((await carolInvite).event, 'group-dm-invite');
+  });
+
+  await t.test('the same membership reuses the existing group', async () => {
+    const opened = next(A, ['group-dm-opened', 'error-msg']);
+    A.emit('start-group-dm', { userIds: [carol.user.id, bob.user.id], name: 'Another name' });
+    const { event, data } = await opened;
+    assert.strictEqual(event, 'group-dm-opened');
+    assert.strictEqual(data.code, code);
+  });
+
+  await t.test('invitees join only after they accept', async () => {
+    const bobOpened = next(B, ['group-dm-opened', 'error-msg']);
+    B.emit('accept-group-dm', { code });
+    assert.strictEqual((await bobOpened).event, 'group-dm-opened');
+    const carolOpened = next(C, ['group-dm-opened', 'error-msg']);
+    C.emit('accept-group-dm', { code });
+    const { data } = await carolOpened;
+    assert.strictEqual(data.members.length, 3);
   });
 
   await t.test('a two-person group is refused', async () => {
@@ -178,10 +201,25 @@ test('group DM rules', async (t) => {
     assert.strictEqual(event, 'error-msg');
   });
 
-  await t.test('a rewrap reaches only the intended recipient', async () => {
+  await t.test('a rewrap without a request from that member is REJECTED', async () => {
+    const r = next(A, ['group-key-rewrapped', 'error-msg', 'public-key-conflict']);
+    A.emit('rewrap-group-key', {
+      code, epoch: 1, recipientId: carol.user.id, wrappedKey: fakeKey('nope'),
+      recipientPublicKey: JSON.stringify(jwk('c')),
+    });
+    const { event } = await r;
+    assert.strictEqual(event, 'error-msg');
+  });
+
+  await t.test('a rewrap reaches only the intended recipient after they ask', async () => {
+    C.emit('request-group-rewrap', { code });
+    await wait(200);
     const forCarol = next(C, ['group-key-rewrapped']);
     const forBob = next(B, ['group-key-rewrapped'], 1500);
-    A.emit('rewrap-group-key', { code, epoch: 1, recipientId: carol.user.id, wrappedKey: fakeKey('carol-rewrapped') });
+    A.emit('rewrap-group-key', {
+      code, epoch: 1, recipientId: carol.user.id, wrappedKey: fakeKey('carol-rewrapped'),
+      recipientPublicKey: JSON.stringify(jwk('c')),
+    });
     assert.ok((await forCarol).data, 'carol was told');
     assert.strictEqual((await forBob).event, null, 'bob was not');
   });

@@ -1176,6 +1176,23 @@ function initDatabase() {
       ON dm_group_keys (channel_id, recipient_id, epoch);
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dm_group_invites (
+      channel_id INTEGER NOT NULL,
+      user_id    INTEGER NOT NULL,
+      invited_by INTEGER NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (channel_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS dm_group_rewrap_requests (
+      channel_id    INTEGER NOT NULL,
+      epoch         INTEGER NOT NULL,
+      requester_id  INTEGER NOT NULL,
+      created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (channel_id, epoch, requester_id)
+    );
+  `);
+
   // ── Migration: E2E encrypted private key (per-account sync) ──
   try {
     db.prepare("SELECT encrypted_private_key FROM users LIMIT 0").get();

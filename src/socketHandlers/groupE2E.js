@@ -15,7 +15,7 @@
 const { isInt } = require('./helpers');
 
 module.exports = function register(socket, ctx) {
-  const { io, db } = ctx;
+  const { io, db, generateUniqueSharedCode } = ctx;
 
   const memberIds = (channelId) =>
     db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ? ORDER BY user_id').all(channelId).map((r) => r.user_id);
@@ -25,6 +25,46 @@ module.exports = function register(socket, ctx) {
 
   const groupChannel = (code) =>
     db.prepare('SELECT id, code, key_epoch FROM channels WHERE code = ? AND is_dm = 1').get(code);
+
+  const pendingInvitees = (channelId) =>
+    db.prepare('SELECT user_id FROM dm_group_invites WHERE channel_id = ? ORDER BY user_id').all(channelId).map((r) => r.user_id);
+
+  const rosterIds = (channelId) =>
+    [...new Set([...memberIds(channelId), ...pendingInvitees(channelId)])].sort((a, b) => a - b);
+
+  const sameIds = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+  const findExistingGroup = (want) => {
+    const target = [...want].sort((a, b) => a - b);
+    const candidates = db.prepare(`
+      SELECT c.id, c.code, c.name FROM channels c
+      WHERE c.is_dm = 1
+        AND (
+          (SELECT COUNT(*) FROM channel_members WHERE channel_id = c.id) >= 3
+          OR EXISTS (SELECT 1 FROM dm_group_invites WHERE channel_id = c.id)
+        )
+    `).all();
+    return candidates.find((c) => sameIds(rosterIds(c.id), target)) || null;
+  };
+
+  const userSummaries = (ids) => {
+    if (!ids.length) return [];
+    const ph = ids.map(() => '?').join(',');
+    return db.prepare(`
+      SELECT u.id, COALESCE(u.display_name, u.username) AS username
+      FROM users u WHERE u.id IN (${ph})
+    `).all(...ids);
+  };
+
+  const groupPayload = (ch) => {
+    const members = memberIds(ch.id);
+    const pending = pendingInvitees(ch.id);
+    return {
+      id: ch.id, code: ch.code, name: ch.name, is_dm: 1, is_group: 1,
+      members: userSummaries(members).map((u) => ({ id: u.id, username: u.username })),
+      pending: userSummaries(pending).map((u) => ({ id: u.id, username: u.username })),
+    };
+  };
 
   /* ── Signing identity ───────────────────────────────
      Pinned exactly like the ECDH key: an unpinned signing key would let an
@@ -85,24 +125,83 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', `Cannot start an encrypted group with ${unusable.map((u) => u.username).join(', ')} — no encryption key published yet`);
     }
 
-    const code = require('crypto').randomBytes(4).toString('hex');
-    const name = typeof data.name === 'string' && data.name.trim() ? data.name.trim().slice(0, 50) : 'Group DM';
-    const tx = db.transaction(() => {
-      const res = db.prepare('INSERT INTO channels (name, code, created_by, is_dm, key_epoch) VALUES (?, ?, ?, 1, 0)')
-        .run(name, code, socket.user.id);
-      const insert = db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)');
-      for (const id of ids) insert.run(res.lastInsertRowid, id);
-      return res.lastInsertRowid;
-    });
-    const channelId = tx();
-
-    const payload = {
-      id: channelId, code, name, is_dm: 1, is_group: 1,
-      members: users.map((u) => ({ id: u.id, username: u.username })),
-    };
-    for (const [, s] of io.of('/').sockets) {
-      if (s.user && ids.includes(s.user.id)) { s.join(`channel:${code}`); s.emit('group-dm-opened', payload); }
+    const existing = findExistingGroup(ids);
+    if (existing) {
+      const payload = groupPayload(existing);
+      if (isMember(existing.id, socket.user.id)) {
+        socket.join(`channel:${existing.code}`);
+        socket.emit('group-dm-opened', payload);
+      } else {
+        socket.emit('group-dm-invite', payload);
+      }
+      return;
     }
+
+    const invitees = ids.filter((id) => id !== socket.user.id);
+    const name = typeof data.name === 'string' && data.name.trim() ? data.name.trim().slice(0, 50) : 'Group DM';
+    let channelId;
+    let code;
+    try {
+      const tx = db.transaction(() => {
+        code = generateUniqueSharedCode ? generateUniqueSharedCode() : require('crypto').randomBytes(4).toString('hex');
+        const res = db.prepare('INSERT INTO channels (name, code, created_by, is_dm, key_epoch) VALUES (?, ?, ?, 1, 0)')
+          .run(name, code, socket.user.id);
+        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(res.lastInsertRowid, socket.user.id);
+        const insInvite = db.prepare('INSERT INTO dm_group_invites (channel_id, user_id, invited_by) VALUES (?, ?, ?)');
+        for (const id of invitees) insInvite.run(res.lastInsertRowid, id, socket.user.id);
+        return res.lastInsertRowid;
+      });
+      channelId = tx();
+    } catch (err) {
+      console.error('Start group DM error:', err);
+      return socket.emit('error-msg', 'Failed to create group DM');
+    }
+
+    const payload = groupPayload({ id: channelId, code, name });
+    socket.join(`channel:${code}`);
+    socket.emit('group-dm-opened', payload);
+    // Named people are invited, not joined. They opt in via accept-group-dm.
+    for (const [, s] of io.of('/').sockets) {
+      if (s.user && invitees.includes(s.user.id)) {
+        s.emit('group-dm-invite', {
+          ...payload,
+          invitedBy: { id: socket.user.id, username: socket.user.displayName || socket.user.username },
+        });
+      }
+    }
+  });
+
+  socket.on('accept-group-dm', (data) => {
+    const ch = groupChannel(typeof (data && data.code) === 'string' ? data.code.trim() : '');
+    if (!ch) return socket.emit('error-msg', 'Group not found');
+    const invite = db.prepare('SELECT invited_by FROM dm_group_invites WHERE channel_id = ? AND user_id = ?')
+      .get(ch.id, socket.user.id);
+    if (!invite) return socket.emit('error-msg', 'No outstanding invite for this group');
+    try {
+      db.transaction(() => {
+        db.prepare('DELETE FROM dm_group_invites WHERE channel_id = ? AND user_id = ?').run(ch.id, socket.user.id);
+        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(ch.id, socket.user.id);
+      })();
+    } catch (err) {
+      console.error('Accept group DM error:', err);
+      return socket.emit('error-msg', 'Failed to join group DM');
+    }
+    const named = db.prepare('SELECT name FROM channels WHERE id = ?').get(ch.id);
+    socket.join(`channel:${ch.code}`);
+    const payload = groupPayload({ id: ch.id, code: ch.code, name: named && named.name });
+    socket.emit('group-dm-opened', payload);
+    io.to(`channel:${ch.code}`).emit('group-dm-member-joined', {
+      code: ch.code,
+      user: { id: socket.user.id, username: socket.user.displayName || socket.user.username },
+      members: payload.members,
+    });
+  });
+
+  socket.on('decline-group-dm', (data) => {
+    const ch = groupChannel(typeof (data && data.code) === 'string' ? data.code.trim() : '');
+    if (!ch) return;
+    db.prepare('DELETE FROM dm_group_invites WHERE channel_id = ? AND user_id = ?').run(ch.id, socket.user.id);
+    socket.emit('group-dm-declined', { code: ch.code });
   });
 
   /* ── Epoch publication ──────────────────────────── */
@@ -180,14 +279,21 @@ module.exports = function register(socket, ctx) {
     const ch = groupChannel(typeof (data && data.code) === 'string' ? data.code.trim() : '');
     if (!ch) return;
     if (!isMember(ch.id, socket.user.id)) return;
+    db.prepare(`
+      INSERT INTO dm_group_rewrap_requests (channel_id, epoch, requester_id)
+      VALUES (?, ?, ?)
+      ON CONFLICT(channel_id, epoch, requester_id) DO NOTHING
+    `).run(ch.id, ch.key_epoch, socket.user.id);
     socket.to(`channel:${ch.code}`).emit('group-rewrap-requested', {
       code: ch.code, userId: socket.user.id, epoch: ch.key_epoch,
     });
   });
 
   /**
-   * Re-wrap one member's copy of an existing epoch. Scoped to a single
-   * recipient so it cannot be used to rewrite the whole epoch.
+   * Re-wrap one member's copy of an existing epoch. Only after that member
+   * asked, and only if the wrapper attests the same public key the server
+   * already pinned — otherwise a helper could seal the epoch to a key the
+   * recipient never published.
    */
   socket.on('rewrap-group-key', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -198,12 +304,32 @@ module.exports = function register(socket, ctx) {
     const epoch = isInt(data.epoch) ? data.epoch : null;
     if (!recipientId || !epoch || typeof data.wrappedKey !== 'string') return;
     if (!isMember(ch.id, recipientId)) return socket.emit('error-msg', 'Recipient is not a member');
+    if (typeof data.wrappedKey !== 'string' || !data.wrappedKey || data.wrappedKey.length > 4096) {
+      return socket.emit('error-msg', 'Malformed wrapped key');
+    }
 
-    db.prepare(`
-      INSERT INTO dm_group_keys (channel_id, epoch, recipient_id, wrapped_key, wrapped_by)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(channel_id, epoch, recipient_id) DO UPDATE SET wrapped_key = excluded.wrapped_key, wrapped_by = excluded.wrapped_by
-    `).run(ch.id, epoch, recipientId, data.wrappedKey, socket.user.id);
+    const asked = db.prepare(
+      'SELECT 1 FROM dm_group_rewrap_requests WHERE channel_id = ? AND epoch = ? AND requester_id = ?'
+    ).get(ch.id, epoch, recipientId);
+    if (!asked) return socket.emit('error-msg', 'No outstanding rewrap request from that member');
+
+    const pinned = db.prepare('SELECT public_key FROM users WHERE id = ?').get(recipientId);
+    const claimed = typeof data.recipientPublicKey === 'string' ? data.recipientPublicKey : '';
+    if (!pinned || !pinned.public_key || pinned.public_key !== claimed) {
+      let existing = null;
+      try { existing = pinned && pinned.public_key ? JSON.parse(pinned.public_key) : null; } catch {}
+      return socket.emit('public-key-conflict', { existing });
+    }
+
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO dm_group_keys (channel_id, epoch, recipient_id, wrapped_key, wrapped_by)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(channel_id, epoch, recipient_id) DO UPDATE SET wrapped_key = excluded.wrapped_key, wrapped_by = excluded.wrapped_by
+      `).run(ch.id, epoch, recipientId, data.wrappedKey, socket.user.id);
+      db.prepare('DELETE FROM dm_group_rewrap_requests WHERE channel_id = ? AND epoch = ? AND requester_id = ?')
+        .run(ch.id, epoch, recipientId);
+    })();
 
     for (const [, s] of io.of('/').sockets) {
       if (s.user && s.user.id === recipientId) s.emit('group-key-rewrapped', { code: ch.code, epoch });
