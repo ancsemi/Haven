@@ -3700,8 +3700,10 @@ _setupDensityPicker() {
   if (!picker) return;
 
   // Restore saved density
-  const saved = localStorage.getItem('haven-density') || 'cozy';
+  const stored = localStorage.getItem('haven-density');
+  const saved = ['compact', 'cozy', 'spacious'].includes(stored) ? stored : 'cozy';
   document.documentElement.dataset.density = saved;
+  document.documentElement.dataset.havenDensity = saved;
   picker.querySelectorAll('.density-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.density === saved);
   });
@@ -3711,7 +3713,9 @@ _setupDensityPicker() {
     if (!btn) return;
     const density = btn.dataset.density;
     document.documentElement.dataset.density = density;
+    document.documentElement.dataset.havenDensity = density;
     localStorage.setItem('haven-density', density);
+    document.dispatchEvent(new CustomEvent('haven:density-change', { detail: { density } }));
     picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });

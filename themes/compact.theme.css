@@ -10,7 +10,7 @@
 /*
   Compact is a pure Theme API v1 theme. It tightens stable application regions
   on desktop but leaves message geometry to Haven's Layout Density setting and
-  reserves structural changes for a future Compact Layout plugin.
+  leaves structural changes to the optional Compact Layout plugin.
 */
 
 :root {

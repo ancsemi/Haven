@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=3.51.0';
 import UIBindMethods   from './modules/app-ui.js?v=3.51.0';
-import MediaMethods    from './modules/app-media.js?v=3.51.0';
+import MediaMethods    from './modules/app-media.js?v=3.51.1';
 import ContextMethods  from './modules/app-context.js?v=3.44.3';
 import ChannelMethods  from './modules/app-channels.js?v=3.44.3';
 import MessageMethods  from './modules/app-messages.js?v=3.51.0';

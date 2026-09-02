@@ -32,6 +32,18 @@
     document.documentElement.setAttribute('data-toggle-style', 'switch');
   }
 
+  // Public density state is available before first paint. Layout plugins and
+  // themes can react without reading Haven's private message geometry values.
+  try {
+    var _density = localStorage.getItem('haven-density');
+    if (['compact', 'cozy', 'spacious'].indexOf(_density) < 0) _density = 'cozy';
+    document.documentElement.setAttribute('data-density', _density);
+    document.documentElement.setAttribute('data-haven-density', _density);
+  } catch (e) {
+    document.documentElement.setAttribute('data-density', 'cozy');
+    document.documentElement.setAttribute('data-haven-density', 'cozy');
+  }
+
   // Apply the saved interface scale before first paint so the UI doesn't render
   // at 100% and then jump. Mirrors the slider logic in app-media.js and
   // migrates the retired 4-tier font-size setting.

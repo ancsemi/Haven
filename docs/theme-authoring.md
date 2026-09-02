@@ -203,6 +203,7 @@ Select major areas through `data-haven-region`:
 | `app-shell` | Primary application shell, including the status bar |
 | `workspace` | Main multi-column workspace |
 | `server-rail` | Server navigation rail |
+| `server-list` | Dynamic server list inside the server rail |
 | `navigation-sidebar` | Channels and direct-message sidebar |
 | `account` | Current account identity and account actions |
 | `sidebar-content` | Reorderable sidebar content |
@@ -211,6 +212,7 @@ Select major areas through `data-haven-region`:
 | `channels` | Channel list section |
 | `direct-messages` | Direct-message list section |
 | `sidebar-footer` | Pinned sidebar footer and controls |
+| `sidebar-actions` | Persistent sidebar action buttons |
 | `theme-picker` | Theme selector |
 | `main` | Main content column |
 | `channel-header` | Active channel header |
@@ -244,6 +246,58 @@ Select major areas through `data-haven-region`:
 
 `theme-picker` exists on both pages, but only one page is loaded in a document.
 
+## Public layout state
+
+Haven exposes three state attributes for themes and layout plugins:
+
+| Hook | Values | Purpose |
+| --- | --- | --- |
+| `data-haven-density` on `html` | `compact`, `cozy`, `spacious` | The user's message-density choice |
+| `data-haven-layout-editing` on `html` | `1` while active, otherwise absent | Mod Mode is editing the native layout |
+| `data-haven-layout-owner` on `html` | Plugin-defined owner ID, otherwise absent | The structural layout plugin currently moving regions |
+
+The density attribute is applied before first paint. Message geometry properties
+remain internal; use the state only to adapt surrounding layout without
+overriding the user's density choice.
+
+Interactive plugins can also listen for synchronous state changes:
+
+```js
+document.addEventListener('haven:density-change', (event) => {
+  console.log(event.detail.density);
+});
+
+document.addEventListener('haven:layout-editing', (event) => {
+  if (event.detail.active) restoreNativeLayout();
+});
+
+document.addEventListener('haven:layout-owner-change', (event) => {
+  console.log(event.detail.owner);
+});
+```
+
+`haven:layout-editing` fires before Mod Mode starts moving panels and after it
+has restored the saved native arrangement. Structural plugins should suspend
+on the first event and reapply only after the second.
+
+Structural layout plugins must also acquire the shared owner before moving
+regions and release it after restoring them:
+
+```js
+if (HavenApi.Layout.acquire('MyLayout')) {
+  movePublicRegions();
+}
+
+// During stop(), below the desktop breakpoint, or before Mod Mode edits:
+restorePublicRegions();
+HavenApi.Layout.release('MyLayout');
+```
+
+`acquire()` returns `false` while another structural plugin owns the layout.
+Listen for `haven:layout-owner-change` to retry after that owner releases it.
+This prevents one plugin from recording another plugin's temporary DOM as the
+native restore position. `HavenApi.Layout.owner` exposes the current owner.
+
 ## Stability policy
 
 For Theme API v1, Haven intends to keep these stable:
@@ -251,6 +305,9 @@ For Theme API v1, Haven intends to keep these stable:
 - `data-haven-theme-api="1"`
 - `data-haven-page` values
 - documented `data-haven-region` values
+- documented `data-haven-density`, `data-haven-layout-editing`, and `data-haven-layout-owner` states
+- documented `haven:density-change`, `haven:layout-editing`, and `haven:layout-owner-change` events
+- `HavenApi.Layout.acquire()`, `release()`, and `owner`
 - documented public design tokens
 
 The following are not part of Theme API v1:
@@ -260,7 +317,7 @@ The following are not part of Theme API v1:
 - inline styles used to represent runtime state
 - dynamically generated message, channel, member, and modal internals
 - undocumented custom properties
-- plugin APIs or JavaScript objects
+- undocumented plugin APIs or JavaScript objects
 
 A region keeps its semantic responsibility, but Haven may change its element
 type, class, ID, children, or location. Write selectors against the region and
@@ -349,6 +406,12 @@ Use a plugin for:
 CSS can visually position an element outside its parent, but that does not move
 its semantics, clipping context, keyboard order, or event assumptions. Prefer a
 reversible plugin when a layout requires a real structural move.
+
+`plugins/CompactLayout.plugin.js` is the minimal bundled example. It moves only
+complete public regions, records their original parents and sibling positions,
+restores the native layout below the desktop breakpoint and during Mod Mode,
+and leaves message density under the user's control. Its `Ctrl+Alt+C` shortcut
+and sidebar button provide an immediate way back to the classic layout.
 
 ## Security
 

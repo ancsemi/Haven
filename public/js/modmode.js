@@ -76,6 +76,8 @@ class ModMode {
   // ── Enable / Disable ──
 
   _enable() {
+    document.documentElement.setAttribute('data-haven-layout-editing', '1');
+    document.dispatchEvent(new CustomEvent('haven:layout-editing', { detail: { active: true } }));
     this.container.classList.add('mod-mode-active');
     document.body.classList.add('mod-mode-on');
     this._cacheSections();
@@ -107,8 +109,13 @@ class ModMode {
       s.removeEventListener('dragend',   this._boundDragEnd);
     });
     this._disablePanelMode();
-    this._saveLayout();
-    this._savePanelLayout();
+    try {
+      this._saveLayout();
+      this._savePanelLayout();
+    } finally {
+      document.documentElement.removeAttribute('data-haven-layout-editing');
+      document.dispatchEvent(new CustomEvent('haven:layout-editing', { detail: { active: false } }));
+    }
     this._showToast(t('modmode.disabled'));
   }
 

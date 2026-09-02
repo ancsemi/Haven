@@ -12,8 +12,11 @@ class BraidLayout {
   ];
 
   start() {
+    this._stopping = false;
     this._permListeners = [];          // survive disengage; removed only in stop()
     this._engaged = false;
+    this._suspended = false;
+    this._transitioning = false;
     HavenApi.DOM.addStyle('BraidPillCSS', BraidLayout._PILL_CSS);
     this._buildReturnPill();
     // One shortcut, both directions: the way back must never be buried.
@@ -26,7 +29,30 @@ class BraidLayout {
     };
     document.addEventListener('keydown', kd, true);
     this._permListeners.push([document, 'keydown', kd, true]);
-    if (HavenApi.Data.load('BraidLayout', 'layoutOn', '1') !== '0') this._engage();
+    const ownerChanged = (event) => {
+      if (event.detail?.owner || this._stopping || this._transitioning
+          || document.documentElement.hasAttribute('data-haven-layout-editing')) return;
+      if (HavenApi.Data.load('BraidLayout', 'layoutOn', '1') === '0') return;
+      if (this._engaged && this._suspended) this._resume();
+      else if (!this._engaged) this._engage();
+    };
+    document.addEventListener('haven:layout-owner-change', ownerChanged);
+    this._permListeners.push([document, 'haven:layout-owner-change', ownerChanged]);
+    const editingChanged = (event) => {
+      if (this._stopping) return;
+      if (event.detail?.active === true) {
+        if (this._engaged && !this._suspended) this._suspend();
+        return;
+      }
+      if (HavenApi.Data.load('BraidLayout', 'layoutOn', '1') === '0') return;
+      if (this._engaged) this._resume();
+      else this._engage();
+    };
+    document.addEventListener('haven:layout-editing', editingChanged);
+    this._permListeners.push([document, 'haven:layout-editing', editingChanged]);
+    const layoutOn = HavenApi.Data.load('BraidLayout', 'layoutOn', '1') !== '0';
+    if (layoutOn && !document.documentElement.hasAttribute('data-haven-layout-editing')) this._engage();
+    else if (layoutOn) console.log('[BraidLayout] Waiting for Mod Mode to finish');
     else console.log('[BraidLayout] Started dormant — classic layout (pill or Ctrl+Shift+B to re-engage)');
   }
 
@@ -37,70 +63,74 @@ class BraidLayout {
   // Everything visual lives between _engage and _disengage, so "back to
   // normal" is one click without touching the plugin toggle in Settings.
   _engage() {
-    if (this._engaged) return;
-    this._engaged = true;
-    HavenApi.Data.save('BraidLayout', 'layoutOn', '1');
+    if (this._engaged || document.documentElement.hasAttribute('data-haven-layout-editing')) return;
+    if (HavenApi.Layout && !HavenApi.Layout.acquire('BraidLayout')) {
+      HavenApi.UI.showToast('Another structural layout plugin is active', 'warning');
+      return;
+    }
     this._hidden = new Map();          // el -> { display, hadHidden }
     this._lsPrev = new Map();          // localStorage key -> previous value (null = absent)
     this._listeners = [];              // [target, type, fn, opts]
     this._collapsedAdded = [];         // elements we added a class to
     this._moved = [];                  // [el, origParent, origNextSibling] for relocations
-    HavenApi.DOM.addStyle('BraidLayoutCSS', BraidLayout._LAYOUT_CSS);
-    HavenApi.DOM.addStyle('BraidShapeCSS', BraidLayout._SHAPE_CSS);
-    HavenApi.DOM.addStyle('BraidFormCSS', BraidLayout._FORM_CSS);
-    HavenApi.DOM.addStyle('BraidMotionCSS', BraidLayout._MOTION_CSS);
-    document.documentElement.setAttribute('data-braid-layout', '1');
-    document.documentElement.setAttribute('data-braid-form', '1');
-    this._applyDensity();
-    this._paintOwn();
-    this._themeBottomIcons();
-    this._applyTextScales();
-    // Channel switches get the hex loader moment
-    this._listen(document, 'click', (e) => {
-      if (e.target.closest && e.target.closest('.channel-item')) this._showHexLoader();
-    }, true);
-    // Mod Mode (Haven's layout editor) must see the real chrome to drag
-    // it around — suspend the whole Braid layer while it is editing and
-    // come back when it saves. body class changes are attribute
-    // mutations, which the main childList observer deliberately ignores.
     this._suspended = false;
-    this._modObs = new MutationObserver(() => {
-      const editing = document.body.classList.contains('mod-mode-on');
-      if (editing && !this._suspended) this._suspend();
-      else if (!editing && this._suspended) this._resume();
-    });
-    this._modObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    this._collapseJoinCreate();
-    this._setPeopleOpen(false);
-    this._buildMoreMenu();
-    this._applyLayout();
-    let scheduled = false;
-    let applying = false;
-    // childList-only observer: _applyLayout mutates style/attributes and its
-    // one-time builds are idempotent, so the observer can't feed back on itself.
-    this._obs = new MutationObserver(() => {
-      if (applying || scheduled) return;
-      scheduled = true;
-      requestAnimationFrame(() => {
-        scheduled = false;
-        if (applying) return;
-        applying = true;
-        try { this._applyLayout(); }
-        finally { applying = false; }
+    this._engaged = true;
+    try {
+      HavenApi.Data.save('BraidLayout', 'layoutOn', '1');
+      HavenApi.DOM.addStyle('BraidLayoutCSS', BraidLayout._LAYOUT_CSS);
+      HavenApi.DOM.addStyle('BraidShapeCSS', BraidLayout._SHAPE_CSS);
+      HavenApi.DOM.addStyle('BraidFormCSS', BraidLayout._FORM_CSS);
+      HavenApi.DOM.addStyle('BraidMotionCSS', BraidLayout._MOTION_CSS);
+      document.documentElement.setAttribute('data-braid-layout', '1');
+      document.documentElement.setAttribute('data-braid-form', '1');
+      this._applyDensity();
+      this._paintOwn();
+      this._themeBottomIcons();
+      this._applyTextScales();
+      // Channel switches get the hex loader moment
+      this._listen(document, 'click', (e) => {
+        if (e.target.closest && e.target.closest('.channel-item')) this._showHexLoader();
+      }, true);
+      this._collapseJoinCreate();
+      this._setPeopleOpen(false);
+      this._buildMoreMenu();
+      this._applyLayout();
+      let scheduled = false;
+      let applying = false;
+      // childList-only observer: _applyLayout mutates style/attributes and its
+      // one-time builds are idempotent, so the observer can't feed back on itself.
+      this._obs = new MutationObserver(() => {
+        if (applying || scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => {
+          scheduled = false;
+          if (applying) return;
+          applying = true;
+          try { this._applyLayout(); }
+          finally { applying = false; }
+        });
       });
-    });
-    this._obs.observe(document.getElementById('app-body') || document.body, { childList: true, subtree: true });
-    console.log('[BraidLayout] Engaged');
+      this._obs.observe(document.getElementById('app-body') || document.body, { childList: true, subtree: true });
+      console.log('[BraidLayout] Engaged');
+    } catch (error) {
+      try { this._disengage(false); }
+      catch (cleanupError) { console.error('[BraidLayout] Rollback error:', cleanupError); }
+      throw error;
+    }
   }
 
   stop() {
-    this._disengage(false);
-    for (const [t, type, fn, opts] of this._permListeners || []) t.removeEventListener(type, fn, opts);
-    this._permListeners = [];
-    document.getElementById('braid-return-pill')?.remove();
-    document.getElementById('braid-mod-done')?.remove();
-    HavenApi.DOM.removeStyle('BraidPillCSS');
-    console.log('[BraidLayout] Stopped');
+    this._stopping = true;
+    try {
+      this._disengage(false);
+    } finally {
+      for (const [t, type, fn, opts] of this._permListeners || []) t.removeEventListener(type, fn, opts);
+      this._permListeners = [];
+      document.getElementById('braid-return-pill')?.remove();
+      document.getElementById('braid-mod-done')?.remove();
+      HavenApi.DOM.removeStyle('BraidPillCSS');
+      console.log('[BraidLayout] Stopped');
+    }
   }
 
   // persist=false is the plugin-loader disable path: tearing the layer down
@@ -108,62 +138,68 @@ class BraidLayout {
   _disengage(persist = true) {
     if (!this._engaged) return;
     this._engaged = false;
-    if (persist) HavenApi.Data.save('BraidLayout', 'layoutOn', '0');
-    if (this._obs) { this._obs.disconnect(); this._obs = null; }
-    if (this._modObs) { this._modObs.disconnect(); this._modObs = null; }
-    document.getElementById('braid-mod-done')?.remove();
-    this._unfoldVoiceDock();
-    this._restoreBottomIcons();
-    document.getElementById('braid-text-sliders')?.remove();
-    document.getElementById('braid-density-card')?.remove();
-    document.getElementById('braid-hex-overlay')?.remove();
-    document.documentElement.removeAttribute('data-braid-density');
-    document.documentElement.style.removeProperty('--braid-chat-scale');
-    document.documentElement.style.removeProperty('--braid-ui-scale');
-    // Unfold the server rail back to its own column
-    const bar = document.getElementById('server-bar');
-    const strip = document.getElementById('braid-server-strip');
-    if (bar && strip) {
-      while (strip.firstChild) bar.appendChild(strip.firstChild);
-      delete bar.dataset.braidFolded;
-      bar.removeAttribute('aria-hidden');
+    this._transitioning = true;
+    try {
+      if (this._obs) { this._obs.disconnect(); this._obs = null; }
+      document.getElementById('braid-mod-done')?.remove();
+      this._unfoldVoiceDock();
+      this._restoreBottomIcons();
+      document.getElementById('braid-text-sliders')?.remove();
+      document.getElementById('braid-density-card')?.remove();
+      document.getElementById('braid-hex-overlay')?.remove();
+      document.documentElement.removeAttribute('data-braid-density');
+      document.documentElement.style.removeProperty('--braid-chat-scale');
+      document.documentElement.style.removeProperty('--braid-ui-scale');
+      // Unfold the server rail back to its own column
+      const bar = document.getElementById('server-bar');
+      const strip = document.getElementById('braid-server-strip');
+      if (bar && strip) {
+        while (strip.firstChild) bar.appendChild(strip.firstChild);
+        delete bar.dataset.braidFolded;
+        bar.removeAttribute('aria-hidden');
+      }
+      strip?.remove();
+      document.querySelector('.braid-more-wrap')?.remove();
+      document.getElementById('braid-more-menu')?.remove();
+      document.getElementById('braid-theme-btn')?.remove();
+      document.getElementById('braid-classic-btn')?.remove();
+      document.getElementById('braid-apps-drawer')?.remove();
+      // Restore everything we hid
+      for (const [el, prev] of this._hidden) {
+        el.style.display = prev.display;
+        if (!prev.hadHidden) el.removeAttribute('hidden');
+      }
+      this._hidden.clear();
+      // Restore the right sidebar to interactive state
+      const right = document.getElementById('right-sidebar');
+      if (right) { right.style.display = ''; right.style.width = ''; right.style.opacity = ''; right.style.pointerEvents = ''; }
+      // Undo collapse classes we added (leave ones the user already had)
+      for (const [el, cls] of this._collapsedAdded) el.classList.remove(cls);
+      this._collapsedAdded = [];
+      // Restore localStorage keys we introduced
+      for (const [key, prev] of this._lsPrev) {
+        try { prev === null ? localStorage.removeItem(key) : localStorage.setItem(key, prev); } catch {}
+      }
+      this._lsPrev.clear();
+      for (const [t, type, fn, opts] of this._listeners) t.removeEventListener(type, fn, opts);
+      this._listeners = [];
+      document.documentElement.classList.remove('braid-people-open', 'braid-sound-open', 'braid-status-open');
+      document.documentElement.removeAttribute('data-braid-layout');
+      document.documentElement.removeAttribute('data-braid-form');
+      document.querySelectorAll('[data-braid-run]').forEach((el) => el.removeAttribute('data-braid-run'));
+      HavenApi.DOM.removeStyle('BraidLayoutCSS');
+      HavenApi.DOM.removeStyle('BraidMotionCSS');
+      HavenApi.DOM.removeStyle('BraidShapeCSS');
+      HavenApi.DOM.removeStyle('BraidFormCSS');
+      HavenApi.DOM.removeStyle('BraidFormOwn');
+      HavenApi.DOM.removeStyle('BraidDensityCSS');
+      this._suspended = false;
+      if (persist) HavenApi.Data.save('BraidLayout', 'layoutOn', '0');
+      console.log('[BraidLayout] Disengaged — classic layout');
+    } finally {
+      HavenApi.Layout?.release('BraidLayout');
+      this._transitioning = false;
     }
-    strip?.remove();
-    document.querySelector('.braid-more-wrap')?.remove();
-    document.getElementById('braid-more-menu')?.remove();
-    document.getElementById('braid-theme-btn')?.remove();
-    document.getElementById('braid-classic-btn')?.remove();
-    document.getElementById('braid-apps-drawer')?.remove();
-    // Restore everything we hid
-    for (const [el, prev] of this._hidden) {
-      el.style.display = prev.display;
-      if (!prev.hadHidden) el.removeAttribute('hidden');
-    }
-    this._hidden.clear();
-    // Restore the right sidebar to interactive state
-    const right = document.getElementById('right-sidebar');
-    if (right) { right.style.display = ''; right.style.width = ''; right.style.opacity = ''; right.style.pointerEvents = ''; }
-    // Undo collapse classes we added (leave ones the user already had)
-    for (const [el, cls] of this._collapsedAdded) el.classList.remove(cls);
-    this._collapsedAdded = [];
-    // Restore localStorage keys we introduced
-    for (const [key, prev] of this._lsPrev) {
-      try { prev === null ? localStorage.removeItem(key) : localStorage.setItem(key, prev); } catch {}
-    }
-    this._lsPrev.clear();
-    for (const [t, type, fn, opts] of this._listeners) t.removeEventListener(type, fn, opts);
-    this._listeners = [];
-    document.documentElement.classList.remove('braid-people-open', 'braid-sound-open', 'braid-status-open');
-    document.documentElement.removeAttribute('data-braid-layout');
-    document.documentElement.removeAttribute('data-braid-form');
-    document.querySelectorAll('[data-braid-run]').forEach((el) => el.removeAttribute('data-braid-run'));
-    HavenApi.DOM.removeStyle('BraidLayoutCSS');
-    HavenApi.DOM.removeStyle('BraidMotionCSS');
-    HavenApi.DOM.removeStyle('BraidShapeCSS');
-    HavenApi.DOM.removeStyle('BraidFormCSS');
-    HavenApi.DOM.removeStyle('BraidFormOwn');
-    HavenApi.DOM.removeStyle('BraidDensityCSS');
-    console.log('[BraidLayout] Disengaged — classic layout');
   }
 
   // The classic-mode switch lives INSIDE the stock bottom-left icon bar,
@@ -681,8 +717,23 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
   // real and visible. On exit the layer re-applies, leaving whatever
   // section order the user just saved in Mod Mode alone.
   _suspend() {
+    if (!this._engaged || this._suspended) return;
+    this._transitioning = true;
     this._suspended = true;
-    this._showModDone();
+    try {
+      this._restoreNativeLayout();
+      HavenApi.Layout?.release('BraidLayout');
+    } catch (error) {
+      this._suspended = false;
+      throw error;
+    } finally {
+      this._transitioning = false;
+    }
+  }
+
+  _restoreNativeLayout() {
+    if (document.documentElement.hasAttribute('data-haven-layout-editing')) this._showModDone();
+    else document.getElementById('braid-mod-done')?.remove();
     this._unfoldVoiceDock();
     const bar = document.getElementById('server-bar');
     const strip = document.getElementById('braid-server-strip');
@@ -699,13 +750,26 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
   }
 
   _resume() {
-    this._suspended = false;
-    document.getElementById('braid-mod-done')?.remove();
-    document.documentElement.setAttribute('data-braid-layout', '1');
-    document.documentElement.setAttribute('data-braid-form', '1');
-    this._applyDensity();
-    this._setPeopleOpen(document.documentElement.classList.contains('braid-people-open'));
-    this._applyLayout();
+    if (!this._engaged || !this._suspended
+        || document.documentElement.hasAttribute('data-haven-layout-editing')) return;
+    this._transitioning = true;
+    try {
+      if (HavenApi.Layout && !HavenApi.Layout.acquire('BraidLayout')) return;
+      this._suspended = false;
+      document.getElementById('braid-mod-done')?.remove();
+      document.documentElement.setAttribute('data-braid-layout', '1');
+      document.documentElement.setAttribute('data-braid-form', '1');
+      this._applyDensity();
+      this._setPeopleOpen(document.documentElement.classList.contains('braid-people-open'));
+      this._applyLayout();
+    } catch (error) {
+      this._suspended = true;
+      try { this._restoreNativeLayout(); }
+      finally { HavenApi.Layout?.release('BraidLayout'); }
+      throw error;
+    } finally {
+      this._transitioning = false;
+    }
   }
 
   // ── Themed bottom-left icons ─────────────────────────────
@@ -1337,4 +1401,5 @@ body.mod-mode-on #braid-return-pill{display:none!important}
 `;
 
 // Register with the plugin loader's _win scope
+if (typeof module !== 'undefined') module.exports = BraidLayout;
 if (typeof _win !== 'undefined') _win.BraidLayout = BraidLayout;

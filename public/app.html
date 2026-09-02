@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
   <link rel="stylesheet" href="/css/style.css?v=3.51.5">
   <script src="/js/theme-compat.js?v=4.1.1"></script>
-  <script src="/js/theme-init.js?v=4.1.1"></script>
+  <script src="/js/theme-init.js?v=4.1.2"></script>
 </head>
 <body data-haven-page="app">
 
@@ -26,7 +26,7 @@
           <span class="server-status-dot online"></span>
         </div>
         <div class="server-separator"></div>
-        <div id="server-list"></div>
+        <div id="server-list" data-haven-region="server-list"></div>
         <button class="server-icon add-server" id="add-server-btn" data-i18n-title="app.sidebar.add_server" title="Add Server">
           <span class="server-icon-text">+</span>
         </button>
@@ -250,7 +250,7 @@
 
           <!-- Bottom bar -->
           <div id="voice-bar" class="voice-bar" style="display:none"></div>
-          <div class="sidebar-bottom-bar">
+          <div class="sidebar-bottom-bar" data-haven-region="sidebar-actions">
             <button id="theme-popup-toggle" class="sidebar-bottom-btn" data-i18n-title="app.theme.title" title="Themes">🎨</button>
             <button class="sidebar-bottom-btn" id="activities-btn" data-i18n-title="modals.activities.title" title="Activities">🎮</button>
             <button class="sidebar-bottom-btn" id="sidebar-members-btn" data-i18n-title="modals.all_members.title" title="All Members" style="display:none">👥</button>
@@ -4191,13 +4191,13 @@
   <script src="/js/notifications.js?v=3.16.15"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
   <script src="/js/voice.js?v=3.34.5"></script>
-  <script src="/js/modmode.js?v=3.16.15"></script>
+  <script src="/js/modmode.js?v=3.16.16"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.1.1"></script>
-  <script src="/js/plugin-loader.js?v=4.1.1"></script>
+  <script type="module" src="/js/app.js?v=4.1.2"></script>
+  <script src="/js/plugin-loader.js?v=4.1.2"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
 </body>

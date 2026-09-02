@@ -690,12 +690,22 @@ Haven also ships a couple of extras that are **installed but switched off by def
 | `themes/compact.theme.css` | Compact, a dense graphite Theme API v1 theme |
 | `themes/braid.theme.css` | Braid, a dark mint theme |
 | `themes/braid-light.theme.css` | Braid Light |
+| `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |
 
 To make a bundled theme available to everyone, go to **Settings → Admin → 🏠 Branding → Custom Themes** and publish it. Publishing is what adds its button to the theme picker in the sidebar. Until then it stays hidden even though the file is present, which is the usual reason a theme "looks missing" after an update.
 
 Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes/` folder, restart, then publish it in the same place. A theme can also be set as the server **default** from that section, which applies to anyone who has not already picked a theme of their own. It is a default rather than a lock, so a user who chooses a different theme keeps their choice.
+
+Enable **Compact Layout** per browser under **Settings → Plugins & Themes**. It
+folds the server rail into the navigation sidebar and docks account and active
+voice controls in that sidebar's footer on desktop. Tablet and mobile keep the
+native Haven layout. Use its `C` footer button or `Ctrl+Alt+C` to switch between
+Compact and classic layout without disabling the plugin.
+Only one structural layout plugin can be active at a time. If Braid Layout is
+already engaged, Compact waits until Braid restores the native layout, and vice
+versa.
 
 Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
 

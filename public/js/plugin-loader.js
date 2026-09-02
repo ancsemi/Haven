@@ -43,6 +43,30 @@ window.HavenPluginLoader = (function () {
       queryAll(sel) { return [...document.querySelectorAll(sel)]; },
     },
 
+    // Structural layout plugins are mutually exclusive. Acquiring the shared
+    // owner before moving regions prevents two reversible plugins from saving
+    // each other's temporary DOM as their native restore point.
+    Layout: {
+      _owner: null,
+      acquire(owner) {
+        const id = String(owner || '').trim();
+        if (!id || (this._owner && this._owner !== id)) return false;
+        if (this._owner === id) return true;
+        this._owner = id;
+        document.documentElement.setAttribute('data-haven-layout-owner', id);
+        document.dispatchEvent(new CustomEvent('haven:layout-owner-change', { detail: { owner: id } }));
+        return true;
+      },
+      release(owner) {
+        if (this._owner !== String(owner || '').trim()) return false;
+        this._owner = null;
+        document.documentElement.removeAttribute('data-haven-layout-owner');
+        document.dispatchEvent(new CustomEvent('haven:layout-owner-change', { detail: { owner: null } }));
+        return true;
+      },
+      get owner() { return this._owner; },
+    },
+
     // ── Data (localStorage wrapper) ──
     Data: {
       save(pluginName, key, value) {

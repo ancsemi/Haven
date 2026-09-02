@@ -39,6 +39,7 @@ class MemoryStorage {
 function createDocument() {
   const attributes = new Map();
   const links = [];
+  const listeners = new Map();
   const documentElement = {
     attributes,
     style: {
@@ -63,6 +64,13 @@ function createDocument() {
     createElement(tag) { return { tagName: tag.toUpperCase(), remove() {} }; },
     getElementById() { return null; },
     querySelectorAll() { return []; },
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(listener);
+    },
+    dispatchEvent(event) {
+      for (const listener of listeners.get(event.type) || []) listener(event);
+    },
   };
   return { document, documentElement, links };
 }
@@ -218,6 +226,9 @@ async function runPluginLoader({
       return link;
     },
     console,
+    CustomEvent: class CustomEvent {
+      constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
+    },
     document,
     fetch,
     globalThis: window,
@@ -231,8 +242,28 @@ async function runPluginLoader({
   });
   await new Promise(resolve => setImmediate(resolve));
   await new Promise(resolve => setImmediate(resolve));
-  return { documentElement, fetches, links, localStorage, loader: window.HavenPluginLoader };
+  return {
+    api: window.HavenApi,
+    documentElement,
+    fetches,
+    links,
+    localStorage,
+    loader: window.HavenPluginLoader,
+  };
 }
+
+test('structural layout ownership is exclusive and releases cleanly', async () => {
+  const result = await runPluginLoader();
+
+  assert.equal(result.api.Layout.acquire('FirstLayout'), true);
+  assert.equal(result.api.Layout.owner, 'FirstLayout');
+  assert.equal(result.documentElement.attributes.get('data-haven-layout-owner'), 'FirstLayout');
+  assert.equal(result.api.Layout.acquire('SecondLayout'), false);
+  assert.equal(result.api.Layout.release('SecondLayout'), false);
+  assert.equal(result.api.Layout.release('FirstLayout'), true);
+  assert.equal(result.api.Layout.owner, null);
+  assert.equal(result.documentElement.attributes.has('data-haven-layout-owner'), false);
+});
 
 test('theme metadata classifies current, legacy, future, and invalid API declarations', () => {
   assert.equal(THEME_API_VERSION, 1);
