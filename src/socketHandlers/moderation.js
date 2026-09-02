@@ -6,7 +6,7 @@ const { utcStamp, isInt } = require('./helpers');
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit,
-          invalidateIpBanCache } = ctx;
+          invalidateIpBanCache, getMentionableChannelMembers } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
   const _invalidateIpCache = (typeof invalidateIpBanCache === 'function') ? invalidateIpBanCache : () => {};
@@ -200,6 +200,26 @@ module.exports = function register(socket, ctx) {
       emitOnlineUsers(code);
     }
 
+    // Clients cache the member list per channel and only refetch on a channel
+    // switch, so without this push the banned name stayed in @mention
+    // autocomplete for everyone already sitting in the channel. The list is
+    // identical for every viewer, so one query per channel covers the room.
+    try {
+      const affected = db.prepare(`
+        SELECT c.id, c.code FROM channel_members cm
+        JOIN channels c ON c.id = cm.channel_id
+        WHERE cm.user_id = ? AND c.is_dm = 0
+      `).all(data.userId);
+      for (const ch of affected) {
+        io.to(`channel:${ch.code}`).emit('channel-members', {
+          channelCode: ch.code,
+          members: getMentionableChannelMembers(ch.id)
+        });
+      }
+    } catch (err) {
+      console.warn('[ban] member list refresh failed:', err.message);
+    }
+
     if (data.scrubMessages) {
       db.prepare('DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE user_id = ? AND is_archived = 0)').run(data.userId, data.userId);
       db.prepare('DELETE FROM messages WHERE user_id = ? AND is_archived = 0').run(data.userId);
@@ -287,10 +307,32 @@ module.exports = function register(socket, ctx) {
   // ── Unban user ──────────────────────────────────────────
   socket.on('unban-user', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!socket.user.isAdmin) {
-      return socket.emit('error-msg', 'Only admins can unban users');
+    // This was admin-only while ban-user, get-bans and dismiss-ban-appeal all
+    // accepted ban_user, so a moderator could ban someone, watch them sit in
+    // the list, reject their appeal, and then be refused the one action that
+    // undoes their own mistake. IP bans have always shared a single permission
+    // for both directions (_canBanIp); user bans now work the same way.
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'ban_user')) {
+      return socket.emit('error-msg', 'You don\'t have permission to unban users');
     }
     if (!isInt(data.userId)) return;
+
+    // Mirror the rank guard on ban-user. A moderator can lift a ban they
+    // placed themselves, or one placed by someone below them, but not an
+    // admin's ban or a peer's. Without this, widening the permission would
+    // hand every moderator a quiet way to reverse an admin's decision.
+    if (!socket.user.isAdmin) {
+      const existing = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(data.userId);
+      if (existing && existing.banned_by !== socket.user.id) {
+        const banner = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(existing.banned_by);
+        if (banner && banner.is_admin) {
+          return socket.emit('error-msg', 'You can\'t undo a ban placed by an admin');
+        }
+        if (getUserEffectiveLevel(existing.banned_by) >= getUserEffectiveLevel(socket.user.id)) {
+          return socket.emit('error-msg', 'You can\'t undo a ban placed by someone of equal or higher rank');
+        }
+      }
+    }
 
     db.prepare('DELETE FROM bans WHERE user_id = ?').run(data.userId);
     // Any appeal is resolved once the ban is lifted (#5457).

@@ -14,6 +14,10 @@
 //   window._streamDebug.download() — save log as a .txt file
 //   window._streamDebug.clear()    — wipe the log
 
+// Cap on retained entries while enabled. A long call with a few peers can
+// emit thousands of state changes; keep the newest and drop the oldest.
+const STREAM_DEBUG_MAX_ENTRIES = 5000;
+
 class StreamDebugLogger {
   constructor(voice) {
     this._voice = voice;
@@ -78,9 +82,17 @@ class StreamDebugLogger {
   }
 
   _log(category, msg, extra) {
+    // The peer and screenSharers patches stay installed after disable(), so
+    // without this check they kept appending every state change to _entries
+    // for the rest of the session. Nothing is recorded while disabled, and
+    // the buffer is bounded while enabled. (#5426)
+    if (!this._enabled && category !== 'system') return;
     const entry = { ts: this._ts(), cat: category, msg };
     if (extra !== undefined) entry.extra = extra;
     this._entries.push(entry);
+    if (this._entries.length > STREAM_DEBUG_MAX_ENTRIES) {
+      this._entries.splice(0, this._entries.length - STREAM_DEBUG_MAX_ENTRIES);
+    }
     if (this._enabled) {
       const extraStr = extra !== undefined ? '  ' + JSON.stringify(extra) : '';
       console.debug(`[StreamDebug][${entry.ts}][${category}] ${msg}${extraStr}`);

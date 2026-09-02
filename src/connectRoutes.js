@@ -28,7 +28,13 @@
  */
 
 const express = require('express');
-const { verifyToken } = require('./auth');
+// NOT destructured at the top. auth.js requires this file near its own end, so
+// when server.js loads auth first (which it does), this module evaluates while
+// auth.js is only part-way through and its module.exports is still empty. A
+// top-level `const { verifyToken } = require('./auth')` captured undefined and
+// kept it forever, which is what made every Steam and Spotify link fail with
+// "verifyToken is not a function" from v3.45.0 onward (#5527). Resolved at call
+// time instead, by which point both modules are fully loaded.
 
 const SPOTIFY_SCOPES = 'user-read-currently-playing user-read-playback-state';
 
@@ -81,6 +87,7 @@ function baseUrl(req) {
 /** Verify a 'connect'-scoped token and return the user id, or null. */
 function connectUserId(token, provider) {
   if (!token || typeof token !== 'string') return null;
+  const { verifyToken } = require('./auth');
   const decoded = verifyToken(token);
   if (!decoded || decoded.scope !== 'connect') return null;
   if (provider && decoded.provider !== provider) return null;

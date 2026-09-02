@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 
-const UPLOAD_PATH_RE = /\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
-const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
+const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
+const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
 function isSafeUploadRelPath(relPath) {
   if (typeof relPath !== 'string' || !relPath) return false;
@@ -37,8 +37,9 @@ module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
-    handleVoiceLeave, broadcastVoiceUsers, generateChannelCode,
-    applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod
+    handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
+    applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
+    rotateChannelCode, botAudioManager
   } = ctx;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -88,6 +89,25 @@ module.exports = function register(socket, ctx) {
   const _canManageSettingsOf = (channelId) =>
     socket.user.isAdmin ||
     userHasPermission(socket.user.id, 'manage_channel_settings', channelId);
+
+  // (#5492) Authority over ONE END of a move. Nesting a channel under a parent
+  // adds a child to that parent's structure, so it needs authority over that
+  // specific parent: admin, or a channel-scoped manage_sub_channels grant.
+  // Unlike _canManageSubsOf, the server-wide create_channel permission is
+  // deliberately NOT enough — otherwise anyone who can create a channel could
+  // make a top-level channel and move it under a parent they don't moderate,
+  // sidestepping manage_sub_channels entirely.
+  //
+  // A null parent means top level, which is nobody's to manage, so it imposes
+  // no requirement of its own. That keeps the rule symmetric: taking a channel
+  // out of a parent and putting one back in both cost the same permission on
+  // the same parent. Treating null as admin-only instead would let a
+  // sub-channel manager promote a channel out and then be unable to put it
+  // back. Touching top level at all is already gated on create_channel above.
+  const _canManageSubsScoped = (parentId) =>
+    !parentId ||
+    socket.user.isAdmin ||
+    userHasPermission(socket.user.id, 'manage_sub_channels', parentId);
 
   // ── Get user's channels ─────────────────────────────────
   socket.on('get-channels', () => {
@@ -154,7 +174,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Channel name contains invalid characters');
     }
 
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     const isPrivate = data.isPrivate ? 1 : 0;
 
     let expiresAt = null;
@@ -234,7 +254,7 @@ module.exports = function register(socket, ctx) {
       // connected sockets so it appears for them without a refresh. (#5271)
       if (data.addAllMembers && !isPrivate) {
         for (const [, s] of io.sockets.sockets) {
-          if (!s.user || s.user.id === socket.user.id) continue;
+          if (!s.user || s.user.isBot || s.user.id === socket.user.id) continue;
           s.join(`channel:${code}`);
           s.emit('channel-created', channel);
         }
@@ -268,7 +288,7 @@ module.exports = function register(socket, ctx) {
       }
     } catch { /* ignore */ }
 
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString();
 
     try {
@@ -288,9 +308,9 @@ module.exports = function register(socket, ctx) {
       };
 
       for (const [, s] of io.sockets.sockets) {
-        if (s.user) s.join(`channel:${code}`);
+        if (s.user && !s.user.isBot) s.join(`channel:${code}`);
       }
-      io.emit('temp-channel-created', channel);
+      io.except('bot-sockets').emit('temp-channel-created', channel);
       socket.emit('temp-channel-join-voice', { code });
     } catch (err) {
       console.error('Create temp channel error:', err);
@@ -512,29 +532,11 @@ module.exports = function register(socket, ctx) {
         const newCount = (channel.code_rotation_counter || 0) + 1;
         const threshold = channel.code_rotation_interval || 5;
         if (newCount >= threshold) {
-          const newCode = generateChannelCode();
-          db.prepare(
-            'UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?'
-          ).run(newCode, channel.id);
-          const oldRoom = `channel:${code}`;
-          const newRoom = `channel:${newCode}`;
-          const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-          if (roomSockets) {
-            for (const sid of [...roomSockets]) {
-              const s = io.sockets.sockets.get(sid);
-              if (s) {
-                s.leave(oldRoom);
-                s.join(newRoom);
-                if (s.currentChannel === code) s.currentChannel = newCode;
-              }
-            }
+          try {
+            channel.code = rotateChannelCode(channel.id, code);
+          } catch (err) {
+            console.warn(`[ChannelRotation] Join-triggered rotation failed for channel ${channel.id}:`, err.message);
           }
-          if (channelUsers.has(code)) {
-            channelUsers.set(newCode, channelUsers.get(code));
-            channelUsers.delete(code);
-          }
-          io.to(newRoom).emit('channel-code-rotated', { channelId: channel.id, oldCode: code, newCode });
-          channel.code = newCode;
         } else {
           db.prepare('UPDATE channels SET code_rotation_counter = ? WHERE id = ?').run(newCount, channel.id);
         }
@@ -668,6 +670,9 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) return;
+    const deletedCodes = [code, ...db.prepare(
+      'SELECT code FROM channels WHERE parent_channel_id = ?'
+    ).all(channel.id).map(row => row.code)];
 
     // Collect the attachments this channel's messages point at, before the
     // rows go away. Deleting a channel dropped the messages but left every
@@ -695,6 +700,8 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
     });
     deleteAll(channel.id);
+    for (const deletedCode of deletedCodes) botAudioManager?.stopChannel(deletedCode, 'channel-deleted');
+    broadcastChannelLists();
 
     // The same file can be linked from more than one message (a copy-pasted
     // image URL), so only relocate the ones nothing else points at anymore.
@@ -787,7 +794,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Cannot create sub-channels inside sub-channels');
     }
 
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     const isPrivate = data.isPrivate ? 1 : 0;
 
     let expiresAt = null;
@@ -873,6 +880,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
+      botAudioManager?.stopChannel(code, 'channel-deleted');
       broadcastChannelLists();
       socket.emit('error-msg', 'Sub-channel deleted');
     } catch (err) {
@@ -907,6 +915,7 @@ module.exports = function register(socket, ctx) {
     try {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
       if (permission === 'voice' && newVal === 0) {
+        botAudioManager?.stopChannel(code, 'voice-disabled');
         db.prepare('UPDATE channels SET streams_enabled = 0, music_enabled = 0 WHERE id = ?').run(channel.id);
         const room = voiceUsers.get(code);
         if (room && room.size > 0) {
@@ -1303,6 +1312,9 @@ module.exports = function register(socket, ctx) {
     try {
       if (newParentCode === null || newParentCode === undefined) {
         if (!channel.parent_channel_id) return socket.emit('error-msg', 'Channel is already top-level');
+        if (!_canManageSubsScoped(channel.parent_channel_id)) {
+          return socket.emit('error-msg', 'You don\'t have permission to promote this channel');
+        }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0').get();
         const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
         db.prepare('UPDATE channels SET parent_channel_id = NULL, position = ?, category = NULL WHERE id = ?').run(position, channel.id);
@@ -1318,9 +1330,13 @@ module.exports = function register(socket, ctx) {
         const subCount = db.prepare('SELECT COUNT(*) as cnt FROM channels WHERE parent_channel_id = ?').get(channel.id);
         if (subCount && subCount.cnt > 0) return socket.emit('error-msg', 'Cannot make a channel with sub-channels into a sub-channel. Move or remove its sub-channels first.');
         if (channel.parent_channel_id === newParent.id) return socket.emit('error-msg', 'Channel is already under that parent');
-        // (#5424) A sub-channel manager of the destination parent (or the
-        // channel's current parent) may re-nest an existing sub-channel.
-        if (!_canManageSubsOf(newParent.id) && !_canManageSubsOf(channel.parent_channel_id)) {
+        // (#5492) Both ends, because a move takes a child away from one parent
+        // and gives it to another, and each of those is that parent's business.
+        // Authority is channel-scoped only: server-wide create_channel does not
+        // let you nest under a parent you don't manage, which was the bypass.
+        // A top-level source is null and passes freely (see _canManageSubsScoped),
+        // so pulling an existing channel into a parent you manage still works.
+        if (!_canManageSubsScoped(newParent.id) || !_canManageSubsScoped(channel.parent_channel_id)) {
           return socket.emit('error-msg', 'You don\'t have permission to move channels');
         }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(newParent.id);
@@ -1432,30 +1448,12 @@ module.exports = function register(socket, ctx) {
     const channel = db.prepare('SELECT * FROM channels WHERE id = ? AND is_dm = 0').get(channelId);
     if (!channel) return;
     const oldCode = channel.code;
-    const newCode = generateChannelCode();
-    db.prepare('UPDATE channels SET code = ?, code_rotation_counter = 0, code_last_rotated = CURRENT_TIMESTAMP WHERE id = ?').run(newCode, channelId);
-    const oldRoom = `channel:${oldCode}`;
-    const newRoom = `channel:${newCode}`;
-    const roomSockets = io.sockets.adapter.rooms.get(oldRoom);
-    if (roomSockets) {
-      for (const sid of [...roomSockets]) {
-        const s = io.sockets.sockets.get(sid);
-        if (s) {
-          s.leave(oldRoom);
-          s.join(newRoom);
-          if (s.currentChannel === oldCode) s.currentChannel = newCode;
-        }
-      }
+    try {
+      rotateChannelCode(channelId, oldCode);
+    } catch (err) {
+      console.warn(`[ChannelRotation] Manual rotation failed for channel ${channelId}:`, err.message);
+      socket.emit('error-msg', 'Channel code rotation failed — please try again.');
     }
-    if (channelUsers.has(oldCode)) {
-      channelUsers.set(newCode, channelUsers.get(oldCode));
-      channelUsers.delete(oldCode);
-    }
-    if (voiceUsers.has(oldCode)) {
-      voiceUsers.set(newCode, voiceUsers.get(oldCode));
-      voiceUsers.delete(oldCode);
-    }
-    io.to(newRoom).emit('channel-code-rotated', { channelId, oldCode, newCode });
   });
 
   // ── Invite user to channel ──────────────────────────────
@@ -1581,7 +1579,7 @@ module.exports = function register(socket, ctx) {
       });
       return;
     }
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     try {
       const result = db.prepare('INSERT INTO channels (name, code, created_by, is_dm) VALUES (?, ?, ?, 1)').run('DM', code, socket.user.id);
       const channelId = result.lastInsertRowid;

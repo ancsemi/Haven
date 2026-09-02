@@ -149,6 +149,7 @@
   },
   "toasts": {
     "roles_updated": "您的角色已更新",
+    "role_server_no_response": "服务器无响应。它可能运行的是旧版 Haven。请更新服务器文件并完全重启服务器，然后重试。",
     "status_pending_reconnect": "状态将在重新连接后更新",
     "channel_created": "频道 \"#{{name}}\" 已创建！\n邀请码：{{code}}",
     "channel_deleted": "频道已删除",
@@ -379,6 +380,7 @@
     "mention_everyone": "提及 @everyone",
     "view_history": "查看消息记录",
     "view_all_members": "查看所有服务器成员",
+    "view_all_channels": "查看所有频道（自动加入）",
     "manage_emojis": "管理自定义表情",
     "manage_soundboard": "管理音效板",
     "promote_user": "提升用户权限",
@@ -655,6 +657,7 @@
     "language_section": {
       "title": "语言",
       "label": "语言",
+      "auto": "自动",
       "hint": "更改立即生效"
     },
     "layout_density": {
@@ -884,6 +887,8 @@
       "max_sound_hint": "音效板最大上传大小（256–10240 KB，默认1024 / 1 MB）",
       "max_emoji_hint": "自定义表情最大上传大小（64–1024 KB，默认256）",
       "max_poll_hint": "每个投票的最大选项数（2–25，默认10）",
+      "max_invite_uses": "邀请链接最大使用次数",
+      "max_invite_uses_hint": "可为邀请链接设置的最大使用次数。管理员和拥有服务器管理权限的用户不受此限制。 (0 = 无限制)",
       "sounds_hint": "上传音频文件作为自定义通知声音",
       "emojis_hint": "上传图片作为自定义服务器表情",
       "emojis_upload_hint": "上传图片作为自定义服务器表情（最大256 KB，png/gif/webp）。名称须为小写，不含空格。",
@@ -948,11 +953,11 @@
       "import_reused": "已更新 {{count}} 个现有频道。",
       "import_failed_alert": "导入失败：{{error}}",
       "roles_no_custom": "没有自定义角色",
-      "roles_level_invalid": "级别必须在1–99之间",
+      "roles_level_invalid": "级别必须在0–99之间",
       "roles_create_title": "创建角色",
       "roles_create_hint": "输入角色名称：",
       "roles_level_title": "角色级别",
-      "roles_level_hint": "角色级别（1-99，数字越大权限越高）：\n服务器管理员默认 = 50，频道管理员默认 = 25",
+      "roles_level_hint": "角色等级（0–99，越高 = 权限越高）：\n默认服务器版主 = 50\n默认频道版主 = 25\n自助管理（无权限） = 0",
       "roles_created": "角色已创建",
       "roles_saved": "角色已保存",
       "roles_updated": "角色已更新",
@@ -1000,7 +1005,7 @@
       "roles_changes_saved_other": "已保存 {{count}} 项角色更改",
       "role_form": {
         "name": "名称",
-        "level": "级别（1-99）",
+        "level": "级别（0-99）",
         "color": "颜色",
         "auto_assign": "自动分配给新成员",
         "auto_assign_hint": "新用户注册或加入频道时将自动获得此角色。",
@@ -1009,6 +1014,8 @@
         "link_channel_access_hint": "启用后，分配/撤销此角色将自动授予/撤销频道成员资格。",
         "reapply_access": "为所有用户重新应用访问权限",
         "permissions": "权限",
+        "admin_only_note": "突出显示的权限仅限管理员使用，只有服务器所有者可以授予。",
+        "level_0_role_note": "0 级角色称为“群组”。群组不授予任何权限。用户无需拥有更高权限即可自由加入这些群组。可能的用途包括：频道授予、分组和角色扮演。",
         "delete": "删除"
       }
     }
@@ -1134,7 +1141,14 @@
       "display_name_placeholder": "新显示名称...",
       "bio_label": "简介",
       "bio_max": "（最多190个字符）",
-      "bio_placeholder": "向大家介绍一下自己…"
+      "bio_placeholder": "向大家介绍一下自己…",
+      "groups_title": "群组",
+      "manage_groups_btn": "管理群组",
+      "save_groups_btn": "保存群组",
+      "groups_hint": "群组会以角色的形式显示在你的个人资料卡上。它们不会授予任何权限，但可以授予频道访问权限！",
+      "no_groups": "你还没有加入任何群组，点击“管理群组”即可加入群组。",
+      "groups_saved": "群组已保存！",
+      "group_channels_granted": "已授予的频道访问权限"
     },
     "admin_action": {
       "title": "管理用户",
@@ -1381,7 +1395,8 @@
     "role_management": {
       "title": "角色管理",
       "new_role_btn": "+ 新角色",
-      "select_to_edit": "选择角色以编辑"
+      "select_to_edit": "选择角色以编辑",
+      "groups_label": "群组"
     },
     "assign_role": {
       "title": "分配角色",

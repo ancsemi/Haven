@@ -1,0 +1,212 @@
+/**
+ * @name Compact
+ * @description Dense graphite chrome with narrow panels and crisp cyan accents. Respects the selected message density.
+ * @author bernardokcosta
+ * @version 1.0
+ * @icon C
+ * @haven-theme-api 1
+ */
+
+/*
+  Compact is a pure Theme API v1 theme. It tightens stable application regions
+  on desktop but leaves message geometry to Haven's Layout Density setting and
+  reserves structural changes for a future Compact Layout plugin.
+*/
+
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #151b23;
+  --bg-tertiary: #10161e;
+  --bg-hover: #1d2631;
+  --bg-active: #263342;
+  --bg-input: #0a0f15;
+  --bg-card: #131a22;
+
+  --accent: #63d2ff;
+  --accent-hover: #91e0ff;
+  --accent-glow: rgba(99, 210, 255, 0.3);
+  --accent-text: #071116;
+
+  --text-primary: #e8edf2;
+  --text-secondary: #aeb9c5;
+  --text-muted: #8391a1;
+  --text-link: #84d9ff;
+
+  --border: #283341;
+  --border-light: #3a4859;
+
+  --success: #4bd39b;
+  --success-text: #07110c;
+  --danger: #ff6b7a;
+  --danger-text: #000000;
+  --warning: #f2bd62;
+  --warning-text: #1b1104;
+  --led-on: #4bd39b;
+  --led-off: #465362;
+  --led-glow: rgba(75, 211, 155, 0.32);
+
+  --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-heading: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --radius: 0.3rem;
+  --radius-sm: 0.2rem;
+  --transition: 0.1s ease-out;
+  --msg-glow: none;
+  --scanline: none;
+}
+
+html[data-haven-theme-api="1"] {
+  color-scheme: dark;
+  background: var(--bg-primary);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="server-rail"] {
+  background: var(--bg-tertiary);
+  border-inline-end: 1px solid var(--border);
+  scrollbar-color: var(--border-light) transparent;
+  scrollbar-width: thin;
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="navigation-sidebar"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="context-sidebar"] {
+  background: var(--bg-secondary);
+  scrollbar-color: var(--border-light) transparent;
+  scrollbar-width: thin;
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="navigation-sidebar"] {
+  border-inline-end: 1px solid var(--border);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="context-sidebar"] {
+  border-inline-start: 1px solid var(--border);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="main"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="message-area"] {
+  background: var(--bg-primary);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="channel-header"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="composer"] {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="webcams"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="screen-shares"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="music-player"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="pinned-messages"] {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="message-list"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="sidebar-content"],
+html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="member-list"] {
+  scrollbar-color: var(--border-light) transparent;
+  scrollbar-width: thin;
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="auth"] [data-haven-region="auth-shell"] {
+  max-width: 23rem;
+  padding: 1rem;
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="auth"] [data-haven-region="auth-card"] {
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.32);
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="auth"] [data-haven-region="auth-header"] {
+  margin-block-end: 1.125rem;
+}
+
+html[data-haven-theme-api="1"] body[data-haven-page="auth"] [data-haven-region="theme-picker"] {
+  gap: 0.25rem;
+  margin-block-start: 0.875rem;
+  padding-block-start: 0.625rem;
+}
+
+@media (min-width: 901px) {
+  :root {
+    --sidebar-width: 14.5rem;
+    --right-width: 15.5rem;
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="server-rail"] {
+    gap: 0.375rem;
+    padding: 0.5rem 0.375rem;
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="navigation-sidebar"] {
+    width: var(--sidebar-width);
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="account"] {
+    gap: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="join-channel"],
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="create-channel"] {
+    padding: 0.5rem 0.75rem;
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="channels"],
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="direct-messages"] {
+    padding: 0.5rem 0.75rem 0;
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="sidebar-footer"] {
+    background: var(--bg-tertiary);
+    border-block-start: 1px solid var(--border);
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="theme-picker"] {
+    gap: 0.25rem;
+    padding-block: 0.125rem;
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="channel-header"] {
+    min-height: 2.75rem;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="message-list"] {
+    padding: 0.625rem 0.875rem;
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="composer"] {
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem 0.625rem;
+    border-block-start: 1px solid var(--border);
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="context-sidebar"] {
+    width: var(--right-width);
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="voice-roster"],
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="member-list"] {
+    border-block-end: 1px solid var(--border);
+  }
+
+  html[data-haven-theme-api="1"] body[data-haven-page="app"] [data-haven-region="status-bar"] {
+    min-height: 1.375rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition: 0s;
+  }
+}

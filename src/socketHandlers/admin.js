@@ -1,14 +1,24 @@
 'use strict';
 
 const crypto = require('crypto');
+const path = require('node:path');
 const { utcStamp, isInt, isValidUploadPath, VALID_ROLE_PERMS } = require('./helpers');
+const {
+  compatibleThemeFiles,
+  isThemeFilename,
+  readThemeMetadataFile,
+  validatedThemeDefault,
+} = require('../themeMetadata');
+
+const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserRoles, getUserHighestRole,
-    emitOnlineUsers, broadcastChannelLists, generateChannelCode,
-    logAudit, fireWebhookEvent, onReferrerPolicyChange, automod, getIdleOnlineUsers
+    emitOnlineUsers, broadcastChannelLists, generateUniqueSharedCode,
+    logAudit, fireWebhookEvent, onReferrerPolicyChange, automod, getIdleOnlineUsers,
+    getUploadUsage, revokeBotVoiceAccess
   } = ctx;
   const { channelUsers } = state;
 
@@ -41,6 +51,16 @@ module.exports = function register(socket, ctx) {
       if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
       settings[r.key] = r.value;
     });
+
+    let storedPublishedThemes = [];
+    try { storedPublishedThemes = JSON.parse(settings.published_themes || '[]'); } catch {}
+    const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
+    settings.published_themes = JSON.stringify(publishedThemes);
+    settings.default_theme = validatedThemeDefault(
+      THEMES_DIR,
+      settings.default_theme || '',
+      publishedThemes
+    );
 
     // Not a stored setting: the server name actually in effect once
     // SERVER_NAME is taken into account. Without it the sidebar fell back to
@@ -75,6 +95,8 @@ module.exports = function register(socket, ctx) {
 
     const key = typeof data.key === 'string' ? data.key.trim() : '';
     const value = typeof data.value === 'string' ? data.value.trim() : '';
+    let publishedThemeFiles = null;
+    let clearDefaultTheme = false;
 
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
@@ -86,12 +108,13 @@ module.exports = function register(socket, ctx) {
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
       'session_duration_days', 'max_message_chars',
-      'default_join_channels', 'registration_token_enabled', // (#5344, #5345), registration_token has its own generate/clear handlers
+      'default_join_channels', 'registration_token_enabled', 'invites_bypass_registration_token', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
       'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
+      'max_invite_uses', // invite uses limiter for non-admin/mannage-server invite-links
       'channel_creator_role', // (#5461) role auto-granted to a non-admin who creates a channel
       // (#12) OIDC / SSO. The client secret is NOT here on purpose — it lives
       // in OIDC_CLIENT_SECRET in the environment, so a database backup never
@@ -107,6 +130,7 @@ module.exports = function register(socket, ctx) {
       'automod_ban_ip', 'automod_log_channel',
       'voice_force_relay',
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
+      'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
       'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
     ];
     if (!allowedKeys.includes(key)) return;
@@ -119,6 +143,7 @@ module.exports = function register(socket, ctx) {
     ];
     if (automodBools.includes(key) && !['true', 'false'].includes(value)) return;
     if (key === 'media_proxy_enabled' && !['true', 'false'].includes(value)) return;
+    if (key === 'fcm_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'unicode_emoji_auto_update' && !['true', 'false'].includes(value)) return;
     if (key === 'automod_link_mode' && !['off', 'allowlist', 'blocklist'].includes(value)) return;
     if (key === 'automod_link_exempt_level') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100) return; }
@@ -165,6 +190,7 @@ module.exports = function register(socket, ctx) {
     if ((key === 'turnstile_site_key' || key === 'turnstile_secret_key') && value.length > 200) return;
     if (key === 'registration_rate_limit_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'registration_rate_limit_per_hour') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 100000) return; }
+    if (key === 'max_invite_uses') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
 
     // 'unsafe-url' and 'no-referrer-when-downgrade' are intentionally absent —
     // both leak the full URL cross-origin, and Haven's invite links live in the
@@ -232,18 +258,42 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'default_theme') {
       // Allow built-in names OR "file:name.theme.css" for published custom themes
-      const validBuiltin = ['', 'haven', 'discord', 'matrix', 'fallout', 'ffx', 'ice', 'nord', 'darksouls', 'eldenring', 'bloodborne', 'cyberpunk', 'lotr', 'abyss', 'scripture', 'chapel', 'gospel', 'tron', 'halo', 'dracula', 'win95'];
-      if (!validBuiltin.includes(value) && !/^file:[a-zA-Z0-9_\-. ]+\.theme\.css$/.test(value)) return;
+      const validBuiltin = ['', 'haven', 'discord', 'matrix', 'tron', 'halo', 'lotr', 'cyberpunk', 'nord', 'dracula', 'bloodborne', 'darksouls', 'eldenring', 'ice', 'abyss', 'minecraft', 'ffx', 'zelda', 'fallout', 'scripture', 'chapel', 'gospel', 'midnightpurple', 'crt', 'win95', 'rgb', 'daylight', 'cloudy'];
+      if (!validBuiltin.includes(value)) {
+        if (!value.startsWith('file:')) return;
+        const file = value.slice(5);
+        const metadata = readThemeMetadataFile(THEMES_DIR, file);
+        if (!metadata?.compatible) {
+          return socket.emit('error-msg', 'That theme is missing or incompatible with this Haven server.');
+        }
+        try {
+          const row = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
+          const published = row ? JSON.parse(row.value) : [];
+          if (!Array.isArray(published) || !published.includes(file)) {
+            return socket.emit('error-msg', 'Publish that theme before selecting it as the server default.');
+          }
+        } catch {
+          return socket.emit('error-msg', 'Could not verify the published theme list.');
+        }
+      }
     }
     if (key === 'default_locale') {
-      const validLocales = ['', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh'];
+      const validLocales = ['', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt'];
       if (!validLocales.includes(value)) return;
     }
     if (key === 'published_themes') {
       try {
         const arr = JSON.parse(value);
-        if (!Array.isArray(arr)) return;
-        if (!arr.every(f => typeof f === 'string' && /^[a-zA-Z0-9_\-. ]+\.theme\.css$/.test(f))) return;
+        if (!Array.isArray(arr) || arr.length > 500) return;
+        if (!arr.every(isThemeFilename) || new Set(arr).size !== arr.length) return;
+        if (!arr.every(file => readThemeMetadataFile(THEMES_DIR, file)?.compatible)) {
+          return socket.emit('error-msg', 'Only installed, compatible themes can be published.');
+        }
+        publishedThemeFiles = arr;
+        const defaultRow = db.prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get();
+        const currentDefault = defaultRow?.value || '';
+        clearDefaultTheme = currentDefault.startsWith('file:')
+          && !publishedThemeFiles.includes(currentDefault.slice(5));
       } catch { return; }
     }
     if (key === 'custom_tos') { if (value.length > 50000) return; }
@@ -252,8 +302,18 @@ module.exports = function register(socket, ctx) {
     if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
     if (key === 'vanity_code') {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
+      if (value) {
+        const conflicts =
+          db.prepare('SELECT 1 FROM channels WHERE code = ?').get(value) ||
+          db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(value) ||
+          db.prepare("SELECT 1 FROM server_settings WHERE key = 'server_code' AND value = ?").get(value);
+        if (conflicts) return socket.emit('error-msg', 'That code is already in use — pick another.');
+      }
     }
     if (key === 'registration_token_enabled') {
+      if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'invites_bypass_registration_token') {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'guests_enabled') {
@@ -308,19 +368,29 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
+      const save = () => {
+        db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
+        if (clearDefaultTheme) {
+          db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('default_theme', '');
+        }
+      };
+      if (clearDefaultTheme && typeof db.transaction === 'function') db.transaction(save)();
+      else save();
     } catch (err) {
       console.error('Failed to save server setting:', key, err.message);
       return socket.emit('error-msg', 'Failed to save setting — database write error');
     }
 
-    io.emit('server-setting-changed', { key, value });
+    io.except('bot-sockets').emit('server-setting-changed', { key, value });
+    if (clearDefaultTheme) {
+      io.except('bot-sockets').emit('server-setting-changed', { key: 'default_theme', value: '' });
+    }
 
     // Clearing the name hands it back to SERVER_NAME, so tell everyone what
     // the name resolves to now rather than leaving the old one on screen
     // until the next reconnect. (#5489)
     if (key === 'server_name') {
-      io.emit('server-setting-changed', {
+      io.except('bot-sockets').emit('server-setting-changed', {
         key: 'server_name_effective',
         value: value || (process.env.SERVER_NAME || '').trim() || ''
       });
@@ -348,6 +418,10 @@ module.exports = function register(socket, ctx) {
       for (const [code] of channelUsers) { emitOnlineUsers(code); }
     }
     if (key === 'referrer_policy') onReferrerPolicyChange(value);
+
+    // Keep the in-memory FCM toggle in sync so the message hot path never reads
+    // the database. isFcmEnabled() consults this on the next push. (FCM Privacy)
+    if (key === 'fcm_enabled') require('../fcm').setFcmAdminEnabled(value !== 'false');
 
     // Turning the feature on shouldn't make the admin wait until the next boot —
     // refresh right away. ensureEmojiData is a no-op when the on-disk copy is
@@ -414,9 +488,9 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
-    const code = generateChannelCode();
+    const code = generateUniqueSharedCode();
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', code);
-    io.emit('server-setting-changed', { key: 'server_code', value: code });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'server_code', value: code });
     socket.emit('error-msg', `Server invite code generated: ${code}`);
   });
 
@@ -425,7 +499,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', '');
-    io.emit('server-setting-changed', { key: 'server_code', value: '' });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'server_code', value: '' });
     socket.emit('error-msg', 'Server invite code cleared');
   });
 
@@ -528,10 +602,26 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // make sure maxUses value is defined and valid
+    // to prevent an omission or invalid value from being interpreted as unlimited uses (0)
+    const maxUses = Number(data.maxUses);
+    if (data.maxUses === null || data.maxUses === '' || !Number.isInteger(maxUses) || maxUses < 0) {
+      return socket.emit('error-msg', `maxUses invalid or not defined`);
+    }
+
+    // Enforce the server-configured max uses for delegated inviters.
+    // 0 = unlimited. Admins and manage_server are uncapped.
+    let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
+    if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 0;
+    const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
+    if (restrictUses && (maxUses > maxInvtUsesSetting || maxUses <= 0)) {
+      return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
+    }
+    if (maxUses > 100000) return socket.emit('error-msg', `maxUses value must be <= 100000.`);
+
     const label = typeof data.label === 'string' ? data.label.trim().slice(0, 60) : '';
     const channels = _normaliseInviteChannels(data.channels);
     if (channels === null) return socket.emit('error-msg', 'Invalid channel selection');
-    const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
     const expiresAt = _inviteExpiryStamp(data.expiresInHours);
 
     // Custom slug (optional) or an auto-generated 8-char hex code.
@@ -545,7 +635,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'That code is already in use — pick another.');
       }
     } else {
-      do { code = generateChannelCode(); } while (_inviteCodeTaken(code));
+      code = generateUniqueSharedCode();
     }
 
     const info = db.prepare(
@@ -580,7 +670,21 @@ module.exports = function register(socket, ctx) {
       sets.push('channels = ?'); vals.push(channels);
     }
     if ('maxUses' in data) {
-      const maxUses = Number.isInteger(data.maxUses) && data.maxUses > 0 ? Math.min(data.maxUses, 100000) : 0;
+      // make sure maxUses value is defined and valid
+      // to prevent an omission or invalid value from being interpreted as unlimited uses (0)
+      const maxUses = Number(data.maxUses);
+      if (data.maxUses === null || data.maxUses === '' || !Number.isInteger(maxUses) || maxUses < 0) {
+        return socket.emit('error-msg', `maxUses invalid or not defined`);
+      }
+      // Enforce the server-configured max uses for delegated inviters.
+      // 0 = unlimited. Admins and manage_server are uncapped.
+      let maxInvtUsesSetting = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_invite_uses'").get()?.value, 10);
+      if (Number.isNaN(maxInvtUsesSetting)) maxInvtUsesSetting = 0;
+      const restrictUses = !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server') && maxInvtUsesSetting > 0;
+      if (restrictUses && (maxUses > maxInvtUsesSetting || maxUses <= 0)) {
+        return socket.emit('error-msg', `Invite links are limited to ${maxInvtUsesSetting} uses.`);
+      }
+      if (maxUses > 100000) return socket.emit('error-msg', `maxUses value must be <= 100000.`);
       sets.push('max_uses = ?'); vals.push(maxUses);
     }
     if ('expiresInHours' in data) {
@@ -598,6 +702,7 @@ module.exports = function register(socket, ctx) {
         details: { fields: sets.map(s => s.split(' ')[0]) }
       });
     }
+    socket.emit('toast', { message: `Invite link updated`, type: 'success' });
     _emitInviteCodes();
   });
 
@@ -629,7 +734,7 @@ module.exports = function register(socket, ctx) {
     }
     const token = crypto.randomBytes(8).toString('hex');
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', token);
-    io.emit('server-setting-changed', { key: 'registration_token', value: token });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'registration_token', value: token });
     socket.emit('error-msg', `Registration token generated: ${token}`);
   });
 
@@ -638,7 +743,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage the registration token');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', '');
-    io.emit('server-setting-changed', { key: 'registration_token', value: '' });
+    io.except('bot-sockets').emit('server-setting-changed', { key: 'registration_token', value: '' });
     socket.emit('error-msg', 'Registration token cleared');
   });
 
@@ -659,6 +764,12 @@ module.exports = function register(socket, ctx) {
   // Two calling conventions:
   //   Bot-manager modal: uses data.channel_id (integer), data.id for delete/toggle
   //   Per-channel modal: uses data.channelCode (string), data.webhookId for delete/toggle
+
+  const visibleWebhookRows = rows => rows.map(webhook =>
+    socket.user.isAdmin || webhook.created_by === socket.user.id
+      ? webhook
+      : { ...webhook, token: null }
+  );
 
   socket.on('create-webhook', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -706,15 +817,15 @@ module.exports = function register(socket, ctx) {
         'INSERT INTO webhooks (channel_id, name, token, avatar_url, created_by) VALUES (?, ?, ?, ?, ?)'
       ).run(channelId, name, token, avatarUrl, socket.user.id);
 
-      const webhooks = db.prepare(`
-        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
+      const webhooks = visibleWebhookRows(db.prepare(`
+        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
-      `).all();
+      `).all());
       socket.emit('webhooks-list', { webhooks });
       socket.emit('error-msg', `Webhook "${name}" created for #${channel.name}`);
     }
@@ -732,21 +843,21 @@ module.exports = function register(socket, ctx) {
       const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(channelCode);
       if (!channel) return;
 
-      const webhooks = db.prepare(
-        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count, can_moderate FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
-      ).all(channel.id);
+      const webhooks = visibleWebhookRows(db.prepare(
+        'SELECT id, channel_id, name, token, avatar_url, is_active, created_at, created_by, callback_url, callback_secret, subscribed_events, last_delivery_status, last_delivery_at, last_delivery_error, failure_count, can_moderate, can_use_voice FROM webhooks WHERE channel_id = ? ORDER BY created_at DESC'
+      ).all(channel.id));
       socket.emit('webhooks-list', { channelCode, webhooks });
     } else {
       // Bot-manager variant (all webhooks)
-      const webhooks = db.prepare(`
-        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
+      const webhooks = visibleWebhookRows(db.prepare(`
+        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
-      `).all();
+      `).all());
       socket.emit('webhooks-list', { webhooks });
     }
   });
@@ -760,6 +871,7 @@ module.exports = function register(socket, ctx) {
     const webhookId = parseInt(data.webhookId || data.id);
     if (!webhookId || isNaN(webhookId)) return;
 
+    revokeBotVoiceAccess?.(webhookId, 'Webhook was deleted');
     db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId);
 
     if (data.webhookId) {
@@ -767,15 +879,15 @@ module.exports = function register(socket, ctx) {
       socket.emit('webhook-deleted', { webhookId });
     } else {
       // Bot-manager response — return full list
-      const webhooks = db.prepare(`
-        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
+      const webhooks = visibleWebhookRows(db.prepare(`
+        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
-      `).all();
+      `).all());
       socket.emit('webhooks-list', { webhooks });
       socket.emit('error-msg', 'Webhook deleted');
     }
@@ -793,21 +905,22 @@ module.exports = function register(socket, ctx) {
     if (!wh) return socket.emit('error-msg', 'Webhook not found');
     const newState = wh.is_active ? 0 : 1;
     db.prepare('UPDATE webhooks SET is_active = ? WHERE id = ?').run(newState, webhookId);
+    if (!newState) revokeBotVoiceAccess?.(webhookId, 'Webhook was disabled');
 
     if (data.webhookId) {
       // Per-channel response
       socket.emit('webhook-toggled', { webhookId, is_active: newState });
     } else {
       // Bot-manager response — return full list
-      const webhooks = db.prepare(`
-        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
+      const webhooks = visibleWebhookRows(db.prepare(`
+        SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
                w.callback_url, w.callback_secret,
                w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-               w.last_delivery_error, w.failure_count, w.can_moderate,
+               w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
                c.name as channel_name, c.code as channel_code
         FROM webhooks w JOIN channels c ON w.channel_id = c.id
         ORDER BY w.created_at DESC
-      `).all();
+      `).all());
       socket.emit('webhooks-list', { webhooks });
     }
   });
@@ -821,6 +934,17 @@ module.exports = function register(socket, ctx) {
     const wh = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId);
     if (!wh) return socket.emit('error-msg', 'Webhook not found');
 
+    if (data.can_use_voice !== undefined && !socket.user.isAdmin) {
+      return socket.emit('error-msg', 'Only admins can change a bot\'s voice permission');
+    }
+
+    if (data.channel_id !== undefined) {
+      const requestedChannelId = parseInt(data.channel_id);
+      if (!socket.user.isAdmin && requestedChannelId !== wh.channel_id && (wh.can_use_voice || wh.can_moderate)) {
+        return socket.emit('error-msg', 'Only admins can move a bot with privileged permissions');
+      }
+    }
+
     if (typeof data.name === 'string' && data.name.trim()) {
       db.prepare('UPDATE webhooks SET name = ? WHERE id = ?').run(data.name.trim().slice(0, 32), webhookId);
     }
@@ -828,7 +952,10 @@ module.exports = function register(socket, ctx) {
       const channelId = parseInt(data.channel_id);
       if (!isNaN(channelId)) {
         const channel = db.prepare('SELECT id FROM channels WHERE id = ?').get(channelId);
-        if (channel) db.prepare('UPDATE webhooks SET channel_id = ? WHERE id = ?').run(channelId, webhookId);
+        if (channel) {
+          db.prepare('UPDATE webhooks SET channel_id = ? WHERE id = ?').run(channelId, webhookId);
+          if (channelId !== wh.channel_id) revokeBotVoiceAccess?.(webhookId, 'Webhook voice channel scope changed');
+        }
       }
     }
     if (data.avatar_url !== undefined) {
@@ -871,16 +998,21 @@ module.exports = function register(socket, ctx) {
       const flag = data.can_moderate ? 1 : 0;
       db.prepare('UPDATE webhooks SET can_moderate = ? WHERE id = ?').run(flag, webhookId);
     }
+    if (data.can_use_voice !== undefined) {
+      const flag = data.can_use_voice ? 1 : 0;
+      db.prepare('UPDATE webhooks SET can_use_voice = ? WHERE id = ?').run(flag, webhookId);
+      if (!flag) revokeBotVoiceAccess?.(webhookId, 'Bot voice permission was revoked');
+    }
 
-    const webhooks = db.prepare(`
-      SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at,
+    const webhooks = visibleWebhookRows(db.prepare(`
+      SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
              w.callback_url, w.callback_secret,
              w.subscribed_events, w.last_delivery_status, w.last_delivery_at,
-             w.last_delivery_error, w.failure_count, w.can_moderate,
+             w.last_delivery_error, w.failure_count, w.can_moderate, w.can_use_voice,
              c.name as channel_name, c.code as channel_code
       FROM webhooks w JOIN channels c ON w.channel_id = c.id
       ORDER BY w.created_at DESC
-    `).all();
+    `).all());
     socket.emit('webhooks-list', { webhooks });
     socket.emit('bot-updated', 'Bot updated');
   });
@@ -1002,12 +1134,35 @@ module.exports = function register(socket, ctx) {
         });
       }
 
+      // Upload storage per member (#5521). Moderator-only: it is a moderation
+      // signal, not something every member needs to see about everyone else.
+      // The DM figure is a size, never a hint at what was sent: DM attachments
+      // are encrypted client-side and stay unreadable to the server.
+      let usage = null;
+      if (canMod) {
+        try { usage = getUploadUsage(); } catch (err) {
+          console.warn('get-all-members: upload usage unavailable:', err.message);
+        }
+      }
+      const storageFor = (userId) => {
+        if (!usage) return undefined;
+        const entry = usage.byUser.get(userId);
+        return {
+          total: entry ? entry.total : 0,
+          channel: entry ? entry.channel : 0,
+          dm: entry ? entry.dm : 0,
+          profile: entry ? entry.profile : 0,
+          files: entry ? entry.files : 0
+        };
+      };
+
       const members = users.map(u => ({
         id: u.id, username: u.username, displayName: u.displayName,
         isAdmin: !!u.is_admin, online: onlineIds.has(u.id),
         banned: bannedIds.has(u.id), roles: userRoles[u.id] || [],
         channels: channelCounts[u.id] || 0,
         channelList: canMod ? (userChannelMap[u.id] || []) : undefined,
+        storage: storageFor(u.id),
         avatar: u.avatar || null, avatarShape: u.avatar_shape || 'circle',
         status: u.status || 'online', statusText: u.status_text || '',
         createdAt: u.created_at
@@ -1016,11 +1171,20 @@ module.exports = function register(socket, ctx) {
       cb({
         members, total: members.length, channelOnly: !!channelOnly,
         allChannels: canMod ? allChannels : undefined,
+        // Files uploaded before this shipped have no owner on record, so they
+        // are reported as their own total instead of being blamed on anyone.
+        storageSummary: usage ? {
+          liveBytes: usage.liveBytes,
+          attributedBytes: usage.attributedBytes,
+          unattributedBytes: usage.unattributedBytes,
+          fileCount: usage.fileCount
+        } : undefined,
         callerPerms: {
           isAdmin, canMod,
           canPromote: isAdmin || userHasPermission(socket.user.id, 'promote_user'),
           canKick: isAdmin || userHasPermission(socket.user.id, 'kick_user'),
           canBan: isAdmin || userHasPermission(socket.user.id, 'ban_user'),
+          canInvite: isAdmin || userHasPermission(socket.user.id, 'invite_users') || userHasPermission(socket.user.id, 'manage_server'),
         }
       });
     } catch (err) {
@@ -1154,7 +1318,7 @@ module.exports = function register(socket, ctx) {
       const payload = automod.enabled()
         ? Object.assign(automod.policy(), { enabled: true, scanDms: s.automod_scan_dms === 'true' })
         : { enabled: false, mode: 'off', allow: [], deny: [], scanDms: false };
-      io.emit('link-policy', payload);
+      io.except('bot-sockets').emit('link-policy', payload);
     } catch { /* non-critical */ }
   }
 

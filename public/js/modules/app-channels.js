@@ -11,6 +11,9 @@ async switchChannel(code) {
   // Voice persists across channel switches — no auto-disconnect
 
   this.currentChannel = code;
+  // Search panel persists per-context: hide/show it for the channel we just
+  // entered (public channels share one, each DM keeps its own). (search-overhaul)
+  this._searchOnChannelSwitch?.();
   // Reset pin indicator until message-history reports the count for this channel
   this._updatePinIndicator?.(this._pinnedCountByChannel?.[code] || 0);
   this._coupledToBottom = true;
@@ -89,6 +92,10 @@ async switchChannel(code) {
   document.getElementById('pinned-toggle-btn').style.display = '';
   const _galleryBtn = document.getElementById('gallery-toggle-btn');
   if (_galleryBtn) _galleryBtn.style.display = isDm ? 'none' : '';
+  // (#5506) Same reasoning as the gallery: DM content is end-to-end encrypted,
+  // so a server-built list of it would have nothing readable to show.
+  const _threadsBtn = document.getElementById('threads-toggle-btn');
+  if (_threadsBtn) _threadsBtn.style.display = isDm ? 'none' : '';
   // Auto-close pinned panel and Pins PiP on channel switch so stale pins don't linger
   document.getElementById('pinned-panel').style.display = 'none';
   this._closePinsPiP?.();
@@ -383,6 +390,7 @@ _openChannelCtxMenu(code, btnEl) {
   // used to show the entry everywhere once you held the permission anywhere.
   const ch = this.channels.find(c => c.code === code);
   const canManageSettings = isAdmin || !!(ch && ch.canManageSettings);
+  const canManageSubs = isAdmin || !!(ch && ch.canManageSubs);
   const isMod = isAdmin || this._canModerate();
   menu.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = canManageChannels ? '' : 'none';
@@ -451,6 +459,14 @@ _openChannelCtxMenu(code, btnEl) {
     const canRename = isMod || this._hasPerm(renamePerm);
     renameCtxBtn.style.display = canRename ? '' : 'none';
   }
+  // Only display the divider when the "rename-channel" and/or "create-sub-channel" buttons are visible.
+  // this eliminates a double divider being displayed when both of these buttons are not displayed
+  const renameOrCreateSubDivider = menu.querySelector('.channel-ctx-sep.rename-or-createSub');
+  if (renameOrCreateSubDivider && ch) {
+    const renameCtxBtn_visible = renameCtxBtn && renameCtxBtn.style.display !== 'none';
+    const createSubBtn_visible = createSubBtn && createSubBtn.style.display !== 'none';
+    renameOrCreateSubDivider.style.display = (renameCtxBtn_visible || createSubBtn_visible) ? '' : 'none';
+  }
   // Hide "Leave Channel" for admins (always in all channels)
   const leaveBtn = menu.querySelector('[data-action="leave-channel"]');
   if (leaveBtn) leaveBtn.style.display = isAdmin ? 'none' : '';
@@ -471,13 +487,19 @@ _openChannelCtxMenu(code, btnEl) {
   const moveToBtn = menu.querySelector('[data-action="move-to-parent"]');
   if (moveToBtn && ch) {
     const hasChildren = this.channels.some(c => c.parent_channel_id === ch.id);
-    // Can move if: admin, not a DM, and has no children (can't nest 2 levels)
-    moveToBtn.style.display = (canManageChannels && !ch.is_dm && !hasChildren) ? '' : 'none';
+    // (#5492) Mirror the server's rule instead of approximating it: you need
+    // the current parent if there is one, plus at least one destination you
+    // actually manage. A top-level channel has no parent to answer to, so
+    // managing a destination is enough to pull it in — otherwise the entry
+    // hid an action the server would have allowed.
+    const sourceOk = !ch.parent_channel_id || canManageSubs;
+    const hasTarget = this._reparentTargets(ch).length > 0;
+    moveToBtn.style.display = (sourceOk && hasTarget && !ch.is_dm && !hasChildren) ? '' : 'none';
   }
   // Show "Promote to Channel" only for sub-channels
   const promoteBtn = menu.querySelector('[data-action="promote-channel"]');
   if (promoteBtn && ch) {
-    promoteBtn.style.display = (canManageChannels && ch.parent_channel_id) ? '' : 'none';
+    promoteBtn.style.display = (canManageSubs && ch.parent_channel_id) ? '' : 'none';
   }
   // Update Channel Functions panel with current channel values
   if (canManageSettings) this._updateChannelFunctionsPanel(ch);
@@ -1015,6 +1037,22 @@ _createSubPanelTile(ch, isSubbed) {
 
 /* ── Re-parent channel modal (move to / promote) ───── */
 
+/**
+ * Top-level channels `ch` may legitimately be moved under. (#5492) Filtered to
+ * the ones this user can actually manage, so the picker stops offering
+ * destinations the server is only going to refuse.
+ */
+_reparentTargets(ch) {
+  const isAdmin = !!(this.user && this.user.isAdmin);
+  return this.channels.filter(c =>
+    !c.is_dm &&
+    !c.parent_channel_id &&          // Must be a top-level channel
+    c.id !== ch.id &&                 // Can't parent under self
+    c.id !== ch.parent_channel_id &&  // Skip current parent (already there)
+    (isAdmin || c.canManageSubs)      // Must be a parent we may add a child to
+  ).sort((a, b) => (a.position || 0) - (b.position || 0));
+},
+
 _openReparentModal(code) {
   const ch = this.channels.find(c => c.code === code);
   if (!ch) return;
@@ -1027,12 +1065,7 @@ _openReparentModal(code) {
   descEl.textContent = t('channels.move_channel_desc', { name: ch.name });
 
   // Build list of valid parent targets (top-level channels that aren't this one)
-  const targets = this.channels.filter(c =>
-    !c.is_dm &&
-    !c.parent_channel_id &&  // Must be a top-level channel
-    c.id !== ch.id &&         // Can't parent under self
-    c.id !== ch.parent_channel_id  // Skip current parent (already there)
-  ).sort((a, b) => (a.position || 0) - (b.position || 0));
+  const targets = this._reparentTargets(ch);
 
   let html = '';
 
@@ -1655,7 +1688,9 @@ _renderWebhookList(webhooks, channelCode) {
     return;
   }
   container.innerHTML = webhooks.map(wh => {
-    const maskedToken = wh.token.slice(0, 8) + '••••••••';
+    const maskedToken = typeof wh.token === 'string' && wh.token
+      ? wh.token.slice(0, 8) + '••••••••'
+      : 'Hidden - owner/admin only';
     const statusLabel = wh.is_active ? `🟢 ${t('channels.webhook_active')}` : `🔴 ${t('channels.webhook_disabled')}`;
     const toggleLabel = wh.is_active ? t('channels.webhook_disable') : t('channels.webhook_enable');
     return `
@@ -3038,13 +3073,14 @@ _updateChannelVoiceIndicators() {
         // Self-talking state is driven by the local analyser directly (not
         // server echo), so talkingState.get('self') reflects real-time mic level.
         const isTalking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
-        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}</div>`;
+        const botBadge = u.isBot ? '<span class="bot-badge">BOT</span>' : '';
+        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}${botBadge}</div>`;
       }).join('');
       // Right-click on a left-sidebar voice user → same voice options menu
       userList.querySelectorAll('.channel-voice-user').forEach(item => {
         item.addEventListener('contextmenu', (e) => {
           const userId = parseInt(item.dataset.userId);
-          if (isNaN(userId) || userId === this.user.id) return;
+          if (isNaN(userId) || userId === this.user.id || item.dataset.isBot === 'true') return;
           e.preventDefault();
           e.stopPropagation();
           this._showVoiceUserMenu(item, userId, item.dataset.username || '');

@@ -27,6 +27,19 @@ services:
       # - VAPID_EMAIL=mailto:you@example  # Optional: email for push notifications
       # - TURN_URL=turn:your-server:3478  # Optional: TURN relay for voice over internet
       # - TURN_SECRET=your-secret         # Shared secret (coturn --use-auth-secret)
+      # - OIDC_CLIENT_SECRET=client-secret # The client secret as defined by your OIDC provider.
+      # Full text search tokenizer. Controls how message text is matched.
+      # Takes effect on restart; changing it triggers a one time reindex.
+      #   trigram    Matches text anywhere inside words, so apple finds apple,
+      #              applesauce and pineapple. Most flexible for partial matches.
+      #              Largest index (about 3 to 4x the message text) and needs
+      #              queries of at least 3 characters.
+      #   unicode61  Whole word and prefix matching, so apple finds apple and
+      #              apple* but not applesauce. Smallest and fastest, best ranking.
+      #   porter     Like unicode61 plus English stemming, so run also finds
+      #              running and ran. Small index, English focused, no substrings.
+      # Default is unicode61, the closest match to how Discord search behaves.
+      # - HAVEN_SEARCH_TOKENIZER=unicode61
     # Uncomment to load settings from a .env file:
     # env_file: .env
     restart: unless-stopped

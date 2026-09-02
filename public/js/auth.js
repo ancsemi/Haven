@@ -3,7 +3,7 @@
 (async function () {
   // Preserve invite param across login/register so vanity invite links work for new users
   const _urlParams = new URLSearchParams(window.location.search);
-  const _pendingInvite = _urlParams.get('invite') || sessionStorage.getItem('haven_pending_invite') || '';
+  let _pendingInvite = _urlParams.get('invite') || sessionStorage.getItem('haven_pending_invite') || '';
   if (_pendingInvite) sessionStorage.setItem('haven_pending_invite', _pendingInvite);
   // Preserve channel/message deep-link params (?channel=CODE&message=ID) too
   const _pendingChannel = _urlParams.get('channel') || sessionStorage.getItem('haven_pending_channel') || '';
@@ -11,14 +11,17 @@
   if (_pendingChannel) sessionStorage.setItem('haven_pending_channel', _pendingChannel);
   if (_pendingMessage) sessionStorage.setItem('haven_pending_message', _pendingMessage);
 
-  const _appQuery = (() => {
-    const parts = [];
-    if (_pendingInvite) parts.push('invite=' + encodeURIComponent(_pendingInvite));
-    if (_pendingChannel) parts.push('channel=' + encodeURIComponent(_pendingChannel));
-    if (_pendingMessage) parts.push('message=' + encodeURIComponent(_pendingMessage));
-    return parts.length ? '?' + parts.join('&') : '';
-  })();
-  const _appUrl = '/app' + _appQuery;
+  function _buildAppUrl() {
+    const _appQuery = (() => {
+      const parts = [];
+      if (_pendingInvite) parts.push('invite=' + encodeURIComponent(_pendingInvite));
+      if (_pendingChannel) parts.push('channel=' + encodeURIComponent(_pendingChannel));
+      if (_pendingMessage) parts.push('message=' + encodeURIComponent(_pendingMessage));
+      return parts.length ? '?' + parts.join('&') : '';
+    })();
+    return '/app' + _appQuery;
+  }
+  let _appUrl = _buildAppUrl();
 
   // (#12) A returning SSO callback stashes its session here and bounces to
   // this page. Claim it before the already-logged-in check below, so an old
@@ -61,10 +64,27 @@
   // ── Theme switching ───────────────────────────────────
   initThemeSwitcher('auth-theme-bar');
 
+  // Themes an admin has published are .theme.css files rather than built-in
+  // data-theme values, and plugin-loader.js (which knows about them) only runs
+  // on the app page. So the login page fetched nothing and showed none of them.
+  // /api/themes is unauthenticated, which is what makes this possible here. (#5537)
+  const publishedThemesPromise = (window.HavenThemeCompat?.fetchThemes?.(fetch) || fetch('/api/themes')
+    .then(r => {
+      if (!r.ok) throw new Error(`Theme metadata request failed (${r.status})`);
+      return r.json();
+    }))
+    .then(themes => {
+      if (!Array.isArray(themes)) throw new Error('Invalid theme metadata response');
+      injectPublishedThemeBar('auth-theme-bar', themes);
+      return themes;
+    })
+    .catch(() => null); // Preserve saved choices when theme metadata is temporarily unavailable.
+
   // ── Language switcher ─────────────────────────────────
   const langSelect = document.getElementById('auth-lang-select');
   if (langSelect) {
-    langSelect.value = window.i18n.locale;
+    langSelect.value = window.i18n.preference;
+    window.i18n.buildLocalePicker(langSelect);
     langSelect.addEventListener('change', e => window.i18n.setLocale(e.target.value));
   }
 
@@ -77,9 +97,24 @@
   // ── Apply server default theme for first-time visitors ──
   // Only applies when the user has no personal theme preference stored locally.
   // Also fetch server title for login page branding.
-  fetch('/api/public-config').then(r => r.json()).then(d => {
+  fetch('/api/public-config').then(r => r.json()).then(async d => {
     if (d.default_theme && !localStorage.getItem('haven_theme')) {
-      document.documentElement.setAttribute('data-theme', d.default_theme);
+      // A published theme is stored as "file:whatever.theme.css". Writing that
+      // straight into data-theme matched no stylesheet at all, so an admin who
+      // picked a custom theme as the server default got an unstyled login page
+      // on a first visit, and only saw the theme once a later page load found
+      // it in localStorage. Neither branch persists: this is the server's
+      // suggestion for someone who has not chosen, not a choice they made, and
+      // storing it would stop a later change to the default from ever reaching
+      // a returning visitor who has not signed in. (#5537, #5536)
+      if (d.default_theme.startsWith('file:')) {
+        const file = d.default_theme.slice(5);
+        const themes = await publishedThemesPromise;
+        const meta = themes?.find(theme => theme?.file === file);
+        if (meta) applyPublishedThemeBase(file, false, meta);
+      } else {
+        applyThemeFromServer(d.default_theme, false);
+      }
     }
     if (d.server_title) {
       const titleEl = document.getElementById('server-title');
@@ -241,20 +276,31 @@
     hideError();
   }
 
+  // function to swap the active tab and form
+  function showTab(target) {
+    tabs.forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === target);
+    });
+
+    loginForm.style.display = target === 'login' ? 'flex' : 'none';
+    registerForm.style.display = target === 'register' ? 'flex' : 'none';
+    if (ssoForm) ssoForm.style.display = target === 'sso' ? 'flex' : 'none';
+    totpForm.style.display = 'none';
+    document.getElementById('recover-form').style.display = 'none';
+    hideError();
+  }
+
+  // listen for clicks on the login tabs to swap the tab and form
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-
-      const target = tab.dataset.tab;
-      loginForm.style.display = target === 'login' ? 'flex' : 'none';
-      registerForm.style.display = target === 'register' ? 'flex' : 'none';
-      if (ssoForm) ssoForm.style.display = target === 'sso' ? 'flex' : 'none';
-      totpForm.style.display = 'none';
-      document.getElementById('recover-form').style.display = 'none';
-      hideError();
+      showTab(tab.dataset.tab);
     });
   });
+
+  // Switch to registration page if an invite link is detected.
+  if (_pendingInvite) {
+    showTab('register');
+  }
 
   function showError(msg) {
     errorEl.textContent = msg;
@@ -900,12 +946,13 @@
   // (#5344) If the server requires a registration token, reveal the
   // token field. Best-effort fetch — if it fails we just leave the
   // field hidden and the server will reject without the token.
-  (async () => {
+  // field is also hidden if an invite link is used and is allowed to override the token requirement.
+  async function _initRegistrationForm() {
     try {
       const r = await fetch('/api/auth/registration-info');
       if (!r.ok) return;
       const info = await r.json();
-      if (info && info.requiresToken) {
+      if (info && info.requiresToken && (!_pendingInvite || !info.invitesBypassToken)) {
         const grp = document.getElementById('reg-token-group');
         const inp = document.getElementById('reg-token');
         if (grp) grp.style.display = '';
@@ -915,7 +962,8 @@
         _initRegistrationCaptcha(info.turnstileSiteKey);
       }
     } catch { /* ignore */ }
-  })();
+  }
+  _initRegistrationForm();
 
   registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -939,11 +987,32 @@
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true, registrationToken, captchaToken: captchaToken || '' })
+        body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true, registrationToken, inviteCode: _pendingInvite, captchaToken: captchaToken || ''})
       });
 
       const data = await res.json();
-      if (!res.ok) { _resetCaptcha('main'); return showError(data.error || t('auth.errors.registration_failed')); }
+      if (!res.ok) {
+        _resetCaptcha('main');
+
+        const error = data.error || t('auth.errors.registration_failed');
+
+        // if registration error is due to an invalid invite link, display the invite error and show the registration key field if required.
+        // This allows the user to attempt registration again, with the registration code, or a new invitation link.
+        if (error.toLowerCase().includes('invite link')) {
+          sessionStorage.removeItem('haven_pending_invite');
+          _pendingInvite = '';
+
+          const url = new URL(window.location.href);
+          url.searchParams.delete('invite');
+          window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+          _appUrl = _buildAppUrl();
+
+          await _initRegistrationForm();
+        }
+
+        showError(error);
+        return;
+      }
 
       // Derive E2E wrapping key from password (client-side only, never sent to server)
       const e2eWrap = await deriveE2EWrappingKey(password);

@@ -5,8 +5,21 @@ export default {
 _renderOnlineUsers(users) {
   this._lastOnlineUsers = users;
   const el = document.getElementById('online-users');
+  const searchWrap = document.getElementById('user-search-wrap');
+  if (searchWrap) searchWrap.style.display = users.length ? '' : 'none';
   if (users.length === 0) {
     el.innerHTML = `<p class="muted-text">${t('users.no_one_here')}</p>`;
+    return;
+  }
+
+  // Member search. Filtering here rather than hiding rows in the DOM keeps the
+  // group counts honest, so "Online 3" means three matches and not three people
+  // of whom you can see one. The roster re-renders on every presence change, so
+  // the term lives on the instance to survive that.
+  const term = (this._userFilter || '').trim().toLowerCase();
+  if (term) users = users.filter(u => (u.username || '').toLowerCase().includes(term));
+  if (users.length === 0) {
+    el.innerHTML = `<p class="muted-text">${t('users.no_search_matches')}</p>`;
     return;
   }
 
@@ -22,11 +35,22 @@ _renderOnlineUsers(users) {
     }
   });
 
-  // Sort: online first, then alphabetical
+  // Sort: online first, then by role level, then alphabetically inside each
+  // level. Straight alphabetical buried whoever is actually in charge somewhere
+  // in the middle of the list, which is the opposite of what you want when you
+  // are looking for someone who can help. (#5470 follow-up, asked by @birdcrazy)
+  //
+  // The level already accounts for the channel you are in: the server sends the
+  // highest role that applies here, merging server-wide and channel-scoped ones.
+  // A user whose role badge is hidden reports no role and sorts as level 0, so
+  // hiding the admin badge does not out them by position either.
+  const levelOf = (u) => (u.role && Number.isFinite(u.role.level)) ? u.role.level : 0;
   const sorted = [...users].sort((a, b) => {
     const aOn = a.online !== false;
     const bOn = b.online !== false;
     if (aOn !== bOn) return aOn ? -1 : 1;
+    const lv = levelOf(b) - levelOf(a);
+    if (lv !== 0) return lv;
     return a.username.toLowerCase().localeCompare(b.username.toLowerCase());
   });
 
@@ -251,11 +275,11 @@ _renderUserItem(u, scoreLookup) {
   const initial = u.username.charAt(0).toUpperCase();
   const shapeClass = 'avatar-' + (u.avatarShape || 'circle');
   const avatarImg = u.avatar
-    ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}" src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
+    ? `<img class="user-item-avatar user-item-avatar-img ${shapeClass}"${this._animAttr(u.animateProfile)} src="${this._escapeHtml(u.avatar)}" alt="${initial}"><div class="user-item-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="user-item-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
   // Wrap avatar + status dot together (Discord-style overlay)
-  const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;
+  const avatarHtml = `<div class="user-avatar-wrapper">${avatarImg}${this._pfpBorderMarker(u.border, u.borderTransform, u.animateProfile)}<span class="user-status-dot${statusClass ? ' ' + statusClass : ''}"></span></div>`;
 
   // Role: color dot to the left of name + tooltip on hover
   // Role display mode
@@ -395,9 +419,11 @@ _renderConnections() {
     // Spotify is collapsed behind a disclosure. It needs a registered developer
     // app and its development-mode user allowlist caps it at roughly 25 people,
     // so steering everyone here by default sends them down the hardest path for
-    // a worse result than Last.fm.
+    // a worse result than Last.fm. Spotify then restricted the Web API to
+    // Premium accounts (#5528), which makes that even more true: the steps used
+    // to say a free account was fine, and following them on one now dead-ends.
     { id: 'spotify', icon: '🎧', name: 'Spotify', advanced: true,
-      blurb: 'Direct connection. Harder to set up and limited to ~25 users — prefer Last.fm above.',
+      blurb: 'Direct connection. Needs a Spotify Premium account, is harder to set up, and is limited to ~25 users. Prefer Last.fm above.',
       help: 'https://developer.spotify.com/dashboard',
       helpLabel: 'Open the Spotify developer dashboard',
       // Two things trip people up here, both worth stating outright:
@@ -409,7 +435,7 @@ _renderConnections() {
       //     registering a name so Spotify knows who is asking.
       steps: [
         'Use the link above — it goes to <b>developer.spotify.com</b>.',
-        'Sign in with your normal Spotify account (free works). Accept the developer terms if it asks.',
+        'Sign in with your Spotify account. <b>This needs Spotify Premium.</b> As of 2026 the Web API is no longer available on free accounts, so the rest of these steps will not work without it (#5528). Accept the developer terms if it asks.',
         'Click <b>Create app</b>. You are not building software — this just registers a name. Call it "Haven".',
         'Paste this into <b>Redirect URI</b>:<code class="setup-uri">' + location.origin + '/connect/spotify/callback</code>',
         'Tick <b>Web API</b>, save, then open <b>Settings</b> on the app you just made.',
@@ -456,6 +482,10 @@ _renderConnections() {
       // Surface a way to paste a fresh one without hand-editing .env.
       if (isAdmin) {
         btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+        // (#5529) Setting a provider up was one-way: the form could replace a
+        // key but never clear one, so an admin had no way to switch an
+        // integration back off without editing .env by hand.
+        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">Remove key</button>`;
       }
     } else if (p.linkType === 'username') {
       // No OAuth for this provider — the whole link flow is one text field.
@@ -463,12 +493,20 @@ _renderConnections() {
       btn += `<button class="btn-sm btn-accent connection-username-toggle" data-provider="${p.id}">Connect</button>`;
       if (isAdmin) {
         btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+        // (#5529) Setting a provider up was one-way: the form could replace a
+        // key but never clear one, so an admin had no way to switch an
+        // integration back off without editing .env by hand.
+        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">Remove key</button>`;
       }
     } else {
       sub = p.blurb;
       btn += `<button class="btn-sm btn-accent connection-link" data-provider="${p.id}">Link</button>`;
       if (isAdmin) {
         btn += `<button class="btn-sm connection-rekey" data-provider="${p.id}">Change key</button>`;
+        // (#5529) Setting a provider up was one-way: the form could replace a
+        // key but never clear one, so an admin had no way to switch an
+        // integration back off without editing .env by hand.
+        if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">Remove key</button>`;
       }
     }
 
@@ -587,6 +625,20 @@ _renderConnections() {
         form.hidden = !form.hidden;
         if (!form.hidden) form.querySelector('input')?.focus();
       }
+    });
+  });
+  // (#5529) Remove the provider's credentials entirely. Confirmed first,
+  // because it turns the integration off for everyone on the server, and it
+  // clears every key the provider uses so Spotify cannot be left with an id
+  // but no secret.
+  host.querySelectorAll('.connection-forget').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const provider = PROVIDERS.find(x => x.id === btn.dataset.provider);
+      if (!provider) return;
+      const keys = provider.fields.map(f => f.key);
+      const label = provider.name;
+      if (!confirm(`Remove the ${label} key from this server? Anyone linked to ${label} will stop showing what they are playing until a new key is set.`)) return;
+      this.socket.emit('clear-integration-key', { keys });
     });
   });
   host.querySelectorAll('.connection-cancel').forEach(btn => {
@@ -731,7 +783,7 @@ _showProfilePopup(profile) {
   const shapeClass = 'avatar-' + (profile.avatarShape || 'circle');
 
   const avatarHtml = profile.avatar
-    ? `<img class="profile-popup-avatar ${shapeClass}" src="${this._escapeHtml(profile.avatar)}" alt="${initial}">`
+    ? `<img class="profile-popup-avatar ${shapeClass}"${this._animAttr(profile.animateProfile)} src="${this._escapeHtml(profile.avatar)}" alt="${initial}">`
     : `<div class="profile-popup-avatar profile-popup-avatar-fallback ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
   // Status dot
@@ -787,6 +839,7 @@ _showProfilePopup(profile) {
     </div>
     <div class="profile-popup-avatar-wrapper">
       ${avatarHtml}
+      ${this._pfpBorderMarker(profile.border, profile.borderTransform, profile.animateProfile)}
       <span class="profile-popup-status-dot ${statusClass}" title="${statusLabel}"></span>
     </div>
     <div class="profile-popup-body">
@@ -814,6 +867,10 @@ _showProfilePopup(profile) {
   }
 
   document.body.appendChild(popup);
+
+  // Opening the profile card is a trigger context: flag the card so the freeze
+  // observer leaves its animated pfp (avatar and later-folded border) playing.
+  popup.dataset.animPlay = '1';
 
   // Position near the anchor element
   this._positionProfilePopup(popup);
@@ -887,22 +944,7 @@ _showProfilePopup(profile) {
     editBtnEl.addEventListener('click', () => {
       this._closeProfilePopup();
       // Open the Edit Profile (rename) modal which now includes avatar + display name + bio
-      document.getElementById('rename-modal').style.display = 'flex';
-      const input = document.getElementById('rename-input');
-      input.value = this.user.displayName || this.user.username;
-      input.focus();
-      input.select();
-      const bioInput = document.getElementById('edit-profile-bio');
-      if (bioInput) bioInput.value = this.user.bio || '';
-      this._updateAvatarPreview();
-      const picker = document.getElementById('avatar-shape-picker');
-      if (picker) {
-        const currentShape = this.user.avatarShape || localStorage.getItem('haven_avatar_shape') || 'circle';
-        picker.querySelectorAll('.avatar-shape-btn').forEach(b => {
-          b.classList.toggle('active', b.dataset.shape === currentShape);
-        });
-        this._pendingAvatarShape = currentShape;
-      }
+      this._openRenameModal();
     });
   }
 
@@ -1136,13 +1178,15 @@ _renderVoiceUsers(users, channelCode) {
     const statusIconsHtml = statusIcons.length
       ? `<span class="voice-status-icons">${statusIcons.join('')}</span>`
       : '';
+    const botBadge = u.isBot ? '<span class="bot-badge">BOT</span>' : '';
     return `
-      <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
+      <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
+        ${botBadge}
         ${streamBadge}
         ${statusIconsHtml}
-        ${isSelf ? '' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
+        ${isSelf || u.isBot ? '' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
       </div>
     `;
   }).join('');
@@ -1160,7 +1204,7 @@ _renderVoiceUsers(users, channelCode) {
   // Bind voice user names/items to open profile popup (same as sidebar)
   el.querySelectorAll('.voice-user-item').forEach(item => {
     const nameEl = item.querySelector('.user-item-name');
-    if (nameEl) {
+    if (nameEl && item.dataset.isBot !== 'true') {
       nameEl.style.cursor = 'pointer';
       nameEl.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1175,7 +1219,7 @@ _renderVoiceUsers(users, channelCode) {
     // Right-click on voice user → same options as "..." button
     item.addEventListener('contextmenu', (e) => {
       const userId = parseInt(item.dataset.userId);
-      if (isNaN(userId) || userId === this.user.id) return;
+      if (isNaN(userId) || userId === this.user.id || item.dataset.isBot === 'true') return;
       e.preventDefault();
       e.stopPropagation();
       const btn = item.querySelector('.voice-user-menu-btn');

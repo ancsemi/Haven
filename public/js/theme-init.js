@@ -45,7 +45,42 @@
     document.documentElement.style.setProperty('--ui-scale', _z + '%');
   } catch (e) {}
 
-  var t = localStorage.getItem('haven_theme');
+  var _themeCompat = window.HavenThemeCompat;
+  var _safeMode = _themeCompat ? _themeCompat.isSafeMode(window.location) : false;
+  var _resetPending = _themeCompat ? _themeCompat.isResetPending() : false;
+  if (!_themeCompat) {
+    try {
+      var _safeRequest = new URLSearchParams(window.location.search).get('haven-safe-mode');
+      if (_safeRequest === '1') sessionStorage.setItem('haven_safe_mode', '1');
+      if (_safeRequest === '0') sessionStorage.removeItem('haven_safe_mode');
+      _safeMode = _safeRequest === '1'
+        || (_safeRequest !== '0' && sessionStorage.getItem('haven_safe_mode') === '1');
+      _resetPending = sessionStorage.getItem('haven_customizations_reset_pending') === '1';
+    } catch {
+      _safeMode = new URLSearchParams(window.location.search).get('haven-safe-mode') === '1';
+    }
+  }
+  if (_safeMode) document.documentElement.setAttribute('data-haven-safe-mode', '1');
+
+  function _injectEarlyTheme(file, onSettled) {
+    if (document.getElementById('haven-theme-file-early')) {
+      if (onSettled) onSettled();
+      return;
+    }
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/themes/' + encodeURIComponent(file);
+    link.id = 'haven-theme-file-early';
+    if (onSettled) {
+      link.onload = onSettled;
+      link.onerror = onSettled;
+    }
+    document.head.appendChild(link);
+  }
+
+  // Safe mode and a pending recovery reset always start from Haven's base
+  // appearance. Preferences stay stored until the user explicitly resets them.
+  var t = (_safeMode || _resetPending) ? 'haven' : localStorage.getItem('haven_theme');
   if (t) {
     if (t.indexOf('file:') === 0) {
       // File theme: inject the CSS link immediately so the theme applies on
@@ -53,11 +88,36 @@
       // on the app page while waiting for plugin-loader's 500 ms startup
       // delay. The data-theme is set to 'haven' as a stable layout base,
       // matching what applyFileTheme() does when the plugin-loader runs. (#5359)
-      var _fl = document.createElement('link');
-      _fl.rel = 'stylesheet';
-      _fl.href = '/themes/' + t.slice(5);
-      _fl.id = 'haven-theme-file-early';
-      document.head.appendChild(_fl);
+      var _themeFile = t.slice(5);
+      var _cachedTheme = _themeCompat ? _themeCompat.getCachedTheme(_themeFile) : null;
+      if (_cachedTheme && _cachedTheme.compatible) {
+        _injectEarlyTheme(_themeFile);
+      } else {
+        // Validate an uncached theme immediately. Hide the base briefly so a
+        // first load does not flash Haven before the compatible CSS arrives.
+        document.documentElement.setAttribute('data-haven-theme-pending', _themeFile);
+        if (_themeCompat?.fetchThemes && typeof window.fetch === 'function') {
+          document.documentElement.style.setProperty('visibility', 'hidden');
+          var _finishThemeCheck = function() {
+            document.documentElement.removeAttribute('data-haven-theme-pending');
+            document.documentElement.style.removeProperty('visibility');
+          };
+          setTimeout(_finishThemeCheck, 3000);
+          _themeCompat.fetchThemes(window.fetch.bind(window)).then(function(themes) {
+            if (Array.isArray(themes)) {
+              _themeCompat.cacheThemes(themes);
+              var selected = themes.find(function(theme) { return theme?.file === _themeFile; });
+              if (selected && selected.compatible !== false
+                  && selected.compatibility !== 'invalid'
+                  && selected.compatibility !== 'unsupported') {
+                _injectEarlyTheme(_themeFile, _finishThemeCheck);
+                return;
+              }
+            }
+            _finishThemeCheck();
+          });
+        }
+      }
       document.documentElement.setAttribute('data-theme', 'haven');
     } else {
       document.documentElement.setAttribute('data-theme', t);
@@ -82,7 +142,7 @@
   }
   // Apply effect overlay system (stackable) — always strip theme pseudo-element effects
   document.documentElement.setAttribute('data-fx-custom', '');
-  var fxRaw = localStorage.getItem('haven_effects') || 'auto';
+  var fxRaw = (_safeMode || _resetPending) ? '[]' : (localStorage.getItem('haven_effects') || 'auto');
   var fxMode;
   try { fxMode = JSON.parse(fxRaw); } catch(e) { fxMode = fxRaw; }
   // Apply CRT class early for scanline var + font (prevents FOUC)

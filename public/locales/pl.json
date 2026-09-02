@@ -154,6 +154,7 @@
   },
   "toasts": {
     "roles_updated": "Twoje role zostały zaktualizowane",
+    "role_server_no_response": "Brak odpowiedzi serwera. Może działać na starszej wersji Haven. Zaktualizuj pliki serwera, uruchom go ponownie w pełni i spróbuj jeszcze raz.",
     "status_pending_reconnect": "Status zostanie zaktualizowany po ponownym połączeniu",
     "channel_created": "Kanał \"#{{name}}\" został utworzony!\nKod: {{code}}",
     "channel_deleted": "Kanał został usunięty",
@@ -397,6 +398,7 @@
     "mention_everyone": "Wspominaj @everyone",
     "view_history": "Przeglądaj historię wiadomości",
     "view_all_members": "Przeglądaj wszystkich członków serwera",
+    "view_all_channels": "Widzi wszystkie kanały (auto-dołączanie)",
     "view_channel_members": "Przeglądaj członków kanału",
     "manage_emojis": "Zarządzaj niestandardowymi emoji",
     "manage_soundboard": "Zarządzaj panelem dźwięków",
@@ -680,6 +682,7 @@
     "language_section": {
       "title": "Język",
       "label": "Język",
+      "auto": "Automatycznie",
       "hint": "Zmiany są stosowane natychmiast"
     },
     "layout_density": {
@@ -914,6 +917,8 @@
       "max_emoji_hint": "Maks. rozmiar przesyłania niestandardowego emoji (64–1024 KB, domyślnie 256)",
       "max_poll_hint": "Maksymalna liczba opcji odpowiedzi na ankietę (2–25, domyślnie 10)",
       "max_message_chars_hint": "Maksymalna liczba znaków na wiadomość, post lub DM (200–100000, domyślnie 2000)",
+      "max_invite_uses": "Maksymalna liczba użyć linku zaproszenia",
+      "max_invite_uses_hint": "Maksymalna liczba użyć, jaką można ustawić dla linku zaproszenia. Administratorzy i użytkownicy z uprawnieniem do zarządzania serwerem ignorują ten limit. (0 = bez ograniczeń)",
       "sounds_hint": "Prześlij pliki audio dla niestandardowych dźwięków powiadomień",
       "emojis_hint": "Prześlij obrazy dla niestandardowych emoji serwera",
       "emojis_upload_hint": "Prześlij obrazy dla niestandardowych emoji serwera (maks. 256 KB, png/gif/webp). Nazwa musi być małymi literami, bez spacji.",
@@ -978,11 +983,11 @@
       "import_reused": "Zaktualizowano {{count}} istniejący(-ch) kanał(ów).",
       "import_failed_alert": "Import nie powiódł się: {{error}}",
       "roles_no_custom": "Brak niestandardowych ról",
-      "roles_level_invalid": "Poziom musi wynosić 1–99",
+      "roles_level_invalid": "Poziom musi wynosić 0–99",
       "roles_create_title": "Utwórz rolę",
       "roles_create_hint": "Wprowadź nazwę roli:",
       "roles_level_title": "Poziom roli",
-      "roles_level_hint": "Poziom roli (1-99, wyższy = więcej uprawnień):\nDomyślny moderator serwera = 50, Domyślny moderator kanału = 25",
+      "roles_level_hint": "Poziom roli (0–99, wyższy = większe uprawnienia):\nDomyślny moderator serwera = 50\nDomyślny moderator kanału = 25\nSamodzielne zarządzanie (brak uprawnień) = 0",
       "roles_created": "Rola utworzona",
       "roles_saved": "Rola zapisana",
       "roles_updated": "Rola zaktualizowana",
@@ -1030,7 +1035,7 @@
       "roles_changes_saved_other": "Zapisano {{count}} zmian ról",
       "role_form": {
         "name": "Nazwa",
-        "level": "Poziom (1-99)",
+        "level": "Poziom (0-99)",
         "color": "Kolor",
         "auto_assign": "Automatyczne przypisywanie nowym członkom",
         "auto_assign_hint": "Nowi użytkownicy automatycznie otrzymają tę rolę po rejestracji lub dołączeniu do kanału.",
@@ -1039,6 +1044,8 @@
         "link_channel_access_hint": "Po włączeniu, przypisanie/odebranie tej roli automatycznie przyzna/odbierze przynależność do kanałów.",
         "reapply_access": "Ponownie zastosuj dostęp dla wszystkich użytkowników",
         "permissions": "Uprawnienia",
+        "admin_only_note": "Wyróżnione uprawnienia są dostępne tylko dla administratorów — tylko właściciel serwera może je nadawać.",
+        "level_0_role_note": "Role poziomu 0 nazywane są „Grupami”. Grupy nie nadają żadnych uprawnień. Użytkownicy mogą dołączać do tych grup według własnego uznania, bez potrzeby posiadania podwyższonych uprawnień. Potencjalne zastosowania obejmują: przypisywanie do kanałów, grupowanie i odgrywanie ról.",
         "delete": "Usuń",
         "reapply_access_tooltip": "Ponownie uruchamia powyższe reguły dostępu do kanałów dla wszystkich użytkowników posiadających tę rolę. Przydatne po edycji pól wyboru Nadaj/Odbierz — dopasowuje istniejących członków do aktualnej konfiguracji bez konieczności ponownego przypisywania roli."
       },
@@ -1182,7 +1189,14 @@
       "display_name_placeholder": "Nowa wyświetlana nazwa...",
       "bio_label": "O mnie",
       "bio_max": "(maks. 190 znaków)",
-      "bio_placeholder": "Opowiedz coś o sobie…"
+      "bio_placeholder": "Opowiedz coś o sobie…",
+      "groups_title": "Grupy",
+      "manage_groups_btn": "Zarządzaj grupami",
+      "save_groups_btn": "Zapisz grupy",
+      "groups_hint": "Grupy są wyświetlane jako role na karcie profilu. Nie nadają uprawnień, ale mogą przyznawać dostęp do kanałów!",
+      "no_groups": "Nie należysz jeszcze do żadnej grupy. Kliknij „Zarządzaj grupami”, aby dołączyć do jednej z nich.",
+      "groups_saved": "Grupy zapisane!",
+      "group_channels_granted": "Przyznany dostęp do kanałów"
     },
     "admin_action": {
       "title": "Moderuj użytkownika",
@@ -1430,7 +1444,8 @@
     "role_management": {
       "title": "Zarządzanie rolami",
       "new_role_btn": "+ Nowa rola",
-      "select_to_edit": "Wybierz rolę do edycji"
+      "select_to_edit": "Wybierz rolę do edycji",
+      "groups_label": "Grupy"
     },
     "assign_role": {
       "title": "Przypisz rolę",

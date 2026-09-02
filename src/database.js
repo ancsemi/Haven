@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const { DB_PATH } = require('./paths');
+const { ensureSearchIndex } = require('./searchIndex');
 
 let db;
 
@@ -228,6 +229,24 @@ function initDatabase() {
       PRIMARY KEY (invite_code_id, user_id)
     );
 
+    -- Who uploaded which file, recorded at the upload endpoint. Message content
+    -- is the only other record of an attachment, and in a DM that content is E2E
+    -- ciphertext (the file bytes are encrypted client-side too), so scanning
+    -- messages would silently miss every private upload, which is exactly the
+    -- storage nobody could account for before. The upload endpoint is the one
+    -- place the server still knows both the uploader and the file. Sizes are
+    -- re-read from disk when the member list is built, so a file that has been
+    -- deleted or purged stops counting without a bookkeeping hook here.
+    CREATE TABLE IF NOT EXISTS upload_ownership (
+      rel_path TEXT PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      bytes INTEGER NOT NULL DEFAULT 0,
+      scope TEXT NOT NULL DEFAULT 'channel',   -- 'channel' | 'dm' | 'profile'
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_upload_ownership_user
+      ON upload_ownership(user_id);
+
     CREATE INDEX IF NOT EXISTS idx_messages_channel
       ON messages(channel_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_channel_code
@@ -406,12 +425,14 @@ function initDatabase() {
   insertSetting.run('server_code', '');                // server-wide invite code (joins all channels)
   insertSetting.run('default_join_channels', '');       // (#5345) JSON array of channel IDs that server-code/vanity-code joiners get added to (empty = all public)
   insertSetting.run('registration_token_enabled', 'false'); // (#5344) require a token on the registration form
+  insertSetting.run('invites_bypass_registration_token', 'false'); // Allow invite links to bypass token on the registration form
   insertSetting.run('registration_token', '');          // (#5344) the token value (admin-generated, rerollable)
   insertSetting.run('registration_captcha_enabled', 'false'); // opt-in Cloudflare Turnstile CAPTCHA on registration
   insertSetting.run('turnstile_site_key', '');          // Turnstile public site key (safe to expose to the page)
   insertSetting.run('turnstile_secret_key', '');        // Turnstile secret key (server-side verification only, never sent to clients)
   insertSetting.run('registration_rate_limit_enabled', 'false'); // opt-in global cap on new accounts per hour
   insertSetting.run('registration_rate_limit_per_hour', '20');   // the cap value when enabled
+  insertSetting.run('max_invite_uses', '0');            // the maximum uses each non-admin/manage-server invite link can accept
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
@@ -470,6 +491,12 @@ function initDatabase() {
   // default: it costs bandwidth but nothing breaks without it, and leaving it
   // off means every embedded image leaks the viewer's IP to whoever posted it.
   insertSetting.run('media_proxy_enabled', 'true');
+
+  // Google FCM mobile push. On by default so existing Android users keep getting
+  // notifications on upgrade; admins who prefer a Google-free path (UnifiedPush /
+  // ntfy) can turn it off under Settings → Security → FCM Privacy. Off skips FCM
+  // sends only, so web-push to browsers is unaffected.
+  insertSetting.run('fcm_enabled', 'true');
 
   // Unique server fingerprint — used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
@@ -587,6 +614,27 @@ function initDatabase() {
     db.prepare("SELECT avatar_shape FROM users LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE users ADD COLUMN avatar_shape TEXT DEFAULT 'circle'");
+  }
+
+  // ── Migration: animate_profile column (pfp animation policy) ──
+  try {
+    db.prepare("SELECT animate_profile FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN animate_profile TEXT DEFAULT 'trigger'");
+  }
+
+  // ── Migration: border column (pfp overlay, mirrors avatar) ──
+  try {
+    db.prepare("SELECT border FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN border TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: border_transform column (pfp-overlay fit, JSON op log) ──
+  try {
+    db.prepare("SELECT border_transform FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN border_transform TEXT DEFAULT NULL");
   }
 
   // ── Migration: bio column ─────────────────────────────────
@@ -776,6 +824,11 @@ function initDatabase() {
   const personaMsgCols = [
     { name: 'persona_id',       sql: "ALTER TABLE messages ADD COLUMN persona_id INTEGER DEFAULT NULL REFERENCES user_personas(id) ON DELETE SET NULL" },
     { name: 'persona_username', sql: "ALTER TABLE messages ADD COLUMN persona_username TEXT DEFAULT NULL" },
+    // Ferry: which Discord destination this message was addressed to, as a
+    // display label ("MyServer#general") or the literal 'dm'. Null for the vast
+    // majority of messages. Stored so channel history can show where a message
+    // went instead of leaving the routing prefix in the body.
+    { name: 'ferry_target', sql: "ALTER TABLE messages ADD COLUMN ferry_target TEXT DEFAULT NULL" },
     { name: 'persona_avatar',   sql: "ALTER TABLE messages ADD COLUMN persona_avatar TEXT DEFAULT NULL" },
   ];
   for (const col of personaMsgCols) {
@@ -827,6 +880,7 @@ function initDatabase() {
       'kick_user', 'mute_user', 'delete_message', 'pin_message',
       'set_channel_topic', 'manage_sub_channels', 'rename_channel',
       'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
+      'use_ferry',
       'upload_files', 'use_voice', 'view_history', 'view_all_members',
       'manage_music_queue',
       'delete_own_messages', 'edit_own_messages'
@@ -949,10 +1003,47 @@ function initDatabase() {
     // 3.18.0 — opt-in moderation actions (kick/ban/mute) for bot webhooks.
     // Defaults to 0 so existing bots cannot suddenly moderate. Per #5397.
     { name: 'can_moderate',         sql: "ALTER TABLE webhooks ADD COLUMN can_moderate INTEGER DEFAULT 0" },
+    // Voice gateway access is also opt-in and can only be granted by admins.
+    { name: 'can_use_voice',        sql: "ALTER TABLE webhooks ADD COLUMN can_use_voice INTEGER DEFAULT 0" },
   ];
   for (const col of webhookCallbackCols) {
     try { db.prepare(`SELECT ${col.name} FROM webhooks LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }
+
+  // ── Migration: Ferry (Haven <-> Discord bridge) pairings ──
+  // One row per Haven channel paired with one Discord channel. A Haven channel
+  // may appear more than once (fan out to several Discord servers) and so may a
+  // Discord channel, so the uniqueness is on the pair.
+  //
+  //   direction  'both' | 'to_discord' | 'to_haven'  — admin-selectable per pair
+  //   out_mode   'all'     mirrors every message in the Haven channel
+  //              'command' only relays messages the author explicitly addressed
+  //
+  // webhook_id/webhook_token are the Discord channel webhook Ferry sends
+  // through. They are filled in lazily on first send, because creating one
+  // needs the bot to already be in that Discord server with Manage Webhooks.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ferry_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      guild_id TEXT NOT NULL,
+      guild_name TEXT,
+      discord_channel_id TEXT NOT NULL,
+      discord_channel_name TEXT,
+      direction TEXT NOT NULL DEFAULT 'both',
+      out_mode TEXT NOT NULL DEFAULT 'command',
+      webhook_id TEXT DEFAULT NULL,
+      webhook_token TEXT DEFAULT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      last_activity_at DATETIME DEFAULT NULL,
+      last_error TEXT DEFAULT NULL,
+      created_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(channel_id, discord_channel_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ferry_links_channel ON ferry_links(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_ferry_links_discord ON ferry_links(discord_channel_id);
+  `);
 
   // ── Migration: mobile FCM push tokens ───────────────────
   db.exec(`
@@ -1003,6 +1094,7 @@ function initDatabase() {
       PRIMARY KEY (user_id, channel_code)
     );
     CREATE INDEX IF NOT EXISTS idx_user_channel_prefs_user ON user_channel_prefs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_channel_prefs_channel ON user_channel_prefs(channel_code);
   `);
 
   // ── Migration: channel feature toggles & QoL ────────────
@@ -1159,6 +1251,18 @@ function initDatabase() {
     db.prepare("SELECT password_version FROM users LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE users ADD COLUMN password_version INTEGER DEFAULT 1");
+  }
+
+  // ── Migration: mark auto-joins made by view_all_channels ─
+  // The permission inserts a real channel_members row per channel, which is
+  // what makes losing it dangerous: without knowing which rows it created,
+  // revoking cannot take them back and a demoted mod keeps every private
+  // channel. Rows it adds carry this flag; everything else stays 0 and is
+  // never touched by the cleanup. (#5512)
+  try {
+    db.prepare("SELECT auto_all_channels FROM channel_members LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channel_members ADD COLUMN auto_all_channels INTEGER NOT NULL DEFAULT 0");
   }
 
   // ── Migration: role-based channel access ────────────────
@@ -1411,6 +1515,7 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN thread_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE CASCADE");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL");
 
   // ── Audit log ───────────────────────────────────────────
   // Tracks admin/moderator actions: channel CRUD, role changes,
@@ -1456,6 +1561,14 @@ function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_user_connections_provider ON user_connections(provider);
   `);
+
+  // Full-text search index (messages_fts) — created/reconciled here so it runs
+  // synchronously before the server listens. (search-overhaul phase 2)
+  try {
+    ensureSearchIndex(db);
+  } catch (e) {
+    console.warn('[search] Index setup failed:', e.message);
+  }
 
   return db;
 }

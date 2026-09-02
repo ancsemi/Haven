@@ -1556,6 +1556,13 @@ _decryptE2EImages(root) {
       .then(buf => this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk))
       .then(plain => {
         const blob = new Blob([plain], { type: mime });
+        // Hand the blob back once the browser has decoded it. Without this the
+        // object URL keeps the decrypted bytes alive for the life of the tab,
+        // so scrolling a media-heavy DM slowly locks up hundreds of MB. Same
+        // revoke-on-load pattern the upload previews use. (#5426)
+        img.addEventListener('load', () => {
+          try { URL.revokeObjectURL(img.src); } catch {}
+        }, { once: true });
         img.src = URL.createObjectURL(blob);
         img.classList.remove('e2e-img-loading');
       })
