@@ -4651,21 +4651,38 @@ _setupUI() {
       if (!inviteUrl) return;
 
       const html = `
-        <div style="font-family:Arial,sans-serif;line-height:1.5">
-          <h2>You're invited to join Haven!</h2>
-          <p>You've been invited to join Haven.</p>
-          <p>
+        <div style="margin:0;padding:40px 20px;background:#f2f2f2;font-family:Arial,sans-serif;text-align:center">
+          <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px 24px;box-sizing:border-box">
+            <h2 style="margin:0 0 16px;font-size:24px;color:#222">
+              You're invited to join Haven!
+            </h2>
+
+            <p style="margin:0 0 24px;color:#555;font-size:16px">
+              You've been invited to join Haven.
+            </p>
+
             <a href="${inviteUrl}"
-               style="display:inline-block;padding:10px 16px;
-                      background:#5865f2;color:#fff;
-                      text-decoration:none;border-radius:4px">
+              style="display:inline-block;
+                      padding:12px 24px;
+                      background:#5865f2;
+                      color:#fff;
+                      text-decoration:none;
+                      border-radius:6px;
+                      font-size:16px;
+                      font-weight:bold">
               Join Haven
             </a>
-          </p>
-          <p>
-            Or copy this link:<br>
-            <a href="${inviteUrl}">${inviteUrl}</a>
-          </p>
+
+            <p style="margin:24px 0 8px;color:#777;font-size:14px">
+              Or copy this link:
+            </p>
+
+            <p style="margin:0;word-break:break-all;font-size:14px">
+              <a href="${inviteUrl}" style="color:#5865f2">
+                ${inviteUrl}
+              </a>
+            </p>
+          </div>
         </div>
       `;
 
