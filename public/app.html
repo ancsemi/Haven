@@ -110,6 +110,10 @@
                 <input type="checkbox" id="new-channel-temporary">
                 <span>⏱️ <span data-i18n="app.sidebar.temporary_channel">Temporary</span></span>
               </label>
+              <label class="checkbox-row" data-i18n-title="app.sidebar.forum_hint" title="Each message starts a topic; replies go in its thread" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+                <input type="checkbox" id="new-channel-forum">
+                <span>🗂️ <span data-i18n="app.sidebar.forum_channel">Forum</span></span>
+              </label>
               <label class="checkbox-row" id="new-channel-add-all-row" data-i18n-title="app.sidebar.add_all_hint" title="Everyone joins automatically" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
                 <input type="checkbox" id="new-channel-add-all">
                 <span>👥 <span data-i18n="app.sidebar.add_all_members">Add all members</span></span>
@@ -3665,6 +3669,10 @@
       </div>
       <div class="cfn-row" data-fn="read-only" data-i18n-title="channel_functions.read_only_hint" title="Make this channel read-only — only users with the Read-Only Override permission can post">
         <span class="cfn-label">🔒 <span data-i18n="channel_functions.read_only">Read Only</span></span>
+        <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="forum" data-i18n-title="channel_functions.forum_hint" title="Each message is a topic. Replies go in its thread and bump the topic back to the newest end of the channel">
+        <span class="cfn-label">🗂️ <span data-i18n="channel_functions.forum">Forum</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
       </div>
       <div class="cfn-divider"></div>

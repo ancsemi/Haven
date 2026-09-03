@@ -1112,6 +1112,9 @@ function initDatabase() {
     { name: 'voice_enabled',     sql: "ALTER TABLE channels ADD COLUMN voice_enabled INTEGER DEFAULT 1" },
     { name: 'text_enabled',      sql: "ALTER TABLE channels ADD COLUMN text_enabled INTEGER DEFAULT 1" },
     { name: 'soundboard_enabled', sql: "ALTER TABLE channels ADD COLUMN soundboard_enabled INTEGER DEFAULT 1" },
+    // Forum mode (#144): each top-level message is a topic, and the channel
+    // lists topics by their latest thread activity instead of creation time.
+    { name: 'is_forum',          sql: "ALTER TABLE channels ADD COLUMN is_forum INTEGER DEFAULT 0" },
     // #5390 — extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,

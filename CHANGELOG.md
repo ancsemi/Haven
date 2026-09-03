@@ -40,6 +40,92 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.3.0] - 2026-09-03
+
+Forum channels and self-serve Groups are the big two, the whole interface is
+translatable now, and a large batch of contributor work landed alongside them: a
+Compact theme and layout, listening presence from your music player, the encryption
+groundwork for group DMs, GIPHY back as the GIF provider, and images that phones could
+see but desktops could not. No migration steps: the one new database column is added
+on first start.
+
+### Added
+- **Forum channels (#144).** Any channel can be a forum: tick Forum when creating it,
+  or flip it in Channel Functions. Every message in a forum channel is a topic, replies
+  go in that message's thread with a reply count shown on the topic, and a new reply
+  bumps the topic back to the newest end of the channel, right above the message box,
+  so old topics resurface instead of sinking. Requested by @ArtyDaSmarty and shaped in
+  the community chat.
+- **Groups, roles people join themselves (#5548).** A role at level 0 is a Group.
+  Members pick their own Groups from their profile settings, see which channels each
+  one grants, and can leave again, with no moderator involved. Thanks to @birdcrazy.
+- **The whole interface is translatable (#5551).** Every hardcoded string in the client
+  now goes through the language files, with Portuguese carried along and the other
+  languages falling back to English one string at a time. The tests treat English as
+  the base, so adding an English string no longer requires writing the Portuguese for
+  it. Thanks to @bernardokcosta.
+- **Compact theme and Compact Layout plugin (#5549, #5552).** A dense graphite Theme
+  API v1 theme, and an optional plugin that folds the server rail into the sidebar and
+  docks account and voice controls in its footer, switchable with Ctrl+Alt+C. Both are
+  off by default. Structural plugins now share one layout owner, so Braid and Compact
+  hand the layout back and forth cleanly. Thanks to @bernardokcosta.
+- **Theme safe mode (#5545).** If a theme or plugin makes the page unusable, open
+  `/app.html?haven-safe-mode=1` to load without them and reset your choices.
+  Thanks to @bernardokcosta.
+- **Listening presence (#5523).** Your profile card can show what you are playing. A
+  music player that can run a plugin or a script (Havidrome for Navidrome is the first)
+  posts to a personal webhook URL from Settings, Activity, and the card shows the track
+  with cover art and a live progress bar. The contract is in `docs/listening-api.md`.
+  Thanks to @Bo0sted.
+- **Group DM encryption groundwork (#5499).** The crypto core and key distribution for
+  end to end encrypted group DMs, with a test suite written as attacks rather than happy
+  paths. No interface yet. Thanks to @Amnibro.
+- **Voice connectivity test (#5542).** Admin settings can now test the STUN and TURN
+  servers Haven will use and say which ones answer, and the TURN troubleshooting notes
+  point there first.
+- **Paste a link over selected text to make a markdown link (#5553).** Works in
+  channels, threads and DM windows. Thanks to @birdcrazy.
+- **One right-click menu for people (#5554).** Right-clicking a name in the member list
+  or on a message opens one menu with the profile actions and, for moderators, the
+  role, channel and moderation actions behind a divider. Clicking an avatar on a profile
+  card opens it full size. The hover preview card stays, with a switch under Settings,
+  Chat to turn it off, and the gear buttons stay and open the same menu. Thanks to
+  @Bo0sted.
+- **Braid spacing levels (#5494).** Compact, Cozy and Spacious, plus readable ink on the
+  Android badge. Thanks to @Amnibro.
+
+### Changed
+- **Full image mode uses the whole message width.** The largest image setting was
+  capped at well under half of a desktop chat pane, so it never read as large.
+- **invite_users opens the Admin tab (#5470).** Holders of that permission saw an Admin
+  tab that did nothing when clicked. The three places that gated it now share one check.
+- **GIPHY is the supported GIF provider again (#5546).** Tenor is no longer offered for
+  new setups; an existing Tenor key keeps working if no GIPHY key is set. Thanks to
+  @Amnibro.
+- **`npm test` runs the suite serially,** so a green run means what it says.
+- **Website:** desktop download links point at Desktop 1.4.29.
+
+### Fixed
+- **Images that showed on Haven Mobile were blank on desktop (#5550).** Signed Discord
+  links from Ferry and bots were escaped before the media proxy fetched them, so they
+  404ed. Thanks to @Amnibro.
+- **Screen share and webcam teardown on leaving voice (#5426).** Leaving voice used to
+  fire renegotiations at peers that were about to close, and a stale continuation could
+  wipe out a share started right after rejoining. Per-peer work also runs concurrently
+  now instead of one viewer at a time. For anyone still seeing stutter through a TURN
+  relay there is an opt-in Debug toggle, Gentler screen share for relay connections, to
+  try and report back on.
+- **Braid grouped main channels into the wrong sub-channel card (#5507).** Thanks to
+  @Amnibro.
+- **A direct message with someone you also share a group DM with** always opens the
+  direct message, not the group.
+- **Profile saves no longer clear your Groups, and Group channel lookups no longer leak
+  private channel names (#5548).**
+- **The listening webhook checks its token before reading the upload (#5523),** and the
+  open profile card only redraws when something on it actually changed.
+
+---
+
 ## [4.2.0] - 2026-09-01
 
 Voice connectivity is the theme. A server whose admin had set their own STUN server

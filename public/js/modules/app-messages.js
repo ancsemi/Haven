@@ -610,6 +610,33 @@ _appendMessages(messages) {
   requestAnimationFrame(() => { this._suppressCoupleCheck = false; });
 },
 
+// Forum channels (#144): a reply is its topic's newest activity, so the topic
+// moves to the newest end of the list, next to the composer, the way a fresh
+// message would. Topics never compact into each other, so moving the node is
+// safe. A topic that is not loaded (older than the current window) is fetched
+// by reloading the channel, which lands it at the end too.
+_bumpForumTopic(parentId) {
+  const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  if (!ch || !ch.is_forum) return;
+  const container = document.getElementById('messages');
+  if (!container) return;
+  const el = container.querySelector(`[data-msg-id="${parentId}"]`);
+  if (!el) {
+    if (!this._loadingHistory && !this._historyBefore && !this._historyAfter) {
+      this.socket.emit('get-messages', { code: this.currentChannel });
+    }
+    return;
+  }
+  if (container.lastElementChild === el) return;
+  const wasAtBottom = this._coupledToBottom;
+  container.appendChild(el);
+  // The window's least active topic may have just moved; keep the pagination
+  // cursor on whatever is first now.
+  const firstEl = container.querySelector('[data-msg-id]');
+  if (firstEl) this._oldestMsgId = parseInt(firstEl.dataset.msgId);
+  if (wasAtBottom) this._scrollToBottom(true);
+},
+
 _appendMessage(message, forceScroll = false) {
   const container = document.getElementById('messages');
   const lastMsg = container.lastElementChild;
@@ -702,12 +729,15 @@ _createMessageEl(msg, prevMsg) {
   const isImage = this._isImageUrl(msg.content);
   const curCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
   const isAnnouncement = curCh && curCh.notification_type === 'announcement';
+  // Forum topics never fold into each other: every topic keeps its own header,
+  // which also keeps _bumpForumTopic's node move safe. (#144)
+  const isForum = !!(curCh && curCh.is_forum);
   // Threads were intentionally removed from DMs entirely. The PiP appenders
   // mark their messages with `_isDmRender`; main-pane DM views are caught by
   // `curCh.is_dm`. Either signal suppresses the thread button + preview so
   // there is no entry point left in any DM surface.
   const isDmContext = !!(msg && msg._isDmRender) || !!(curCh && curCh.is_dm);
-  const isCompact = prevMsg &&
+  const isCompact = prevMsg && !isForum &&
     // A preceding welcome/system line never folds the next message into it.
     (prevMsg.type || 'user') === 'user' &&
     prevMsg.user_id === msg.user_id &&

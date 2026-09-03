@@ -1673,6 +1673,7 @@ _setupSocketListeners() {
   this.socket.on('thread-updated', (data) => {
     if (data.channelCode !== this.currentChannel) return;
     this._updateThreadPreview(data.parentId, data.thread);
+    this._bumpForumTopic?.(data.parentId);
   });
 
   // ── Polls ─────────────────────────────────────────

@@ -42,6 +42,60 @@ module.exports = function register(socket, ctx) {
   }
 
   // ── Get message history ─────────────────────────────────
+  // ── Forum channels (#144) ──────────────────────────────
+  // A forum channel is an ordinary channel whose top-level messages are
+  // topics. Replies live in each topic's thread, and the channel lists topics
+  // by their latest activity (the topic itself or its newest reply) instead of
+  // by when they were posted, so a reply bumps an old topic back to the newest
+  // end. Cursors keep the same shape as the chronological queries (a message
+  // id) but resolve to that message's activity stamp first, so "older than X"
+  // means "less recently active than X".
+  const FORUM_ACTIVITY = 'COALESCE((SELECT MAX(t.created_at) FROM messages t WHERE t.thread_id = m.id), m.created_at)';
+  const FORUM_SELECT = `
+    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+           COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
+           COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile,
+           ${FORUM_ACTIVITY} AS activity_at
+    FROM messages m LEFT JOIN users u ON m.user_id = u.id
+    WHERE m.channel_id = ? AND m.thread_id IS NULL`;
+  function forumActivityOf(id) {
+    const row = db.prepare(`SELECT ${FORUM_ACTIVITY} AS activity_at FROM messages m WHERE m.id = ?`).get(id);
+    return row ? row.activity_at : null;
+  }
+  // Less recently active than the cursor message, newest first (reversed by
+  // the caller, like the chronological "before" query).
+  function forumOlder(channelId, cursorId, limit) {
+    const at = forumActivityOf(cursorId);
+    if (!at) return [];
+    return db.prepare(`
+      SELECT * FROM (${FORUM_SELECT})
+      WHERE activity_at < ? OR (activity_at = ? AND id < ?)
+      ORDER BY activity_at DESC, id DESC LIMIT ?
+    `).all(channelId, at, at, cursorId, limit);
+  }
+  function forumNewer(channelId, cursorId, limit) {
+    const at = forumActivityOf(cursorId);
+    if (!at) return [];
+    return db.prepare(`
+      SELECT * FROM (${FORUM_SELECT})
+      WHERE activity_at > ? OR (activity_at = ? AND id > ?)
+      ORDER BY activity_at ASC, id ASC LIMIT ?
+    `).all(channelId, at, at, cursorId, limit);
+  }
+  function forumHistory(channelId, { before, after, around, limit }) {
+    if (before) return forumOlder(channelId, before, limit);
+    if (after) return forumNewer(channelId, after, limit);
+    if (around) {
+      const half = Math.floor(limit / 2);
+      const target = db.prepare(`SELECT * FROM (${FORUM_SELECT}) WHERE id = ?`).all(channelId, around);
+      return [...forumOlder(channelId, around, half).reverse(), ...target, ...forumNewer(channelId, around, half)];
+    }
+    return db.prepare(`
+      SELECT * FROM (${FORUM_SELECT})
+      ORDER BY activity_at DESC, id DESC LIMIT ?
+    `).all(channelId, limit);
+  }
+
   socket.on('get-messages', (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
@@ -51,7 +105,7 @@ module.exports = function register(socket, ctx) {
     const around = isInt(data.around) ? data.around : null;
     const limit = isInt(data.limit) && data.limit > 0 && data.limit <= 100 ? data.limit : 80;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_forum FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
@@ -60,7 +114,9 @@ module.exports = function register(socket, ctx) {
     if (!member && !socket.user.isAdmin) return socket.emit('error-msg', 'Not a member of this channel');
 
     let messages;
-    if (before) {
+    if (channel.is_forum) {
+      messages = forumHistory(channel.id, { before, after, around, limit });
+    } else if (before) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,

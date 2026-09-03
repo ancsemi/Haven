@@ -2372,7 +2372,7 @@ _openInviteLinksModal() {
 },
 
 // ═══════════════════════════════════════════════════════
-// markdown link pasting 
+// markdown link pasting
 // ═══════════════════════════════════════════════════════
 
 _handleMarkdownLinkPaste(input, event) {

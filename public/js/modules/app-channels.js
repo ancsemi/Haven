@@ -675,6 +675,8 @@ _updateChannelFunctionsPanel(ch) {
   // Read-only toggle
   const isReadOnly = ch.read_only === 1;
   this._setCfnBadge('read-only', isReadOnly, t(isReadOnly ? 'channel_functions.on' : 'channel_functions.off'));
+  const isForum = ch.is_forum === 1;
+  this._setCfnBadge('forum', isForum, t(isForum ? 'channel_functions.on' : 'channel_functions.off'));
   const interval = ch.slow_mode_interval || 0;
   this._setCfnBadge('slow-mode', interval > 0, interval > 0 ? `${interval}s` : t('channel_functions.off'));
   // (#5467) Cleanup protection and welcome messages are still admin-only on
@@ -1885,7 +1887,7 @@ _renderChannels() {
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
     const isTempVoice = !!ch.is_temp_voice;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : '#')));
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : '#'))));
 
     // Build small status indicators for channel features
     const _badges = [];

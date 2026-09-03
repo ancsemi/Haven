@@ -239,7 +239,7 @@ _setupUI() {
 
   // insert a markdown link when a link is pasted over selected text
   msgInput.addEventListener('paste', (event) => {
-    this._handleMarkdownLinkPaste(msgInput, event); 
+    this._handleMarkdownLinkPaste(msgInput, event);
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
@@ -263,8 +263,9 @@ _setupUI() {
       const temporary = document.getElementById('new-channel-temporary')?.checked || false;
       const duration = parseInt(document.getElementById('new-channel-duration')?.value, 10) || 24;
       const addAllMembers = document.getElementById('new-channel-add-all')?.checked || false;
+      const isForum = document.getElementById('new-channel-forum')?.checked || false;
       if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers });
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum });
         nameInput.value = '';
         const pvt = document.getElementById('new-channel-private');
         if (pvt) pvt.checked = false;
@@ -484,6 +485,15 @@ _setupUI() {
       const newVal = ch && ch.read_only ? 0 : 1;
       optimistic({ read_only: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'read_only' });
+    } else if (fn === 'forum') {
+      const newVal = ch && ch.is_forum ? 0 : 1;
+      optimistic({ is_forum: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'forum' });
+      // The ordering rule just changed under the open channel; reload it so
+      // the topics re-sort now instead of on the next visit.
+      if (code === this.currentChannel) {
+        setTimeout(() => this.socket.emit('get-messages', { code }), 400);
+      }
     } else if (fn === 'slow-mode') {
       const badge = row.querySelector('.cfn-badge');
       if (!badge || badge.tagName === 'INPUT') return;
@@ -2398,7 +2408,7 @@ _setupUI() {
       }
 
       // insert a markdown link when a link is pasted over selected text
-      this._handleMarkdownLinkPaste(threadInput, e); 
+      this._handleMarkdownLinkPaste(threadInput, e);
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.

@@ -160,6 +160,10 @@ They'll register their own account, then enter the code to join your channel.
 
 Every conversation in Haven happens inside a **channel**. Channels are like rooms — each has a unique 8-character code (e.g. `a3f8b2c1`). To get into a channel, you either create it or enter its code.
 
+### Forum Channels 🗂️
+
+Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic. Replies go in that message's thread, the topic shows its reply count, and a new reply bumps the topic back to the newest end of the channel, right above the composer, so old topics resurface instead of sinking. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
+
 ### Creating Sub-Channels
 
 Right-click (or click ⋯) on any channel to create a **sub-channel** beneath it. Sub-channels appear indented under their parent with a `↳` icon. They have their own code and their own message history.
