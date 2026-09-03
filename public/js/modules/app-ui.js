@@ -4550,6 +4550,7 @@ _setupUI() {
           <button class="btn-sm" data-act="toggle">${t(ic.enabled ? 'settings.admin.invite_links.disable' : 'settings.admin.invite_links.enable')}</button>
           <button class="btn-sm" data-act="edit">${t('msg_toolbar.edit')}</button>
           <button class="btn-sm" data-act="delete">${t('msg_toolbar.delete')}</button>
+          <button class="btn-sm" data-act="copy_card" title="${t('settings.admin.invite_links.copy_card')}" style="margin-left:auto">📋</button>
         </div>
         <div class="invite-code-editor" style="display:none;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
           <h6 style="margin:0 0 4px;font-size:.8rem;font-weight:600">${t('settings.admin.invite_links.channels_granted')}</h6>
@@ -4643,6 +4644,60 @@ _setupUI() {
         navigator.clipboard.writeText(val).then(done).catch(fallback);
       } else {
         fallback();
+      }
+    } else if (act === 'copy_card'){
+      const input = card.querySelector('[data-role="invite-link"]');
+      const inviteUrl = input?.value || '';
+      if (!inviteUrl) return;
+
+      const html = `
+        <div style="font-family:Arial,sans-serif;line-height:1.5">
+          <h2>You're invited to join Haven!</h2>
+          <p>You've been invited to join Haven.</p>
+          <p>
+            <a href="${inviteUrl}"
+               style="display:inline-block;padding:10px 16px;
+                      background:#5865f2;color:#fff;
+                      text-decoration:none;border-radius:4px">
+              Join Haven
+            </a>
+          </p>
+          <p>
+            Or copy this link:<br>
+            <a href="${inviteUrl}">${inviteUrl}</a>
+          </p>
+        </div>
+      `;
+
+      const text = `You're invited to join Haven!
+
+You've been invited to join Haven.
+
+Join Haven:
+${inviteUrl}`;
+
+      const done = () => this._showToast?.(
+        t('settings.admin.invite_links.copied'),
+        'success'
+      );
+
+      if (navigator.clipboard?.write) {
+        navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' })
+          })
+        ]).then(done).catch(() => {
+          this._showToast?.(
+            t('settings.admin.invite_links.copy_manually'),
+            'info'
+          );
+        });
+      } else {
+        this._showToast?.(
+          t('settings.admin.invite_links.copy_manually'),
+          'info'
+        );
       }
     } else if (act === 'toggle') {
       this.socket.emit('update-invite-code', { id, enabled: ic ? !ic.enabled : true });
