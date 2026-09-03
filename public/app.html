@@ -732,6 +732,11 @@
               <option value="60">60 fps</option>
             </select>
           </div>
+          <div class="voice-settings-row" id="native-screen-share-row" hidden>
+            <label class="voice-settings-label" for="native-screen-share-enabled" data-i18n="voice_settings.native_screen_share">Native GPU sharing</label>
+            <input type="checkbox" id="native-screen-share-enabled">
+          </div>
+          <small class="settings-hint" id="native-screen-share-hint" data-i18n="voice_settings.native_screen_share_hint" hidden>Use the experimental Desktop native media pipeline. Chromium remains the default and fallback.</small>
         </div>
         <!-- Voice controls bar (pinned above settings) -->
         <div id="voice-panel" class="voice-panel" data-haven-region="voice-controls" style="display:none">
@@ -4195,13 +4200,13 @@
   <script src="/js/theme.js?v=4.1.1"></script>
   <script src="/js/notifications.js?v=3.16.15"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=3.34.5"></script>
+  <script src="/js/voice.js?v=3.34.7"></script>
   <script src="/js/modmode.js?v=3.16.16"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.1.2"></script>
+  <script type="module" src="/js/app.js?v=4.1.3"></script>
   <script src="/js/plugin-loader.js?v=4.1.2"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

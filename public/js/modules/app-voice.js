@@ -502,8 +502,10 @@ async _doToggleScreenShare() {
           try { this._applyShareAudioModeBadge(ev.detail); } catch (e) { console.warn('share mode badge update failed:', e); }
         });
       }
-      // Show our own screen in the viewer
-      this._handleScreenStream(this.user.id, this.voice.screenStream);
+      // Native desktop capture has no Chromium MediaStream for local preview.
+      if (this.voice.screenStream) {
+        this._handleScreenStream(this.user.id, this.voice.screenStream);
+      }
       // Show audio/no-audio badge
       if (this.voice.screenHasAudio) {
         this._handleScreenAudio(this.user.id);

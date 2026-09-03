@@ -1391,6 +1391,18 @@ _setupUI() {
       this.voice.setScreenFrameRate(parseInt(e.target.value, 10));
     });
   }
+  const nativeScreenRow = document.getElementById('native-screen-share-row');
+  const nativeScreenHint = document.getElementById('native-screen-share-hint');
+  const nativeScreenToggle = document.getElementById('native-screen-share-enabled');
+  if (window.havenDesktop?.nativeScreen && nativeScreenToggle) {
+    nativeScreenRow.hidden = false;
+    nativeScreenHint.hidden = false;
+    nativeScreenToggle.checked = localStorage.getItem('haven_native_screen_share') === '1';
+    nativeScreenToggle.addEventListener('change', () => {
+      if (nativeScreenToggle.checked) localStorage.setItem('haven_native_screen_share', '1');
+      else localStorage.removeItem('haven_native_screen_share');
+    });
+  }
 
   // Wire up the voice manager's video callback
   this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
@@ -1455,6 +1467,15 @@ _setupUI() {
   // staring at "ICE: Connecting..." with no clue why (#5399).
   this.voice.onConnectivityWarning = (msg) => {
     this._showToast(msg, 'error', null, 12000);
+  };
+  this.voice.onScreenShareWarning = () => {
+    const button = document.getElementById('screen-share-btn');
+    if (button) {
+      button.textContent = '🖥️';
+      button.title = t('voice.screen_share');
+      button.classList.remove('sharing');
+    }
+    this._showToast(t('voice.screen_share_cancelled'), 'error', null, 12000);
   };
 
   // Wire up talking indicator

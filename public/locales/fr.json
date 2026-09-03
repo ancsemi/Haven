@@ -612,6 +612,8 @@
     "resolution": "Résolution",
     "resolution_source": "Source",
     "frame_rate": "Fréquence d'images",
+    "native_screen_share": "Partage GPU natif",
+    "native_screen_share_hint": "Utilise le pipeline multimédia natif expérimental de l'application. Chromium reste le mode par défaut et de secours.",
     "camera_fallback": "Caméra {{n}}"
   },
   "status_bar": {

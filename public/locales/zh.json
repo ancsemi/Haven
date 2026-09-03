@@ -612,6 +612,8 @@
     "resolution": "分辨率",
     "resolution_source": "源",
     "frame_rate": "帧率",
+    "native_screen_share": "原生 GPU 屏幕共享",
+    "native_screen_share_hint": "使用实验性的桌面原生媒体管线。Chromium 仍是默认和回退模式。",
     "camera_fallback": "摄像头 {{n}}"
   },
   "status_bar": {

@@ -612,6 +612,8 @@
     "resolution": "Resolución",
     "resolution_source": "Fuente",
     "frame_rate": "Frecuencia de fotogramas",
+    "native_screen_share": "Compartir mediante GPU nativa",
+    "native_screen_share_hint": "Usa la canalización multimedia nativa experimental de Desktop. Chromium sigue siendo la opción predeterminada y de respaldo.",
     "camera_fallback": "Cámara {{n}}"
   },
   "status_bar": {
