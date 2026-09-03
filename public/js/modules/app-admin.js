@@ -831,6 +831,14 @@ _syncSettingsNav() {
   document.querySelectorAll('#section-invite .invite-server-config').forEach(el => {
     el.style.display = inviteLinksOnly ? 'none' : '';
   });
+  // Invite-link-only users can access only the Invite Links block.
+  // The admin tab body contains all admin sections, so hiding the nav item
+  // alone is not sufficient to prevent the other sections from being shown.
+  if (inviteLinksOnly) {
+    document.querySelectorAll('#admin-mod-panel .admin-settings').forEach(section => {
+      section.style.display = section.id === 'section-invite' ? '' : 'none';
+    });
+  }
   // With everything above it hidden, the block's divider has nothing to divide.
   document.getElementById('invite-links-block')
     ?.classList.toggle('invite-links-flush', inviteLinksOnly);
