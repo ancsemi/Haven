@@ -4646,76 +4646,7 @@ _setupUI() {
         fallback();
       }
     } else if (act === 'copy_card'){
-      const input = card.querySelector('[data-role="invite-link"]');
-      const inviteUrl = input?.value || '';
-      if (!inviteUrl) return;
-
-      const html = `
-        <div style="margin:0;padding:40px 20px;background:#f2f2f2;font-family:Arial,sans-serif;text-align:center">
-          <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px 24px;box-sizing:border-box">
-            <h2 style="margin:0 0 16px;font-size:24px;color:#222">
-              You're invited to join Haven!
-            </h2>
-
-            <p style="margin:0 0 24px;color:#555;font-size:16px">
-              You've been invited to join Haven.
-            </p>
-
-            <a href="${inviteUrl}"
-              style="display:inline-block;
-                      padding:12px 24px;
-                      background:#5865f2;
-                      color:#fff;
-                      text-decoration:none;
-                      border-radius:6px;
-                      font-size:16px;
-                      font-weight:bold">
-              Join Haven
-            </a>
-
-            <p style="margin:24px 0 8px;color:#777;font-size:14px">
-              Or copy this link:
-            </p>
-
-            <p style="margin:0;word-break:break-all;font-size:14px">
-              <a href="${inviteUrl}" style="color:#5865f2">
-                ${inviteUrl}
-              </a>
-            </p>
-          </div>
-        </div>
-      `;
-
-      const text = `You're invited to join Haven!
-
-You've been invited to join Haven.
-
-Join Haven:
-${inviteUrl}`;
-
-      const done = () => this._showToast?.(
-        t('settings.admin.invite_links.copied'),
-        'success'
-      );
-
-      if (navigator.clipboard?.write) {
-        navigator.clipboard.write([
-          new ClipboardItem({
-            'text/html': new Blob([html], { type: 'text/html' }),
-            'text/plain': new Blob([text], { type: 'text/plain' })
-          })
-        ]).then(done).catch(() => {
-          this._showToast?.(
-            t('settings.admin.invite_links.copy_manually'),
-            'info'
-          );
-        });
-      } else {
-        this._showToast?.(
-          t('settings.admin.invite_links.copy_manually'),
-          'info'
-        );
-      }
+      this._copyInviteCard(card);
     } else if (act === 'toggle') {
       this.socket.emit('update-invite-code', { id, enabled: ic ? !ic.enabled : true });
     } else if (act === 'delete') {
@@ -4826,6 +4757,128 @@ ${inviteUrl}`;
   document.getElementById('invite-links-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
+},
+
+_copyInviteCard(card) {
+  const input = card.querySelector('[data-role="invite-link"]');
+  const inviteUrl = input?.value || '';
+  if (!inviteUrl) return;
+
+  // Resolve the active theme's CSS variables into actual values.
+  const styles = getComputedStyle(card);
+  const theme = name => styles.getPropertyValue(name).trim();
+
+  const bgPrimary = theme('--bg-primary');
+  const bgCard = theme('--bg-card');
+  const accent = theme('--accent');
+  const accentText = theme('--accent-text') || '#fff';
+  const textPrimary = theme('--text-primary');
+  const textSecondary = theme('--text-secondary');
+  const textLink = theme('--text-link');
+  const border = theme('--border');
+  const radius = theme('--radius') || '8px';
+  const fontMain = theme('--font-main');
+
+  const html = `
+    <div style="
+      margin:0;
+      padding:40px 20px;
+      background:${bgPrimary};
+      font-family:${fontMain};
+      text-align:center;
+    ">
+      <div style="
+        max-width:600px;
+        margin:0 auto;
+        padding:32px 24px;
+        box-sizing:border-box;
+        background:${bgCard};
+        border:1px solid ${border};
+        border-radius:${radius};
+      ">
+        <h2 style="
+          margin:0 0 16px;
+          font-family:${fontMain};
+          font-size:24px;
+          color:${textPrimary};
+        ">
+          You're invited to join Haven!
+        </h2>
+
+        <p style="
+          margin:0 0 24px;
+          color:${textSecondary};
+          font-size:16px;
+        ">
+          You've been invited to join Haven.
+        </p>
+
+        <a href="${inviteUrl}"
+           style="
+             display:inline-block;
+             padding:12px 24px;
+             background:${accent};
+             color:${accentText};
+             text-decoration:none;
+             border-radius:${radius};
+             font-size:16px;
+             font-weight:bold;
+           ">
+          Join Haven
+        </a>
+
+        <p style="
+          margin:24px 0 8px;
+          color:${textSecondary};
+          font-size:14px;
+        ">
+          Or copy this link:
+        </p>
+
+        <p style="
+          margin:0;
+          word-break:break-all;
+          font-size:14px;
+        ">
+          <a href="${inviteUrl}"
+             style="color:${textLink};text-decoration:none;">
+            ${inviteUrl}
+          </a>
+        </p>
+      </div>
+    </div>
+  `;
+
+  const text = `You're invited to join Haven!
+
+You've been invited to join Haven.
+
+Join Haven:
+${inviteUrl}`;
+
+  const done = () => this._showToast?.(
+    t('settings.admin.invite_links.copied'),
+    'success'
+  );
+
+  if (navigator.clipboard?.write) {
+    navigator.clipboard.write([
+      new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' })
+      })
+    ]).then(done).catch(() => {
+      this._showToast?.(
+        t('settings.admin.invite_links.copy_manually'),
+        'info'
+      );
+    });
+  } else {
+    this._showToast?.(
+      t('settings.admin.invite_links.copy_manually'),
+      'info'
+    );
+  }
 },
 
 _openRenameModal() {
