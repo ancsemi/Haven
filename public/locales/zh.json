@@ -649,11 +649,14 @@
       "limits": "限制",
       "admin_sounds": "声音",
       "emojis": "表情",
+      "stickers": "贴纸",
       "roles": "角色",
       "tunnel": "隧道",
       "bots": "机器人",
       "import": "导入",
-      "mod_mode": "管理模式"
+      "mod_mode": "管理模式",
+      "automod": "自动审核",
+      "guests": "访客访问"
     },
     "language_section": {
       "title": "语言",

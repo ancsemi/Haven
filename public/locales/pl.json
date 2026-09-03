@@ -674,11 +674,14 @@
       "limits": "Limity",
       "admin_sounds": "Dźwięki",
       "emojis": "Emoji",
+      "stickers": "Naklejki",
       "roles": "Role",
       "tunnel": "Tunel",
       "bots": "Boty",
       "import": "Import",
-      "mod_mode": "Tryb moderatora"
+      "mod_mode": "Tryb moderatora",
+      "automod": "Automoderacja",
+      "guests": "Dostęp dla gości"
     },
     "language_section": {
       "title": "Język",

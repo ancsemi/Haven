@@ -739,140 +739,144 @@ _renderWebhooksList(webhooks) {
 },
 
 _syncSettingsNav() {
+  // Dict of admin settings sections and the roles that can access them.
+  // (Admin has access to all)
+  //
+  // Dict key: The section id to grant access to
+  // Key value: A list of roles that can access the section, or a dictionary
+  // of roles listing the sub-sections they can access. ('*' for all subsection access)
+  const settingsSectionsAccess = {
+    'section-update':       [],
+    'section-branding':     ['manage_server'],
+    'section-members':      ['manage_server'],
+    'section-moderation':   [],
+    'section-security':     [],
+    'section-automod':      [],
+    'section-whitelist':    ['manage_server'],
+    'section-invite':       {'manage_server': '*', 'invite_users': ['invite-links-block']}, // invite_users only have access to the id="invite-links-block" section within id="section-invite"
+    'section-guests':       [],
+    'section-cleanup':      ['manage_server'],
+    'section-backup':       ['manage_server'],
+    'section-uploads':      ['manage_server'],
+    'section-connectivity': [],
+    'section-tunnel':       ['manage_server'],
+    'section-bots':         ['manage_server', 'manage_webhooks'],
+    'section-ferry':        [],
+    'section-custom-tos':   [],
+    'section-import':       ['manage_server'],
+    'section-modmode':      ['manage_server'],
+    'section-emojis':       ['manage_emojis'],
+    'section-stickers':     ['manage_stickers'],
+    'section-sounds-admin': ['manage_soundboard'],
+    'section-roles':        ['manage_roles'],
+    'section-audit-log':    ['view_audit_log']
+  };
+  
   // Use the canonical authoritative flag from the server, not DOM visibility.
   const isAdmin = !!(this.user && this.user.isAdmin);
-  const canManageEmojis = isAdmin || this._hasPerm('manage_emojis');
-  const canManageStickers = isAdmin || this._hasPerm('manage_stickers') || this._hasPerm('manage_emojis');
-  const canManageSounds = isAdmin || this._hasPerm('manage_soundboard');
-  const canManageRoles = isAdmin || this._hasPerm('manage_roles');
-  const canManageServer = isAdmin || this._hasPerm('manage_server');
-  const canManageWebhooks = isAdmin || this._hasPerm('manage_webhooks');
-  const canInviteUsers = isAdmin || this._hasPerm('invite_users'); // (#5470)
-  const hasAnyAdminAccess = this._hasAnyAdminSettingsAccess();
 
-  // Show/hide individual admin nav items (default: hidden for non-admins)
-  document.querySelectorAll('.settings-nav-admin').forEach(el => {
-    el.style.display = isAdmin ? '' : 'none';
+  //Returns the actual access level for a settings section:
+  //   '*'              = full access
+  //   ['some-block']   = limited access to specific subsections
+  //   null             = no access
+  const getSectionAccess = (target) => {
+    const access = settingsSectionsAccess[target];
+
+    if (isAdmin) return '*';
+    if (!access) return null;
+
+    // Simple permission list: any matching permission grants full access.
+    if (Array.isArray(access)) {
+      return access.some(permission => this._hasPerm(permission)) ? '*' : null;
+    }
+    // Permission -> subsection access map.
+    const allowedSubSections = new Set();
+    for (const [permission, subSections] of Object.entries(access)) {
+      if (!this._hasPerm(permission)) continue;
+
+      // Any full-access permission wins, regardless of object order.
+      if (subSections === '*') return '*';
+
+      for (const subSection of subSections) {
+        allowedSubSections.add(subSection);
+      }
+    }
+    return allowedSubSections.size > 0 ? [...allowedSubSections] : null;
+  };
+
+  const canAccessSection = (target) => {
+    return getSectionAccess(target) !== null;
+  };
+
+  // Determine whether the user has access to any admin settings.
+  const hasAnyAdminAccess = isAdmin || Object.keys(settingsSectionsAccess).some(target => canAccessSection(target));
+
+  // Admin settings navigation.
+  // Unknown nav targets are hidden for non-admins.
+  document.querySelectorAll('.settings-nav-item.settings-nav-admin').forEach(navItem => {
+    if (isAdmin) {
+      navItem.style.display = '';
+      return;
+    }
+    navItem.style.display = canAccessSection(navItem.dataset.target) ? '' : 'none';
   });
-  // Show/hide the admin tab button + group + body — gate on ANY admin access
-  const adminTab = document.querySelector('.settings-tab-admin');
-  if (adminTab) adminTab.style.display = hasAnyAdminAccess ? '' : 'none';
-  const adminNavGroup = document.querySelector('.settings-nav-admin-group');
-  if (adminNavGroup) adminNavGroup.style.display = hasAnyAdminAccess ? '' : 'none';
-  const adminBody = document.getElementById('settings-body-admin');
-  // settings-body-admin display is governed by tab switching too — only force-hide
-  // when the user has zero admin access so a stale 'block' doesn't leak through.
-  if (adminBody && !hasAnyAdminAccess) adminBody.style.display = 'none';
-  // Show/hide the admin save bar (only visible when admin tab is active AND has access)
+
+  // Admin settings navigation group labels.
+  document.querySelectorAll('.settings-nav-group-label.settings-nav-admin').forEach(label => {
+    if (isAdmin) {
+      label.style.display = '';
+      return;
+    }
+
+    let hasVisibleItem = false;
+    let sibling = label.nextElementSibling;
+    while (sibling && !sibling.classList.contains('settings-nav-group-label')) {
+      if (sibling.classList.contains('settings-nav-item') && sibling.classList.contains('settings-nav-admin') && sibling.style.display !== 'none') {
+        hasVisibleItem = true;
+        break;
+      }
+      sibling = sibling.nextElementSibling;
+    }
+    label.style.display = hasVisibleItem ? '' : 'none';
+  });
+
+  document.querySelectorAll('.settings-nav-admin-group').forEach(group => {
+    group.style.display = hasAnyAdminAccess ? '' : 'none';
+  });
+
+  // Admin settings sections.
+  // Every section must be explicitly represented in settingsSectionsAccess.
+  // This prevents an unlisted admin section from becoming visible to
+  // non-admin users simply because its nav item was hidden.
+  document.querySelectorAll('#admin-mod-panel .admin-settings').forEach(section => {
+    const access = getSectionAccess(section.id);
+    section.style.display = (access === null) ? 'none' : '';
+  });
+
+  // Apply subsection restrictions.
+  // Sections using object-form access can restrict access to specific
+  // direct-child subsections.
+  Object.entries(settingsSectionsAccess).forEach(([sectionId, access]) => {
+    if (isAdmin || !access || Array.isArray(access)) return;
+
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    const sectionAccess = getSectionAccess(sectionId);
+    if (sectionAccess === null || sectionAccess === '*') return;
+
+    section.querySelectorAll(':scope > *').forEach(subSection => {
+      subSection.style.display = sectionAccess.includes(subSection.id) ? '' : 'none';
+    });
+  });
+
+  const adminPanel = document.getElementById('settings-body-admin');
+  if (adminPanel) {
+    adminPanel.style.display = hasAnyAdminAccess ? '' : 'none';
+  }
   const saveBar = document.querySelector('.admin-save-bar');
   if (saveBar) {
-    const adminTabActive = adminTab?.classList.contains('active');
-    saveBar.style.display = (hasAnyAdminAccess && adminTabActive) ? '' : 'none';
-  }
-  // Show the Emojis settings tab for users with manage_emojis permission even if not full admin/mod
-  // (#5335) manage_stickers also unhides this tab — the Stickers admin block
-  // currently lives inside the Emojis section so users with sticker access
-  // need to see that nav item even if they can't touch emojis themselves.
-  const emojiNavItem = document.querySelector('.settings-nav-item[data-target="section-emojis"]');
-  if (emojiNavItem && !isAdmin && (canManageEmojis || canManageStickers)) {
-    emojiNavItem.style.display = '';
-  }
-  // Hide the emoji-only and sticker-only sub-blocks based on which perms the
-  // user actually has, so a manage_stickers-only user doesn't see an Emoji
-  // upload panel they can't use (and vice versa).
-  const emojiBlock = document.getElementById('section-emojis');
-  const stickerBlock = document.getElementById('section-stickers');
-  if (emojiBlock && !isAdmin) emojiBlock.style.display = canManageEmojis ? '' : 'none';
-  if (stickerBlock && !isAdmin) stickerBlock.style.display = canManageStickers ? '' : 'none';
-  // Show the Sounds admin tab for users with manage_soundboard permission
-  const soundsNavItem = document.querySelector('.settings-nav-item[data-target="section-sounds-admin"]');
-  if (soundsNavItem && !isAdmin && canManageSounds) {
-    soundsNavItem.style.display = '';
-  }
-  // Show Roles tab for users with manage_roles permission
-  const rolesNavItem = document.querySelector('.settings-nav-item[data-target="section-roles"]');
-  if (rolesNavItem && !isAdmin && canManageRoles) {
-    rolesNavItem.style.display = '';
-  }
-  // Show Server settings tab for users with manage_server permission.
-  // manage_server gates many categories on the server-side, so unhide the
-  // full set of server-management nav items (categories with their own
-  // dedicated perm — emojis/sounds/roles/audit log — are handled separately).
-  if (!isAdmin && canManageServer) {
-    const serverManagedTargets = [
-      'section-branding',
-      'section-members',
-      'section-whitelist',
-      'section-invite',
-      'section-cleanup',
-      'section-backup',
-      'section-uploads',
-      'section-tunnel',
-      'section-bots',
-      'section-import',
-      'section-modmode'
-    ];
-    serverManagedTargets.forEach(target => {
-      const navItem = document.querySelector(`.settings-nav-item[data-target="${target}"]`);
-      if (navItem) navItem.style.display = '';
-    });
-  }
-  // (#5470) invite_users reaches the Invite Links block and nothing else in
-  // that section. The server code, the vanity link and the default-join list
-  // are server configuration and stay behind manage_server, so hide those
-  // rather than showing controls whose saves would be refused.
-  const inviteNavItem = document.querySelector('.settings-nav-item[data-target="section-invite"]');
-  const inviteLinksOnly = !isAdmin && !canManageServer && canInviteUsers;
-  if (!isAdmin && !canManageServer) {
-    if (inviteNavItem) inviteNavItem.style.display = canInviteUsers ? '' : 'none';
-    const inviteSection = document.getElementById('section-invite');
-    if (inviteSection) inviteSection.style.display = canInviteUsers ? '' : 'none';
-  }
-  document.querySelectorAll('#section-invite .invite-server-config').forEach(el => {
-    el.style.display = inviteLinksOnly ? 'none' : '';
-  });
-  // Invite-link-only users can access only the Invite Links block.
-  // The admin tab body contains all admin sections, so hiding the nav item
-  // alone is not sufficient to prevent the other sections from being shown.
-  if (inviteLinksOnly) {
-    document.querySelectorAll('#admin-mod-panel .admin-settings').forEach(section => {
-      section.style.display = section.id === 'section-invite' ? '' : 'none';
-    });
-  }
-  // With everything above it hidden, the block's divider has nothing to divide.
-  document.getElementById('invite-links-block')
-    ?.classList.toggle('invite-links-flush', inviteLinksOnly);
-  // Show Bots tab for users with manage_webhooks permission
-  const botsNavItem = document.querySelector('.settings-nav-item[data-target="section-bots"]');
-  if (botsNavItem && !isAdmin && canManageWebhooks) {
-    botsNavItem.style.display = '';
-  }
-  // Show Audit Log nav item for users with view_audit_log permission
-  const canViewAuditLog = isAdmin || this._hasPerm('view_audit_log');
-  const auditNavItem = document.querySelector('.settings-nav-item[data-target="section-audit-log"]');
-  if (auditNavItem) auditNavItem.style.display = canViewAuditLog ? '' : 'none';
-  // Make sure the admin tab/group/body are visible if the user only has audit-log access
-  if (canViewAuditLog && !hasAnyAdminAccess) {
-    if (adminTab) adminTab.style.display = '';
-    if (adminNavGroup) adminNavGroup.style.display = '';
-  }
-
-  // Moderation section (idle-online oversight, v3.46.0). Visible to admins and
-  // to moderators who can act on it — the same bar the server enforces. A
-  // non-admin mod sees ONLY this section, not the admin-only ones, because
-  // every other admin nav item stays display:none unless isAdmin.
-  const canSeeOversight = isAdmin || this._hasPerm('view_audit_log') ||
-    this._hasPerm('ban_user') || this._hasPerm('kick_user') || this._hasPerm('view_all_members');
-  const modNavItem = document.querySelector('.settings-nav-item[data-target="section-moderation"]');
-  if (modNavItem) modNavItem.style.display = canSeeOversight ? '' : 'none';
-  if (canSeeOversight && !hasAnyAdminAccess) {
-    if (adminTab) adminTab.style.display = '';
-    if (adminNavGroup) adminNavGroup.style.display = '';
-  }
-  // Also show save bar for users with manage_server perm (when admin tab active)
-  if (saveBar && !isAdmin && this._hasPerm('manage_server')) {
-    const adminTabActive = adminTab?.classList.contains('active');
-    if (adminTabActive) saveBar.style.display = '';
+    saveBar.style.display = hasAnyAdminAccess ? '' : 'none';
   }
 },
 

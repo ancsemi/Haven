@@ -649,11 +649,14 @@
       "limits": "Limites",
       "admin_sounds": "Sons",
       "emojis": "Emojis",
+      "stickers": "Autocollants",
       "roles": "Rôles",
       "tunnel": "Tunnel",
       "bots": "Bots",
       "import": "Importer",
-      "mod_mode": "Mode mod"
+      "mod_mode": "Mode mod",
+      "automod": "Modération automatique",
+      "guests": "Accès invité"
     },
     "language_section": {
       "title": "Langue",
