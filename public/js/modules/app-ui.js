@@ -4765,7 +4765,8 @@ _copyInviteCard(card) {
   if (!inviteUrl) return;
 
   // Resolve the active theme's CSS variables into actual values.
-  const styles = getComputedStyle(card);
+  const themeElement = document.querySelector('[data-theme]') || document.documentElement;
+  const styles = getComputedStyle(themeElement);
   const theme = name => styles.getPropertyValue(name).trim();
 
   const bgPrimary = theme('--bg-primary');
