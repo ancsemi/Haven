@@ -601,9 +601,25 @@ function buildHavenContent(msg) {
   for (const sticker of msg.sticker_items || []) {
     media.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
   }
-  // A link-only message arrives with an empty body and one embed. Without this
-  // it would relay as nothing at all. This counts as authored: the person chose
-  // to post the link, Discord only unfurled it.
+  // Discord attaches two kinds of embed, and they mean different things.
+  //
+  // A bot composes a 'rich' embed itself, and for a stream or video
+  // announcement bot that embed IS the message: the typed line is
+  // "@everyone X is live", while the stream link sits in embed.url and the
+  // thumbnail in embed.image. Reading the embed only when the body was empty
+  // relayed that line alone, so Haven got a bare "X is live" with nothing to
+  // click and nothing to look at. Rich embeds are read whether or not the bot
+  // also typed something, and their url is kept because the link is the thing
+  // being promoted. That link is checked against the link policy on its own,
+  // so an allowlist server that has not added, say, kick.com drops just the
+  // link and still relays the announcement and its picture.
+  //
+  // Everything else ('link', 'video', 'article', 'image', 'gifv') is Discord's
+  // own unfurl of a link already in the text, so it is only worth reading
+  // when there is no text at all, otherwise Haven would unfurl the same link
+  // a second time. That is the link-only message shape: an empty body and one
+  // embed, which would otherwise relay as nothing at all. It counts as
+  // authored: the person chose to post the link, Discord only unfurled it.
   //
   // Image bots (SaucyBot and friends) are the other shape here: the picture is
   // the point of the message and it lives in embed.image, with the source page
@@ -619,17 +635,33 @@ function buildHavenContent(msg) {
   // because whether a viewer's browser actually fetches the image is decided by
   // the preview allowlist at render time, which is the control that exists to
   // stop a third-party host seeing everyone who scrolls past.
-  if (!authored.length && !media.length && (msg.embeds || []).length) {
-    const embeds = msg.embeds.slice(0, 10);
+  const allEmbeds = (msg.embeds || []).filter(Boolean).slice(0, 10);
+  const richEmbeds = allEmbeds.filter(e => e.type === 'rich');
+  const embeds = richEmbeds.length ? richEmbeds
+    : (!authored.length && !media.length ? allEmbeds : []);
+  if (embeds.length) {
     for (const e of embeds) {
       const image = (e.image && e.image.url) || (e.thumbnail && e.thumbnail.url);
       if (image) media.push(image);
     }
     const e = embeds[0];
-    // Once the image is coming through, e.url is the link that would be
-    // unfurled, so it is dropped and the readable parts are kept for context.
-    const parts = media.length ? [e.title, e.description] : [e.title, e.url, e.description];
-    const summary = parts.filter(Boolean).join(' ');
+    let link = typeof e.url === 'string' ? e.url : '';
+    if (e.type === 'rich') {
+      // The promoted link stands or falls on its own, never taking the
+      // announcement down with it.
+      try {
+        if (link && automod.checkText(link, { surface: 'message' }).ok === false) link = '';
+      } catch { /* an automod fault must never take the bridge down */ }
+    } else if (media.length) {
+      // Once the image is coming through, e.url is the link that would be
+      // unfurled, so it is dropped and the readable parts are kept for context.
+      link = '';
+    }
+    // A bot that already typed the title or the link gets it once, not twice.
+    const typed = authored.join('\n');
+    const parts = [e.title, link, e.description]
+      .filter(p => typeof p === 'string' && p.trim() && !typed.includes(p.trim()));
+    const summary = parts.join(' ');
     if (summary) authored.push(summary.slice(0, 500));
   }
 

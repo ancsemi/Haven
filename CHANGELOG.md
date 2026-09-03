@@ -13,6 +13,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Fixed
+- **Stream and video announcement bots bridged through Ferry lost their link and
+  thumbnail.** CouchBot-style promotion bots type the ping line ("X is now live")
+  and put the stream link, title, and thumbnail in a rich embed. Ferry only read
+  the embed when the Discord message had no text, so Haven got the ping line and
+  nothing to click or look at. Rich (bot-composed) embeds are now read alongside
+  the typed text: the Twitch / YouTube / Kick link and the thumbnail come through
+  with it. The promoted link is checked against the link policy on its own, so an
+  allowlist server that has not added a host (kick.com is not in the starter list)
+  drops just that link and still relays the announcement and its picture. Discord's
+  own unfurl of a typed link is still ignored so Haven does not preview it twice.
+
 ### Added
 - **Three Braid spacing levels, either side of the shipped one.** Settings → Braid spacing (and Menu → Braid spacing, which cycles) offers Compact, Cozy, and Spacious. Cozy is exactly what shipped; the other two take roughly a fifth off or add a fifth on. Message runs and channel rows move together, and the rounded card shapes are identical at all three levels — only padding, gutters, avatar size, and sidebar width change. The continuation gutter is derived from inset + avatar + row gap, so a smaller avatar can't drift a run out of alignment with its own leader.
 

@@ -98,3 +98,37 @@ test('an allowed domain the user typed still passes', () => {
     'clip https://www.youtube.com/watch?v=abc'
   );
 });
+
+test('a promoted stream link is kept when the allowlist permits it', () => {
+  const out = buildHavenContent({
+    content: '@everyone Streamer is live!',
+    embeds: [{
+      type: 'rich',
+      title: 'Streamer on Twitch',
+      url: 'https://www.twitch.tv/streamer',
+      image: { url: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_streamer-1280x720.jpg' },
+    }],
+  });
+  assert.equal(
+    out,
+    '@everyone Streamer is live!\nStreamer on Twitch https://www.twitch.tv/streamer\nhttps://static-cdn.jtvnw.net/previews-ttv/live_user_streamer-1280x720.jpg'
+  );
+});
+
+test('a promoted link off the allowlist drops just the link, not the announcement', () => {
+  // kick.com is not in the starter allowlist. The old path would have fed the
+  // link through with the text and lost the whole message.
+  const out = buildHavenContent({
+    content: '@everyone Streamer is live on Kick!',
+    embeds: [{
+      type: 'rich',
+      title: 'Streamer on Kick',
+      url: 'https://kick.com/streamer',
+      image: { url: 'https://images.kick.com/video_thumbnails/streamer/720.webp' },
+    }],
+  });
+  assert.equal(
+    out,
+    '@everyone Streamer is live on Kick!\nStreamer on Kick\nhttps://images.kick.com/video_thumbnails/streamer/720.webp'
+  );
+});

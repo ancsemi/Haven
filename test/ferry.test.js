@@ -166,6 +166,56 @@ test('an image bot embed relays the picture instead of a link to unfurl', () => 
   );
 });
 
+test('a stream announcement bot relays its link and thumbnail next to the text', () => {
+  // The CouchBot / stream-notifier shape: the bot types the ping line and puts
+  // everything worth having (stream link, title, thumbnail) in a rich embed.
+  // Reading the embed only for empty bodies relayed the ping line alone.
+  const live = {
+    content: '@everyone Streamer is now live!',
+    embeds: [{
+      type: 'rich',
+      title: 'Streamer is playing Spira Speedruns',
+      url: 'https://www.twitch.tv/streamer',
+      description: 'Come hang out',
+      image: { url: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_streamer-1280x720.jpg' },
+    }],
+  };
+  const out = buildHavenContent(live);
+  assert.ok(out.startsWith('@everyone Streamer is now live!'));
+  assert.ok(out.includes('https://www.twitch.tv/streamer'));
+  assert.ok(out.includes('Streamer is playing Spira Speedruns'));
+  assert.ok(out.includes('https://static-cdn.jtvnw.net/previews-ttv/live_user_streamer-1280x720.jpg'));
+
+  // Thumbnail-shaped previews (YouTube, Kick) count as the picture too.
+  const video = buildHavenContent({
+    content: 'New upload!',
+    embeds: [{
+      type: 'rich',
+      url: 'https://www.youtube.com/watch?v=abc123',
+      thumbnail: { url: 'https://i.ytimg.com/vi/abc123/maxresdefault.jpg' },
+    }],
+  });
+  assert.ok(video.includes('https://www.youtube.com/watch?v=abc123'));
+  assert.ok(video.includes('https://i.ytimg.com/vi/abc123/maxresdefault.jpg'));
+
+  // A bot that already typed the link does not get it twice.
+  const typed = buildHavenContent({
+    content: 'Live now https://kick.com/streamer',
+    embeds: [{ type: 'rich', url: 'https://kick.com/streamer', title: 'Live now' }],
+  });
+  assert.equal(typed, 'Live now https://kick.com/streamer');
+
+  // Discord's own unfurl of a typed link is still ignored, or Haven would
+  // unfurl the same link a second time.
+  assert.equal(
+    buildHavenContent({
+      content: 'watch https://www.youtube.com/watch?v=abc123',
+      embeds: [{ type: 'video', url: 'https://www.youtube.com/watch?v=abc123', thumbnail: { url: 'https://i.ytimg.com/vi/abc123/hq.jpg' } }],
+    }),
+    'watch https://www.youtube.com/watch?v=abc123'
+  );
+});
+
 test('Discord custom emotes become readable shortcodes', () => {
   // Relayed raw these read as "<:blue_heart:1178833036244652178>" mid-sentence.
   assert.equal(buildHavenContent({ content: 'hi <:wave:1178833036244652178> there' }), 'hi :wave: there');
