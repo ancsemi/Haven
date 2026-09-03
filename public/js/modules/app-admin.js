@@ -870,13 +870,18 @@ _syncSettingsNav() {
     });
   });
 
+  const adminTab = document.querySelector('.settings-tab-admin');
+  if (adminTab) {
+    adminTab.style.display = hasAnyAdminAccess ? '' : 'none';
+  }
   const adminPanel = document.getElementById('settings-body-admin');
   if (adminPanel) {
     adminPanel.style.display = hasAnyAdminAccess ? '' : 'none';
   }
   const saveBar = document.querySelector('.admin-save-bar');
   if (saveBar) {
-    saveBar.style.display = hasAnyAdminAccess ? '' : 'none';
+    const adminTabActive = adminTab?.classList.contains('active');
+    saveBar.style.display = (hasAnyAdminAccess && adminTabActive) ? '' : 'none';
   }
 },
 
