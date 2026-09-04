@@ -4759,37 +4759,18 @@ _setupUI() {
   });
 },
 
-_copyInviteCard(card) {
+async _copyInviteCard(card) {
   const input = card.querySelector('[data-role="invite-link"]');
   const inviteUrl = input?.value || '';
   if (!inviteUrl) return;
 
   // Server branding
-  const brandText = document.querySelector('.brand-text')?.textContent?.trim() || 'HAVEN';
-  const brandIcon = document.querySelector('.brand-icon');
-  const defaultLogo = document.querySelector('.logo-sm')?.textContent?.trim() || '⬡';
+  const brandText =
+    document.querySelector('.brand-text')?.textContent?.trim() || 'HAVEN';
 
-  const iconHtml = brandIcon?.src ? `
-      <img
-        src="${brandIcon.src}"
-        alt="${brandText}"
-        style="
-          display:block;
-          width:64px;
-          height:64px;
-          margin:0 auto 16px;
-          border-radius:8px;
-          object-fit:contain;
-        "
-      >
-    ` : `
-      <div style="
-        margin:0 auto 16px;
-        font-size:56px;
-        line-height:64px;
-        color:${accent};
-      ">${defaultLogo}</div>
-    `;
+  const brandIcon = document.querySelector('.brand-icon');
+  const defaultLogo =
+    document.querySelector('.logo-sm')?.textContent?.trim() || '⬡';
 
   // Active theme
   const themeElement =
@@ -4807,6 +4788,57 @@ _copyInviteCard(card) {
   const border = theme('--border');
   const radius = theme('--radius') || '8px';
   const fontMain = theme('--font-main');
+
+  // Convert custom server icon to a self-contained data URL.
+  let iconSrc = '';
+
+  if (brandIcon?.src) {
+    try {
+      if (brandIcon.src.startsWith('data:')) {
+        iconSrc = brandIcon.src;
+      } else {
+        const response = await fetch(brandIcon.src);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        iconSrc = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to embed server icon:', err);
+    }
+  }
+
+  const iconHtml = iconSrc
+    ? `
+      <img
+        src="${iconSrc}"
+        alt="${brandText}"
+        style="
+          display:block;
+          width:96px;
+          height:96px;
+          margin:0 auto 16px;
+          border-radius:${radius};
+          object-fit:contain;
+        "
+      >
+    `
+    : `
+      <div style="
+        margin:0 auto 16px;
+        font-size:84px;
+        line-height:96px;
+        color:${accent};
+      ">${defaultLogo}</div>
+    `;
 
   const html = `
     <div style="
@@ -4826,14 +4858,15 @@ _copyInviteCard(card) {
         border-radius:${radius};
       ">
         ${iconHtml}
-      <h2 style="
-        margin:0 0 16px;
-        font-family:${fontMain};
-        font-size:24px;
-        color:${textPrimary};
-      ">
-        You're invited to join ${brandText}!
-      </h2>
+
+        <h2 style="
+          margin:0 0 16px;
+          font-family:${fontMain};
+          font-size:24px;
+          color:${textPrimary};
+        ">
+          You're invited to join ${brandText}!
+        </h2>
 
         <p style="
           margin:0 0 24px;
@@ -4886,24 +4919,25 @@ You've been invited to join ${brandText}.
 Join ${brandText}:
 ${inviteUrl}`;
 
-  const done = () => this._showToast?.(
-    t('settings.admin.invite_links.copied'),
-    'success'
-  );
+  try {
+    if (!navigator.clipboard?.write) {
+      throw new Error('HTML clipboard API unavailable');
+    }
 
-  if (navigator.clipboard?.write) {
-    navigator.clipboard.write([
+    await navigator.clipboard.write([
       new ClipboardItem({
         'text/html': new Blob([html], { type: 'text/html' }),
         'text/plain': new Blob([text], { type: 'text/plain' })
       })
-    ]).then(done).catch(() => {
-      this._showToast?.(
-        t('settings.admin.invite_links.copy_manually'),
-        'info'
-      );
-    });
-  } else {
+    ]);
+
+    this._showToast?.(
+      t('settings.admin.invite_links.copied'),
+      'success'
+    );
+  } catch (err) {
+    console.warn('Failed to copy HTML email:', err);
+
     this._showToast?.(
       t('settings.admin.invite_links.copy_manually'),
       'info'
