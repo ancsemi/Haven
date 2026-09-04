@@ -118,7 +118,7 @@ webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VA
 
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
-const { setupSocketHandlers, sanitizeText, sanitizeBorderTransform } = require('./src/socketHandlers');
+const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform } = require('./src/socketHandlers');
 const { initFerry, stopFerry } = require('./src/ferry');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const {
@@ -1964,20 +1964,6 @@ function createSoundUpload() {
       else cb(new Error('Only audio files allowed (mp3, ogg, wav, webm)'));
     }
   });
-}
-
-// Soundboard display names: letters/numbers (any script), spaces, _/-, and emoji
-// (incl. ZWJ sequences / VS16). The old ASCII-only strip dropped emoji before
-// they reached the DB, while the client toast still showed the typed name.
-function sanitizeSoundName(raw) {
-  if (typeof raw !== 'string') return '';
-  let name = raw.normalize('NFC').trim()
-    .replace(/[^\p{L}\p{N}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\u200D\uFE0F _-]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const chars = [...name];
-  if (chars.length > 30) name = chars.slice(0, 30).join('');
-  return name;
 }
 
 app.post('/api/upload-sound', uploadLimiter, uploadDiskGuard, (req, res) => {
