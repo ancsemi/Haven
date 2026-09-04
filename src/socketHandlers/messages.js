@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 
 module.exports = function register(socket, ctx) {
@@ -47,23 +47,6 @@ module.exports = function register(socket, ctx) {
     SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username, m.imported_from, m.persona_username,
            COALESCE(u.display_name, u.username, '[Deleted User]') as username
     FROM messages m LEFT JOIN users u ON m.user_id = u.id`;
-
-  function replyAuthorUsername(row) {
-    if (row.is_webhook) return `[BOT] ${row.webhook_username || 'Bot'}`;
-    if (row.imported_from) return row.webhook_username || 'Unknown';
-    if (row.persona_username) return row.persona_username;
-    return row.username || '[Deleted User]';
-  }
-
-  function toReplyContext(row) {
-    if (!row) return null;
-    return {
-      id: row.id,
-      content: row.content,
-      user_id: row.user_id,
-      username: replyAuthorUsername(row),
-    };
-  }
 
   // ── Get message history ─────────────────────────────────
   // ── Forum channels (#144) ──────────────────────────────

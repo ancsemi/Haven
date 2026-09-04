@@ -200,4 +200,31 @@ function filterIdleOnline(entries, thresholdMs, nowMs) {
   return out;
 }
 
-module.exports = { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline };
+// ── Reply banner author (#5564) ─────────────────────────
+// Bot/webhook messages store user_id NULL and the display name on
+// webhook_username. A users-table COALESCE alone becomes "[Deleted User]".
+// Keep this in sync with how message history formats is_webhook / persona /
+// imported_from authors.
+function replyAuthorUsername(row) {
+  if (!row) return '[Deleted User]';
+  if (row.is_webhook) return `[BOT] ${row.webhook_username || 'Bot'}`;
+  if (row.imported_from) return row.webhook_username || 'Unknown';
+  if (row.persona_username) return row.persona_username;
+  return row.username || '[Deleted User]';
+}
+
+function toReplyContext(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    content: row.content,
+    user_id: row.user_id,
+    username: replyAuthorUsername(row),
+  };
+}
+
+module.exports = {
+  utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName,
+  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline,
+  replyAuthorUsername, toReplyContext,
+};
