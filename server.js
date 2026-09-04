@@ -1966,6 +1966,20 @@ function createSoundUpload() {
   });
 }
 
+// Soundboard display names: letters/numbers (any script), spaces, _/-, and emoji
+// (incl. ZWJ sequences / VS16). The old ASCII-only strip dropped emoji before
+// they reached the DB, while the client toast still showed the typed name.
+function sanitizeSoundName(raw) {
+  if (typeof raw !== 'string') return '';
+  let name = raw.normalize('NFC').trim()
+    .replace(/[^\p{L}\p{N}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\u200D\uFE0F _-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const chars = [...name];
+  if (chars.length > 30) name = chars.slice(0, 30).join('');
+  return name;
+}
+
 app.post('/api/upload-sound', uploadLimiter, uploadDiskGuard, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
@@ -1976,9 +1990,8 @@ app.post('/api/upload-sound', uploadLimiter, uploadDiskGuard, (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, ' ').trim();
+    let name = sanitizeSoundName(req.body.name || '');
     if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
-    if (name.length > 30) name = name.slice(0, 30);
 
     const { getDb } = require('./src/database');
     try {
@@ -2037,8 +2050,8 @@ app.patch('/api/sounds/:name', (req, res) => {
   if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
   const oldName = req.params.name;
   if (BUILTIN_SOUNDS.some(s => s.name === oldName)) return res.status(403).json({ error: 'Cannot rename built-in sounds' });
-  let newName = (req.body.newName || '').trim().replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, ' ').trim();
-  if (!newName || newName.length > 30) return res.status(400).json({ error: 'Invalid new name' });
+  const newName = sanitizeSoundName(req.body.newName || '');
+  if (!newName) return res.status(400).json({ error: 'Invalid new name' });
   const { getDb } = require('./src/database');
   try {
     const row = getDb().prepare('SELECT id FROM custom_sounds WHERE name = ?').get(oldName);
