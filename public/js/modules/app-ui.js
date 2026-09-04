@@ -4764,6 +4764,10 @@ async _copyInviteCard(card) {
   const inviteUrl = input?.value || '';
   if (!inviteUrl) return;
 
+  // Find the invite code data for this card.
+  const id = parseInt(card.dataset.id, 10);
+  const invite = (this._inviteCodes || []).find(x => x.id === id);
+
   // Server branding
   const brandText =
     document.querySelector('.brand-text')?.textContent?.trim() || 'HAVEN';
@@ -4778,7 +4782,6 @@ async _copyInviteCard(card) {
   const styles = getComputedStyle(themeElement);
   const theme = name => styles.getPropertyValue(name).trim();
 
-  const bgPrimary = theme('--bg-primary');
   const bgCard = theme('--bg-card');
   const accent = theme('--accent');
   const accentText = theme('--accent-text') || '#fff';
@@ -4840,11 +4843,35 @@ async _copyInviteCard(card) {
       ">${defaultLogo}</div>
     `;
 
+  // Format invite expiration.
+  let expiryText = '';
+
+  if (invite?.expires_at) {
+    const expiryDate = new Date(invite.expires_at);
+
+    if (!Number.isNaN(expiryDate.getTime())) {
+      expiryText = expiryDate.toLocaleString();
+    }
+  }
+
+  const expiryHtml = expiryText
+    ? `
+      <p style="
+        margin:24px 0 0;
+        padding-top:16px;
+        border-top:1px solid ${border};
+        color:${textSecondary};
+        font-size:13px;
+      ">
+        This invite is valid until ${expiryText}.
+      </p>
+    `
+    : '';
+
   const html = `
     <div style="
       margin:0;
       padding:40px 20px;
-      background:${bgPrimary};
       font-family:${fontMain};
       text-align:center;
     ">
@@ -4873,7 +4900,7 @@ async _copyInviteCard(card) {
           color:${textSecondary};
           font-size:16px;
         ">
-          You've been invited to join ${brandText}.
+          Click the button below to register!
         </p>
 
         <a href="${inviteUrl}"
@@ -4908,16 +4935,20 @@ async _copyInviteCard(card) {
             ${inviteUrl}
           </a>
         </p>
+
+        ${expiryHtml}
       </div>
     </div>
   `;
 
   const text = `You're invited to join ${brandText}!
 
-You've been invited to join ${brandText}.
+Click the button below to register!
 
 Join ${brandText}:
-${inviteUrl}`;
+${inviteUrl}${expiryText ? `
+
+This invite is valid until ${expiryText}.` : ''}`;
 
   try {
     if (!navigator.clipboard?.write) {
