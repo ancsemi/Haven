@@ -4764,8 +4764,36 @@ _copyInviteCard(card) {
   const inviteUrl = input?.value || '';
   if (!inviteUrl) return;
 
-  // Resolve the active theme's CSS variables into actual values.
-  const themeElement = document.querySelector('[data-theme]') || document.documentElement;
+  // Server branding
+  const brandText = document.querySelector('.brand-text')?.textContent?.trim() || 'HAVEN';
+  const brandIcon = document.querySelector('.brand-icon');
+  const defaultLogo = document.querySelector('.logo-sm')?.textContent?.trim() || '⬡';
+
+  const iconHtml = brandIcon?.src ? `
+      <img
+        src="${brandIcon.src}"
+        alt="${brandText}"
+        style="
+          display:block;
+          width:64px;
+          height:64px;
+          margin:0 auto 16px;
+          border-radius:8px;
+          object-fit:contain;
+        "
+      >
+    ` : `
+      <div style="
+        margin:0 auto 16px;
+        font-size:56px;
+        line-height:64px;
+        color:${accent};
+      ">${defaultLogo}</div>
+    `;
+
+  // Active theme
+  const themeElement =
+    document.querySelector('[data-theme]') || document.documentElement;
   const styles = getComputedStyle(themeElement);
   const theme = name => styles.getPropertyValue(name).trim();
 
@@ -4797,21 +4825,22 @@ _copyInviteCard(card) {
         border:1px solid ${border};
         border-radius:${radius};
       ">
-        <h2 style="
-          margin:0 0 16px;
-          font-family:${fontMain};
-          font-size:24px;
-          color:${textPrimary};
-        ">
-          You're invited to join Haven!
-        </h2>
+        ${iconHtml}
+      <h2 style="
+        margin:0 0 16px;
+        font-family:${fontMain};
+        font-size:24px;
+        color:${textPrimary};
+      ">
+        You're invited to join ${brandText}!
+      </h2>
 
         <p style="
           margin:0 0 24px;
           color:${textSecondary};
           font-size:16px;
         ">
-          You've been invited to join Haven.
+          You've been invited to join ${brandText}.
         </p>
 
         <a href="${inviteUrl}"
@@ -4825,7 +4854,7 @@ _copyInviteCard(card) {
              font-size:16px;
              font-weight:bold;
            ">
-          Join Haven
+          Join ${brandText}
         </a>
 
         <p style="
@@ -4850,11 +4879,11 @@ _copyInviteCard(card) {
     </div>
   `;
 
-  const text = `You're invited to join Haven!
+  const text = `You're invited to join ${brandText}!
 
-You've been invited to join Haven.
+You've been invited to join ${brandText}.
 
-Join Haven:
+Join ${brandText}:
 ${inviteUrl}`;
 
   const done = () => this._showToast?.(
