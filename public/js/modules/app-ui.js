@@ -4550,7 +4550,7 @@ _setupUI() {
           <button class="btn-sm" data-act="toggle">${t(ic.enabled ? 'settings.admin.invite_links.disable' : 'settings.admin.invite_links.enable')}</button>
           <button class="btn-sm" data-act="edit">${t('msg_toolbar.edit')}</button>
           <button class="btn-sm" data-act="delete">${t('msg_toolbar.delete')}</button>
-          <button class="btn-sm" data-act="copy_card" title="${t('settings.admin.invite_links.copy_card')}" style="margin-left:auto">📋</button>
+          <button class="btn-sm" data-act="copy_card" title="${t('settings.admin.invite_links.copy_email_card')}" style="margin-left:auto">✉️</button>
         </div>
         <div class="invite-code-editor" style="display:none;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
           <h6 style="margin:0 0 4px;font-size:.8rem;font-weight:600">${t('settings.admin.invite_links.channels_granted')}</h6>
@@ -4824,8 +4824,13 @@ async _copyInviteCard(card) {
     if (!Number.isNaN(expiryDate.getTime())) expiryText = expiryDate.toLocaleString();
   }
 
-  const expiryHtml = expiryText 
-    ? `<p style="margin:24px 0 0;padding-top:16px;border-top:1px solid ${border};color:${textSecondary}; font-size:13px">This invite is valid until ${expiryText}.</p>` 
+  const invitedText = t('settings.admin.invite_links.card_invited', { server: brandText });
+  const registerText = t('settings.admin.invite_links.card_register');
+  const joinText = t('settings.admin.invite_links.card_join', { server: brandText });
+  const copyLinkText = t('settings.admin.invite_links.card_copy_link');
+
+  const expiryHtml = expiryText
+    ? `<p style="margin:24px 0 0;padding-top:16px;border-top:1px solid ${border};color:${textSecondary}; font-size:13px">${t('settings.admin.invite_links.card_expires', { date: expiryText })}</p>`
     : '';
 
   const html = `
@@ -4834,16 +4839,16 @@ async _copyInviteCard(card) {
           border:1px solid ${border};border-radius:${radius}">
         ${iconHtml}
         <h2 style="margin:0 0 16px;font-family:${fontMain};font-size:24px;color:${textPrimary}">
-          You're invited to join ${brandText}!
+          ${invitedText}
         </h2>
         <p style="margin:0 0 24px;color:${textSecondary};font-size:16px">
-          Click the button below to register!
+          ${registerText}
         </p>
         <a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:${accent};color:${accentText};
             text-decoration:none;border-radius:${radius};font-size:16px;font-weight:bold">
-          Join ${brandText}
+          ${joinText}
         </a>
-        <p style="margin:24px 0 8px;color:${textSecondary};font-size:14px">Or copy this link:</p>
+        <p style="margin:24px 0 8px;color:${textSecondary};font-size:14px">${copyLinkText}</p>
         <p style="margin:0;word-break:break-all;font-size:14px">
           <a href="${inviteUrl}" style="color:${textLink};text-decoration:none">${inviteUrl}</a>
         </p>
@@ -4851,14 +4856,14 @@ async _copyInviteCard(card) {
       </div>
     </div>`;
 
-  const text = `You're invited to join ${brandText}!
+  const text = `${invitedText}
 
-Click the button below to register!
+${registerText}
 
-Join ${brandText}:
+${joinText}:
 ${inviteUrl}${expiryText ? `
 
-This invite is valid until ${expiryText}.` : ''}`;
+${t('settings.admin.invite_links.card_expires', { date: expiryText })}` : ''}`;
 
   try {
     if (!navigator.clipboard?.write) throw new Error('HTML clipboard API unavailable');
@@ -4870,10 +4875,10 @@ This invite is valid until ${expiryText}.` : ''}`;
       })
     ]);
 
-    this._showToast?.(t('settings.admin.invite_links.copied'), 'success');
+    this._showToast?.(t('settings.admin.invite_links.email_card_copied'), 'success');
   } catch (err) {
     console.warn('Failed to copy HTML email:', err);
-    this._showToast?.(t('settings.admin.invite_links.copy_manually'), 'info');
+    this._showToast?.(t('settings.admin.invite_links.email_card_copy_failed'), 'info');
   }
 },
 

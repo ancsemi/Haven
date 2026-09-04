@@ -953,6 +953,16 @@
       "import_skipped": "已跳过 {{count}} 条重复消息。",
       "import_reused": "已更新 {{count}} 个现有频道。",
       "import_failed_alert": "导入失败：{{error}}",
+      "invite_links": {
+        "copy_email_card": "复制电子邮件邀请卡片",
+        "email_card_copied": "电子邮件卡片已复制！",
+        "email_card_copy_failed": "卡片复制失败！",
+        "card_invited": "邀请你加入 {{server}}！",
+        "card_register": "点击下方按钮进行注册！",
+        "card_join": "加入 {{server}}",
+        "card_copy_link": "或者复制此链接：",
+        "card_expires": "此邀请有效期至 {{date}}。"
+      },
       "roles_no_custom": "没有自定义角色",
       "roles_level_invalid": "级别必须在0–99之间",
       "roles_create_title": "创建角色",

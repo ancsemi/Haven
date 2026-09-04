@@ -953,6 +953,16 @@
       "import_skipped": "{{count}} Duplikat(e) übersprungen.",
       "import_reused": "{{count}} vorhandener Kanal (Kanäle) aktualisiert.",
       "import_failed_alert": "Import fehlgeschlagen: {{error}}",
+      "invite_links": {
+        "copy_email_card": "Einladungskarte für E-Mail kopieren",
+        "email_card_copied": "Einladungskarte kopiert!",
+        "email_card_copy_failed": "Kopieren der Karte fehlgeschlagen!",
+        "card_invited": "Du bist eingeladen, {{server}} beizutreten!",
+        "card_register": "Klicke auf die Schaltfläche unten, um dich zu registrieren!",
+        "card_join": "{{server}} beitreten",
+        "card_copy_link": "Oder kopiere diesen Link:",
+        "card_expires": "Diese Einladung ist bis zum {{date}} gültig."
+      },
       "roles_no_custom": "Keine benutzerdefinierten Rollen",
       "roles_level_invalid": "Ebene muss 0–99 sein",
       "roles_create_title": "Rolle erstellen",

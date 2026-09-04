@@ -953,6 +953,16 @@
       "import_skipped": "{{count}} doublon(s) ignoré(s).",
       "import_reused": "{{count}} salon(s) existant(s) mis à jour.",
       "import_failed_alert": "Échec de l'importation : {{error}}",
+      "invite_links": {
+        "copy_email_card": "Copier la carte d’invitation par e-mail",
+        "email_card_copied": "Carte d’e-mail copiée !",
+        "email_card_copy_failed": "Échec de la copie de la carte !",
+        "card_invited": "Vous êtes invité à rejoindre {{server}} !",
+        "card_register": "Cliquez sur le bouton ci-dessous pour vous inscrire !",
+        "card_join": "Rejoindre {{server}}",
+        "card_copy_link": "Ou copiez ce lien :",
+        "card_expires": "Cette invitation est valide jusqu’au {{date}}."
+      },
       "roles_no_custom": "Aucun rôle personnalisé",
       "roles_level_invalid": "Le niveau doit être entre 0 et 99",
       "roles_create_title": "Créer un rôle",
