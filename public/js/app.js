@@ -5,15 +5,15 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=3.51.2';
-import UIBindMethods   from './modules/app-ui.js?v=3.51.2';
+import UIBindMethods   from './modules/app-ui.js?v=3.51.3';
 import MediaMethods    from './modules/app-media.js?v=3.51.1';
 import ContextMethods  from './modules/app-context.js?v=3.44.4';
 import ChannelMethods  from './modules/app-channels.js?v=3.44.4';
 import MessageMethods  from './modules/app-messages.js?v=3.51.1';
 import UserMethods     from './modules/app-users.js?v=3.25.4';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.0';
-import UtilityMethods  from './modules/app-utilities.js?v=4.2.1';
-import AdminMethods    from './modules/app-admin.js?v=4.1.1';
+import UtilityMethods  from './modules/app-utilities.js?v=4.2.2';
+import AdminMethods    from './modules/app-admin.js?v=4.1.2';
 import PlatformMethods from './modules/app-platform.js?v=3.16.12';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';

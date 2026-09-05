@@ -2411,6 +2411,9 @@ _wrapSelectedText(inputEl, before, after, forEachLine = false) {
 
   input.setRangeText(replacement, start, end);
   input.setSelectionRange(start, start + replacement.length);
+  // setRangeText does not fire 'input', and the composers rely on it for
+  // auto-resize, the draft, and the typing indicator.
+  input.dispatchEvent(new Event('input', { bubbles: true }));
   return true;
 },
 
@@ -2427,16 +2430,17 @@ _handleMarkdownShortcuts(inputEl, event) {
   const input = inputEl || document.getElementById('message-input');
 
   const modifier = event.ctrlKey || event.metaKey;
-  if (!modifier) return false;
-  const key = event.key.toLowerCase();
+  // AltGr reports as Ctrl+Alt on Windows, and those combos type characters.
+  if (!modifier || event.altKey) return false;
+  const key = (event.key || '').toLowerCase();
 
-  // Italic (Ctrl/Cmd + I)
-  if (key === 'i') {
+  // Italic (Ctrl/Cmd + I). Shift+I is left to the browser (DevTools).
+  if (key === 'i' && !event.shiftKey) {
     return this._wrapSelectedText(input, '*', `*`, true);
   }
 
-  // Bold (Ctrl/Cmd + B)
-  if (key === 'b') {
+  // Bold (Ctrl/Cmd + B). Shift+B is the bookmarks bar in Chrome.
+  if (key === 'b' && !event.shiftKey) {
     return this._wrapSelectedText(input, '**', `**`, true);
   }
 
