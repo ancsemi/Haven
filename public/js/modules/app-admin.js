@@ -2443,7 +2443,11 @@ _handleMarkdownShortcuts(inputEl, event) {
   }
 
   // Italic (Ctrl/Cmd + I)
+  // Alt-Italic (Ctrl/Cmd + Shift + I)
   if (key === 'i') {
+    if (event.shiftKey){
+      return this._wrapSelectedText(input, '_', `_`, true);
+    }
     return this._wrapSelectedText(input, '*', `*`, true);
   }
 
