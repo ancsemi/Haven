@@ -118,7 +118,7 @@ webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VA
 
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
-const { setupSocketHandlers, sanitizeText, sanitizeBorderTransform, toReplyContext } = require('./src/socketHandlers');
+const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext } = require('./src/socketHandlers');
 const { initFerry, stopFerry } = require('./src/ferry');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const {
@@ -1976,9 +1976,8 @@ app.post('/api/upload-sound', uploadLimiter, uploadDiskGuard, (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, ' ').trim();
+    let name = sanitizeSoundName(req.body.name || '');
     if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
-    if (name.length > 30) name = name.slice(0, 30);
 
     const { getDb } = require('./src/database');
     try {
@@ -2037,8 +2036,8 @@ app.patch('/api/sounds/:name', (req, res) => {
   if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
   const oldName = req.params.name;
   if (BUILTIN_SOUNDS.some(s => s.name === oldName)) return res.status(403).json({ error: 'Cannot rename built-in sounds' });
-  let newName = (req.body.newName || '').trim().replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, ' ').trim();
-  if (!newName || newName.length > 30) return res.status(400).json({ error: 'Invalid new name' });
+  const newName = sanitizeSoundName(req.body.newName || '');
+  if (!newName) return res.status(400).json({ error: 'Invalid new name' });
   const { getDb } = require('./src/database');
   try {
     const row = getDb().prepare('SELECT id FROM custom_sounds WHERE name = ?').get(oldName);
