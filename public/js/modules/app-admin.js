@@ -2444,15 +2444,7 @@ _handleMarkdownShortcuts(inputEl, event) {
 
   // Italic (Ctrl/Cmd + I)
   if (key === 'i') {
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-    if (start === end) return false;
-
-    const selectedText = input.value.substring(start, end);
-    if (selectedText.includes('\n')) {
-      return this._wrapSelectedText(input, '_', `_`);
-    }
-    return this._wrapSelectedText(input, '*', `*`);
+    return this._wrapSelectedText(input, '*', `*`, true);
   }
 
   // Bold (Ctrl/Cmd + B)
