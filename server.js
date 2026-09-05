@@ -470,6 +470,35 @@ const DEFAULT_REFERRER_POLICY = 'same-origin';
 let currentReferrerPolicy = DEFAULT_REFERRER_POLICY;
 
 // ── Security Headers (helmet) ────────────────────────────
+// ── Do we serve TLS ourselves? ───────────────────────────
+// Resolved here because the security headers below depend on the answer. On
+// plain HTTP, telling a browser to upgrade every request to HTTPS breaks the
+// page rather than protecting it: the CSS and JS are re-requested over https on
+// a port with no TLS listener, so a remote visitor gets an unstyled page with
+// dead buttons. It looks perfect to whoever is testing on localhost, which
+// browsers treat as trustworthy and never upgrade. A Windows install whose SSL
+// step was skipped (no OpenSSL on PATH) lands in exactly that state without
+// anyone setting FORCE_HTTP.
+let sslCert = process.env.SSL_CERT_PATH;
+let sslKey  = process.env.SSL_KEY_PATH;
+
+// If not explicitly configured, check if the startup scripts generated certs
+if (!sslCert && !sslKey) {
+  const autoCert = path.join(CERTS_DIR, 'cert.pem');
+  const autoKey  = path.join(CERTS_DIR, 'key.pem');
+  if (fs.existsSync(autoCert) && fs.existsSync(autoKey)) {
+    sslCert = autoCert;
+    sslKey  = autoKey;
+  }
+} else {
+  // Resolve relative paths against the data directory
+  if (sslCert && !path.isAbsolute(sslCert)) sslCert = path.resolve(DATA_DIR, sslCert);
+  if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
+}
+
+const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+const useSSL = !!(sslCert && sslKey) && !forceHttp;
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -486,12 +515,12 @@ app.use(helmet({
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'self'"],               // allow mobile app iframe, block third-party clickjacking
-      ...(process.env.FORCE_HTTP?.toLowerCase() === 'true' ? { upgradeInsecureRequests: null } : {}), // helmet 8.x auto-appends upgrade-insecure-requests; disable when FORCE_HTTP=true
+      ...(useSSL ? {} : { upgradeInsecureRequests: null }), // helmet 8.x auto-appends upgrade-insecure-requests; it breaks every page when Haven is not serving TLS
     }
   },
   crossOriginEmbedderPolicy: false,  // needed for WebRTC
   crossOriginOpenerPolicy: false,    // needed for WebRTC
-  hsts: (process.env.FORCE_HTTP || '').toLowerCase() === 'true' ? false : { maxAge: 31536000, includeSubDomains: false }, // force HTTPS for 1 year (disabled when FORCE_HTTP=true)
+  hsts: useSSL ? { maxAge: 31536000, includeSubDomains: false } : false, // force HTTPS for 1 year (only sent when we actually serve it)
   referrerPolicy: false, // set dynamically from the admin-configurable cache in the middleware below
 }));
 
@@ -5127,27 +5156,8 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
 
 // Create HTTP or HTTPS server
 let server;
-
-// Resolve SSL paths: if set in .env resolve relative to DATA_DIR, otherwise auto-detect
-let sslCert = process.env.SSL_CERT_PATH;
-let sslKey  = process.env.SSL_KEY_PATH;
-
-// If not explicitly configured, check if the startup scripts generated certs
-if (!sslCert && !sslKey) {
-  const autoCert = path.join(CERTS_DIR, 'cert.pem');
-  const autoKey  = path.join(CERTS_DIR, 'key.pem');
-  if (fs.existsSync(autoCert) && fs.existsSync(autoKey)) {
-    sslCert = autoCert;
-    sslKey  = autoKey;
-  }
-} else {
-  // Resolve relative paths against the data directory
-  if (sslCert && !path.isAbsolute(sslCert)) sslCert = path.resolve(DATA_DIR, sslCert);
-  if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
-}
-
-const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
-const useSSL = sslCert && sslKey && !forceHttp;
+// sslCert, sslKey, forceHttp and useSSL are resolved up with the security
+// headers, which have to know whether this process serves TLS.
 
 if (forceHttp) {
   console.log('⚡ FORCE_HTTP=true — running plain HTTP (reverse proxy mode)');

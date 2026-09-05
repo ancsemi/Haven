@@ -11,6 +11,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **A Haven running without a certificate served a broken page to everyone but the
+  person who set it up.** With no certificate present, Haven falls back to plain
+  HTTP but still sent the header telling browsers to fetch every stylesheet and
+  script over HTTPS, on a port with nothing answering HTTPS. Visitors got an
+  unstyled page whose buttons did nothing, while the host saw a perfect page,
+  because browsers exempt localhost from that upgrade. The two headers that assume
+  HTTPS are now sent only when Haven is actually serving it. The Windows installer
+  produces this state whenever OpenSSL is missing, so it hit a self-hoster. Note
+  that microphone and camera still require HTTPS on any address other than
+  localhost, so voice needs a certificate or a tunnel.
+
+---
+
 ## [4.4.0] - 2026-09-05
 
 A contributor-heavy release. The server side of native screen sharing for Haven
