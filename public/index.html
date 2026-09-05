@@ -37,6 +37,7 @@
           <input type="password" id="login-password" autocomplete="current-password" required>
         </div>
         <button type="submit" class="btn-primary" data-i18n="auth.login.submit">Login</button>
+        <p class="auth-consent-note" data-i18n-html="auth.login.consent_note" style="text-align:center;color:var(--text-muted);font-size:0.72rem;line-height:1.4;margin-top:10px">By clicking "Login", you formally consent to our <a href="#" id="login-tos-link">current ToS</a>, which may be different from the ToS that was effective when you first registered.</p>
         <div class="auth-recovery-links">
           <a href="#" id="forgot-password-show" data-i18n="auth.login.forgot_password">Forgot password?</a>
           <a href="#" id="admin-recover-show" data-i18n="auth.login.locked_out">Locked out? Admin recovery</a>
@@ -277,8 +278,10 @@
         </p>
       </form>
 
-      <!-- EULA acceptance (required before login/register) -->
-      <div class="eula-notice" id="eula-notice">
+      <!-- EULA acceptance. Shown on the account-creation views (register / SSO /
+           guest) only; hidden on the login tab, where consent is instead
+           re-affirmed by the note under the Login button. Toggled in auth.js. -->
+      <div class="eula-notice" id="eula-notice" style="display:none">
         <label class="eula-check-row">
           <input type="checkbox" id="age-checkbox">
           <span data-i18n-html="auth.eula.age_confirm">I confirm that I am <strong>18 years of age or older</strong> (or the age of legal majority in my jurisdiction)</span>

@@ -20,7 +20,8 @@
       "forgot_password": "Forgot password?",
       "locked_out": "Locked out? Admin recovery",
       "admin_recover_hint": "Enter your admin credentials above and click Recover",
-      "admin_recover_btn": "Recover Admin Access"
+      "admin_recover_btn": "Recover Admin Access",
+      "consent_note": "By clicking \"Login\", you formally consent to our <a href=\"#\" id=\"login-tos-link\">current ToS</a>, which may be different from the ToS that was effective when you first registered."
     },
     "register": {
       "username_label": "Username",

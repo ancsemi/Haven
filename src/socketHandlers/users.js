@@ -561,6 +561,11 @@ module.exports = function register(socket, ctx) {
       // OFF (absent row = not sharing); the two sub-toggles default ON but
       // only matter once the master is enabled.
       'share_activity', 'share_game_activity', 'share_music_activity',
+      // "Don't show again" for the desktop / mobile promo modals and the
+      // recovery-codes notice. Persisted per-account (not localStorage) so
+      // hardened browsers that wipe local storage every session still honour a
+      // prior dismissal instead of re-showing the modal on every login.
+      'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
     ];
     if (!allowedKeys.includes(key) || !value || value.length > 50) return;
 
@@ -578,6 +583,30 @@ module.exports = function register(socket, ctx) {
     const ACTIVITY_KEYS = ['share_activity', 'share_game_activity', 'share_music_activity'];
     if ((key === 'hide_score_badge' || ACTIVITY_KEYS.includes(key)) && socket.currentChannel) {
       emitOnlineUsers(socket.currentChannel);
+    }
+  });
+
+  // ── Recovery-codes notice gating ────────────────────────
+  // The client asks whether to surface the one-time "generate recovery codes"
+  // notice; the decision is made entirely server-side. Skip it when the account
+  // already has at least one usable recovery code (nothing to nudge), or when
+  // the user ticked "never show again" (persisted in user_preferences, exactly
+  // like the promo-modal dismissals).
+  socket.on('get-recovery-notice-state', () => {
+    try {
+      const codes = db.prepare(
+        'SELECT COUNT(*) AS c FROM account_recovery_codes WHERE user_id = ? AND used = 0'
+      ).get(socket.user.id);
+      const pref = db.prepare(
+        "SELECT value FROM user_preferences WHERE user_id = ? AND key = 'recovery_notice_seen'"
+      ).get(socket.user.id);
+      const hasCodes = (codes?.c || 0) > 0;
+      const dismissed = pref?.value === 'true';
+      socket.emit('recovery-notice-state', { show: !hasCodes && !dismissed });
+    } catch (err) {
+      console.error('recovery-notice-state error:', err);
+      // Fail closed: never nag if we couldn't determine the state.
+      socket.emit('recovery-notice-state', { show: false });
     }
   });
 

@@ -237,47 +237,36 @@ _initAndroidBetaBanner() {
 /** Unified first-time-visit popup sequencer. Replaces the previous
  *  uncoordinated `setTimeout`-soup where each promo modal raced the others.
  *  Behavior:
- *    1. Reads a per-popup "seen" map from localStorage. Any popup whose id
- *       is already in the map is skipped forever.
- *    2. Migrates legacy per-popup dismissal keys into the map so users who
- *       hit "Don't show again" in older versions don't see those same
- *       popups again after upgrading.
- *    3. Shows remaining popups one at a time, injecting a footer with
+ *    1. Dismissal state is per-account, stored server-side in user_preferences
+ *       (keys promo_seen_*) — never in localStorage. A popup whose pref is set
+ *       is skipped. State is fetched via get-preferences; the queue waits for
+ *       it before showing anything.
+ *    2. Shows remaining popups one at a time, injecting a footer with
  *       "Next" + "Skip all" so users can click through or bail in one go.
- *    4. Any close action (Next, Skip all, X, overlay click, Maybe Later,
- *       primary CTA) marks the current popup as seen. Skip all also marks
- *       every remaining popup as seen in one shot.
- *    5. NEW popups added in future versions are NOT auto-dismissed by a
- *       previous "Skip all" — only ids the user has actually been shown
- *       (or that pre-existed at migration time) get persisted as seen. */
+ *    3. Persistence is opt-in: a dismissal is written to the account ONLY when
+ *       the user ticks that modal's "Don't show again" box. Any plain close
+ *       (Next, Skip all, X, overlay click, Maybe Later, primary CTA) is
+ *       session-only — the popup returns on the next login. */
 _initWelcomePopups() {
-  // ── Load + migrate dismissal state ──
-  let seen = {};
-  try { seen = JSON.parse(localStorage.getItem('haven_welcome_seen_v1') || '{}') || {}; } catch { seen = {}; }
+  // Run the queue at most once per page load.
+  if (this._welcomePopupsStarted) return;
 
-  // Legacy key migration. Run once on first load after upgrade. Stays
-  // correct on subsequent loads because we only ever set, never clear.
-  if (localStorage.getItem('haven_desktop_promo_dismissed') && !seen.desktop_app_promo) {
-    seen.desktop_app_promo = 1;
+  // Dismissal state lives server-side in user_preferences (fetched via
+  // get-preferences). Wait for it to land before deciding what to show —
+  // otherwise a hardened browser (which wipes localStorage every session and
+  // so never had a client-side record anyway) would re-show a modal the user
+  // already told us to stop showing. No localStorage is read or written here.
+  if (!this._userPrefs) {
+    this.socket.once('preferences', () => this._initWelcomePopups());
+    return;
   }
-  if (localStorage.getItem('haven_ab_promo_nodisplay') && !seen.android_app_promo) {
-    seen.android_app_promo = 1;
-  }
-  if (localStorage.getItem('haven_multi_role_notice_v1')) {
-    // The multi-role popup was removed in 3.22.0; mark as seen defensively
-    // so the migration path is consistent even though the popup is gone.
-    seen.multi_role_notice_v1 = 1;
-  }
-
-  const persist = () => {
-    try { localStorage.setItem('haven_welcome_seen_v1', JSON.stringify(seen)); } catch {}
-  };
-  persist();
+  this._welcomePopupsStarted = true;
 
   // ── Build the queue ──
-  // Each entry: { id, modalId, shouldShow }. Anything in `seen` is filtered
-  // out. shouldShow() handles per-platform skips (e.g. desktop promo is
-  // useless inside the desktop app itself).
+  // Each entry: { id, modalId, prefKey, checkboxId, shouldShow }. A popup is
+  // filtered out only if its persisted "Don't show again" pref is set.
+  // shouldShow() handles per-platform skips (e.g. desktop promo is useless
+  // inside the desktop app itself).
   const isMobile = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent);
   const isElectron = !!window.havenDesktop || navigator.userAgent.includes('Electron');
 
@@ -285,16 +274,20 @@ _initWelcomePopups() {
     {
       id: 'desktop_app_promo',
       modalId: 'desktop-promo-modal',
+      prefKey: 'promo_seen_desktop',
+      checkboxId: 'desktop-promo-dismiss-check',
       shouldShow: () => !isElectron && !isMobile,
     },
     {
       id: 'android_app_promo',
       modalId: 'android-beta-modal',
+      prefKey: 'promo_seen_android',
+      checkboxId: 'android-beta-dismiss-check',
       shouldShow: () => true,
     },
   ];
 
-  const queue = allEntries.filter(e => !seen[e.id] && e.shouldShow() && document.getElementById(e.modalId));
+  const queue = allEntries.filter(e => this._userPrefs[e.prefKey] !== 'true' && e.shouldShow() && document.getElementById(e.modalId));
   if (!queue.length) return;
 
   // ── Sequencer ──
@@ -338,9 +331,10 @@ _initWelcomePopups() {
     const skipBtn = footer.querySelector('.haven-welcome-queue-skip');
     if (skipBtn) {
       skipBtn.addEventListener('click', () => {
-        // Mark everything still in the queue as seen, then close.
-        for (let i = idx; i < queue.length; i++) seen[queue[i].id] = 1;
-        persist();
+        // Terminate the queue for this session. Nothing is persisted — only an
+        // explicit "Don't show again" tick (handled on close below) survives to
+        // the next login. The current modal's own checkbox is still honoured
+        // because hiding it fires the close handler.
         idx = queue.length; // force terminate
         modal.style.display = 'none';
       });
@@ -357,11 +351,14 @@ _initWelcomePopups() {
       if (d === 'none' || d === '') {
         try { activeObserver.disconnect(); } catch {}
         activeObserver = null;
-        // Always mark the current entry seen on close (the user has now
-        // been shown it; we don't want to nag them every reload). New ids
-        // added in future versions are not affected.
-        seen[entry.id] = 1;
-        persist();
+        // Persist a dismissal only when the user ticked this modal's "Don't
+        // show again" box. A plain close (Next / Done / Maybe Later / overlay)
+        // is session-only: the queue has already advanced past it here, but it
+        // returns on the next login. This is deliberate — see commit rationale.
+        const checkbox = document.getElementById(entry.checkboxId);
+        if (checkbox && checkbox.checked) {
+          this.socket.emit('set-preference', { key: entry.prefKey, value: 'true' });
+        }
         idx++;
         // Tiny delay so the close animation / focus shift completes before
         // the next one opens — feels less jarring than back-to-back flashes.

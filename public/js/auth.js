@@ -156,6 +156,7 @@
   const eulaLink = document.getElementById('eula-link');
   const eulaAcceptBtn = document.getElementById('eula-accept-btn');
   const eulaDeclineBtn = document.getElementById('eula-decline-btn');
+  const eulaNotice = document.getElementById('eula-notice');
 
   // Restore EULA acceptance from localStorage (v2.0 requires re-acceptance)
   if (localStorage.getItem('haven_eula_accepted') === '2.0') {
@@ -166,6 +167,16 @@
   eulaLink.addEventListener('click', (e) => {
     e.preventDefault();
     eulaModal.style.display = 'flex';
+  });
+
+  // The login consent note links to the same Terms popup. Its anchor is injected
+  // via data-i18n-html and re-created on every language change, so bind it by
+  // delegation instead of a direct reference a re-render would orphan.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest?.('#login-tos-link')) {
+      e.preventDefault();
+      eulaModal.style.display = 'flex';
+    }
   });
 
   eulaAcceptBtn.addEventListener('click', () => {
@@ -287,6 +298,10 @@
     if (ssoForm) ssoForm.style.display = target === 'sso' ? 'flex' : 'none';
     totpForm.style.display = 'none';
     document.getElementById('recover-form').style.display = 'none';
+    // The age / ToS checkboxes are only for creating an account, so they show on
+    // the register and SSO tabs and stay hidden on login (where the consent note
+    // under the button covers re-affirmation). The guest flow re-shows them.
+    if (eulaNotice) eulaNotice.style.display = (target === 'login') ? 'none' : '';
     hideError();
   }
 
@@ -406,7 +421,10 @@
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     hideError();
-    if (!checkEula()) return;
+    // No EULA gate on login: an existing account already accepted at
+    // registration (recorded server-side in eula_acceptances). The consent note
+    // under the button covers re-affirmation of the current terms. The account-
+    // creation flows (register / SSO / guest) still call checkEula().
 
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
@@ -1069,6 +1087,9 @@
       const ssoForm = document.getElementById('sso-form');
       if (ssoForm) ssoForm.style.display = 'none';
       guestForm.style.display = '';
+      // Guest creation still requires consent (guest submit calls checkEula), so
+      // the checkboxes hidden on the login tab must reappear here.
+      if (eulaNotice) eulaNotice.style.display = '';
       const u = document.getElementById('guest-username');
       if (u) u.focus();
     });
@@ -1079,6 +1100,7 @@
       hideError();
       if (guestForm) guestForm.style.display = 'none';
       if (loginForm) loginForm.style.display = '';
+      if (eulaNotice) eulaNotice.style.display = 'none';
     });
   }
   if (guestForm) {

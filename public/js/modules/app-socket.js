@@ -439,10 +439,11 @@ _setupSocketListeners() {
       this.socket.emit('set-status', this._pendingStatus);
       this._pendingStatus = null;
     }
-    // Show recovery-codes feature notice once per user (dismissible)
-    if (!localStorage.getItem('haven_recovery_notice_v1')) {
-      setTimeout(() => this._showRecoveryNotice(), 2500);
-    }
+    // Ask the server whether to surface the recovery-codes notice. It decides:
+    // skipped when the account already has recovery codes, or the user ticked
+    // "never show again" (both checked server-side). Reply is handled by the
+    // 'recovery-notice-state' listener registered in _setupSocketListeners.
+    this.socket.emit('get-recovery-notice-state');
   });
   document.addEventListener('visibilitychange', () => {
     this.socket?.emit('visibility-change', { visible: !document.hidden });
@@ -2350,6 +2351,13 @@ _setupSocketListeners() {
     // Activity toggles live entirely server-side (other clients must honour
     // them), so the UI can only be correct once prefs land.
     this._syncActivityUI?.();
+  });
+
+  // Server's verdict on the recovery-codes notice (see the connect handler's
+  // get-recovery-notice-state emit). Only shows when the account has no
+  // recovery codes and the user hasn't ticked "never show again".
+  this.socket.on('recovery-notice-state', ({ show } = {}) => {
+    if (show) setTimeout(() => this._showRecoveryNotice(), 2500);
   });
 
   // ── Rich presence: linked accounts ─────────────────

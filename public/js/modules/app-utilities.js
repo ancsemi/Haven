@@ -1050,10 +1050,13 @@ _showToast(message, type = 'info', action = null, duration = 4000) {
   setTimeout(() => toast.remove(), duration);
 },
 
-/** Show a one-time notice about the Account Recovery feature */
+/** Show a one-time notice about the Account Recovery feature.
+ *  Whether to show it at all is decided server-side (no recovery codes yet AND
+ *  not previously dismissed) — see get-recovery-notice-state. This only guards
+ *  against showing twice within a single session (e.g. socket reconnects). */
 _showRecoveryNotice() {
-  // Guard: only show once
-  if (localStorage.getItem('haven_recovery_notice_v1')) return;
+  if (this._recoveryNoticeShown) return;
+  this._recoveryNoticeShown = true;
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay recovery-notice-overlay';
@@ -1078,18 +1081,24 @@ _showRecoveryNotice() {
 
   document.body.appendChild(overlay);
 
-  const dismiss = () => {
+  // Persist "never show again" per-account (not localStorage), same as the
+  // promo modals. A plain close is session-only; the notice returns next login
+  // unless the user generates recovery codes (which the server check suppresses
+  // it on) or ticks the box here.
+  const persistIfChecked = () => {
     if (document.getElementById('recovery-notice-dsa')?.checked) {
-      localStorage.setItem('haven_recovery_notice_v1', '1');
+      this.socket.emit('set-preference', { key: 'recovery_notice_seen', value: 'true' });
     }
+  };
+
+  const dismiss = () => {
+    persistIfChecked();
     overlay.remove();
   };
 
   document.getElementById('recovery-notice-close').addEventListener('click', dismiss);
   document.getElementById('recovery-notice-go').addEventListener('click', () => {
-    if (document.getElementById('recovery-notice-dsa')?.checked) {
-      localStorage.setItem('haven_recovery_notice_v1', '1');
-    }
+    persistIfChecked();
     overlay.remove();
     // Open settings modal and navigate to recovery section
     document.getElementById('open-settings-btn')?.click();
