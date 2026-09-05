@@ -18,6 +18,12 @@ test('sound names keep ZWJ emoji sequences', () => {
   assert.equal(sanitizeSoundName('👨‍👩‍👧‍👦 family'), '👨‍👩‍👧‍👦 family');
 });
 
+test('sound names keep flags and keycap emoji', () => {
+  assert.equal(sanitizeSoundName('🇺🇸 anthem'), '🇺🇸 anthem');
+  assert.equal(sanitizeSoundName('#️⃣ hash'), '#️⃣ hash');
+  assert.equal(sanitizeSoundName('1️⃣ one'), '1️⃣ one');
+});
+
 test('sound names strip angle brackets and punctuation noise', () => {
   assert.equal(sanitizeSoundName('Hello <script>'), 'Hello script');
   assert.equal(sanitizeSoundName('!!!'), '');

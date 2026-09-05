@@ -40,12 +40,13 @@ function sanitizeText(str) {
 }
 
 // Soundboard display names: letters/numbers (any script), spaces, _/-, and emoji
-// (incl. ZWJ sequences / VS16). An ASCII-only strip used to drop emoji before
-// they reached the DB, while the client toast still showed the typed name.
+// (incl. ZWJ sequences / VS16, flags, and the # and * keycaps). An ASCII-only
+// strip used to drop emoji before they reached the DB, while the client toast
+// still showed the typed name.
 function sanitizeSoundName(raw) {
   if (typeof raw !== 'string') return '';
   let name = raw.normalize('NFC').trim()
-    .replace(/[^\p{L}\p{N}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\u200D\uFE0F _-]/gu, '')
+    .replace(/[^\p{L}\p{N}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u200D\uFE0F#* _-]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
   const chars = [...name];
