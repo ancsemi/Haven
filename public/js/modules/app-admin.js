@@ -2396,28 +2396,85 @@ _openInviteLinksModal() {
 },
 
 // ═══════════════════════════════════════════════════════
-// markdown link pasting
+// markdown keyboard shortcut helper functions
 // ═══════════════════════════════════════════════════════
 
-_handleMarkdownLinkPaste(input, event) {
-  const url = event.clipboardData.getData('text/plain').trim();
-  // Only handle pasted URLs.
-  if (!/^https?:\/\/\S+$/i.test(url)) {
-    return;
-  }
+_wrapSelectedText(inputEl, before, after, forEachLine = false) {
+  const input = inputEl || document.getElementById('message-input');
 
   const start = input.selectionStart;
   const end = input.selectionEnd;
-  // Nothing selected, so allow normal paste behavior.
-  if (start === end) {
-    return;
+  if (start === end) return false;
+
+  const selectedText = input.value.substring(start, end);
+  const replacement = forEachLine  ? selectedText .split('\n') .map(line => `${before}${line}${after}`) .join('\n') : `${before}${selectedText}${after}`;
+
+  input.setRangeText(replacement, start, end);
+  input.setSelectionRange(start, start + replacement.length);
+  return true;
+},
+
+_handleMarkdownLinkPaste(inputEl, event) {
+  const input = inputEl || document.getElementById('message-input');
+  const url = event.clipboardData.getData('text/plain').trim();
+
+  // Only handle pasted URLs.
+  if (!/^https?:\/\/\S+$/i.test(url)) return false;
+  return this._wrapSelectedText(input, '[', `](${url})`);
+},
+
+_handleMarkdownShortcuts(inputEl, event) {
+  const input = inputEl || document.getElementById('message-input');
+
+  const modifier = event.ctrlKey || event.metaKey;
+  if (!modifier) return false;
+  const key = event.key.toLowerCase();
+
+  // Link (Ctrl/Cmd + K)
+  if (key === 'k') {
+
+    if (this._wrapSelectedText(input, '[', ']()')) {
+      const end = input.selectionEnd;
+      // Place cursor inside the URL parentheses.
+      input.setSelectionRange(end + 2, end + 2);
+      return true;
+    }
+    return false;
   }
 
-  // hijack the paste event and insert markdown link on highlighted text
-  event.preventDefault();
-  const selectedText = input.value.substring(start, end);
-  const markdownLink = `[${selectedText}](${url})`;
-  input.setRangeText(markdownLink, start, end, 'end');
+  // Italic (Ctrl/Cmd + I)
+  if (key === 'i') {
+    return this._wrapSelectedText(input, '*', `*`, true);
+  }
+
+  // Bold (Ctrl/Cmd + B)
+  if (key === 'b') {
+    return this._wrapSelectedText(input, '**', `**`, true);
+  }
+
+  // Code (Ctrl/Cmd + Shift + C)
+  if (event.shiftKey && key === 'c') {
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    if (start === end) return false;
+
+    const selectedText = input.value.substring(start, end);
+    if (selectedText.includes('\n')) {
+      return this._wrapSelectedText(input, '```\n', '\n```');
+    }
+    return this._wrapSelectedText(input, '`', '`');
+  }
+
+  // Strikethrough (Ctrl/Cmd + Shift + X)
+  if (event.shiftKey && key === 'x') {
+    return this._wrapSelectedText(input, '~~', `~~`, true);
+  }
+
+  // Spoiler (Ctrl/Cmd + Shift + P)
+  if (event.shiftKey && key === 'p') {
+    return this._wrapSelectedText(input, '||', `||`);
+  }
+  return false;
 },
 
 // ═══════════════════════════════════════════════════════
