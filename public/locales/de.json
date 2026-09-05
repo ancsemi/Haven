@@ -612,6 +612,8 @@
     "resolution": "Auflösung",
     "resolution_source": "Quelle",
     "frame_rate": "Bildrate",
+    "native_screen_share": "Native GPU-Bildschirmfreigabe",
+    "native_screen_share_hint": "Verwendet die experimentelle native Medienpipeline der Desktop-App. Chromium bleibt Standard und Fallback.",
     "camera_fallback": "Kamera {{n}}"
   },
   "status_bar": {

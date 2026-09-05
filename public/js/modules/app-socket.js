@@ -375,7 +375,7 @@ _setupSocketListeners() {
     }
     // Re-join voice if we were in voice before reconnect
     if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
-      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() });
       if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: this.voice.currentChannel, muted: true });
       if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
       // (#5427) When the socket flaps (common on the web client behind certain
@@ -542,7 +542,7 @@ _setupSocketListeners() {
       // live, so rebind the voice slot here instead. This is a no-op on
       // the server when we're already bound on this socket.
       if (voiceLive && this.voice?.currentChannel && this.socket?.connected) {
-        this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+        this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() });
       }
       // Re-fetch channels in case list changed while backgrounded
       this.socket?.emit('get-channels');
@@ -840,7 +840,7 @@ _setupSocketListeners() {
     );
     this.voice?.resolveDeferredChannelGone?.(deferredRotation?.newCode || deferredChannel?.code || null);
     if (voiceRotation && this.voice?.inVoice && this.voice.currentChannel === voiceRotation.newCode) {
-      this.socket.emit('voice-rejoin', { code: voiceRotation.newCode });
+      this.socket.emit('voice-rejoin', { code: voiceRotation.newCode, ...this.voice.getNativeScreenClientInfo() });
       if (this.voice.isMuted) this.socket.emit('voice-mute-state', { code: voiceRotation.newCode, muted: true });
       if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: voiceRotation.newCode, deafened: true });
       this.voice._healPeerConnectionsAfterChannelRotation?.(voiceRotation.oldCode);
@@ -1394,7 +1394,7 @@ _setupSocketListeners() {
       if ((now - (this._lastVoiceSelfHealAt || 0)) > 3000 && this.socket?.connected) {
         this._lastVoiceSelfHealAt = now;
         console.warn('[Voice] Self missing from roster — emitting voice-rejoin');
-        this.socket.emit('voice-rejoin', { code: data.channelCode });
+        this.socket.emit('voice-rejoin', { code: data.channelCode, ...this.voice.getNativeScreenClientInfo() });
       }
     }
     if (isViewing && localStorage.getItem('haven_hide_voice_panel') !== 'true') {
@@ -1815,7 +1815,10 @@ _setupSocketListeners() {
     // the server can't find it (the DB row's code column was just
     // updated), and we get the infinite "server says voice channel is
     // gone" loop. Migrate every voice-side code reference too.
-    if (wasInVoiceHere) console.log(`[Voice] channel code rotated mid-call: ${data.oldCode} -> ${data.newCode}`);
+    if (wasInVoiceHere) {
+      console.log(`[Voice] channel code rotated mid-call: ${data.oldCode} -> ${data.newCode}`);
+      this.voice._healPeerConnectionsAfterChannelRotation?.(data.oldCode);
+    }
     this._renderChannels();
     // If currently viewing this channel, update the header code display
     if (this.currentChannel === data.newCode) {
@@ -2556,7 +2559,7 @@ _forceFullResync(reason) {
         try { this.socket.emit('request-online-users', { code: this.currentChannel }); } catch {}
         try { this.socket.emit('request-voice-users', { code: this.currentChannel }); } catch {}
         if (this.voice?.inVoice && this.voice.currentChannel) {
-          try { this.socket.emit('voice-rejoin', { code: this.voice.currentChannel }); } catch {}
+          try { this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() }); } catch {}
         }
       }
     }
@@ -2583,7 +2586,7 @@ _lightVoiceResync(reason) {
     if (this.voice?.inVoice && this.voice.currentChannel) {
       // voice-rejoin is now a no-op on the server when already bound on this
       // socket (skipRenegotiate). Still safe — used only to refresh roster.
-      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel });
+      this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getNativeScreenClientInfo() });
       // UI may have been flipped to "Join Voice" by a partial desync — restore.
       try { this._reconcileVoiceUi?.(); } catch {}
       try { this.voice.reassertScreenStreams?.(); } catch {}

@@ -2,11 +2,12 @@
 
 const bcrypt = require('bcryptjs');
 const { utcStamp, isInt } = require('./helpers');
+const { clearChannelRuntimeState } = require('../channelRotation');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit,
-          invalidateIpBanCache, getMentionableChannelMembers } = ctx;
+          invalidateIpBanCache, getMentionableChannelMembers, handleVoiceLeave } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
   const _invalidateIpCache = (typeof invalidateIpBanCache === 'function') ? invalidateIpBanCache : () => {};
@@ -19,6 +20,31 @@ module.exports = function register(socket, ctx) {
       _tableExists[table] = !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
     }
     if (_tableExists[table]) db.prepare(sql).run(...params);
+  }
+
+  function removeUserFromVoice(userId) {
+    for (const [code, users] of Array.from(voiceUsers.entries())) {
+      const entry = users.get(userId);
+      if (!entry) continue;
+      const pendingKey = `${userId}:${code}`;
+      const pending = state.pendingVoiceLeave?.get(pendingKey);
+      if (pending) {
+        clearTimeout(pending.timer);
+        state.pendingVoiceLeave.delete(pendingKey);
+      }
+      const liveSocket = io.sockets.sockets.get(entry.socketId);
+      const voiceSocket = liveSocket || {
+        id: entry.socketId,
+        user: {
+          id: userId,
+          displayName: entry.username,
+          isBot: !!entry.isBot,
+          webhookId: entry.webhookId,
+        },
+        leave() {},
+      };
+      handleVoiceLeave(voiceSocket, code);
+    }
   }
 
   // ── Full account-purge cascade ──────────────────────────
@@ -417,12 +443,7 @@ module.exports = function register(socket, ctx) {
         emitOnlineUsers(code);
       }
     }
-    for (const [code, users] of voiceUsers) {
-      if (users.has(data.userId)) {
-        users.delete(data.userId);
-        broadcastVoiceUsers(code);
-      }
-    }
+    removeUserFromVoice(data.userId);
 
     const purge = db.transaction((uid) => {
       purgeUserCascade(uid, targetUser, socket.user.id, data.scrubMessages, reason);
@@ -526,11 +547,7 @@ module.exports = function register(socket, ctx) {
         for (const uid of ids) if (users.delete(uid)) changed = true;
         if (changed) emitOnlineUsers(code);
       }
-      for (const [code, users] of voiceUsers) {
-        let changed = false;
-        for (const uid of ids) if (users.delete(uid)) changed = true;
-        if (changed) broadcastVoiceUsers(code);
-      }
+      for (const uid of ids) removeUserFromVoice(uid);
 
       let removed = 0;
       try {
@@ -620,6 +637,7 @@ module.exports = function register(socket, ctx) {
     }
 
     const scrubMessages = !!data.scrubMessages;
+    const deletedDmCodes = [];
 
     for (const [code, users] of channelUsers) {
       if (users.has(uid)) {
@@ -627,12 +645,7 @@ module.exports = function register(socket, ctx) {
         emitOnlineUsers(code);
       }
     }
-    for (const [code, users] of voiceUsers) {
-      if (users.has(uid)) {
-        users.delete(uid);
-        broadcastVoiceUsers(code);
-      }
-    }
+    removeUserFromVoice(uid);
 
     // Helper: run a DELETE/UPDATE only when the target table exists.
     // Self-hosted instances upgraded from older versions may be missing
@@ -687,6 +700,7 @@ module.exports = function register(socket, ctx) {
             db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(dm.id);
             _runIfTable('read_positions', 'DELETE FROM read_positions WHERE channel_id = ?', dm.id);
             db.prepare('DELETE FROM channels WHERE id = ?').run(dm.id);
+            deletedDmCodes.push(dm.code);
           }
         }
       } else {
@@ -706,6 +720,11 @@ module.exports = function register(socket, ctx) {
       // "Failed to delete account" message (#5376).
       const detail = err && err.message ? String(err.message).slice(0, 240) : 'Unknown error';
       return cb({ error: `Failed to delete account: ${detail}` });
+    }
+
+    for (const code of deletedDmCodes) {
+      io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
+      clearChannelRuntimeState(state, code);
     }
 
     console.log(`🗑️  User self-deleted: "${userRow.username}" (id: ${uid}, scrub: ${scrubMessages})`);

@@ -22,6 +22,7 @@ const {
   validateCallbackUrl
 } = require('../webhookCallback');
 const {
+  clearChannelRuntimeState,
   createTempChannelDeleteCallback,
   generateUniqueChannelCode,
   persistChannelCodeRotation,
@@ -50,6 +51,11 @@ const registerRoles      = require('./roles');
 const registerAdmin      = require('./admin');
 const registerFerry      = require('./ferry');
 const registerGroupE2E   = require('./groupE2E');
+const {
+  NATIVE_SCREEN_SIGNAL_EVENTS,
+  clearNativeScreenOfferWindows,
+  nativeScreenSignalFloodScope,
+} = require('./nativeScreen');
 
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -97,7 +103,9 @@ function setupSocketHandlers(io, db, opts = {}) {
   const activeMusic         = new Map(); // code → { url, userId, username, playbackState, ... }
   const musicQueues         = new Map(); // code → [{ id, url, title, userId, username, resolvedFrom }]
   const activeScreenSharers = new Map(); // code → Set<userId>
+  const activeScreenSessions = new Map(); // code → Map<userId, { transport, sessionId }>
   const activeWebcamUsers   = new Map(); // code → Set<userId>
+  const nativeScreenOfferWindows = new Map(); // `${sharerId}:${viewerId}` → timestamps
   const userFloodBuckets    = new Map(); // `${userId}:${bucket}` → number[] (send timestamps)
   // Presence timing for the "idle but online" flag. onlineSince is set when a
   // user goes from having zero live sockets to one; lastActiveAt advances only
@@ -148,7 +156,8 @@ function setupSocketHandlers(io, db, opts = {}) {
   const state = {
     channelUsers, voiceUsers, voiceLastActivity,
     activeMusic, musicQueues,
-    activeScreenSharers, activeWebcamUsers, streamViewers,
+    activeScreenSharers, activeScreenSessions, activeWebcamUsers,
+    nativeScreenOfferWindows, streamViewers,
     slowModeTracker, pendingTempDelete, pendingVoiceLeave,
     botAudioManager
   };
@@ -676,6 +685,23 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (!sock || !sock.connected) {
         if (entry.isBot) botAudioManager?.stopWebhook(-Number(userId));
         room.delete(userId);
+        clearNativeScreenOfferWindows(nativeScreenOfferWindows, code, userId);
+        const sharers = activeScreenSharers.get(code);
+        if (sharers) {
+          sharers.delete(userId);
+          if (sharers.size === 0) activeScreenSharers.delete(code);
+        }
+        const sessions = activeScreenSessions.get(code);
+        if (sessions) {
+          sessions.delete(userId);
+          if (sessions.size === 0) activeScreenSessions.delete(code);
+        }
+        streamViewers.delete(`${code}:${userId}`);
+        for (const [key, viewers] of streamViewers) {
+          if (!key.startsWith(`${code}:`)) continue;
+          viewers.delete(userId);
+          if (viewers.size === 0) streamViewers.delete(key);
+        }
         removed.push({ id: userId, username: entry.username });
         console.log(`[Voice] Pruned stale voice entry for user ${userId} (socket ${entry.socketId} gone)`);
       }
@@ -930,10 +956,16 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     if (socket.user.isBot) botAudioManager?.stopWebhook(socket.user.webhookId);
     voiceRoom.delete(socket.user.id);
+    clearNativeScreenOfferWindows(nativeScreenOfferWindows, code, socket.user.id);
     socket.leave(`voice:${code}`);
 
     const sharers = activeScreenSharers.get(code);
     if (sharers) { sharers.delete(socket.user.id); if (sharers.size === 0) activeScreenSharers.delete(code); }
+    const screenSessions = activeScreenSessions.get(code);
+    if (screenSessions) {
+      screenSessions.delete(socket.user.id);
+      if (screenSessions.size === 0) activeScreenSessions.delete(code);
+    }
 
     const camUsers = activeWebcamUsers.get(code);
     if (camUsers) { camUsers.delete(socket.user.id); if (camUsers.size === 0) activeWebcamUsers.delete(code); }
@@ -1417,11 +1449,8 @@ function setupSocketHandlers(io, db, opts = {}) {
           }
           botAudioManager?.stopChannel(ch.code, 'channel-expired');
           io.to(`channel:${ch.code}`).to(`voice:${ch.code}`).emit('channel-deleted', { code: ch.code, reason: 'expired' });
-          channelUsers.delete(ch.code);
-          voiceUsers.delete(ch.code);
-          activeMusic.delete(ch.code);
+          clearChannelRuntimeState(state, ch.code);
           syncMusicActivity(ch.code);
-          musicQueues.delete(ch.code);
           console.log(`[Temporary] Channel "${ch.code}" expired and was deleted`);
         }
       }
@@ -1451,6 +1480,27 @@ function setupSocketHandlers(io, db, opts = {}) {
             if (!sock || !sock.connected) {
               if (entry.isBot) botAudioManager?.stopWebhook(-Number(userId));
               room.delete(userId);
+              clearNativeScreenOfferWindows(nativeScreenOfferWindows, ch.code, userId);
+              const sharers = activeScreenSharers.get(ch.code);
+              if (sharers) {
+                sharers.delete(userId);
+                if (sharers.size === 0) activeScreenSharers.delete(ch.code);
+              }
+              const sessions = activeScreenSessions.get(ch.code);
+              if (sessions) {
+                sessions.delete(userId);
+                if (sessions.size === 0) activeScreenSessions.delete(ch.code);
+              }
+              streamViewers.delete(`${ch.code}:${userId}`);
+              for (const [key, viewers] of streamViewers) {
+                if (!key.startsWith(`${ch.code}:`)) continue;
+                viewers.delete(userId);
+                if (viewers.size === 0) streamViewers.delete(key);
+              }
+              io.to(`voice:${ch.code}`).to(`channel:${ch.code}`).emit('voice-user-left', {
+                channelCode: ch.code,
+                user: { id: userId, username: entry.username }
+              });
             }
           }
           if (room.size > 0) continue;
@@ -1815,6 +1865,10 @@ function setupSocketHandlers(io, db, opts = {}) {
     const FLOOD_LIMITS = {
       message: { max: 10, windowMs: 10000 },
       event:   { max: 60, windowMs: 10000 },
+      nativeSignal: { max: 120, windowMs: 10000 },
+      nativeSignalGlobal: { max: 12000, windowMs: 10000 },
+      screenLifecycle: { max: 12, windowMs: 10000 },
+      screenRecovery: { max: 12, windowMs: 10000 },
       // Search is far heavier than the typing/presence traffic the event
       // bucket was sized for (FTS MATCH + count(*) + joins across every
       // channel you're in), so it gets its own tighter per-account cap on
@@ -1829,9 +1883,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       ferrySearch: { max: 8, windowMs: 10000 },
     };
 
-    function floodCheck(bucket) {
+    function floodCheck(bucket, scope = '') {
       const limit = FLOOD_LIMITS[bucket];
-      const key = `${socket.user.id}:${bucket}`;
+      const key = `${socket.user.id}:${bucket}:${scope}`;
       const now = Date.now();
       const timestamps = (userFloodBuckets.get(key) || []).filter(t => now - t < limit.windowMs);
       if (timestamps.length >= limit.max) {
@@ -1845,8 +1899,6 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const FLOOD_EXEMPT = new Set([
       'voice-offer', 'voice-answer', 'voice-ice-candidate',
-      'screen-share-started', 'screen-share-stopped',
-      'request-screen-renegotiate',
       'voice-speaking', 'webcam-started', 'webcam-stopped',
       'stream-viewer-joined', 'stream-viewer-left',
       'visibility-change'
@@ -1866,7 +1918,30 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     socket.use((packet, next) => {
       const eventName = packet[0];
+      const acknowledgeFlood = error => {
+        const callback = packet[packet.length - 1];
+        if (typeof callback === 'function') callback({ ok: false, error });
+      };
       if (PRESENCE_ACTIVE_EVENTS.has(eventName)) touchPresenceActivity(socket.user.id);
+      if (eventName === 'screen-share-stopped') return next();
+      if (eventName === 'screen-share-started') {
+        if (floodCheck('screenLifecycle')) return acknowledgeFlood('rate_limited');
+        return next();
+      }
+      if (eventName === 'request-screen-renegotiate') {
+        if (floodCheck('screenRecovery')) return;
+        return next();
+      }
+      if (NATIVE_SCREEN_SIGNAL_EVENTS.has(eventName)) {
+        if (floodCheck('nativeSignalGlobal')) return;
+        const scope = nativeScreenSignalFloodScope(eventName, packet[1], {
+          socket,
+          voiceUsers,
+          activeScreenSessions,
+        });
+        if (floodCheck('nativeSignal', scope)) return;
+        return next();
+      }
       if (FLOOD_EXEMPT.has(eventName)) return next();
       if (floodCheck('event')) {
         socket.emit('error-msg', 'Slow down — too many requests');

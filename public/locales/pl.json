@@ -636,6 +636,8 @@
     "resolution": "Rozdzielczość",
     "resolution_source": "Źródło",
     "frame_rate": "Liczba klatek",
+    "native_screen_share": "Natywne udostępnianie przez GPU",
+    "native_screen_share_hint": "Używa eksperymentalnego natywnego potoku multimediów aplikacji Desktop. Chromium pozostaje trybem domyślnym i zapasowym.",
     "camera_fallback": "Kamera {{n}}"
   },
   "status_bar": {

@@ -641,6 +641,8 @@
     "resolution": "Разрешение",
     "resolution_source": "Источник",
     "frame_rate": "Частота кадров",
+    "native_screen_share": "Нативная трансляция через GPU",
+    "native_screen_share_hint": "Использует экспериментальный нативный медиаконвейер Desktop. Chromium остается основным и резервным режимом.",
     "camera_fallback": "Камера {{n}}"
   },
   "status_bar": {

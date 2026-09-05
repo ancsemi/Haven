@@ -1197,6 +1197,8 @@
     "resolution": "Resolution",
     "resolution_source": "Source",
     "frame_rate": "Frame Rate",
+    "native_screen_share": "Native GPU sharing",
+    "native_screen_share_hint": "Use the experimental Desktop native media pipeline. Chromium remains the default and fallback.",
     "camera_fallback": "Camera {{n}}"
   },
   "notifications_runtime": {

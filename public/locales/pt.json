@@ -1195,6 +1195,8 @@
     "resolution": "Resolução",
     "resolution_source": "Fonte",
     "frame_rate": "Taxa de quadros",
+    "native_screen_share": "Compartilhamento nativo por GPU",
+    "native_screen_share_hint": "Usa o pipeline de mídia nativo experimental do Desktop. O Chromium continua sendo o padrão e a alternativa.",
     "camera_fallback": "Câmera {{n}}"
   },
   "notifications_runtime": {
