@@ -118,7 +118,7 @@ webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VA
 
 const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
-const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform } = require('./src/socketHandlers');
+const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext } = require('./src/socketHandlers');
 const { initFerry, stopFerry } = require('./src/ferry');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const {
@@ -3664,17 +3664,16 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   if (replyTo) {
     try {
       const r = db.prepare(`
-        SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username,
+        SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username, m.imported_from, m.persona_username,
                COALESCE(u.display_name, u.username) AS username
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.id = ?
       `).get(replyTo);
       if (r) {
-        replyContext = {
-          id: r.id,
+        replyContext = toReplyContext({
+          ...r,
           content: (r.content || '').slice(0, 200),
-          username: r.is_webhook ? `[BOT] ${r.webhook_username || 'Bot'}` : (r.username || 'Unknown')
-        };
+        });
       }
     } catch { /* best-effort */ }
   }

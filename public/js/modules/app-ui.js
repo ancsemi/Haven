@@ -210,6 +210,12 @@ _setupUI() {
         }
       }
     }
+
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(msgInput, e)) {
+      e.preventDefault();
+      return;
+    }
   });
 
   msgInput.addEventListener('input', () => {
@@ -239,7 +245,9 @@ _setupUI() {
 
   // insert a markdown link when a link is pasted over selected text
   msgInput.addEventListener('paste', (event) => {
-    this._handleMarkdownLinkPaste(msgInput, event);
+    if (this._handleMarkdownLinkPaste(msgInput, event)) {
+      event.preventDefault();
+    }
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
@@ -2194,6 +2202,12 @@ _setupUI() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       this._sendDMPiPMessage?.();
+      return;
+    }
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(dmPipInput, e)) {
+      e.preventDefault();
+      return;
     }
   });
   if (dmPipInput) dmPipInput.addEventListener('input', () => {
@@ -2226,7 +2240,9 @@ _setupUI() {
     }
 
     // insert a markdown link when a link is pasted over selected text
-    this._handleMarkdownLinkPaste(dmPipInput, e);
+    if (this._handleMarkdownLinkPaste(dmPipInput, e)) {
+      e.preventDefault();
+    }
   });
 
   // PiP emoji button — positions the picker above the button and targets the PiP input
@@ -2361,6 +2377,12 @@ _setupUI() {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this._sendThreadMessage();
+        return;
+      }
+      // Markdown Formatting shortcuts
+      if (this._handleMarkdownShortcuts(threadInput, e)) {
+        e.preventDefault();
+        return;
       }
     });
     threadInput.addEventListener('input', () => {
@@ -2387,7 +2409,9 @@ _setupUI() {
       }
 
       // insert a markdown link when a link is pasted over selected text
-      this._handleMarkdownLinkPaste(threadInput, e);
+      if (this._handleMarkdownLinkPaste(threadInput, e)) {
+        e.preventDefault();
+      }
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.
@@ -4550,6 +4574,7 @@ _setupUI() {
           <button class="btn-sm" data-act="toggle">${t(ic.enabled ? 'settings.admin.invite_links.disable' : 'settings.admin.invite_links.enable')}</button>
           <button class="btn-sm" data-act="edit">${t('msg_toolbar.edit')}</button>
           <button class="btn-sm" data-act="delete">${t('msg_toolbar.delete')}</button>
+          <button class="btn-sm" data-act="copy_card" title="${t('settings.admin.invite_links.copy_email_card')}" style="margin-left:auto">✉️</button>
         </div>
         <div class="invite-code-editor" style="display:none;margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
           <h6 style="margin:0 0 4px;font-size:.8rem;font-weight:600">${t('settings.admin.invite_links.channels_granted')}</h6>
@@ -4644,6 +4669,8 @@ _setupUI() {
       } else {
         fallback();
       }
+    } else if (act === 'copy_card'){
+      this._copyInviteCard(card);
     } else if (act === 'toggle') {
       this.socket.emit('update-invite-code', { id, enabled: ic ? !ic.enabled : true });
     } else if (act === 'delete') {
@@ -4754,6 +4781,129 @@ _setupUI() {
   document.getElementById('invite-links-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
+},
+
+async _copyInviteCard(card) {
+  const input = card.querySelector('[data-role="invite-link"]');
+  const inviteUrl = input?.value || '';
+  if (!inviteUrl) return;
+
+  // Find the invite code data for this card.
+  const id = parseInt(card.dataset.id, 10);
+  const invite = (this._inviteCodes || []).find(x => x.id === id);
+
+  // Server branding
+  const brandText = document.querySelector('.brand-text')?.textContent?.trim() || 'HAVEN';
+  const brandIcon = document.querySelector('.brand-icon');
+  const defaultLogo = document.querySelector('.logo-sm')?.textContent?.trim() || '⬡';
+
+  // Active theme
+  const themeElement = document.querySelector('[data-theme]') || document.documentElement;
+  const styles = getComputedStyle(themeElement);
+  const theme = name => styles.getPropertyValue(name).trim();
+
+  const bgCard = theme('--bg-card');
+  const accent = theme('--accent');
+  const accentText = theme('--accent-text') || '#fff';
+  const textPrimary = theme('--text-primary');
+  const textSecondary = theme('--text-secondary');
+  const textLink = theme('--text-link');
+  const border = theme('--border');
+  const radius = theme('--radius') || '8px';
+  const fontMain = theme('--font-main');
+
+  // Convert custom server icon to a self-contained data URL.
+  let iconSrc = '';
+
+  if (brandIcon?.src) {
+    try {
+      if (brandIcon.src.startsWith('data:')) {
+        iconSrc = brandIcon.src;
+      } else {
+        const response = await fetch(brandIcon.src);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const blob = await response.blob();
+        iconSrc = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to embed server icon:', err);
+    }
+  }
+
+  const iconHtml = iconSrc
+    ? `<img src="${iconSrc}" alt="${brandText}" style="display:block;width:96px;height:96px;margin:0 auto 16px; border-radius:${radius};object-fit:contain">`
+    : `<div style="margin:0 auto 16px;font-size:84px;line-height:96px;color:${accent}">${defaultLogo}</div>`;
+
+  // Format invite expiration.
+  let expiryText = '';
+
+  if (invite?.expires_at) {
+    const expiryDate = new Date(invite.expires_at);
+    if (!Number.isNaN(expiryDate.getTime())) expiryText = expiryDate.toLocaleString();
+  }
+
+  const invitedText = t('settings.admin.invite_links.card_invited', { server: brandText });
+  const registerText = t('settings.admin.invite_links.card_register');
+  const joinText = t('settings.admin.invite_links.card_join', { server: brandText });
+  const copyLinkText = t('settings.admin.invite_links.card_copy_link');
+
+  const expiryHtml = expiryText
+    ? `<p style="margin:24px 0 0;padding-top:16px;border-top:1px solid ${border};color:${textSecondary}; font-size:13px">${t('settings.admin.invite_links.card_expires', { date: expiryText })}</p>`
+    : '';
+
+  const html = `
+    <div style="margin:0;padding:40px 20px;font-family:${fontMain};text-align:center">
+      <div style="max-width:600px;margin:0 auto;padding:32px 24px;box-sizing:border-box;background:${bgCard};
+          border:1px solid ${border};border-radius:${radius}">
+        ${iconHtml}
+        <h2 style="margin:0 0 16px;font-family:${fontMain};font-size:24px;color:${textPrimary}">
+          ${invitedText}
+        </h2>
+        <p style="margin:0 0 24px;color:${textSecondary};font-size:16px">
+          ${registerText}
+        </p>
+        <a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:${accent};color:${accentText};
+            text-decoration:none;border-radius:${radius};font-size:16px;font-weight:bold">
+          ${joinText}
+        </a>
+        <p style="margin:24px 0 8px;color:${textSecondary};font-size:14px">${copyLinkText}</p>
+        <p style="margin:0;word-break:break-all;font-size:14px">
+          <a href="${inviteUrl}" style="color:${textLink};text-decoration:none">${inviteUrl}</a>
+        </p>
+        ${expiryHtml}
+      </div>
+    </div>`;
+
+  const text = `${invitedText}
+
+${registerText}
+
+${joinText}:
+${inviteUrl}${expiryText ? `
+
+${t('settings.admin.invite_links.card_expires', { date: expiryText })}` : ''}`;
+
+  try {
+    if (!navigator.clipboard?.write) throw new Error('HTML clipboard API unavailable');
+
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' })
+      })
+    ]);
+
+    this._showToast?.(t('settings.admin.invite_links.email_card_copied'), 'success');
+  } catch (err) {
+    console.warn('Failed to copy HTML email:', err);
+    this._showToast?.(t('settings.admin.invite_links.email_card_copy_failed'), 'info');
+  }
 },
 
 _openRenameModal() {
