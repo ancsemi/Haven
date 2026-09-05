@@ -470,6 +470,19 @@ $ui['btnNext3'].Add_Click({
     try {
         $npmOut = & npm install --no-audit --no-fund 2>&1
         if ($ui['radLT'].IsChecked) { & npm install localtunnel --save 2>&1 | Out-Null }
+        if ($ui['radCF'].IsChecked) {
+            # The Cloudflare option promised an auto-download and never did one; the server
+            # now fetches cloudflared on first use, and this pre-fetch just saves the wait.
+            try {
+                Set-Step 'step2' 'active' 'Downloading cloudflared...'
+                $binDir = Join-Path $DATA_DIR 'bin'
+                if (!(Test-Path $binDir)) { New-Item -ItemType Directory -Path $binDir -Force | Out-Null }
+                $cfArch = if ([Environment]::Is64BitOperatingSystem) { 'amd64' } else { '386' }
+                $cfUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-$cfArch.exe"
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+                (New-Object System.Net.WebClient).DownloadFile($cfUrl, (Join-Path $binDir 'cloudflared.exe'))
+            } catch { Set-Step 'step2' 'active' "cloudflared download skipped ($_); Haven will fetch it on first tunnel start" }
+        }
         Set-Step 'step2' 'done' 'Dependencies installed'
     } catch {
         Set-Step 'step2' 'error' "npm install failed: $_"

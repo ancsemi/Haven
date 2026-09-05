@@ -13,6 +13,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Fixed
+- **Cloudflare Tunnel on Windows never worked out of the box.** The installer's Cloudflare
+  option says "auto-downloads cloudflared", but nothing downloaded it and the tunnel module
+  only ever ran `cloudflared` from PATH, so a fresh install that picked Cloudflare always
+  ended in "cloudflared binary not found in PATH" (reported by a self-hoster 2026-09-05).
+  The tunnel module now looks on PATH, then in `<data dir>/bin`, and fetches the official
+  release binary into that folder on first start when neither has it (Windows and Linux;
+  macOS gets a `brew install cloudflared` hint). A failed download says exactly which file
+  to drop where. The installer pre-fetches the same file when Cloudflare is chosen.
+- **A refused port on Windows now says why.** `EACCES` on Windows is almost always a port
+  inside a Hyper-V/WSL reserved range rather than a privilege problem; the startup error
+  now points at `netsh interface ipv4 show excludedportrange protocol=tcp` and the
+  `winnat` restart instead of only mentioning ports below 1024.
+
 ### Added
 - **Native screen sharing groundwork for Haven Desktop (#5555).** The server can
   now negotiate a native, hardware-encoded screen share path with a Desktop build
