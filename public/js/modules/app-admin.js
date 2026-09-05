@@ -2443,12 +2443,16 @@ _handleMarkdownShortcuts(inputEl, event) {
   }
 
   // Italic (Ctrl/Cmd + I)
-  // Alt-Italic (Ctrl/Cmd + Shift + I)
   if (key === 'i') {
-    if (event.shiftKey){
-      return this._wrapSelectedText(input, '_', `_`, true);
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    if (start === end) return false;
+
+    const selectedText = input.value.substring(start, end);
+    if (selectedText.includes('\n')) {
+      return this._wrapSelectedText(input, '_', `_`);
     }
-    return this._wrapSelectedText(input, '*', `*`, true);
+    return this._wrapSelectedText(input, '*', `*`);
   }
 
   // Bold (Ctrl/Cmd + B)
