@@ -13,7 +13,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [Unreleased]
 
+### Added
+- **Copy an invite as an email card (#5559).** Each invite link has an envelope
+  button that copies a formatted invitation, in your theme and language and with
+  the server's branding, ready to paste into an email. Thanks to @birdcrazy.
+- **Markdown keyboard shortcuts (#5571).** With text selected, Ctrl/Cmd+I, Ctrl/Cmd+B,
+  Ctrl/Cmd+Shift+C, Ctrl/Cmd+Shift+X and Ctrl/Cmd+Shift+P wrap it in italic, bold,
+  code, strikethrough and spoiler markers. Works in the message box, threads, PiP
+  DMs and the message editor, which also gets the paste-a-link-over-text shortcut.
+  Thanks to @birdcrazy.
+
 ### Fixed
+- **Replying to a bot showed [Deleted User] as the author (#5564, #5566).** Reply
+  banners now name webhook bots, imported messages and personas the same way the
+  message itself does. Thanks to @delenda-delenda.
+- **Emoji in soundboard names vanished after saving (#5565, #5567).** Upload and
+  rename stripped everything outside ASCII. Names now keep letters in any script,
+  emoji, flags and keycaps. Thanks to @delenda-delenda.
+- **Picking a Messages sound previewed nothing while the Notifications toggle was
+  off,** which is the default, so a new account could not try the sounds out. The
+  settings preview plays regardless of the toggle; the toggle still decides what
+  plays for real messages.
 - **Stream and video announcement bots bridged through Ferry lost their link and
   thumbnail.** CouchBot-style promotion bots type the ping line ("X is now live")
   and put the stream link, title, and thumbnail in a rich embed. Ferry only read
