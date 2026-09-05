@@ -14,6 +14,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Native screen sharing groundwork for Haven Desktop (#5555).** The server can
+  now negotiate a native, hardware-encoded screen share path with a Desktop build
+  that carries the helper. Off by default, opt-in from Settings, and the switch
+  only appears inside such a build. Browser sharing and per-app audio are
+  untouched. Thanks to @bernardokcosta.
 - **Copy an invite as an email card (#5559).** Each invite link has an envelope
   button that copies a formatted invitation, in your theme and language and with
   the server's branding, ready to paste into an email. Thanks to @birdcrazy.
@@ -46,6 +51,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   own unfurl of a typed link is still ignored so Haven does not preview it twice.
 
 ### Changed
+- **Promo popups and the recovery-codes notice remember Don't show again on your
+  account (#5570),** not in the browser, so privacy-hardened browsers that wipe
+  storage stop re-showing them. Closing a popup without ticking the box brings it
+  back next login. Dismissals recorded by older builds are carried over once, so
+  nobody sees a popup they already closed. Thanks to @Bo0sted.
+- **Login no longer re-asks for the 18+ and Terms checkboxes (#5570).** They are
+  captured when an account is created, which the server already records. The
+  login form carries a note that signing in accepts the current Terms, with a
+  link to read them. Thanks to @Bo0sted.
 - **Admin settings visibility comes from one access table (#5558).** Which
   sections a moderator sees is now decided in one place instead of a dozen
   special cases, and Auto-Mod, Guest Access and Stickers have their own entries
