@@ -11,7 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.4.0] - 2026-09-05
+
+A contributor-heavy release. The server side of native screen sharing for Haven
+Desktop lands off by default, invites can be copied as a ready-to-send email card,
+markdown formatting has keyboard shortcuts, and the Cloudflare tunnel finally works
+on a fresh Windows install. Promo popups now remember their dismissal on the account
+rather than in the browser. No migration steps.
 
 ### Added
 - **Native screen sharing groundwork for Haven Desktop (#5555).** The server can
@@ -52,7 +58,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   settings preview plays regardless of the toggle; the toggle still decides what
   plays for real messages.
 - **Stream and video announcement bots bridged through Ferry lost their link and
-  thumbnail.** CouchBot-style promotion bots type the ping line ("X is now live")
+  thumbnail (#5557).** CouchBot-style promotion bots type the ping line ("X is now live")
   and put the stream link, title, and thumbnail in a rich embed. Ferry only read
   the embed when the Discord message had no text, so Haven got the ping line and
   nothing to click or look at. Rich (bot-composed) embeds are now read alongside
@@ -61,6 +67,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   allowlist server that has not added a host (kick.com is not in the starter list)
   drops just that link and still relays the announcement and its picture. Discord's
   own unfurl of a typed link is still ignored so Haven does not preview it twice.
+  Thanks to @Amnibro.
 
 ### Changed
 - **Promo popups and the recovery-codes notice remember Don't show again on your
@@ -76,6 +83,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   sections a moderator sees is now decided in one place instead of a dozen
   special cases, and Auto-Mod, Guest Access and Stickers have their own entries
   in the admin navigation. Thanks to @birdcrazy.
+- **Website:** desktop download links point at Desktop 1.4.30.
 
 ---
 
