@@ -262,6 +262,31 @@ _initWelcomePopups() {
   }
   this._welcomePopupsStarted = true;
 
+  // One-time carry-over from the localStorage flags older builds used, so an
+  // account that already closed a promo or the recovery notice is not shown
+  // it again after upgrading. Runs once per browser; the account pref is the
+  // record from then on.
+  try {
+    if (!localStorage.getItem('haven_promo_prefs_migrated')) {
+      let seen = {};
+      try { seen = JSON.parse(localStorage.getItem('haven_welcome_seen_v1') || '{}') || {}; } catch { seen = {}; }
+      const legacy = {
+        promo_seen_desktop: seen.desktop_app_promo || localStorage.getItem('haven_desktop_promo_dismissed'),
+        promo_seen_android: seen.android_app_promo || localStorage.getItem('haven_ab_promo_nodisplay'),
+        recovery_notice_seen: localStorage.getItem('haven_recovery_notice_v1'),
+      };
+      for (const [prefKey, wasDismissed] of Object.entries(legacy)) {
+        if (!wasDismissed || this._userPrefs[prefKey] === 'true') continue;
+        this._userPrefs[prefKey] = 'true';
+        this.socket.emit('set-preference', { key: prefKey, value: 'true' });
+      }
+      // The server already answered get-recovery-notice-state for this
+      // connection before the pref landed, so cover this session by hand.
+      if (legacy.recovery_notice_seen) this._recoveryNoticeShown = true;
+      localStorage.setItem('haven_promo_prefs_migrated', '1');
+    }
+  } catch { /* storage unavailable: nothing to carry over */ }
+
   // ── Build the queue ──
   // Each entry: { id, modalId, prefKey, checkboxId, shouldShow }. A popup is
   // filtered out only if its persisted "Don't show again" pref is set.
