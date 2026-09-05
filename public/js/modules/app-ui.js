@@ -210,6 +210,12 @@ _setupUI() {
         }
       }
     }
+
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(msgInput, e)) {
+      e.preventDefault();
+      return;
+    }
   });
 
   msgInput.addEventListener('input', () => {
@@ -239,7 +245,9 @@ _setupUI() {
 
   // insert a markdown link when a link is pasted over selected text
   msgInput.addEventListener('paste', (event) => {
-    this._handleMarkdownLinkPaste(msgInput, event);
+    if (this._handleMarkdownLinkPaste(msgInput, event)) {
+      event.preventDefault();
+    }
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
@@ -2194,6 +2202,12 @@ _setupUI() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       this._sendDMPiPMessage?.();
+      return;
+    }
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(dmPipInput, e)) {
+      e.preventDefault();
+      return;
     }
   });
   if (dmPipInput) dmPipInput.addEventListener('input', () => {
@@ -2226,7 +2240,9 @@ _setupUI() {
     }
 
     // insert a markdown link when a link is pasted over selected text
-    this._handleMarkdownLinkPaste(dmPipInput, e);
+    if (this._handleMarkdownLinkPaste(dmPipInput, e)) {
+      e.preventDefault();
+    }
   });
 
   // PiP emoji button — positions the picker above the button and targets the PiP input
@@ -2361,6 +2377,12 @@ _setupUI() {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this._sendThreadMessage();
+        return;
+      }
+      // Markdown Formatting shortcuts
+      if (this._handleMarkdownShortcuts(threadInput, e)) {
+        e.preventDefault();
+        return;
       }
     });
     threadInput.addEventListener('input', () => {
@@ -2387,7 +2409,9 @@ _setupUI() {
       }
 
       // insert a markdown link when a link is pasted over selected text
-      this._handleMarkdownLinkPaste(threadInput, e);
+      if (this._handleMarkdownLinkPaste(threadInput, e)) {
+        e.preventDefault();
+      }
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.
