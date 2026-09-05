@@ -986,6 +986,16 @@
       "import_skipped": "Pominięto {{count}} duplikat(ów).",
       "import_reused": "Zaktualizowano {{count}} istniejący(-ch) kanał(ów).",
       "import_failed_alert": "Import nie powiódł się: {{error}}",
+      "invite_links": {
+        "copy_email_card": "Kopiuj kartę zaproszenia do e-maila",
+        "email_card_copied": "Karta e-mail skopiowana!",
+        "email_card_copy_failed": "Kopiowanie karty nie powiodło się!",
+        "card_invited": "Zaproszono Cię do dołączenia do {{server}}!",
+        "card_register": "Kliknij przycisk poniżej, aby się zarejestrować!",
+        "card_join": "Dołącz do {{server}}",
+        "card_copy_link": "Lub skopiuj ten link:",
+        "card_expires": "To zaproszenie jest ważne do {{date}}."
+      },
       "roles_no_custom": "Brak niestandardowych ról",
       "roles_level_invalid": "Poziom musi wynosić 0–99",
       "roles_create_title": "Utwórz rolę",

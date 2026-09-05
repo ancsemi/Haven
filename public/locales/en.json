@@ -2056,7 +2056,15 @@
         "save_changes": "Save changes",
         "copied": "Invite link copied",
         "copy_manually": "Press Ctrl+C to copy the selected link",
-        "delete_confirm": "Delete invite link \"{{code}}\"? Anyone holding the old link won't be able to use it."
+        "delete_confirm": "Delete invite link \"{{code}}\"? Anyone holding the old link won't be able to use it.",
+        "copy_email_card": "Copy invite email card",
+        "email_card_copied": "Email Card Copied!",
+        "email_card_copy_failed": "Card Copy Failed!",
+        "card_invited": "You're invited to join {{server}}!",
+        "card_register": "Click the button below to register!",
+        "card_join": "Join {{server}}",
+        "card_copy_link": "Or copy this link:",
+        "card_expires": "This invite is valid until {{date}}."
       },
       "upload_failed": "Upload failed",
       "no_whitelisted_users": "No whitelisted users",
