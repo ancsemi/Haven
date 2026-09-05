@@ -2430,18 +2430,6 @@ _handleMarkdownShortcuts(inputEl, event) {
   if (!modifier) return false;
   const key = event.key.toLowerCase();
 
-  // Link (Ctrl/Cmd + K)
-  if (key === 'k') {
-
-    if (this._wrapSelectedText(input, '[', ']()')) {
-      const end = input.selectionEnd;
-      // Place cursor inside the URL parentheses.
-      input.setSelectionRange(end + 2, end + 2);
-      return true;
-    }
-    return false;
-  }
-
   // Italic (Ctrl/Cmd + I)
   if (key === 'i') {
     return this._wrapSelectedText(input, '*', `*`, true);
