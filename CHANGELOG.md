@@ -11,7 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.4.1] - 2026-09-05
+
+One fix, for anyone hosting Haven without a certificate. Update if your friends
+see a plain white page with buttons that do nothing.
 
 ### Fixed
 - **A Haven running without a certificate served a broken page to everyone but the
