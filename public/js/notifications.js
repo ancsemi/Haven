@@ -152,8 +152,9 @@ class NotificationManager {
     else if (opts && opts.isReply && this.repliesEnabled) { /* allowed */ }
     else if (opts && opts.isDm && this.dmEnabled) { /* allowed */ }
     // Regular message & announcement sounds are gated by the master toggle;
-    // everything else (sent, join, leave) always plays
-    else if ((event === 'message' || event === 'announcement') && !this.enabled) return;
+    // everything else (sent, join, leave) always plays. A settings preview
+    // skips the gate: picking a sound should let you hear it either way.
+    else if ((event === 'message' || event === 'announcement') && !this.enabled && !(opts && opts.preview)) return;
 
     const sound = this.sounds[event];
     if (!sound || sound === 'none') return;
