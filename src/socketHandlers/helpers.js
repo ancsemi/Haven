@@ -39,6 +39,21 @@ function sanitizeText(str) {
     .replace(/javascript\s*:/gi, '');
 }
 
+// Soundboard display names: letters/numbers (any script), spaces, _/-, and emoji
+// (incl. ZWJ sequences / VS16, flags, and the # and * keycaps). An ASCII-only
+// strip used to drop emoji before they reached the DB, while the client toast
+// still showed the typed name.
+function sanitizeSoundName(raw) {
+  if (typeof raw !== 'string') return '';
+  let name = raw.normalize('NFC').trim()
+    .replace(/[^\p{L}\p{N}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u200D\uFE0F#* _-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const chars = [...name];
+  if (chars.length > 30) name = chars.slice(0, 30).join('');
+  return name;
+}
+
 // ── Validate /uploads/ path (prevent path traversal) ──
 function isValidUploadPath(value) {
   if (!value || typeof value !== 'string') return false;
@@ -200,4 +215,31 @@ function filterIdleOnline(entries, thresholdMs, nowMs) {
   return out;
 }
 
-module.exports = { utcStamp, isString, isInt, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline };
+// ── Reply banner author (#5564) ─────────────────────────
+// Bot/webhook messages store user_id NULL and the display name on
+// webhook_username. A users-table COALESCE alone becomes "[Deleted User]".
+// Keep this in sync with how message history formats is_webhook / persona /
+// imported_from authors.
+function replyAuthorUsername(row) {
+  if (!row) return '[Deleted User]';
+  if (row.is_webhook) return `[BOT] ${row.webhook_username || 'Bot'}`;
+  if (row.imported_from) return row.webhook_username || 'Unknown';
+  if (row.persona_username) return row.persona_username;
+  return row.username || '[Deleted User]';
+}
+
+function toReplyContext(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    content: row.content,
+    user_id: row.user_id,
+    username: replyAuthorUsername(row),
+  };
+}
+
+module.exports = {
+  utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
+  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline,
+  replyAuthorUsername, toReplyContext,
+};

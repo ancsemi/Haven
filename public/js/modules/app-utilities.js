@@ -3829,6 +3829,12 @@ _startEditMessage(msgEl, msgId) {
       if (e.key === 'Escape') { this._hideEmojiDropdown(); return; }
     }
 
+    // Markdown formatting shortcuts
+    if (this._handleMarkdownShortcuts(textarea, e)) {
+      e.preventDefault();
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       btnRow.querySelector('.edit-save-btn').click();
@@ -3836,6 +3842,13 @@ _startEditMessage(msgEl, msgId) {
     if (e.key === 'Escape') {
       e.preventDefault();
       cancel();
+    }
+  });
+
+  textarea.addEventListener('paste', (e) => {
+    if (this._handleMarkdownLinkPaste(textarea, e)) {
+      e.preventDefault();
+      return;
     }
   });
 

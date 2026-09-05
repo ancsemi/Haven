@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform } = require('./helpers');
+const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 
 module.exports = function register(socket, ctx) {
@@ -40,6 +40,13 @@ module.exports = function register(socket, ctx) {
       fs.renameSync(src, dst);
     } catch { /* file locked or already moved */ }
   }
+
+  // Reply banners must match message rendering: bots live in webhook_* with
+  // user_id NULL, so a users-table COALESCE alone becomes "[Deleted User]".
+  const REPLY_CONTEXT_SELECT = `
+    SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username, m.imported_from, m.persona_username,
+           COALESCE(u.display_name, u.username, '[Deleted User]') as username
+    FROM messages m LEFT JOIN users u ON m.user_id = u.id`;
 
   // ── Get message history ─────────────────────────────────
   // ── Forum channels (#144) ──────────────────────────────
@@ -179,11 +186,9 @@ module.exports = function register(socket, ctx) {
     const replyMap = new Map();
     if (replyIds.length > 0) {
       const ph = replyIds.map(() => '?').join(',');
-      db.prepare(`
-        SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username
-        FROM messages m LEFT JOIN users u ON m.user_id = u.id
+      db.prepare(`${REPLY_CONTEXT_SELECT}
         WHERE m.id IN (${ph}) AND m.channel_id = ?
-      `).all(...replyIds, channel.id).forEach(r => replyMap.set(r.id, r));
+      `).all(...replyIds, channel.id).forEach(r => replyMap.set(r.id, toReplyContext(r)));
     }
 
     const reactionMap = new Map();
@@ -1113,10 +1118,9 @@ module.exports = function register(socket, ctx) {
       };
 
       if (replyTo) {
-        message.replyContext = db.prepare(`
-          SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username FROM messages m
-          LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ? AND m.channel_id = ?
-        `).get(replyTo, channel.id) || null;
+        message.replyContext = toReplyContext(db.prepare(`${REPLY_CONTEXT_SELECT}
+          WHERE m.id = ? AND m.channel_id = ?
+        `).get(replyTo, channel.id));
       }
 
       io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
@@ -1984,10 +1988,9 @@ module.exports = function register(socket, ctx) {
     const replyMap = new Map();
     if (replyIds.length > 0) {
       const ph = replyIds.map(() => '?').join(',');
-      db.prepare(`
-        SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username
-        FROM messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.id IN (${ph})
-      `).all(...replyIds).forEach(r => replyMap.set(r.id, r));
+      db.prepare(`${REPLY_CONTEXT_SELECT}
+        WHERE m.id IN (${ph})
+      `).all(...replyIds).forEach(r => replyMap.set(r.id, toReplyContext(r)));
     }
 
     const reactionMap = new Map();
@@ -2116,10 +2119,9 @@ module.exports = function register(socket, ctx) {
       };
 
       if (replyTo) {
-        message.replyContext = db.prepare(`
-          SELECT m.id, m.content, m.user_id, COALESCE(u.display_name, u.username, '[Deleted User]') as username
-          FROM messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?
-        `).get(replyTo) || null;
+        message.replyContext = toReplyContext(db.prepare(`${REPLY_CONTEXT_SELECT}
+          WHERE m.id = ?
+        `).get(replyTo));
       }
 
       // Emit to everyone in the channel who has the thread open

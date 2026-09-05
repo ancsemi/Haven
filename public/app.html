@@ -1360,11 +1360,14 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-roles" style="display:none">👑 <span data-i18n="settings.nav.roles">Roles</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-moderation" style="display:none">🛡️ <span data-i18n="settings.nav.moderation">Moderation</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-security" style="display:none">🔒 <span data-i18n="settings.nav.security">Security</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-automod" style="display:none">🛡️ <span data-i18n="settings.nav.automod">Moderation</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🛡️ <span data-i18n="settings.nav.whitelist">Whitelist</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-invite" style="display:none">🌐 <span data-i18n="settings.nav.invite">Invite Code</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-guests" style="display:none">👤 <span data-i18n="settings.nav.guests">Guest Access</span></div>
 
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_content">Content</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-emojis" style="display:none">😎 <span data-i18n="settings.nav.emojis">Emojis</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-stickers" style="display:none">🖼️ <span data-i18n="settings.nav.stickers">Stickers</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-sounds-admin" style="display:none">🔊 <span data-i18n="settings.nav.admin_sounds">Sounds</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-uploads" style="display:none">📁 <span data-i18n="settings.nav.limits">Limits</span></div>
 
@@ -2654,7 +2657,7 @@
             <small class="settings-hint" data-i18n="settings.admin.invite_links_hint">Shareable links that drop people straight into the channels you pick — no code to type. Each link can be turned off, limited to a number of people, or set to expire.</small>
             <button class="btn-sm btn-accent" id="open-invite-links-btn" type="button" style="margin-top:8px">🔗 <span data-i18n="settings.admin.invite_links_manage">Manage Invite Links</span> <span id="invite-links-count" class="muted-text" style="font-weight:normal"></span></button>
           </div>
-          <div id="invite-links-settings-block">
+          <div id="invite-links-settings-block" class="invite-server-config">
             <label class="select-row" style="margin-top:8px">
               <span data-i18n="settings.admin.max_invite_uses">Max invite link uses</span>
               <input type="number" id="max-invite-uses" min="0" max="100000" step="1" style="max-width:90px">
@@ -4206,7 +4209,7 @@
     </div>
   </div>
   <script src="/js/theme.js?v=4.1.1"></script>
-  <script src="/js/notifications.js?v=3.16.15"></script>
+  <script src="/js/notifications.js?v=3.16.16"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
   <script src="/js/voice.js?v=3.34.7"></script>
   <script src="/js/modmode.js?v=3.16.16"></script>

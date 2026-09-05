@@ -14,29 +14,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
-- **Three Braid spacing levels, either side of the shipped one.** Settings → Braid spacing (and Menu → Braid spacing, which cycles) offers Compact, Cozy, and Spacious. Cozy is exactly what shipped; the other two take roughly a fifth off or add a fifth on. Message runs and channel rows move together, and the rounded card shapes are identical at all three levels — only padding, gutters, avatar size, and sidebar width change. The continuation gutter is derived from inset + avatar + row gap, so a smaller avatar can't drift a run out of alignment with its own leader.
+- **Copy an invite as an email card (#5559).** Each invite link has an envelope
+  button that copies a formatted invitation, in your theme and language and with
+  the server's branding, ready to paste into an email. Thanks to @birdcrazy.
+- **Markdown keyboard shortcuts (#5571).** With text selected, Ctrl/Cmd+I, Ctrl/Cmd+B,
+  Ctrl/Cmd+Shift+C, Ctrl/Cmd+Shift+X and Ctrl/Cmd+Shift+P wrap it in italic, bold,
+  code, strikethrough and spoiler markers. Works in the message box, threads, PiP
+  DMs and the message editor, which also gets the paste-a-link-over-text shortcut.
+  Thanks to @birdcrazy.
 
 ### Fixed
-- **GIF search setup points at GIPHY again, not Tenor.** #5472 made Tenor the
-  preferred provider on the belief that GIPHY had stopped issuing keys. That was
-  backwards: **GIPHY still works**, and Tenor is no longer supported for new setup.
-  The picker guide and `GIPHY_API_KEY` are the path again. An existing
-  `tenor_api_key` is still used if no GIPHY key is set, so servers that already
-  configured Tenor do not go dark overnight. GIFs already posted from Tenor URLs
-  still render.
-- **Images visible on Haven Mobile were missing on desktop/web.** Two things stacked.
-  Ferry (and any bot) posts Discord CDN photos as a URL with a signed query string
-  (`?ex=…&is=…&hm=…`). The desktop client HTML-escaped the message *before* turning
-  that URL into an `<img>`, so `&` became `&amp;` and the media proxy requested a
-  URL Discord has never heard of — blank bubble, no broken-image icon. Mobile never
-  escapes the URL, which is why the same photo rendered there. Remote image-only
-  messages now use the raw URL, and auto-linked / markdown images decode entities
-  first. Separately, `_formatContent` required a stricter `/uploads/` filename than
-  `_isImageUrl`, so a classified-as-image message with a dot in the basename (or an
-  extra path segment) emitted no `<img>` at all. The two regexes now match. The
-  media proxy also speaks a browser User-Agent (Discord 403'd `HavenBot`) and
-  accepts `application/octet-stream` when the bytes are actually JPEG/PNG/GIF/WebP.
-- **The Android App badge was white on light green.** Accent-filled controls now read `--accent-text`, but this badge paints itself with a fixed Android-green gradient in every theme, so it kept its hardcoded white label at 1.78:1. It and its dismiss button now use a dark ink that measures 9.65:1 at the light end of the gradient and 6.46:1 at the dark end.
+- **Replying to a bot showed [Deleted User] as the author (#5564, #5566).** Reply
+  banners now name webhook bots, imported messages and personas the same way the
+  message itself does. Thanks to @delenda-delenda.
+- **Emoji in soundboard names vanished after saving (#5565, #5567).** Upload and
+  rename stripped everything outside ASCII. Names now keep letters in any script,
+  emoji, flags and keycaps. Thanks to @delenda-delenda.
+- **Picking a Messages sound previewed nothing while the Notifications toggle was
+  off,** which is the default, so a new account could not try the sounds out. The
+  settings preview plays regardless of the toggle; the toggle still decides what
+  plays for real messages.
+- **Stream and video announcement bots bridged through Ferry lost their link and
+  thumbnail.** CouchBot-style promotion bots type the ping line ("X is now live")
+  and put the stream link, title, and thumbnail in a rich embed. Ferry only read
+  the embed when the Discord message had no text, so Haven got the ping line and
+  nothing to click or look at. Rich (bot-composed) embeds are now read alongside
+  the typed text: the Twitch / YouTube / Kick link and the thumbnail come through
+  with it. The promoted link is checked against the link policy on its own, so an
+  allowlist server that has not added a host (kick.com is not in the starter list)
+  drops just that link and still relays the announcement and its picture. Discord's
+  own unfurl of a typed link is still ignored so Haven does not preview it twice.
+
+### Changed
+- **Admin settings visibility comes from one access table (#5558).** Which
+  sections a moderator sees is now decided in one place instead of a dozen
+  special cases, and Auto-Mod, Guest Access and Stickers have their own entries
+  in the admin navigation. Thanks to @birdcrazy.
 
 ---
 

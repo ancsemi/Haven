@@ -5,15 +5,15 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=3.51.2';
-import UIBindMethods   from './modules/app-ui.js?v=3.51.2';
+import UIBindMethods   from './modules/app-ui.js?v=3.51.3';
 import MediaMethods    from './modules/app-media.js?v=3.51.1';
-import ContextMethods  from './modules/app-context.js?v=3.44.4';
+import ContextMethods  from './modules/app-context.js?v=3.44.5';
 import ChannelMethods  from './modules/app-channels.js?v=3.44.4';
 import MessageMethods  from './modules/app-messages.js?v=3.51.1';
 import UserMethods     from './modules/app-users.js?v=3.25.4';
 import VoiceMethods    from './modules/app-voice.js?v=3.34.2';
-import UtilityMethods  from './modules/app-utilities.js?v=4.2.1';
-import AdminMethods    from './modules/app-admin.js?v=4.1.1';
+import UtilityMethods  from './modules/app-utilities.js?v=4.2.2';
+import AdminMethods    from './modules/app-admin.js?v=4.1.2';
 import PlatformMethods from './modules/app-platform.js?v=3.16.12';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
@@ -146,9 +146,12 @@ class HavenApp {
     // permission added in one place cannot be missed in the others. (#5470:
     // invite_users was in the nav but not in the tab gate, so holders saw an
     // Admin tab that did nothing when clicked.)
+    // Mirrors the access table in _syncSettingsNav (app-admin.js): anyone who
+    // can see at least one admin section must also be allowed onto the tab.
     this._hasAnyAdminSettingsAccess = () => this.user.isAdmin || [
       'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_roles',
-      'manage_server', 'manage_webhooks', 'view_audit_log', 'invite_users'
+      'manage_server', 'manage_webhooks', 'view_audit_log', 'invite_users',
+      'ban_user', 'kick_user', 'view_all_members'
     ].some(p => this._hasPerm(p));
     // Global-only variant: excludes permissions granted via a channel-scoped
     // role assignment, for gating UI that always performs a server-wide

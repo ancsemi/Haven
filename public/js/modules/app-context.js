@@ -353,7 +353,8 @@ _setupNotifications() {
 
   msgSound.addEventListener('change', () => {
     this.notifications.setSound('message', msgSound.value);
-    this.notifications.play('message'); // Preview the selected sound
+    // Preview even while the Notifications toggle is off, which is the default.
+    this.notifications.play('message', { preview: true });
   });
 
   if (sentSound) {
