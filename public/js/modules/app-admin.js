@@ -2407,7 +2407,7 @@ _wrapSelectedText(inputEl, before, after, forEachLine = false) {
   if (start === end) return false;
 
   const selectedText = input.value.substring(start, end);
-  const replacement = forEachLine  ? selectedText .split('\n') .map(line => `${before}${line}${after}`) .join('\n') : `${before}${selectedText}${after}`;
+  const replacement = forEachLine ? selectedText.split('\n').map(line => line ? `${before}${line}${after}` : line).join('\n') : `${before}${selectedText}${after}`;
 
   input.setRangeText(replacement, start, end);
   input.setSelectionRange(start, start + replacement.length);
