@@ -4640,7 +4640,7 @@ _setupUI() {
     const total = cbs.length;
     const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
     // All checked → [] = "grant all public" (future-proof as new channels appear).
-    const channels = (total > 0 && picked.length === total) ? [] : picked;
+    const channels = picked;
 
     const maxUsesValue = document.getElementById('invite-new-maxuses')?.value;
     const maxUses = maxUsesValue === '' ? 1 : parseInt(maxUsesValue);
@@ -4712,7 +4712,7 @@ _setupUI() {
       const cbs = Array.from(card.querySelectorAll('.invite-edit-channel-cb'));
       const total = cbs.length;
       const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
-      const channels = (total > 0 && picked.length === total) ? [] : picked;
+      const channels = picked;
       const maxUses = parseInt(card.querySelector('[data-role="edit-maxuses"]')?.value) || 0;
       const payload = { id, channels, maxUses };
       const exp = parseInt(card.querySelector('[data-role="edit-expiry"]')?.value);

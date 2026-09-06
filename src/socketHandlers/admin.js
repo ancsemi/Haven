@@ -544,11 +544,11 @@ module.exports = function register(socket, ctx) {
   // Normalise an admin-supplied channel list into a JSON string of positive
   // ints (capped). Returns '' for "all public", or null if the input is invalid.
   const _normaliseInviteChannels = (channels) => {
-    if (channels == null) return '';
+    if (channels == null) return '[]';
     if (!Array.isArray(channels)) return null;
     const ids = [...new Set(channels.map(n => parseInt(n)).filter(n => Number.isInteger(n) && n > 0))];
     if (ids.length > 500) return null;
-    return ids.length ? JSON.stringify(ids) : '';
+    return JSON.stringify(ids);
   };
 
   // hours <= 0 / falsy → never expires (null). Stored as a UTC string that
