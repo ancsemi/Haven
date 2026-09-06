@@ -145,6 +145,10 @@ async switchChannel(code) {
   if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
   if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
   if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
+  const _timeBtn = document.getElementById('time-btn');
+  const _timeDivider = document.getElementById('time-divider');
+  if (_timeBtn) _timeBtn.style.display = _textOff ? 'none' : '';
+  if (_timeDivider) _timeDivider.style.display = _textOff ? 'none' : '';
   // Upload button tied to media toggle
   const _uploadBtn = document.getElementById('upload-btn');
   if (_uploadBtn) _uploadBtn.style.display = _mediaOff ? 'none' : '';

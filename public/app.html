@@ -554,6 +554,14 @@
                   <line x1="2"  y1="20" x2="22" y2="20"/>
                 </svg>
               </button>
+              <span class="input-actions-divider" id="time-divider"></span>
+              <button id="time-btn" class="btn-poll btn-time" data-i18n-title="app.input_bar.time_btn" title="Insert timestamp">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"/>
+                  <line x1="12" y1="12" x2="12" y2="7"/>
+                  <line x1="12" y1="12" x2="15.5" y2="13.5"/>
+                </svg>
+              </button>
               <span class="input-actions-divider" id="burn-divider" style="display:none"></span>
               <button id="burn-btn" class="btn-burn" data-i18n-title="app.input_bar.burn_btn" title="Burn after read (DM only)" style="display:none">🔥</button>
             </div>
@@ -3859,6 +3867,65 @@
         <button class="btn-sm" id="poll-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent" id="poll-create-btn" data-i18n="modals.poll.create_btn">Create Poll</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Timestamp Modal (/time with no args) -->
+  <div class="modal-overlay" id="time-modal" style="display:none">
+    <div class="modal tsm-modal" style="width:400px">
+      <div class="tsm-header">
+        <div class="tsm-clock" aria-hidden="true">🕐</div>
+        <p class="modal-desc tsm-subtitle" data-i18n="commands.description.time">Insert a time everyone sees in their own timezone</p>
+        <p class="tsm-syntax" data-i18n="commands.time_usage">Usage: /time 8pm</p>
+      </div>
+
+      <!-- Date row -->
+      <div class="tsm-row" role="group" data-i18n-aria-label="modals.time.date_label" aria-label="Date">
+        <div class="tsm-field">
+          <label for="tsm-year" data-i18n="modals.time.year">Year</label>
+          <input type="number" id="tsm-year" class="tsm-input" min="1970" max="9999" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-month" data-i18n="modals.time.month">Month</label>
+          <input type="number" id="tsm-month" class="tsm-input" min="1" max="12" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-day" data-i18n="modals.time.day">Day</label>
+          <input type="number" id="tsm-day" class="tsm-input" min="1" max="31" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field tsm-cal-field">
+          <label aria-hidden="true">&nbsp;</label>
+          <button type="button" id="tsm-cal-btn" class="tsm-cal-btn" data-i18n-title="modals.time.calendar" title="Open calendar">📅</button>
+          <input type="date" id="tsm-cal-input" class="tsm-cal-native" tabindex="-1" aria-hidden="true">
+        </div>
+      </div>
+
+      <!-- Time row -->
+      <div class="tsm-row" role="group" data-i18n-aria-label="modals.time.time_label" aria-label="Time">
+        <div class="tsm-field">
+          <label for="tsm-hour" data-i18n="modals.time.hour">Hour</label>
+          <input type="number" id="tsm-hour" class="tsm-input" min="0" max="23" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-minute" data-i18n="modals.time.minute">Minute</label>
+          <input type="number" id="tsm-minute" class="tsm-input" min="0" max="59" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-second" data-i18n="modals.time.second">Second</label>
+          <input type="number" id="tsm-second" class="tsm-input" min="0" max="59" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field tsm-meridiem-field">
+          <label aria-hidden="true">&nbsp;</label>
+          <div class="tsm-meridiem" role="group" data-i18n-aria-label="modals.time.clock_mode" aria-label="Clock mode">
+            <button type="button" class="tsm-mer-btn" data-mer="24" data-i18n="modals.time.hour_24">24HR</button>
+            <button type="button" class="tsm-mer-btn" data-mer="AM" data-i18n="modals.time.am">AM</button>
+            <button type="button" class="tsm-mer-btn" data-mer="PM" data-i18n="modals.time.pm">PM</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Styles: every format previewed, each with its own insert -->
+      <div class="tsm-styles" id="tsm-styles"></div>
     </div>
   </div>
 

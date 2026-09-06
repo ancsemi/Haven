@@ -294,6 +294,7 @@
       "gif_btn": "Search GIFs",
       "gif_label": "GIF",
       "poll_btn": "Create Poll",
+      "time_btn": "Insert timestamp",
       "burn_btn": "Burn after read (DM only)",
       "burn_btn_armed": "Burn after read armed — next message self-destructs 30s after viewing"
     },
@@ -2686,6 +2687,22 @@
       "option_placeholder": "Option {{number}}",
       "option_1": "Option 1",
       "option_2": "Option 2"
+    },
+    "time": {
+      "date_label": "Date",
+      "time_label": "Time",
+      "year": "Year",
+      "month": "Month",
+      "day": "Day",
+      "hour": "Hour",
+      "minute": "Minute",
+      "second": "Second",
+      "calendar": "Open calendar",
+      "clock_mode": "Clock mode",
+      "hour_24": "24HR",
+      "am": "AM",
+      "pm": "PM",
+      "insert_btn": "Insert"
     },
     "sub_panel": {
       "title": "Sub-channel Subscriptions",

@@ -9202,6 +9202,141 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   cursor: help;
 }
 
+/* ── /time timestamp modal ─────────────────────────────── */
+.tsm-header { margin-bottom: 1rem; }
+.tsm-clock {
+  font-size: 2.25rem;
+  line-height: 1;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+.tsm-subtitle {
+  text-align: center;
+  margin-bottom: 0.375rem;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+.tsm-syntax {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.tsm-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+.tsm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+.tsm-field > label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.tsm-input {
+  width: 100%;
+  padding: 0.5rem 0.5rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  text-align: center;
+  transition: border-color var(--transition);
+}
+.tsm-input:focus { border-color: var(--accent); outline: none; }
+
+/* Calendar button reuses the native date input from search: the <input
+   type="date"> stays visually hidden and its picker is opened on demand. */
+.tsm-cal-field { flex: 0 0 auto; position: relative; }
+.tsm-cal-btn {
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.tsm-cal-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+.tsm-cal-native {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+}
+
+.tsm-meridiem-field { flex: 0 0 auto; }
+.tsm-meridiem { display: flex; }
+.tsm-mer-btn {
+  padding: 0.5rem 0.5rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-left-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.tsm-mer-btn:first-child {
+  border-left-width: 1px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.tsm-mer-btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.tsm-mer-btn:hover { color: var(--text-primary); }
+.tsm-mer-btn.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* Every style previewed on its own row with a dedicated insert button. */
+.tsm-styles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.875rem;
+}
+.tsm-style-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tsm-style-preview {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+/* Let a long "Full Date/Time" wrap in the row instead of overflowing. */
+.tsm-style-preview .chat-timestamp { white-space: normal; }
+.tsm-style-insert { flex: 0 0 auto; }
+.tsm-style-preview:empty::after { content: "—"; color: var(--text-muted); }
+.tsm-style-preview.tsm-invalid { color: var(--text-muted); }
+
 .mention {
   background: rgba(124, 92, 252, 0.15);
   color: var(--accent);

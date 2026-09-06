@@ -100,6 +100,16 @@ async _sendMessage() {
         return;
       }
       if (cmd === 'time') {
+        // No argument opens the picker modal; the toast is kept for input
+        // that was typed but could not be parsed.
+        if (!arg) {
+          input.value = '';
+          input.style.height = 'auto';
+          this._hideMentionDropdown();
+          this._hideSlashDropdown();
+          this._openTimeModal();
+          return;
+        }
         const token = this._buildTimeToken(arg);
         if (!token) {
           this._showToast(t('commands.time_usage'), 'error');
