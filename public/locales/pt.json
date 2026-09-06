@@ -1980,7 +1980,6 @@
       "invite_links_label": "Rótulo",
       "invite_links_label_hint": "Para sua referência, ex.: \"Promoção no Reddit\"",
       "invite_links_label_placeholder": "Nome opcional",
-      "invite_links_channels_hint": "Deixe todos marcados para conceder todos os canais públicos.",
       "invite_links_max_uses": "Máximo de usos",
       "invite_links_max_uses_hint": "0 = ilimitado. Conta pessoas distintas.",
       "invite_links_custom_code": "Código personalizado",

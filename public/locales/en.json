@@ -1988,7 +1988,6 @@
       "invite_links_label": "Label",
       "invite_links_label_hint": "For your reference, e.g. \"Reddit promo\"",
       "invite_links_label_placeholder": "Optional name",
-      "invite_links_channels_hint": "Leave all checked to grant every public channel.",
       "invite_links_max_uses": "Max uses",
       "invite_links_max_uses_hint": "0 = unlimited. Counts distinct people.",
       "invite_links_custom_code": "Custom code",
