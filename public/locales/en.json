@@ -2040,7 +2040,6 @@
         "active": "Active",
         "channel_one": "{{count}} channel",
         "channel_other": "{{count}} channels",
-        "all_public_channels": "all public channels",
         "never": "Never",
         "no_label": "(no label)",
         "copy_link": "Copy link",

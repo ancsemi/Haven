@@ -4571,14 +4571,14 @@ _setupUI() {
             ? `<span style="color:var(--danger,#e84a4a)">● ${t('settings.admin.invite_links.expired')}</span>`
             : `<span style="color:var(--green,#43b581)">● ${t('settings.admin.invite_links.active')}</span>`;
       const link = `${origin}/?invite=${encodeURIComponent(ic.code)}`;
-      const chCount = (ic.channels && ic.channels.length)
-        ? t(ic.channels.length === 1 ? 'settings.admin.invite_links.channel_one' : 'settings.admin.invite_links.channel_other', { count: ic.channels.length })
-        : t('settings.admin.invite_links.all_public_channels');
+      const chCount = t(ic.channels.length === 1
+          ? 'settings.admin.invite_links.channel_one'
+          : 'settings.admin.invite_links.channel_other', { count: ic.channels.length }
+      );
       const uses = ic.max_uses > 0 ? `${ic.use_count} / ${ic.max_uses}` : `${ic.use_count}`;
       const expiry = ic.expires_at ? new Date(ic.expires_at).toLocaleString() : t('settings.admin.invite_links.never');
       const label = ic.label ? this._escapeHtml(ic.label) : `<em style="opacity:.6">${t('settings.admin.invite_links.no_label')}</em>`;
-      const editorChannels = _inviteChannelChecks('invite-edit-channel-cb',
-        (ic.channels && ic.channels.length) ? new Set(ic.channels) : null);
+      const editorChannels = _inviteChannelChecks('invite-edit-channel-cb', new Set(ic.channels || []));
       return `<div class="invite-code-card" data-id="${ic.id}" style="border:1px solid var(--border);border-radius:8px;padding:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <div style="font-weight:600">${label} &nbsp;<code style="font-size:.85rem">${this._escapeHtml(ic.code)}</code></div>

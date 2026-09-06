@@ -2032,7 +2032,6 @@
         "active": "Ativo",
         "channel_one": "{{count}} canal",
         "channel_other": "{{count}} canais",
-        "all_public_channels": "todos os canais públicos",
         "never": "Nunca",
         "no_label": "(sem rótulo)",
         "copy_link": "Copiar link",
