@@ -3721,6 +3721,32 @@ _setupDensityPicker() {
   });
 },
 
+// ── Channel Scrolling Picker ──
+// Sets data-channel-scroll on <html>; CSS handles the layout. Persists the
+// viewer's choice and applies it live without a reload.
+_setupChannelScrollPicker() {
+  const picker = document.getElementById('channel-scroll-picker');
+  if (!picker) return;
+
+  // Restore saved channel scroll behavior
+  const stored = localStorage.getItem('haven-channel-scroll');
+  const saved = ['separate', 'combined'].includes(stored) ? stored : 'separate';
+  document.documentElement.dataset.channelScroll = saved;
+  picker.querySelectorAll('.density-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.channelScroll === saved);
+  });
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('.density-btn');
+    if (!btn) return;
+    const channelScroll = btn.dataset.channelScroll;
+    document.documentElement.dataset.channelScroll = channelScroll;
+    localStorage.setItem('haven-channel-scroll', channelScroll);
+    picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+},
+
 // ── Toggle Style Picker (sliders vs checkboxes) ──
 // Sets data-toggle-style on <html>; the CSS does the rest. theme-init.js
 // applies the same value pre-paint, so this only has to keep the buttons in

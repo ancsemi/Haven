@@ -666,14 +666,24 @@
       "auto": "Automatisch",
       "hint": "Änderungen werden sofort übernommen"
     },
-    "layout_density": {
-      "title": "Layout-Dichte",
-      "compact": "Kompakt",
-      "compact_hint": "Kompakt — engere Abstände, kleinere Avatare",
-      "cozy": "Gemütlich",
-      "cozy_hint": "Gemütlich — Standard-Layout",
-      "spacious": "Geräumig",
-      "spacious_hint": "Geräumig — mehr Weißraum"
+    "layout": {
+      "title": "Layout",
+      "layout": {
+        "title": "Layout-Dichte",
+        "compact": "Kompakt",
+        "compact_hint": "Kompakt — engere Abstände, kleinere Avatare",
+        "cozy": "Gemütlich",
+        "cozy_hint": "Gemütlich — Standard-Layout",
+        "spacious": "Geräumig",
+        "spacious_hint": "Geräumig — mehr Weißraum"
+      },
+      "channel_scrolling": {
+        "title": "Kanal-Scrolling",
+        "separate": "Getrennt",
+        "separate_hint": "Getrennt — separate Scrollleisten für Kanäle und DMs",
+        "combined": "Kombiniert",
+        "combined_hint": "Kombiniert — eine Scrollleiste für Kanäle und DMs"
+      }
     },
     "font_size": {
       "title": "Schriftgröße",

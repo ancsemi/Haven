@@ -666,14 +666,24 @@
       "auto": "Automático",
       "hint": "Los cambios se aplican inmediatamente"
     },
-    "layout_density": {
-      "title": "Densidad del diseño",
-      "compact": "Compacto",
-      "compact_hint": "Compacto — espaciado más ajustado, avatares más pequeños",
-      "cozy": "Acogedor",
-      "cozy_hint": "Acogedor — diseño equilibrado predeterminado",
-      "spacious": "Espacioso",
-      "spacious_hint": "Espacioso — más espacio libre"
+    "layout": {
+      "title": "Diseño",
+      "density": {
+        "title": "Densidad del diseño",
+        "compact": "Compacto",
+        "compact_hint": "Compacto — espaciado más ajustado, avatares más pequeños",
+        "cozy": "Acogedor",
+        "cozy_hint": "Acogedor — diseño equilibrado predeterminado",
+        "spacious": "Espacioso",
+        "spacious_hint": "Espacioso — más espacio libre"
+      },
+      "channel_scrolling": {
+        "title": "Desplazamiento de canales",
+        "separate": "Separado",
+        "separate_hint": "Separado — barras de desplazamiento independientes para canales y MD",
+        "combined": "Combinado",
+        "combined_hint": "Combinado — una sola barra de desplazamiento para canales y MD"
+      }
     },
     "font_size": {
       "title": "Tamaño de fuente",

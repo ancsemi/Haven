@@ -1352,14 +1352,24 @@
       "auto": "Automático",
       "hint": "As alterações são aplicadas imediatamente"
     },
-    "layout_density": {
-      "title": "Densidade da disposição",
-      "compact": "Compacta",
-      "compact_hint": "Compacta — menos espaço e avatares menores",
-      "cozy": "Confortável",
-      "cozy_hint": "Confortável — disposição equilibrada padrão",
-      "spacious": "Espaçosa",
-      "spacious_hint": "Espaçosa — mais espaço entre os elementos"
+    "layout": {
+      "title": "Layout",
+      "density": {
+        "title": "Densidade da disposição",
+        "compact": "Compacta",
+        "compact_hint": "Compacta — menos espaço e avatares menores",
+        "cozy": "Confortável",
+        "cozy_hint": "Confortável — disposição equilibrada padrão",
+        "spacious": "Espaçosa",
+        "spacious_hint": "Espaçosa — mais espaço entre os elementos"
+      },
+      "channel_scrolling": {
+        "title": "Deslocamento de canais",
+        "separate": "Separado",
+        "separate_hint": "Separado — barras de deslocamento separadas para canais e MDs",
+        "combined": "Combinado",
+        "combined_hint": "Combinado — uma única barra de deslocamento para canais e MDs"
+      }
     },
     "animate_pfp": {
       "title": "Fotos de perfil animadas",

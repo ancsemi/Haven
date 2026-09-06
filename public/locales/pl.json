@@ -691,14 +691,24 @@
       "auto": "Automatycznie",
       "hint": "Zmiany są stosowane natychmiast"
     },
-    "layout_density": {
-      "title": "Gęstość układu",
-      "compact": "Kompaktowy",
-      "compact_hint": "Kompaktowy — ściślejszy odstęp, mniejsze awatary",
-      "cozy": "Przytulny",
-      "cozy_hint": "Przytulny — domyślny zrównoważony układ",
-      "spacious": "Przestronny",
-      "spacious_hint": "Przestronny — więcej wolnego miejsca"
+    "layout": {
+      "title": "Układ",
+      "density": {
+        "title": "Gęstość układu",
+        "compact": "Kompaktowy",
+        "compact_hint": "Kompaktowy — ściślejszy odstęp, mniejsze awatary",
+        "cozy": "Przytulny",
+        "cozy_hint": "Przytulny — domyślny zrównoważony układ",
+        "spacious": "Przestronny",
+        "spacious_hint": "Przestronny — więcej wolnego miejsca"
+      },
+      "channel_scrolling": {
+        "title": "Przewijanie kanałów",
+        "separate": "Oddzielne",
+        "separate_hint": "Oddzielne — osobne paski przewijania dla kanałów i wiadomości prywatnych",
+        "combined": "Połączone",
+        "combined_hint": "Połączone — jeden pasek przewijania dla kanałów i wiadomości prywatnych"
+      }
     },
     "font_size": {
       "title": "Rozmiar czcionki",

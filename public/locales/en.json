@@ -1358,14 +1358,24 @@
       "auto": "Automatic",
       "hint": "Changes apply immediately"
     },
-    "layout_density": {
-      "title": "Layout Density",
-      "compact": "Compact",
-      "compact_hint": "Compact — tighter spacing, smaller avatars",
-      "cozy": "Cozy",
-      "cozy_hint": "Cozy — default balanced layout",
-      "spacious": "Spacious",
-      "spacious_hint": "Spacious — more breathing room"
+    "layout": {
+      "title": "Layout",
+      "density": {
+        "title": "Layout Density",
+        "compact": "Compact",
+        "compact_hint": "Compact — tighter spacing, smaller avatars",
+        "cozy": "Cozy",
+        "cozy_hint": "Cozy — default balanced layout",
+        "spacious": "Spacious",
+        "spacious_hint": "Spacious — more breathing room"
+      },
+      "channel_scrolling": {
+        "title": "Channel Scrolling",
+        "separate": "Separate",
+        "separate_hint": "Separate — separate scrollbars for channels and DMs",
+        "combined": "Combined",
+        "combined_hint": "Combined — one scrollbar for both channels and DMs"
+      }
     },
     "animate_pfp": {
       "title": "Animated Profile Pictures",

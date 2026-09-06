@@ -10954,6 +10954,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 .settings-section:last-child { border-bottom: none; }
 
+.settings-subsection { margin-top: 0.6rem; }
+
 /* ── Admin section divider ── */
 .admin-section-divider {
   display: flex;
@@ -16276,6 +16278,13 @@ ul.chat-list { list-style-type: disc; }
   min-height: 0;
   flex: 1;
 }
+/* Expand scroll area to include scrolling join/create channel sections when screen height is short*/
+@media (max-height: 550px) {
+  .sidebar-mod-container {
+    overflow: auto;
+    display: block;
+  }
+}
 
 .mod-mode-active .mod-draggable {
   cursor: move;
@@ -16469,9 +16478,22 @@ ul.chat-list { list-style-type: disc; }
 .sidebar-split {
   flex: 1;
   min-height: 0;
-  display: flex;
   flex-direction: column;
+}
+[data-channel-scroll="separate"] .sidebar-split {
+  display: flex;
   overflow: hidden;
+}
+[data-channel-scroll="combined"] .sidebar-split {
+  display: block;
+  overflow: auto;
+}
+/* Short screen: use the expanded scrolling behavior regardless of mode */
+@media (max-height: 550px) {
+  .sidebar-split {
+    display: block;
+    overflow: auto;
+  }
 }
 
 /* Channels pane (top) */
@@ -16517,7 +16539,6 @@ ul.chat-list { list-style-type: disc; }
 /* Drag handle between channels & DMs — blends with natural section border */
 .sidebar-split-handle {
   height: 0;
-  cursor: row-resize;
   position: relative;
   flex-shrink: 0;
   z-index: 5;
@@ -16526,6 +16547,18 @@ ul.chat-list { list-style-type: disc; }
   padding: 0.25rem 0;
   box-sizing: content-box;
   transition: border-color 0.15s;
+}
+[data-channel-scroll="separate"] .sidebar-split-handle {
+  cursor: row-resize;
+}
+[data-channel-scroll="combined"] .sidebar-split-handle {
+  cursor: auto;
+}
+/* Short screen: use the expanded scrolling behavior regardless of mode */
+@media (max-height: 550px) {
+  .sidebar-split-handle {
+    cursor: auto;
+  }
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

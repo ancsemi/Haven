@@ -1316,7 +1316,7 @@
           <div class="settings-nav-user">
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_appearance">Appearance</div>
           <div class="settings-nav-item active" data-target="section-language">🗣️ <span data-i18n="settings.nav.language">Language</span></div>
-          <div class="settings-nav-item" data-target="section-density">📐 <span data-i18n="settings.nav.layout">Layout &amp; Density</span></div>
+          <div class="settings-nav-item" data-target="section-layout">📐 <span data-i18n="settings.nav.layout">Layout &amp; Density</span></div>
           <div class="settings-nav-item" data-target="section-font-size">🔤 <span data-i18n="settings.nav.text_size">Text Size</span></div>
           <div class="settings-nav-item" data-target="section-emoji-size">😀 <span data-i18n="settings.nav.emoji_size">Emoji Size</span></div>
           <div class="settings-nav-item" data-target="section-role-display">🎨 <span data-i18n="settings.nav.role_display">Role Display</span></div>
@@ -1405,21 +1405,37 @@
         <small class="settings-hint" data-i18n="settings.language_section.hint">Changes apply immediately</small>
       </div>
 
-      <div class="settings-section" id="section-density">
-        <h5 class="settings-section-title">📐 <span data-i18n="settings.layout_density.title">Layout Density</span></h5>
-        <div class="density-picker" id="density-picker">
-          <button type="button" class="density-btn" data-density="compact" data-i18n-title="settings.layout_density.compact_hint" title="Compact — tighter spacing, smaller avatars">
-            <span class="density-icon">▪️</span>
-            <span class="density-label" data-i18n="settings.layout_density.compact">Compact</span>
-          </button>
-          <button type="button" class="density-btn active" data-density="cozy" data-i18n-title="settings.layout_density.cozy_hint" title="Cozy — default balanced layout">
-            <span class="density-icon">◾</span>
-            <span class="density-label" data-i18n="settings.layout_density.cozy">Cozy</span>
-          </button>
-          <button type="button" class="density-btn" data-density="spacious" data-i18n-title="settings.layout_density.spacious_hint" title="Spacious — more breathing room">
-            <span class="density-icon">⬛</span>
-            <span class="density-label" data-i18n="settings.layout_density.spacious">Spacious</span>
-          </button>
+      <div class="settings-section" id="section-layout">
+        <h5 class="settings-section-title">📐 <span data-i18n="settings.layout.title">Layout</span></h5>
+        <div class="settings-subsection" id="layout-density-subsection">
+          <small class="settings-group-label">📏 <span data-i18n="settings.layout.density.title">Layout Density</span></small>
+          <div class="density-picker" id="density-picker">
+            <button type="button" class="density-btn" data-density="compact" data-i18n-title="settings.layout.density.compact_hint" title="Compact — tighter spacing, smaller avatars">
+              <span class="density-icon">▪️</span>
+              <span class="density-label" data-i18n="settings.layout.density.compact">Compact</span>
+            </button>
+            <button type="button" class="density-btn active" data-density="cozy" data-i18n-title="settings.layout.density.cozy_hint" title="Cozy — default balanced layout">
+              <span class="density-icon">◾</span>
+              <span class="density-label" data-i18n="settings.layout.density.cozy">Cozy</span>
+            </button>
+            <button type="button" class="density-btn" data-density="spacious" data-i18n-title="settings.layout.density.spacious_hint" title="Spacious — more breathing room">
+              <span class="density-icon">⬛</span>
+              <span class="density-label" data-i18n="settings.layout.density.spacious">Spacious</span>
+            </button>
+          </div>
+        </div>
+        <div class="settings-subsection" id="channel-scrolling-subsection">
+          <small class="settings-group-label">📜 <span data-i18n="settings.layout.channel_scrolling.title">Channel Scrolling</span></small>
+          <div class="channel-scroll-picker" id="channel-scroll-picker">
+            <button type="button" class="density-btn active" data-channelScroll="separate" data-i18n-title="settings.layout.channel_scrolling.separate_hint" title="Separate — separate scrollbars for channels and DMs">
+              <span class="density-icon">📜📜</span>
+              <span class="density-label" data-i18n="settings.layout.channel_scrolling.separate">Separate</span>
+            </button>
+            <button type="button" class="density-btn" data-channelScroll="combined" data-i18n-title="settings.layout.channel_scrolling.combined_hint" title="Combined — one scrollbar for both channels and DMs">
+              <span class="density-icon">📜</span>
+              <span class="density-label" data-i18n="settings.layout.channel_scrolling.combined">Combined</span>
+            </button>
+          </div>
         </div>
       </div>
 

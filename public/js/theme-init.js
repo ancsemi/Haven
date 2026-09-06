@@ -44,6 +44,15 @@
     document.documentElement.setAttribute('data-haven-density', 'cozy');
   }
 
+ // Apply channel scroll behavior
+  try {
+    var _channelScroll = localStorage.getItem('haven-channel-scroll');
+    if (['separate', 'combined'].indexOf(_channelScroll) < 0) _channelScroll = 'separate';
+    document.documentElement.setAttribute('data-channel-scroll', _channelScroll);
+  } catch (e) {
+    document.documentElement.setAttribute('data-channel-scroll', 'separate');
+  }
+
   // Apply the saved interface scale before first paint so the UI doesn't render
   // at 100% and then jump. Mirrors the slider logic in app-media.js and
   // migrates the retired 4-tier font-size setting.

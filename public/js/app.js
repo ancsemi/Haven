@@ -327,6 +327,7 @@ class HavenApp {
     this.modMode = typeof ModMode === 'function' ? new ModMode() : null;
     this.modMode?.init();
     this._setupDensityPicker();
+    this._setupChannelScrollPicker();
     this._setupToggleStylePicker();
     this._setupAnimatePfpPicker();
     this._setupAnimateChatPicker();

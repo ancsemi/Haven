@@ -666,14 +666,24 @@
       "auto": "自动",
       "hint": "更改立即生效"
     },
-    "layout_density": {
-      "title": "布局密度",
-      "compact": "紧凑",
-      "compact_hint": "紧凑 — 更紧密的间距，更小的头像",
-      "cozy": "舒适",
-      "cozy_hint": "舒适 — 默认均衡布局",
-      "spacious": "宽松",
-      "spacious_hint": "宽松 — 更多留白空间"
+    "layout": {
+      "title": "布局",
+      "density": {
+        "title": "布局密度",
+        "compact": "紧凑",
+        "compact_hint": "紧凑 — 更紧密的间距，更小的头像",
+        "cozy": "舒适",
+        "cozy_hint": "舒适 — 默认均衡布局",
+        "spacious": "宽松",
+        "spacious_hint": "宽松 — 更多留白空间"
+      },
+      "channel_scrolling": {
+        "title": "频道滚动",
+        "separate": "分开",
+        "separate_hint": "分开 — 频道和私信使用独立的滚动条",
+        "combined": "合并",
+        "combined_hint": "合并 — 频道和私信共用一个滚动条"
+      }
     },
     "font_size": {
       "title": "字体大小",
