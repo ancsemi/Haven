@@ -16018,7 +16018,8 @@ ul.chat-list { list-style-type: disc; }
    LAYOUT DENSITY PICKER
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-.density-picker {
+.density-picker,
+.channel-scroll-picker {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
