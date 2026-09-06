@@ -16491,7 +16491,7 @@ ul.chat-list { list-style-type: disc; }
 }
 /* Short screen: use the expanded scrolling behavior regardless of mode */
 @media (max-height: 550px) {
-  .sidebar-split {
+  [data-channel-scroll="separate"] .sidebar-split {
     display: block;
     overflow: auto;
   }
@@ -16557,7 +16557,7 @@ ul.chat-list { list-style-type: disc; }
 }
 /* Short screen: use the expanded scrolling behavior regardless of mode */
 @media (max-height: 550px) {
-  .sidebar-split-handle {
+  [data-channel-scroll="separate"] .sidebar-split-handle {
     cursor: auto;
   }
 }
