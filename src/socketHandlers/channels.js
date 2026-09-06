@@ -345,21 +345,23 @@ module.exports = function register(socket, ctx) {
       ).all();
       let allowSet = null;
       if (Array.isArray(explicitChannelIds)) {
-        if (explicitChannelIds.length > 0) {
-          allowSet = new Set(explicitChannelIds.map(n => parseInt(n)).filter(n => Number.isFinite(n)));
-        }
-        // empty array → allowSet stays null → "all public"
+        // Managed invite: the invite's channel list is authoritative.
+        // An empty array means no channels.
+        allowSet = new Set(explicitChannelIds.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n)));
       } else {
+        // Legacy server/vanity code: use the global default join-channel
+        // setting when configured. Empty/unset means all public.
         try {
           const djc = db.prepare("SELECT value FROM server_settings WHERE key = 'default_join_channels'").get();
           if (djc && djc.value) {
             const parsed = JSON.parse(djc.value);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              allowSet = new Set(parsed.map(n => parseInt(n)).filter(n => Number.isFinite(n)));
+              allowSet = new Set(parsed.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n)));
             }
           }
         } catch { /* malformed JSON falls through to "all public" */ }
       }
+
       const parents = allowSet ? allParents.filter(p => allowSet.has(p.id)) : allParents;
       return { parents, allowSet };
     };
