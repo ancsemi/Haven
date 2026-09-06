@@ -3691,60 +3691,70 @@ async _uploadBotAvatar(botId, file) {
   }
 },
 
+// Helper function to simplify picker setups
+_setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange) {
+  if (!allowedValues.includes(defaultValue)) {
+    throw new Error(`Invalid default value "${defaultValue}" for ${pickerId}`);
+  }
+
+  const picker = document.getElementById(pickerId);
+  if (!picker) return null;
+
+  const dataKeys = Array.isArray(dataKey) ? dataKey : [dataKey];
+  const apply = (value, notify = false) => {
+    dataKeys.forEach(key => {
+      document.documentElement.dataset[key] = value;
+    });
+
+    picker.querySelectorAll('.density-btn').forEach(btn => {
+      btn.classList.toggle('active', dataKeys.some(key => btn.dataset[key] === value));
+    });
+    if (notify) onChange?.(value);
+  };
+
+  const stored = localStorage.getItem(storageKey);
+  const saved = allowedValues.includes(stored) ? stored : defaultValue;
+  apply(saved);
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('.density-btn');
+    if (!btn || !picker.contains(btn)) return;
+    const value = dataKeys.map(key => btn.dataset[key]).find(value => allowedValues.includes(value));
+    if (!value) return;
+    apply(value, true);
+    localStorage.setItem(storageKey, value);
+  });
+  return saved;
+},
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // LAYOUT DENSITY
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 _setupDensityPicker() {
-  const picker = document.getElementById('density-picker');
-  if (!picker) return;
+  const pickerId = 'density-picker';
+  const storageKey = 'haven-density';
+  const allowedValues = ['compact', 'cozy', 'spacious'];
+  const defaultValue = 'cozy';
+  const dataKey = ['density', 'havenDensity'];
+  const onChange = (density) => {
+    document.dispatchEvent(new CustomEvent('haven:density-change', {detail: { density }}))
+  };
 
-  // Restore saved density
-  const stored = localStorage.getItem('haven-density');
-  const saved = ['compact', 'cozy', 'spacious'].includes(stored) ? stored : 'cozy';
-  document.documentElement.dataset.density = saved;
-  document.documentElement.dataset.havenDensity = saved;
-  picker.querySelectorAll('.density-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.density === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('.density-btn');
-    if (!btn) return;
-    const density = btn.dataset.density;
-    document.documentElement.dataset.density = density;
-    document.documentElement.dataset.havenDensity = density;
-    localStorage.setItem('haven-density', density);
-    document.dispatchEvent(new CustomEvent('haven:density-change', { detail: { density } }));
-    picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange);
 },
 
 // ── Channel Scrolling Picker ──
 // Sets data-channel-scroll on <html>; CSS handles the layout. Persists the
 // viewer's choice and applies it live without a reload.
 _setupChannelScrollPicker() {
-  const picker = document.getElementById('channel-scroll-picker');
-  if (!picker) return;
+  const pickerId = 'channel-scroll-picker';
+  const storageKey = 'haven-channel-scroll';
+  const allowedValues = ['separate', 'combined'];
+  const defaultValue = 'separate';
+  const dataKey = 'channelScroll';
 
-  // Restore saved channel scroll behavior
-  const stored = localStorage.getItem('haven-channel-scroll');
-  const saved = ['separate', 'combined'].includes(stored) ? stored : 'separate';
-  document.documentElement.dataset.channelScroll = saved;
-  picker.querySelectorAll('.density-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.channelScroll === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('.density-btn');
-    if (!btn) return;
-    const channelScroll = btn.dataset.channelScroll;
-    document.documentElement.dataset.channelScroll = channelScroll;
-    localStorage.setItem('haven-channel-scroll', channelScroll);
-    picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey);
 },
 
 // ── Toggle Style Picker (sliders vs checkboxes) ──
@@ -3752,25 +3762,13 @@ _setupChannelScrollPicker() {
 // applies the same value pre-paint, so this only has to keep the buttons in
 // step and persist the choice.
 _setupToggleStylePicker() {
-  const picker = document.getElementById('toggle-style-picker');
-  if (!picker) return;
+  const pickerId = 'toggle-style-picker';
+  const storageKey = 'haven-toggle-style';
+  const allowedValues = ['switch', 'box'];
+  const defaultValue = 'switch';
+  const dataKey = 'toggleStyle';
 
-  // Sliders are the default; only an explicit 'box' choice differs.
-  const saved = localStorage.getItem('haven-toggle-style') === 'box' ? 'box' : 'switch';
-  document.documentElement.dataset.toggleStyle = saved;
-  picker.querySelectorAll('.density-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.togglestyle === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('.density-btn');
-    if (!btn) return;
-    const style = btn.dataset.togglestyle === 'box' ? 'box' : 'switch';
-    document.documentElement.dataset.toggleStyle = style;
-    localStorage.setItem('haven-toggle-style', style);
-    picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey);
 },
 
 // ── Animated Profile Pictures Picker (viewer side) ──
@@ -3849,26 +3847,14 @@ _setupZoomSlider() {
 },
 
 // ── Emoji Reaction Size Picker ──
-
 _setupEmojiSizePicker() {
-  const picker = document.getElementById('emoji-size-picker');
-  if (!picker) return;
+  const pickerId = 'emoji-size-picker';
+  const storageKey = 'haven-emojisize';
+  const allowedValues = ['small', 'normal', 'large', 'x-large'];
+  const defaultValue = 'normal';
+  const dataKey = 'emojisize';
 
-  const saved = localStorage.getItem('haven-emojisize') || 'normal';
-  document.documentElement.dataset.emojisize = saved;
-  picker.querySelectorAll('[data-emojisize]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.emojisize === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-emojisize]');
-    if (!btn) return;
-    const size = btn.dataset.emojisize;
-    document.documentElement.dataset.emojisize = size;
-    localStorage.setItem('haven-emojisize', size);
-    picker.querySelectorAll('[data-emojisize]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey);
 },
 
 // ── Debug Section ──
@@ -4050,26 +4036,17 @@ _applyEmbedSize(mode) {
 // ── Role Display Picker ──
 
 _setupRoleDisplayPicker() {
-  const picker = document.getElementById('role-display-picker');
-  if (!picker) return;
-
-  const saved = localStorage.getItem('haven-role-display') || 'colored-name';
-  document.documentElement.dataset.roleDisplay = saved;
-  picker.querySelectorAll('[data-roledisplay]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.roledisplay === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-roledisplay]');
-    if (!btn) return;
-    const mode = btn.dataset.roledisplay;
-    document.documentElement.dataset.roleDisplay = mode;
-    localStorage.setItem('haven-role-display', mode);
-    picker.querySelectorAll('[data-roledisplay]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+  const pickerId = 'role-display-picker';
+  const storageKey = 'haven-role-display';
+  const allowedValues = ['colored-name', 'role-name'];
+  const defaultValue = 'colored-name';
+  const dataKey = 'roleDisplay';
+  const onChange = () => {
     // Re-render member list to reflect the change
     if (this._updateUsers) this._updateUsers();
-  });
+  };
+
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange);
 },
 
 // ── Toolbar Icon Style Picker ──
