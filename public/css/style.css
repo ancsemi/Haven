@@ -6840,7 +6840,7 @@ details.sound-section:not([open]) .sound-section-label::before {
   cursor: pointer;
   transition: opacity 0.15s ease;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .chat-image:hover { opacity: 0.85; }
