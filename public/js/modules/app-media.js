@@ -4042,7 +4042,7 @@ _setupRoleDisplayPicker() {
   const storageKey = 'haven-role-display';
   const allowedValues = ['colored-name', 'role-name'];
   const defaultValue = 'colored-name';
-  const dataKey = 'data-roledisplay';
+  const dataKey = 'roledisplay';
   const onChange = () => {
     // Re-render member list to reflect the change
     if (this._updateUsers) this._updateUsers();
