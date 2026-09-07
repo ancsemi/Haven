@@ -4040,7 +4040,7 @@ _applyEmbedSize(mode) {
 _setupRoleDisplayPicker() {
   const pickerId = 'role-display-picker';
   const storageKey = 'haven-role-display';
-  const allowedValues = ['colored-name', 'role-name'];
+  const allowedValues = ['colored-name', 'dot'];
   const defaultValue = 'colored-name';
   const dataKey = 'roledisplay';
   const onChange = () => {
