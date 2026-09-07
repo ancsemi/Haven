@@ -668,7 +668,7 @@
     },
     "layout": {
       "title": "Layout",
-      "layout": {
+      "density": {
         "title": "Layout-Dichte",
         "compact": "Kompakt",
         "compact_hint": "Kompakt — engere Abstände, kleinere Avatare",
