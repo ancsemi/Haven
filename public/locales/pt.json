@@ -1361,26 +1361,6 @@
       "spacious": "Espaçosa",
       "spacious_hint": "Espaçosa — mais espaço entre os elementos"
     },
-    "animate_pfp": {
-      "title": "Fotos de perfil animadas",
-      "always": "Sempre",
-      "always_hint": "Sempre: os avatares animados ficam em looping o tempo todo",
-      "hover": "Ao passar o mouse",
-      "hover_hint": "Ao passar o mouse: reproduz enquanto você aponta para uma mensagem ou abre um perfil",
-      "never": "Nunca",
-      "never_hint": "Nunca: mostra apenas o primeiro quadro",
-      "hint": "Vale para os avatares e bordas de todo mundo, do jeito que você vê. Quem desativou a animação no próprio perfil continua parado de qualquer forma."
-    },
-    "animate_chat": {
-      "title": "Imagens animadas no chat",
-      "always": "Sempre",
-      "hover": "Ao passar o mouse",
-      "never": "Nunca",
-      "always_hint": "Sempre: os GIFs ficam em looping o tempo todo",
-      "hover_hint": "Ao passar o mouse: só reproduz enquanto você aponta para a imagem",
-      "never_hint": "Nunca: mostra apenas o primeiro quadro",
-      "hint": "Vale para GIFs e outras imagens animadas enviadas nas mensagens, só para você. A visualização de mais ninguém muda."
-    },
     "toggle_style": {
       "title": "Estilo dos controles",
       "switch": "Deslizantes",
@@ -1444,10 +1424,33 @@
     },
     "image_display": {
       "title": "Exibição de imagens",
-      "thumbnail": "Miniatura",
-      "thumbnail_hint": "Miniatura — prévia pequena; clique para ampliar",
-      "full": "Completa",
-      "full_hint": "Completa — imagens grandes na mensagem, como no Discord"
+      "image_mode": {
+        "title": "Modo de exibição de imagens",
+        "thumbnail": "Miniatura",
+        "thumbnail_hint": "Miniatura — prévia pequena; clique para ampliar",
+        "full": "Completa",
+        "full_hint": "Completa — imagens grandes na mensagem, como no Discord"
+      },
+      "animate_pfp": {
+        "title": "Fotos de perfil animadas",
+        "always": "Sempre",
+        "always_hint": "Sempre: os avatares animados ficam em looping o tempo todo",
+        "hover": "Ao passar o mouse",
+        "hover_hint": "Ao passar o mouse: reproduz enquanto você aponta para uma mensagem ou abre um perfil",
+        "never": "Nunca",
+        "never_hint": "Nunca: mostra apenas o primeiro quadro",
+        "hint": "Vale para os avatares e bordas de todo mundo, do jeito que você vê. Quem desativou a animação no próprio perfil continua parado de qualquer forma."
+      },
+      "animate_chat": {
+        "title": "Imagens animadas no chat",
+        "always": "Sempre",
+        "hover": "Ao passar o mouse",
+        "never": "Nunca",
+        "always_hint": "Sempre: os GIFs ficam em looping o tempo todo",
+        "hover_hint": "Ao passar o mouse: só reproduz enquanto você aponta para a imagem",
+        "never_hint": "Nunca: mostra apenas o primeiro quadro",
+        "hint": "Vale para GIFs e outras imagens animadas enviadas nas mensagens, só para você. A visualização de mais ninguém muda."
+      }
     },
     "embed_display": {
       "title": "Prévias de links",

@@ -688,10 +688,13 @@
     },
     "image_display": {
       "title": "Bildanzeige",
-      "thumbnail": "Vorschaubild",
-      "thumbnail_hint": "Vorschaubild — kleines Vorschaubild, klicken zum Vergrößern",
-      "full": "Vollbild",
-      "full_hint": "Vollbild — große Inline-Bilder wie Discord"
+      "image_mode": {
+        "title": "Bildanzeigemodus",
+        "thumbnail": "Vorschaubild",
+        "thumbnail_hint": "Vorschaubild — kleines Vorschaubild, klicken zum Vergrößern",
+        "full": "Vollbild",
+        "full_hint": "Vollbild — große Inline-Bilder wie Discord"
+      }
     },
     "sounds_section": {
       "title": "Töne",

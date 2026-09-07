@@ -1367,26 +1367,6 @@
       "spacious": "Spacious",
       "spacious_hint": "Spacious — more breathing room"
     },
-    "animate_pfp": {
-      "title": "Animated Profile Pictures",
-      "always": "Always",
-      "always_hint": "Always: animated avatars loop constantly",
-      "hover": "On hover",
-      "hover_hint": "On hover: play while you hover a message or open a profile",
-      "never": "Never",
-      "never_hint": "Never: show the first frame only",
-      "hint": "Applies to everyone's avatars and borders as you see them. Anyone who has turned animation off for their own profile stays still regardless."
-    },
-    "animate_chat": {
-      "title": "Animated Images in Chat",
-      "always": "Always",
-      "hover": "On hover",
-      "never": "Never",
-      "always_hint": "Always: GIFs loop constantly",
-      "hover_hint": "On hover: play only while you point at the image",
-      "never_hint": "Never: show the first frame only",
-      "hint": "Applies to GIFs and other animated images posted in messages, for you only. Nobody else's view changes."
-    },
     "toggle_style": {
       "title": "Toggle Style",
       "switch": "Sliders",
@@ -1450,10 +1430,33 @@
     },
     "image_display": {
       "title": "Image Display",
-      "thumbnail": "Thumbnail",
-      "thumbnail_hint": "Thumbnail — small preview, click to enlarge",
-      "full": "Full",
-      "full_hint": "Full — large inline images like Discord"
+      "image_mode": {
+        "title": "Image Display Mode",
+        "thumbnail": "Thumbnail",
+        "thumbnail_hint": "Thumbnail — small preview, click to enlarge",
+        "full": "Full",
+        "full_hint": "Full — large inline images like Discord"
+      },
+      "animate_pfp": {
+        "title": "Animated Profile Pictures",
+        "always": "Always",
+        "always_hint": "Always: animated avatars loop constantly",
+        "hover": "On hover",
+        "hover_hint": "On hover: play while you hover a message or open a profile",
+        "never": "Never",
+        "never_hint": "Never: show the first frame only",
+        "hint": "Applies to everyone's avatars and borders as you see them. Anyone who has turned animation off for their own profile stays still regardless."
+      },
+      "animate_chat": {
+        "title": "Animated Images in Chat",
+        "always": "Always",
+        "hover": "On hover",
+        "never": "Never",
+        "always_hint": "Always: GIFs loop constantly",
+        "hover_hint": "On hover: play only while you point at the image",
+        "never_hint": "Never: show the first frame only",
+        "hint": "Applies to GIFs and other animated images posted in messages, for you only. Nobody else's view changes."
+      }
     },
     "embed_display": {
       "title": "Link Previews",

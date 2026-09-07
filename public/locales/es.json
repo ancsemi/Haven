@@ -688,10 +688,13 @@
     },
     "image_display": {
       "title": "Visualización de imágenes",
-      "thumbnail": "Miniatura",
-      "thumbnail_hint": "Miniatura — vista previa pequeña, clic para ampliar",
-      "full": "Completo",
-      "full_hint": "Completo — imágenes grandes en línea como Discord"
+      "image_mode": {
+        "title": "Modo de visualización de imágenes",
+        "thumbnail": "Miniatura",
+        "thumbnail_hint": "Miniatura — vista previa pequeña, clic para ampliar",
+        "full": "Completo",
+        "full_hint": "Completo — imágenes grandes en línea como Discord"
+      }
     },
     "sounds_section": {
       "title": "Sonidos",

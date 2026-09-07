@@ -688,10 +688,13 @@
     },
     "image_display": {
       "title": "图片显示",
-      "thumbnail": "缩略图",
-      "thumbnail_hint": "缩略图 — 小预览，点击放大",
-      "full": "完整",
-      "full_hint": "完整 — 类似 Discord 的大型内嵌图片"
+      "image_mode": {
+        "title": "图片显示模式",
+        "thumbnail": "缩略图",
+        "thumbnail_hint": "缩略图 — 小预览，点击放大",
+        "full": "完整",
+        "full_hint": "完整 — 类似 Discord 的大型内嵌图片"
+      }
     },
     "sounds_section": {
       "title": "声音",

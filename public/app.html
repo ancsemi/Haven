@@ -1423,50 +1423,6 @@
         </div>
       </div>
 
-      <!-- Animated profile pictures (viewer side). The pfp owner can already turn
-           their own animation off for everyone; this is the other half, so a
-           viewer who doesn't want moving avatars can stop seeing them. -->
-      <div class="settings-section" id="section-animate-pfp" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">✨ <span data-i18n="settings.animate_pfp.title">Animated Profile Pictures</span></h5>
-        <div class="density-picker" id="animate-pfp-picker">
-          <button type="button" class="density-btn" data-animpfp="always" data-i18n-title="settings.animate_pfp.always_hint" title="Always: animated avatars loop constantly">
-            <span class="density-icon">▶️</span>
-            <span class="density-label" data-i18n="settings.animate_pfp.always">Always</span>
-          </button>
-          <button type="button" class="density-btn active" data-animpfp="hover" data-i18n-title="settings.animate_pfp.hover_hint" title="On hover: play while you hover a message or open a profile">
-            <span class="density-icon">🖱️</span>
-            <span class="density-label" data-i18n="settings.animate_pfp.hover">On hover</span>
-          </button>
-          <button type="button" class="density-btn" data-animpfp="never" data-i18n-title="settings.animate_pfp.never_hint" title="Never: show the first frame only">
-            <span class="density-icon">⏸️</span>
-            <span class="density-label" data-i18n="settings.animate_pfp.never">Never</span>
-          </button>
-        </div>
-        <small class="settings-hint" data-i18n="settings.animate_pfp.hint">Applies to everyone's avatars and borders as you see them. Anyone who has turned animation off for their own profile stays still regardless.</small>
-      </div>
-
-      <!-- Animated images in chat (#5526). Separate from the avatar setting above:
-           a GIF someone posted is content, an avatar is ambient, so this one
-           stays at Always unless the viewer asks otherwise. -->
-      <div class="settings-section" id="section-animate-chat" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎞️ <span data-i18n="settings.animate_chat.title">Animated Images in Chat</span></h5>
-        <div class="density-picker" id="animate-chat-picker">
-          <button type="button" class="density-btn active" data-animchat="always" data-i18n-title="settings.animate_chat.always_hint" title="Always: GIFs loop constantly">
-            <span class="density-icon">▶️</span>
-            <span class="density-label" data-i18n="settings.animate_chat.always">Always</span>
-          </button>
-          <button type="button" class="density-btn" data-animchat="hover" data-i18n-title="settings.animate_chat.hover_hint" title="On hover: play only while you point at the image">
-            <span class="density-icon">🖱️</span>
-            <span class="density-label" data-i18n="settings.animate_chat.hover">On hover</span>
-          </button>
-          <button type="button" class="density-btn" data-animchat="never" data-i18n-title="settings.animate_chat.never_hint" title="Never: show the first frame only">
-            <span class="density-icon">⏸️</span>
-            <span class="density-label" data-i18n="settings.animate_chat.never">Never</span>
-          </button>
-        </div>
-        <small class="settings-hint" data-i18n="settings.animate_chat.hint">Applies to GIFs and other animated images posted in messages, for you only. Nobody else's view changes.</small>
-      </div>
-
       <!-- Toggle Style (sliders vs checkboxes) -->
       <div class="settings-section" id="section-toggle-style" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🎚️ <span data-i18n="settings.toggle_style.title">Toggle Style</span></h5>
@@ -1579,21 +1535,69 @@
         <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.toolbar_icons.hint">Applies to message and thread hover action bars.</small>
       </div>
 
-      <!-- Image Display Mode -->
-      <!-- Renamed from the Layout Density section's id, which it duplicated.
-           getElementById always resolved to the first match, so this section
-           had no working nav anchor at all. -->
       <div class="settings-section" id="section-image-display" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🖼️ <span data-i18n="settings.image_display.title">Image Display</span></h5>
-        <div class="density-picker" id="image-mode-picker">
-          <button type="button" class="density-btn active" data-image-mode="thumbnail" data-i18n-title="settings.image_display.thumbnail_hint" title="Thumbnail — small preview, click to enlarge">
-            <span class="density-icon">🔍</span>
-            <span class="density-label" data-i18n="settings.image_display.thumbnail">Thumbnail</span>
-          </button>
-          <button type="button" class="density-btn" data-image-mode="full" data-i18n-title="settings.image_display.full_hint" title="Full — large inline images like Discord">
-            <span class="density-icon">🖼️</span>
-            <span class="density-label" data-i18n="settings.image_display.full">Full</span>
-          </button>
+
+        <!-- Image Display Mode -->
+        <!-- Renamed from the Layout Density section's id, which it duplicated.
+            getElementById always resolved to the first match, so this section
+            had no working nav anchor at all. -->
+        <div class="settings-subsection" id="image-mode-subsection">
+          <small class="settings-group-label">🖼️ <span data-i18n="settings.image_display.image_mode.title">Image Display Mode</span></small>
+          <div class="density-picker" id="image-mode-picker">
+            <button type="button" class="density-btn active" data-image-mode="thumbnail" data-i18n-title="settings.image_display.image_mode.thumbnail_hint" title="Thumbnail — small preview, click to enlarge">
+              <span class="density-icon">🔍</span>
+              <span class="density-label" data-i18n="settings.image_display.image_mode.thumbnail">Thumbnail</span>
+            </button>
+            <button type="button" class="density-btn" data-image-mode="full" data-i18n-title="settings.image_display.image_mode.full_hint" title="Full — large inline images like Discord">
+              <span class="density-icon">🖼️</span>
+              <span class="density-label" data-i18n="settings.image_display.image_mode.full">Full</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Animated profile pictures (viewer side). The pfp owner can already turn
+            their own animation off for everyone; this is the other half, so a
+            viewer who doesn't want moving avatars can stop seeing them. -->
+        <div class="settings-subsection" id="animate-pfp-subsection">
+          <small class="settings-group-label">✨ <span data-i18n="settings.image_display.animate_pfp.title">Animated Profile Pictures</span></small>
+          <div class="density-picker" id="animate-pfp-picker">
+            <button type="button" class="density-btn" data-animpfp="always" data-i18n-title="settings.image_display.animate_pfp.always_hint" title="Always: animated avatars loop constantly">
+              <span class="density-icon">▶️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_pfp.always">Always</span>
+            </button>
+            <button type="button" class="density-btn active" data-animpfp="hover" data-i18n-title="settings.image_display.animate_pfp.hover_hint" title="On hover: play while you hover a message or open a profile">
+              <span class="density-icon">🖱️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_pfp.hover">On hover</span>
+            </button>
+            <button type="button" class="density-btn" data-animpfp="never" data-i18n-title="settings.image_display.animate_pfp.never_hint" title="Never: show the first frame only">
+              <span class="density-icon">⏸️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_pfp.never">Never</span>
+            </button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.image_display.animate_pfp.hint">Applies to everyone's avatars and borders as you see them. Anyone who has turned animation off for their own profile stays still regardless.</small>
+        </div>
+
+        <!-- Animated images in chat (#5526). Separate from the avatar setting above:
+            a GIF someone posted is content, an avatar is ambient, so this one
+            stays at Always unless the viewer asks otherwise. -->
+        <div class="settings-subsection" id="animate-chat-subsection">
+          <small class="settings-group-label">🎞️ <span data-i18n="settings.image_display.animate_chat.title">Animated Images in Chat</span></small>
+          <div class="density-picker" id="animate-chat-picker">
+            <button type="button" class="density-btn active" data-animchat="always" data-i18n-title="settings.image_display.animate_chat.always_hint" title="Always: GIFs loop constantly">
+              <span class="density-icon">▶️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_chat.always">Always</span>
+            </button>
+            <button type="button" class="density-btn" data-animchat="hover" data-i18n-title="settings.image_display.animate_chat.hover_hint" title="On hover: play only while you point at the image">
+              <span class="density-icon">🖱️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_chat.hover">On hover</span>
+            </button>
+            <button type="button" class="density-btn" data-animchat="never" data-i18n-title="settings.image_display.animate_chat.never_hint" title="Never: show the first frame only">
+              <span class="density-icon">⏸️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_chat.never">Never</span>
+            </button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.image_display.animate_chat.hint">Applies to GIFs and other animated images posted in messages, for you only. Nobody else's view changes.</small>
         </div>
       </div>
 

@@ -713,10 +713,13 @@
     },
     "image_display": {
       "title": "Wyświetlanie obrazów",
-      "thumbnail": "Miniatura",
-      "thumbnail_hint": "Miniatura — mały podgląd, kliknij, aby powiększyć",
-      "full": "Pełny rozmiar",
-      "full_hint": "Pełny rozmiar — duże obrazy inline jak w Discord"
+      "image_mode": {
+        "title": "Tryb wyświetlania obrazów",
+        "thumbnail": "Miniatura",
+        "thumbnail_hint": "Miniatura — mały podgląd, kliknij, aby powiększyć",
+        "full": "Pełny rozmiar",
+        "full_hint": "Pełny rozmiar — duże obrazy inline jak w Discord"
+      }
     },
     "sounds_section": {
       "title": "Dźwięki",
