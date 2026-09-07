@@ -3692,7 +3692,7 @@ async _uploadBotAvatar(botId, file) {
 },
 
 // Helper function to simplify picker setups
-_setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange) {
+_setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange, buttonDataKey = dataKey) {
   if (!allowedValues.includes(defaultValue)) {
     throw new Error(`Invalid default value "${defaultValue}" for ${pickerId}`);
   }
@@ -3707,7 +3707,7 @@ _setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChang
     });
 
     picker.querySelectorAll('.density-btn').forEach(btn => {
-      btn.classList.toggle('active', dataKeys.some(key => btn.dataset[key] === value));
+      btn.classList.toggle('active', btn.dataset[buttonDataKey] === value);
     });
     if (notify) onChange?.(value);
   };
@@ -3719,8 +3719,9 @@ _setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChang
   picker.addEventListener('click', (e) => {
     const btn = e.target.closest('.density-btn');
     if (!btn || !picker.contains(btn)) return;
-    const value = dataKeys.map(key => btn.dataset[key]).find(value => allowedValues.includes(value));
-    if (!value) return;
+    const value = btn.dataset[buttonDataKey];
+    if (!allowedValues.includes(value)) return;
+
     apply(value, true);
     localStorage.setItem(storageKey, value);
   });
@@ -3766,9 +3767,10 @@ _setupToggleStylePicker() {
   const storageKey = 'haven-toggle-style';
   const allowedValues = ['switch', 'box'];
   const defaultValue = 'switch';
-  const dataKey = 'togglestyle';
+  const dataKey = 'toggleStyle';
+  const buttonDataKey = 'togglestyle';
 
-  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey);
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, null, buttonDataKey);
 },
 
 // ── Animated Profile Pictures Picker (viewer side) ──
@@ -4040,7 +4042,7 @@ _setupRoleDisplayPicker() {
   const storageKey = 'haven-role-display';
   const allowedValues = ['colored-name', 'role-name'];
   const defaultValue = 'colored-name';
-  const dataKey = 'roledisplay';
+  const dataKey = 'data-roledisplay';
   const onChange = () => {
     // Re-render member list to reflect the change
     if (this._updateUsers) this._updateUsers();
