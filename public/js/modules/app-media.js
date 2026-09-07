@@ -3692,7 +3692,7 @@ async _uploadBotAvatar(botId, file) {
 },
 
 // Helper function to simplify picker setups
-_setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange, buttonDataKey = dataKey) {
+_setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange, buttonDataKey) {
   if (!allowedValues.includes(defaultValue)) {
     throw new Error(`Invalid default value "${defaultValue}" for ${pickerId}`);
   }
@@ -3701,6 +3701,7 @@ _setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChang
   if (!picker) return null;
 
   const dataKeys = Array.isArray(dataKey) ? dataKey : [dataKey];
+  buttonDataKey ??= dataKeys[0];
   const apply = (value, notify = false) => {
     dataKeys.forEach(key => {
       document.documentElement.dataset[key] = value;
@@ -3738,11 +3739,12 @@ _setupDensityPicker() {
   const allowedValues = ['compact', 'cozy', 'spacious'];
   const defaultValue = 'cozy';
   const dataKey = ['density', 'havenDensity'];
+  const buttonDataKey = 'density';
   const onChange = (density) => {
     document.dispatchEvent(new CustomEvent('haven:density-change', {detail: { density }}))
   };
 
-  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange);
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange, buttonDataKey);
 },
 
 // ── Channel Scrolling Picker ──
