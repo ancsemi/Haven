@@ -1343,6 +1343,8 @@
       "toolbar_icons": "Toolbar Icons",
       "image_display": "Image Display",
       "embeds_media": "Embeds & Media",
+      "toggle_style":"Toggle Style",
+      "banner_display": "Banner Display",
       "status_bar": "Status Bar",
       "group_chat": "Chat",
       "chat_behavior": "Chat Behavior",

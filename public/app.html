@@ -1331,6 +1331,8 @@
           <div class="settings-nav-item" data-target="section-toolbar-icons">🧰 <span data-i18n="settings.nav.toolbar_icons">Toolbar Icons</span></div>
           <div class="settings-nav-item" data-target="section-image-display">🖼️ <span data-i18n="settings.nav.image_display">Image Display</span></div>
           <div class="settings-nav-item" data-target="section-embed-size">📺 <span data-i18n="settings.nav.embeds_media">Embeds &amp; Media</span></div>
+          <div class="settings-nav-item" data-target="section-banner-display">🏞️ <span data-i18n="settings.nav.banner_display">Banner Display</span></div>
+          <div class="settings-nav-item" data-target="section-toggle-style">🎚️ <span data-i18n="settings.nav.toggle_style">Toggle Style</span></div>
           <div class="settings-nav-item" data-target="section-statusbar">📊 <span data-i18n="settings.nav.status_bar">Status Bar</span></div>
 
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_chat">Chat</div>
@@ -1447,32 +1449,6 @@
         </div>
       </div>
 
-      <!-- Toggle Style (sliders vs checkboxes) -->
-      <div class="settings-section" id="section-toggle-style" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎚️ <span data-i18n="settings.toggle_style.title">Toggle Style</span></h5>
-        <div class="font-size-picker" id="toggle-style-picker">
-          <button type="button" class="density-btn active" data-togglestyle="switch" data-i18n-title="settings.toggle_style.switch_hint" title="Sliding switches (default)">
-            <span class="density-icon">🎚️</span>
-            <span class="density-label" data-i18n="settings.toggle_style.switch">Sliders</span>
-          </button>
-          <button type="button" class="density-btn" data-togglestyle="box" data-i18n-title="settings.toggle_style.box_hint" title="Classic square checkboxes">
-            <span class="density-icon">☑️</span>
-            <span class="density-label" data-i18n="settings.toggle_style.box">Boxes</span>
-          </button>
-        </div>
-        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.toggle_style.hint">Applies to on/off settings. Lists you tick items in, like permissions and channel pickers, always stay as boxes.</small>
-      </div>
-
-      <!-- Soundboard Sidebar Setting -->
-      <div class="settings-section" id="section-soundboard-mode" style="border-top: 1px solid var(--border-light); padding-top: 14px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎵 <span data-i18n="settings.soundboard_section.title">Soundboard</span></h5>
-        <label class="checkbox-row" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8125rem">
-          <input type="checkbox" id="soundboard-sidebar-mode-settings" style="cursor:pointer">
-          <span data-i18n="settings.soundboard_section.sidebar_mode">Sidebar mode</span>
-        </label>
-        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.soundboard_section.sidebar_mode_hint">Open the soundboard as a pinned sidebar panel instead of a popup.</small>
-      </div>
-
       <!-- Font Size -->
       <div class="settings-section" id="section-font-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🔍 <span data-i18n="settings.zoom.title">Zoom</span></h5>
@@ -1526,7 +1502,7 @@
 
       <!-- Toolbar Icon Style -->
       <div class="settings-section" id="section-toolbar-icons" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎛️ <span data-i18n="settings.toolbar_icons.title">Toolbar Icons</span></h5>
+        <h5 class="settings-section-title">🧰 <span data-i18n="settings.toolbar_icons.title">Toolbar Icons</span></h5>
         <div class="density-picker" id="toolbar-icon-picker">
           <button type="button" class="density-btn active" data-toolbaricons="mono" title="Use sleek monochrome icons in message toolbars" data-i18n-title="settings.toolbar_icons.monochrome_hint">
             <span class="density-icon" aria-hidden="true">
@@ -1673,6 +1649,32 @@
         <small class="settings-hint" data-i18n="settings.banner_display.hint">How the banner interacts with the channel header area. These settings are per-device.</small>
       </div>
 
+      <!-- Toggle Style (sliders vs checkboxes) -->
+      <div class="settings-section" id="section-toggle-style" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🎚️ <span data-i18n="settings.toggle_style.title">Toggle Style</span></h5>
+        <div class="font-size-picker" id="toggle-style-picker">
+          <button type="button" class="density-btn active" data-togglestyle="switch" data-i18n-title="settings.toggle_style.switch_hint" title="Sliding switches (default)">
+            <span class="density-icon">🎚️</span>
+            <span class="density-label" data-i18n="settings.toggle_style.switch">Sliders</span>
+          </button>
+          <button type="button" class="density-btn" data-togglestyle="box" data-i18n-title="settings.toggle_style.box_hint" title="Classic square checkboxes">
+            <span class="density-icon">☑️</span>
+            <span class="density-label" data-i18n="settings.toggle_style.box">Boxes</span>
+          </button>
+        </div>
+        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.toggle_style.hint">Applies to on/off settings. Lists you tick items in, like permissions and channel pickers, always stay as boxes.</small>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="settings-section" id="section-statusbar" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">📊 <span data-i18n="settings.status_bar_section.title">Status Bar</span></h5>
+        <label class="toggle-row">
+          <span data-i18n="settings.status_bar_section.show">Show Status Bar</span>
+          <input type="checkbox" id="show-status-bar">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.status_bar_section.hint">Show the status bar at the bottom of the screen with server, ping, channel, and online info.</small>
+      </div>
+
       <!-- Chat Behavior -->
       <div class="settings-section" id="section-chat-behavior" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">💬 <span data-i18n="settings.chat_behavior.title">Chat</span></h5>
@@ -1693,73 +1695,14 @@
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.hover_profile_card_hint">Hovering over a name or avatar shows a quick profile preview. Clicking opens the full card either way.</small>
       </div>
 
-      <!-- Status Bar -->
-      <div class="settings-section" id="section-statusbar" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">📊 <span data-i18n="settings.status_bar_section.title">Status Bar</span></h5>
-        <label class="toggle-row">
-          <span data-i18n="settings.status_bar_section.show">Show Status Bar</span>
-          <input type="checkbox" id="show-status-bar">
+      <!-- Soundboard Sidebar Setting -->
+      <div class="settings-section" id="section-soundboard-mode" style="border-top: 1px solid var(--border-light); padding-top: 14px; margin-top: 8px;">
+        <h5 class="settings-section-title">🎛️ <span data-i18n="settings.soundboard_section.title">Soundboard</span></h5>
+        <label class="checkbox-row" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8125rem">
+          <input type="checkbox" id="soundboard-sidebar-mode-settings" style="cursor:pointer">
+          <span data-i18n="settings.soundboard_section.sidebar_mode">Sidebar mode</span>
         </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.status_bar_section.hint">Show the status bar at the bottom of the screen with server, ping, channel, and online info.</small>
-      </div>
-
-      <!-- Game Score Badges -->
-      <div class="settings-section" id="section-score-badges" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🚢 <span data-i18n="settings.score_badges.title">Score Badges</span></h5>
-        <label class="toggle-row">
-          <span data-i18n="settings.score_badges.hide_others">Hide other players' score badges</span>
-          <input type="checkbox" id="hide-other-scores">
-        </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_others_hint">Don't show 🚢 badges next to other users in the member list.</small>
-        <label class="toggle-row">
-          <span data-i18n="settings.score_badges.hide_own">Hide my score badge from this server</span>
-          <input type="checkbox" id="hide-own-score">
-        </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_own_hint">Other users (and you) won't see your 🚢 badge anywhere on this server, including the leaderboard.</small>
-      </div>
-
-      <!-- Activity / Rich Presence -->
-      <div class="settings-section" id="section-activity" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎮 <span data-i18n="settings.activity_section.title">Activity</span></h5>
-        <label class="toggle-row">
-          <span data-i18n="settings.activity_section.share">Share my activity</span>
-          <input type="checkbox" id="share-activity">
-        </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.activity_section.share_hint">Others can see what you're playing or listening to. Games and music only appear once you link an account below. Nothing is ever shared while your status is Invisible.</small>
-
-        <div id="activity-suboptions" style="display:none;padding-left:10px;border-left:2px solid var(--border-light);margin-bottom:10px">
-          <label class="toggle-row">
-            <span data-i18n="settings.activity_section.show_games">Show games</span>
-            <input type="checkbox" id="share-game-activity">
-          </label>
-          <label class="toggle-row">
-            <span data-i18n="settings.activity_section.show_music">Show music</span>
-            <input type="checkbox" id="share-music-activity">
-          </label>
-        </div>
-
-        <h5 class="settings-section-title" style="margin-top:12px">🔗 <span data-i18n="settings.activity_section.connections">Connections</span></h5>
-        <div id="connections-list">
-          <small class="settings-hint" data-i18n="modals.common.loading">Loading…</small>
-        </div>
-        <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.activity_section.connections_hint">Haven's own music player needs no connection — it shares automatically while you're listening in a voice channel.</small>
-
-        <!-- Listening presence (any music player) -->
-        <div id="listening-connection" style="margin-top:14px">
-          <h5 class="settings-section-title">🎶 <span data-i18n="settings.listening.title">Listening Webhook</span></h5>
-          <small class="settings-hint" style="display:block;margin-bottom:8px" data-i18n-html="settings.listening.note">Please refer to the <a href="https://github.com/ancsemi/Haven/blob/main/docs/listening-api.md" target="_blank" rel="noopener noreferrer">Listening API</a>.</small>
-          <label class="toggle-row">
-            <span data-i18n="settings.listening.toggle">Show my music on Haven</span>
-            <input type="checkbox" id="listening-enabled">
-          </label>
-          <div id="listening-url-row" hidden style="margin-top:8px">
-            <label class="connection-field">
-              <span data-i18n="settings.listening.url_label">Your webhook URL</span>
-              <input type="text" id="listening-url" readonly autocomplete="off" spellcheck="false">
-            </label>
-            <small class="settings-hint" style="display:block;margin-top:4px" data-i18n="settings.listening.url_hint">Point your player's plugin or script at this URL. Keep it secret; anyone with it can post to your profile.</small>
-          </div>
-        </div>
+        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.soundboard_section.sidebar_mode_hint">Open the soundboard as a pinned sidebar panel instead of a popup.</small>
       </div>
 
       <!-- Sounds Section -->
@@ -1937,6 +1880,65 @@
           <small class="settings-hint" id="push-notif-status" data-i18n="settings.push_section.checking">Checking...</small>
           <small class="settings-hint" style="opacity:0.5" data-i18n="settings.push_section.hint">Receive notifications even when Haven is closed</small>
         </div>
+      </div>
+
+      <!-- Activity / Rich Presence -->
+      <div class="settings-section" id="section-activity" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🎮 <span data-i18n="settings.activity_section.title">Activity</span></h5>
+        <label class="toggle-row">
+          <span data-i18n="settings.activity_section.share">Share my activity</span>
+          <input type="checkbox" id="share-activity">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.activity_section.share_hint">Others can see what you're playing or listening to. Games and music only appear once you link an account below. Nothing is ever shared while your status is Invisible.</small>
+
+        <div id="activity-suboptions" style="display:none;padding-left:10px;border-left:2px solid var(--border-light);margin-bottom:10px">
+          <label class="toggle-row">
+            <span data-i18n="settings.activity_section.show_games">Show games</span>
+            <input type="checkbox" id="share-game-activity">
+          </label>
+          <label class="toggle-row">
+            <span data-i18n="settings.activity_section.show_music">Show music</span>
+            <input type="checkbox" id="share-music-activity">
+          </label>
+        </div>
+
+        <h5 class="settings-section-title" style="margin-top:12px">🔗 <span data-i18n="settings.activity_section.connections">Connections</span></h5>
+        <div id="connections-list">
+          <small class="settings-hint" data-i18n="modals.common.loading">Loading…</small>
+        </div>
+        <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.activity_section.connections_hint">Haven's own music player needs no connection — it shares automatically while you're listening in a voice channel.</small>
+
+        <!-- Listening presence (any music player) -->
+        <div id="listening-connection" style="margin-top:14px">
+          <h5 class="settings-section-title">🎶 <span data-i18n="settings.listening.title">Listening Webhook</span></h5>
+          <small class="settings-hint" style="display:block;margin-bottom:8px" data-i18n-html="settings.listening.note">Please refer to the <a href="https://github.com/ancsemi/Haven/blob/main/docs/listening-api.md" target="_blank" rel="noopener noreferrer">Listening API</a>.</small>
+          <label class="toggle-row">
+            <span data-i18n="settings.listening.toggle">Show my music on Haven</span>
+            <input type="checkbox" id="listening-enabled">
+          </label>
+          <div id="listening-url-row" hidden style="margin-top:8px">
+            <label class="connection-field">
+              <span data-i18n="settings.listening.url_label">Your webhook URL</span>
+              <input type="text" id="listening-url" readonly autocomplete="off" spellcheck="false">
+            </label>
+            <small class="settings-hint" style="display:block;margin-top:4px" data-i18n="settings.listening.url_hint">Point your player's plugin or script at this URL. Keep it secret; anyone with it can post to your profile.</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Score Badges -->
+      <div class="settings-section" id="section-score-badges" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🚢 <span data-i18n="settings.score_badges.title">Score Badges</span></h5>
+        <label class="toggle-row">
+          <span data-i18n="settings.score_badges.hide_others">Hide other players' score badges</span>
+          <input type="checkbox" id="hide-other-scores">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_others_hint">Don't show 🚢 badges next to other users in the member list.</small>
+        <label class="toggle-row">
+          <span data-i18n="settings.score_badges.hide_own">Hide my score badge from this server</span>
+          <input type="checkbox" id="hide-own-score">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_own_hint">Other users (and you) won't see your 🚢 badge anywhere on this server, including the leaderboard.</small>
       </div>
 
       <!-- Password Change Section -->
