@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "extensions": [
+    {
+      "id": "org.example.layout",
+      "type": "plugin",
+      "version": "1.1.0",
+      "requires": { "haven": ">=4.5.0 <5.0.0" },
+      "asset": "ExampleLayout.plugin.js",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

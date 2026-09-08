@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-08T00:00:00Z",
+  "blocked": [
+    {
+      "repo": "example-owner/haven-extensions",
+      "id": "org.example.layout",
+      "versions": ["1.0.1"],
+      "reason": "Illustrative entry only: this version was withdrawn by its publisher."
+    }
+  ]
+}
