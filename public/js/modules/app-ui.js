@@ -3365,33 +3365,62 @@ _setupUI() {
   });
 
   // ── Settings scroll-spy ──────────────────────────────
-  // (language picker is built above; scroll-spy follows)
-  // The settings body is one long scrolling column, not a tab switcher, so the
-  // nav highlight used to sit on whatever was last clicked (or "Language" by
-  // default) no matter where you'd scrolled to. That made the nav actively
-  // misleading — it would claim you were in Language while you were looking at
-  // Activity. Track the topmost visible section instead.
-  const settingsBody = document.getElementById('settings-body-user');
-  if (settingsBody) {
+  // Settings bodies are long scrolling columns rather than tab switchers.
+  // Keep the corresponding nav item highlighted as the user scrolls.
+  //
+  // User settings:
+  //   #settings-body-user
+  //   .settings-nav-user
+  //
+  // Admin settings:
+  //   #settings-body-admin
+  //   .settings-nav-admin-group
+  //
+  // Each body has its own independent scroll-spy so the user and admin nav
+  // states cannot interfere with each other.
+  const setupSettingsScrollSpy = (settingsBody, navSelector) => {
+    if (!settingsBody) return;
+
     const syncNavHighlight = () => {
       if (Date.now() < (this._settingsSpyMuteUntil || 0)) return;
-      const navItems = Array.from(document.querySelectorAll('.settings-nav-user .settings-nav-item'));
-      if (!navItems.length) return;
-      const bodyTop = settingsBody.getBoundingClientRect().top;
 
-      let current = null;
-      for (const item of navItems) {
+      // Only consider nav items whose corresponding section currently exists
+      // and is visible. This is important for admin settings because many of
+      // the admin nav entries start with display:none.
+      const navItems = Array.from(document.querySelectorAll(`${navSelector} .settings-nav-item`));
+      const visibleNavItems = navItems.filter(item => {
+        if (item.offsetParent === null) return false;
+
         const section = document.getElementById(item.dataset.target);
-        if (!section || section.offsetParent === null) continue;
-        // The last section whose top has passed the viewport top is the one
-        // being read; anything below that hasn't been reached yet.
-        if (section.getBoundingClientRect().top - bodyTop <= 8) current = item;
-        else break;
+        return section && section.offsetParent !== null;
+      });
+
+      if (!visibleNavItems.length) return;
+
+      const bodyTop = settingsBody.getBoundingClientRect().top;
+      let current = null;
+      for (const item of visibleNavItems) {
+        const section = document.getElementById(item.dataset.target);
+        if (!section) continue;
+
+        // The last section whose top has passed the top of the scrolling
+        // body is the section currently being viewed.
+        if (section.getBoundingClientRect().top - bodyTop <= 8) {
+          current = item;
+        } else {
+          break;
+        }
       }
-      if (!current) current = navItems[0];
+
+      // Before the first section reaches the top, highlight the first
+      // visible section.
+      if (!current) current = visibleNavItems[0];
+
+      // Nothing to do if the correct item is already highlighted.
       if (current.classList.contains('active')) return;
 
-      navItems.forEach(n => n.classList.remove('active'));
+      // Only modify nav items belonging to this scroll-spy.
+      visibleNavItems.forEach(item => item.classList.remove('active'));
       current.classList.add('active');
       // Keep the highlighted entry reachable in a long nav list.
       current.scrollIntoView({ block: 'nearest' });
@@ -3403,7 +3432,15 @@ _setupUI() {
       spyQueued = true;
       requestAnimationFrame(() => { spyQueued = false; syncNavHighlight(); });
     }, { passive: true });
-  }
+
+    // Set the correct highlight immediately in case the settings body is
+    // already scrolled when the spy is initialized.
+    syncNavHighlight();
+  };
+  // User settings scroll-spy
+  setupSettingsScrollSpy(document.getElementById('settings-body-user'), '.settings-nav-user');
+  // Admin settings scroll-spy
+  setupSettingsScrollSpy(document.getElementById('settings-body-admin'), '.settings-nav-admin-group');
 
   // ── Language switcher ────────────────────────────────
   document.getElementById('language-select')?.addEventListener('change', (e) => {
