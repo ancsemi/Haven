@@ -2452,6 +2452,11 @@ _handleMarkdownShortcuts(inputEl, event) {
     return this._wrapSelectedText(input, '*', `*`, true);
   }
 
+  // Underline (Ctrl/Cmd + U).
+  if (key === 'u' && !event.shiftKey) {
+    return this._wrapSelectedText(input, '__', `__`, true);
+  }
+
   // Bold (Ctrl/Cmd + B). Shift+B is the bookmarks bar in Chrome.
   if (key === 'b' && !event.shiftKey) {
     return this._wrapSelectedText(input, '**', `**`, true);

@@ -974,6 +974,9 @@ _formatContent(str) {
   // Render **bold**
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
+  // Render __underline__
+  html = html.replace(/__(.+?)__/g, '<u>$1</u>');
+
   // Render *italic*
   html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
 
