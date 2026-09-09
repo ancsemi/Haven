@@ -1000,6 +1000,15 @@ _formatContent(str) {
     return `\x00BLOCKQUOTE_${idx}\x00`;
   });
 
+  // Render c#RRGGBB...#c color spans (HEX color code)
+  html = html.replace(/c#([0-9a-fA-F]{6})(.+?)#c/g, '<span style="color:#$1">$2</span>');
+
+  // Render c#(R,G,B)...#c color spans (RGB color code)
+  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)(.+?)#c/g, (_, r, g, b, text) => {
+    if (r > 255 || g > 255 || b > 255) return _;
+    return `<span style="color:rgb(${r},${g},${b})">${text}</span>`;
+  });
+
   // ── Headings: # H1, ## H2, ### H3 at start of line ──
   html = html.replace(/(^|\n)(#{1,3})\s+(.+)/g, (_, pre, hashes, text) => {
     const level = hashes.length;

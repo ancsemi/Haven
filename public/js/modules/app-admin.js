@@ -2479,6 +2479,17 @@ _handleMarkdownShortcuts(inputEl, event) {
   if (event.shiftKey && key === 'p') {
     return this._wrapSelectedText(input, '||', `||`);
   }
+
+  // Text color (Ctrl/Cmd + Shift + C)
+  if (event.shiftKey && key === 'c') {
+    const colorPrefix = 'c#(51,153,255)'
+    if (!this._wrapSelectedText(input, colorPrefix, '#c')) return false;
+
+    // Move cursor to just before ")" so the user can edit the color
+    const cursorPos = input.selectionStart + (colorPrefix.length - 1);
+    input.setSelectionRange(cursorPos, cursorPos);
+    return true;
+  }
   return false;
 },
 
