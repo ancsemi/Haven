@@ -683,7 +683,8 @@
       "import": "Import",
       "mod_mode": "Tryb moderatora",
       "automod": "Automoderacja",
-      "guests": "Dostęp dla gości"
+      "guests": "Dostęp dla gości",
+      "extension_updates": "Aktualizacje rozszerzeń"
     },
     "language_section": {
       "title": "Język",
@@ -1095,6 +1096,32 @@
       "roles_remove": "Usuń",
       "roles_select_to_add": "-- Wybierz rolę do dodania --",
       "roles_undo": "Cofnij"
+    },
+    "extension_updates": {
+      "operation_failed": "Operacja na rozszerzeniu nie powiodła się.",
+      "checking": "Sprawdzanie wydań i listy blokad bezpieczeństwa…",
+      "check_complete": "Sprawdzanie zakończone. Aktualizacje dotyczą wszystkich użytkowników tej instancji.",
+      "no_sources": "Żadne zainstalowane rozszerzenie nie wskazuje repozytorium aktualizacji.",
+      "rollback_title": "Przywróć rozszerzenie",
+      "update_title": "Zaktualizuj rozszerzenie",
+      "plugin_warning": "Wtyczki uruchamiają JavaScript w Haven i mogą uzyskiwać dostęp do wiadomości lub działać w Twoim imieniu. Instaluj tylko zaufany kod. Spowoduje to zastąpienie pliku dla wszystkich użytkowników tej instancji.",
+      "theme_warning": "Motywy mogą zmieniać lub ukrywać elementy sterujące oraz wczytywać zasoby zewnętrzne. Instaluj tylko zaufane motywy. Spowoduje to zastąpienie pliku dla wszystkich użytkowników tej instancji.",
+      "no_notes": "Nie podano informacji o wydaniu.",
+      "rollback": "Przywróć",
+      "update": "Rozumiem, aktualizuj",
+      "no_updates": "Nie znaleziono nowszego, zgodnego, niezablokowanego i niezmiennego wydania.",
+      "installing": "Weryfikowanie i instalowanie…",
+      "updated": "Rozszerzenie zaktualizowane. Odśwież stronę, aby zastosować zmianę. Twój wybór nie uległ zmianie.",
+      "installed_flagged": "Zainstalowana wersja oznaczona: {{reason}}",
+      "blocked_update": "Zablokowana aktualizacja: {{reason}}",
+      "review_rollback": "Sprawdź przywrócenie do wersji {{version}}",
+      "review_update": "Sprawdź aktualizację do wersji {{version}}",
+      "title": "Aktualizacje rozszerzeń",
+      "summary": "Sprawdź nowe wydania obsługiwanych wtyczek i motywów w zadeklarowanych repozytoriach GitHub.",
+      "check": "Sprawdź aktualizacje",
+      "release_link": "Zobacz wydanie na GitHubie",
+      "reload_notice": "Rozszerzenia zostały zmienione. Odśwież stronę, aby je zastosować; Twój wybór nie uległ zmianie.",
+      "reload": "Odśwież"
     }
   },
   "modals": {

@@ -1,22 +1,57 @@
-# Extension updates from GitHub Releases (draft)
+# Extension updates
 
-Proposal for #5578. This document is an early contract review, not an implemented
-updater. Existing plugin/theme loading is unchanged.
+Haven can update plugins and themes from public GitHub releases. Updates are
+manual and administrator-only: Haven does not poll repositories or install an
+extension in the background.
 
-## First implementation
+Extensions without update metadata continue to load normally, but Haven does
+not check them for updates.
 
-An administrator explicitly clicks **Check for updates**. Haven checks public
-GitHub repositories for installed extensions with update metadata. There is no
-background polling or automatic installation. A confirmation shows the repository,
-installed and proposed versions, release notes, and the access plugins have inside
-Haven. After confirmation, the server verifies the download before replacing the
-installed file and keeps the previous version for rollback.
+## Updating an extension
 
-The reusable publishing workflow and a marketplace can follow separately.
+Open **Settings → Admin → Extension Updates** and select **Check for updates**.
+Haven checks the repositories declared by the installed extensions and lists
+newer compatible versions.
 
-## Installed file header
+Before making a change, Haven shows the repository, installed and proposed
+versions, the GitHub release notes, and a security warning. Release notes are
+shown as escaped plain text. Select **I understand, update** to continue.
 
-Plugins and themes use their existing comment block, with two additional fields:
+Haven checks that:
+
+- the current user is still an administrator;
+- the release is published, immutable, and not a prerelease;
+- the installed file has not changed since the update check;
+- the version is not on Haven's security blocklist;
+- the downloaded file has the SHA-256 checksum declared by its manifest; and
+- the downloaded metadata matches the installed extension and repository.
+
+The existing file remains in place if any check fails. After a successful
+update, Haven keeps the previous file for rollback and asks connected users to
+reload.
+
+## Rolling back
+
+When a previous version is available, an administrator can review and restore
+it from the same settings page. Rollback uses the same administrator,
+blocklist, local-file, and atomic-replacement checks as an update.
+
+A backup is only offered on the Haven version where it was created. Restore an
+extension manually after upgrading Haven if its saved version is no longer
+eligible for rollback. A version listed on the security blocklist cannot be
+restored.
+
+## Extension maintainer guide
+
+An updateable extension needs metadata in its source file and a matching
+`haven-release.json` asset in each GitHub release. Haven downloads the
+`.plugin.js` or `.theme.css` file directly; do not package it in an archive or
+use an install script.
+
+### Add update metadata
+
+Add `@id`, `@version`, and `@update-repo` to the extension's leading comment
+block:
 
 ```js
 /**
@@ -27,116 +62,146 @@ Plugins and themes use their existing comment block, with two additional fields:
  */
 ```
 
-`id` is a stable, case-sensitive identifier: lowercase letters, digits, dots,
-underscores and hyphens, starting with a letter or digit (maximum 128 characters).
-`update-repo` is an owner/repository pair on github.com, not an arbitrary URL.
-Files without these fields continue to work and have no managed update source.
-The first implementation supports stable releases only; no channel field yet.
-
-On first use the admin approves the source, which Haven records alongside the
-installed ID, type, filename, version and checksum. A downloaded header cannot
-silently change that source or the destination filename. Existing filename-based
-preferences and theme publication settings must be preserved.
-
-## Release manifest
-
-Each release includes a UTF-8 JSON asset named `haven-release.json` and the actual
-`.plugin.js` and/or `.theme.css` assets. No archives or install scripts are used.
-See [the release example](examples/extension-updates/haven-release.json).
-The example uses a placeholder all-zero checksum and illustrative compatibility
-bounds; publishers must supply the actual file hash and tested version range.
-
-| Field | Meaning |
+| Field | Requirement |
 | --- | --- |
-| `schemaVersion` | Integer `1`; reject unsupported schema versions. |
-| `extensions` | Nonempty array; each ID occurs at most once. |
-| `id` | Matches the installed header ID. |
-| `type` | `plugin` or `theme`; must match the installed extension. |
-| `version` | Strict stable SemVer, compared semantically rather than lexically. |
-| `requires.haven` | SemVer range for the installed Haven version. |
-| `asset` | Exact release asset basename, ending in `.plugin.js` or `.theme.css` as appropriate. No slashes, backslashes, traversal, or arbitrary URL. |
-| `sha256` | Exactly 64 lowercase hexadecimal characters, hashing the raw asset bytes. |
+| `@id` | A stable, case-sensitive identifier containing lowercase letters, digits, dots, underscores, or hyphens. It must start with a letter or digit and cannot exceed 128 characters. |
+| `@version` | A complete, stable semantic version such as `1.1.0`. Prerelease versions are not supported. |
+| `@update-repo` | The public GitHub `owner/repository` containing the releases. Do not use a URL. |
 
-The repository comes from the approved installed source; release ID, asset ID,
-tag, release page and notes come from GitHub. They are not duplicated in the
-manifest. Multiple extensions may share a release and have independent versions.
-The tag need not equal each extension's version.
+Keep the ID and repository unchanged in future builds. Haven rejects a download
+that changes either value. Keep the extension filename stable as well, because
+Haven replaces the installed file without changing its name.
 
-Use only published, non-prerelease releases. Inspect manifests to select the
-highest newer compatible extension version; GitHub's "latest" release alone may
-exclude an older compatible version. Pagination and bounded requests must not
-silently turn an incomplete check into "up to date". Reject ambiguous duplicate
-asset names and conflicting candidates for the same extension version.
+### Build the release asset
 
-## Confirmation and installation contract
+Produce a single `.plugin.js` file for a plugin or `.theme.css` file for a
+theme. The built file must contain the same ID, version, and repository as its
+metadata and the release manifest.
 
-All check, install and rollback operations require server-side admin authorization
-against current database permissions. Browser visibility is not authorization.
+Calculate SHA-256 from the exact bytes that will be uploaded. For example:
 
-1. A check returns an offer bound server-side to the installed ID/checksum,
-   approved repository, release ID, asset ID, version and expected checksum.
-2. Render release notes safely as text or sanitized Markdown. Show the repository
-   and link to the release in the confirmation. A checksum proves byte integrity,
-   not that a publisher's JavaScript is safe.
-3. On confirmation, recheck admin permission, the installed checksum and the
-   blocklist. Reject stale offers rather than substituting another release.
-4. Download to staging with time and size limits. Restrict GitHub API/download
-   destinations and redirects; never accept arbitrary URLs or local/private
-   network destinations from manifests. Do not send credentials to download hosts.
-5. Verify SHA-256 on the original bytes and check header ID/version/source and file
-   type against the offer. Never evaluate downloaded JavaScript on the server.
-6. Under an extension-specific lock, preserve the current bytes and metadata
-   outside public static directories, then atomically replace the file on the same
-   filesystem. Failed validation leaves the current file untouched. Persist a
-   recoverable transaction record so a crash cannot mismatch file and version state.
-7. Offer users a reload; retain their selections. Use a version/hash cache key so
-   reload fetches the replacement. Do not hot-swap running plugin code in this pass.
+```sh
+shasum -a 256 ExampleLayout.plugin.js
+```
 
-Rollback restores the saved bytes and metadata using the same lock and atomic
-replacement rules. It must check the blocklist too and must not restore a known
-blocked release. Local edits cause a conflict instead of being overwritten.
-Managed storage must survive container recreation and be writable; unsupported
-read-only deployments should get an actionable message.
+Do not modify or regenerate the asset after calculating the checksum.
 
-## Blocklist
+### Create `haven-release.json`
 
-Proposed location: `https://ancsemi.github.io/Haven/blocklist.json` (not assumed to
-exist yet). See [the blocklist example](examples/extension-updates/blocklist.json).
+Add one entry for each extension shipped by the release:
 
-`schemaVersion` is `1`; `updatedAt` is an RFC 3339 UTC timestamp; `blocked` is an
-array. Entries identify an approved `repo`, extension `id`, exact `versions`, and a
-human-readable `reason`. Repository matching is case-insensitive; IDs and versions
-are exact. Scope by repository as well as ID to avoid unrelated ID collisions.
-Version ranges and hash-only indicators can be added later if needed.
+```json
+{
+  "schemaVersion": 1,
+  "extensions": [
+    {
+      "id": "org.example.layout",
+      "type": "plugin",
+      "version": "1.1.0",
+      "requires": { "haven": ">=4.5.0 <5.0.0" },
+      "asset": "ExampleLayout.plugin.js",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  ]
+}
+```
 
-Check this list when the admin checks for updates and again before install or
-rollback. Warn about affected installed extensions and block affected candidates.
-Do not silently disable running extensions. There is no background alerting in
-this initial manual-only design.
+| Field | Requirement |
+| --- | --- |
+| `schemaVersion` | The integer `1`. |
+| `extensions` | A nonempty array containing no more than 100 entries. Each ID can occur once. |
+| `id` | The exact `@id` from the extension file. |
+| `type` | `plugin` or `theme`. |
+| `version` | The exact stable semantic version from the extension file. |
+| `requires.haven` | A semantic-version range describing the Haven versions tested with this build. |
+| `asset` | The exact release asset basename. It must end in `.plugin.js` for a plugin or `.theme.css` for a theme. Paths and URLs are rejected. |
+| `sha256` | The lowercase, 64-character SHA-256 digest of the raw extension asset. |
 
-An unavailable or malformed list is not an empty list. Proposed behavior: keep
-existing extensions running, show that the security check is unavailable, and
-require a successful refresh before installing or rolling back. This availability
-tradeoff needs agreement before implementation. Removing a compromised version
-does not undo actions it already performed.
+The release tag does not have to match the extension version. A repository may
+publish several extensions in one release, and each entry may have its own
+version and compatibility range. See the complete
+[release manifest example](examples/extension-updates/haven-release.json).
 
-## Questions for this draft
+### Publish the GitHub release
 
-- Does this header and manifest shape fit the existing extension conventions?
-- Should immutable releases be mandatory from the start? The initial issue
-  discussion suggested them; this draft leaves the decision explicit. Checksums
-  remain required either way.
-- Is exact-version blocking sufficient initially, and is the proposed behavior
-  when the blocklist is unavailable appropriate?
+1. Create a release in the public repository named by `@update-repo`.
+2. Upload `haven-release.json` and every extension file named in the manifest
+   as release assets.
+3. Add release notes. Haven shows the GitHub release body as plain text when an
+   administrator reviews the update.
+4. Publish the release as a normal release, not a draft or prerelease.
+5. Make the release immutable in the repository's GitHub settings.
 
-## Follow-up implementation and validation
+Haven ignores a release until all of these conditions are satisfied. It checks
+published releases and chooses the highest newer compatible extension version,
+so the GitHub “latest” release does not need to support every Haven version.
 
-- Strict manifest/header/blocklist parsing; compatibility and candidate selection.
-- Admin-only check endpoint and settings control, then review confirmation.
-- Bounded download, checksum verification, transaction storage and rollback.
-- Blocklist integration and reload notice without changing user preferences.
-- Tests for non-admin requests, malformed metadata, incompatible versions, stale
-  offers, checksum mismatch, blocked releases, failed downloads, concurrent
-  updates, local modifications and crash recovery.
-- Browser verification of check, cancel, install failure, successful update and
-  rollback. Shared release Actions workflow only after the updater works.
+Treat a published asset and manifest as permanent. Publish a new immutable
+release for corrections instead of replacing an existing asset.
+
+### Test a release
+
+Install the extension file in Haven's normal `plugins/` or `themes/` directory,
+then open **Settings → Admin → Extension Updates** and run a check. Confirm that Haven finds the
+expected version, displays the repository and release notes, installs the file,
+and offers the previous version for rollback.
+
+If Haven reports a checksum mismatch, calculate the digest from the uploaded
+release asset and compare it with `sha256` in `haven-release.json`. Metadata
+errors usually mean the ID, version, repository, asset name, extension type, or
+Haven compatibility range differs between the installed file, downloaded file,
+and manifest.
+
+## Security blocklist
+
+Haven reads its blocklist from
+`https://ancsemi.github.io/Haven/blocklist.json` before checking, installing,
+or rolling back an extension. Each entry identifies a repository, extension ID,
+exact versions, and a reason:
+
+```json
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-08T00:00:00Z",
+  "blocked": [
+    {
+      "repo": "example-owner/haven-extensions",
+      "id": "org.example.layout",
+      "versions": ["1.0.1"],
+      "reason": "This release has been withdrawn by its publisher."
+    }
+  ]
+}
+```
+
+Repository matching is case-insensitive; IDs and versions are exact. Haven
+warns administrators when an installed version is listed and prevents listed
+versions from being installed or restored. It does not silently disable an
+extension that is already running.
+
+If the blocklist is unavailable or malformed, existing extensions continue to
+run, but Haven prevents updates and rollbacks until it can complete a fresh
+security check. See the [blocklist example](examples/extension-updates/blocklist.json).
+
+## Deployment notes
+
+Updater state, backups, and the recovery journal are stored under
+`HAVEN_DATA_DIR/extension-updates`. Plugin and theme files remain in Haven's
+existing `plugins/` and `themes/` directories. Container deployments must keep
+these locations writable and persistent. Back up the extension directories and
+updater state together.
+
+Run one Haven process against these directories. The updater serializes work
+inside one process but does not coordinate multiple Haven processes sharing the
+same storage.
+
+Update offers belong to the administrator who checked and expire after ten
+minutes. A new check or successful replacement invalidates earlier offers.
+Local edits and source changes are reported as conflicts and are never
+overwritten automatically.
+
+Downloads use HTTPS and approved public GitHub hosts without credentials.
+Requests have time and size limits. Haven caps the blocklist at 1 MiB, GitHub
+JSON responses at 2 MiB, and extension assets at 5 MiB. It checks at most five
+pages of releases and 30 manifests per repository. An incomplete check is
+reported as an error rather than “up to date.”

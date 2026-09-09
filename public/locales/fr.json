@@ -658,7 +658,8 @@
       "import": "Importer",
       "mod_mode": "Mode mod",
       "automod": "Modération automatique",
-      "guests": "Accès invité"
+      "guests": "Accès invité",
+      "extension_updates": "Mises à jour des extensions"
     },
     "language_section": {
       "title": "Langue",
@@ -1047,6 +1048,32 @@
         "level_0_role_note": "Les rôles de niveau 0 sont appelés « Groupes ». Les groupes n’accordent aucune permission. Les utilisateurs peuvent rejoindre ces groupes librement sans disposer de permissions élevées. Ils peuvent notamment servir pour : les attributions de canaux, les regroupements et le jeu de rôle.",
         "delete": "Supprimer"
       }
+    },
+    "extension_updates": {
+      "operation_failed": "L’opération sur l’extension a échoué.",
+      "checking": "Vérification des versions et de la liste de blocage de sécurité…",
+      "check_complete": "Vérification terminée. Les mises à jour s’appliquent à tous les utilisateurs de cette instance.",
+      "no_sources": "Aucune extension installée ne déclare de dépôt de mise à jour.",
+      "rollback_title": "Restaurer l’extension",
+      "update_title": "Mettre à jour l’extension",
+      "plugin_warning": "Les plugins exécutent du JavaScript dans Haven et peuvent accéder aux messages ou agir en votre nom. Installez uniquement du code fiable. Cette action remplace le fichier pour tous les utilisateurs de cette instance.",
+      "theme_warning": "Les thèmes peuvent modifier ou masquer des commandes et charger des ressources externes. Installez uniquement des thèmes fiables. Cette action remplace le fichier pour tous les utilisateurs de cette instance.",
+      "no_notes": "Aucune note de version fournie.",
+      "rollback": "Restaurer",
+      "update": "Je comprends, mettre à jour",
+      "no_updates": "Aucune version plus récente, compatible, non bloquée et immuable trouvée.",
+      "installing": "Vérification et installation…",
+      "updated": "Extension mise à jour. Rechargez pour appliquer la modification. Vos sélections restent inchangées.",
+      "installed_flagged": "Version installée signalée : {{reason}}",
+      "blocked_update": "Mise à jour bloquée : {{reason}}",
+      "review_rollback": "Vérifier la restauration vers {{version}}",
+      "review_update": "Vérifier la mise à jour vers {{version}}",
+      "title": "Mises à jour des extensions",
+      "summary": "Recherchez de nouvelles versions des plugins et thèmes compatibles dans leurs dépôts GitHub déclarés.",
+      "check": "Rechercher des mises à jour",
+      "release_link": "Voir la version sur GitHub",
+      "reload_notice": "Les extensions ont changé. Rechargez pour les appliquer ; vos sélections restent inchangées.",
+      "reload": "Recharger"
     }
   },
   "modals": {

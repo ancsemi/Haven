@@ -319,6 +319,7 @@ class HavenApp {
     this._setupEmojiManagement();
     this._setupStickerManagement();
     this._setupWebhookManagement();
+    this._setupExtensionUpdates();
     this._setupDiscordImport();
     this._setupAuditLog();
     this._initRoleManagement();

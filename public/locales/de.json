@@ -658,7 +658,8 @@
       "import": "Importieren",
       "mod_mode": "Mod-Modus",
       "automod": "Automod",
-      "guests": "Gastzugriff"
+      "guests": "Gastzugriff",
+      "extension_updates": "Erweiterungsupdates"
     },
     "language_section": {
       "title": "Sprache",
@@ -1047,6 +1048,32 @@
         "level_0_role_note": "Rollen der Stufe 0 werden als „Gruppen“ bezeichnet. Gruppen gewähren keine Berechtigungen. Benutzer können diesen Gruppen nach Belieben beitreten, ohne erhöhte Berechtigungen zu benötigen. Mögliche Verwendungszwecke sind: Kanalzuweisungen, Gruppierungen und Rollenspiele.",
         "delete": "Löschen"
       }
+    },
+    "extension_updates": {
+      "operation_failed": "Die Erweiterungsaktion ist fehlgeschlagen.",
+      "checking": "Veröffentlichungen und Sicherheits-Sperrliste werden geprüft…",
+      "check_complete": "Prüfung abgeschlossen. Updates gelten für alle auf dieser Instanz.",
+      "no_sources": "Keine installierten Erweiterungen geben ein Update-Repository an.",
+      "rollback_title": "Erweiterung zurücksetzen",
+      "update_title": "Erweiterung aktualisieren",
+      "plugin_warning": "Plugins führen JavaScript in Haven aus und können auf Nachrichten zugreifen oder in deinem Namen handeln. Installiere nur Code, dem du vertraust. Dadurch wird die Datei für alle auf dieser Instanz ersetzt.",
+      "theme_warning": "Themes können Steuerelemente verändern oder ausblenden und externe Ressourcen laden. Installiere nur Themes, denen du vertraust. Dadurch wird die Datei für alle auf dieser Instanz ersetzt.",
+      "no_notes": "Keine Versionshinweise vorhanden.",
+      "rollback": "Zurücksetzen",
+      "update": "Ich verstehe, aktualisieren",
+      "no_updates": "Keine neuere kompatible, nicht gesperrte und unveränderliche Veröffentlichung gefunden.",
+      "installing": "Wird überprüft und installiert…",
+      "updated": "Erweiterung aktualisiert. Neu laden, um die Änderung anzuwenden. Deine Auswahl bleibt unverändert.",
+      "installed_flagged": "Installierte Version markiert: {{reason}}",
+      "blocked_update": "Gesperrtes Update: {{reason}}",
+      "review_rollback": "Zurücksetzen auf {{version}} prüfen",
+      "review_update": "Update auf {{version}} prüfen",
+      "title": "Erweiterungsupdates",
+      "summary": "Unterstützte Plugins und Themes auf neue Veröffentlichungen in den angegebenen GitHub-Repositorys prüfen.",
+      "check": "Nach Updates suchen",
+      "release_link": "GitHub-Veröffentlichung anzeigen",
+      "reload_notice": "Erweiterungen wurden geändert. Lade neu, um sie anzuwenden; deine Auswahl bleibt unverändert.",
+      "reload": "Neu laden"
     }
   },
   "modals": {

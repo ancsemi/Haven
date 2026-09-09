@@ -658,7 +658,8 @@
       "import": "Importar",
       "mod_mode": "Modo mod",
       "automod": "Automoderación",
-      "guests": "Acceso de invitados"
+      "guests": "Acceso de invitados",
+      "extension_updates": "Actualizaciones de extensiones"
     },
     "language_section": {
       "title": "Idioma",
@@ -1047,6 +1048,32 @@
         "level_0_role_note": "Los roles de nivel 0 se denominan «Grupos». Los grupos no otorgan ningún permiso. Los usuarios pueden unirse a estos grupos libremente sin necesidad de permisos elevados. Algunos usos posibles son: asignaciones de canales, agrupaciones y juegos de rol.",
         "delete": "Eliminar"
       }
+    },
+    "extension_updates": {
+      "operation_failed": "La operación de la extensión ha fallado.",
+      "checking": "Comprobando versiones y la lista de bloqueo de seguridad…",
+      "check_complete": "Comprobación terminada. Las actualizaciones se aplican a todos los usuarios de esta instancia.",
+      "no_sources": "Ninguna extensión instalada declara un repositorio de actualizaciones.",
+      "rollback_title": "Revertir extensión",
+      "update_title": "Actualizar extensión",
+      "plugin_warning": "Los plugins ejecutan JavaScript dentro de Haven y pueden acceder a mensajes o actuar en tu nombre. Instala únicamente código de confianza. Esto sustituye el archivo para todos los usuarios de esta instancia.",
+      "theme_warning": "Los temas pueden cambiar u ocultar controles y cargar recursos externos. Instala únicamente temas de confianza. Esto sustituye el archivo para todos los usuarios de esta instancia.",
+      "no_notes": "No se han proporcionado notas de la versión.",
+      "rollback": "Revertir",
+      "update": "Lo entiendo, actualizar",
+      "no_updates": "No se ha encontrado ninguna versión más reciente, compatible, no bloqueada e inmutable.",
+      "installing": "Verificando e instalando…",
+      "updated": "Extensión actualizada. Recarga para aplicar el cambio. Tus selecciones no han cambiado.",
+      "installed_flagged": "Versión instalada marcada: {{reason}}",
+      "blocked_update": "Actualización bloqueada: {{reason}}",
+      "review_rollback": "Revisar reversión a {{version}}",
+      "review_update": "Revisar actualización a {{version}}",
+      "title": "Actualizaciones de extensiones",
+      "summary": "Busca nuevas versiones de plugins y temas compatibles en sus repositorios de GitHub declarados.",
+      "check": "Buscar actualizaciones",
+      "release_link": "Ver versión en GitHub",
+      "reload_notice": "Las extensiones han cambiado. Recarga para aplicarlas; tus selecciones no han cambiado.",
+      "reload": "Recargar"
     }
   },
   "modals": {

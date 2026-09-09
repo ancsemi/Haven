@@ -1359,6 +1359,7 @@
           <div class="settings-nav-admin-group" style="display:none">
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_server">Server</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-update" style="display:none">⬆️ <span data-i18n="settings.nav.server_updates">Server Updates</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-extension-updates" style="display:none">🧩 <span data-i18n="settings.nav.extension_updates">Extension Updates</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 <span data-i18n="settings.nav.tunnel">Tunnel</span></div>
@@ -2272,6 +2273,17 @@
             <button class="btn-sm" id="update-run-btn" disabled data-i18n="settings.admin.update_run_btn">Update Now</button>
           </div>
           <div id="update-status" style="margin-top:10px;padding:8px;border:1px solid var(--border);border-radius:4px;display:none"></div>
+        </div>
+
+        <!-- Plugin and Theme Updates -->
+        <div class="admin-settings" id="section-extension-updates">
+          <h5 class="settings-section-subtitle">🧩 <span data-i18n="settings.extension_updates.title">Extension Updates</span></h5>
+          <small class="settings-hint" data-i18n="settings.extension_updates.summary">Check supported plugins and themes for new releases from their declared GitHub repositories.</small>
+          <div style="margin-top:8px">
+            <button id="extension-update-check" data-i18n="settings.extension_updates.check" class="btn-sm btn-accent">Check for updates</button>
+          </div>
+          <p id="extension-update-status" role="status" class="settings-hint"></p>
+          <div id="extension-update-results" class="plugin-list"></div>
         </div>
 
         <!-- Server Branding -->

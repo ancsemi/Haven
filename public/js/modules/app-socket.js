@@ -144,6 +144,10 @@ _clearChannelCodeMap() {
 
 _setupSocketListeners() {
   this._setupFerrySocket();
+  // Extension files are replaced on the server, but each client keeps its
+  // current code until reload so running plugin state is not hot-swapped.
+  this.socket.on('extensions-updated', () => this._showExtensionReloadNotice());
+
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };

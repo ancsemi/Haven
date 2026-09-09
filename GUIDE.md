@@ -707,6 +707,11 @@ To make a bundled theme available to everyone, go to **Settings → Admin → �
 
 Custom themes work the same way. Drop a `<name>.theme.css` file into the `themes/` folder, restart, then publish it in the same place. A theme can also be set as the server **default** from that section, which applies to anyone who has not already picked a theme of their own. It is a default rather than a lock, so a user who chooses a different theme keeps their choice.
 
+Administrators can check supported plugins and themes for updates under
+**Settings → Admin → Extension Updates**. Extension authors can add update support using
+the metadata and GitHub release format in the
+[extension update and maintainer guide](docs/extension-updates.md).
+
 Enable **Compact Layout** per browser under **Settings → Plugins & Themes**. It
 folds the server rail into the navigation sidebar and docks account and active
 voice controls in that sidebar's footer on desktop. Tablet and mobile keep the

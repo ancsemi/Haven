@@ -6438,6 +6438,38 @@ details.sound-section:not([open]) .sound-section-label::before {
   width: min(90%, 23.75rem);
   padding: 1.375rem 1.5rem 1.25rem;
 }
+.extension-update-warning {
+  margin: 1.25rem -1.5rem -1.25rem;
+  padding: 1rem 1.5rem 1.25rem;
+  color: #fff;
+  background: #b42318;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+.extension-update-warning p {
+  margin: 0.375rem 0 0;
+  color: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.extension-update-warning .modal-actions {
+  margin-top: 0.875rem;
+}
+.extension-update-warning .btn-sm {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.18);
+}
+.extension-update-warning .btn-sm:hover {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.28);
+}
+.extension-update-warning .btn-sm.btn-accent {
+  color: #b42318;
+  background: #fff;
+}
+.extension-update-warning .btn-sm.btn-accent:hover {
+  color: #b42318;
+  background: rgba(255, 255, 255, 0.9);
+}
 
 /* Expand/restore toggle button in modal headers */
 .modal-expand-btn {
@@ -11202,6 +11234,37 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-size: 0.625rem;
   color: var(--text-muted);
   margin-top: 0.125rem;
+}
+#extension-update-results .plugin-card {
+  align-items: stretch;
+  flex-direction: column;
+}
+.extension-update-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  margin-top: 0.625rem;
+}
+.extension-update-actions .btn-sm {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  min-height: 2rem;
+  text-align: center;
+  text-decoration: none;
+}
+@media (max-width: 600px) {
+  .extension-update-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #extension-update-results .extension-update-actions > .btn-sm {
+    justify-content: center;
+    min-width: 0;
+    width: 100%;
+    white-space: normal;
+  }
 }
 .plugin-empty {
   font-size: 0.75rem;
