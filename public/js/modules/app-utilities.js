@@ -966,6 +966,9 @@ _formatContent(str) {
     return match;
   });
 
+  // Render __underline__
+  html = html.replace(/__(.+?)__/g, '<u>$1</u>');
+
   // Render /me action text (italic)
   if (html.startsWith('_') && html.endsWith('_') && html.length > 2) {
     html = `<em class="action-text">${html.slice(1, -1)}</em>`;
@@ -973,9 +976,6 @@ _formatContent(str) {
 
   // Render **bold**
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-  // Render __underline__
-  html = html.replace(/__(.+?)__/g, '<u>$1</u>');
 
   // Render *italic*
   html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
