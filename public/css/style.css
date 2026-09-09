@@ -3821,17 +3821,20 @@ html.rgb-cycling *::after {
   overflow-y: auto;
 }
 .dm-pip-send {
-  background: var(--accent, #5865f2);
-  color: var(--accent-text);
-  border: none;
-  border-radius: 0.375rem;
-  padding: 0 0.625rem;
-  cursor: pointer;
+  width: 2.125rem;
+  height: 2.125rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
 }
-.dm-pip-send:hover { filter: brightness(1.1); }
+.dm-pip-send:hover { filter: brightness(1.15); }
 
 /* Drag handle at the top of PiP input areas — drag upward to expand the textarea */
 .pip-input-resizer {
