@@ -2452,6 +2452,11 @@ _handleMarkdownShortcuts(inputEl, event) {
     return this._wrapSelectedText(input, '*', `*`, true);
   }
 
+  // Underline (Ctrl/Cmd + U).
+  if (key === 'u' && !event.shiftKey) {
+    return this._wrapSelectedText(input, '__', `__`, true);
+  }
+
   // Bold (Ctrl/Cmd + B). Shift+B is the bookmarks bar in Chrome.
   if (key === 'b' && !event.shiftKey) {
     return this._wrapSelectedText(input, '**', `**`, true);
@@ -2478,6 +2483,17 @@ _handleMarkdownShortcuts(inputEl, event) {
   // Spoiler (Ctrl/Cmd + Shift + P)
   if (event.shiftKey && key === 'p') {
     return this._wrapSelectedText(input, '||', `||`);
+  }
+
+  // Text color (Ctrl/Cmd + Shift + F) (F for font, since c for code is already taken)
+  if (event.shiftKey && key === 'f') {
+    const colorPrefix = 'c#(51,153,255)'
+    if (!this._wrapSelectedText(input, colorPrefix, '#c')) return false;
+
+    // Move cursor to just before ")" so the user can edit the color
+    const cursorPos = input.selectionStart + (colorPrefix.length - 1);
+    input.setSelectionRange(cursorPos, cursorPos);
+    return true;
   }
   return false;
 },
@@ -5339,6 +5355,7 @@ _openRoleAssignCenter(preSelectUserId = null) {
   this._racSelectedUser = null;
   this._racSelectedChannel = null; // null = server-wide, number = channel id
   this._racPendingChanges = {}; // key: `${userId}:${channelId||'server'}` → { assignments: { [roleId]: {level, customPerms, applyToSubs} }, removals: [roleId, ...] }
+  this._racCollapsed = new Set(); // `${key}:${roleId}` cards folded away while their edits stay pending (#5607)
 
   document.getElementById('rac-user-list').innerHTML = `<p class="rac-placeholder">${t('modals.common.loading')}</p>`;
   document.getElementById('rac-channel-list').innerHTML = `<p class="rac-placeholder">${t('settings.admin.roles_select_user')}</p>`;
@@ -5666,7 +5683,11 @@ _renderRacConfig() {
     const effectivePerms = assignment && assignment.customPerms
       ? assignment.customPerms
       : [...(card.defaultPerms || [])];
-    const expanded = !!assignment;
+    // Collapsed is a view state on top of the pending assignment, so a card
+    // with edits, or a pending add, can be folded away without losing them.
+    // The Collapse button used to do nothing at all for those (#5607).
+    if (!this._racCollapsed) this._racCollapsed = new Set();
+    const expanded = !!assignment && !this._racCollapsed.has(`${key}:${card.roleId}`);
     const applyToSubs = !!(assignment && assignment.applyToSubs);
 
     let stateBadge = '';
@@ -5869,16 +5890,25 @@ _renderRacConfig() {
       const p = ensurePending();
       const card = cards.find(c => c.roleId === rid);
       if (!card) return;
+      const collapsedKey = `${key}:${rid}`;
       if (p.assignments && p.assignments[rid]) {
-        // Already expanded — collapse by removing the assignment IF nothing
-        // was changed from the held state. Otherwise keep it.
-        const a = p.assignments[rid];
-        const unchanged = card.held
-          && a.level === card.heldLevel
-          && JSON.stringify((a.customPerms || []).slice().sort()) === JSON.stringify((card.defaultPerms || []).slice().sort())
-          && !a.applyToSubs;
-        if (unchanged) delete p.assignments[rid];
+        if (this._racCollapsed.has(collapsedKey)) {
+          // Folded away with edits still pending: open it back up.
+          this._racCollapsed.delete(collapsedKey);
+        } else {
+          // Collapse by dropping the assignment when nothing was changed from
+          // the held state. With edits, or a pending add, keep them and just
+          // fold the editor (#5607).
+          const a = p.assignments[rid];
+          const unchanged = card.held
+            && a.level === card.heldLevel
+            && JSON.stringify((a.customPerms || []).slice().sort()) === JSON.stringify((card.defaultPerms || []).slice().sort())
+            && !a.applyToSubs;
+          if (unchanged) delete p.assignments[rid];
+          else this._racCollapsed.add(collapsedKey);
+        }
       } else {
+        this._racCollapsed.delete(collapsedKey);
         // Expand: seed an assignment from the current held values (or preset).
         p.assignments[rid] = {
           level: card.held ? card.heldLevel : card.defaultLevel,

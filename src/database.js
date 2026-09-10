@@ -1443,6 +1443,13 @@ function initDatabase() {
     db.exec("ALTER TABLE channels ADD COLUMN read_only INTEGER DEFAULT 0");
   }
 
+  // ── Migration: former channel names, so a #old-name link keeps resolving (#5602) ──
+  try {
+    db.prepare("SELECT former_names FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN former_names TEXT DEFAULT NULL");
+  }
+
   // ── Migration: encrypted server list for cross-device sync ──────────
   try {
     db.prepare("SELECT encrypted_servers FROM users LIMIT 0").get();

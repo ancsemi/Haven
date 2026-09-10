@@ -89,6 +89,15 @@ _handleAutocompleteKeydown(e) {
 _setupUI() {
   const msgInput = document.getElementById('message-input');
 
+  // A Discord emote whose picture cannot be fetched (bridge off, emote deleted,
+  // offline) shows its :name: instead of a broken image. Error events do not
+  // bubble, so this listens in the capture phase.
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || !img.classList.contains('discord-emote')) return;
+    img.replaceWith(document.createTextNode(img.alt || ''));
+  }, true);
+
   // Shorter placeholder on narrow screens to prevent wrapping
   if (window.innerWidth <= 480) {
     msgInput.placeholder = t('app.messages.placeholder_short');

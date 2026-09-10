@@ -2213,6 +2213,57 @@ app.get('/api/standard-emojis', (req, res) => {
   res.json(require('./src/emoji').getEmojiData() || { categories: {}, names: {}, modifierBase: [] });
 });
 
+// ── Discord emote cache ─────────────────────────────────
+// A Discord custom emote travels as <:name:id> (or <a:name:id> when animated),
+// whether Ferry relayed it or a Haven member typed it so it shows on the
+// Discord side. Clients render that token as an inline image and load it from
+// here rather than from cdn.discordapp.com, so a third-party host never sees
+// who is scrolling through a bridged channel: the server fetches each emote
+// once and keeps it on disk. Only a server with the bridge switched on fetches
+// anything; everywhere else the client gets a 404 and shows the :name: text.
+const DISCORD_EMOTE_DIR = path.join(DATA_DIR, 'cache', 'discord-emotes');
+const DISCORD_EMOTE_MAX_BYTES = 512 * 1024;
+const DISCORD_EMOTE_MAX_FILES = 5000;
+const discordEmoteMisses = new Map();    // file -> when Discord last said it does not exist
+const discordEmoteInflight = new Map();  // file -> download in progress, so a burst of renders is one fetch
+const discordEmoteLimiter = require('express-rate-limit')({ windowMs: 60 * 1000, max: 300, message: { error: 'Rate limit exceeded' } });
+
+app.get('/api/ferry/emote/:file', discordEmoteLimiter, async (req, res) => {
+  const m = /^(\d{15,25})\.(png|gif)$/.exec(String(req.params.file || ''));
+  if (!m) return res.status(400).end();
+  const file = m[0];
+  const full = path.join(DISCORD_EMOTE_DIR, file);
+  // An emote id never changes what it points at, so a copy is good forever.
+  const sendOpts = { maxAge: 365 * 24 * 60 * 60 * 1000, immutable: true };
+  if (fs.existsSync(full)) return res.sendFile(full, sendOpts);
+
+  let ferryOn = false;
+  try { ferryOn = !!require('./src/ferry').getFerryState().enabled; } catch { /* bridge not loaded */ }
+  if (!ferryOn) return res.status(404).end();
+  const missedAt = discordEmoteMisses.get(file);
+  if (missedAt && Date.now() - missedAt < 6 * 60 * 60 * 1000) return res.status(404).end();
+
+  let job = discordEmoteInflight.get(file);
+  if (!job) {
+    job = (async () => {
+      fs.mkdirSync(DISCORD_EMOTE_DIR, { recursive: true });
+      if (fs.readdirSync(DISCORD_EMOTE_DIR).length >= DISCORD_EMOTE_MAX_FILES) return false;
+      const r = await fetch(`https://cdn.discordapp.com/emojis/${file}?size=64`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok || !/^image\//i.test(r.headers.get('content-type') || '')) return false;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (!buf.length || buf.length > DISCORD_EMOTE_MAX_BYTES) return false;
+      const tmp = `${full}.${process.pid}.${Date.now()}.tmp`;
+      fs.writeFileSync(tmp, buf);
+      fs.renameSync(tmp, full);
+      return true;
+    })().catch(() => false).finally(() => discordEmoteInflight.delete(file));
+    discordEmoteInflight.set(file, job);
+  }
+  if (await job) return res.sendFile(full, sendOpts);
+  discordEmoteMisses.set(file, Date.now());
+  res.status(404).end();
+});
+
 app.delete('/api/emojis/:name', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;

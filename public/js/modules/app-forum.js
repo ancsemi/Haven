@@ -182,6 +182,9 @@ _createForumTopicEl(msg) {
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
   el.dataset.username = msg.username || '';
+  // Protected topics carry the same flag and shield as a message in chat, so
+  // the card shows it and the context menu offers Unprotect (#5622).
+  if (msg.is_archived) { el.classList.add('archived'); el.dataset.archived = '1'; }
   const tagsOf = this._forumTagsOf();
   const tags = Array.isArray(msg.tags) ? msg.tags : [];
   const thumb = this._forumThumbOf(msg);
@@ -191,7 +194,7 @@ _createForumTopicEl(msg) {
   el.innerHTML = `
     ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"><span>⬡</span></div>`}
     <div class="forum-topic-body">
-      <div class="forum-topic-tags">${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
+      <div class="forum-topic-tags">${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
       <div class="forum-topic-title">${this._escapeHtml(this._forumTitleOf(msg))}</div>
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">

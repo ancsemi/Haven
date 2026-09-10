@@ -1659,7 +1659,9 @@ _fetchLinkPreviews(containerEl) {
   if (!/\bembed-size-/.test(document.body.className)) this._applyEmbedSize(this._embedSize());
   const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
 
-  const links = containerEl.querySelectorAll('.message-content a[href]');
+  // Thread replies keep their body in .thread-msg-content, and until now no
+  // preview card was ever drawn there (#5620).
+  const links = containerEl.querySelectorAll('.message-content a[href], .thread-msg-content a[href]');
   const seen = new Set();
   links.forEach(link => {
     const url = link.href;
@@ -1679,7 +1681,7 @@ _fetchLinkPreviews(containerEl) {
     // ── Inline YouTube embed (wrapped in the shared embed chrome) ──
     const ytVideoId = this._extractYouTubeVideoId(url);
     if (ytVideoId) {
-      const msgContent = link.closest('.message-content');
+      const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
       const ytCollapsed = this._collapsedEmbeds.has(url);
@@ -1738,7 +1740,7 @@ _fetchLinkPreviews(containerEl) {
     dataPromise
       .then(data => {
         if (!data || (!data.title && !data.description && !data.text)) return;
-        const msgContent = link.closest('.message-content');
+        const msgContent = link.closest('.message-content, .thread-msg-content');
         if (!msgContent) return;
 
         // Don't add duplicate previews

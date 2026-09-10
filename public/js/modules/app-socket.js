@@ -1335,6 +1335,12 @@ _setupSocketListeners() {
   });
 
   this.socket.on('online-users', (data) => {
+    // Every list is kept by channel (the socket sits in every room it
+    // belongs to), so a DM PiP can read its own partner's presence instead
+    // of the list for whatever channel is on screen (#5574).
+    if (!this._onlineByChannel) this._onlineByChannel = new Map();
+    this._onlineByChannel.set(data.channelCode, data.users || []);
+    if (this._activeDMPip && data.channelCode === this._activeDMPip) this._refreshDMPipHeader?.();
     if (data.channelCode === this.currentChannel) {
       // In 'all' mode the list includes offline members too; only count truly online users
       const trueOnlineCount = data.visibilityMode === 'all'
@@ -2240,12 +2246,20 @@ _setupSocketListeners() {
         if (msgEl.classList.contains('message-compact') && content && !content.querySelector('.archived-tag')) {
           content.insertAdjacentHTML('afterbegin', `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
         }
+        // A forum topic card shows the shield with its tags (#5622).
+        const forumTags = msgEl.classList.contains('forum-topic') ? msgEl.querySelector('.forum-topic-tags') : null;
+        if (forumTags && !forumTags.querySelector('.archived-tag')) {
+          forumTags.insertAdjacentHTML('afterbegin', `<span class="forum-tag forum-tag-protected archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
+        }
         // Update toolbar: swap archive → unarchive
         const archBtn = msgEl.querySelector('[data-action="archive"]');
         if (archBtn) { archBtn.dataset.action = 'unarchive'; archBtn.title = t('app.messages.unprotect_btn'); }
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.protected_by', { name: data.archivedBy })}`);
     }
+    // Keep the cached topic in step so a re-rendered card keeps its shield.
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 1;
   });
 
   this.socket.on('message-unarchived', (data) => {
@@ -2265,6 +2279,8 @@ _setupSocketListeners() {
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.message_unprotected')}`);
     }
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 0;
   });
 
   // ── Admin moderation events ────────────────────────

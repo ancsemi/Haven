@@ -386,6 +386,9 @@ _highlightSearch(escapedHtml, query) {
 // Capped at 27 to avoid jumbo-sizing a wall of emoji.
 _isEmojiOnly(str) {
   if (!str || !str.trim()) return false;
+  // A Discord emote token counts as one emoji, like a resolved :name: does.
+  const discordEmotes = (str.match(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g) || []).length;
+  str = str.replace(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g, ' ');
   const customMatches = str.match(/:([a-zA-Z0-9_-]+):/g) || [];
   // Only expand custom tokens that actually exist as loaded emojis
   const resolvedCustom = customMatches.filter(m => {
@@ -404,8 +407,19 @@ _isEmojiOnly(str) {
   if (s.trim().length > 0) return false;
   let unicodeCount = 0;
   try { unicodeCount = (str.match(/[\p{Extended_Pictographic}]/gu) || []).length; } catch {}
-  const total = resolvedCustom.length + unicodeCount;
+  const total = resolvedCustom.length + unicodeCount + discordEmotes;
   return total >= 1 && total <= 27;
+},
+
+// Markup for one Discord emote token. Haven's own emoji of that name is
+// preferred so a server carrying the same set shows its copy; the fallback is
+// the server-side emote cache, and a failed load turns back into the :name:
+// text (the capture-phase error listener in app-ui.js does that).
+_discordEmoteHtml(name, id, animated) {
+  const label = this._escapeHtml(`:${name}:`);
+  const own = this._findNamedEmoji(name);
+  if (own) return `<img src="${this._escapeHtml(own.url)}" alt="${label}" title="${label}" class="custom-emoji">`;
+  return `<img src="/api/ferry/emote/${id}.${animated ? 'gif' : 'png'}" alt="${label}" title="${label}" class="custom-emoji discord-emote">`;
 },
 
 // Resolve a `:name:` shortcode to an image emoji — checks the bundled
@@ -788,7 +802,21 @@ _formatContent(str) {
     return `\x00TIMESTAMP_${idx}\x00`;
   });
 
-  let html = this._escapeHtml(withTimestamps);
+  // ── Discord custom emotes: <:name:id> / <a:name:id> ──
+  // Relayed by Ferry, or typed by someone who wants the emote to show on the
+  // Discord side of a bridge. Pulled out before escaping like the timestamps,
+  // and before the :name: pass below so the shortcode inside the token is not
+  // resolved on its own. A Haven emoji of the same name wins; otherwise the
+  // picture comes from the server's emote cache (/api/ferry/emote/), which
+  // answers 404 on a server without the bridge, and the :name: text stays.
+  const emotes = [];
+  const withEmotes = withTimestamps.replace(/<(a?):([A-Za-z0-9_]{2,32}):(\d{15,25})>/g, (full, anim, name, id) => {
+    const idx = emotes.length;
+    emotes.push(this._discordEmoteHtml(name, id, !!anim));
+    return `\x00DEMOTE_${idx}\x00`;
+  });
+
+  let html = this._escapeHtml(withEmotes);
 
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
@@ -938,20 +966,37 @@ _formatContent(str) {
   // ## headings or message IDs (#1234) don't get linkified spuriously.
   if (Array.isArray(this.channels) && this.channels.length) {
     const chanByName = new Map();
+    const nameByCode = new Map();
+    // Names a channel used to have, so a #old-name typed before a rename
+    // still points at it and reads as the name it has now (#5602). A current
+    // name always wins over another channel's former one.
+    const formerByName = new Map();
     for (const c of this.channels) {
       if (c && c.name && c.code && !c.is_dm) {
         chanByName.set(String(c.name).toLowerCase(), c.code);
+        nameByCode.set(c.code, String(c.name));
+        let former = [];
+        try { former = typeof c.former_names === 'string' ? JSON.parse(c.former_names) : (c.former_names || []); } catch { former = []; }
+        if (Array.isArray(former)) for (const old of former) {
+          if (typeof old === 'string' && old) formerByName.set(old.toLowerCase(), c.code);
+        }
       }
     }
     if (chanByName.size > 0) {
+      // Names with spaces are typed as #foo_bar — try the literal form
+      // first, then fall back to a space-substituted lookup so spaced
+      // channel names resolve too.
+      const lookup = (map, lower) => map.get(lower) || map.get(lower.replace(/_/g, ' '));
       html = html.replace(/(?<![\w#&])#([\p{L}\p{N}\p{Emoji_Presentation}_-][\p{L}\p{N}\p{Emoji_Presentation}_-]{0,49})/gu, (match, name) => {
         const lower = name.toLowerCase();
-        // Names with spaces are typed as #foo_bar — try the literal form
-        // first, then fall back to a space-substituted lookup so spaced
-        // channel names resolve too.
-        let code = chanByName.get(lower) || chanByName.get(lower.replace(/_/g, ' '));
-        if (!code) return match;
-        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(name)}</span>`;
+        let code = lookup(chanByName, lower);
+        let label = name;
+        if (!code) {
+          code = lookup(formerByName, lower);
+          if (!code) return match;
+          label = (nameByCode.get(code) || name).replace(/\s+/g, '_');
+        }
+        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(label)}</span>`;
       });
     }
   }
@@ -965,6 +1010,9 @@ _formatContent(str) {
     if (emoji) return `<img src="${this._escapeHtml(emoji.url)}" alt=":${this._escapeHtml(name)}:" title=":${this._escapeHtml(name)}:" class="custom-emoji">`;
     return match;
   });
+
+  // Render __underline__
+  html = html.replace(/__(.+?)__/g, '<u>$1</u>');
 
   // Render /me action text (italic)
   if (html.startsWith('_') && html.endsWith('_') && html.length > 2) {
@@ -998,6 +1046,15 @@ _formatContent(str) {
     const idx = blockquotes.length;
     blockquotes.push(`${pre}<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
     return `\x00BLOCKQUOTE_${idx}\x00`;
+  });
+
+  // Render c#RRGGBB...#c color spans (HEX color code)
+  html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, '<span style="color:#$1">$2</span>');
+
+  // Render c#(R,G,B)...#c color spans (RGB color code)
+  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (_, r, g, b, text) => {
+    if (r > 255 || g > 255 || b > 255) return _;
+    return `<span style="color:rgb(${r},${g},${b})">${text}</span>`;
   });
 
   // ── Headings: # H1, ## H2, ### H3 at start of line ──
@@ -1145,6 +1202,11 @@ _formatContent(str) {
   // be read as a replacement pattern.
   timestamps.forEach((el, idx) => {
     html = html.replace(`\x00TIMESTAMP_${idx}\x00`, () => el);
+  });
+
+  // ── Restore Discord emotes ──
+  emotes.forEach((el, idx) => {
+    html = html.replace(`\x00DEMOTE_${idx}\x00`, () => el);
   });
 
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
@@ -3158,6 +3220,9 @@ _openDMPiP(code) {
   if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
 
   this._refreshDMPipHeader(ch, partnerName);
+  // Ask for the DM's own online list so the header is right straight away,
+  // not only after the next presence change (#5574).
+  this.socket.emit('request-online-users', { code });
 
   // Banner background: use server banner as a subtle backdrop
   const bannerEl = document.getElementById('dm-pip-banner');
@@ -3189,8 +3254,13 @@ _refreshDMPipHeader(ch, partnerName) {
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
   if (avatarWrap) {
     const partnerId = ch.dm_target && ch.dm_target.id;
-    const onlinePartner = partnerId && this._lastOnlineUsers
-      ? this._lastOnlineUsers.find(u => u.id === partnerId)
+    // The DM's own list first: the list for the channel on screen only has
+    // the partner in it when they happen to share that channel (#5574).
+    const dmList = this._onlineByChannel && this._onlineByChannel.get(ch.code);
+    const onlinePartner = partnerId
+      ? ((dmList && dmList.find(u => u.id === partnerId))
+        || (this._lastOnlineUsers ? this._lastOnlineUsers.find(u => u.id === partnerId) : null)
+        || null)
       : null;
     const avatarUrl = (onlinePartner && onlinePartner.avatar) || (ch.dm_target && ch.dm_target.avatar);
     const shape = (onlinePartner && onlinePartner.avatarShape)
@@ -3798,6 +3868,8 @@ _appendThreadMessage(msg) {
     `;
   }
   container.appendChild(el);
+  // Link cards in threads, the same as in the channel (#5620).
+  this._fetchLinkPreviews(el);
   try { this._decryptE2EImages?.(el); } catch {}
   try { this._decryptE2EFiles?.(el); } catch {}
   try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch {}

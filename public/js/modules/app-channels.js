@@ -316,26 +316,59 @@ _updateTopicBar(topic) {
     const header = document.querySelector('.channel-header');
     header.parentNode.insertBefore(bar, header.nextSibling);
   }
-  const canEdit = this.user.isAdmin || this._hasPerm('set_channel_topic');
-  if (topic) {
-    bar.textContent = topic;
-    bar.style.display = 'block';
-    bar.title = canEdit ? t('channels.topic_edit_hint') : topic;
-    bar.onclick = canEdit ? () => this._editTopic() : null;
-    bar.style.cursor = canEdit ? 'pointer' : 'default';
-  } else {
-    if (canEdit) {
-      bar.textContent = t('channels.topic_placeholder');
-      bar.style.display = 'block';
-      bar.style.opacity = '';
-      bar.style.color = 'var(--text-muted)';
-      bar.style.cursor = 'pointer';
-      bar.onclick = () => this._editTopic();
-    } else {
-      bar.style.display = 'none';
-    }
+  // The text and the fold arrow are separate targets. The arrow folds the bar
+  // to a thin strip for this browser only, and the fold survives channel
+  // switches and reloads (#5625). Clicking the folded strip opens it again.
+  let text = bar.querySelector('.channel-topic-text');
+  if (!text) {
+    bar.textContent = '';
+    text = document.createElement('span');
+    text.className = 'channel-topic-text';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'channel-topic-toggle';
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._setTopicBarFolded(!bar.classList.contains('collapsed'));
+    });
+    bar.appendChild(text);
+    bar.appendChild(toggle);
   }
-  if (topic) { bar.style.opacity = '1'; bar.style.color = ''; }
+  const canEdit = this.user.isAdmin || this._hasPerm('set_channel_topic');
+  const editable = !!topic ? canEdit : canEdit;
+  if (topic || canEdit) {
+    text.textContent = topic || t('channels.topic_placeholder');
+    bar.style.display = '';
+    bar.title = topic ? (canEdit ? t('channels.topic_edit_hint') : topic) : '';
+    bar.style.cursor = editable ? 'pointer' : 'default';
+    bar.style.color = topic ? '' : 'var(--text-muted)';
+    bar.style.opacity = topic ? '1' : '';
+    bar.onclick = () => {
+      if (bar.classList.contains('collapsed')) { this._setTopicBarFolded(false); return; }
+      if (editable) this._editTopic();
+    };
+  } else {
+    bar.style.display = 'none';
+  }
+  this._setTopicBarFolded(null);
+},
+
+// null keeps the saved state and just applies it; true or false saves first.
+_setTopicBarFolded(folded) {
+  const bar = document.getElementById('channel-topic-bar');
+  if (!bar) return;
+  if (folded !== null) {
+    try { localStorage.setItem('haven_topic_bar_folded', folded ? '1' : '0'); } catch { /* private mode */ }
+  }
+  let saved = false;
+  try { saved = localStorage.getItem('haven_topic_bar_folded') === '1'; } catch { /* private mode */ }
+  bar.classList.toggle('collapsed', saved);
+  const toggle = bar.querySelector('.channel-topic-toggle');
+  if (toggle) {
+    toggle.textContent = saved ? '\u25BE' : '\u25B4';
+    toggle.title = t(saved ? 'channels.topic_bar_show' : 'channels.topic_bar_hide');
+    toggle.setAttribute('aria-label', toggle.title);
+  }
 },
 
 async _editTopic() {
@@ -3072,6 +3105,8 @@ _fireNativeNotification(message, channelCode, opts) {
   const channelLabel = channel?.is_dm ? 'DM' : `#${channel?.name || channelCode}`;
   const title = t('notifications_runtime.title', { sender, channel: channelLabel });
   let rawContent = message.content || '';
+  // A Discord emote token reads as its :name: in a notification.
+  rawContent = rawContent.replace(/<a?:([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$1:');
   // Detect E2E encrypted envelope — show generic text instead of ciphertext
   try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
   // Burn-after-read: never reveal the message content in a notification

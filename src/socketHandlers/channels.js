@@ -37,7 +37,7 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
-    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
+    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, botAudioManager
@@ -118,6 +118,8 @@ module.exports = function register(socket, ctx) {
       (room) => socket.join(room)
     );
     socket.emit('channels-list', channels);
+    // Now in every DM room: let partners know this user is here (#5574).
+    if (emitDmPresence) emitDmPresence(socket.user.id);
   });
 
   // ── Create channel (permission-based) ─────────────────
@@ -762,7 +764,16 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare('UPDATE channels SET name = ? WHERE id = ?').run(name, channel.id);
+      // Keep the old name, so a #old-name typed before the rename still points
+      // here and clients can show the name it has now (#5602). Newest first,
+      // capped, and a name the channel has come back to drops out of the list.
+      let former = [];
+      try { former = JSON.parse(channel.former_names || '[]'); } catch { former = []; }
+      if (!Array.isArray(former)) former = [];
+      former = [channel.name, ...former]
+        .filter((n, i, arr) => typeof n === 'string' && n && n.toLowerCase() !== name.toLowerCase() && arr.indexOf(n) === i)
+        .slice(0, 10);
+      db.prepare('UPDATE channels SET name = ?, former_names = ? WHERE id = ?').run(name, JSON.stringify(former), channel.id);
       broadcastChannelLists();
       io.to(code).emit('channel-renamed', { code, name });
       _audit({ actor: socket.user, action: 'channel_rename',

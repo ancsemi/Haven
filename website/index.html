@@ -7,11 +7,11 @@
 <meta property="og:description" content="Haven is a free, open source alternative to Discord that you host on your own computer. Channels, voice, screen sharing, threads and encrypted DMs. Friends join with a link, the desktop app or the Android app.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ancsemi.github.io/Haven/">
-<meta property="og:image" content="https://ancsemi.github.io/Haven/img/haven-4-5-default.jpg">
+<meta property="og:image" content="https://ancsemi.github.io/Haven/img/haven-4-6-default.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Haven, a chat server you run yourself">
 <meta name="twitter:description" content="Haven is a free, open source alternative to Discord that you host on your own computer. Channels, voice, screen sharing, threads and encrypted DMs. Friends join with a link, the desktop app or the Android app.">
-<meta name="twitter:image" content="https://ancsemi.github.io/Haven/img/haven-4-5-default.jpg">
+<meta name="twitter:image" content="https://ancsemi.github.io/Haven/img/haven-4-6-default.jpg">
 <meta name="twitter:site" content="@ancsemi">
 <link rel="canonical" href="https://ancsemi.github.io/Haven/">
 <meta name="theme-color" content="#F6F5F9">
@@ -127,15 +127,18 @@
   .btn.pulse { border-color: var(--accent); background: var(--accent-soft); animation: pulse-ring 1.2s ease-out 3; }
 
   /* ── Sections ────────────────────────────────────── */
-  section { padding: clamp(56px, 8vw, 96px) 0; border-top: 1px solid var(--rule); scroll-margin-top: var(--topbar); }
+  section { padding: clamp(28px, 4vw, 48px) 0; border-top: 1px solid var(--rule); scroll-margin-top: var(--topbar); }
   section:first-of-type { border-top: 0; }
   .section-head { margin-bottom: 28px; }
   .section-head p { margin-top: 12px; color: var(--muted); max-width: var(--measure); }
 
   /* ── Hero ────────────────────────────────────────── */
-  .hero { padding-top: clamp(40px, 6vw, 72px); }
+  .hero { padding-top: clamp(20px, 3vw, 36px); }
   .hero-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(28px, 5vw, 64px); align-items: start; }
-  .hero .lead { font-size: 20px; line-height: 1.5; margin-top: 22px; max-width: 34em; }
+  .hero-brand { display: inline-flex; align-items: center; gap: 0.32em; color: var(--ink); font-weight: 600; font-size: clamp(48px, 7vw, 76px); letter-spacing: 0.01em; line-height: 1; }
+  .hero-brand svg { width: 1.05em; height: 1.05em; flex: none; }
+  .hero-title { font-size: clamp(20px, 2.4vw, 25px); font-weight: 700; letter-spacing: -0.01em; margin-top: 30px; }
+  .hero .lead { font-size: 20px; line-height: 1.5; margin-top: 10px; max-width: 34em; }
   .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 30px; }
   .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 4px; font-weight: 600; font-size: 16px; text-decoration: none; border: 1px solid transparent; line-height: 1.2; }
   .btn-primary { background: var(--accent); color: var(--accent-ink); }
@@ -166,8 +169,9 @@
   .cols > div:first-child { padding-left: 0; border-left: 0; }
   .cols > div:last-child { padding-right: 0; }
   .cols h3 { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
-  .cols ul { list-style: none; padding: 0; }
-  .cols li { padding-left: 0; font-size: 16px; }
+  .cols ul { list-style: disc; padding-left: 1.1em; }
+  .cols li { font-size: 16px; }
+  .cols li::marker { color: var(--accent); }
   .cols li + li { margin-top: 0.5em; }
 
   /* ── Steps ───────────────────────────────────────── */
@@ -205,6 +209,11 @@
   .lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(10, 8, 16, 0.92); display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out; }
   .lightbox[hidden] { display: none; }
   .lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+  .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 30px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0 0 4px; }
+  .lb-nav:hover { background: rgba(255, 255, 255, 0.26); }
+  .lb-prev { left: 18px; }
+  .lb-next { right: 18px; }
+  @media (max-width: 700px) { .lb-nav { width: 36px; height: 36px; font-size: 24px; } .lb-prev { left: 8px; } .lb-next { right: 8px; } }
 
   /* ── Facts ───────────────────────────────────────── */
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; border-top: 1px solid var(--rule-strong); border-bottom: 1px solid var(--rule-strong); }
@@ -263,6 +272,7 @@
       <a href="#compare">Compare</a>
       <a href="#setup">Setup</a>
       <a href="#security">Security</a>
+      <a href="#screenshots">Gallery</a>
       <a href="#download">Download</a>
       <a href="https://github.com/ancsemi/Haven">GitHub</a>
       <a class="btn-try" id="try-now" href="#top">Try it now</a>
@@ -275,10 +285,14 @@
     <div class="wrap">
       <div class="hero-grid">
         <div>
-          <h1>A chat server you run yourself.</h1>
+          <div class="hero-brand" aria-hidden="true">
+            <svg viewBox="0 0 100 100"><polygon points="50,3 93,28 93,72 50,97 7,72 7,28" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/></svg>
+            Haven
+          </div>
+          <h1 class="hero-title">A chat server you run yourself.</h1>
           <p class="lead">Haven is a free, open source alternative to Discord. It runs on your own computer, your friends join with a link, and there's no company in the middle.</p>
           <div class="actions">
-            <a class="btn btn-primary" href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.6.0.zip">Download Haven <span class="ver">4.6.0</span></a>
+            <a class="btn btn-primary" href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.6.1.zip">Download Haven <span class="ver">4.6.1</span></a>
             <a class="btn btn-secondary" id="try-server" href="https://haven.moviethingy.xyz/?invite=da0b9be7">Join the community server</a>
             <a class="plain" href="https://github.com/ancsemi/Haven">Source on GitHub</a>
           </div>
@@ -300,15 +314,14 @@
         </div>
       </div>
       <figure class="shot">
-        <img class="zoomable" src="img/haven-4-5-default.jpg" width="1600" height="760" alt="Haven's default theme with a voice call going, channels on the left and the member list on the right">
+        <img class="zoomable" src="img/haven-4-6-default.jpg" width="1918" height="1010" alt="Haven's default theme: channels and DMs on the left, the member list on the right">
       </figure>
     </div>
   </section>
 
   <section id="about">
     <div class="wrap">
-      <div class="split">
-        <div class="prose">
+      <div class="prose">
           <div class="section-head">
             <h2>About</h2>
           </div>
@@ -316,11 +329,6 @@
           <p>There's no company in the middle. No account with us, no email or phone number, and nothing to pay for. Your messages, files and voice calls stay on your own server.</p>
           <p>Haven has been in development since February 2026. It's a spare-time project and it'll always be free.</p>
           <p>Many helpful people with a shared passion for free, unfiltered and private chat have come together to improve it. Every change is public, with a <a href="https://github.com/ancsemi/Haven/blob/main/CHANGELOG.md">changelog</a> updated every release.</p>
-        </div>
-        <figure class="fig">
-          <img class="zoomable" src="img/haven-phone-welcome.jpg" width="480" height="1040" alt="Haven's welcome screen in a phone browser">
-          <figcaption>Joining from a phone browser. No app needed.</figcaption>
-        </figure>
       </div>
     </div>
   </section>
@@ -354,10 +362,9 @@
         <div>
           <h3>Customization</h3>
           <ul>
-            <li>26 themes, or write your own CSS</li>
+            <li>26 themes with customizable effects, or write your own CSS</li>
             <li>Bots and webhooks</li>
             <li>Sign in with your own identity provider</li>
-            <li>Backups and updates from the settings page</li>
             <li>Guest access, invite links and channel codes</li>
             <li>Available in 8 languages</li>
           </ul>
@@ -368,9 +375,13 @@
             <li>Rich Presence: show what you're playing or listening to</li>
             <li>Built-in games with leaderboards</li>
             <li>Flash games, through Ruffle</li>
+            <li>Backups and updates from the settings page</li>
           </ul>
         </div>
       </div>
+      <figure class="shot">
+        <img class="zoomable" src="img/haven-features.jpg" width="1915" height="1005" alt="A community channel in the Braid theme with the member list open" loading="lazy">
+      </figure>
     </div>
   </section>
 
@@ -427,7 +438,8 @@
         <h2>Security and privacy</h2>
         <p>How it actually works.</p>
       </div>
-      <div class="prose">
+      <div class="split">
+        <div class="prose">
         <ul>
           <li><strong>Your data lives on the computer running the server,</strong> in one folder. Back it up, move it or delete it whenever you want.</li>
           <li><strong>Direct messages are end-to-end encrypted.</strong> The server stores them but can't read them, and neither can the admin.</li>
@@ -436,6 +448,13 @@
           <li><strong>No telemetry.</strong> The server doesn't send usage data or crash reports anywhere.</li>
           <li><strong>There's no central Haven server and no Haven account.</strong> Nothing to leak.</li>
         </ul>
+        </div>
+        <figure class="fig">
+          <img class="zoomable" src="img/haven-phone-welcome.jpg" width="480" height="1040" alt="Haven's welcome screen in a phone browser" loading="lazy">
+          <figcaption>Joining from a phone browser. No app needed.</figcaption>
+        </figure>
+      </div>
+      <div class="prose">
         <h3 style="margin-top: 36px;">What the server connects to</h3>
         <p class="muted small" style="margin-top: 6px;">Every outside service a Haven server contacts, and when.</p>
       </div>
@@ -485,23 +504,23 @@
       <div class="dl">
         <div class="dl-row">
           <div>
-            <h3>Haven Server <span class="ver">4.6.0</span></h3>
+            <h3>Haven Server <span class="ver">4.6.1</span></h3>
             <p>Windows, macOS and Linux. Needs Node.js. About 5 MB.</p>
           </div>
           <div class="dl-links">
-            <a class="btn btn-primary" href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.6.0.zip">Download .zip</a>
+            <a class="btn btn-primary" href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.6.1.zip">Download .zip</a>
             <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md">Setup guide</a>
           </div>
         </div>
         <div class="dl-row">
           <div>
-            <h3>Haven Desktop <span class="ver">1.4.30</span></h3>
+            <h3>Haven Desktop <span class="ver">1.4.31</span></h3>
             <p>Adds per-app audio sharing, mid-call device switching and a system tray. It can run the server too.</p>
           </div>
           <div class="dl-links">
-            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.30/Haven-Setup-1.4.30.exe">Windows installer</a>
-            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.30/Haven-1.4.30.AppImage">Linux AppImage</a>
-            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.30/haven-desktop_1.4.30_amd64.deb">Linux .deb</a>
+            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.31/Haven-Setup-1.4.31.exe">Windows installer</a>
+            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.31/Haven-1.4.31.AppImage">Linux AppImage</a>
+            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.31/haven-desktop_1.4.31_amd64.deb">Linux .deb</a>
           </div>
         </div>
         <div class="dl-row">
@@ -532,35 +551,55 @@
   <section id="screenshots">
     <div class="wrap">
       <div class="section-head">
-        <h2>More screenshots</h2>
+        <h2>Gallery</h2>
       </div>
       <div class="gallery">
-        <figure><img class="zoomable" src="img/haven-screen-share.jpg" width="1200" height="591" alt="Screen sharing with voice chat and more than one stream"></figure>
-        <figure><img class="zoomable" src="img/haven-theme-chat.jpg" width="1200" height="593" alt="A chat channel in one of the built-in themes"></figure>
-        <figure><img class="zoomable" src="img/haven-games.jpg" width="1200" height="568" alt="A channel in another theme with a video playing"></figure>
-        <figure><img class="zoomable" src="img/haven-login.jpg" width="1200" height="593" alt="The login screen with the theme picker"></figure>
+        <figure><img class="zoomable" src="img/haven-screen-share.jpg" width="1200" height="591" alt="Screen sharing with voice chat and more than one stream" loading="lazy"></figure>
+        <figure><img class="zoomable" src="img/haven-theme-chat.jpg" width="1200" height="593" alt="The login screen with the theme picker" loading="lazy"></figure>
+        <figure><img class="zoomable" src="img/haven-theme-crt.jpg" width="1916" height="1006" alt="A DM window and profile card in the CRT theme" loading="lazy"></figure>
+        <figure><img class="zoomable" src="img/haven-theme-braid.jpg" width="1918" height="1009" alt="A chat channel in the Braid theme" loading="lazy"></figure>
       </div>
     </div>
   </section>
 </main>
 
-<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" tabindex="-1" hidden><img alt=""></div>
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" tabindex="-1" hidden>
+  <button class="lb-nav lb-prev" type="button" aria-label="Previous screenshot">&#8249;</button>
+  <img alt="">
+  <button class="lb-nav lb-next" type="button" aria-label="Next screenshot">&#8250;</button>
+</div>
 
 <script>
-// Screenshots open full size; click anywhere or press Escape to close.
+// Screenshots open full size. The arrow keys, or the arrows on screen, step
+// through every screenshot on the page; click anywhere else or press Escape
+// to close.
 (() => {
   const box = document.getElementById('lightbox');
   if (!box) return;
   const big = box.querySelector('img');
-  const open = (img) => { big.src = img.currentSrc || img.src; big.alt = img.alt; box.hidden = false; document.body.style.overflow = 'hidden'; box.focus(); };
+  const shots = Array.from(document.querySelectorAll('img.zoomable'));
+  let current = -1;
+  const show = (i) => {
+    current = (i + shots.length) % shots.length;
+    const img = shots[current];
+    big.src = img.currentSrc || img.src; big.alt = img.alt;
+  };
+  const open = (img) => { show(shots.indexOf(img)); box.hidden = false; document.body.style.overflow = 'hidden'; box.focus(); };
   const close = () => { box.hidden = true; big.removeAttribute('src'); document.body.style.overflow = ''; };
-  document.querySelectorAll('img.zoomable').forEach((img) => {
+  shots.forEach((img) => {
     img.tabIndex = 0; img.setAttribute('role', 'button'); img.setAttribute('aria-label', 'Enlarge screenshot');
     img.addEventListener('click', () => open(img));
     img.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(img); } });
   });
+  box.querySelector('.lb-prev').addEventListener('click', (e) => { e.stopPropagation(); show(current - 1); });
+  box.querySelector('.lb-next').addEventListener('click', (e) => { e.stopPropagation(); show(current + 1); });
   box.addEventListener('click', close);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) close(); });
+  document.addEventListener('keydown', (e) => {
+    if (box.hidden) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); show(current + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); show(current - 1); }
+  });
 })();
 </script>
 

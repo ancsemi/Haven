@@ -11,6 +11,67 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.6.1] - 2026-09-09
+
+A round of fixes from the issue tracker and the community server. Discord
+emotes show as pictures on both sides of the Ferry bridge, the DM PiP shows
+who is actually online, #channel links survive a rename, thread replies get
+link cards, forum cards show the protection shield, the hover card and the
+role Collapse button behave, CRT text reads bigger, and the topic bar folds
+away. The homepage has full-size screenshots and a gallery. No migration
+steps; the one new column is added on first start.
+
+### Added
+- **The topic bar folds away (#5625).** A small arrow at its right folds the
+  bar to a thin strip, so "Click to set a topic" stops taking a line for
+  people who never will. It is per browser, and the fold survives channel
+  switches and reloads. Requested by @quakeman00.
+
+### Changed
+- **Homepage.** The logo leads the page, the screenshots are full size with a
+  Gallery you can step through with the arrow keys, the phone shot sits beside
+  Security and privacy, and a community channel shot follows the feature list.
+
+### Fixed
+- **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a
+  further notch, so sub-channel names and other fine print no longer read a
+  size smaller than every other theme. Reported by @quakeman00.
+- **Discord emotes show as pictures on both sides of the bridge.** A custom
+  emote relayed from Discord arrived as its bare `:name:` shortcode, and one
+  typed in Haven so it would show on the Discord side stayed as text here.
+  Haven now draws `<:name:id>` inline, fetching the picture once through the
+  server so nobody's browser talks to Discord's CDN, and a Haven `:name:` goes
+  out as the paired server's own emote of that name. Reported by Raidenphantom.
+- **The hover profile card stays put (#5608).** It closed itself three
+  seconds after opening even with the mouse still on the name, and the next
+  twitch of the mouse opened it again. It now stays while the pointer rests on
+  the name and closes when it leaves. Reported by @quakeman00, traced by
+  @birdcrazy.
+- **Collapse works on a role card with pending changes (#5607).** In Role
+  Assignment, Collapse only folded a card whose settings were unchanged, so a
+  pending add or an edited level ignored the button. It now folds the editor
+  and keeps the pending change for Save. Reported by @quakeman00.
+- **#channel links survive a rename (#5602).** A `#old-name` typed before a
+  channel was renamed stopped rendering as a link. Channels now remember their
+  former names, so the old reference still opens the channel and reads as its
+  current name. Reported by @birdcrazy.
+- **Link cards in threads (#5620).** A link posted as a reply in a forum
+  topic, or in any other thread, now gets the same preview card as it does in
+  the channel. Reported by @quakeman00.
+- **Forum topic cards show the protection shield (#5622).** A protected topic
+  now carries the shield on its card, and its right-click menu offers Unprotect
+  instead of Protect a second time. Reported by @quakeman00.
+- **The DM PiP shows the partner's avatar and live status (#5574, #5600).**
+  The PiP header only knew about people in whatever channel was on screen, so
+  a partner who was not in that channel showed as a grey dot with an initial
+  until the DM was opened full screen. The DM now carries its partner's avatar,
+  and presence for a DM is refreshed whenever either side connects, disconnects
+  or changes status, with the DM not on screen. Reported by @birdcrazy and
+  @TianLaiEric.
+- **The DM PiP send button lines up with the reply box (#5600).** It now has
+  the same height as a one-line reply box in every theme. Reported by
+  @TianLaiEric.
+
 ## [4.6.0] - 2026-09-09
 
 Forums turn into proper forums, with topic cards, a gallery view, tags and a New

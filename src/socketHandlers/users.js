@@ -8,7 +8,7 @@ const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
-          emitOnlineUsers, broadcastVoiceUsers, generateToken,
+          emitOnlineUsers, emitDmPresence, broadcastVoiceUsers, generateToken,
           touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit, getAdminRoleDisplay } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -245,6 +245,8 @@ module.exports = function register(socket, ctx) {
         emitOnlineUsers(code);
       }
     }
+    // DM partners see the new status too, with the DM not on screen (#5574).
+    if (emitDmPresence) emitDmPresence(socket.user.id);
 
     socket.emit('status-updated', { status, statusText });
   });
