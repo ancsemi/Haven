@@ -2456,9 +2456,12 @@ app.delete('/api/stickers/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
 });
 
-// ── GIF search proxy (GIPHY, with a legacy Tenor fallback) ──
-// GIPHY is the supported provider. Tenor is no longer offered for new
-// setup; an existing tenor_api_key still works if no GIPHY key is set.
+// ── GIF search proxy (GIPHY, KLIPY, or a legacy Tenor fallback) ──
+// Three providers are supported. preferred_gif_search picks which one to use
+// when more than one key is set. If that preference is unset or not a known
+// provider, we fall back to whatever is configured, trying GIPHY first, then
+// KLIPY, and Tenor last (Tenor is deprecated).
+const GIF_FALLBACK_ORDER = ['giphy', 'klipy', 'tenor'];
 function getGifProvider() {
   // Check database first (set via admin panel), fall back to .env
   const readSetting = (key) => {
@@ -2469,16 +2472,41 @@ function getGifProvider() {
     } catch { /* DB not ready yet or no key stored */ }
     return '';
   };
-  const giphyKey = readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '';
-  if (giphyKey) return { provider: 'giphy', key: giphyKey };
-  const tenorKey = readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '';
-  if (tenorKey) return { provider: 'tenor', key: tenorKey };
+  const keys = {
+    giphy: readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '',
+    klipy: readSetting('klipy_api_key') || process.env.KLIPY_API_KEY || '',
+    tenor: readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '',
+  };
+  const preferred = (readSetting('preferred_gif_search') || process.env.PREFERRED_GIF_SEARCH || '')
+    .trim().toLowerCase();
+  // Honour the preference only when it names a known provider that actually
+  // has a key; otherwise fall through to the configured-order fallback.
+  if (GIF_FALLBACK_ORDER.includes(preferred) && keys[preferred]) {
+    return { provider: preferred, key: keys[preferred] };
+  }
+  for (const provider of GIF_FALLBACK_ORDER) {
+    if (keys[provider]) return { provider, key: keys[provider] };
+  }
   return null;
 }
 
-// Both providers normalize to the same result shape the client expects:
+// All providers normalize to the same result shape the client expects:
 // { id, title, tiny (grid thumbnail), full (send URL) }.
 function fetchGifs(kind, q, limit, cfg) {
+  if (cfg.provider === 'klipy') {
+    // The app key is a path segment; the small (220px) gif is the grid
+    // thumbnail and the hd/md gif is the send URL.
+    const path = kind === 'search'
+      ? `gifs/search?q=${encodeURIComponent(q)}&`
+      : 'gifs/trending?';
+    const url = `https://api.klipy.com/api/v1/${encodeURIComponent(cfg.key)}/${path}per_page=${limit}&content_filter=off`;
+    return fetch(url).then(r => r.json()).then(data => (data.data?.data || []).map(g => ({
+      id: g.id,
+      title: g.title || '',
+      tiny: g.file?.sm?.gif?.url || g.file?.xs?.gif?.url || '',
+      full: g.file?.hd?.gif?.url || g.file?.md?.gif?.url || '',
+    })));
+  }
   if (cfg.provider === 'tenor') {
     const base = kind === 'search'
       ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&`

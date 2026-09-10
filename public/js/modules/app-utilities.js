@@ -2064,11 +2064,12 @@ _switchGifTab(tab) {
 },
 
 // The proxy reports which provider served the batch — keep the picker
-// footer honest ("Powered by Tenor" vs "Powered by GIPHY").
+// footer honest ("Powered by Tenor" / "KLIPY" / "GIPHY").
 _setGifFooter(provider) {
   if (!provider) return;
+  const label = provider === 'tenor' ? 'Tenor' : provider === 'klipy' ? 'KLIPY' : 'GIPHY';
   const footer = document.querySelector('.gif-picker-footer');
-  if (footer) footer.textContent = t('gifs.powered_by', { provider: provider === 'tenor' ? 'Tenor' : 'GIPHY' });
+  if (footer) footer.textContent = t('gifs.powered_by', { provider: label });
 },
 
 _loadTrendingGifs() {
