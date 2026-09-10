@@ -8,7 +8,7 @@ const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
-          emitOnlineUsers, broadcastVoiceUsers, generateToken,
+          emitOnlineUsers, emitDmPresence, broadcastVoiceUsers, generateToken,
           touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit, getAdminRoleDisplay } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
@@ -245,6 +245,8 @@ module.exports = function register(socket, ctx) {
         emitOnlineUsers(code);
       }
     }
+    // DM partners see the new status too, with the DM not on screen (#5574).
+    if (emitDmPresence) emitDmPresence(socket.user.id);
 
     socket.emit('status-updated', { status, statusText });
   });
@@ -556,7 +558,11 @@ module.exports = function register(socket, ctx) {
     const value = typeof data.value === 'string' ? data.value.trim() : '';
 
     const allowedKeys = [
-      'theme', 'hide_score_badge',
+      'theme', 'hide_score_badge', 'hide_nsfw',
+      // Visual effects picker (theme.js). Same reason as theme: a desktop app
+      // that lands on a different storage origin (http vs https autodetect)
+      // loses localStorage, and only server-side preferences come back.
+      'effects',
       // Rich presence. share_activity is the master switch and defaults to
       // OFF (absent row = not sharing); the two sub-toggles default ON but
       // only matter once the master is enabled.
@@ -566,8 +572,12 @@ module.exports = function register(socket, ctx) {
       // hardened browsers that wipe local storage every session still honour a
       // prior dismissal instead of re-showing the modal on every login.
       'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
+      // The top-bar Android banner, closed once (#5594).
+      'android_banner_seen',
     ];
-    if (!allowedKeys.includes(key) || !value || value.length > 50) return;
+    // 'effects' is a JSON array of effect ids, longer than the other values.
+    const maxLen = key === 'effects' ? 400 : 50;
+    if (!allowedKeys.includes(key) || !value || value.length > maxLen) return;
 
     db.prepare(
       'INSERT OR REPLACE INTO user_preferences (user_id, key, value) VALUES (?, ?, ?)'

@@ -314,7 +314,7 @@ module.exports = function createPermissions(db) {
     const row = db.prepare(`
       SELECT MAX(r.max_upload_mb) AS cap FROM roles r
       JOIN user_roles ur ON ur.role_id = r.id
-      WHERE ur.user_id = ? AND r.max_upload_mb IS NOT NULL
+      WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.max_upload_mb IS NOT NULL
     `).get(userId);
     const cap = row && row.cap ? parseInt(row.cap, 10) : 0;
     return Math.max(base, cap || 0);

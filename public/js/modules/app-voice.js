@@ -227,20 +227,23 @@ _reconcileVoiceUi() {
 
   const joinBtn = document.getElementById('voice-join-btn');
   const joinVisible = !!joinBtn && joinBtn.style.display !== 'none';
+  // Hidden on purpose (welcome screen, voice off, no permission) is not a
+  // desync, so compare against what the channel allows (#5598).
+  const joinExpected = this._voiceJoinAvailable();
   const bar = document.getElementById('voice-bar');
   const barShowsVoice = !!bar && bar.style.display !== 'none' && bar.style.display !== '';
 
   // Already consistent.
   if (!repaired && sessionInVoice && !joinVisible && barShowsVoice) return;
-  if (!repaired && !sessionInVoice && joinVisible && !barShowsVoice) return;
+  if (!repaired && !sessionInVoice && joinVisible === joinExpected && !barShowsVoice) return;
 
   // Only repair UPWARD when media is live. Never tear UI down on a flaky
   // layout read during maximize — that wiped stream tiles.
   if (!sessionInVoice) {
     // Genuinely idle — leave UI alone unless it still shows connected chrome.
-    if (!barShowsVoice && joinVisible) return;
+    if (!barShowsVoice && joinVisible === joinExpected) return;
     // Bar still says connected but media is dead: clear chrome.
-    if (barShowsVoice || !joinVisible) {
+    if (barShowsVoice || joinVisible !== joinExpected) {
       console.warn('[Voice] UI shows voice but media is dead — clearing chrome');
       this._updateVoiceButtons(false);
       this._updateVoiceStatus(false);
@@ -302,8 +305,19 @@ _syncMuteDeafenButtons() {
   });
 },
 
+// Whether "Join Voice" makes sense right now: a channel is open, voice is
+// on in it, and this user may use voice. The welcome screen, text-only
+// channels and people without the permission get no button (#5598).
+_voiceJoinAvailable() {
+  if (!this.currentChannel) return false;
+  const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  if (ch && ch.voice_enabled === 0) return false;
+  return !!(this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice'));
+},
+
 _updateVoiceButtons(inVoice) {
-  document.getElementById('voice-join-btn').style.display = inVoice ? 'none' : 'inline-flex';
+  const showJoin = !inVoice && this._voiceJoinAvailable();
+  document.getElementById('voice-join-btn').style.display = showJoin ? 'inline-flex' : 'none';
   // Show/hide the header voice-active indicator (not a button, just a label)
   const indicator = document.getElementById('voice-active-indicator');
   if (indicator) indicator.style.display = inVoice ? 'inline-flex' : 'none';
@@ -332,8 +346,8 @@ _updateVoiceButtons(inVoice) {
   // keep the button visible while already in voice (#5387).
   const mobileJoin = document.getElementById('voice-join-mobile');
   if (mobileJoin) {
-    if (inVoice) mobileJoin.style.setProperty('display', 'none', 'important');
-    else mobileJoin.style.removeProperty('display');
+    if (showJoin) mobileJoin.style.removeProperty('display');
+    else mobileJoin.style.setProperty('display', 'none', 'important');
   }
 
   if (!inVoice) {

@@ -1,87 +1,55 @@
 'use strict';
-
-/**
- * Self-signed certificate without OpenSSL (src/selfsignedCert.js).
- * Node parses what it makes, the key matches, the names are in the SAN, and a
- * real TLS handshake succeeds against it.
- *
- *   node --test test/selfsignedCert.test.js
- */
-
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const https = require('node:https');
 const test = require('node:test');
-
-const { generateSelfSignedCert } = require('../src/selfsignedCert');
-
-const made = generateSelfSignedCert({
-  commonName: 'Haven',
-  altNames: ['localhost', 'haven.local'],
-  ipAddresses: ['127.0.0.1', '192.168.1.20', 'not-an-ip'],
-  days: 3650,
+const crypto = require('crypto');
+const fs = require('fs');
+const https = require('https');
+const os = require('os');
+const path = require('path');
+const { generate, ensureCerts, localNames } = require('../src/selfsignedCert');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-cert-'));
+const made = ensureCerts(dir);
+const certPem = fs.readFileSync(made.certPath, 'utf8');
+const keyPem = fs.readFileSync(made.keyPath, 'utf8');
+const x509 = new crypto.X509Certificate(certPem);
+test('writes cert.pem and key.pem once and leaves them alone after that', () => {
+  assert.equal(made.created, true);
+  assert.match(certPem, /^-----BEGIN CERTIFICATE-----\n[\s\S]+\n-----END CERTIFICATE-----\n$/);
+  assert.match(keyPem, /^-----BEGIN PRIVATE KEY-----/);
+  const again = ensureCerts(dir);
+  assert.equal(again.created, false);
+  assert.equal(fs.readFileSync(again.certPath, 'utf8'), certPem);
 });
-
-test('the certificate parses and describes itself', () => {
-  const cert = new crypto.X509Certificate(made.cert);
-  assert.equal(cert.subject, 'CN=Haven');
-  assert.equal(cert.issuer, 'CN=Haven', 'self-signed');
-  assert.match(cert.subjectAltName, /DNS:localhost/);
-  assert.match(cert.subjectAltName, /DNS:haven\.local/);
-  assert.match(cert.subjectAltName, /IP Address:127\.0\.0\.1/);
-  assert.match(cert.subjectAltName, /IP Address:192\.168\.1\.20/);
-  assert.ok(!/not-an-ip/.test(cert.subjectAltName), 'junk addresses are dropped');
-  const validFor = (new Date(cert.validTo) - new Date(cert.validFrom)) / 86400000;
-  assert.ok(validFor > 3649 && validFor < 3651, `valid for about ten years, got ${validFor} days`);
-  assert.ok(new Date(cert.validFrom) <= new Date(), 'already valid');
+test('parses as a v3 self-signed cert that Node itself trusts as its own issuer', () => {
+  assert.equal(x509.subject, 'CN=Haven');
+  assert.equal(x509.issuer, 'CN=Haven');
+  assert.equal(x509.verify(x509.publicKey), true);
+  assert.equal(x509.checkPrivateKey(crypto.createPrivateKey(keyPem)), true);
+  assert.ok(x509.ca);
+  assert.ok(new Date(x509.validTo).getTime() - new Date(x509.validFrom).getTime() > 3649 * 86400000);
+  assert.deepEqual(x509.keyUsage, ['1.3.6.1.5.5.7.3.1']);
 });
-
-test('the private key belongs to the certificate and the signature checks out', () => {
-  const cert = new crypto.X509Certificate(made.cert);
-  const key = crypto.createPrivateKey(made.key);
-  assert.equal(cert.checkPrivateKey(key), true);
-  assert.equal(cert.verify(cert.publicKey), true, 'signed by its own key');
-  assert.equal(cert.checkHost('localhost'), 'localhost');
-  assert.equal(cert.checkIP('127.0.0.1'), '127.0.0.1');
+test('SAN covers localhost, the loopback IP, the LAN IPv4s and the hostname', () => {
+  const san = x509.subjectAltName;
+  assert.match(san, /DNS:localhost/);
+  assert.match(san, /IP Address:127\.0\.0\.1/);
+  for (const n of localNames()) assert.ok(san.includes(/^\d/.test(n) ? `IP Address:${n}` : `DNS:${n}`), `${n} missing from ${san}`);
+  assert.equal(x509.checkHost('localhost'), 'localhost');
+  assert.equal(x509.checkIP('127.0.0.1'), '127.0.0.1');
 });
-
-test('a TLS server accepts the pair and a client can talk to it', async () => {
-  const server = https.createServer({ cert: made.cert, key: made.key }, (req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('secure enough');
-  });
-  await new Promise((res) => server.listen(0, '127.0.0.1', res));
-  const { port } = server.address();
-  try {
-    const body = await new Promise((resolve, reject) => {
-      // No keep-alive: the pooled socket would otherwise keep the server's
-      // close() waiting, and the test runner with it.
-      https.get({ host: '127.0.0.1', port, path: '/', rejectUnauthorized: false, agent: false, headers: { Connection: 'close' } }, (r) => {
-        const peer = r.socket.getPeerCertificate(); // read while the socket is still ours
-        let b = '';
-        r.on('data', (c) => (b += c));
-        r.on('end', () => resolve({ status: r.statusCode, text: b, cert: peer }));
-      }).on('error', reject);
-    });
-    assert.equal(body.status, 200);
-    assert.equal(body.text, 'secure enough');
-    assert.equal(body.cert.subject.CN, 'Haven');
-  } finally {
-    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
-    await new Promise((res) => server.close(res));
-  }
+test('custom names and CN land in the SAN, junk is dropped, and 2050+ expiry still parses', () => {
+  const r = generate({ cn: 'haven.example.org', names: ['10.0.0.5', 'bad name!', 'box'], days: 365 * 30 });
+  const c = new crypto.X509Certificate(r.cert);
+  assert.equal(c.subject, 'CN=haven.example.org');
+  assert.equal(c.subjectAltName, 'DNS:haven.example.org, IP Address:10.0.0.5, DNS:box');
+  assert.equal(new Date(c.validTo).getUTCFullYear() >= 2050, true);
+  assert.equal(c.verify(c.publicKey), true);
 });
-
-test('every certificate is its own', () => {
-  const again = generateSelfSignedCert({ days: 30 });
-  const a = new crypto.X509Certificate(made.cert);
-  const b = new crypto.X509Certificate(again.cert);
-  assert.notEqual(a.serialNumber, b.serialNumber);
-  assert.notEqual(a.fingerprint256, b.fingerprint256);
-});
-
-test('a certificate that outlives 2049 still parses', () => {
-  const far = generateSelfSignedCert({ days: 365 * 30 });
-  const cert = new crypto.X509Certificate(far.cert);
-  assert.ok(new Date(cert.validTo).getUTCFullYear() >= 2050);
+test('a real TLS handshake succeeds against the generated pair', async () => {
+  const server = https.createServer({ cert: certPem, key: keyPem }, (req, res) => res.end('ok'));
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+  const body = await new Promise((resolve, reject) => https.get({ host: '127.0.0.1', port, path: '/', ca: certPem, servername: 'localhost' }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); }).on('error', reject));
+  server.close();
+  assert.equal(body, 'ok');
 });

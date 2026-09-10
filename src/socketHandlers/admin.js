@@ -108,7 +108,7 @@ module.exports = function register(socket, ctx) {
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
       'giphy_api_key', 'tenor_api_key', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
-      'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only',
+      'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
@@ -232,6 +232,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
     if (key === 'setup_wizard_complete' && !['true', 'false'].includes(value)) return;
     if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
+    if (key === 'hide_disabled_channel_badges' && !['true', 'false'].includes(value)) return;
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
     // (#12) OIDC. The issuer must be an absolute https URL — anything else is
     // either a typo or an attempt to point discovery somewhere it shouldn't go.

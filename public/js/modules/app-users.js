@@ -805,7 +805,13 @@ _showProfilePopup(profile) {
   // If this was a hover-triggered popup but the mouse already left, abort
   if (this._isHoverPopup && !this._hoverTarget) return;
 
+  // Closing any earlier card clears the hover target. Keep it for the hover
+  // card about to be drawn: without it the next mouseover on the same name
+  // read as a switch to a new trigger, closed the card and reopened it 350ms
+  // later, so it flickered under a resting mouse (#5608).
+  const hoverTarget = this._isHoverPopup ? this._hoverTarget : null;
   this._closeProfilePopup();
+  if (hoverTarget) this._hoverTarget = hoverTarget;
 
   const isSelf = profile.id === this.user.id;
   const currentNick = !isSelf ? (this._nicknames[profile.id] || '') : '';
@@ -906,11 +912,21 @@ _showProfilePopup(profile) {
   this._startActivityProgress(popup);
 
   // Hover mode is closed by the mouseover/mouseleave handlers; this is a safety
-  // net in case one of them misses.
+  // net in case one of them misses. It only fires once the pointer has actually
+  // left the trigger. A fixed three-second timer closed the card while the
+  // mouse was still resting on the name, and the next nudge of the mouse opened
+  // it again, so it looked like it flickered on its own (#5608).
   if (this._isHoverPopup) {
-    this._hoverAutoCloseTimer = setTimeout(() => {
-      if (this._isHoverPopup) this._closeProfilePopup();
-    }, 3000);
+    const stillHovering = () => {
+      const el = this._hoverTarget;
+      try { return !!(el && el.isConnected && el.matches(':hover')); } catch { return false; }
+    };
+    const check = () => {
+      if (!this._isHoverPopup) return;
+      if (stillHovering()) { this._hoverAutoCloseTimer = setTimeout(check, 1000); return; }
+      this._closeProfilePopup();
+    };
+    this._hoverAutoCloseTimer = setTimeout(check, 3000);
   }
 
   // Close button

@@ -4,20 +4,21 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=3.52.0';
-import UIBindMethods   from './modules/app-ui.js?v=4.6.0';
-import MediaMethods    from './modules/app-media.js?v=4.6.0';
-import ContextMethods  from './modules/app-context.js?v=3.44.6';
-import ChannelMethods  from './modules/app-channels.js?v=3.45.0';
-import MessageMethods  from './modules/app-messages.js?v=3.53.0';
-import UserMethods     from './modules/app-users.js?v=4.5.1';
-import VoiceMethods    from './modules/app-voice.js?v=3.34.2';
-import UtilityMethods  from './modules/app-utilities.js?v=4.5.1';
-import AdminMethods    from './modules/app-admin.js?v=4.6.0';
-import PlatformMethods from './modules/app-platform.js?v=3.16.14';
+import SocketMethods   from './modules/app-socket.js?v=4.6.2';
+import UIBindMethods   from './modules/app-ui.js?v=4.6.2';
+import MediaMethods    from './modules/app-media.js?v=4.6.2';
+import ContextMethods  from './modules/app-context.js?v=4.6.2';
+import ChannelMethods  from './modules/app-channels.js?v=4.6.2';
+import MessageMethods  from './modules/app-messages.js?v=4.6.2';
+import UserMethods     from './modules/app-users.js?v=4.6.1';
+import VoiceMethods    from './modules/app-voice.js?v=4.5.1';
+import UtilityMethods  from './modules/app-utilities.js?v=4.6.2';
+import AdminMethods    from './modules/app-admin.js?v=4.6.2';
+import PlatformMethods from './modules/app-platform.js?v=4.5.1';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.6.0';
+import ForumMethods    from './modules/app-forum.js?v=4.6.2';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.6.2';
 
 class HavenApp {
   constructor() {
@@ -335,6 +336,7 @@ class HavenApp {
     this._setupZoomSlider();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
+    this._setupLazyMedia();
     this._setupEmbedSizePicker();
     this._setupRoleDisplayPicker();
     this._setupToolbarIconPicker();
@@ -433,6 +435,7 @@ Object.assign(HavenApp.prototype,
   PlatformMethods,
   SearchMethods,
   FerryMethods,
+  ForumMethods,
   RoleToolMethods,
 );
 

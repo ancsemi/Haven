@@ -37,7 +37,7 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
-    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers,
+    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, botAudioManager
@@ -118,6 +118,8 @@ module.exports = function register(socket, ctx) {
       (room) => socket.join(room)
     );
     socket.emit('channels-list', channels);
+    // Now in every DM room: let partners know this user is here (#5574).
+    if (emitDmPresence) emitDmPresence(socket.user.id);
   });
 
   // ── Create channel (permission-based) ─────────────────
@@ -171,7 +173,7 @@ module.exports = function register(socket, ctx) {
     if (name.length > 50) {
       return socket.emit('error-msg', 'Channel name too long (max 50)');
     }
-    if (!/^[\w\s\-!?.,'\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
+    if (!/^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
       return socket.emit('error-msg', 'Channel name contains invalid characters');
     }
 
@@ -296,7 +298,7 @@ module.exports = function register(socket, ctx) {
     const name = typeof data.name === 'string' ? data.name.trim() : '';
     if (!name || name.length === 0) return socket.emit('error-msg', 'Channel name required');
     if (name.length > 50) return socket.emit('error-msg', 'Channel name too long (max 50)');
-    if (!/^[\w\s\-!?.,'\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
+    if (!/^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
       return socket.emit('error-msg', 'Channel name contains invalid characters');
     }
 
@@ -765,7 +767,7 @@ module.exports = function register(socket, ctx) {
     if (!name || name.length === 0 || name.length > 50) {
       return socket.emit('error-msg', 'Channel name must be 1-50 characters');
     }
-    if (!/^[\w\s\-!?.,'\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
+    if (!/^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
       return socket.emit('error-msg', 'Channel name contains invalid characters');
     }
 
@@ -779,7 +781,16 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare('UPDATE channels SET name = ? WHERE id = ?').run(name, channel.id);
+      // Keep the old name, so a #old-name typed before the rename still points
+      // here and clients can show the name it has now (#5602). Newest first,
+      // capped, and a name the channel has come back to drops out of the list.
+      let former = [];
+      try { former = JSON.parse(channel.former_names || '[]'); } catch { former = []; }
+      if (!Array.isArray(former)) former = [];
+      former = [channel.name, ...former]
+        .filter((n, i, arr) => typeof n === 'string' && n && n.toLowerCase() !== name.toLowerCase() && arr.indexOf(n) === i)
+        .slice(0, 10);
+      db.prepare('UPDATE channels SET name = ?, former_names = ? WHERE id = ?').run(name, JSON.stringify(former), channel.id);
       broadcastChannelLists();
       io.to(code).emit('channel-renamed', { code, name });
       _audit({ actor: socket.user, action: 'channel_rename',
@@ -813,7 +824,7 @@ module.exports = function register(socket, ctx) {
     if (!name || name.length === 0 || name.length > 50) {
       return socket.emit('error-msg', 'Sub-channel name must be 1-50 characters');
     }
-    if (!/^[\w\s\-!?.,'\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
+    if (!/^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u.test(name)) {
       return socket.emit('error-msg', 'Sub-channel name contains invalid characters');
     }
 
@@ -919,20 +930,50 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Channel feature toggles ─────────────────────────────
+  // Forum tags: the list a forum's topics pick from. JSON array of
+  // { name, emoji } kept on the channel row; topics store the names they use.
+  socket.on('set-forum-tags', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    if (!channel || channel.is_dm) return socket.emit('error-msg', 'Channel not found');
+    if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to edit forum tags');
+    const raw = Array.isArray(data.tags) ? data.tags : [];
+    const seen = new Set();
+    const tags = [];
+    for (const t of raw) {
+      const name = String(typeof t === 'string' ? t : (t && t.name) || '').trim().slice(0, 30);
+      const emoji = typeof t === 'object' && t && typeof t.emoji === 'string' ? t.emoji.trim().slice(0, 8) : '';
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      tags.push(emoji ? { name, emoji } : { name });
+      if (tags.length >= 20) break;
+    }
+    try {
+      db.prepare('UPDATE channels SET forum_tags = ? WHERE id = ?').run(tags.length ? JSON.stringify(tags) : null, channel.id);
+      broadcastChannelLists();
+      io.to(`channel:${code}`).emit('forum-tags-updated', { code, tags });
+    } catch (err) {
+      console.error('set-forum-tags error:', err);
+      socket.emit('error-msg', 'Failed to save forum tags');
+    }
+  });
+
   socket.on('toggle-channel-permission', (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
     const permission = typeof data.permission === 'string' ? data.permission.trim() : '';
-    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'private'];
+    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'private', 'nsfw'];
     if (!validPerms.includes(permission)) return socket.emit('error-msg', 'Invalid permission');
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to toggle channel permissions');
 
-    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', private: 'is_private' };
+    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', private: 'is_private', nsfw: 'is_nsfw' };
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
@@ -970,7 +1011,7 @@ module.exports = function register(socket, ctx) {
         }
       }
 
-      const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode', soundboard: 'Soundboard', forum: 'Forum mode', private: 'Private' };
+      const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode', soundboard: 'Soundboard', forum: 'Forum mode', private: 'Private', nsfw: 'NSFW' };
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('channel-permission-updated', { code, permission, enabled: !!newVal });
       socket.emit('toast', { message: `${labelMap[permission]} ${newVal ? 'enabled' : 'disabled'} for this channel`, type: 'success' });

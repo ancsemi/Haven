@@ -298,7 +298,7 @@
             </tr>
             <tr>
               <td>Voice chat not working</td>
-              <td>Voice requires HTTPS <em>or</em> localhost. If friends are connecting over the internet without HTTPS, voice won't work in most browsers. Install <a href="https://slproweb.com/products/Win32OpenSSL.html" target="_blank">OpenSSL</a> and restart Haven to enable HTTPS automatically.</td>
+              <td>Voice requires HTTPS <em>or</em> localhost. If friends are connecting over the internet without HTTPS, voice won't work in most browsers. Haven generates its own certificate on first start, so check the startup log says <code>HTTPS enabled</code> and that <code>FORCE_HTTP</code> is not set in your <code>.env</code>.</td>
             </tr>
             <tr>
               <td>"Port 3000 already in use"</td>
@@ -427,7 +427,7 @@
             <span class="arrow">▼</span>
           </button>
           <div class="faq-a">
-            <p>Install <a href="https://slproweb.com/products/Win32OpenSSL.html" target="_blank">OpenSSL</a> (Windows) or use your system's package manager (Mac/Linux). Restart Haven and it'll automatically generate certificates and switch to HTTPS. Check the <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">Setup Guide</a> for full instructions.</p>
+            <p>Haven generates a self-signed certificate itself on first start, no OpenSSL needed. If the log says HTTP, remove <code>FORCE_HTTP=true</code> from your <code>.env</code> (or delete the <code>certs</code> folder in your data directory if the log says the certificate could not be loaded) and restart. Check the <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">Setup Guide</a> for full instructions.</p>
           </div>
         </div>
       </div>

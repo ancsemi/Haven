@@ -587,6 +587,8 @@
     "dm_cleanup_notice": "Messages older than {{days}} days are auto-deleted on this server.",
     "topic_edit_hint": "Click to edit topic",
     "topic_placeholder": "Click to set a topic...",
+    "topic_bar_hide": "Hide the topic bar",
+    "topic_bar_show": "Show the topic bar",
     "topic_modal_title": "Channel Topic",
     "topic_modal_hint": "Set channel topic (max 256 chars):",
     "mute_channel": "Mute Channel",
@@ -1323,6 +1325,7 @@
       "admin_group": "Admin",
       "server_updates": "Server Updates",
       "branding": "Branding",
+      "tos": "Terms of Service",
       "members": "Members",
       "whitelist": "Whitelist",
       "invite": "Invite Code",
@@ -1349,12 +1352,14 @@
       "group_integrations": "Integrations",
       "group_maintenance": "Maintenance",
       "group_appearance": "Appearance",
-      "text_size": "Text Size",
-      "emoji_size": "Emoji Size",
+      "zoom": "Zoom",
+      "reaction_size": "Reaction Size",
       "role_display": "Role Display",
       "toolbar_icons": "Toolbar Icons",
       "image_display": "Image Display",
       "embeds_media": "Embeds & Media",
+      "toggle_style":"Toggle Style",
+      "banner_display": "Banner Display",
       "status_bar": "Status Bar",
       "group_chat": "Chat",
       "chat_behavior": "Chat Behavior",
@@ -1577,6 +1582,9 @@
       "popup_1m": "At most 1 per minute",
       "popup_5m": "At most 1 every 5 min",
       "popup_15m": "At most 1 every 15 min",
+      "popup_never": "Never (sounds and badges still work)",
+      "popup_custom": "Custom…",
+      "popup_custom_minutes": "Minutes between pop-ups",
       "popup_limit_hint": "Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected.",
       "join_vol": "Join Vol",
       "leave_vol": "Leave Vol"
@@ -2046,7 +2054,8 @@
       "import_fetch_failed": "Fetch failed",
       "registration": {
         "clear_confirm": "Clear the registration token? People will no longer be able to register with it.",
-        "copied": "Token copied"
+        "copied": "Token copied",
+        "copy_failed": "Could not copy the token. Select it and press Ctrl+C."
       },
       "default_join": {
         "all": "Invite joiners will land in every public channel",
@@ -2172,6 +2181,8 @@
       "no_locale": "Auto-detect (browser)",
       "default_locale_hint": "New users see Haven in this language on first visit. They can still pick their own.",
       "update_banner_hint": "When enabled, the \"update available\" banner is only shown to admins",
+      "hide_disabled_badges_label": "Hide the crossed-out icons in the channel list",
+      "hide_disabled_badges_hint": "Channels with screen share or music turned off show small crossed-out icons next to their name. Turn this on to hide those icons for everyone.",
       "whitelist_hint": "When enabled, only pre-approved usernames can register",
       "invite_hint": "A single code that adds people to every channel & sub-channel on the server",
       "copy_code_title": "Copy code",
@@ -2438,7 +2449,12 @@
         "pick_one": "Tick at least one role",
         "posted": "Role menu posted"
       }
-    }
+    },
+    "nsfw": {
+      "hide": "Hide NSFW channels",
+      "hide_hint": "Channels an admin marked 🔞 leave your sidebar until you turn this off. Handy on a phone in public."
+    },
+    "search_placeholder": "Search settings (Ctrl+F)"
   },
   "modals": {
     "common": {
@@ -3303,7 +3319,11 @@
     "save_template": "Save as template",
     "save_template_hint": "Keep this channel's setup as a template in the Create Channel picker",
     "save_template_prompt": "Template name",
-    "save_template_done": "Template \"{{name}}\" saved. It is in the Create Channel picker now."
+    "save_template_done": "Template \"{{name}}\" saved. It is in the Create Channel picker now.",
+    "forum_tags": "Forum tags",
+    "forum_tags_hint": "The tags topics in this forum can carry, one per line",
+    "nsfw": "NSFW",
+    "nsfw_hint": "Mark this channel NSFW. Members can hide NSFW channels from their sidebar in Settings"
   },
   "confirm": {
     "delete_channel": "Delete this channel?\nAll messages will be permanently lost.",
@@ -3640,5 +3660,39 @@
   "role_menu": {
     "join": "Get the {{name}} role",
     "leave": "Drop the {{name}} role"
+  },
+  "forum": {
+    "new_post": "New Post",
+    "post": "Post",
+    "title": "Title",
+    "title_placeholder": "What is this topic about?",
+    "body": "Body",
+    "body_placeholder": "Write the first message of the topic…",
+    "tags": "Tags",
+    "tags_hint": "(up to 5)",
+    "attach_hint": "To attach an image or a file, paste or drop it into the message box below the topics instead.",
+    "sort": "Sort",
+    "sort_active": "Recently active",
+    "sort_created": "Date posted",
+    "view_list": "List",
+    "view_gallery": "Gallery",
+    "tag_matching": "Tag matching",
+    "match_some": "Match some",
+    "match_all": "Match all",
+    "clear_tags": "Clear",
+    "pinned": "Pinned",
+    "replies": "{{count}} replies",
+    "edit_topic": "Edit title and tags",
+    "closed": "Closed",
+    "mark_closed": "Closed: grey it out and keep it below the open topics",
+    "image_topic": "Image",
+    "load_more": "Load more topics",
+    "no_topics_for_tags": "No topics carry those tags.",
+    "just_now": "just now",
+    "minutes_ago": "{{n}}m ago",
+    "hours_ago": "{{n}}h ago",
+    "days_ago": "{{n}}d ago",
+    "tags_editor_title": "Forum tags",
+    "tags_editor_hint": "One tag per line. Put an emoji first if you want one, like \"🎨 Art\". Up to 20."
   }
 }

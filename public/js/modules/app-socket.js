@@ -1028,6 +1028,11 @@ _setupSocketListeners() {
       }
     }
 
+    if (this._forumLoadingMore && this._forumActive) {
+      this._forumLoadingMore = false;
+      this._forumAppendOlder(data.messages);
+      return;
+    }
     if (this._historyBefore) {
       // Pagination request — prepend older messages
       this._historyBefore = null;
@@ -1143,7 +1148,7 @@ _setupSocketListeners() {
       const forumFeed = !!this._isForumFeed?.();
       const distEnd = msgContainer.scrollHeight - msgContainer.clientHeight - msgContainer.scrollTop;
       const atOlderEdge = forumFeed ? distEnd < 200 : msgContainer.scrollTop < 200;
-      if (atOlderEdge && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
+      if (atOlderEdge && !this._forumActive && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
         this._loadingHistory = true;
         this._historyBefore = this._oldestMsgId;
         this._historyDebounce = now;
@@ -1344,6 +1349,12 @@ _setupSocketListeners() {
   });
 
   this.socket.on('online-users', (data) => {
+    // Every list is kept by channel (the socket sits in every room it
+    // belongs to), so a DM PiP can read its own partner's presence instead
+    // of the list for whatever channel is on screen (#5574).
+    if (!this._onlineByChannel) this._onlineByChannel = new Map();
+    this._onlineByChannel.set(data.channelCode, data.users || []);
+    if (this._activeDMPip && data.channelCode === this._activeDMPip) this._refreshDMPipHeader?.();
     if (data.channelCode === this.currentChannel) {
       // In 'all' mode the list includes offline members too; only count truly online users
       const trueOnlineCount = data.visibilityMode === 'all'
@@ -1697,7 +1708,18 @@ _setupSocketListeners() {
   this.socket.on('thread-updated', (data) => {
     if (data.channelCode !== this.currentChannel) return;
     this._updateThreadPreview(data.parentId, data.thread);
-    this._bumpForumTopic?.(data.parentId);
+    if (!this._forumActive) this._bumpForumTopic?.(data.parentId);
+  });
+
+  // Forum topics: retitled or retagged, and the channel's tag list changed.
+  this.socket.on('topic-updated', (data) => {
+    if (data.channelCode !== this.currentChannel) return;
+    this._forumApplyTopicUpdate?.(data);
+  });
+  this.socket.on('forum-tags-updated', (data) => {
+    const ch = this.channels && this.channels.find(c => c.code === data.code);
+    if (ch) ch.forum_tags = JSON.stringify(data.tags || []);
+    if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
   });
 
   // ── Polls ─────────────────────────────────────────
@@ -2238,12 +2260,20 @@ _setupSocketListeners() {
         if (msgEl.classList.contains('message-compact') && content && !content.querySelector('.archived-tag')) {
           content.insertAdjacentHTML('afterbegin', `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
         }
+        // A forum topic card shows the shield with its tags (#5622).
+        const forumTags = msgEl.classList.contains('forum-topic') ? msgEl.querySelector('.forum-topic-tags') : null;
+        if (forumTags && !forumTags.querySelector('.archived-tag')) {
+          forumTags.insertAdjacentHTML('afterbegin', `<span class="forum-tag forum-tag-protected archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
+        }
         // Update toolbar: swap archive → unarchive
         const archBtn = msgEl.querySelector('[data-action="archive"]');
         if (archBtn) { archBtn.dataset.action = 'unarchive'; archBtn.title = t('app.messages.unprotect_btn'); }
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.protected_by', { name: data.archivedBy })}`);
     }
+    // Keep the cached topic in step so a re-rendered card keeps its shield.
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 1;
   });
 
   this.socket.on('message-unarchived', (data) => {
@@ -2263,6 +2293,8 @@ _setupSocketListeners() {
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.message_unprotected')}`);
     }
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 0;
   });
 
   // ── Admin moderation events ────────────────────────
@@ -2336,6 +2368,7 @@ _setupSocketListeners() {
     this.serverSettings[data.key] = data.value;
     this._applyServerSettings();
     if (data.key === 'channel_templates') this._renderChannelTemplates();
+    if (data.key === 'hide_disabled_channel_badges') this._renderChannels?.();
   });
 
   // ── Webhooks list ──────────────────────────────────
@@ -2359,15 +2392,28 @@ _setupSocketListeners() {
   // ── User preferences (persistent theme etc.) ───────
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
+    // The top-bar Android banner waits for this record before it shows (#5594).
+    this._syncAndroidBanner?.();
+    // Effects come back from the server like the theme does; restore them
+    // first so applyThemeFromServer() applies the saved pick, not the default.
+    if (prefs.effects && typeof syncEffectsFromServer === 'function') syncEffectsFromServer(prefs.effects);
     if (prefs.theme) {
       // User has a saved personal theme preference — apply it
       applyThemeFromServer(prefs.theme, true, true);
     } else if (this.serverSettings.default_theme) {
       // No personal preference — apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);
+    } else if (prefs.effects && typeof applyEffects === 'function') {
+      // No theme pass to carry them, so the restored effects apply here.
+      applyEffects(_getStoredEffectMode());
     }
     // Sync hide-own-score toggle to the server's stored value so reopening
     // settings on a fresh device shows the correct state.
+    if (prefs.hide_nsfw != null) {
+      try { localStorage.setItem('haven_hide_nsfw', prefs.hide_nsfw); } catch {}
+      const nsfwToggle = document.getElementById('hide-nsfw-channels');
+      if (nsfwToggle) nsfwToggle.checked = prefs.hide_nsfw === 'true';
+    }
     if (prefs.hide_score_badge != null) {
       try { localStorage.setItem('haven_hide_own_score', prefs.hide_score_badge); } catch {}
       const ownToggle = document.getElementById('hide-own-score');

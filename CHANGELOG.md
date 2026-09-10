@@ -11,9 +11,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.6.1] - 2026-09-09
+
+A round of fixes from the issue tracker and the community server. Discord
+emotes show as pictures on both sides of the Ferry bridge, the DM PiP shows
+who is actually online, #channel links survive a rename, thread replies get
+link cards, forum cards show the protection shield, the hover card and the
+role Collapse button behave, CRT text reads bigger, and the topic bar folds
+away. The homepage has full-size screenshots and a gallery. No migration
+steps; the one new column is added on first start.
+
+### Added
 ## [Unreleased]
 
 ### Added
+- **Closed forum topics (#5624).** Edit title and tags on a topic has a Closed
+  box. A closed topic greys out, carries a Closed tag and sits below the open
+  ones, and reopening it puts it back. The author, admins and anyone with
+  manage messages in the channel can flip it. Requested by @birdcrazy.
+- **Pop-up notifications: a custom gap, and Never (#5619).** The limit on
+  desktop and browser pop-ups takes a number of minutes of your own now, and a
+  Never option stops the pop-ups altogether while sounds and unread badges keep
+  working. Requested by @quakeman00.
+- **Hide the crossed-out channel icons (#5615).** An admin setting hides the
+  small screen-share-off and music-off icons in the channel list for everyone,
+  for servers where most channels have those off and the icons were only
+  clutter. Requested by @quakeman00.
+- **Underlined text (#5621).** Wrap text in `__double underscores__`, or select
+  it and press Ctrl+U. Thanks to @birdcrazy.
+- **Coloured text (#5623).** Wrap text as `c#RRGGBB...#c` or `c#(R,G,B)...#c`
+  to colour it; Ctrl+Shift+F wraps a selection and leaves the cursor on the
+  colour. Thanks to @birdcrazy.
 - **Roles start from a template.** New Role in Role Management opens a picker:
   Moderator, Helper, Trusted member, Event host, Media poster, Group, or Blank.
   Each comes with a level, a colour and a permission set already ticked, and
@@ -39,6 +67,103 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   clicking the button under the message, gives the reader the role, and undoing
   either takes it back. Level-0 Groups are made for this. Requested by
   Dispencer2.
+
+- **The topic bar folds away (#5625).** A small arrow at its right folds the
+  bar to a thin strip, so "Click to set a topic" stops taking a line for
+  people who never will. It is per browser, and the fold survives channel
+  switches and reloads. Requested by @quakeman00.
+
+### Fixed
+- **Pinned forum topics stay on top.** A reply to another topic could push a
+  pinned one down the list, and a pinned topic with old activity could be
+  missing from the first page altogether. Pinned topics now load with the
+  first page and keep the top of the list, in the cards and in the feed.
+- **The DM PiP send button is a square that matches the thread panel's (#5601).**
+  Thanks to @birdcrazy.
+
+### Changed
+- **Homepage.** The logo leads the page, the screenshots are full size with a
+  Gallery you can step through with the arrow keys, the phone shot sits beside
+  Security and privacy, and a community channel shot follows the feature list.
+
+### Fixed
+- **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a
+  further notch, so sub-channel names and other fine print no longer read a
+  size smaller than every other theme. Reported by @quakeman00.
+- **Discord emotes show as pictures on both sides of the bridge.** A custom
+  emote relayed from Discord arrived as its bare `:name:` shortcode, and one
+  typed in Haven so it would show on the Discord side stayed as text here.
+  Haven now draws `<:name:id>` inline, fetching the picture once through the
+  server so nobody's browser talks to Discord's CDN, and a Haven `:name:` goes
+  out as the paired server's own emote of that name. Reported by Raidenphantom.
+- **The hover profile card stays put (#5608).** It closed itself three
+  seconds after opening even with the mouse still on the name, and the next
+  twitch of the mouse opened it again. It now stays while the pointer rests on
+  the name and closes when it leaves. Reported by @quakeman00, traced by
+  @birdcrazy.
+- **Collapse works on a role card with pending changes (#5607).** In Role
+  Assignment, Collapse only folded a card whose settings were unchanged, so a
+  pending add or an edited level ignored the button. It now folds the editor
+  and keeps the pending change for Save. Reported by @quakeman00.
+- **#channel links survive a rename (#5602).** A `#old-name` typed before a
+  channel was renamed stopped rendering as a link. Channels now remember their
+  former names, so the old reference still opens the channel and reads as its
+  current name. Reported by @birdcrazy.
+- **Link cards in threads (#5620).** A link posted as a reply in a forum
+  topic, or in any other thread, now gets the same preview card as it does in
+  the channel. Reported by @quakeman00.
+- **Forum topic cards show the protection shield (#5622).** A protected topic
+  now carries the shield on its card, and its right-click menu offers Unprotect
+  instead of Protect a second time. Reported by @quakeman00.
+- **The DM PiP shows the partner's avatar and live status (#5574, #5600).**
+  The PiP header only knew about people in whatever channel was on screen, so
+  a partner who was not in that channel showed as a grey dot with an initial
+  until the DM was opened full screen. The DM now carries its partner's avatar,
+  and presence for a DM is refreshed whenever either side connects, disconnects
+  or changes status, with the DM not on screen. Reported by @birdcrazy and
+  @TianLaiEric.
+- **The DM PiP send button lines up with the reply box (#5600).** It now has
+  the same height as a one-line reply box in every theme. Reported by
+  @TianLaiEric.
+
+## [4.6.0] - 2026-09-09
+
+Forums turn into proper forums, with topic cards, a gallery view, tags and a New
+Post button. Chat images now load only when they come near the screen, which
+cuts the desktop app's memory on a busy channel by a large margin. Channels can
+be marked NSFW and hidden, Settings has a search box, members can be kicked while
+they are offline, and the website has been rebuilt from scratch. No migration
+steps; the new columns are added on first start.
+
+### Added
+- **Forums read like forums (#5595).** A forum channel now opens as a list of
+  topic cards, newest activity on top, each with its title, tags, author, reply
+  count and first image, and a Gallery view of square tiles for art and
+  character sheets. The toolbar sorts by Recently active or Date posted,
+  filters by the channel's tags (match some or all), and a New Post button
+  opens a composer with title, body and tags. Replies still live in the
+  topic's thread and bump it. Admins keep the tag list in Channel Functions
+  (one per line, an emoji first if you like), and the author or a moderator
+  can retitle or retag a topic from its card. Requested by test2 and the RP
+  crowd, built by @Amnibro.
+- **NSFW channels (#5595).** Channel Functions has an NSFW switch, and Settings
+  has "Hide NSFW channels" for a phone in public. Requested by Dispencer2.
+- **Search inside Settings (#5595).** A search box at the top of the Settings
+  nav (or Ctrl+F while Settings is open) hides every section that does not
+  mention the word. Requested by Dispencer2.
+- **One way to create a channel (#5595).** The sidebar's Create Temp Channel
+  opens the same create form with Temporary already ticked instead of its own
+  prompt. Requested by Dispencer2.
+- **& and + in channel names (#5595).** Requested by Dispencer2.
+- **Inline images load on demand (#5587).** Chat images, stickers and link
+  preview pictures used to fetch the moment a message rendered, and every one
+  of the 100 messages kept on screen held its decoded bitmap, which was most of
+  the memory the desktop app used on a busy channel. They now load only when
+  they come near the viewport, closest first and three at a time, and are let
+  go again once they scroll far away or the window has been hidden for a while,
+  in the main chat, threads, DM pop-outs and search alike. A picture keeps its
+  size while unloaded so history never jumps. Measured by @Amnibro on the
+  desktop app: about 430 MB of a 700 MB process was decoded images.
 - **Attachments per message is an admin setting (#5561).** Uploads & Limits has
   a Max Attachments per Message box (1 to 50, default 10). Dropping, pasting or
   picking several files at once now queues all of them, in the main composer,
@@ -51,12 +176,69 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   connections" toggle, while viewers on a direct route keep the full-quality
   one. On by default; a switch under Settings, Debug turns the detection off.
   Suggested by @RCCore after confirming the profile on two setups.
+- **Visual effects follow you between desktop launches (#5589).** The effects
+  pick used to live only in the browser's local storage, so a desktop relaunch
+  that landed on a different storage origin came back with the theme's default
+  effects while the theme itself survived. The pick now syncs through your
+  server preferences the way the theme does. Reported by Dispencer2, fixed by
+  @Amnibro.
+
+### Changed
+- **Settings sections follow the nav order (#5596).** On both the user and
+  admin panels the sections now sit in the same order as the nav, so clicking
+  down the list scrolls one way instead of jumping around. The admin panel gets
+  the same scroll highlight the user panel had, plus a Terms of Service entry.
+  Reported and fixed by @birdcrazy (#5576).
+- **CRT theme text reads the same size as every other theme (#5590).** VT323's
+  glyphs sit small in their box, so the CRT theme always read a size smaller.
+  The face is scaled to match without touching spacing or avatars. Reported by
+  Dispencer2, fixed by @Amnibro.
 
 ### Fixed
+- **Members can be kicked while they are offline.** Kick refused anyone who was
+  not connected to the channel at that moment ("use ban instead"), so a member
+  who had gone offline could not be removed. Kicking is a membership change, so
+  it now works on anyone who is a member, online or not; the kicked notice and
+  the online list only update when there is a live connection to tell. The
+  confirmation is a green toast now instead of a red one. Reported by
+  Dispencer2.
+- **Join Voice only shows where you can join (#5598).** The header and sidebar
+  buttons stayed up on the welcome screen and in channels with voice turned
+  off, and came back a few seconds after switching to such a channel because
+  the voice UI check treated a hidden button as a fault and put it back. Both
+  now follow the channel: no channel, voice off, or no voice permission means
+  no button. Reported by @birdcrazy.
+- **The Android banner stays dismissed (#5594).** Closing it, or ticking "Don't
+  show this again" on the Android promo, now keeps it gone on that account,
+  across reloads and devices. Nothing was writing the permanent flag before, so
+  it came back on every page load. Reported by @Nosirus.
 - **DM PiP header stuck on a grey dot and an initial (#5574).** The avatar and
   status dot in the DM PiP header were drawn once when the panel opened, from
   whatever the online list held at that moment, and never again. They follow
   presence updates now. Reported by @birdcrazy.
+- **Layout density buttons work again (#5585).** A picker helper change in 4.5.0
+  left the Compact, Cozy and Spacious buttons unresponsive. Fixed by @birdcrazy.
+- **Channel and DM lists scroll while you drag near the edges (#5591).**
+  Dragging a channel to the top or bottom of a long sidebar used to stop there;
+  the list now scrolls along, faster the closer you hold to the edge. Reported
+  by Dispencer2, fixed by @Amnibro.
+- **Copy token copies the token, or says it could not (#5592).** The Copy
+  button under Require invite token reported success even when the desktop app
+  refused the clipboard write. It now goes through the desktop clipboard first
+  and shows an error with a hint if every route fails. Reported by Dispencer2,
+  fixed by @Amnibro.
+- **Soundboard hotkeys can be set and cleared from every layout (#5593).** The
+  sidebar soundboard showed a hotkey but gave no way to clear it or set one.
+  The grid, the pop-out and the sidebar now share the same controls, with a
+  finger-sized clear button in row layouts. Reported by Dispencer2, fixed by
+  @Amnibro.
+- **Every install path uses Haven's own certificate generator (#5586).**
+  4.5.0 taught the server to make its certificate itself, but `Start Haven.bat`,
+  `Install Haven.ps1` and the web installer still went looking for
+  `openssl.exe` first and reported a skipped certificate as done. They now call
+  the same generator, the certificate carries the CA and server-auth flags that
+  phones expect when you import it, and the guide and support page stop telling
+  people to install OpenSSL. Reported by MutantRabbit767, fixed by @Amnibro.
 
 ---
 

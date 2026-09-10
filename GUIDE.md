@@ -660,7 +660,7 @@ The `Upgrade` / `Connection` headers are required for Socket.io WebSocket traffi
 
 | Problem | Solution |
 |---------|----------|
-| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or install OpenSSL and restart (see Troubleshooting below) |
+| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or unset `FORCE_HTTP` and restart (see Troubleshooting below) |
 | Friends get "took too long to respond" | Port forwarding not set up, or firewall blocking |
 | Friends get "connection refused" | Server isn't running — launch `Start Haven.bat` |
 | Can't connect with `https://` | Make sure you're using port 3000, not 443 |
@@ -890,7 +890,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 
 - **HTTPS is required.** Push notifications use Service Workers, which only work over `https://` or `localhost`. If you're accessing Haven via a LAN IP like `http://192.168.1.x:3000`, push will **not** work.
 - A modern browser (Chrome, Edge, Firefox, or Safari 16+)
-- Haven must be running with SSL certificates (the default if OpenSSL is installed)
+- Haven must be running with SSL certificates (the default; Haven makes its own)
 
 ### How to Enable
 
@@ -927,7 +927,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 | "Permission denied" | You blocked notifications. Reset in browser settings: Settings → Site Settings → Notifications → find Haven → Allow |
 | Toggle is grayed out | Your browser doesn't support push, or you're in incognito/private mode |
 | Notifications not appearing | Check your OS notification settings — Haven notifications may be muted at the system level |
-| Only works on localhost | For LAN/remote access, you need valid SSL. Haven auto-generates self-signed certs if OpenSSL is installed |
+| Only works on localhost | For LAN/remote access, you need valid SSL. Haven generates self-signed certs itself on first start |
 
 ---
 
@@ -1487,14 +1487,12 @@ If your webhook has a `callback_url` and `callback_secret` configured, Haven wil
 ## 🆘 Troubleshooting
 
 **"SSL_ERROR_RX_RECORD_TOO_LONG" or "ERR_SSL_PROTOCOL_ERROR" in browser**
-→ Your browser is trying to connect via `https://` but the server is actually running in HTTP mode. This happens when SSL certificates weren't generated (usually because OpenSSL isn't installed).
+→ Your browser is trying to connect via `https://` but the server is actually running in HTTP mode. Haven makes its own self-signed certificate on first start (no OpenSSL needed), so this now only happens when `FORCE_HTTP=true` is set in your `.env`, or when the certificate files in your data directory are unreadable.
 **Quick fix:** Change the URL in your browser from `https://localhost:3000` to `http://localhost:3000`.
-**Permanent fix:** Install OpenSSL so Haven can generate certificates:
-1. Download from [slproweb.com/products/Win32OpenSSL.html](https://slproweb.com/products/Win32OpenSSL.html) (the "Light" version is fine)
-2. During install, choose **"Copy OpenSSL DLLs to the Windows system directory"**
-3. **Restart your PC** (so OpenSSL is added to PATH)
-4. Delete the `certs` folder in your data directory (`%APPDATA%\Haven\certs`)
-5. Re-launch `Start Haven.bat` — it will regenerate certificates and start in HTTPS mode
+**Permanent fix:**
+1. Open `.env` in your data directory (`%APPDATA%\Haven` on Windows, `~/.haven` elsewhere) and remove `FORCE_HTTP=true` unless a reverse proxy is terminating TLS for you
+2. If the startup log says the certificate could not be loaded, delete the `certs` folder in that data directory
+3. Re-launch `Start Haven.bat` — Haven regenerates the certificate and starts in HTTPS mode
 
 **How to tell if you're running HTTP or HTTPS:**
 Check the server's startup banner in the terminal. If it says `http://localhost:3000` — you're on HTTP. If it says `https://localhost:3000` — you're on HTTPS. The protocol in the URL you use must match.

@@ -551,6 +551,8 @@ _applyServerSettings() {
     if (updateBannerAdminOnly) {
       updateBannerAdminOnly.checked = this.serverSettings.update_banner_admin_only === 'true';
     }
+    const hideDisabledBadges = document.getElementById('hide-disabled-badges');
+    if (hideDisabledBadges) hideDisabledBadges.checked = this.serverSettings.hide_disabled_channel_badges === 'true';
     const defaultTheme = document.getElementById('default-theme-select');
     if (defaultTheme) {
       defaultTheme.value = this.serverSettings.default_theme || '';
@@ -919,6 +921,7 @@ _snapshotAdminSettings() {
     session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
+    hide_disabled_channel_badges: this.serverSettings.hide_disabled_channel_badges || 'false',
     admin_password_reset_enabled: this.serverSettings.admin_password_reset_enabled || 'false',
     unicode_emoji_auto_update: this.serverSettings.unicode_emoji_auto_update || 'false',
     registration_captcha_enabled: this.serverSettings.registration_captcha_enabled || 'false',
@@ -1098,6 +1101,11 @@ _saveAdminSettings() {
     this.socket.emit('update-server-setting', { key: 'update_banner_admin_only', value: updateBannerAdminOnly });
     changed = true;
   }
+  const hideDisabledBadges = document.getElementById('hide-disabled-badges')?.checked ? 'true' : 'false';
+  if (hideDisabledBadges !== (snap.hide_disabled_channel_badges || 'false')) {
+    this.socket.emit('update-server-setting', { key: 'hide_disabled_channel_badges', value: hideDisabledBadges });
+    changed = true;
+  }
 
   const adminPwReset = document.getElementById('admin-password-reset-enabled')?.checked ? 'true' : 'false';
   if (adminPwReset !== (snap.admin_password_reset_enabled || 'false')) {
@@ -1269,6 +1277,8 @@ _cancelAdminSettings() {
     if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
+    const hdb = document.getElementById('hide-disabled-badges');
+    if (hdb) hdb.checked = snap.hide_disabled_channel_badges === 'true';
     const dt = document.getElementById('default-theme-select');
     if (dt) dt.value = snap.default_theme || '';
     const dl = document.getElementById('default-locale-select');
@@ -2452,6 +2462,11 @@ _handleMarkdownShortcuts(inputEl, event) {
     return this._wrapSelectedText(input, '*', `*`, true);
   }
 
+  // Underline (Ctrl/Cmd + U).
+  if (key === 'u' && !event.shiftKey) {
+    return this._wrapSelectedText(input, '__', `__`, true);
+  }
+
   // Bold (Ctrl/Cmd + B). Shift+B is the bookmarks bar in Chrome.
   if (key === 'b' && !event.shiftKey) {
     return this._wrapSelectedText(input, '**', `**`, true);
@@ -2478,6 +2493,17 @@ _handleMarkdownShortcuts(inputEl, event) {
   // Spoiler (Ctrl/Cmd + Shift + P)
   if (event.shiftKey && key === 'p') {
     return this._wrapSelectedText(input, '||', `||`);
+  }
+
+  // Text color (Ctrl/Cmd + Shift + F) (F for font, since c for code is already taken)
+  if (event.shiftKey && key === 'f') {
+    const colorPrefix = 'c#(51,153,255)'
+    if (!this._wrapSelectedText(input, colorPrefix, '#c')) return false;
+
+    // Move cursor to just before ")" so the user can edit the color
+    const cursorPos = input.selectionStart + (colorPrefix.length - 1);
+    input.setSelectionRange(cursorPos, cursorPos);
+    return true;
   }
   return false;
 },
@@ -5335,6 +5361,7 @@ _openRoleAssignCenter(preSelectUserId = null) {
   this._racSelectedUser = null;
   this._racSelectedChannel = null; // null = server-wide, number = channel id
   this._racPendingChanges = {}; // key: `${userId}:${channelId||'server'}` → { assignments: { [roleId]: {level, customPerms, applyToSubs} }, removals: [roleId, ...] }
+  this._racCollapsed = new Set(); // `${key}:${roleId}` cards folded away while their edits stay pending (#5607)
 
   document.getElementById('rac-user-list').innerHTML = `<p class="rac-placeholder">${t('modals.common.loading')}</p>`;
   document.getElementById('rac-channel-list').innerHTML = `<p class="rac-placeholder">${t('settings.admin.roles_select_user')}</p>`;
@@ -5662,7 +5689,11 @@ _renderRacConfig() {
     const effectivePerms = assignment && assignment.customPerms
       ? assignment.customPerms
       : [...(card.defaultPerms || [])];
-    const expanded = !!assignment;
+    // Collapsed is a view state on top of the pending assignment, so a card
+    // with edits, or a pending add, can be folded away without losing them.
+    // The Collapse button used to do nothing at all for those (#5607).
+    if (!this._racCollapsed) this._racCollapsed = new Set();
+    const expanded = !!assignment && !this._racCollapsed.has(`${key}:${card.roleId}`);
     const applyToSubs = !!(assignment && assignment.applyToSubs);
 
     let stateBadge = '';
@@ -5865,16 +5896,25 @@ _renderRacConfig() {
       const p = ensurePending();
       const card = cards.find(c => c.roleId === rid);
       if (!card) return;
+      const collapsedKey = `${key}:${rid}`;
       if (p.assignments && p.assignments[rid]) {
-        // Already expanded — collapse by removing the assignment IF nothing
-        // was changed from the held state. Otherwise keep it.
-        const a = p.assignments[rid];
-        const unchanged = card.held
-          && a.level === card.heldLevel
-          && JSON.stringify((a.customPerms || []).slice().sort()) === JSON.stringify((card.defaultPerms || []).slice().sort())
-          && !a.applyToSubs;
-        if (unchanged) delete p.assignments[rid];
+        if (this._racCollapsed.has(collapsedKey)) {
+          // Folded away with edits still pending: open it back up.
+          this._racCollapsed.delete(collapsedKey);
+        } else {
+          // Collapse by dropping the assignment when nothing was changed from
+          // the held state. With edits, or a pending add, keep them and just
+          // fold the editor (#5607).
+          const a = p.assignments[rid];
+          const unchanged = card.held
+            && a.level === card.heldLevel
+            && JSON.stringify((a.customPerms || []).slice().sort()) === JSON.stringify((card.defaultPerms || []).slice().sort())
+            && !a.applyToSubs;
+          if (unchanged) delete p.assignments[rid];
+          else this._racCollapsed.add(collapsedKey);
+        }
       } else {
+        this._racCollapsed.delete(collapsedKey);
         // Expand: seed an assignment from the current held values (or preset).
         p.assignments[rid] = {
           level: card.held ? card.heldLevel : card.defaultLevel,

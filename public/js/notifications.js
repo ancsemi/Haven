@@ -217,8 +217,11 @@ class NotificationManager {
     this._savePref('haven_notif_voice_action_cues_enabled', this.voiceActionCuesEnabled);
   }
 
+  // 0 shows every pop-up, -1 shows none (sounds and badges are separate), any
+  // other value is the shortest gap between two pop-ups in ms (#5619).
   setPopupCooldownMs(val) {
-    this.popupCooldownMs = Math.max(0, parseInt(val, 10) || 0);
+    const n = parseInt(val, 10);
+    this.popupCooldownMs = n === -1 ? -1 : Math.max(0, n || 0);
     this._savePref('haven_notif_popup_cooldown_ms', this.popupCooldownMs);
   }
 
@@ -231,6 +234,7 @@ class NotificationManager {
    * that keeps reconnecting) can't spam the taskbar.
    */
   popupAllowed() {
+    if (this.popupCooldownMs === -1) return false;
     if (!this.popupCooldownMs) return true;
     const now = Date.now();
     if (now - this._lastPopupAt < this.popupCooldownMs) return false;

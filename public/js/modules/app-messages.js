@@ -328,6 +328,12 @@ _renderMessages(messages, lastReadMessageId) {
   }
   const container = document.getElementById('messages');
   container.innerHTML = '';
+  container.classList.remove('forum-view', 'forum-gallery');
+  this._forumActive = false;
+  if (this._isForumChannel && this._isForumChannel(this.currentChannel)) {
+    this._renderForum(messages);
+    return;
+  }
   // A forum feed runs newest first: the most recently active topic sits at
   // the top, where a forum reader expects it. (#144)
   const forumFeed = this._isForumFeed();
@@ -360,6 +366,8 @@ _renderMessages(messages, lastReadMessageId) {
   const order = [];
   for (let i = start; i < messages.length; i++) order.push(i);
   if (forumFeed) order.reverse();
+  // Pinned topics head a forum feed whatever their activity. (#144)
+  if (forumFeed) order.sort((a, b) => (messages[b].pinned ? 1 : 0) - (messages[a].pinned ? 1 : 0));
   for (const i of order) {
     const prevMsg = (!forumFeed && i > start) ? messages[i - 1] : null;
 
@@ -697,19 +705,22 @@ _appendOlderForum(messages) {
 _bumpForumTopic(parentId) {
   const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (!ch || !ch.is_forum) return;
+  if (this._forumActive && this._forumBump) { this._forumBump(parentId); return; }
   const container = document.getElementById('messages');
   if (!container) return;
   const el = container.querySelector(`[data-msg-id="${parentId}"]`);
   if (!el) {
     if (!this._loadingHistory && !this._historyBefore && !this._historyAfter) {
-      this.socket.emit('get-messages', { code: this.currentChannel });
+      this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
     }
     return;
   }
-  if (container.firstElementChild === el) return;
+  const slot = this._forumFeedTopSlot(container, el);
+  if (slot === el) return;
   const nearTop = container.scrollTop < 40;
-  // Newest activity goes on top. (#144)
-  container.insertBefore(el, container.firstElementChild);
+  // Newest activity goes on top, under the pinned block: a reply must never
+  // push a pinned topic down. (#144)
+  container.insertBefore(el, slot);
   // The window's least active topic may have just moved; keep the pagination
   // cursor on whatever is last now.
   const all = container.querySelectorAll('[data-msg-id]');
@@ -718,8 +729,20 @@ _bumpForumTopic(parentId) {
   if (nearTop) container.scrollTop = 0;
 },
 
+// Where a topic that just became the newest activity goes in a forum feed:
+// the very top when it is pinned itself, otherwise right under the pinned
+// block. Returns the node to insert before (null means the end).
+_forumFeedTopSlot(container, el) {
+  const isPinned = (n) => !!n && (n.classList.contains('pinned') || n.dataset.pinned === '1');
+  if (isPinned(el)) return container.firstElementChild;
+  let node = container.firstElementChild;
+  while (node && isPinned(node)) node = node.nextElementSibling;
+  return node;
+},
+
 _appendMessage(message, forceScroll = false) {
   const container = document.getElementById('messages');
+  if (this._forumActive && this._forumInsertTopic) { this._forumInsertTopic(message); return; }
   const lastMsg = container.lastElementChild;
 
   // Track persona name for @PersonaName mention resolution. (#5349)
@@ -750,9 +773,10 @@ _appendMessage(message, forceScroll = false) {
   const nearTop = container.scrollTop < 40;
   const msgEl = this._createMessageEl(message, forumFeed ? null : prevMsg);
   if (forumFeed) {
-    // A new topic is the newest activity, so it goes on top. (#144)
+    // A new topic is the newest activity, so it goes on top, under the pinned
+    // block. (#144)
     container.querySelector('.forum-empty-hint')?.remove();
-    container.insertBefore(msgEl, container.firstElementChild);
+    container.insertBefore(msgEl, this._forumFeedTopSlot(container, msgEl));
   } else {
     container.appendChild(msgEl);
   }
@@ -1652,7 +1676,9 @@ _fetchLinkPreviews(containerEl) {
   if (!/\bembed-size-/.test(document.body.className)) this._applyEmbedSize(this._embedSize());
   const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
 
-  const links = containerEl.querySelectorAll('.message-content a[href]');
+  // Thread replies keep their body in .thread-msg-content, and until now no
+  // preview card was ever drawn there (#5620).
+  const links = containerEl.querySelectorAll('.message-content a[href], .thread-msg-content a[href]');
   const seen = new Set();
   links.forEach(link => {
     const url = link.href;
@@ -1672,7 +1698,7 @@ _fetchLinkPreviews(containerEl) {
     // ── Inline YouTube embed (wrapped in the shared embed chrome) ──
     const ytVideoId = this._extractYouTubeVideoId(url);
     if (ytVideoId) {
-      const msgContent = link.closest('.message-content');
+      const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
       const ytCollapsed = this._collapsedEmbeds.has(url);
@@ -1731,7 +1757,7 @@ _fetchLinkPreviews(containerEl) {
     dataPromise
       .then(data => {
         if (!data || (!data.title && !data.description && !data.text)) return;
-        const msgContent = link.closest('.message-content');
+        const msgContent = link.closest('.message-content, .thread-msg-content');
         if (!msgContent) return;
 
         // Don't add duplicate previews

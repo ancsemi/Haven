@@ -21,6 +21,11 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
   src: url('/fonts/vt323-latin.woff2?v=1') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
@@ -29,6 +34,11 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
   src: url('/fonts/vt323-latin-ext.woff2?v=1') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
@@ -37,6 +47,11 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
   src: url('/fonts/vt323-vietnamese.woff2?v=1') format('woff2');
   unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
 }
@@ -3809,17 +3824,20 @@ html.rgb-cycling *::after {
   overflow-y: auto;
 }
 .dm-pip-send {
-  background: var(--accent, #5865f2);
-  color: var(--accent-text);
-  border: none;
-  border-radius: 0.375rem;
-  padding: 0 0.625rem;
-  cursor: pointer;
+  width: 2.125rem;
+  height: 2.125rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
 }
-.dm-pip-send:hover { filter: brightness(1.1); }
+.dm-pip-send:hover { filter: brightness(1.15); }
 
 /* Drag handle at the top of PiP input areas — drag upward to expand the textarea */
 .pip-input-resizer {
@@ -5144,6 +5162,11 @@ select.cfn-select.cfn-input {
   padding: 0 0.125rem; border-radius: 0.1875rem; transition: color 0.15s, background 0.15s;
 }
 .sb-hotkey-clear:hover { color: var(--danger); background: rgba(240,71,71,0.15); }
+/* Row layouts (list mode, sidebar) get a finger-sized clear target. */
+.soundboard-grid.list-mode .sb-hotkey-clear,
+#sb-sidebar-grid .sb-hotkey-clear { font-size: 1rem; padding: 0 0.375rem; }
+#sb-sidebar-grid .soundboard-btn { justify-content: space-between; }
+#sb-sidebar-grid .sb-hotkey-row, #sb-sidebar-grid .sb-hotkey-set { flex-shrink: 0; margin-left: 0.5rem; }
 .sb-hotkey-set {
   font-size: 0.5625rem; color: var(--accent); cursor: pointer; opacity: 0.7;
   transition: opacity 0.15s;
@@ -6844,6 +6867,12 @@ details.sound-section:not([open]) .sound-section-label::before {
 }
 
 .chat-image:hover { opacity: 0.85; }
+
+/* Lazy media queue: a quiet block while an inline image waits for its turn. */
+img[data-lazy="pending"],
+img[data-lazy="loading"] { background: var(--bg-tertiary); }
+img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
+@keyframes lazy-media-in { from { opacity: 0.4; } to { opacity: 1; } }
 
 /* E2E encrypted image loading states */
 .e2e-img-pending,
@@ -13608,6 +13637,10 @@ video:-webkit-full-screen {
   overflow-y: auto;
   flex: 1;
   min-height: 5rem;
+  /* It also carries .soundboard-grid for the list-view styles; that class caps
+     height and pads the Sound Manager grid, neither of which fits the pop-out. */
+  max-height: none;
+  padding: 0;
 }
 @media (max-width: 768px) {
   .sb-pip-overlay {
@@ -14401,6 +14434,15 @@ ul.chat-list { list-style-type: disc; }
 .channel-topic-bar:hover {
   color: var(--text-primary);
 }
+
+/* Fold arrow on the topic bar (#5625). Folded, the bar is a thin strip with
+   just the arrow at the right, so the placeholder stops taking a line. */
+.channel-topic-bar { display: flex; align-items: center; gap: 0.5rem; }
+.channel-topic-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.channel-topic-toggle { flex: none; margin-left: auto; background: none; border: 0; color: inherit; opacity: 0.55; cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 0 0.25rem; }
+.channel-topic-toggle:hover { opacity: 1; }
+.channel-topic-bar.collapsed { padding-top: 0; padding-bottom: 0; min-height: 0.8rem; }
+.channel-topic-bar.collapsed .channel-topic-text { display: none; }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    User Status Dots
@@ -19497,6 +19539,69 @@ ul.chat-list { list-style-type: disc; }
   margin-right: 6px;
   vertical-align: middle;
 }
+
+/* ── Forum channels: topic cards, list or gallery, toolbar ─────────────── */
+.messages.forum-view { display: flex; flex-direction: column; padding: 0.75rem 1rem 1.5rem; }
+.forum-toolbar { position: sticky; top: 0; z-index: 3; background: var(--bg-primary); padding: 0.25rem 0 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+.forum-toolbar-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.forum-toolbar-row + .forum-toolbar-row { margin-top: 0.5rem; }
+.forum-sort-view { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+.forum-select { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.3rem 0.5rem; font-size: 0.8rem; }
+.forum-select-small { padding: 0.2rem 0.4rem; font-size: 0.72rem; }
+.forum-view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.forum-view-btn { background: transparent; border: none; color: var(--text-muted); padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.9rem; }
+.forum-view-btn.active { background: var(--accent); color: var(--accent-text, #fff); }
+.forum-tag-chip { background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.7rem; font-size: 0.75rem; cursor: pointer; }
+.forum-tag-chip:hover { color: var(--text-primary); border-color: var(--accent); }
+.forum-tag-chip.active { background: var(--accent); color: var(--accent-text, #fff); border-color: var(--accent); }
+.forum-tag-clear { background: none; border: none; color: var(--text-link); font-size: 0.75rem; cursor: pointer; }
+.forum-new-post { white-space: nowrap; }
+.forum-topics { display: flex; flex-direction: column; gap: 0.5rem; }
+.forum-topic { display: flex; gap: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem; cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+.forum-topic:hover { border-color: var(--accent); transform: translateY(-1px); }
+.forum-topic-pinned { border-color: var(--accent-dim, var(--accent)); }
+.forum-topic-thumb { flex: 0 0 5.5rem; width: 5.5rem; height: 5.5rem; border-radius: calc(var(--radius) - 2px); overflow: hidden; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
+.forum-topic-thumb img.forum-thumb-img { width: 100%; height: 100%; object-fit: cover; max-width: none; max-height: none; min-width: 0; min-height: 0; margin: 0; }
+/* The glyph colour lives on the span: the tile is a 35% accent tint over the
+   card, not an accent fill, so the accent-on-accent-text contract does not apply. */
+.forum-topic-thumb-empty { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 35%, var(--bg-card)), var(--bg-card)); font-size: 1.6rem; }
+.forum-topic-thumb-empty span { color: var(--accent); }
+.forum-topic-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.forum-topic-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.forum-topic-tags:empty { display: none; }
+.forum-tag { background: var(--bg-tertiary); color: var(--text-secondary); border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.68rem; }
+.forum-tag-pinned { color: var(--accent); }
+.forum-tag-closed { color: var(--text-muted); }
+.forum-topic-closed { opacity: 0.55; }
+.forum-topic-closed:hover { opacity: 0.85; }
+.forum-field-closed span { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.forum-topic-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.forum-topic-snippet { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.forum-topic-snippet:empty { display: none; }
+.forum-topic-meta { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; color: var(--text-muted); margin-top: auto; padding-top: 0.25rem; }
+.forum-topic-author { color: var(--text-secondary); font-weight: 600; }
+.forum-topic-replies { color: var(--accent); }
+.forum-topic-edit { margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; opacity: 0.6; }
+.forum-topic-edit:hover { opacity: 1; color: var(--accent); }
+.forum-load-more { align-self: center; margin-top: 0.75rem; }
+/* Gallery: a grid of true squares, the image fills the tile, the words sit on a scrim. */
+.messages.forum-gallery .forum-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.6rem; }
+.messages.forum-gallery .forum-topic { position: relative; display: block; aspect-ratio: 1 / 1; padding: 0; overflow: hidden; }
+.messages.forum-gallery .forum-topic-thumb { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; font-size: 2.4rem; }
+.messages.forum-gallery .forum-topic-body { position: absolute; left: 0; right: 0; bottom: 0; padding: 1.25rem 0.6rem 0.5rem; gap: 0.15rem; background: linear-gradient(to top, rgba(8,8,14,0.88), rgba(8,8,14,0.55) 60%, transparent); color: #fff; }
+.messages.forum-gallery .forum-topic-title { color: #fff; font-size: 0.9rem; }
+.messages.forum-gallery .forum-topic-snippet { display: none; }
+.messages.forum-gallery .forum-topic-author, .messages.forum-gallery .forum-topic-meta { color: rgba(235,235,245,0.85); }
+.messages.forum-gallery .forum-topic-tags { position: absolute; top: 0.4rem; left: 0.4rem; right: 0.4rem; }
+.messages.forum-gallery .forum-tag { background: rgba(8,8,14,0.65); color: #fff; }
+.forum-post-modal { max-width: 34rem; width: 94%; }
+.forum-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
+.forum-field input, .forum-field textarea { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem; font: inherit; }
+.forum-tag-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+/* Settings search */
+.settings-search-wrap { padding: 0.5rem 0.75rem 0.25rem; }
+.settings-search { width: 100%; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 0.6rem; font-size: 0.82rem; }
+.settings-search-hidden { display: none !important; }
 
 /* ── Role tools: templates, gates, self-assign menus ───────────── */
 .tool-modal .tool-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }

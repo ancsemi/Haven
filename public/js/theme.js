@@ -1286,6 +1286,27 @@ function _updateEffectButtons(container, mode) {
   });
 }
 
+// Effects used to live only in localStorage. The desktop app can land on a
+// different storage origin between launches (http vs https autodetect), and
+// hardened browsers wipe local storage, so the pick came back as the theme's
+// defaults while the theme itself survived through the server. Mirror the
+// choice to user_preferences the way theme does.
+function _persistEffects(raw) {
+  localStorage.setItem('haven_effects', raw);
+  if (typeof socket !== 'undefined' && socket && socket.connected) {
+    socket.emit('set-preference', { key: 'effects', value: raw });
+  }
+}
+
+// Called from the socket 'preferences' handler before the theme is applied,
+// so the theme pass picks the restored effects up in the same go.
+function syncEffectsFromServer(raw) {
+  if (typeof raw !== 'string' || !raw) return;
+  try { localStorage.setItem('haven_effects', raw); } catch (e) {}
+  const container = document.getElementById('effect-selector');
+  if (container) _updateEffectButtons(container, _getStoredEffectMode());
+}
+
 function initEffectSelector() {
   const container = document.getElementById('effect-selector');
   if (!container) return;
@@ -1299,11 +1320,11 @@ function initEffectSelector() {
       const fx = btn.dataset.effect;
 
       if (fx === 'auto') {
-        localStorage.setItem('haven_effects', 'auto');
+        _persistEffects('auto');
         applyEffects('auto');
         _updateEffectButtons(container, 'auto');
       } else if (fx === 'none') {
-        localStorage.setItem('haven_effects', 'none');
+        _persistEffects('none');
         applyEffects('none');
         _updateEffectButtons(container, 'none');
       } else {
@@ -1317,11 +1338,11 @@ function initEffectSelector() {
         }
 
         if (current.length === 0) {
-          localStorage.setItem('haven_effects', 'none');
+          _persistEffects('none');
           applyEffects('none');
           _updateEffectButtons(container, 'none');
         } else {
-          localStorage.setItem('haven_effects', JSON.stringify(current));
+          _persistEffects(JSON.stringify(current));
           applyEffects(current);
           _updateEffectButtons(container, current);
         }

@@ -423,7 +423,7 @@ function uploadCapMb(user) {
   try {
     const row = db.prepare(`
       SELECT MAX(r.max_upload_mb) AS cap FROM roles r JOIN user_roles ur ON ur.role_id = r.id
-      WHERE ur.user_id = ? AND r.max_upload_mb IS NOT NULL
+      WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.max_upload_mb IS NOT NULL
     `).get(user.id);
     return Math.max(base, parseInt(row?.cap, 10) || 0);
   } catch { return base; }
@@ -497,10 +497,23 @@ let currentReferrerPolicy = DEFAULT_REFERRER_POLICY;
 let sslCert = process.env.SSL_CERT_PATH;
 let sslKey  = process.env.SSL_KEY_PATH;
 
-// If not explicitly configured, check if the startup scripts generated certs
+const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+
+// If not explicitly configured, use the certs in the data directory, and make
+// them ourselves when they are missing. The startup scripts used to need an
+// openssl.exe for this, which Windows does not ship (OpenSSH is not OpenSSL),
+// so those machines silently fell back to HTTP.
 if (!sslCert && !sslKey) {
   const autoCert = path.join(CERTS_DIR, 'cert.pem');
   const autoKey  = path.join(CERTS_DIR, 'key.pem');
+  if (!forceHttp && !(fs.existsSync(autoCert) && fs.existsSync(autoKey))) {
+    try {
+      const made = require('./src/selfsignedCert').ensureCerts(CERTS_DIR);
+      console.log(`🔒 Generated a self-signed certificate in ${CERTS_DIR} (${made.names.join(', ')})`);
+    } catch (err) {
+      console.warn('⚠️  Could not generate a self-signed certificate:', err.message);
+    }
+  }
   if (fs.existsSync(autoCert) && fs.existsSync(autoKey)) {
     sslCert = autoCert;
     sslKey  = autoKey;
@@ -509,36 +522,6 @@ if (!sslCert && !sslKey) {
   // Resolve relative paths against the data directory
   if (sslCert && !path.isAbsolute(sslCert)) sslCert = path.resolve(DATA_DIR, sslCert);
   if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
-}
-
-const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
-
-// No certificate and no wish for plain HTTP: make one. Voice, camera and the
-// mobile app all need HTTPS, and the Windows installer used to skip this step
-// quietly whenever OpenSSL was missing, leaving people on HTTP with no idea
-// why nothing worked. Built with Node's own crypto, so nothing to install.
-// FORCE_HTTP=true is the way to say plain HTTP is on purpose.
-if (!sslCert && !sslKey && !forceHttp) {
-  try {
-    const { generateSelfSignedCert } = require('./src/selfsignedCert');
-    const lanIps = [];
-    try {
-      for (const ifaces of Object.values(require('os').networkInterfaces())) {
-        for (const i of ifaces || []) if (i.family === 'IPv4' && !i.internal) lanIps.push(i.address);
-      }
-    } catch { /* no LAN names in the certificate; still a working certificate */ }
-    const made = generateSelfSignedCert({ commonName: 'Haven', altNames: ['localhost'], ipAddresses: ['127.0.0.1', ...lanIps] });
-    const autoCert = path.join(CERTS_DIR, 'cert.pem');
-    const autoKey  = path.join(CERTS_DIR, 'key.pem');
-    fs.mkdirSync(CERTS_DIR, { recursive: true });
-    fs.writeFileSync(autoKey, made.key, { mode: 0o600 });
-    fs.writeFileSync(autoCert, made.cert);
-    sslCert = autoCert;
-    sslKey  = autoKey;
-    console.log(`\u{1F512} No certificate found, so Haven made a self-signed one in ${CERTS_DIR}. Browsers will warn once. Set FORCE_HTTP=true to run plain HTTP on purpose.`);
-  } catch (err) {
-    console.warn('\u26A0\uFE0F  Could not create a self-signed certificate, running plain HTTP:', err && err.message);
-  }
 }
 
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
@@ -1821,14 +1804,7 @@ function uploadLimiter(req, res, next) {
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute
-  // One message can carry up to max_attachments files, each its own request,
-  // so the allowance follows that setting (twice it, never under the old 10)
-  // rather than refusing the tail of a single drop. (#5561)
-  let attachmentCap = 10;
-  try {
-    attachmentCap = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_attachments'").get()?.value) || 10;
-  } catch { /* keep the default */ }
-  const maxUploads = Math.max(10, attachmentCap * 2);
+  const maxUploads = 10;
   if (!uploadLimitStore.has(ip)) uploadLimitStore.set(ip, []);
   const stamps = uploadLimitStore.get(ip).filter(t => now - t < windowMs);
   uploadLimitStore.set(ip, stamps);
@@ -2248,6 +2224,57 @@ app.get('/api/standard-emojis', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token || !verifyToken(token)) return res.status(401).json({ error: 'Unauthorized' });
   res.json(require('./src/emoji').getEmojiData() || { categories: {}, names: {}, modifierBase: [] });
+});
+
+// ── Discord emote cache ─────────────────────────────────
+// A Discord custom emote travels as <:name:id> (or <a:name:id> when animated),
+// whether Ferry relayed it or a Haven member typed it so it shows on the
+// Discord side. Clients render that token as an inline image and load it from
+// here rather than from cdn.discordapp.com, so a third-party host never sees
+// who is scrolling through a bridged channel: the server fetches each emote
+// once and keeps it on disk. Only a server with the bridge switched on fetches
+// anything; everywhere else the client gets a 404 and shows the :name: text.
+const DISCORD_EMOTE_DIR = path.join(DATA_DIR, 'cache', 'discord-emotes');
+const DISCORD_EMOTE_MAX_BYTES = 512 * 1024;
+const DISCORD_EMOTE_MAX_FILES = 5000;
+const discordEmoteMisses = new Map();    // file -> when Discord last said it does not exist
+const discordEmoteInflight = new Map();  // file -> download in progress, so a burst of renders is one fetch
+const discordEmoteLimiter = require('express-rate-limit')({ windowMs: 60 * 1000, max: 300, message: { error: 'Rate limit exceeded' } });
+
+app.get('/api/ferry/emote/:file', discordEmoteLimiter, async (req, res) => {
+  const m = /^(\d{15,25})\.(png|gif)$/.exec(String(req.params.file || ''));
+  if (!m) return res.status(400).end();
+  const file = m[0];
+  const full = path.join(DISCORD_EMOTE_DIR, file);
+  // An emote id never changes what it points at, so a copy is good forever.
+  const sendOpts = { maxAge: 365 * 24 * 60 * 60 * 1000, immutable: true };
+  if (fs.existsSync(full)) return res.sendFile(full, sendOpts);
+
+  let ferryOn = false;
+  try { ferryOn = !!require('./src/ferry').getFerryState().enabled; } catch { /* bridge not loaded */ }
+  if (!ferryOn) return res.status(404).end();
+  const missedAt = discordEmoteMisses.get(file);
+  if (missedAt && Date.now() - missedAt < 6 * 60 * 60 * 1000) return res.status(404).end();
+
+  let job = discordEmoteInflight.get(file);
+  if (!job) {
+    job = (async () => {
+      fs.mkdirSync(DISCORD_EMOTE_DIR, { recursive: true });
+      if (fs.readdirSync(DISCORD_EMOTE_DIR).length >= DISCORD_EMOTE_MAX_FILES) return false;
+      const r = await fetch(`https://cdn.discordapp.com/emojis/${file}?size=64`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok || !/^image\//i.test(r.headers.get('content-type') || '')) return false;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (!buf.length || buf.length > DISCORD_EMOTE_MAX_BYTES) return false;
+      const tmp = `${full}.${process.pid}.${Date.now()}.tmp`;
+      fs.writeFileSync(tmp, buf);
+      fs.renameSync(tmp, full);
+      return true;
+    })().catch(() => false).finally(() => discordEmoteInflight.delete(file));
+    discordEmoteInflight.set(file, job);
+  }
+  if (await job) return res.sendFile(full, sendOpts);
+  discordEmoteMisses.set(file, Date.now());
+  res.status(404).end();
 });
 
 app.delete('/api/emojis/:name', (req, res) => {

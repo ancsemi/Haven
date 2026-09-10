@@ -333,10 +333,30 @@ _setupNotifications() {
 
   const popupCooldownSel = document.getElementById('notif-popup-cooldown');
   if (popupCooldownSel) {
-    popupCooldownSel.value = String(this.notifications.popupCooldownMs || 0);
+    // Presets, Never, or a number of minutes typed in (#5619). A stored gap
+    // that matches no preset shows as Custom with its minutes filled in.
+    const customRow = document.getElementById('notif-popup-custom-row');
+    const customMin = document.getElementById('notif-popup-custom-minutes');
+    const current = this.notifications.popupCooldownMs || 0;
+    if ([...popupCooldownSel.options].some(o => o.value === String(current))) {
+      popupCooldownSel.value = String(current);
+    } else {
+      popupCooldownSel.value = 'custom';
+      if (customMin) customMin.value = String(Math.max(1, Math.round(current / 60000)));
+    }
+    const syncRow = () => { if (customRow) customRow.style.display = popupCooldownSel.value === 'custom' ? '' : 'none'; };
+    const applyCustom = () => {
+      const mins = Math.min(1440, Math.max(1, parseInt(customMin && customMin.value, 10) || 0));
+      if (customMin) customMin.value = String(mins);
+      this.notifications.setPopupCooldownMs(mins * 60000);
+    };
+    syncRow();
     popupCooldownSel.addEventListener('change', () => {
-      this.notifications.setPopupCooldownMs(popupCooldownSel.value);
+      syncRow();
+      if (popupCooldownSel.value !== 'custom') { this.notifications.setPopupCooldownMs(popupCooldownSel.value); return; }
+      if (customMin) { if (!customMin.value) customMin.value = '10'; applyCustom(); customMin.focus(); }
     });
+    if (customMin) customMin.addEventListener('change', applyCustom);
   }
 
   toggle.addEventListener('change', () => {
@@ -539,6 +559,12 @@ _setupNotifications() {
       if (this._lastOnlineUsers) this._renderOnlineUsers(this._lastOnlineUsers);
     });
   }
+  const hideNsfwToggle = document.getElementById('hide-nsfw-channels');
+  if (hideNsfwToggle) {
+    hideNsfwToggle.checked = localStorage.getItem('haven_hide_nsfw') === 'true';
+    hideNsfwToggle.addEventListener('change', () => this._setHideNsfw?.(hideNsfwToggle.checked));
+  }
+  this._setupSettingsSearch?.();
   const hideOwnScoreToggle = document.getElementById('hide-own-score');
   if (hideOwnScoreToggle) {
     // Initial value comes from the server-synced preferences cache, falling

@@ -71,7 +71,7 @@ test('the server wrote a certificate and key into the data directory', () => {
 });
 
 test('it said so on the console', () => {
-  assert.match(log, /made a self-signed one/);
+  assert.match(log, /Generated a self-signed certificate|made a self-signed one/);
   assert.match(log, /HTTPS enabled/);
 });
 

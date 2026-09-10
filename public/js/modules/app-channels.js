@@ -62,30 +62,30 @@ async switchChannel(code) {
     this._updateVoiceButtons(true);
     // If viewing a different channel from the one we're in voice in, show "Join Voice" instead of "Voice Active"
     if (this.voice.currentChannel !== code) {
-      const _canVoice = this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice');
       const indic = document.getElementById('voice-active-indicator');
       if (indic) indic.style.display = 'none';
+      const _showJoin = this._voiceJoinAvailable();
       const _scJoinBtn = document.getElementById('voice-join-btn');
-      if (_scJoinBtn) _scJoinBtn.style.display = (channel && channel.voice_enabled === 0) || !_canVoice ? 'none' : 'inline-flex';
+      if (_scJoinBtn) _scJoinBtn.style.display = _showJoin ? 'inline-flex' : 'none';
       const mobileJoin = document.getElementById('voice-join-mobile');
       if (mobileJoin) {
-        if ((channel && channel.voice_enabled === 0) || !_canVoice) mobileJoin.style.setProperty('display', 'none', 'important');
-        else mobileJoin.style.removeProperty('display');
+        if (_showJoin) mobileJoin.style.removeProperty('display');
+        else mobileJoin.style.setProperty('display', 'none', 'important');
       }
     }
   } else {
     // Show just the join button (not the indicator), but hide it for text-only channels or users without voice permission
+    const _showJoin = this._voiceJoinAvailable();
     const _scJoinBtn = document.getElementById('voice-join-btn');
-    const _canVoice = this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice');
-    if (_scJoinBtn) _scJoinBtn.style.display = (channel && channel.voice_enabled === 0) || !_canVoice ? 'none' : 'inline-flex';
+    if (_scJoinBtn) _scJoinBtn.style.display = _showJoin ? 'inline-flex' : 'none';
     const indic = document.getElementById('voice-active-indicator');
     if (indic) indic.style.display = 'none';
     const vp = document.getElementById('voice-panel');
     if (vp) vp.style.display = 'none';
     const mobileJoin = document.getElementById('voice-join-mobile');
     if (mobileJoin) {
-      if ((channel && channel.voice_enabled === 0) || !_canVoice) mobileJoin.style.setProperty('display', 'none', 'important');
-      else mobileJoin.style.removeProperty('display');
+      if (_showJoin) mobileJoin.style.removeProperty('display');
+      else mobileJoin.style.setProperty('display', 'none', 'important');
     }
   }
   document.getElementById('search-toggle-btn').style.display = '';
@@ -206,7 +206,7 @@ async switchChannel(code) {
       console.warn('[Haven] DM partner key fetch failed, continuing unencrypted:', err);
     }
   }
-  this.socket.emit('get-messages', { code });
+  this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(code) : { code });
   // Belt-and-braces mark-read: if the server already told us the latest
   // message id for this channel (channels-list snapshot), fire a
   // mark-read IMMEDIATELY (not via the debounced _markRead path) so that
@@ -316,26 +316,59 @@ _updateTopicBar(topic) {
     const header = document.querySelector('.channel-header');
     header.parentNode.insertBefore(bar, header.nextSibling);
   }
-  const canEdit = this.user.isAdmin || this._hasPerm('set_channel_topic');
-  if (topic) {
-    bar.textContent = topic;
-    bar.style.display = 'block';
-    bar.title = canEdit ? t('channels.topic_edit_hint') : topic;
-    bar.onclick = canEdit ? () => this._editTopic() : null;
-    bar.style.cursor = canEdit ? 'pointer' : 'default';
-  } else {
-    if (canEdit) {
-      bar.textContent = t('channels.topic_placeholder');
-      bar.style.display = 'block';
-      bar.style.opacity = '';
-      bar.style.color = 'var(--text-muted)';
-      bar.style.cursor = 'pointer';
-      bar.onclick = () => this._editTopic();
-    } else {
-      bar.style.display = 'none';
-    }
+  // The text and the fold arrow are separate targets. The arrow folds the bar
+  // to a thin strip for this browser only, and the fold survives channel
+  // switches and reloads (#5625). Clicking the folded strip opens it again.
+  let text = bar.querySelector('.channel-topic-text');
+  if (!text) {
+    bar.textContent = '';
+    text = document.createElement('span');
+    text.className = 'channel-topic-text';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'channel-topic-toggle';
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._setTopicBarFolded(!bar.classList.contains('collapsed'));
+    });
+    bar.appendChild(text);
+    bar.appendChild(toggle);
   }
-  if (topic) { bar.style.opacity = '1'; bar.style.color = ''; }
+  const canEdit = this.user.isAdmin || this._hasPerm('set_channel_topic');
+  const editable = !!topic ? canEdit : canEdit;
+  if (topic || canEdit) {
+    text.textContent = topic || t('channels.topic_placeholder');
+    bar.style.display = '';
+    bar.title = topic ? (canEdit ? t('channels.topic_edit_hint') : topic) : '';
+    bar.style.cursor = editable ? 'pointer' : 'default';
+    bar.style.color = topic ? '' : 'var(--text-muted)';
+    bar.style.opacity = topic ? '1' : '';
+    bar.onclick = () => {
+      if (bar.classList.contains('collapsed')) { this._setTopicBarFolded(false); return; }
+      if (editable) this._editTopic();
+    };
+  } else {
+    bar.style.display = 'none';
+  }
+  this._setTopicBarFolded(null);
+},
+
+// null keeps the saved state and just applies it; true or false saves first.
+_setTopicBarFolded(folded) {
+  const bar = document.getElementById('channel-topic-bar');
+  if (!bar) return;
+  if (folded !== null) {
+    try { localStorage.setItem('haven_topic_bar_folded', folded ? '1' : '0'); } catch { /* private mode */ }
+  }
+  let saved = false;
+  try { saved = localStorage.getItem('haven_topic_bar_folded') === '1'; } catch { /* private mode */ }
+  bar.classList.toggle('collapsed', saved);
+  const toggle = bar.querySelector('.channel-topic-toggle');
+  if (toggle) {
+    toggle.textContent = saved ? '\u25BE' : '\u25B4';
+    toggle.title = t(saved ? 'channels.topic_bar_show' : 'channels.topic_bar_hide');
+    toggle.setAttribute('aria-label', toggle.title);
+  }
 },
 
 async _editTopic() {
@@ -689,6 +722,12 @@ _updateChannelFunctionsPanel(ch) {
   const isForum = ch.is_forum === 1;
   this._setCfnBadge('forum', isForum, t(isForum ? 'channel_functions.on' : 'channel_functions.off'));
   const isPrivate = !!ch.is_private;
+  {
+    const _cfnPanel = document.getElementById('channel-functions-panel'); const nsfwRow = _cfnPanel?.querySelector('.cfn-row[data-fn="nsfw"] .cfn-badge');
+    if (nsfwRow) { nsfwRow.textContent = ch.is_nsfw ? t('channel_functions.on') : t('channel_functions.off'); nsfwRow.className = 'cfn-badge ' + (ch.is_nsfw ? 'cfn-on' : 'cfn-off'); }
+    const tagsRow = _cfnPanel?.querySelector('.cfn-row[data-fn="forum-tags"]');
+    if (tagsRow) { tagsRow.style.display = ch.is_forum ? '' : 'none'; const b = tagsRow.querySelector('.cfn-badge'); if (b) b.textContent = String(this._forumTagsOf ? this._forumTagsOf(ch.code).length : 0); }
+  }
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const gateBadge = this._roleGateBadge(ch);
   this._setCfnBadge('role-gate', gateBadge.on, gateBadge.text);
@@ -1905,13 +1944,19 @@ _renderChannels() {
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
     const isTempVoice = !!ch.is_temp_voice;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : '#'))));
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
+    // NSFW channels stay out of sight when the user asked for that (phone in
+    // public), except the one they are actually in.
+    if (ch.is_nsfw && this._hideNsfw && this._hideNsfw() && ch.code !== this.currentChannel) el.style.display = 'none';
 
     // Build small status indicators for channel features
     const _badges = [];
     if (!isSub) {
-      if (ch.streams_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.screen_share_not_allowed')}">🖥️</span>`);
-      if (ch.music_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.music_not_allowed')}">🎵</span>`);
+      // An admin can hide the crossed-out icons for everyone (#5615): on a
+      // server where most channels have these off they were only clutter.
+      const showOff = !this.serverSettings || this.serverSettings.hide_disabled_channel_badges !== 'true';
+      if (showOff && ch.streams_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.screen_share_not_allowed')}">🖥️</span>`);
+      if (showOff && ch.music_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.music_not_allowed')}">🎵</span>`);
       if (ch.slow_mode_interval > 0) _badges.push(`<span title="${t('channels.slow_mode_title', { seconds: ch.slow_mode_interval })}" style="opacity:0.5;font-size:0.65rem">🐢</span>`);
       if (ch.cleanup_exempt === 1) _badges.push(`<span title="${t('channels.cleanup_exempt_title')}" style="opacity:0.5;font-size:0.65rem">🛡️</span>`);
     }
@@ -2231,6 +2276,21 @@ _renderChannels() {
     tempBtn.innerHTML = `<span style="font-size:0.9rem">➕</span><span>${t('channels.create_temp_channel')}</span>`;
     tempBtn.title = t('channels.create_temp_channel_title');
     tempBtn.addEventListener('click', async () => {
+      // One create form for every kind of channel: open it with Temporary
+      // ticked instead of a second prompt that only made a temp channel.
+      const form = document.getElementById('create-section-body');
+      const nameInput = document.getElementById('new-channel-name');
+      const tmp = document.getElementById('new-channel-temporary');
+      if (form && nameInput && tmp) {
+        form.style.display = '';
+        const arrow = document.getElementById('create-section-arrow');
+        if (arrow) arrow.textContent = '▾';
+        tmp.checked = true;
+        tmp.dispatchEvent(new Event('change'));
+        nameInput.focus();
+        nameInput.scrollIntoView({ block: 'center' });
+        return;
+      }
       const name = await this._showPromptModal(
         t('channels.create_temp_channel_title'),
         t('channels.create_temp_channel_hint')
@@ -2480,6 +2540,40 @@ _renderChannels() {
 
 // ── Drag-and-drop channel reordering ────────────────────
 
+// Chromium's native drag-and-drop only auto-scrolls the document, never a
+// nested overflow container, so a channel dragged to the top or bottom edge
+// of a long sidebar just stopped there. This drives the scroll ourselves from
+// dragover. The element that actually scrolls depends on the channel-scroll
+// mode (#channel-list in "separate", .sidebar-split in "combined" and on
+// short screens), so it is resolved on each call.
+_makeEdgeScroller(listEl, edge = 48, maxSpeed = 18) {
+  let raf = null, vel = 0;
+  const scroller = () => {
+    let el = listEl;
+    while (el && el !== document.body) {
+      const oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+      el = el.parentElement;
+    }
+    return listEl;
+  };
+  const stop = () => { if (raf) cancelAnimationFrame(raf); raf = null; vel = 0; };
+  const step = (sc) => () => {
+    if (!vel) { raf = null; return; }
+    sc.scrollTop += vel;
+    raf = requestAnimationFrame(step(sc));
+  };
+  const onDragOver = (clientY) => {
+    const sc = scroller();
+    const r = sc.getBoundingClientRect();
+    if (clientY < r.top + edge) vel = -maxSpeed * Math.min(1, (r.top + edge - clientY) / edge);
+    else if (clientY > r.bottom - edge) vel = maxSpeed * Math.min(1, (clientY - (r.bottom - edge)) / edge);
+    else { stop(); return; }
+    if (!raf) raf = requestAnimationFrame(step(sc));
+  };
+  return { onDragOver, stop };
+},
+
 _setupChannelDragDrop() {
   const canManage = this.user?.isAdmin || this._hasPerm('manage_server') || this._hasPerm('create_channel');
   const list = document.getElementById('channel-list');
@@ -2499,7 +2593,9 @@ _setupChannelDragDrop() {
   const indicator = document.createElement('div');
   indicator.className = 'ch-drag-indicator';
 
+  const edge = this._makeEdgeScroller(list);
   const cleanUp = () => {
+    edge.stop();
     if (dragSrc) { dragSrc.classList.remove('ch-dragging'); dragSrc = null; }
     indicator.remove();
   };
@@ -2531,6 +2627,7 @@ _setupChannelDragDrop() {
     if (!dragSrc) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    edge.onDragOver(e.clientY);
     const tgt = e.target.closest('.channel-item:not(.temp-channel-create-btn), .category-label');
     if (!tgt || !isCompatible(dragSrc, tgt)) { indicator.remove(); return; }
     const rect = tgt.getBoundingClientRect();
@@ -2547,6 +2644,7 @@ _setupChannelDragDrop() {
 
   list.addEventListener('drop', (e) => {
     e.preventDefault();
+    edge.stop();
     if (!dragSrc || !indicator.parentNode) { cleanUp(); return; }
     indicator.parentNode.insertBefore(dragSrc, indicator);
     indicator.remove();
@@ -2672,6 +2770,7 @@ _setupDmDragDrop() {
   indicator.className = 'ch-drag-indicator';
 
   const cleanUp = () => {
+    edge.stop();
     if (dragSrc) { dragSrc.classList.remove('ch-dragging'); dragSrc = null; }
     indicator.remove();
   };
@@ -2685,10 +2784,12 @@ _setupDmDragDrop() {
     e.dataTransfer.setData('text/plain', el.dataset.code || '');
   });
 
+  const edge = this._makeEdgeScroller(dmList);
   dmList.addEventListener('dragover', (e) => {
     if (!dragSrc) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    edge.onDragOver(e.clientY);
     const tgt = e.target.closest('.dm-item');
     if (!tgt || tgt === dragSrc) { indicator.remove(); return; }
     const rect = tgt.getBoundingClientRect();
@@ -2705,6 +2806,7 @@ _setupDmDragDrop() {
 
   dmList.addEventListener('drop', (e) => {
     e.preventDefault();
+    edge.stop();
     if (!dragSrc || !indicator.parentNode) { cleanUp(); return; }
     indicator.parentNode.insertBefore(dragSrc, indicator);
     indicator.remove();
@@ -3011,6 +3113,8 @@ _fireNativeNotification(message, channelCode, opts) {
   const channelLabel = channel?.is_dm ? 'DM' : `#${channel?.name || channelCode}`;
   const title = t('notifications_runtime.title', { sender, channel: channelLabel });
   let rawContent = message.content || '';
+  // A Discord emote token reads as its :name: in a notification.
+  rawContent = rawContent.replace(/<a?:([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$1:');
   // Detect E2E encrypted envelope — show generic text instead of ciphertext
   try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
   // Burn-after-read: never reveal the message content in a notification

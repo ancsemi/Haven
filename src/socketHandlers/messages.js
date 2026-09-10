@@ -59,48 +59,77 @@ module.exports = function register(socket, ctx) {
   // means "less recently active than X".
   const FORUM_ACTIVITY = 'COALESCE((SELECT MAX(t.created_at) FROM messages t WHERE t.thread_id = m.id), m.created_at)';
   const FORUM_SELECT = `
-    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
+    SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.title, m.tags, m.closed,
            COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
            COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile,
            ${FORUM_ACTIVITY} AS activity_at
     FROM messages m LEFT JOIN users u ON m.user_id = u.id
     WHERE m.channel_id = ? AND m.thread_id IS NULL`;
-  function forumActivityOf(id) {
-    const row = db.prepare(`SELECT ${FORUM_ACTIVITY} AS activity_at FROM messages m WHERE m.id = ?`).get(id);
-    return row ? row.activity_at : null;
+  // Sort key for a forum page: 'active' (default, latest reply bumps the
+  // topic) or 'created' (date posted). Tags filter with 'some' (any of the
+  // picked tags) or 'all' (every picked tag), read from the JSON array on
+  // the topic row.
+  function forumKeyExpr(sort) { return sort === 'created' ? 'm.created_at' : FORUM_ACTIVITY; }
+  function forumKeyCol(sort) { return sort === 'created' ? 'created_at' : 'activity_at'; }
+  function forumTagSql(tags, mode) {
+    if (!tags.length) return { sql: '', params: [] };
+    const one = "EXISTS (SELECT 1 FROM json_each(COALESCE(m.tags, '[]')) je WHERE je.value = ?)";
+    return { sql: ` AND (${tags.map(() => one).join(mode === 'all' ? ' AND ' : ' OR ')})`, params: tags };
   }
-  // Less recently active than the cursor message, newest first (reversed by
-  // the caller, like the chronological "before" query).
-  function forumOlder(channelId, cursorId, limit) {
-    const at = forumActivityOf(cursorId);
+  function forumKeyOf(id, sort) {
+    const row = db.prepare(`SELECT ${forumKeyExpr(sort)} AS k FROM messages m WHERE m.id = ?`).get(id);
+    return row ? row.k : null;
+  }
+  // Less recently active (or older) than the cursor message, newest first
+  // (reversed by the caller, like the chronological "before" query).
+  function forumOlder(channelId, cursorId, limit, opts) {
+    const at = forumKeyOf(cursorId, opts.sort);
     if (!at) return [];
+    const key = forumKeyCol(opts.sort); const tag = forumTagSql(opts.tags, opts.tagMode);
     return db.prepare(`
-      SELECT * FROM (${FORUM_SELECT})
-      WHERE activity_at < ? OR (activity_at = ? AND id < ?)
-      ORDER BY activity_at DESC, id DESC LIMIT ?
-    `).all(channelId, at, at, cursorId, limit);
+      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      WHERE ${key} < ? OR (${key} = ? AND id < ?)
+      ORDER BY ${key} DESC, id DESC LIMIT ?
+    `).all(channelId, ...tag.params, at, at, cursorId, limit);
   }
-  function forumNewer(channelId, cursorId, limit) {
-    const at = forumActivityOf(cursorId);
+  function forumNewer(channelId, cursorId, limit, opts) {
+    const at = forumKeyOf(cursorId, opts.sort);
     if (!at) return [];
+    const key = forumKeyCol(opts.sort); const tag = forumTagSql(opts.tags, opts.tagMode);
     return db.prepare(`
-      SELECT * FROM (${FORUM_SELECT})
-      WHERE activity_at > ? OR (activity_at = ? AND id > ?)
-      ORDER BY activity_at ASC, id ASC LIMIT ?
-    `).all(channelId, at, at, cursorId, limit);
+      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      WHERE ${key} > ? OR (${key} = ? AND id > ?)
+      ORDER BY ${key} ASC, id ASC LIMIT ?
+    `).all(channelId, ...tag.params, at, at, cursorId, limit);
   }
-  function forumHistory(channelId, { before, after, around, limit }) {
-    if (before) return forumOlder(channelId, before, limit);
-    if (after) return forumNewer(channelId, after, limit);
+  function forumHistory(channelId, { before, after, around, limit, sort = 'active', tags = [], tagMode = 'some' }) {
+    const opts = { sort, tags, tagMode };
+    if (before) return forumOlder(channelId, before, limit, opts);
+    if (after) return forumNewer(channelId, after, limit, opts);
     if (around) {
       const half = Math.floor(limit / 2);
       const target = db.prepare(`SELECT * FROM (${FORUM_SELECT}) WHERE id = ?`).all(channelId, around);
-      return [...forumOlder(channelId, around, half).reverse(), ...target, ...forumNewer(channelId, around, half)];
+      return [...forumOlder(channelId, around, half, opts).reverse(), ...target, ...forumNewer(channelId, around, half, opts)];
     }
-    return db.prepare(`
-      SELECT * FROM (${FORUM_SELECT})
-      ORDER BY activity_at DESC, id DESC LIMIT ?
-    `).all(channelId, limit);
+    const key = forumKeyCol(sort); const tag = forumTagSql(tags, tagMode);
+    // Pinned topics ride on the first page whatever their last activity, so
+    // they are on top from the start rather than only once they happen to
+    // load. Later pages may hand one back again; the client skips repeats.
+    const pinned = db.prepare(`
+      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      WHERE id IN (SELECT message_id FROM pinned_messages WHERE channel_id = ?)
+      ORDER BY ${key} DESC, id DESC
+    `).all(channelId, ...tag.params, channelId);
+    const page = db.prepare(`
+      SELECT * FROM (${FORUM_SELECT}${tag.sql})
+      ORDER BY ${key} DESC, id DESC LIMIT ?
+    `).all(channelId, ...tag.params, limit);
+    const seen = new Set(pinned.map(r => r.id));
+    return [...pinned, ...page.filter(r => !seen.has(r.id))];
+  }
+  function parseTags(raw) {
+    if (!raw) return [];
+    try { const a = JSON.parse(raw); return Array.isArray(a) ? a.filter(t => typeof t === 'string') : []; } catch { return []; }
   }
 
   socket.on('get-messages', (data) => {
@@ -111,6 +140,9 @@ module.exports = function register(socket, ctx) {
     const after  = isInt(data.after)  ? data.after  : null;
     const around = isInt(data.around) ? data.around : null;
     const limit = isInt(data.limit) && data.limit > 0 && data.limit <= 100 ? data.limit : 80;
+    const sort = data.sort === 'created' ? 'created' : 'active';
+    const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 10) : [];
+    const tagMode = data.tagMode === 'all' ? 'all' : 'some';
 
     const channel = db.prepare('SELECT id, is_forum, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return;
@@ -123,7 +155,7 @@ module.exports = function register(socket, ctx) {
 
     let messages;
     if (channel.is_forum) {
-      messages = forumHistory(channel.id, { before, after, around, limit });
+      messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode });
     } else if (before) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type,
@@ -291,6 +323,8 @@ module.exports = function register(socket, ctx) {
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
       obj.thread = threadMap.get(m.id) || null;
+      if ('tags' in m) obj.tags = parseTags(m.tags);
+      if ('closed' in m) obj.closed = !!m.closed;
       if (m.poll_data) {
         try {
           obj.poll = JSON.parse(m.poll_data);
@@ -889,8 +923,21 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
     }
 
-    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
+
+    // Forum topics carry a title and a pick of the channel's tags. Both are
+    // ignored outside forum channels so a stale client cannot tag chat.
+    let topicTitle = null;
+    let topicTags = null;
+    if (channel.is_forum) {
+      if (typeof data.title === 'string' && data.title.trim()) topicTitle = data.title.trim().replace(/\s+/g, ' ').slice(0, 120);
+      const allowed = new Set(parseChannelTags(channel.forum_tags).map(t => t.name));
+      if (Array.isArray(data.tags)) {
+        const picked = [...new Set(data.tags.filter(t => typeof t === 'string').map(t => t.trim()).filter(t => allowed.has(t)))].slice(0, 5);
+        if (picked.length) topicTags = JSON.stringify(picked);
+      }
+    }
 
     const member = db.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
@@ -1100,12 +1147,14 @@ module.exports = function register(socket, ctx) {
 
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel);
+        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags);
 
       const message = {
         id: result.lastInsertRowid,
         content: finalContent,
+        title: topicTitle || undefined,
+        tags: topicTags ? JSON.parse(topicTags) : undefined,
         created_at: new Date().toISOString(),
         username: personaUsername || socket.user.displayName,
         user_id: socket.user.id,
@@ -1244,6 +1293,38 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Edit message ────────────────────────────────────────
+  function parseChannelTags(raw) {
+    if (!raw) return [];
+    try { const a = JSON.parse(raw); return Array.isArray(a) ? a.filter(t => t && typeof t.name === 'string') : []; } catch { return []; }
+  }
+
+  // Retitle or retag a forum topic. The author, or anyone who may manage
+  // messages in the channel, may do it.
+  socket.on('set-topic-meta', (data) => {
+    if (!data || typeof data !== 'object' || !isInt(data.messageId)) return;
+    const msg = db.prepare('SELECT m.id, m.user_id, m.channel_id, m.thread_id, c.code, c.is_forum, c.forum_tags FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(data.messageId);
+    if (!msg || !msg.is_forum || msg.thread_id) return socket.emit('error-msg', 'Not a forum topic');
+    const mine = msg.user_id === socket.user.id;
+    if (!mine && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_messages', msg.channel_id)) {
+      return socket.emit('error-msg', 'You don\'t have permission to edit this topic');
+    }
+    const title = typeof data.title === 'string' ? data.title.trim().replace(/\s+/g, ' ').slice(0, 120) : null;
+    const allowed = new Set(parseChannelTags(msg.forum_tags).map(t => t.name));
+    const tags = Array.isArray(data.tags) ? [...new Set(data.tags.filter(t => typeof t === 'string').map(t => t.trim()).filter(t => allowed.has(t)))].slice(0, 5) : [];
+    // Closed is only changed when the editor sent it, so an older client that
+    // edits the title leaves it alone (#5624).
+    const closed = typeof data.closed === 'boolean' ? (data.closed ? 1 : 0) : null;
+    try {
+      db.prepare('UPDATE messages SET title = ?, tags = ? WHERE id = ?').run(title || null, tags.length ? JSON.stringify(tags) : null, msg.id);
+      if (closed !== null) db.prepare('UPDATE messages SET closed = ? WHERE id = ?').run(closed, msg.id);
+      const closedNow = closed !== null ? closed : (db.prepare('SELECT closed FROM messages WHERE id = ?').get(msg.id)?.closed || 0);
+      io.to(`channel:${msg.code}`).emit('topic-updated', { channelCode: msg.code, messageId: msg.id, title: title || null, tags, closed: !!closedNow });
+    } catch (err) {
+      console.error('set-topic-meta error:', err);
+      socket.emit('error-msg', 'Failed to update the topic');
+    }
+  });
+
   socket.on('edit-message', (data) => {
     if (!data || typeof data !== 'object') return;
     const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
@@ -1985,6 +2066,8 @@ module.exports = function register(socket, ctx) {
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
     if (!member && !socket.user.isAdmin) return;
+    // A role gate on the channel covers its threads too (#5597).
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
@@ -2071,6 +2154,8 @@ module.exports = function register(socket, ctx) {
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(channel.id, socket.user.id);
     if (!tMember && !socket.user.isAdmin) return;
+    // A role gate on the channel covers its threads too (#5597).
+    if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
 
     // ── Moderation controls (#5483) ───────────────────────
     // This handler grew up alongside send-message but never picked up the
