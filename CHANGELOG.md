@@ -25,6 +25,11 @@ steps; the one new column is added on first start.
 ## [Unreleased]
 
 ### Added
+- **Forum unread dots (#5641).** A topic you have not opened, or one with
+  replies since you last looked, shows a dot and an accent edge on its card.
+  Opening the topic clears it, and a Mark all read button in the forum
+  toolbar clears the lot. It is stored on your account, so reading on one
+  device clears it everywhere. Requested by @josolanes.
 - **Theme palettes stay exclusive.** Braid, Braid Light, and Compact file
   themes no longer stack on Matrix (or any built-in) when their Settings
   toggles are on. Layout lives in Theme → Layout (Braid and Compact) and
@@ -88,6 +93,14 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **A moderation mute no longer blocks private messages (#5640).** Being
+  muted stops you posting in the server's channels for the set time; DMs
+  still work, which is also how you can reach a mod about it. Not to be
+  confused with muting a channel or DM in your own notification settings,
+  which only silences alerts for you.
+- **CRT theme is easier to read (#5606).** The pixel font is swapped for the
+  cleaner Share Tech Mono terminal face, which reads at normal size in
+  sub-channel names and other fine print. Requested by @quakeman00.
 - **Declined screen shares still played their audio (#5636).** With "auto
   accept screen shares" off, the sound from a share you had not joined played
   anyway, with no tile to turn it down. The audio now waits until you join.
