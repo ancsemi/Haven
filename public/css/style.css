@@ -3973,7 +3973,10 @@ html.rgb-cycling *::after {
   min-height: 3.25rem;
   gap: 0.75rem;
   position: relative;
-  z-index: 1;
+  /* Above the messages column: header dropdowns (the encryption menu, for
+     one) were painted under later siblings that also sit at z-index 1, such
+     as the DM safety notice (#5639). */
+  z-index: 2;
 }
 
 .channel-info { display: flex; align-items: center; gap: 0.625rem; min-width: 0; }
