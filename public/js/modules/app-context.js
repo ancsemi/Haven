@@ -137,7 +137,7 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
     });
     if (canAddToChannel) addBtn(`➕ ${t('users.gear_menu.add_to_channel')}`, () => {
       this._hideUserContextMenu();
-      this._openGearMenuChannelPicker(targetUserId, targetName, addToChannelList);
+      this._openMemberChannelPicker(targetUserId, targetName, 'add', addToChannelList);
     });
   }
 

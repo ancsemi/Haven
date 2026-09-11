@@ -2174,14 +2174,19 @@ _bindMemberListActions(container) {
   });
 },
 
-_openMemberChannelPicker(userId, username, mode) {
-  // mode: 'add' or 'remove'
+_openMemberChannelPicker(userId, username, mode, channelsOverride = null) {
+  // mode: 'add' or 'remove'. channelsOverride is a ready-made [{ id, name }]
+  // list for callers outside Settings, All Members (the user context menu),
+  // where the member and channel tables are not loaded. The server rejects
+  // channels the user is already in, so no pre-filter is needed there (#5637).
   const member = (this._allMembersData || []).find(m => m.id === userId);
   const allChannels = this._allMembersChannels || [];
   const memberChannelIds = new Set((member && member.channelList ? member.channelList : []).map(c => c.id));
 
   let channels;
-  if (mode === 'add') {
+  if (Array.isArray(channelsOverride)) {
+    channels = channelsOverride;
+  } else if (mode === 'add') {
     // Show channels user is NOT in (top-level only for clarity)
     channels = allChannels.filter(c => !memberChannelIds.has(c.id) && !c.parentId);
   } else {

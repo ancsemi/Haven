@@ -100,52 +100,6 @@ _renderOnlineUsers(users) {
   });
 },
 
-// Lightweight channel picker for the user gear menu's "Add to Channel"
-// action. Lists every non-DM, non-private top-level channel the caller can
-// see (admins also see private). Server's `invite-to-channel` handler
-// validates membership/permissions and rejects already-members with a
-// toast, so no need to pre-filter by target's current memberships here.
-_openGearMenuChannelPicker(userId, username, channels) {
-  if (!channels || channels.length === 0) {
-    this._showToast?.(t('users.no_invite_channels'), 'info');
-    return;
-  }
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay aml-channel-picker-overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '100002';
-  overlay.innerHTML = `
-    <div class="modal aml-ch-picker">
-      <div class="aml-ch-picker-header">
-        <h4 class="aml-ch-picker-title">${t('users.add_to_channel_title', { name: this._escapeHtml(username) })}</h4>
-      </div>
-      <div class="aml-channel-list">
-        ${channels.map(c => `
-          <button class="aml-channel-row gm-add-ch-btn" data-cid="${c.id}" data-cname="${this._escapeHtml(c.name)}">
-            <span class="aml-ch-hash">#</span>
-            <span class="aml-ch-name">${this._escapeHtml(c.name)}</span>
-          </button>
-        `).join('')}
-      </div>
-      <div class="modal-actions aml-ch-picker-actions">
-        <button class="btn-sm aml-ch-cancel">${t('modals.common.cancel')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.aml-ch-cancel').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelectorAll('.gm-add-ch-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const channelId = parseInt(btn.dataset.cid);
-      if (!channelId) return;
-      this.socket.emit('invite-to-channel', { targetUserId: userId, channelId });
-      close();
-    });
-  });
-},
-
 _renderUserItem(u, scoreLookup) {
   const onlineClass = u.online === false ? ' offline' : '';
   const score = scoreLookup[u.id] || 0;
