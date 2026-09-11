@@ -1325,6 +1325,18 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // "You are muted for N more minutes", or null when the user has no active
+  // mute. send-message already refuses on this; edits and reactions need the
+  // same gate or a muted user just edits an old message instead (#5640).
+  function activeMuteNotice(userId) {
+    const row = db.prepare(
+      'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
+    ).get(userId);
+    if (!row) return null;
+    const remaining = Math.ceil((new Date(row.expires_at + 'Z') - Date.now()) / 60000);
+    return `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`;
+  }
+
   socket.on('edit-message', (data) => {
     if (!data || typeof data !== 'object') return;
     const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
@@ -1352,6 +1364,8 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'edit_own_messages', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to edit messages');
     }
+    const editMute = activeMuteNotice(socket.user.id);
+    if (editMute) return socket.emit('error-msg', editMute);
 
     const newContent = sanitizeText(data.content.trim());
     if (!newContent) return;
@@ -1716,6 +1730,8 @@ module.exports = function register(socket, ctx) {
     try {
       if (!data || typeof data !== 'object') return;
       if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+      const reactMute = activeMuteNotice(socket.user.id);
+      if (reactMute) return socket.emit('error-msg', reactMute);
 
       const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
       const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;

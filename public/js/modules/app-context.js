@@ -155,6 +155,10 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this._showAdminActionModal('mute', targetUserId, targetName);
     });
+    if (canMod) addBtn(`🔊 ${t('users.gear_menu.unmute')}`, () => {
+      this._hideUserContextMenu();
+      this.socket.emit('unmute-user', { userId: targetUserId });
+    });
     if (canBan) addBtn(`⛔ ${t('users.gear_menu.ban')}`, () => {
       this._hideUserContextMenu();
       this._showAdminActionModal('ban', targetUserId, targetName);

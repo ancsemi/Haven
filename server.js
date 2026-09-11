@@ -4438,7 +4438,7 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
   if (io) {
     for (const [, s] of io.sockets.sockets) {
       if (s.user && s.user.id === userId) {
-        s.emit('muted', { reason: safeReason, expiresAt });
+        s.emit('muted', { duration: Math.round(durationMs / 60000), reason: safeReason, expiresAt });
       }
     }
   }

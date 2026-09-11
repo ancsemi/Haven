@@ -2320,6 +2320,10 @@ _setupSocketListeners() {
     this._showToast(data.reason ? t('toasts.muted_reason', { duration: data.duration, reason: data.reason }) : t('toasts.muted', { duration: data.duration }), 'error');
   });
 
+  this.socket.on('unmuted', () => {
+    this._showToast(t('toasts.unmuted'), 'success');
+  });
+
   this.socket.on('ban-list', (data) => {
     this._renderBanList(data);
   });
