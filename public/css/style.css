@@ -1300,9 +1300,12 @@
   --led-off:       #221800;
   --led-glow:      rgba(255, 176, 0, 0.5);
 
-  --font-main:     'VT323', 'Courier New', monospace;
-  --font-heading:  'VT323', 'Courier New', monospace;
-  --font-mono:     'VT323', 'Courier New', monospace;
+  /* Share Tech Mono, the clean terminal face, instead of the pixel VT323:
+     the pixel font stayed cramped in sub-channel names and other fine print
+     even scaled up, and this reads at normal size (#5606). */
+  --font-main:     'Share Tech Mono', 'Courier New', monospace;
+  --font-heading:  'Share Tech Mono', 'Courier New', monospace;
+  --font-mono:     'Share Tech Mono', 'Courier New', monospace;
 
   --theme-logo:    "📺";
 }
