@@ -915,16 +915,16 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
     }
 
-    const activeMute = db.prepare(
-      'SELECT id, expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
-    ).get(socket.user.id);
-    if (activeMute) {
-      const remaining = Math.ceil((new Date(activeMute.expires_at + 'Z') - Date.now()) / 60000);
-      return socket.emit('error-msg', `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
-    }
-
     const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
+
+    // A moderation mute covers the server's channels, not private messages:
+    // a muted person can still DM, which is also how they reach a mod about
+    // the mute (#5640).
+    if (!channel.is_dm) {
+      const sendMute = activeMuteNotice(socket.user.id);
+      if (sendMute) return socket.emit('error-msg', sendMute);
+    }
 
     // Forum topics carry a title and a pick of the channel's tags. Both are
     // ignored outside forum channels so a stale client cannot tag chat.
@@ -1326,8 +1326,8 @@ module.exports = function register(socket, ctx) {
   });
 
   // "You are muted for N more minutes", or null when the user has no active
-  // mute. send-message already refuses on this; edits and reactions need the
-  // same gate or a muted user just edits an old message instead (#5640).
+  // mute. Sends, edits and reactions in the server's channels all go through
+  // it; DMs are exempt (#5640).
   function activeMuteNotice(userId) {
     const row = db.prepare(
       'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
@@ -1350,7 +1350,7 @@ module.exports = function register(socket, ctx) {
     const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
     if (!code) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const msg = db.prepare(
@@ -1364,7 +1364,7 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'edit_own_messages', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to edit messages');
     }
-    const editMute = activeMuteNotice(socket.user.id);
+    const editMute = channel.is_dm ? null : activeMuteNotice(socket.user.id);
     if (editMute) return socket.emit('error-msg', editMute);
 
     const newContent = sanitizeText(data.content.trim());
@@ -1750,10 +1750,14 @@ module.exports = function register(socket, ctx) {
       // channel — using socket.currentChannel made the reaction silently
       // fail because the message wouldn't be found in that channel. (#bug-#4)
       const msg = db.prepare(
-        'SELECT m.id, c.code, c.id as channel_id FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+        'SELECT m.id, c.code, c.id as channel_id, c.is_dm FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
       ).get(data.messageId);
       if (!msg) return;
       const code = msg.code;
+      if (!msg.is_dm) {
+        const reactMute = activeMuteNotice(socket.user.id);
+        if (reactMute) return socket.emit('error-msg', reactMute);
+      }
 
       // Verify membership of the channel the message lives in.
       const member = db.prepare(
