@@ -37,7 +37,7 @@ steps; the one new column is added on first start.
   and Tenor. Set `KLIPY_API_KEY`, and use `PREFERRED_GIF_SEARCH` (klipy, giphy
   or tenor) to pick which provider serves the picker when more than one key is
   set. If the preference is unset or invalid it falls back to whatever is
-  configured — GIPHY first, then KLIPY, then Tenor last, since Tenor is
+  configured: GIPHY first, then KLIPY, then Tenor last, since Tenor is
   deprecated. Supplemental; existing GIPHY/Tenor setups are unchanged.
 - **Closed forum topics (#5624).** Edit title and tags on a topic has a Closed
   box. A closed topic greys out, carries a Closed tag and sits below the open

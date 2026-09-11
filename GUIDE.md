@@ -1319,6 +1319,11 @@ can search GIFs once it is set. No payment is involved; GIPHY's free tier is far
 than a private server will use. Tenor is no longer supported for new setup; a server
 that already has a Tenor key keeps working until a GIPHY key is set.
 
+KLIPY works as well. Get a key at [klipy.com/developers](https://klipy.com/developers)
+and set `KLIPY_API_KEY` in your `.env` (or Docker environment). If more than one key
+is set, `PREFERRED_GIF_SEARCH` (`klipy`, `giphy` or `tenor`) picks which provider the
+picker uses; without it the server tries GIPHY first, then KLIPY, then Tenor.
+
 ---
 
 ## 🌐 Translations
