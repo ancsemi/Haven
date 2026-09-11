@@ -11,18 +11,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [4.6.1] - 2026-09-09
+## [4.7.0] - 2026-09-11
 
-A round of fixes from the issue tracker and the community server. Discord
-emotes show as pictures on both sides of the Ferry bridge, the DM PiP shows
-who is actually online, #channel links survive a rename, thread replies get
-link cards, forum cards show the protection shield, the hover card and the
-role Collapse button behave, CRT text reads bigger, and the topic bar folds
-away. The homepage has full-size screenshots and a gallery. No migration
-steps; the one new column is added on first start.
-
-### Added
-## [Unreleased]
+Forums grow up another notch and a big batch of community work lands. Topic
+cards carry an unread dot that follows your account between devices, with a
+Mark all read button; there is a feed view, tile size sliders, closed topics,
+and pinned topics stay on top. Amnibro's role work is in: role and channel
+templates, required roles on a channel, per-role upload caps and self-assign
+role menus. KLIPY joins GIPHY as a GIF provider, Braid and Compact stop
+stacking on Matrix, text can be underlined and coloured, and the pop-up
+notification limit takes a custom gap or Never. Fixes cover mutes (they now
+cover channels, not DMs, muted users cannot edit or react, and mods can
+unmute), Add to Channel is multi-select again, bot slash commands stay in
+their bot's channel, declined screen shares stay silent, the hover card, the
+encryption menu, the DM PiP away colour, sub-channel deletion, stream focus
+mode, the squeezed composer and deleted-file retention. One new table
+(thread_reads) is created on first start; nothing to run by hand.
 
 ### Added
 - **Forum unread dots (#5641).** A topic you have not opened, or one with
@@ -87,10 +91,14 @@ steps; the one new column is added on first start.
   either takes it back. Level-0 Groups are made for this. Requested by
   Dispencer2.
 
-- **The topic bar folds away (#5625).** A small arrow at its right folds the
-  bar to a thin strip, so "Click to set a topic" stops taking a line for
-  people who never will. It is per browser, and the fold survives channel
-  switches and reloads. Requested by @quakeman00.
+### Changed
+- **Deleted files no longer sit around forever.** Attachments from deleted
+  messages and channels are parked in a deleted-attachments folder, which was
+  only ever emptied when auto-cleanup was on with a max age set, and even then
+  only its top level. They now expire a week after deletion by default,
+  whether cleanup is on or not, and the window is a setting under
+  Auto-Cleanup. Files parked before this release count as expired on the
+  first run after updating.
 
 ### Fixed
 - **A moderation mute no longer blocks private messages (#5640).** Being
@@ -153,6 +161,22 @@ steps; the one new column is added on first start.
 - **The DM PiP send button is a square that matches the thread panel's (#5601).**
   Thanks to @birdcrazy.
 
+## [4.6.1] - 2026-09-09
+
+A round of fixes from the issue tracker and the community server. Discord
+emotes show as pictures on both sides of the Ferry bridge, the DM PiP shows
+who is actually online, #channel links survive a rename, thread replies get
+link cards, forum cards show the protection shield, the hover card and the
+role Collapse button behave, CRT text reads bigger, and the topic bar folds
+away. The homepage has full-size screenshots and a gallery. No migration
+steps; the one new column is added on first start.
+
+### Added
+- **The topic bar folds away (#5625).** A small arrow at its right folds the
+  bar to a thin strip, so "Click to set a topic" stops taking a line for
+  people who never will. It is per browser, and the fold survives channel
+  switches and reloads. Requested by @quakeman00.
+
 ### Changed
 - **Homepage.** The logo leads the page, the screenshots are full size with a
   Gallery you can step through with the arrow keys, the phone shot sits beside
@@ -160,13 +184,6 @@ steps; the one new column is added on first start.
   The download section leads with the app, since most people need that and
   not the server, and the Download button at the top takes you there instead
   of grabbing the server zip.
-- **Deleted files no longer sit around forever.** Attachments from deleted
-  messages and channels are parked in a deleted-attachments folder, which was
-  only ever emptied when auto-cleanup was on with a max age set, and even then
-  only its top level. They now expire a week after deletion by default,
-  whether cleanup is on or not, and the window is a setting under
-  Auto-Cleanup. Files parked before this release count as expired on the
-  first run after updating.
 
 ### Fixed
 - **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a
