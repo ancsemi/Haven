@@ -200,7 +200,10 @@
     },
     "theme": {
       "title": "Tema",
+      "layout": "Layout",
       "effect_overlay": "Sobreposição de efeitos",
+      "braid_layout": "Layout Braid",
+      "compact_layout": "Layout Compact",
       "close": "Fechar",
       "speed": "Velocidade",
       "vibrancy": "Vivacidade",

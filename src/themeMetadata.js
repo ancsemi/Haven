@@ -100,6 +100,10 @@ function parseThemeMetadata(content) {
   return {
     ...meta,
     ...classifyThemeApi(declared === undefined ? null : declared),
+    // A file that sets the page background is a full palette, not a stackable
+    // tweak. Settings toggles for those used to keep injecting :root tokens
+    // after the picker moved to Matrix.
+    palette: typeof content === 'string' && /--bg-primary\s*:/.test(content),
   };
 }
 

@@ -215,7 +215,10 @@
     },
     "theme": {
       "title": "Theme",
+      "layout": "Layout",
       "effect_overlay": "Effect Overlay",
+      "braid_layout": "Braid layout",
+      "compact_layout": "Compact layout",
       "close": "Close",
       "speed": "Speed",
       "vibrancy": "Vibrancy",

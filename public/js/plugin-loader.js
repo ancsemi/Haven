@@ -279,10 +279,19 @@ window.HavenPluginLoader = (function () {
     localStorage.setItem('haven_enabled_themes', JSON.stringify(list));
   }
   // Published themes are what the theme picker offers, so only one can be
-  // active at a time. Unpublished ones are additive CSS tweaks that stack on
-  // top of whatever theme is selected.
-  function isPublishedTheme(file) {
-    return !!loadedThemes.get(file)?.meta?.published;
+  // active at a time. Palettes (Braid, Compact, anything that sets
+  // --bg-primary) are the same even when an admin has not published them —
+  // they replace the built-in tokens, they do not stack on Matrix.
+  // Unpublished files without a palette stay additive CSS tweaks.
+  function isExclusiveMeta(meta) {
+    if (!meta) return false;
+    if (meta.published || meta.palette) return true;
+    if (meta.layout) return true;
+    return /^(braid|braid-light|compact)\.theme\.css$/i.test(meta.file || '');
+  }
+  function isExclusiveTheme(file) {
+    const t = loadedThemes.get(file);
+    return isExclusiveMeta(t ? { ...t.meta, file } : { file });
   }
   function getActiveFileTheme() {
     const saved = localStorage.getItem('haven_theme') || '';
@@ -396,7 +405,7 @@ window.HavenPluginLoader = (function () {
       existing.compatible = compatible;
       existing.suppressed = existing.enabled && (!compatible || suppressExtensions);
       const shouldInject = existing.enabled && compatible && !suppressExtensions
-        && (!meta.published || getActiveFileTheme() === meta.file);
+        && (!isExclusiveMeta({ ...meta, file: meta.file }) || getActiveFileTheme() === meta.file);
       if (!shouldInject && existing.linkEl) {
         existing.linkEl.remove();
         existing.linkEl = null;
@@ -416,7 +425,7 @@ window.HavenPluginLoader = (function () {
     // previously-selected one in the enabled list must not stack it on top of
     // whatever theme is active now.
     const shouldInject = configured && compatible && !suppressExtensions
-      && (!meta.published || getActiveFileTheme() === meta.file);
+      && (!isExclusiveMeta({ ...meta, file: meta.file }) || getActiveFileTheme() === meta.file);
     let linkEl = null;
     if (shouldInject) {
       linkEl = document.createElement('link');
@@ -439,7 +448,7 @@ window.HavenPluginLoader = (function () {
     if (!t || t.enabled || suppressExtensions || !t.compatible) return;
     // A published theme is one of the picker's choices, not a stackable tweak —
     // turning it on means selecting it, so the two surfaces stay in agreement.
-    if (t.meta.published) {
+    if (isExclusiveMeta({ ...t.meta, file })) {
       applyFileTheme(file);
       return;
     }
@@ -467,7 +476,9 @@ window.HavenPluginLoader = (function () {
     // Turning off the selected published theme deselects it, which means falling
     // back to the built-in default rather than leaving the picker pointing at a
     // stylesheet that is no longer loaded.
-    if (t.meta.published && getActiveFileTheme() === file) selectBuiltinTheme('haven');
+    if (isExclusiveMeta({ ...t.meta, file }) && getActiveFileTheme() === file) {
+      selectBuiltinTheme('haven');
+    }
     renderPluginUI();
   }
 
@@ -856,7 +867,7 @@ window.HavenPluginLoader = (function () {
     // from the enabled list — otherwise the Settings toggles claim a theme is
     // on while the picker shows a different one as active.
     const kept = getEnabledThemes().filter(f =>
-      f !== file && !isPublishedTheme(f) && loadedThemes.get(f)?.compatible !== false
+      f !== file && !isExclusiveTheme(f) && loadedThemes.get(f)?.compatible !== false
     );
     setEnabledThemes([file, ...kept]);
 
@@ -882,14 +893,27 @@ window.HavenPluginLoader = (function () {
   // Re-inject the user-enabled CSS tweaks that are missing from the DOM.
   // Called after any theme switch that removes haven-theme-* links.
   // The active theme is skipped (it was just injected, and re-adding it would
-  // move it after the tweaks meant to override it) and so is every other
-  // published theme, which is a selectable theme rather than an overlay.
+  // move it after the tweaks meant to override it) and so is every exclusive
+  // palette, which is a selectable theme rather than an overlay.
+  function dropExclusiveThemesFromEnabled(keepFile) {
+    const enabled = getEnabledThemes();
+    const kept = enabled.filter(f => f === keepFile || !isExclusiveTheme(f));
+    if (kept.length !== enabled.length) setEnabledThemes(kept);
+    for (const [file, t] of loadedThemes) {
+      if (file === keepFile) continue;
+      if (!isExclusiveTheme(file)) continue;
+      t.enabled = false;
+      t.linkEl = null;
+    }
+  }
+
   function reapplyEnabledThemes(activeFile = getActiveFileTheme()) {
     if (suppressExtensions) return;
+    dropExclusiveThemesFromEnabled(activeFile);
     const enabledList = getEnabledThemes();
     for (const file of enabledList) {
       if (file === activeFile) continue;
-      if (isPublishedTheme(file)) continue;
+      if (isExclusiveTheme(file)) continue;
       const t = loadedThemes.get(file);
       if (!t?.compatible) continue;
       if (document.getElementById(`haven-theme-${file}`)) continue; // already present

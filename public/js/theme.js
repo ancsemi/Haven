@@ -1307,6 +1307,44 @@ function syncEffectsFromServer(raw) {
   if (container) _updateEffectButtons(container, _getStoredEffectMode());
 }
 
+function _layoutPlugin(file) {
+  return window.HavenPluginLoader?.loadedPlugins?.get(file)?.instance;
+}
+
+function _syncBraidToggle() {
+  const box = document.getElementById('braid-layout-toggle');
+  if (box) box.checked = document.documentElement.hasAttribute('data-braid-layout');
+}
+
+function _syncCompactToggle() {
+  const box = document.getElementById('compact-layout-toggle');
+  if (box) box.checked = document.documentElement.hasAttribute('data-compact-layout');
+}
+
+function _setLayoutPlugin(file, on, dataKey) {
+  try {
+    window.HavenApi?.Data?.save(dataKey, 'layoutOn', on ? '1' : '0');
+  } catch {}
+  if (on) window.HavenPluginLoader?.enablePlugin?.(file);
+  const inst = _layoutPlugin(file);
+  if (on) inst?._engage?.();
+  else inst?._disengage?.();
+}
+
+function _setBraidLayout(on) {
+  if (on) _setLayoutPlugin('CompactLayout.plugin.js', false, 'CompactLayout');
+  _setLayoutPlugin('BraidLayout.plugin.js', on, 'BraidLayout');
+  _syncBraidToggle();
+  _syncCompactToggle();
+}
+
+function _setCompactLayout(on) {
+  if (on) _setLayoutPlugin('BraidLayout.plugin.js', false, 'BraidLayout');
+  _setLayoutPlugin('CompactLayout.plugin.js', on, 'CompactLayout');
+  _syncBraidToggle();
+  _syncCompactToggle();
+}
+
 function initEffectSelector() {
   const container = document.getElementById('effect-selector');
   if (!container) return;
@@ -1314,6 +1352,24 @@ function initEffectSelector() {
   const mode = _getStoredEffectMode();
   applyEffects(mode);
   _updateEffectButtons(container, mode);
+
+  const braidBox = document.getElementById('braid-layout-toggle');
+  if (braidBox && !braidBox.dataset.bound) {
+    braidBox.dataset.bound = '1';
+    braidBox.addEventListener('change', () => _setBraidLayout(braidBox.checked));
+    _syncBraidToggle();
+  }
+  const compactBox = document.getElementById('compact-layout-toggle');
+  if (compactBox && !compactBox.dataset.bound) {
+    compactBox.dataset.bound = '1';
+    compactBox.addEventListener('change', () => _setCompactLayout(compactBox.checked));
+    _syncCompactToggle();
+  }
+  if (!document.documentElement.dataset.layoutTogglesBound) {
+    document.documentElement.dataset.layoutTogglesBound = '1';
+    document.addEventListener('haven:braid-layout', _syncBraidToggle);
+    document.addEventListener('haven:compact-layout', _syncCompactToggle);
+  }
 
   container.querySelectorAll('.effect-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1537,15 +1593,14 @@ function initThemeSwitcher(containerId, socket) {
       if (_isHavenSafeMode() || _isThemeRecoveryPending()) return;
       const theme = btn.dataset.theme;
 
-      // Switching to a built-in theme: remove any injected file-theme links
+      localStorage.setItem('haven_theme', theme);
       if (!theme.startsWith('file:')) {
         document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
-        // Re-inject user-enabled custom CSS tweaks that survived the theme switch
         window.HavenPluginLoader?.reapplyEnabledThemes?.();
+        window.HavenPluginLoader?.renderPluginUI?.();
       }
 
       document.documentElement.setAttribute('data-theme', theme.startsWith('file:') ? 'haven' : theme);
-      localStorage.setItem('haven_theme', theme);
 
       document.querySelectorAll('.theme-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.theme === theme);
