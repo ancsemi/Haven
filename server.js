@@ -1,5 +1,6 @@
 ﻿// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
+const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 
 // ── Node.js version guard ─────────────────────────────────
 const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
@@ -162,6 +163,9 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
   try {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
+    // A rename keeps the upload's own timestamp. The retention window counts
+    // from the deletion, so stamp the file now.
+    try { const now = new Date(); fs.utimesSync(dst, now, now); } catch { /* purge falls back to the upload time */ }
   } catch { /* file locked or already moved */ }
 }
 
@@ -5484,6 +5488,16 @@ function runAutoCleanup() {
       return row ? row.value : null;
     };
 
+    // Deleted items never sit around forever. Attachments that message and
+    // channel deletes park in deleted-attachments are removed for good once
+    // they have been there longer than the retention window (a week unless
+    // the admin changes it), whether or not auto-cleanup is switched on.
+    try {
+      const removed = purgeDeletedAttachments(
+        DELETED_ATTACHMENTS_DIR, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
+      if (removed > 0) console.log(`Auto-cleanup: removed ${removed} expired file(s) from deleted-attachments`);
+    } catch (e) { console.error('deleted-attachments purge error:', e.message); }
+
     const enabled = getSetting('cleanup_enabled');
     if (enabled !== 'true') return;
 
@@ -5581,37 +5595,12 @@ function runAutoCleanup() {
       }
     }
 
-    // Purge old files from deleted-attachments only. These are former message
-    // attachments that were relocated here when their message was deleted (by
-    // the steps above, by single-message deletes, or by the orphan-DM sweep).
-    //
-    // We deliberately do NOT scan the main uploads/ directory. That directory
-    // also holds user avatars, persona avatars, custom emojis, soundboard
-    // sounds, and the server icon — none of which are posted media. The old
-    // "delete everything in uploads/ that isn't on a protect-list" approach
-    // kept silently eating any file type nobody remembered to allow-list
-    // (persona avatars in #5423, stickers/emojis before that). Auto-cleanup is
-    // scoped to posts and messages and their attachments — nothing else.
-    if (maxAgeDays > 0) {
-      const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
-      const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-      if (require('fs').existsSync(deletedDir)) {
-        let daDeleted = 0;
-        for (const f of require('fs').readdirSync(deletedDir)) {
-          try {
-            const fp = require('path').join(deletedDir, f);
-            const st = require('fs').statSync(fp);
-            if (st.isFile() && st.mtimeMs < cutoff) {
-              require('fs').unlinkSync(fp);
-              daDeleted++;
-            }
-          } catch { /* skip */ }
-        }
-        if (daDeleted > 0) {
-          console.log(`Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
-        }
-      }
-    }
+    // Files in deleted-attachments are purged on their own clock at the top
+    // of this run, whether or not cleanup is enabled. Nothing here scans the
+    // main uploads/ directory: it also holds avatars, custom emojis,
+    // soundboard sounds, stickers and the server icon, none of which are
+    // posted media, and an allow-list approach kept eating whichever type
+    // nobody remembered to list (#5423).
 
     // 3. (#5282) Orphan-DM sweep — delete any DM channel that has dropped
     // below 2 members (one or both participants deleted their account or

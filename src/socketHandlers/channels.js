@@ -702,18 +702,27 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) return;
-    const deletedCodes = [code, ...db.prepare(
-      'SELECT code FROM channels WHERE parent_channel_id = ?'
-    ).all(channel.id).map(row => row.code)];
 
-    // Collect the attachments this channel's messages point at, before the
+    // A parent goes with everything under it. The parent link is ON DELETE
+    // SET NULL, so sub-channels used to survive their parent's deletion as
+    // top-level channels nobody had asked for. The client warns before it
+    // gets here and points at moving any sub-channel worth keeping first.
+    const subChannels = db.prepare(
+      'SELECT id, code, name FROM channels WHERE parent_channel_id = ?'
+    ).all(channel.id);
+    const doomed = [...subChannels, channel]; // sub-channels first, then the parent
+    const deletedCodes = doomed.map(c => c.code);
+    const idMarks = doomed.map(() => '?').join(',');
+    const ids = doomed.map(c => c.id);
+
+    // Collect the attachments these channels' messages point at, before the
     // rows go away. Deleting a channel dropped the messages but left every
     // uploaded file sitting in uploads/ forever — deleting a single message
     // has always cleaned up after itself, and deleting a whole channel is
     // the same thing in bulk. (#5487)
     const doomedUploads = new Set();
     try {
-      const msgs = db.prepare('SELECT content FROM messages WHERE channel_id = ?').all(channel.id);
+      const msgs = db.prepare(`SELECT content FROM messages WHERE channel_id IN (${idMarks})`).all(...ids);
       for (const row of msgs) {
         const text = row.content || '';
         UPLOAD_PATH_RE.lastIndex = 0;
@@ -724,14 +733,16 @@ module.exports = function register(socket, ctx) {
       }
     } catch { /* best-effort cleanup — never block the delete */ }
 
-    const deleteAll = db.transaction((chId) => {
-      db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
-      db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
-      db.prepare('DELETE FROM messages WHERE channel_id = ?').run(chId);
-      db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(chId);
-      db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
+    const deleteAll = db.transaction((chIds) => {
+      for (const chId of chIds) {
+        db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
+        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
+      }
     });
-    deleteAll(channel.id);
+    deleteAll(ids);
     for (const deletedCode of deletedCodes) botAudioManager?.stopChannel(deletedCode, 'channel-deleted');
     broadcastChannelLists();
 
@@ -748,13 +759,20 @@ module.exports = function register(socket, ctx) {
       } catch { /* best-effort */ }
     }
 
-    io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
-
-    clearChannelRuntimeState(state, code);
+    for (const deletedCode of deletedCodes) {
+      io.to(`channel:${deletedCode}`).to(`voice:${deletedCode}`).emit('channel-deleted', { code: deletedCode });
+      clearChannelRuntimeState(state, deletedCode);
+    }
 
     _audit({ actor: socket.user, action: 'channel_delete',
       target_type: 'channel', target_id: channel.id, target_name: channel.name,
-      details: { code, parent_channel_id: channel.parent_channel_id || null } });
+      details: { code, parent_channel_id: channel.parent_channel_id || null,
+        sub_channels: subChannels.map(s => ({ code: s.code, name: s.name })) } });
+    for (const sub of subChannels) {
+      _audit({ actor: socket.user, action: 'channel_delete',
+        target_type: 'channel', target_id: sub.id, target_name: sub.name,
+        details: { code: sub.code, parent_channel_id: channel.id, deleted_with_parent: code } });
+    }
   });
 
   // ── Rename channel ──────────────────────────────────────

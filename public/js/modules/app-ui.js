@@ -345,6 +345,19 @@ _setupUI() {
       { danger: true }
     );
     if (!ok) return;
+    // A parent takes its sub-channels with it. Say so, name them, and point
+    // at the way out for anyone who wants to keep some of them.
+    const ch = this.channels.find(c => c.code === code);
+    const subs = ch ? this.channels.filter(c => c.parent_channel_id === ch.id) : [];
+    if (subs.length) {
+      const names = subs.map(s => '#' + s.name).join(', ');
+      const okSubs = await this._showConfirmModal(
+        '⚠️ ' + t('confirm.delete_channel_subs_title'),
+        t('confirm.delete_channel_subs', { names }),
+        { danger: true, confirmLabel: t('confirm.delete_channel_subs_btn') }
+      );
+      if (!okSubs) return;
+    }
     this.socket.emit('delete-channel', { code });
   });
   // Mark channel as read

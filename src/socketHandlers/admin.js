@@ -108,6 +108,7 @@ module.exports = function register(socket, ctx) {
 
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
+      'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
@@ -142,6 +143,11 @@ module.exports = function register(socket, ctx) {
       'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
     ];
     if (!allowedKeys.includes(key)) return;
+
+    if (key === 'deleted_retention_days') {
+      const n = parseInt(value, 10);
+      if (!Number.isInteger(n) || n < 1 || n > 3650 || String(n) !== String(value).trim()) return;
+    }
 
     // ── Auto-mod validation (v3.42.0) ─────────────────────
     const automodBools = [

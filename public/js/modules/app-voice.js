@@ -1544,6 +1544,14 @@ _updateScreenShareVisibility() {
   const container = document.getElementById('screen-share-container');
   const grid = document.getElementById('screen-share-grid');
   const label = document.getElementById('screen-share-label');
+  // Focus mode hides every tile but the focused one, so once that tile is
+  // gone (its sharer stopped, or it was closed or minimised) the remaining
+  // streams sat invisible in a blank container until something happened to
+  // reset it. Drop back to the grid instead. (#5609)
+  if (container.classList.contains('stream-focus-mode') &&
+      !grid.querySelector('.screen-share-tile.stream-focused:not([data-hidden="true"])')) {
+    this._exitStreamFocus();
+  }
   const totalCount = grid.children.length;
   const visibleCount = grid.querySelectorAll('.screen-share-tile:not([data-hidden=\"true\"])').length;
   const hiddenCount = totalCount - visibleCount;
@@ -1912,28 +1920,33 @@ _toggleStreamFocus(tile) {
   const grid = document.getElementById('screen-share-grid');
   const wasFocused = tile.classList.contains('stream-focused');
 
-  // Remove focus from all tiles first
-  grid.querySelectorAll('.screen-share-tile').forEach(t => {
-    t.classList.remove('stream-focused');
-  });
-  container.classList.remove('stream-focus-mode');
+  // Leave focus mode first, whichever tile held it.
+  this._exitStreamFocus();
+  if (wasFocused) return;
 
-  if (!wasFocused) {
-    tile.classList.add('stream-focused');
-    container.classList.add('stream-focus-mode');
-    // Clear inline max-height so CSS flex constraints take over (viewport-bounded)
-    container.style.maxHeight = '';
-    grid.style.maxHeight = '';
-    const vid = tile.querySelector('video');
-    if (vid) vid.style.maxHeight = '';
-  } else {
-    // Restore slider-based size
-    const saved = localStorage.getItem('haven_stream_size') || '50';
-    const vh = parseInt(saved, 10);
-    container.style.maxHeight = vh + 'vh';
-    grid.style.maxHeight = (vh - 2) + 'vh';
-    document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
-  }
+  tile.classList.add('stream-focused');
+  container.classList.add('stream-focus-mode');
+  // Clear inline max-height so CSS flex constraints take over (viewport-bounded)
+  container.style.maxHeight = '';
+  grid.style.maxHeight = '';
+  const vid = tile.querySelector('video');
+  if (vid) vid.style.maxHeight = '';
+},
+
+// Leave focus mode and put the slider-based size back. Runs on the second
+// double-click, and whenever the focused tile goes away. (#5609)
+_exitStreamFocus() {
+  const container = document.getElementById('screen-share-container');
+  const grid = document.getElementById('screen-share-grid');
+  if (!container || !grid) return;
+  grid.querySelectorAll('.screen-share-tile.stream-focused').forEach(t => t.classList.remove('stream-focused'));
+  if (!container.classList.contains('stream-focus-mode')) return;
+  container.classList.remove('stream-focus-mode');
+  const saved = localStorage.getItem('haven_stream_size') || '50';
+  const vh = parseInt(saved, 10);
+  container.style.maxHeight = vh + 'vh';
+  grid.style.maxHeight = (vh - 2) + 'vh';
+  document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
 },
 
 /** Collapse the stream container when all tiles are popped out (no visible streams) */

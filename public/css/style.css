@@ -5356,6 +5356,11 @@ details.sound-section:not([open]) .sound-section-label::before {
 .message-input-area {
   display: flex;
   align-items: flex-end;
+  /* In a narrow message column (a half-screen browser with both sidebars
+     open) the toolbar was squeezing the text box down to a few characters.
+     The box keeps a usable width and the toolbar wraps onto its own row
+     above it instead. (#5626) */
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 1rem 1.25rem 1rem;
   position: relative;
@@ -5368,6 +5373,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .message-input-area textarea {
   flex: 1;
+  min-width: 11rem;
   padding: 0.625rem 0.875rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -12381,6 +12387,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     flex-wrap: nowrap;
     align-items: flex-end;
   }
+  .message-input-area textarea { min-width: auto; }
 
   /* Media buttons — compact inline, not a separate row */
   .input-actions-box {

@@ -80,6 +80,22 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **Deleting a parent channel deletes its sub-channels too.** They used to be
+  cut loose instead and turned up as top-level channels nobody had created.
+  Delete now asks a second time when there are sub-channels, names them, and
+  suggests moving any worth keeping to another channel or promoting them to
+  top level first.
+- **Other streams no longer vanish when the focused one ends (#5609).** With
+  several people sharing, double-clicking one stream to focus it hides the
+  rest. If that sharer then stopped, the viewer stayed in focus mode with
+  nothing left to show, so the remaining streams sat invisible in a blank box
+  until something reset it. Focus mode now drops back to the grid the moment
+  the focused stream ends, or is closed or minimised. Reported by @quakeman00.
+- **The text box no longer gets squeezed out by the toolbar (#5626).** In a
+  narrow message column, such as a half-screen browser window with both
+  sidebars open, the upload, emoji, GIF and poll buttons left only a few
+  characters of room to type. The toolbar now moves onto its own row when
+  there is not enough width. Reported by @quakeman00.
 - **Pinned forum topics stay on top.** A reply to another topic could push a
   pinned one down the list, and a pinned topic with old activity could be
   missing from the first page altogether. Pinned topics now load with the
@@ -91,6 +107,16 @@ steps; the one new column is added on first start.
 - **Homepage.** The logo leads the page, the screenshots are full size with a
   Gallery you can step through with the arrow keys, the phone shot sits beside
   Security and privacy, and a community channel shot follows the feature list.
+  The download section leads with the app, since most people need that and
+  not the server, and the Download button at the top takes you there instead
+  of grabbing the server zip.
+- **Deleted files no longer sit around forever.** Attachments from deleted
+  messages and channels are parked in a deleted-attachments folder, which was
+  only ever emptied when auto-cleanup was on with a max age set, and even then
+  only its top level. They now expire a week after deletion by default,
+  whether cleanup is on or not, and the window is a setting under
+  Auto-Cleanup. Files parked before this release count as expired on the
+  first run after updating.
 
 ### Fixed
 - **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a
