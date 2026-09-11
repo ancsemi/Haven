@@ -3685,7 +3685,8 @@ html.rgb-cycling *::after {
   box-sizing: content-box;
   pointer-events: none;
 }
-.dm-pip-status-dot.away    { background: #95a5a6; }
+.dm-pip-status-dot.away    { background: #faa61a; border-radius: 0.125rem 0.125rem 50% 50%; }
+.dm-pip-status-dot.offline { background: #95a5a6; }
 .dm-pip-status-dot.dnd     { background: #e74c3c; }
 .dm-pip-status-dot.invisible { background: transparent; border-color: var(--text-muted, #888); }
 .dm-pip-title { font-weight: 600; font-size: 0.8125rem; }

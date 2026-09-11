@@ -3281,12 +3281,12 @@ _refreshDMPipHeader(ch, partnerName) {
       statusClass = s === 'dnd' ? 'dnd'
         : s === 'away' ? 'away'
         : s === 'invisible' ? 'invisible'
-        : (onlinePartner.online === false ? 'away' : '');
+        : (onlinePartner.online === false ? 'offline' : '');
     } else {
-      statusClass = 'away'; // partner not in online list → treat as offline/away
+      statusClass = 'offline'; // partner not in online list
     }
     const statusLabel = statusClass === 'dnd' ? t('app.profile.dnd')
-      : statusClass === 'away' ? t('dm_runtime.offline_away')
+      : (statusClass === 'away' || statusClass === 'offline') ? t('dm_runtime.offline_away')
       : statusClass === 'invisible' ? t('app.profile.invisible')
       : t('app.profile.online');
     const statusDot = `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
