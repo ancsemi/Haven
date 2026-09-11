@@ -75,6 +75,20 @@ _renderOnlineUsers(users) {
 
   el.innerHTML = html;
 
+  // Re-point the hover card at the rebuilt row. This list is redrawn on every
+  // presence update (someone talking in voice triggers one every few seconds)
+  // and the card's safety net reads a detached trigger as "pointer left", so
+  // without this the card closed by itself under a resting mouse (#5608).
+  const hovered = this._hoverTarget;
+  if (hovered && !hovered.isConnected && hovered.classList && hovered.classList.contains('user-item')) {
+    const uid = hovered.dataset.userId;
+    const fresh = uid ? el.querySelector(`.user-item[data-user-id="${uid}"]`) : null;
+    if (fresh) {
+      this._hoverTarget = fresh;
+      if (this._profilePopupAnchor === hovered) this._profilePopupAnchor = fresh;
+    }
+  }
+
   // Bind gear buttons: same unified menu as right-click, anchored to the gear
   el.querySelectorAll('.user-gear-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
