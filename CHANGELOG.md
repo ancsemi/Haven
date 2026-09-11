@@ -88,6 +88,29 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **Muted users could still edit messages and react (#5640).** Editing an
+  existing message and adding a reaction now get the same "you are muted"
+  refusal as sending. Reported by @birdcrazy.
+- **No way to lift a mute (#5640).** The user menu has an Unmute entry next
+  to Mute for anyone who can mute, the person gets a toast when it happens,
+  and a mute set through the REST API no longer shows "muted for undefined
+  min".
+- **Add to Channel from the user menu is multi-select again (#5637).** The
+  right-click menu now opens the same tick-the-boxes picker as Settings, All
+  Members, instead of a one-click list that closed after the first channel.
+  Reported by @quakeman00.
+- **Bot slash commands in every channel (#5635, #5504).** A bot's commands
+  only appear in the slash menu while you are in the channel the bot is set
+  up in. Built-in commands are unchanged. Reported by @josolanes.
+- **Hover profile card closed on its own while someone was in voice
+  (#5608).** The member list is redrawn on every presence update, and the
+  card treated the vanished row as the pointer leaving. It now follows the
+  rebuilt row.
+- **Encryption menu drawn under the DM safety notice (#5639).** The channel
+  header sits above the messages column again, so its dropdowns are not
+  covered. Reported by @birdcrazy.
+- **DM PiP showed Away as grey (#5574).** Away is amber like the sidebar,
+  and offline stays grey.
 - **Deleting a parent channel deletes its sub-channels too.** They used to be
   cut loose instead and turned up as top-level channels nobody had created.
   Delete now asks a second time when there are sub-channels, names them, and
