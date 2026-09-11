@@ -412,7 +412,9 @@ class HavenApp {
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`
+          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`,
+          // A bot lives in one channel, so its commands are only offered there (#5635).
+          channelCode: bc.channel_code || null
         });
       }
     } catch { /* non-critical */ }

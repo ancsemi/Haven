@@ -4762,9 +4762,10 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
 app.get('/api/bot-commands', (req, res) => {
   const { getDb } = require('./src/database');
   const rows = getDb().prepare(`
-    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name
+    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name, c.code as channel_code
     FROM bot_commands bc
     JOIN webhooks w ON bc.webhook_id = w.id
+    LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.is_active = 1
   `).all();
   const commands = [];
@@ -4785,7 +4786,8 @@ app.get('/api/bot-commands', (req, res) => {
           description: typeof sc.description === 'string' && sc.description.trim()
             ? sc.description.trim()
             : (row.description || 'Bot command'),
-          bot_name: row.bot_name || 'Bot'
+          bot_name: row.bot_name || 'Bot',
+          channel_code: row.channel_code || null
         });
       }
       continue;
@@ -4793,7 +4795,8 @@ app.get('/api/bot-commands', (req, res) => {
     commands.push({
       command: row.command,
       description: row.description || '',
-      bot_name: row.bot_name || 'Bot'
+      bot_name: row.bot_name || 'Bot',
+      channel_code: row.channel_code || null
     });
   }
   res.json({ commands });

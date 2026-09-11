@@ -2953,7 +2953,10 @@ _showSlashDropdown(query) {
   const host = (this._slashInput && this._slashInput.parentElement) || null;
   if (host && dropdown.parentElement !== host) host.appendChild(dropdown);
   const q = String(query || '').toLowerCase();
-  const filtered = this.slashCommands
+  // Bot commands carry the channel their bot is set up in and are only
+  // offered there. Built-in commands have no channel and show everywhere (#5635).
+  const offered = this.slashCommands.filter(c => !c.channelCode || c.channelCode === this.currentChannel);
+  const filtered = offered
     .filter(c => String(c.cmd || '').toLowerCase().startsWith(q))
     // For base queries like "rss", show "/rss add" before plain "/rss" so
     // discoverable subcommands appear first and users don't keep selecting the
@@ -2969,7 +2972,7 @@ _showSlashDropdown(query) {
     })
     .slice(0, 10);
 
-  if (filtered.length === 0 || (query === '' && filtered.length === this.slashCommands.length)) {
+  if (filtered.length === 0 || (query === '' && filtered.length === offered.length)) {
     // Show all on empty query
     if (query === '') {
       // show all
@@ -2979,7 +2982,7 @@ _showSlashDropdown(query) {
     }
   }
 
-  const shown = query === '' ? this.slashCommands.slice(0, 12) : filtered;
+  const shown = query === '' ? offered.slice(0, 12) : filtered;
 
   dropdown.innerHTML = shown.map((c, i) =>
     `<div class="slash-item${i === 0 ? ' active' : ''}" data-cmd="${c.cmd}">
