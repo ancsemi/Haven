@@ -279,11 +279,12 @@ module.exports = function register(socket, ctx) {
       db.prepare(`
         SELECT thread_id,
                COUNT(*) as reply_count,
-               MAX(created_at) as last_reply_at
+               MAX(created_at) as last_reply_at,
+               MAX(id) as last_reply_id
         FROM messages WHERE thread_id IN (${ph})
         GROUP BY thread_id
       `).all(...msgIds).forEach(t => {
-        threadMap.set(t.thread_id, { count: t.reply_count, lastReplyAt: utcStamp(t.last_reply_at), participants: [] });
+        threadMap.set(t.thread_id, { count: t.reply_count, lastReplyAt: utcStamp(t.last_reply_at), lastReplyId: t.last_reply_id, participants: [] });
       });
       // Get participants for threads (up to 5 unique usernames)
       if (threadMap.size > 0) {
@@ -306,6 +307,16 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Which reply this account last saw in each topic, for the unread dot on
+    // forum cards (#5641).
+    const threadReadMap = new Map();
+    if (channel.is_forum && msgIds.length > 0) {
+      const rph = msgIds.map(() => '?').join(',');
+      db.prepare(`SELECT thread_id, last_read_reply_id FROM thread_reads WHERE user_id = ? AND thread_id IN (${rph})`)
+        .all(socket.user.id, ...msgIds)
+        .forEach(r => threadReadMap.set(r.thread_id, r.last_read_reply_id));
+    }
+
     const enriched = messages.map(m => {
       const obj = { ...m };
       // Border fit travels with the message (like avatar) so it renders even when
@@ -323,6 +334,15 @@ module.exports = function register(socket, ctx) {
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
       obj.thread = threadMap.get(m.id) || null;
+      // A forum topic is unread until you open it (your own topics start
+      // read), and again whenever a reply lands after the last one you saw.
+      if (channel.is_forum && !m.thread_id) {
+        const tinfo = obj.thread || { count: 0, lastReplyAt: null, lastReplyId: 0, participants: [] };
+        const lastId = tinfo.lastReplyId || 0;
+        const seen = threadReadMap.get(m.id);
+        tinfo.unread = seen !== undefined ? lastId > seen : (m.user_id !== socket.user.id || lastId > 0);
+        obj.thread = tinfo;
+      }
       if ('tags' in m) obj.tags = parseTags(m.tags);
       if ('closed' in m) obj.closed = !!m.closed;
       if (m.poll_data) {
@@ -2059,6 +2079,36 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // Mark every topic in a forum channel read for this account (#5641). Each
+  // topic's row moves to its latest reply, or 0 when it has none, so the dot
+  // comes back only for replies that land after this.
+  socket.on('mark-forum-read', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+
+    const channel = db.prepare('SELECT id, is_forum FROM channels WHERE code = ?').get(code);
+    if (!channel || !channel.is_forum) return;
+
+    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    if (!member && !socket.user.isAdmin) return;
+
+    try {
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
+        SELECT ?, m.id, COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id), 0)
+        FROM messages m
+        WHERE m.channel_id = ? AND m.thread_id IS NULL
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, channel.id);
+      for (const [, s] of io.sockets.sockets) {
+        if (s.user && s.user.id === socket.user.id) s.emit('forum-read', { channelCode: code });
+      }
+    } catch (err) {
+      console.error('Mark forum read error:', err);
+    }
+  });
+
   // ═══════════════════════════════════════════════════════
   // THREADS
   // ═══════════════════════════════════════════════════════
@@ -2088,6 +2138,21 @@ module.exports = function register(socket, ctx) {
     if (!member && !socket.user.isAdmin) return;
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
+
+    // Opening a thread marks every reply in it seen for this account, and the
+    // person's other devices drop the unread dot too (#5641).
+    try {
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
+        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, parentId, parentId);
+      for (const [, s] of io.sockets.sockets) {
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId });
+      }
+    } catch (err) {
+      console.error('Thread read error:', err);
+    }
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
@@ -2217,6 +2282,11 @@ module.exports = function register(socket, ctx) {
       const result = db.prepare(
         'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to) VALUES (?, ?, ?, ?, ?)'
       ).run(channel.id, socket.user.id, safeContent, parentId, replyTo);
+      // Your own reply is not news to you (#5641).
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, parentId, result.lastInsertRowid);
 
       const message = {
         id: result.lastInsertRowid,
@@ -2270,6 +2340,9 @@ module.exports = function register(socket, ctx) {
         thread: {
           count: threadCount.count,
           lastReplyAt: lastMsg ? lastMsg.created_at : null,
+          lastReplyId: lastMsg ? lastMsg.id : null,
+          // Lets forum cards light up for everyone but the person who replied (#5641).
+          senderId: socket.user.id,
           participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
         }
       });

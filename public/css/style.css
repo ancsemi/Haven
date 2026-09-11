@@ -19627,6 +19627,12 @@ ul.chat-list { list-style-type: disc; }
 .forum-topic-closed:hover { opacity: 0.85; }
 .forum-field-closed span { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
 .forum-topic-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* Unread dot on a forum card: a topic you have not opened, or new replies since you did (#5641). */
+.forum-unread-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); margin-right: 0.4rem; vertical-align: middle; position: relative; top: -0.05rem; box-shadow: 0 0 0 2px var(--bg-card); }
+.forum-topic-unread { border-left: 3px solid var(--accent); }
+.messages.forum-gallery .forum-topic-unread, .messages.forum-feed .forum-topic-unread { border-left: none; }
+.messages.forum-gallery .forum-unread-dot { box-shadow: 0 0 0 2px rgba(8,8,14,0.7); }
+.forum-mark-read { white-space: nowrap; }
 .forum-topic-snippet { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .forum-topic-snippet:empty { display: none; }
 .forum-topic-meta { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; color: var(--text-muted); margin-top: auto; padding-top: 0.25rem; }

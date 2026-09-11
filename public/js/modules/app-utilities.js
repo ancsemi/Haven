@@ -3647,6 +3647,9 @@ _openThread(parentId) {
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel
   this._clearThreadMentionsForParent(this.currentChannel, parentId);
+  // The server records the read position when it serves the thread; drop the
+  // forum card's dot right away rather than on the next reload (#5641).
+  if (this._forumActive && this._forumMarkTopicRead) this._forumMarkTopicRead(parentId);
   const panel = document.getElementById('thread-panel');
   if (!panel) return;
   panel.style.display = 'flex';

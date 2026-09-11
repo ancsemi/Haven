@@ -1711,6 +1711,17 @@ _setupSocketListeners() {
     if (!this._forumActive) this._bumpForumTopic?.(data.parentId);
   });
 
+  // Forum unread dots are per account, so another device opening a topic or
+  // pressing Mark all read clears them here as well (#5641).
+  this.socket.on('thread-read', (data) => {
+    if (!data || data.channelCode !== this.currentChannel) return;
+    this._forumMarkTopicRead?.(data.parentId);
+  });
+  this.socket.on('forum-read', (data) => {
+    if (!data || data.channelCode !== this.currentChannel) return;
+    this._forumMarkAllRead?.(data.channelCode);
+  });
+
   // Forum topics: retitled or retagged, and the channel's tag list changed.
   this.socket.on('topic-updated', (data) => {
     if (data.channelCode !== this.currentChannel) return;

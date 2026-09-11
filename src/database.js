@@ -732,6 +732,20 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: per-thread read positions (#5641) ─────────
+  // Which reply a person last saw in a thread, keyed by the parent message.
+  // Forum topic cards use it for their unread dot, and because it lives on
+  // the account it follows you between devices. A row with 0 means the
+  // thread was opened but had no replies yet.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS thread_reads (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      thread_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      last_read_reply_id INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, thread_id)
+    );
+  `);
+
   // ── Migration: original_name on messages for file uploads ──
   try {
     db.prepare("SELECT original_name FROM messages LIMIT 0").get();

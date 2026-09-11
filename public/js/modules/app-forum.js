@@ -187,6 +187,7 @@ _forumToolbarEl(code) {
           <span>${t('forum.tile_size')}</span>
           <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
         </label>
+        <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
       </div>
     </div>
     ${tags.length ? `<div class="forum-toolbar-row forum-tags-row">
@@ -205,6 +206,10 @@ _forumToolbarEl(code) {
     this._applyForumChrome(document.getElementById('messages'), next);
     this._lazyMedia && this._lazyPump && this._lazyPump();
   }));
+  bar.querySelector('#forum-mark-read')?.addEventListener('click', () => {
+    this.socket.emit('mark-forum-read', { code });
+    this._forumMarkAllRead(code);
+  });
   bar.querySelector('#forum-tile-size')?.addEventListener('input', (e) => {
     this._applyForumChrome(document.getElementById('messages'), this._setForumPrefs(code, { tile: this._forumParseTile(e.target.value) }));
   });
@@ -221,7 +226,8 @@ _forumToolbarEl(code) {
 
 _createForumTopicEl(msg) {
   const el = document.createElement('div');
-  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '');
+  const unread = !!(msg.thread && msg.thread.unread);
+  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (unread ? ' forum-topic-unread' : '');
   el.dataset.msgId = msg.id;
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
@@ -240,7 +246,7 @@ _createForumTopicEl(msg) {
     ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"><span>⬡</span></div>`}
     <div class="forum-topic-body">
       <div class="forum-topic-tags">${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
-      <div class="forum-topic-title">${this._escapeHtml(this._forumTitleOf(msg))}</div>
+      <div class="forum-topic-title">${unread ? `<span class="forum-unread-dot" title="${t('forum.unread')}"></span>` : ''}${this._escapeHtml(this._forumTitleOf(msg))}</div>
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">
         <span class="message-author forum-topic-author">${this._escapeHtml(msg.username || '')}</span>
@@ -293,8 +299,13 @@ _forumBump(parentId, thread) {
   const el = grid.querySelector(`[data-msg-id="${parentId}"]`);
   const topic = this._forumTopics && this._forumTopics.get(parentId);
   if (!el || !topic) { this._forumReload(); return; }
-  if (thread) topic.thread = thread;
-  else topic.thread = { ...(topic.thread || {}), count: ((topic.thread && topic.thread.count) || 0) + 1, lastReplyAt: new Date().toISOString() };
+  // A reply from someone else lights the card up unless that thread is the
+  // one open on screen; your own reply never does (#5641).
+  const mine = thread && this.user && thread.senderId === this.user.id;
+  const watching = this._activeThreadParent === parentId && document.getElementById('thread-panel')?.style.display !== 'none';
+  const unread = thread ? (!mine && !watching) : !!(topic.thread && topic.thread.unread);
+  if (thread) topic.thread = { ...thread, unread };
+  else topic.thread = { ...(topic.thread || {}), count: ((topic.thread && topic.thread.count) || 0) + 1, lastReplyAt: new Date().toISOString(), unread };
   const fresh = this._createForumTopicEl(topic);
   el.replaceWith(fresh);
   if (this._forumPrefs().sort === 'active' && !topic.pinned && !topic.closed) {
@@ -302,6 +313,25 @@ _forumBump(parentId, thread) {
     if (firstUnpinned && firstUnpinned !== fresh) grid.insertBefore(fresh, firstUnpinned);
   }
   this._lazyMedia && this._lazyPump && this._lazyPump();
+},
+
+// Unread dots follow the account: opening a topic here, or on another
+// device, and Mark all read both clear them (#5641).
+_forumMarkTopicRead(parentId) {
+  const topic = this._forumTopics && this._forumTopics.get(parentId);
+  if (!topic || !topic.thread || !topic.thread.unread) return;
+  topic.thread.unread = false;
+  const el = document.querySelector(`#forum-topics [data-msg-id="${parentId}"]`);
+  if (el) el.replaceWith(this._createForumTopicEl(topic));
+  this._lazyMedia && this._lazyPump && this._lazyPump();
+},
+
+_forumMarkAllRead(code) {
+  if (code && code !== this.currentChannel) return;
+  if (!this._forumActive || !this._forumTopics) return;
+  for (const [id, topic] of this._forumTopics) {
+    if (topic.thread && topic.thread.unread) this._forumMarkTopicRead(id);
+  }
 },
 
 _forumApplyTopicUpdate(data) {
