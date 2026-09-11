@@ -918,6 +918,7 @@
     "member_since_label": "Member Since",
     "streaming_live": "LIVE",
     "streaming_no_viewers": "Streaming",
+    "stream_click_to_watch": "Click to watch",
     "streaming_viewers_one": "Streaming · {{count}} viewer",
     "streaming_viewers_other": "Streaming · {{count}} viewers",
     "watching_stream_title": "Watching {{names}}",

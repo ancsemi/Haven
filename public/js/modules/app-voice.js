@@ -1123,6 +1123,10 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       grid.appendChild(tile);
     }
 
+    // A share the viewer had to accept may have had its audio parked while
+    // the Join prompt was up. The tile exists now, so let it play (#5636).
+    if (userId !== null && userId !== this.user.id) this.voice.flushPendingScreenAudio?.(userId);
+
     // Show the container BEFORE assigning srcObject — browsers won't decode
     // video frames inside a display:none container, causing a black rectangle
     // that only fixes itself on layout reflow (e.g. resizing the slider).

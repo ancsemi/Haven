@@ -1165,7 +1165,9 @@ _renderVoiceUsers(users, channelCode) {
         ? t(viewerCount === 1 ? 'users.streaming_viewers_one' : 'users.streaming_viewers_other', { count: viewerCount })
         : t('users.streaming_no_viewers');
       const viewerNames = viewers.map(v => v.username).join(', ');
-      const liveTitle = this._escapeHtml(viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel);
+      // The badge is also the way back into a share you dismissed or did not
+      // auto-accept, so the tooltip says so (#5636).
+      const liveTitle = this._escapeHtml(`${viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel}. ${t('users.stream_click_to_watch')}`);
       streamBadge = `<span class="voice-stream-badge live" title="${liveTitle}">🔴${viewerCount ? ' ' + viewerCount : ''}</span>`;
     }
     if (hasWebcam) {

@@ -3535,6 +3535,7 @@ class VoiceManager {
       const screenAudioEl = document.getElementById(`voice-audio-screen-${userId}`);
       if (screenAudioEl) screenAudioEl.remove();
       this.screenGainNodes.delete(userId);
+      this._pendingScreenAudio?.delete(userId);
       this.gainNodes.delete(userId);
       this._screenDelivered.delete(userId);
       this._relayPeers?.delete(userId);
@@ -3882,7 +3883,32 @@ class VoiceManager {
 
   // ── Screen Share Audio ────────────────────────────────
 
+  // With "auto-accept screen shares" off, the video side waits for the Join
+  // prompt in _handleScreenStream, but the audio track used to play the moment
+  // it arrived: a share you never accepted was audible with no tile and no
+  // volume control to silence it (#5636). Park the audio until the tile
+  // exists; _handleScreenStream flushes it once the viewer joins. With the
+  // setting on (the default) nothing changes.
+  _screenAudioDeferred(userId) {
+    let autoAccept = true;
+    try { autoAccept = localStorage.getItem('haven_auto_accept_streams') !== 'false'; } catch {}
+    if (autoAccept) return false;
+    return !document.getElementById(`screen-tile-${userId}`);
+  }
+
+  flushPendingScreenAudio(userId) {
+    const stream = this._pendingScreenAudio && this._pendingScreenAudio.get(userId);
+    if (!stream) return;
+    this._pendingScreenAudio.delete(userId);
+    this._playScreenAudio(userId, stream);
+  }
+
   _playScreenAudio(userId, stream) {
+    if (this._screenAudioDeferred(userId)) {
+      if (!this._pendingScreenAudio) this._pendingScreenAudio = new Map();
+      this._pendingScreenAudio.set(userId, stream);
+      return;
+    }
     const key = `screen-${userId}`;
     let audioEl = document.getElementById(`voice-audio-${key}`);
     if (!audioEl) {

@@ -88,6 +88,12 @@ steps; the one new column is added on first start.
   switches and reloads. Requested by @quakeman00.
 
 ### Fixed
+- **Declined screen shares still played their audio (#5636).** With "auto
+  accept screen shares" off, the sound from a share you had not joined played
+  anyway, with no tile to turn it down. The audio now waits until you join.
+  The red live badge next to a person in the voice list opens their stream,
+  which is the way back in after the pop-up is gone; its tooltip says so now.
+  Reported by @quakeman00.
 - **Muted users could still edit messages and react (#5640).** Editing an
   existing message and adding a reaction now get the same "you are muted"
   refusal as sending. Reported by @birdcrazy.
