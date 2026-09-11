@@ -304,6 +304,8 @@ _forumBump(parentId, thread) {
   const mine = thread && this.user && thread.senderId === this.user.id;
   const watching = this._activeThreadParent === parentId && document.getElementById('thread-panel')?.style.display !== 'none';
   const unread = thread ? (!mine && !watching) : !!(topic.thread && topic.thread.unread);
+  // Seen live in the open panel: tell the server so it stays read after a reload.
+  if (thread && watching && !mine) this.socket.emit('mark-thread-read', { parentId });
   if (thread) topic.thread = { ...thread, unread };
   else topic.thread = { ...(topic.thread || {}), count: ((topic.thread && topic.thread.count) || 0) + 1, lastReplyAt: new Date().toISOString(), unread };
   const fresh = this._createForumTopicEl(topic);

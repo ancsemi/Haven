@@ -2109,6 +2109,30 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // A reply that lands while you have the thread open on screen has been
+  // seen: record it so a reload, or another device, does not flag it (#5641).
+  socket.on('mark-thread-read', (data) => {
+    if (!data || typeof data !== 'object' || !isInt(data.parentId)) return;
+    const parentRow = db.prepare(
+      'SELECT m.id, m.channel_id, c.code as channel_code FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ? AND m.thread_id IS NULL'
+    ).get(data.parentId);
+    if (!parentRow) return;
+    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(parentRow.channel_id, socket.user.id);
+    if (!member && !socket.user.isAdmin) return;
+    try {
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
+        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, data.parentId, data.parentId);
+      for (const [, s] of io.sockets.sockets) {
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId: data.parentId });
+      }
+    } catch (err) {
+      console.error('Mark thread read error:', err);
+    }
+  });
+
   // ═══════════════════════════════════════════════════════
   // THREADS
   // ═══════════════════════════════════════════════════════
