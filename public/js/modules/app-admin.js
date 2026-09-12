@@ -4834,7 +4834,10 @@ _openRoleMembersModal(role) {
       return;
     }
     listEl.innerHTML = filtered.map(u => {
-      const hasRole = u.currentRoles.some(r => r.id === role.id && !r.channel_id);
+      // The assignment data lists a held role as role_id, not id, so this
+      // never matched: every row said Assign, the badge never appeared and
+      // there was no Remove to undo it with (#5643).
+      const hasRole = u.currentRoles.some(r => (r.role_id ?? r.id) === role.id && !r.channel_id);
       const color = this._getUserColor(u.username);
       const initial = (u.displayName || u.username).charAt(0).toUpperCase();
       const shapeStyle = u.avatarShape === 'square' ? 'border-radius:4px' : '';
