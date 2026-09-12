@@ -11,6 +11,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Edit a posted role menu (#5644).** Right-click a role menu message and
+  pick Edit role menu: tick or untick roles, change their emojis and reword
+  the text. The buttons and reaction chips people already see update in
+  place. Requested by @quakeman00.
+- **Edit a forum post from its card (#5650).** Edit post on a topic's menu
+  opens the composer with the title, tags and Closed box, and for the author
+  the text as well, so a topic can be reworded without hunting for the
+  message. Reported by @birdcrazy.
+- **Hide the Send button (#5654).** Settings, Layout, Message Box has a
+  switch for people who only ever press Enter. Requested by @quakeman00.
+
+### Changed
+- **The GIF button hides when no GIF provider is set up (#5654).** On those
+  servers it only ever opened an empty picker. Suggested by @birdcrazy.
+- **A quote needs a space after the > (#5654).** A line like ">implying" or
+  ">.<" stays as typed; "> like this" and ">> nested" still quote, and a
+  lone ">" on its own line is no longer an empty quote. Requested by
+  @quakeman00.
+- **The live badge in the voice list stays put (#5636).** It sits at the
+  right edge ahead of the mute icon, so it no longer jumps when someone on
+  push to talk mutes and unmutes. Reported by @quakeman00.
+
+### Fixed
+- **Right-clicking a forum card opened two menus at once (#5650).** The
+  thumbnail gets the image menu, with a View image entry, and the rest of
+  the card gets a menu made for topics: Open, Edit post, Pin, Close, Copy
+  link, Protect, Delete. The chat menu's Edit, React and Thread are gone
+  from there: Edit stacked a second copy of the text on the card, React
+  opened the picker under the composer, and Thread is what a click does.
+  Reported by @quakeman00 and @birdcrazy.
+- **Clicking a forum thumbnail opened the picture and the topic at once
+  (#5646).** A click opens the topic; the picture is under View image on
+  the right-click menu. Reported by @quakeman00.
+- **A picture and text sent together made two forum topics (#5653).** They
+  make one topic now, with the text as its title and the picture on the
+  card. Reported by @birdcrazy.
+- **Watch Stream did nothing once the Join prompt was gone (#5636).** With
+  auto-accept off, the red badge and Watch Stream asked the sharer to resend
+  and landed back at the same prompt check, so the click only ever said
+  Requesting stream. Clicking either now counts as the accept. Reported by
+  @quakeman00.
+- **A slash command registered by two bots showed in one channel (#5635).**
+  The same command set up on two bots in two channels only suggested itself
+  in one of them. It shows in both. Reported by @josolanes.
+- **A role's Members list never showed who held it (#5643).** Every row said
+  Assign, the badge never appeared and there was no Remove, because the list
+  checked a field the server does not send. Reported by @quakeman00.
+- **Encryption menu under the DM safety notice with a banner up (#5639).**
+  The 4.7.0 fix was overridden whenever a server banner was showing.
+  Reported by @birdcrazy.
+- **Show Status Bar was ignored in the Desktop app (#5647).** The bar is on
+  by default there, as the window's footer, and the switch now turns it
+  off. Reported by @quakeman00 and @birdcrazy.
+
 ## [4.7.0] - 2026-09-11
 
 Forums grow up another notch and a big batch of community work lands. Topic

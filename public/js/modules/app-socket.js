@@ -976,6 +976,16 @@ _setupSocketListeners() {
     this._markSelfRole(data.roleId, !!data.held);
   });
 
+  // A role menu was edited: swap in the new buttons wherever that message is
+  // on screen. The click handling is delegated, so fresh HTML just works (#5644).
+  this.socket.on('role-menu-updated', (data) => {
+    if (!data || !data.messageId) return;
+    document.querySelectorAll(`.role-menu-widget[data-msg-id="${data.messageId}"]`).forEach(w => {
+      const html = this._renderRoleMenu(data.messageId, data.roleMenu);
+      if (html) w.outerHTML = html; else w.remove();
+    });
+  });
+
   this.socket.on('channel-joined', (channel) => {
     if (!this.channels.find(c => c.code === channel.code)) {
       this.channels.push(channel);
@@ -2049,6 +2059,9 @@ _setupSocketListeners() {
           displayContent = t('header.messages.decrypt_failed');
         }
       }
+      // A forum card shows a title and a snippet rather than the message
+      // body, so it is rebuilt from the new text instead of patched in place.
+      if (this._forumActive && this._forumApplyContentEdit?.(data.messageId, displayContent)) return;
       msgEls.forEach((msgEl) => {
         const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
         if (!contentEl) return;
@@ -2177,6 +2190,10 @@ _setupSocketListeners() {
       this._appendSystemMessage(`📌 ${t('header.messages.pinned_by', { name: data.pinnedBy })}`);
       this._markPinUnread?.(data.messageId);
       this._bumpPinIndicator?.(1);
+      // A pinned topic heads the forum list and its menu should offer Unpin,
+      // so the cached topic follows and the cards are rebuilt (#5650).
+      const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+      if (topic) { topic.pinned = 1; if (this._forumActive) this._forumReload(); }
 
       // If the Pins PiP is open, silently re-fetch the updated pin list so the
       // new pin appears without requiring the user to reopen anything.
@@ -2200,6 +2217,8 @@ _setupSocketListeners() {
         const unpinBtn = msgEl.querySelector('[data-action="unpin"]');
         if (unpinBtn) { unpinBtn.dataset.action = 'pin'; unpinBtn.title = t('msg_toolbar.pin'); }
       }
+      const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+      if (topic) { topic.pinned = 0; if (this._forumActive) this._forumReload(); }
       // Remove from pinned sidebar panel if it's open
       const pinnedItem = document.querySelector(`#pinned-panel .pinned-item[data-msg-id="${data.messageId}"]`);
       if (pinnedItem) {
@@ -2374,6 +2393,9 @@ _setupSocketListeners() {
     // Which of these settings also have a value waiting in the environment,
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
+    // No GIF provider on this server: the button would only open an empty
+    // picker, so it goes (#5654).
+    document.documentElement.toggleAttribute('data-no-gif', settings && settings.gif_search_available === 'false');
     this._applyServerSettings();
     this._renderChannelTemplates();
     this._maybeShowSetupWizard();

@@ -1148,6 +1148,7 @@
       "alt": "Image",
       "save": "Save Image",
       "copy": "Copy Image",
+      "view": "View image",
       "open_new_tab": "Open in New Tab",
       "copied": "Image copied to clipboard",
       "url_copied_bytes_unavailable": "Copied image URL (image bytes unavailable)",
@@ -1402,6 +1403,11 @@
         "separate_hint": "Separate — separate scrollbars for channels and DMs",
         "combined": "Combined",
         "combined_hint": "Combined — one scrollbar for both channels and DMs"
+      },
+      "composer": {
+        "title": "Message Box",
+        "hide_send": "Hide the Send button",
+        "hide_send_hint": "Enter still sends. Frees the end of the message box if you never click the button."
       }
     },
     "toggle_style": {
@@ -2455,7 +2461,12 @@
         "title_placeholder": "Pick your roles",
         "emoji": "Emoji people react with",
         "pick_one": "Tick at least one role",
-        "posted": "Role menu posted"
+        "posted": "Role menu posted",
+        "edit": "Edit role menu",
+        "content_label": "Message text",
+        "content_hint": "Reword the message as you like. The list below is what people can pick: untick a role to take it off the menu, along with its chip.",
+        "updated": "Role menu updated",
+        "gone": "That role menu is gone"
       }
     },
     "nsfw": {
@@ -3700,6 +3711,10 @@
     "pinned": "Pinned",
     "replies": "{{count}} replies",
     "edit_topic": "Edit title and tags",
+    "edit_post": "Edit post",
+    "open_topic": "Open topic",
+    "close_topic": "Close topic",
+    "reopen_topic": "Reopen topic",
     "closed": "Closed",
     "mark_closed": "Closed: grey it out and keep it below the open topics",
     "image_topic": "Image",

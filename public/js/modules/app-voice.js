@@ -965,17 +965,25 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
   const label = document.getElementById('screen-share-label');
 
   if (stream) {
-    // Honour auto-accept setting — show a join prompt instead of opening the tile automatically
-    const autoAccept = force || localStorage.getItem('haven_auto_accept_streams') !== 'false';
+    // Honour auto-accept setting — show a join prompt instead of opening the
+    // tile automatically. Clicking the sharer's live badge counts as the
+    // accept for that share, so it skips the prompt too (#5636).
+    const accepted = !!(this._acceptedStreams && this._acceptedStreams.has(userId));
+    const autoAccept = force || accepted || localStorage.getItem('haven_auto_accept_streams') !== 'false';
     if (!autoAccept && userId !== null && userId !== this.user.id) {
       const peer = this.voice.peers.get(userId);
       const who = peer ? peer.username : t('voice.someone');
+      // Keep the offered stream so the live badge can open it after the
+      // prompt has gone (#5636).
+      if (!this._pendingStreamOffers) this._pendingStreamOffers = new Map();
+      this._pendingStreamOffers.set(userId, stream);
       this._showToast(t('voice.sharing_started', { who: this._escapeHtml(who) }), 'info', {
         label: t('voice_runtime.join'),
         onClick: () => this._handleScreenStream(userId, stream, { force: true })
       }, 8000);
       return;
     }
+    this._pendingStreamOffers?.delete(userId);
 
     // Create a tile for this user's stream
     const tileId = `screen-tile-${userId || 'self'}`;
@@ -1220,7 +1228,10 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       this.socket.emit('stream-watch', { code: this.voice.currentChannel, sharerId: userId });
     }
   } else {
-    // Stream ended — remove this tile
+    // Stream ended — remove this tile. The next share from this person gets
+    // the prompt again, and any offer that never got a tile is gone (#5636).
+    this._pendingStreamOffers?.delete(userId);
+    this._acceptedStreams?.delete(userId);
     const tileId = `screen-tile-${userId || 'self'}`;
     this._stopStreamStallWatchdog(tileId);
     const tile = document.getElementById(tileId);

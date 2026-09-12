@@ -2112,6 +2112,9 @@ _setupUI() {
 
   // Image click — open lightbox overlay (CSP-safe — no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
+    // A forum card handles its own clicks: the thumbnail opens the topic,
+    // not the lightbox (#5646).
+    if (e.target.closest('.forum-topic')) return;
     // Concealed media (hidden image / unrevealed spoiler) intercepts the click
     // before the lightbox opens.
     if (this._maybeRevealConcealed(e)) return;
@@ -2151,8 +2154,10 @@ _setupUI() {
     }
   }
 
-  // Image right-click — custom context menu for chat thumbnails
+  // Image right-click — custom context menu for chat thumbnails. Forum cards
+  // open their own menus, so both menus no longer stack up there (#5650).
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
+    if (e.target.closest('.forum-topic')) return;
     if (e.target.classList.contains('chat-image')) {
       e.preventDefault();
       this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src);
@@ -6945,7 +6950,7 @@ _maybeRevealConcealed(e) {
   return false;
 },
 
-async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false) {
+async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false, opts = {}) {
   if (!this.currentChannel && !targetCode) return;
   // The queue stores the per-image spoiler choice on the File object itself.
   if (!spoiler && file && file._spoiler) spoiler = true;
@@ -7013,9 +7018,13 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
 
     // Send the image URL as a message to the channel that was active at upload time.
     // Prepend persona prefix if this image is bundled with a persona text message.
+    const line = personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url;
+    // A forum topic sent with text collects its picture lines and goes out as
+    // one message instead (#5653).
+    if (opts.returnContent) return line;
     this.socket.emit('send-message', {
       code: targetChannel,
-      content: personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url,
+      content: line,
       isImage: true,
       ...(bundled && { bundled: true })
     });

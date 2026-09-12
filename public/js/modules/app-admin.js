@@ -2955,7 +2955,7 @@ _showSlashDropdown(query) {
   const q = String(query || '').toLowerCase();
   // Bot commands carry the channel their bot is set up in and are only
   // offered there. Built-in commands have no channel and show everywhere (#5635).
-  const offered = this.slashCommands.filter(c => !c.channelCode || c.channelCode === this.currentChannel);
+  const offered = this.slashCommands.filter(c => !c.channelCodes || c.channelCodes.includes(this.currentChannel));
   const filtered = offered
     .filter(c => String(c.cmd || '').toLowerCase().startsWith(q))
     // For base queries like "rss", show "/rss add" before plain "/rss" so
@@ -4834,7 +4834,10 @@ _openRoleMembersModal(role) {
       return;
     }
     listEl.innerHTML = filtered.map(u => {
-      const hasRole = u.currentRoles.some(r => r.id === role.id && !r.channel_id);
+      // The assignment data lists a held role as role_id, not id, so this
+      // never matched: every row said Assign, the badge never appeared and
+      // there was no Remove to undo it with (#5643).
+      const hasRole = u.currentRoles.some(r => (r.role_id ?? r.id) === role.id && !r.channel_id);
       const color = this._getUserColor(u.username);
       const initial = (u.displayName || u.username).charAt(0).toUpperCase();
       const shapeStyle = u.avatarShape === 'square' ? 'border-radius:4px' : '';
