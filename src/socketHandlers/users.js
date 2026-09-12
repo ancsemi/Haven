@@ -19,6 +19,10 @@ module.exports = function register(socket, ctx) {
     const checked = normalizeDisplayName(typeof data.username === 'string' ? data.username : '');
     if (checked.error) return socket.emit('error-msg', checked.error);
     const newName = checked.value;
+    // Saving the profile for a bio or avatar change sends the name along
+    // unchanged, which announced "fenix is now known as fenix" to the
+    // channel every time. Nothing changed, so nothing to do.
+    if (newName === socket.user.displayName) return;
 
     // (#5482) A moderator-set display name holds. Otherwise the whole
     // Manage Display Names permission is decorative — the moderated user

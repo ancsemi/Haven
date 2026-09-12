@@ -6839,7 +6839,11 @@ _saveRename() {
   if (/\p{M}{4,}/u.test(newName)) {
     return this._showToast(t('toasts.display_name_too_many_marks'), 'error');
   }
-  this.socket.emit('rename-user', { username: newName });
+  // Only an actual change goes to the server; a bio or avatar save with the
+  // name left alone used to announce a rename to the whole channel.
+  if (newName !== (this.user.displayName || this.user.username)) {
+    this.socket.emit('rename-user', { username: newName });
+  }
   // Save bio
   const bioInput = document.getElementById('edit-profile-bio');
   if (bioInput) {
