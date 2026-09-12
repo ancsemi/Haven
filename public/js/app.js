@@ -94,6 +94,7 @@ class HavenApp {
       { cmd: 'play',       args: t('commands.args.name_or_url'),       desc: t('commands.description.play') },
       { cmd: 'gif',        args: t('commands.args.query'),             desc: t('commands.description.gif') },
       { cmd: 'poll',       args: t('commands.args.optional_question'), desc: t('commands.description.poll') },
+      { cmd: 'schedule',   args: t('commands.args.optional_text'),     desc: t('commands.description.schedule') },
       { cmd: 'time',       args: t('commands.args.time'),              desc: t('commands.description.time') },
     ];
 

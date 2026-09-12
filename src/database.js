@@ -1426,6 +1426,24 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_poll_votes_msg ON poll_votes(message_id);
   `);
 
+  // ── Scheduled messages (#5638): held on the server until send_at ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduled_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      send_at TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_scheduled_send_at ON scheduled_messages(send_at);
+  `);
+
+  // ── Migration: weighted automod strikes (#5614) ──
+  // A word group can be worth more than one strike; link infractions stay at 1.
+  try { db.prepare('SELECT weight FROM automod_infractions LIMIT 0').get(); }
+  catch { db.exec('ALTER TABLE automod_infractions ADD COLUMN weight INTEGER NOT NULL DEFAULT 1'); }
+
   // ── Migration: deleted_users log (audit trail for admin deletions) ──
   db.exec(`
     CREATE TABLE IF NOT EXISTS deleted_users (

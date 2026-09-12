@@ -1742,6 +1742,12 @@ _setupSocketListeners() {
     if (ch) ch.forum_tags = JSON.stringify(data.tags || []);
     if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
   });
+  // A message you scheduled has just gone out (#5638).
+  this.socket.on('scheduled-message-sent', (data) => {
+    if (!data) return;
+    this._showToast(t('modals.schedule.sent', { channel: data.channelName || '' }), 'info');
+    if (document.getElementById('schedule-modal')?.style.display === 'flex') this._loadScheduledList?.();
+  });
   // An admin set the layout everyone opens this forum in (#5656).
   this.socket.on('forum-layout-updated', (data) => {
     const ch = this.channels && this.channels.find(c => c.code === data.code);

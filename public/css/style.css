@@ -2157,6 +2157,22 @@ html.rgb-cycling *::after {
 [data-hide-statusbar] .status-bar { display: none !important; }
 [data-hide-statusbar] .status-bar-toggle-tab { display: flex; }
 
+/* Auto-mod word groups (#5614) */
+.automod-word-group { border: 1px solid var(--border-light); border-radius: var(--radius); padding: 0.5rem; margin-bottom: 0.5rem; background: var(--bg-tertiary); }
+.automod-word-group-head { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; }
+.automod-word-group-head .awg-name { flex: 1; min-width: 0; }
+.awg-strikes-label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; }
+.awg-strikes-label input { width: 3.5rem; }
+.automod-word-group .awg-words { width: 100%; resize: vertical; font-family: inherit; }
+
+/* Scheduled messages (#5638) */
+.schedule-item { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.4rem 0; border-bottom: 1px solid var(--border-light); }
+.schedule-item-main { flex: 1; min-width: 0; font-size: 0.8rem; }
+.schedule-item-when { font-weight: 600; }
+.schedule-item-chan { color: var(--text-muted); margin-left: 0.3rem; }
+.schedule-item-text { color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: hidden; }
+.schedule-item-actions { display: flex; gap: 0.25rem; flex-shrink: 0; }
+
 /* User preference: no Send button, Enter sends (#5654) */
 [data-hide-send-btn] #send-btn { display: none !important; }
 /* No GIF provider is configured on this server, so the button would only

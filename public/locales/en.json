@@ -478,6 +478,7 @@
       "play": "Search & play music (e.g. /play Cut Your Teeth Kygo)",
       "gif": "Search & send a GIF inline (e.g. /gif thumbs up)",
       "poll": "Open the poll creator",
+      "schedule": "Send this message later, at a time you pick",
       "time": "Insert a time everyone sees in their own timezone"
     },
     "output": {
@@ -2773,6 +2774,21 @@
     "rename_channel": {
       "title": "Rename Channel",
       "prompt": "Rename #{{name}}:\nEnter new name:"
+    },
+    "schedule": {
+      "title": "Send later",
+      "hint": "The message waits on the server and goes out at the time you pick, whether or not you are online. Not available in direct messages.",
+      "message_label": "Message",
+      "when_label": "Send at",
+      "schedule_btn": "Schedule",
+      "pending": "Waiting to send",
+      "none": "Nothing waiting.",
+      "cancel_send": "Cancel",
+      "in_past": "Pick a time at least a minute from now",
+      "not_here": "Send later is not available in direct messages",
+      "scheduled": "Scheduled for {{when}}",
+      "updated": "Updated, sending at {{when}}",
+      "sent": "Your scheduled message went out in #{{channel}}"
     },
     "poll": {
       "title": "Create Poll",

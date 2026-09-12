@@ -1296,6 +1296,127 @@ module.exports = function register(socket, ctx) {
     }, 10000);
   }
 
+  // ── Scheduled messages (#5638) ──────────────────────────
+  // Held on the server, so they go out whether or not the sender is online.
+  // Not for DMs: those are encrypted in the browser, and a message parked
+  // here in plain text would defeat that.
+  const SCHEDULE_MAX_DAYS = 30;
+  const SCHEDULE_MAX_PENDING = 25;
+  function parseSendAt(raw) {
+    const ts = Date.parse(typeof raw === 'string' ? raw : '');
+    if (!Number.isFinite(ts)) return null;
+    if (ts < Date.now() + 15000 || ts > Date.now() + SCHEDULE_MAX_DAYS * 86400000) return null;
+    return new Date(ts).toISOString();
+  }
+  function scheduledList(userId) {
+    return db.prepare(`
+      SELECT s.id, s.content, s.send_at, c.code AS channelCode, c.name AS channelName
+      FROM scheduled_messages s JOIN channels c ON c.id = s.channel_id
+      WHERE s.user_id = ? ORDER BY s.send_at ASC
+    `).all(userId).map(r => ({ id: r.id, content: r.content, sendAt: r.send_at, channelCode: r.channelCode, channelName: r.channelName }));
+  }
+  function scheduleMaxChars() {
+    return parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get()?.value) || 2000;
+  }
+
+  socket.on('schedule-message', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
+    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    const sendAt = parseSendAt(data.sendAt);
+    if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
+    const channel = db.prepare('SELECT id, is_dm, read_only, text_enabled FROM channels WHERE code = ?').get(code);
+    if (!channel) return cb({ error: 'Channel not found' });
+    if (channel.is_dm) return cb({ error: 'Scheduled sends are not available in direct messages' });
+    if (channel.text_enabled === 0) return cb({ error: 'Text messages are disabled in this channel' });
+    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return cb({ error: 'Not a member of this channel' });
+    if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
+    const mute = activeMuteNotice(socket.user.id);
+    if (mute) return cb({ error: mute });
+    const content = sanitizeText(data.content.trim());
+    if (!content) return cb({ error: 'Nothing to send' });
+    // The same checks a live send gets, at the moment it is queued.
+    if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return cb({ error: 'That message was blocked' });
+    const pending = db.prepare('SELECT COUNT(*) AS c FROM scheduled_messages WHERE user_id = ?').get(socket.user.id).c;
+    if (pending >= SCHEDULE_MAX_PENDING) return cb({ error: `You already have ${SCHEDULE_MAX_PENDING} messages waiting to send` });
+    try {
+      const r = db.prepare('INSERT INTO scheduled_messages (user_id, channel_id, content, send_at) VALUES (?, ?, ?, ?)').run(socket.user.id, channel.id, content, sendAt);
+      cb({ success: true, id: r.lastInsertRowid, sendAt, items: scheduledList(socket.user.id) });
+    } catch (err) {
+      console.error('schedule-message error:', err);
+      cb({ error: 'Failed to schedule the message' });
+    }
+  });
+
+  socket.on('get-scheduled-messages', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : (typeof data === 'function' ? data : () => {});
+    try { cb({ items: scheduledList(socket.user.id) }); } catch { cb({ items: [] }); }
+  });
+
+  socket.on('update-scheduled-message', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object' || !isInt(data.id)) return cb({ error: 'Invalid request' });
+    const row = db.prepare('SELECT id, channel_id FROM scheduled_messages WHERE id = ? AND user_id = ?').get(data.id, socket.user.id);
+    if (!row) return cb({ error: 'That scheduled message is gone' });
+    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    const sendAt = parseSendAt(data.sendAt);
+    if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
+    const content = sanitizeText(data.content.trim());
+    if (!content) return cb({ error: 'Nothing to send' });
+    if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id })) return cb({ error: 'That message was blocked' });
+    db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
+    cb({ success: true, items: scheduledList(socket.user.id) });
+  });
+
+  socket.on('cancel-scheduled-message', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object' || !isInt(data.id)) return cb({ error: 'Invalid request' });
+    db.prepare('DELETE FROM scheduled_messages WHERE id = ? AND user_id = ?').run(data.id, socket.user.id);
+    cb({ success: true, items: scheduledList(socket.user.id) });
+  });
+
+  // Every 15 seconds, post whatever has come due. Membership is checked
+  // again at send time, so leaving a channel drops what was queued for it.
+  if (!global.__havenScheduleSweep) {
+    global.__havenScheduleSweep = setInterval(() => {
+      let due = [];
+      try {
+        due = db.prepare(`
+          SELECT s.id, s.user_id, s.channel_id, s.content, c.code, c.name AS channel_name
+          FROM scheduled_messages s JOIN channels c ON c.id = s.channel_id
+          WHERE s.send_at <= ? ORDER BY s.send_at ASC LIMIT 20
+        `).all(new Date().toISOString());
+      } catch (err) { console.error('[schedule-sweep] query error:', err.message); return; }
+      for (const row of due) {
+        try {
+          db.prepare('DELETE FROM scheduled_messages WHERE id = ?').run(row.id);
+          const author = db.prepare('SELECT id, username, display_name, avatar, avatar_shape, border, border_transform, animate_profile FROM users WHERE id = ?').get(row.user_id);
+          const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, row.user_id);
+          if (!author || !member) continue;
+          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, row.content);
+          const message = {
+            id: result.lastInsertRowid, content: row.content, created_at: new Date().toISOString(),
+            username: author.display_name || author.username, user_id: author.id,
+            avatar: author.avatar || null, avatar_shape: author.avatar_shape || 'circle',
+            border: author.border || null, borderTransform: parseBorderTransform(author.border_transform),
+            animateProfile: author.animate_profile || 'trigger',
+            reply_to: null, replyContext: null, reactions: [], edited_at: null, thread: null
+          };
+          io.to(`channel:${row.code}`).emit('new-message', { channelCode: row.code, message });
+          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, row.content);
+          fireWebhookCallbacks(row.channel_id, row.code, message);
+          for (const [, s] of io.sockets.sockets) {
+            if (s.user && s.user.id === author.id) s.emit('scheduled-message-sent', { id: row.id, channelCode: row.code, channelName: row.channel_name });
+          }
+        } catch (err) {
+          console.error('[schedule-sweep] send error:', err.message);
+        }
+      }
+    }, 15000);
+  }
+
   // ── Typing indicator ────────────────────────────────────
   socket.on('typing', (data) => {
     if (!data || typeof data !== 'object') return;

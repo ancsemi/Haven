@@ -260,6 +260,14 @@ _setupUI() {
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
+  // Right-click on Send: send later (#5638). /schedule does the same.
+  document.getElementById('send-btn').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    this._openScheduleModal();
+  });
+  document.getElementById('schedule-cancel')?.addEventListener('click', () => { document.getElementById('schedule-modal').style.display = 'none'; });
+  document.getElementById('schedule-save')?.addEventListener('click', () => this._submitSchedule());
+  document.getElementById('schedule-modal')?.addEventListener('click', (e) => { if (e.target.id === 'schedule-modal') e.target.style.display = 'none'; });
 
   // Join channel
   const joinBtn = document.getElementById('join-channel-btn');

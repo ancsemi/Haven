@@ -4006,6 +4006,28 @@
     </div>
   </div>
 
+  <!-- Scheduled send (#5638): right-click Send, or /schedule -->
+  <div class="modal-overlay" id="schedule-modal" style="display:none">
+    <div class="modal" style="width:480px">
+      <h3>⏰ <span data-i18n="modals.schedule.title">Send later</span></h3>
+      <p class="muted-text" style="font-size:0.78rem" data-i18n="modals.schedule.hint">The message waits on the server and goes out at the time you pick, whether or not you are online. Not available in direct messages.</p>
+      <div class="form-group">
+        <label data-i18n="modals.schedule.message_label">Message</label>
+        <textarea id="schedule-text" class="settings-text-input" rows="4" maxlength="2000"></textarea>
+      </div>
+      <div class="form-group" style="margin-top:8px">
+        <label data-i18n="modals.schedule.when_label">Send at</label>
+        <input type="datetime-local" id="schedule-when" class="settings-text-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="schedule-cancel" data-i18n="modals.common.close">Close</button>
+        <button class="btn-sm btn-accent" id="schedule-save" data-i18n="modals.schedule.schedule_btn">Schedule</button>
+      </div>
+      <small class="settings-group-label" style="margin-top:12px;display:block" data-i18n="modals.schedule.pending">Waiting to send</small>
+      <div id="schedule-list" style="max-height:220px;overflow-y:auto"></div>
+    </div>
+  </div>
+
   <!-- Timestamp Modal (/time with no args) -->
   <div class="modal-overlay" id="time-modal" style="display:none">
     <div class="modal tsm-modal" style="width:400px">

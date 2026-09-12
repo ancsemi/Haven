@@ -155,6 +155,15 @@ async _sendMessage() {
         this._hideSlashDropdown();
         return;
       }
+      if (cmd === 'schedule') {
+        // Send later (#5638): the text after the command is the message.
+        input.value = '';
+        input.style.height = 'auto';
+        this._hideMentionDropdown();
+        this._hideSlashDropdown();
+        this._openScheduleModal?.(arg);
+        return;
+      }
       if (cmd === 'poll') {
         input.value = '';
         input.style.height = 'auto';
