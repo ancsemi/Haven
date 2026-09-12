@@ -22,6 +22,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   opens the composer with the title, tags and Closed box, and for the author
   the text as well, so a topic can be reworded without hunting for the
   message. Reported by @birdcrazy.
+- **Send later (#5638).** Right-click the Send button, or type /schedule,
+  to post a message at a time you pick, up to 30 days out. It waits on the
+  server, so it goes out whether or not you are online, and the same window
+  lists what is waiting with Edit and Cancel. Not available in direct
+  messages, which are encrypted in the browser. Requested by @birdcrazy.
+- **Pictures on poll options (#5648).** Each option in the poll creator has
+  a picture button; the picture shows above the option and a click on it is
+  a vote. Requested by @quakeman00.
+- **Word groups in Auto-Mod (#5614).** Settings, Admin, Auto-Mod has a
+  Words section: groups of words or phrases, each worth a number of strikes.
+  A message carrying one is blocked and the strikes count towards the
+  existing warn, mute and ban ladder, so a serious group can mute on the
+  first offence while a mild one takes several. Whole words only, case
+  does not matter, and staff above the skip level are not checked.
+  Requested by @quakeman00.
 - **Tile shapes for the galleries (#5645).** The forum gallery and the
   Files & Media photos and videos tabs have a Shape picker next to the size
   slider: square, or 4:3, 3:2 and 16:9 in wide and tall. The forum's
