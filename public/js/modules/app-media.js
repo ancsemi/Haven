@@ -4531,12 +4531,15 @@ _revealHiddenImage(ph) {
   ph.replaceWith(img);
 },
 
-_showImageContextMenu(e, src) {
+_showImageContextMenu(e, src, opts = {}) {
   this._hideImageContextMenu();
   const menu = document.createElement('div');
   menu.id = 'image-context-menu';
   menu.className = 'image-context-menu';
+  // opts.viewImage: the <img> to open in the lightbox from a View entry, for
+  // places where a left click does something else, like a forum card (#5646).
   menu.innerHTML = `
+    ${opts.viewImage ? `<button data-action="view">🔍 ${t('media_runtime.image.view')}</button>` : ''}
     <button data-action="save">💾 ${t('media_runtime.image.save')}</button>
     <button data-action="copy">📋 ${t('media_runtime.image.copy')}</button>
     <button data-action="open">🔗 ${t('media_runtime.image.open_new_tab')}</button>
@@ -4732,6 +4735,10 @@ _showImageContextMenu(e, src) {
           }
         }
       })();
+      return;
+    } else if (action === 'view') {
+      this._hideImageContextMenu();
+      this._openLightbox(src, opts.viewImage);
       return;
     } else if (action === 'open') {
       window.open(src, '_blank', 'noopener,noreferrer');

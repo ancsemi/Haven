@@ -252,7 +252,7 @@ _createForumTopicEl(msg) {
         <span class="message-author forum-topic-author">${this._escapeHtml(msg.username || '')}</span>
         <span class="forum-topic-replies" data-thread-parent="${msg.id}">${count ? `💬 ${t('forum.replies', { count })}` : t('thread_runtime.reply_to_topic')}</span>
         <span class="forum-topic-when" title="${when.toLocaleString()}">${this._forumAgo(when)}</span>
-        ${canEdit ? `<button type="button" class="forum-topic-edit" title="${t('forum.edit_topic')}">✎</button>` : ''}
+        ${canEdit ? `<button type="button" class="forum-topic-edit" title="${t('forum.edit_post')}">✎</button>` : ''}
       </div>
     </div>`;
   el.addEventListener('click', (e) => {
@@ -260,8 +260,111 @@ _createForumTopicEl(msg) {
     if (e.target.closest('a')) return;
     this._openThread(msg.id);
   });
-  el.addEventListener('contextmenu', (e) => { if (this._showMessageContextMenu) { e.preventDefault(); this._showMessageContextMenu(e, el); } });
+  // The thumbnail is part of the card: a click opens the topic, and a
+  // right-click on it gets the image menu with a View entry, so the picture
+  // is a step away without the lightbox and the topic opening at once
+  // (#5646). Anywhere else on the card gets the forum's own menu (#5650).
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const img = e.target.closest('img.forum-thumb-img');
+    if (img && this._showImageContextMenu) {
+      this._lightboxContainer = document.getElementById('messages');
+      this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(img) : img.src, { viewImage: img });
+      return;
+    }
+    this._showForumTopicContextMenu(e, msg);
+  });
   return el;
+},
+
+// Right-click on a topic card. The chat menu's Edit, React and Thread do
+// not fit a card: Edit stacked a second copy of the text on it, React opened
+// the picker under the composer, and Thread is what a click already does. A
+// forum gets its own list (#5650).
+_showForumTopicContextMenu(e, msg) {
+  this._hideMessageContextMenu?.();
+  const msgId = msg.id;
+  const isOwn = !!(this.user && msg.user_id === this.user.id);
+  const canEdit = !!(this.user && (isOwn || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages'))));
+  const canPin = !!(this.user?.isAdmin || this._hasPerm('pin_message'));
+  const canArchive = !!(this.user?.isAdmin || this._hasPerm('archive_messages'));
+  const canShareLink = !!this._canShareChannelLink?.(this.currentChannel);
+  const canDelete = !!(isOwn || this.user?.isAdmin || this._canModerate?.() || this._hasPerm('delete_message'));
+  const item = (action, icon, label, cls = '') => `<button class="channel-ctx-item${cls}" data-action="${action}">${icon} <span>${label}</span></button>`;
+  const items = [item('open', '🗂️', t('forum.open_topic'))];
+  if (canEdit) items.push(item('edit', '✏️', t('forum.edit_post')));
+  if (canPin) items.push(msg.pinned ? item('unpin', '📌', t('msg_toolbar.unpin')) : item('pin', '📌', t('msg_toolbar.pin')));
+  if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
+  const more = [];
+  if (canShareLink) more.push(item('copy-link', '🔗', t('msg_toolbar.copy_link')));
+  if (canArchive) more.push(msg.is_archived ? item('unarchive', '🛡️', t('app.messages.unprotect_btn')) : item('archive', '🛡️', t('app.messages.protect_btn')));
+  if (more.length) items.push('<hr class="channel-ctx-sep">', ...more);
+  if (canDelete) items.push('<hr class="channel-ctx-sep">', item('delete', '🗑️', t('msg_toolbar.delete'), ' danger'));
+
+  const menu = document.createElement('div');
+  menu.id = 'message-context-menu';
+  menu.className = 'channel-ctx-menu';
+  menu.innerHTML = items.join('');
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+  if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+
+  menu.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    this._hideMessageContextMenu();
+    if (action === 'open') {
+      this._openThread(msgId);
+    } else if (action === 'edit') {
+      this._forumEditTopicMeta(msgId);
+    } else if (action === 'pin') {
+      if (await this._showConfirmModal(t('confirm.pin_message'), '')) this.socket.emit('pin-message', { messageId: msgId });
+    } else if (action === 'unpin') {
+      this.socket.emit('unpin-message', { messageId: msgId });
+    } else if (action === 'close' || action === 'reopen') {
+      this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], closed: action === 'close' });
+    } else if (action === 'copy-link') {
+      this._copyChannelLink(this.currentChannel, msgId);
+    } else if (action === 'archive') {
+      this.socket.emit('archive-message', { messageId: msgId });
+    } else if (action === 'unarchive') {
+      this.socket.emit('unarchive-message', { messageId: msgId });
+    } else if (action === 'delete') {
+      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
+        this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
+      }
+    }
+  });
+
+  // Same self-closing lifecycle as the chat menu, through the same hook.
+  const closer = (ev) => {
+    if (ev && ev.type !== 'scroll' && menu.contains(ev.target)) return;
+    this._hideMessageContextMenu();
+  };
+  this._msgCtxCloser = closer;
+  setTimeout(() => {
+    document.addEventListener('click', closer, true);
+    document.addEventListener('contextmenu', closer, true);
+    document.getElementById('messages')?.addEventListener('scroll', closer, true);
+  }, 0);
+},
+
+// The body of a topic changed, from the composer or the ordinary edit path:
+// rebuild its card so the title, snippet and thumbnail follow. Returns true
+// when the topic is on screen.
+_forumApplyContentEdit(messageId, content) {
+  const topic = this._forumTopics && this._forumTopics.get(messageId);
+  if (!topic) return false;
+  topic.content = content;
+  topic.edited_at = new Date().toISOString();
+  const el = document.querySelector(`#forum-topics [data-msg-id="${messageId}"]`);
+  if (el) el.replaceWith(this._createForumTopicEl(topic));
+  this._lazyMedia && this._lazyPump && this._lazyPump();
+  return true;
 },
 
 _forumAgo(date) {
@@ -383,15 +486,22 @@ _openForumComposer(existing = null) {
   const code = this.currentChannel;
   const tags = this._forumTagsOf(code);
   const picked = new Set(existing && Array.isArray(existing.tags) ? existing.tags : []);
+  // The author can rewrite the body from here too; it goes through the
+  // ordinary edit path, so it gets the same checks as any message (#5650).
+  const canEditBody = !!(existing && this.user && existing.user_id === this.user.id);
+  const maxChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  const bodyField = !existing
+    ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>`
+    : (canEditBody ? `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" maxlength="${maxChars}">${this._escapeHtml(existing.content || '')}</textarea></label>` : '');
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'forum-post-modal';
   overlay.innerHTML = `
     <div class="modal forum-post-modal">
-      <div class="modal-header"><h3>${existing ? t('forum.edit_topic') : t('forum.new_post')}</h3><button class="modal-close" type="button">&times;</button></div>
+      <div class="modal-header"><h3>${existing ? t('forum.edit_post') : t('forum.new_post')}</h3><button class="modal-close" type="button">&times;</button></div>
       <div class="modal-body">
         <label class="forum-field"><span>${t('forum.title')}</span><input type="text" id="forum-post-title" maxlength="120" placeholder="${t('forum.title_placeholder')}" value="${existing ? this._escapeHtml(existing.title || '') : ''}"></label>
-        ${existing ? '' : `<label class="forum-field"><span>${t('forum.body')}</span><textarea id="forum-post-body" rows="6" placeholder="${t('forum.body_placeholder')}"></textarea></label>`}
+        ${bodyField}
         ${tags.length ? `<div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker">${tags.map(tg => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(tg.name)}</button>`).join('')}</div></div>` : ''}
         ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : `<small class="settings-hint">${t('forum.attach_hint')}</small>`}
       </div>
@@ -414,6 +524,13 @@ _openForumComposer(existing = null) {
     if (existing) {
       const closedBox = overlay.querySelector('#forum-post-closed');
       this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined });
+      const bodyEl = overlay.querySelector('#forum-post-body');
+      if (bodyEl) {
+        const body = bodyEl.value.trim();
+        if (body && body !== String(existing.content || '').trim()) {
+          this.socket.emit('edit-message', { messageId: existing.id, content: body, channelCode: code });
+        }
+      }
       close();
       return;
     }

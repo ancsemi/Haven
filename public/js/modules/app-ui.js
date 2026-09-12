@@ -2112,6 +2112,9 @@ _setupUI() {
 
   // Image click — open lightbox overlay (CSP-safe — no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
+    // A forum card handles its own clicks: the thumbnail opens the topic,
+    // not the lightbox (#5646).
+    if (e.target.closest('.forum-topic')) return;
     // Concealed media (hidden image / unrevealed spoiler) intercepts the click
     // before the lightbox opens.
     if (this._maybeRevealConcealed(e)) return;
@@ -2151,8 +2154,10 @@ _setupUI() {
     }
   }
 
-  // Image right-click — custom context menu for chat thumbnails
+  // Image right-click — custom context menu for chat thumbnails. Forum cards
+  // open their own menus, so both menus no longer stack up there (#5650).
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
+    if (e.target.closest('.forum-topic')) return;
     if (e.target.classList.contains('chat-image')) {
       e.preventDefault();
       this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src);
