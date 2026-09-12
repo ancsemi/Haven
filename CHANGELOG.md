@@ -24,6 +24,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   message. Reported by @birdcrazy.
 - **Hide the Send button (#5654).** Settings, Layout, Message Box has a
   switch for people who only ever press Enter. Requested by @quakeman00.
+- **A default layout for a forum (#5656).** The list, gallery or feed view
+  and the tile size were only ever remembered per browser, so a forum an
+  admin arranged as a gallery opened as a list for everyone else. Anyone
+  who can change the channel's settings has a Set as default button in the
+  forum toolbar; readers who pick their own view afterwards keep it.
+  Reported by @quakeman00.
 
 ### Changed
 - **The GIF button hides when no GIF provider is set up (#5654).** On those
@@ -64,6 +70,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - **Encryption menu under the DM safety notice with a banner up (#5639).**
   The 4.7.0 fix was overridden whenever a server banner was showing.
   Reported by @birdcrazy.
+- **"fenix is now known as fenix".** Saving your profile for a bio or
+  avatar change sent the unchanged name along and announced a rename to the
+  channel. Only an actual change is announced now, old name first.
 - **Show Status Bar was ignored in the Desktop app (#5647).** The bar is on
   by default there, as the window's footer, and the switch now turns it
   off. Reported by @quakeman00 and @birdcrazy.
