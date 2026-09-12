@@ -978,6 +978,32 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // The layout a forum opens in for everyone: list, gallery or feed, plus
+  // the tile size. A reader's own pick, made after this was set, still wins
+  // on their browser (#5656).
+  socket.on('set-forum-layout', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    if (!channel || channel.is_dm) return cb({ error: 'Channel not found' });
+    if (!_canManageSettingsOf(channel.id)) return cb({ error: 'You don\'t have permission to set the forum layout' });
+    const view = ['list', 'gallery', 'feed'].includes(data.view) ? data.view : 'list';
+    const tileN = Number(data.tile);
+    const tile = Number.isFinite(tileN) ? Math.min(28, Math.max(7, Math.round(tileN * 2) / 2)) : 11;
+    const layout = { view, tile, at: Date.now() };
+    try {
+      db.prepare('UPDATE channels SET forum_layout = ? WHERE id = ?').run(JSON.stringify(layout), channel.id);
+      broadcastChannelLists();
+      io.to(`channel:${code}`).emit('forum-layout-updated', { code, layout });
+      cb({ success: true, layout });
+    } catch (err) {
+      console.error('set-forum-layout error:', err);
+      cb({ error: 'Failed to save the forum layout' });
+    }
+  });
+
   socket.on('toggle-channel-permission', (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';

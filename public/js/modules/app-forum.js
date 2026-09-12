@@ -24,14 +24,27 @@ _forumTagsOf(code) {
   try { const a = typeof raw === 'string' ? JSON.parse(raw) : raw; return Array.isArray(a) ? a.filter(t => t && t.name) : []; } catch { return []; }
 },
 
+// The layout an admin set for everyone in this forum, if any (#5656).
+_forumLayoutOf(code) {
+  const ch = this.channels && this.channels.find(c => c.code === (code || this.currentChannel));
+  const raw = ch && ch.forum_layout;
+  if (!raw) return null;
+  try { const l = typeof raw === 'string' ? JSON.parse(raw) : raw; return l && typeof l === 'object' ? l : null; } catch { return null; }
+},
+
 _forumPrefs(code) {
   const key = `haven_forum_prefs:${code || this.currentChannel}`;
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch {}
+  // The channel's default layout applies unless this reader picked their
+  // own after it was set; an admin setting a new default starts everyone
+  // from it again (#5656).
+  const def = this._forumLayoutOf(code) || {};
+  const own = (Number(saved.at) || 0) >= (Number(def.at) || 0);
   return {
     sort: saved.sort === 'created' ? 'created' : 'active',
-    view: this._forumParseView(saved.view),
-    tile: this._forumParseTile(saved.tile),
+    view: this._forumParseView(own && saved.view ? saved.view : def.view),
+    tile: this._forumParseTile(own && saved.tile != null ? saved.tile : def.tile),
     tags: Array.isArray(saved.tags) ? saved.tags : [],
     tagMode: saved.tagMode === 'all' ? 'all' : 'some',
   };
@@ -66,7 +79,7 @@ _forumAvatarHtml(msg) {
   return `<div class="forum-topic-avatar${shape}" style="background:${color}">${initial}</div>`;
 },
 _setForumPrefs(code, patch) {
-  const next = { ...this._forumPrefs(code), ...patch };
+  const next = { ...this._forumPrefs(code), ...patch, at: Date.now() };
   try { localStorage.setItem(`haven_forum_prefs:${code || this.currentChannel}`, JSON.stringify(next)); } catch {}
   return next;
 },
@@ -169,6 +182,9 @@ _forumToolbarEl(code) {
   bar.className = 'forum-toolbar';
   bar.id = 'forum-toolbar';
   const tags = this._forumTagsOf(code);
+  // Whoever can change the channel's settings can make the current view and
+  // tile size the layout everyone opens the forum in (#5656).
+  const canSetDefault = !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
   const chip = (tag) => `<button type="button" class="forum-tag-chip${p.tags.includes(tag.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tag.name)}">${tag.emoji ? this._escapeHtml(tag.emoji) + ' ' : ''}${this._escapeHtml(tag.name)}</button>`;
   bar.innerHTML = `
     <div class="forum-toolbar-row">
@@ -188,6 +204,7 @@ _forumToolbarEl(code) {
           <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
         </label>
         <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
+        ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>` : ''}
       </div>
     </div>
     ${tags.length ? `<div class="forum-toolbar-row forum-tags-row">
@@ -209,6 +226,13 @@ _forumToolbarEl(code) {
   bar.querySelector('#forum-mark-read')?.addEventListener('click', () => {
     this.socket.emit('mark-forum-read', { code });
     this._forumMarkAllRead(code);
+  });
+  bar.querySelector('#forum-set-default')?.addEventListener('click', () => {
+    const cur = this._forumPrefs(code);
+    this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile }, (r) => {
+      if (r?.error) return this._showToast(r.error, 'error');
+      this._showToast(t('forum.default_saved'), 'success');
+    });
   });
   bar.querySelector('#forum-tile-size')?.addEventListener('input', (e) => {
     this._applyForumChrome(document.getElementById('messages'), this._setForumPrefs(code, { tile: this._forumParseTile(e.target.value) }));

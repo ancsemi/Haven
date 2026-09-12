@@ -1146,6 +1146,9 @@ function initDatabase() {
     // decides who is IN the channel; the gate decides who may open it, on top
     // of that, so a channel can ask for one of several roles or all of them.
     { name: 'role_gate',                  sql: "ALTER TABLE channels ADD COLUMN role_gate TEXT DEFAULT NULL" },
+    // Forum layout an admin set for everyone: JSON {"view","tile","at"}.
+    // A reader's own pick, made after "at", still wins on their browser (#5656).
+    { name: 'forum_layout',               sql: "ALTER TABLE channels ADD COLUMN forum_layout TEXT DEFAULT NULL" },
   ];
   for (const col of channelQolCols) {
     try { db.prepare(`SELECT ${col.name} FROM channels LIMIT 0`).get(); } catch { db.exec(col.sql); }

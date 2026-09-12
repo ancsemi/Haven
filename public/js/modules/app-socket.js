@@ -1742,6 +1742,12 @@ _setupSocketListeners() {
     if (ch) ch.forum_tags = JSON.stringify(data.tags || []);
     if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
   });
+  // An admin set the layout everyone opens this forum in (#5656).
+  this.socket.on('forum-layout-updated', (data) => {
+    const ch = this.channels && this.channels.find(c => c.code === data.code);
+    if (ch) ch.forum_layout = data.layout ? JSON.stringify(data.layout) : null;
+    if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
+  });
 
   // ── Polls ─────────────────────────────────────────
   this.socket.on('poll-updated', (data) => {
