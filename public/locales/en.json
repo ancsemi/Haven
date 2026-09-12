@@ -2785,6 +2785,8 @@
       "create_btn": "Create Poll",
       "remove_option": "Remove",
       "option_placeholder": "Option {{number}}",
+      "add_image": "Add a picture to this option",
+      "remove_image": "Remove the picture",
       "option_1": "Option 1",
       "option_2": "Option 2"
     },

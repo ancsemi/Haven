@@ -16923,6 +16923,20 @@ ul.chat-list { list-style-type: disc; }
 .poll-option:hover {
   border-color: var(--accent, #5865f2);
 }
+/* Picture on an option (#5648): sits above the label inside the same button */
+.poll-option.has-image { flex-wrap: wrap; }
+.poll-option-img {
+  position: relative; z-index: 1;
+  flex: 0 0 100%; width: 100%; max-height: 14rem; object-fit: cover;
+  border-radius: 0.3rem; margin-bottom: 0.4rem; display: block;
+}
+.poll-option-imgbtn {
+  flex: 0 0 auto; width: 2rem; height: 2rem; margin-left: 0.3rem;
+  border: 1px solid var(--border-light); border-radius: 0.3rem;
+  background: var(--bg-tertiary) center / cover no-repeat; color: var(--text-secondary);
+  cursor: pointer; font-size: 0.9rem; line-height: 1;
+}
+.poll-option-imgbtn.has-image { color: transparent; border-color: var(--accent); }
 .poll-option.poll-voted {
   border-color: var(--accent, #5865f2);
 }

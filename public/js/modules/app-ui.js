@@ -6397,7 +6397,50 @@ _addPollOptionRow(list, index) {
     row.remove();
     this._updatePollRemoveButtons();
   });
+  // A picture for the option: uploaded on pick, so the poll can be posted
+  // with the URLs the moment Create is clicked (#5648).
+  const imgBtn = document.createElement('button');
+  imgBtn.type = 'button';
+  imgBtn.className = 'poll-option-imgbtn';
+  imgBtn.textContent = '\ud83d\uddbc\ufe0f';
+  imgBtn.title = t('modals.poll.add_image');
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = 'image/*';
+  file.style.display = 'none';
+  imgBtn.addEventListener('click', () => {
+    if (row.dataset.image) {
+      delete row.dataset.image;
+      imgBtn.classList.remove('has-image');
+      imgBtn.style.backgroundImage = '';
+      imgBtn.title = t('modals.poll.add_image');
+      return;
+    }
+    file.click();
+  });
+  file.addEventListener('change', async () => {
+    const f = file.files && file.files[0];
+    file.value = '';
+    if (!f || !f.type.startsWith('image/')) return;
+    const cap = this._uploadCapMb ? this._uploadCapMb() : 25;
+    if (f.size > cap * 1024 * 1024) return this._showToast(t('media.image_too_large', { maxMb: cap }), 'error');
+    try {
+      const fd = new FormData();
+      fd.append('scope', 'channel');
+      fd.append('image', f);
+      const data = await this._uploadWithProgress('/api/upload', fd);
+      if (!data || !data.url) throw new Error('upload');
+      row.dataset.image = data.url;
+      imgBtn.classList.add('has-image');
+      imgBtn.style.backgroundImage = `url("${data.url}")`;
+      imgBtn.title = t('modals.poll.remove_image');
+    } catch (err) {
+      if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
+    }
+  });
   row.appendChild(input);
+  row.appendChild(imgBtn);
+  row.appendChild(file);
   row.appendChild(removeBtn);
   list.appendChild(row);
   this._updatePollRemoveButtons();
@@ -6421,14 +6464,106 @@ _updatePollRemoveButtons() {
 _submitPoll() {
   const question = document.getElementById('poll-question-input').value.trim();
   if (!question) return;
-  const inputs = document.querySelectorAll('#poll-options-list .poll-option-input');
-  const options = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+  const rows = Array.from(document.querySelectorAll('#poll-options-list .poll-option-row'))
+    .map(r => ({ text: r.querySelector('.poll-option-input')?.value.trim() || '', image: r.dataset.image || null }))
+    .filter(r => r.text);
+  const options = rows.map(r => r.text);
   if (options.length < 2) return;
+  const images = rows.map(r => r.image);
   const multiVote = document.getElementById('poll-multi-vote').checked;
   const anonymous = document.getElementById('poll-anonymous').checked;
 
-  this.socket.emit('create-poll', { question, options, multiVote, anonymous });
+  this.socket.emit('create-poll', { question, options, multiVote, anonymous, ...(images.some(Boolean) && { images }) });
   document.getElementById('poll-modal').style.display = 'none';
+},
+
+/* ── Send later (#5638) ─────────────────────────────── */
+_openScheduleModal(prefill = '') {
+  const modal = document.getElementById('schedule-modal');
+  if (!modal) return;
+  const ch = this.channels?.find(c => c.code === this.currentChannel);
+  if (!ch || ch.is_dm) { this._showToast(t('modals.schedule.not_here'), 'error'); return; }
+  const text = document.getElementById('schedule-text');
+  const when = document.getElementById('schedule-when');
+  text.value = prefill || document.getElementById('message-input')?.value || '';
+  text.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setSeconds(0, 0);
+  when.value = this._toLocalInputValue(d);
+  when.min = this._toLocalInputValue(new Date());
+  this._scheduleEditingId = null;
+  document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
+  modal.style.display = 'flex';
+  text.focus();
+  this._loadScheduledList();
+},
+
+_toLocalInputValue(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+},
+
+_loadScheduledList() {
+  this.socket.timeout(8000).emit('get-scheduled-messages', {}, (err, r) => {
+    if (err || !r) return;
+    this._renderScheduledList(r.items || []);
+  });
+},
+
+_renderScheduledList(items) {
+  const list = document.getElementById('schedule-list');
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<p class="muted-text" style="font-size:0.8rem">${t('modals.schedule.none')}</p>`;
+    return;
+  }
+  list.innerHTML = items.map(it => `<div class="schedule-item" data-id="${it.id}">
+    <div class="schedule-item-main">
+      <span class="schedule-item-when">${this._escapeHtml(new Date(it.sendAt).toLocaleString())}</span>
+      <span class="schedule-item-chan">#${this._escapeHtml(it.channelName || '')}</span>
+      <div class="schedule-item-text">${this._escapeHtml(it.content)}</div>
+    </div>
+    <div class="schedule-item-actions">
+      <button type="button" class="btn-sm" data-act="edit">${t('msg_toolbar.edit')}</button>
+      <button type="button" class="btn-sm danger" data-act="cancel">${t('modals.schedule.cancel_send')}</button>
+    </div>
+  </div>`).join('');
+  list.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+    const id = parseInt(b.closest('.schedule-item').dataset.id, 10);
+    const it = items.find(x => x.id === id);
+    if (!it) return;
+    if (b.dataset.act === 'cancel') {
+      this.socket.emit('cancel-scheduled-message', { id }, (r) => this._renderScheduledList((r && r.items) || []));
+      return;
+    }
+    this._scheduleEditingId = id;
+    document.getElementById('schedule-text').value = it.content;
+    document.getElementById('schedule-when').value = this._toLocalInputValue(new Date(it.sendAt));
+    document.getElementById('schedule-save').textContent = t('modals.common.save');
+  }));
+},
+
+_submitSchedule() {
+  const textEl = document.getElementById('schedule-text');
+  const content = textEl.value.trim();
+  const at = new Date(document.getElementById('schedule-when').value);
+  if (!content) { textEl.focus(); return; }
+  if (isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
+  const editing = this._scheduleEditingId;
+  const done = (r) => {
+    if (!r || r.error) { this._showToast((r && r.error) || t('toasts.role_server_no_response'), 'error'); return; }
+    this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: at.toLocaleString() }), 'success');
+    if (!editing) {
+      const input = document.getElementById('message-input');
+      if (input && input.value.trim() === content) { input.value = ''; input.style.height = 'auto'; }
+    }
+    this._scheduleEditingId = null;
+    textEl.value = '';
+    document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
+    this._renderScheduledList(r.items || []);
+  };
+  if (editing) this.socket.emit('update-scheduled-message', { id: editing, content, sendAt: at.toISOString() }, done);
+  else this.socket.emit('schedule-message', { code: this.currentChannel, content, sendAt: at.toISOString() }, done);
 },
 
 /* ── /time timestamp picker modal ───────────────────── */

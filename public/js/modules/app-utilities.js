@@ -2391,8 +2391,12 @@ _renderPollWidget(msgId, poll) {
     const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
     const myVote = voters.some(v => v.user_id === myId);
     const voterNames = poll.anonymous ? '' : voters.map(v => this._escapeHtml(v.username)).join(', ');
-    return `<button class="poll-option${myVote ? ' poll-voted' : ''}" data-msg-id="${msgId}" data-option="${i}" title="${voterNames}">
-      <div class="poll-option-bar" style="width:${pct}%"></div>
+    // An option can carry a picture (#5648). It is part of the button, so a
+    // click on it is a vote, not the lightbox.
+    const img = Array.isArray(poll.images) && typeof poll.images[i] === 'string' && /^\/uploads\//.test(poll.images[i])
+      ? `<img class="poll-option-img" src="${this._escapeHtml(poll.images[i])}" alt="" loading="lazy">` : '';
+    return `<button class="poll-option${myVote ? ' poll-voted' : ''}${img ? ' has-image' : ''}" data-msg-id="${msgId}" data-option="${i}" title="${voterNames}">
+      <div class="poll-option-bar" style="width:${pct}%"></div>${img}
       <span class="poll-option-text">${this._escapeHtml(opt)}</span>
       <span class="poll-option-count">${count} (${pct}%)</span>
     </button>`;

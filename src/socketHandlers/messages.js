@@ -1865,6 +1865,14 @@ module.exports = function register(socket, ctx) {
       if (cleanOptions.some(o => o.length > 100)) return;
       const multiVote = !!data.multiVote;
       const anonymous = !!data.anonymous;
+      // One optional picture per option, as an upload path on this server;
+      // anything else is dropped rather than rendered (#5648).
+      const rawImages = Array.isArray(data.images) ? data.images : [];
+      const images = options.map((_, i) => {
+        const u = typeof rawImages[i] === 'string' ? rawImages[i].trim() : '';
+        return UPLOAD_PATH_EXACT_RE.test(u) ? u : null;
+      }).filter((_, i) => options[i] && typeof options[i] === 'string' && options[i].trim());
+      const hasImages = images.some(Boolean);
 
       if (floodCheck('message')) {
         return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
@@ -1889,7 +1897,7 @@ module.exports = function register(socket, ctx) {
       const safeQuestion = sanitizeText(question);
       if (!safeQuestion) return;
 
-      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous });
+      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }) });
       const content = `📊 Poll: ${safeQuestion}`;
       const result = db.prepare(
         'INSERT INTO messages (channel_id, user_id, content, poll_data) VALUES (?, ?, ?, ?)'
@@ -1911,7 +1919,7 @@ module.exports = function register(socket, ctx) {
         reactions: [],
         edited_at: null,
         thread: null,
-        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, votes: {}, totalVotes: 0 }
+        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), votes: {}, totalVotes: 0 }
       };
       cleanOptions.forEach((_, i) => { message.poll.votes[i] = []; });
 
