@@ -1403,6 +1403,11 @@
         "separate_hint": "Separate — separate scrollbars for channels and DMs",
         "combined": "Combined",
         "combined_hint": "Combined — one scrollbar for both channels and DMs"
+      },
+      "composer": {
+        "title": "Message Box",
+        "hide_send": "Hide the Send button",
+        "hide_send_hint": "Enter still sends. Frees the end of the message box if you never click the button."
       }
     },
     "toggle_style": {

@@ -549,6 +549,18 @@ _setupNotifications() {
     });
   }
 
+  // Hide the Send button for people who only ever press Enter (#5654).
+  const hideSendToggle = document.getElementById('hide-send-btn');
+  if (hideSendToggle) {
+    const applyHideSend = () => document.documentElement.toggleAttribute('data-hide-send-btn', hideSendToggle.checked);
+    hideSendToggle.checked = localStorage.getItem('haven_hide_send_btn') === 'true';
+    hideSendToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_hide_send_btn', String(hideSendToggle.checked));
+      applyHideSend();
+    });
+    applyHideSend();
+  }
+
   // ── Score badge visibility ──
   // "Hide other players' badges" is a per-device client-side filter.
   // "Hide my own badge" is a server-side preference so other clients also

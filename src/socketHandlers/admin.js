@@ -92,6 +92,13 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Whether the GIF picker has a provider behind it, said without the key
+    // itself, so a non-admin client can hide the button when there is none
+    // (#5654). Read from the rows, since the keys are stripped above.
+    const gifKeys = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
+    settings.gif_search_available = String(rows.some(r => gifKeys.includes(r.key) && !!r.value)
+      || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY));
+
     socket.emit('server-settings', settings, envInfo);
   });
 

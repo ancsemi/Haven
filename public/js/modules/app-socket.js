@@ -2393,6 +2393,9 @@ _setupSocketListeners() {
     // Which of these settings also have a value waiting in the environment,
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
+    // No GIF provider on this server: the button would only open an empty
+    // picker, so it goes (#5654).
+    document.documentElement.toggleAttribute('data-no-gif', settings && settings.gif_search_available === 'false');
     this._applyServerSettings();
     this._renderChannelTemplates();
     this._maybeShowSetupWizard();

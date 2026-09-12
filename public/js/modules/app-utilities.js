@@ -1035,8 +1035,13 @@ _formatContent(str) {
   html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
   // Render grouped > blockquotes and preserve attribution lines inside the quote.
+  // A line quotes only when the > is followed by a space, another >, or
+  // nothing at all: ">implying" and ">.<" stay as typed (#5654).
   const blockquotes = [];
-  html = html.replace(/(^|\n)((?:&gt;[^\n]*(?:\n|$))+)/g, (full, pre, block) => {
+  html = html.replace(/(^|\n)((?:&gt;(?:[ \t][^\n]*|&gt;[^\n]*)?(?:\n|$))+)/g, (full, pre, block) => {
+    // A lone ">" with nothing on it is only a blank line inside a quote,
+    // never a quote by itself.
+    if (block.split('\n').every(line => /^&gt;\s*$/.test(line))) return full;
     const lines = block.trim().split('\n').map(line => line.replace(/^&gt;\s?/, ''));
     let authorHtml = '';
     if (lines[0] && /^@[^\s].+ wrote:$/.test(lines[0])) {

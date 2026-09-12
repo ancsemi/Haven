@@ -2157,6 +2157,12 @@ html.rgb-cycling *::after {
 [data-hide-statusbar] .status-bar { display: none !important; }
 [data-hide-statusbar] .status-bar-toggle-tab { display: flex; }
 
+/* User preference: no Send button, Enter sends (#5654) */
+[data-hide-send-btn] #send-btn { display: none !important; }
+/* No GIF provider is configured on this server, so the button would only
+   open an empty picker (#5654) */
+[data-no-gif] #gif-btn { display: none !important; }
+
 /* ── Status bar toggle tab (shows when bar is hidden) ── */
 .status-bar-toggle-tab {
   display: none;
