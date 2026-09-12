@@ -2248,6 +2248,10 @@ _showMessageContextMenu(e, msgEl) {
       ? `<button class="channel-ctx-item" data-action="unarchive">🛡️ <span>${t('app.messages.unprotect_btn')}</span></button>`
       : `<button class="channel-ctx-item" data-action="archive">🛡️ <span>${t('app.messages.protect_btn')}</span></button>`);
   }
+  // A posted role menu's roles, emojis and text can be changed later (#5644).
+  const canEditRoleMenu = !!msgEl.querySelector('.role-menu-widget') &&
+                          !!(this.user?.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('promote_user'));
+  if (canEditRoleMenu) items.push(`<button class="channel-ctx-item" data-action="edit-role-menu">🎭 <span>${t('settings.admin.role_menu.edit')}</span></button>`);
   // Separator right above Delete
   if (canDelete) {
     items.push('<hr class="channel-ctx-sep">');
@@ -2299,6 +2303,8 @@ _showMessageContextMenu(e, msgEl) {
       this.socket.emit('archive-message', { messageId: msgId });
     } else if (action === 'unarchive') {
       this.socket.emit('unarchive-message', { messageId: msgId });
+    } else if (action === 'edit-role-menu') {
+      this._openRoleMenuBuilder?.({ messageId: msgId });
     } else if (action === 'delete') {
       if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });

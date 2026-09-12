@@ -2456,7 +2456,12 @@
         "title_placeholder": "Pick your roles",
         "emoji": "Emoji people react with",
         "pick_one": "Tick at least one role",
-        "posted": "Role menu posted"
+        "posted": "Role menu posted",
+        "edit": "Edit role menu",
+        "content_label": "Message text",
+        "content_hint": "Reword the message as you like. The list below is what people can pick: untick a role to take it off the menu, along with its chip.",
+        "updated": "Role menu updated",
+        "gone": "That role menu is gone"
       }
     },
     "nsfw": {

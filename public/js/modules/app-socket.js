@@ -976,6 +976,16 @@ _setupSocketListeners() {
     this._markSelfRole(data.roleId, !!data.held);
   });
 
+  // A role menu was edited: swap in the new buttons wherever that message is
+  // on screen. The click handling is delegated, so fresh HTML just works (#5644).
+  this.socket.on('role-menu-updated', (data) => {
+    if (!data || !data.messageId) return;
+    document.querySelectorAll(`.role-menu-widget[data-msg-id="${data.messageId}"]`).forEach(w => {
+      const html = this._renderRoleMenu(data.messageId, data.roleMenu);
+      if (html) w.outerHTML = html; else w.remove();
+    });
+  });
+
   this.socket.on('channel-joined', (channel) => {
     if (!this.channels.find(c => c.code === channel.code)) {
       this.channels.push(channel);
