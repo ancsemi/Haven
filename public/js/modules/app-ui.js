@@ -6950,7 +6950,7 @@ _maybeRevealConcealed(e) {
   return false;
 },
 
-async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false) {
+async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false, opts = {}) {
   if (!this.currentChannel && !targetCode) return;
   // The queue stores the per-image spoiler choice on the File object itself.
   if (!spoiler && file && file._spoiler) spoiler = true;
@@ -7018,9 +7018,13 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
 
     // Send the image URL as a message to the channel that was active at upload time.
     // Prepend persona prefix if this image is bundled with a persona text message.
+    const line = personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url;
+    // A forum topic sent with text collects its picture lines and goes out as
+    // one message instead (#5653).
+    if (opts.returnContent) return line;
     this.socket.emit('send-message', {
       code: targetChannel,
-      content: personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url,
+      content: line,
       isImage: true,
       ...(bundled && { bundled: true })
     });

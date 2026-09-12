@@ -19,6 +19,34 @@ async _sendMessage() {
     return;
   }
 
+  // In a forum, a picture and its text sent together are one topic, the way
+  // the New Post hint says, not an image topic next to a text topic. The
+  // pictures upload first so the topic lands whole (#5653).
+  if (hasImages && content && !content.startsWith('/') && this._isForumChannel?.(this.currentChannel)) {
+    const code = this.currentChannel;
+    const files = [...this._imageQueue];
+    this._clearImageQueue();
+    input.value = '';
+    input.style.height = 'auto';
+    input.focus();
+    this._clearReply();
+    this._hideMentionDropdown();
+    this._hideSlashDropdown();
+    const picker = document.getElementById('emoji-picker');
+    if (picker) picker.style.display = 'none';
+    this._uploadsCancelled = false;
+    const lines = [];
+    for (const file of files) {
+      const line = await this._uploadImage(file, code, true, '', false, { returnContent: true });
+      if (line) lines.push(line);
+      if (this._uploadsCancelled) break;
+    }
+    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n') });
+    this.notifications.play('sent');
+    if (hasFiles) this._flushFileQueue?.();
+    return;
+  }
+
   // (#5335) Sticker shortcode — if the message is exactly `:stickername:`
   // (whitespace-trimmed) and that name matches an uploaded sticker, route
   // it through _sendStickerMessage so it goes out as a standalone sticker
