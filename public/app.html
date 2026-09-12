@@ -2685,6 +2685,14 @@
             </label>
             <div id="automod-domain-list" class="whitelist-list" style="margin-top:8px"></div>
 
+            <small class="settings-group-label" style="margin-top:14px;display:block">🔤 <span data-i18n="settings.admin.automod_words_group">Words</span></small>
+            <small class="settings-hint" style="display:block" data-i18n="settings.admin.automod_words_hint">Groups of words that block a message, each worth a number of strikes towards the escalation below. Whole words only, case does not matter, one word or phrase per line. Staff at or above the skip level are not checked.</small>
+            <div id="automod-word-groups" style="margin-top:6px"></div>
+            <div class="settings-btn-grid" style="margin-top:6px">
+              <button class="btn-sm" id="automod-word-add-group" data-i18n="settings.admin.automod_words_add">+ Add group</button>
+              <button class="btn-sm btn-accent" id="automod-word-save" data-i18n="settings.admin.automod_words_save">Save words</button>
+            </div>
+
             <small class="settings-group-label" style="margin-top:14px;display:block">⚙️ <span data-i18n="settings.admin.automod_rules_group">Rules</span></small>
             <label class="select-row" style="margin-top:6px">
               <span data-i18n="settings.admin.automod_min_age">New accounts can't post links for (hours)</span>

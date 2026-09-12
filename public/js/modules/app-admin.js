@@ -6379,6 +6379,18 @@ _initAutomodPanel() {
   ['automod-window-hours', 'automod-warn-at', 'automod-mute-at', 'automod-mute-minutes', 'automod-ban-at']
     .forEach(id => on(id, 'change', pushEscalation));
 
+  // Word groups are one JSON setting, saved on the button (#5614).
+  on('automod-word-add-group', 'click', () => this._addAutomodWordGroupRow({ name: '', words: [], strikes: 1 }));
+  on('automod-word-save', 'click', () => {
+    const groups = [...document.querySelectorAll('#automod-word-groups .automod-word-group')].map(row => ({
+      name: row.querySelector('.awg-name').value.trim().slice(0, 40),
+      strikes: Math.min(100, Math.max(1, parseInt(row.querySelector('.awg-strikes').value, 10) || 1)),
+      words: row.querySelector('.awg-words').value.split(/\r?\n|,/).map(w => w.trim()).filter(Boolean).slice(0, 300)
+    })).filter(g => g.words.length);
+    setKey('automod_words', JSON.stringify(groups));
+    this._showToast(t('settings.admin.automod_words_saved'), 'success');
+  });
+
   on('voice-force-relay', 'change', (e) => setKey('voice_force_relay', e.target.checked ? 'true' : 'false'));
   on('fcm-enabled', 'change', (e) => setKey('fcm_enabled', e.target.checked ? 'true' : 'false'));
   on('media-proxy-enabled', 'change', (e) => {
@@ -6454,6 +6466,31 @@ _renderIdleOnline(data) {
 
 // Grey out the rest of the panel when automod is off, so it is obvious that
 // none of the settings below are doing anything.
+_addAutomodWordGroupRow(g) {
+  const host = document.getElementById('automod-word-groups');
+  if (!host) return;
+  const row = document.createElement('div');
+  row.className = 'automod-word-group';
+  row.innerHTML = `
+    <div class="automod-word-group-head">
+      <input type="text" class="settings-text-input awg-name" maxlength="40" placeholder="${this._escapeHtml(t('settings.admin.automod_words_name'))}" value="${this._escapeHtml(g.name || '')}">
+      <label class="awg-strikes-label"><span>${t('settings.admin.automod_words_strikes')}</span><input type="number" class="awg-strikes" min="1" max="100" step="1" value="${Math.min(100, Math.max(1, parseInt(g.strikes, 10) || 1))}"></label>
+      <button type="button" class="btn-sm danger awg-remove" title="${this._escapeHtml(t('settings.admin.automod_words_remove'))}">&times;</button>
+    </div>
+    <textarea class="settings-text-input awg-words" rows="3" placeholder="${this._escapeHtml(t('settings.admin.automod_words_placeholder'))}">${this._escapeHtml((g.words || []).join('\n'))}</textarea>`;
+  row.querySelector('.awg-remove').addEventListener('click', () => row.remove());
+  host.appendChild(row);
+},
+
+_renderAutomodWordGroups(raw) {
+  const host = document.getElementById('automod-word-groups');
+  if (!host) return;
+  host.innerHTML = '';
+  let groups = [];
+  try { groups = JSON.parse(raw || '[]'); } catch {}
+  (Array.isArray(groups) ? groups : []).forEach(g => this._addAutomodWordGroupRow(g || {}));
+},
+
 _syncAutomodVisibility() {
   const body = document.getElementById('automod-body');
   if (!body) return;
@@ -6493,6 +6530,12 @@ _applyAutomodSettings() {
   num('automod-exempt-level', 'automod_link_exempt_level', '50');
   const logCh = document.getElementById('automod-log-channel');
   if (logCh) logCh.value = s.automod_log_channel || '';
+  // Only redraw the word groups when the stored value changed, so an admin
+  // mid-edit is not wiped by an unrelated setting arriving.
+  if (this._automodWordsSeen !== (s.automod_words || '[]')) {
+    this._automodWordsSeen = s.automod_words || '[]';
+    this._renderAutomodWordGroups(this._automodWordsSeen);
+  }
 
   try {
     const c = JSON.parse(s.automod_escalation || '{}');

@@ -109,7 +109,8 @@ module.exports = function register(socket, ctx) {
     }
 
     const key = typeof data.key === 'string' ? data.key.trim() : '';
-    const value = typeof data.value === 'string' ? data.value.trim() : '';
+    // `let`: the word groups are stored normalised (#5614).
+    let value = typeof data.value === 'string' ? data.value.trim() : '';
     let publishedThemeFiles = null;
     let clearDefaultTheme = false;
 
@@ -143,7 +144,7 @@ module.exports = function register(socket, ctx) {
       'automod_link_min_account_hours', 'automod_scan_edits', 'automod_scan_profile',
       'automod_scan_dms', 'automod_block_ip_urls', 'automod_block_punycode',
       'automod_block_obfuscated', 'automod_preview_allowlist_only', 'automod_escalation',
-      'automod_ban_ip', 'automod_log_channel',
+      'automod_ban_ip', 'automod_log_channel', 'automod_words',
       'voice_force_relay',
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
@@ -170,6 +171,23 @@ module.exports = function register(socket, ctx) {
     if (key === 'automod_link_exempt_level') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100) return; }
     if (key === 'automod_link_min_account_hours') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 8760) return; }
     if (key === 'automod_log_channel' && value && !/^[a-f0-9]{8}$/i.test(value)) return;
+    // Word groups (#5614): stored normalised, so a hand-edited or oversized
+    // payload never reaches the matcher.
+    if (key === 'automod_words') {
+      let groups;
+      try { groups = JSON.parse(value); } catch { return; }
+      if (!Array.isArray(groups) || groups.length > 50) return;
+      const clean = [];
+      for (const g of groups) {
+        if (!g || typeof g !== 'object') return;
+        const name = String(g.name || '').trim().slice(0, 40);
+        const strikes = Math.min(100, Math.max(1, parseInt(g.strikes, 10) || 1));
+        const words = [...new Set((Array.isArray(g.words) ? g.words : [])
+          .map(w => String(w || '').trim().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean))].slice(0, 300);
+        if (words.length) clean.push({ name: name || `group ${clean.length + 1}`, strikes, words });
+      }
+      value = JSON.stringify(clean);
+    }
     if (key === 'automod_escalation') {
       // Thresholds must be coherent or the escalation ladder misbehaves in
       // ways that are very hard to debug from the outside: a ban threshold
