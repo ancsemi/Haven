@@ -1783,6 +1783,17 @@ _setupUI() {
       this._applyMediaTileSize(px);
     });
   }
+  // Tile shape, shared with the forum gallery (#5645).
+  const shapeSel = document.getElementById('media-gallery-shape');
+  if (shapeSel && this._tileShapeOptionsHtml) {
+    let saved = 'square';
+    try { saved = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    shapeSel.innerHTML = this._tileShapeOptionsHtml(saved);
+    shapeSel.addEventListener('change', () => {
+      try { localStorage.setItem('mediaGalleryShape', this._forumParseShape(shapeSel.value)); } catch {}
+      this._applyMediaTileSize();
+    });
+  }
 
   // ── Select / multi-delete bar (#5375) ──
   const selToggle = document.getElementById('media-gallery-select-toggle');
@@ -7112,6 +7123,11 @@ _applyMediaTileSize(px) {
   const size = px != null ? this._mediaTilePx(px) : this._mediaTilePx();
   const modal = document.getElementById('media-gallery-modal');
   if (modal) modal.style.setProperty('--media-tile', `${size}px`);
+  if (modal && this._tileShapes) {
+    let shape = 'square';
+    try { shape = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    modal.style.setProperty('--media-shape', this._tileShapes()[shape] || '1 / 1');
+  }
   const slider = document.getElementById('media-gallery-tile');
   if (slider && slider.value !== String(size)) slider.value = String(size);
   const wrap = document.getElementById('media-gallery-tile-wrap');

@@ -992,7 +992,9 @@ module.exports = function register(socket, ctx) {
     const view = ['list', 'gallery', 'feed'].includes(data.view) ? data.view : 'list';
     const tileN = Number(data.tile);
     const tile = Number.isFinite(tileN) ? Math.min(28, Math.max(7, Math.round(tileN * 2) / 2)) : 11;
-    const layout = { view, tile, at: Date.now() };
+    const shapes = ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
+    const shape = shapes.includes(data.shape) ? data.shape : 'square';
+    const layout = { view, tile, shape, at: Date.now() };
     try {
       db.prepare('UPDATE channels SET forum_layout = ? WHERE id = ?').run(JSON.stringify(layout), channel.id);
       broadcastChannelLists();

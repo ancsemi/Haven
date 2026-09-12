@@ -45,12 +45,23 @@ _forumPrefs(code) {
     sort: saved.sort === 'created' ? 'created' : 'active',
     view: this._forumParseView(own && saved.view ? saved.view : def.view),
     tile: this._forumParseTile(own && saved.tile != null ? saved.tile : def.tile),
+    shape: this._forumParseShape(own && saved.shape ? saved.shape : def.shape),
     tags: Array.isArray(saved.tags) ? saved.tags : [],
     tagMode: saved.tagMode === 'all' ? 'all' : 'some',
   };
 },
 
 _forumParseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; },
+// Tile shapes for the galleries: square, or a landscape/portrait pair at
+// 4:3, 3:2 and 16:9 (#5645). Shared with Files & Media.
+_tileShapes() {
+  return { square: '1 / 1', '4:3': '4 / 3', '3:4': '3 / 4', '3:2': '3 / 2', '2:3': '2 / 3', '16:9': '16 / 9', '9:16': '9 / 16' };
+},
+_forumParseShape(v) { return Object.prototype.hasOwnProperty.call(this._tileShapes(), v) ? v : 'square'; },
+_tileShapeOptionsHtml(current) {
+  const labels = { square: t('forum.shape_square'), '4:3': t('forum.shape_wide', { ratio: '4:3' }), '3:4': t('forum.shape_tall', { ratio: '3:4' }), '3:2': t('forum.shape_wide', { ratio: '3:2' }), '2:3': t('forum.shape_tall', { ratio: '2:3' }), '16:9': t('forum.shape_wide', { ratio: '16:9' }), '9:16': t('forum.shape_tall', { ratio: '9:16' }) };
+  return Object.keys(this._tileShapes()).map(k => `<option value="${k}"${k === current ? ' selected' : ''}>${labels[k]}</option>`).join('');
+},
 _forumParseTile(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 11;
@@ -63,9 +74,9 @@ _applyForumChrome(container, prefs) {
   el.classList.toggle('forum-gallery', p.view === 'gallery');
   el.classList.toggle('forum-feed', p.view === 'feed');
   el.style.setProperty('--forum-tile', `${p.tile}rem`);
+  el.style.setProperty('--forum-shape', this._tileShapes()[p.shape] || '1 / 1');
   el.dataset.forumTile = p.tile <= 9 ? 'small' : p.tile >= 20 ? 'large' : 'medium';
-  const sliderWrap = document.querySelector('#forum-toolbar .forum-tile-size');
-  if (sliderWrap) sliderWrap.hidden = p.view !== 'gallery';
+  document.querySelectorAll('#forum-toolbar .forum-tile-size').forEach(w => { w.hidden = p.view !== 'gallery'; });
   return p;
 },
 _forumAvatarHtml(msg) {
@@ -203,6 +214,10 @@ _forumToolbarEl(code) {
           <span>${t('forum.tile_size')}</span>
           <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
         </label>
+        <label class="forum-tile-size forum-tile-shape"${p.view === 'gallery' ? '' : ' hidden'}>
+          <span>${t('forum.shape')}</span>
+          <select id="forum-shape" class="forum-select forum-select-small" aria-label="${t('forum.shape')}">${this._tileShapeOptionsHtml(p.shape)}</select>
+        </label>
         <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
         ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>` : ''}
       </div>
@@ -229,10 +244,13 @@ _forumToolbarEl(code) {
   });
   bar.querySelector('#forum-set-default')?.addEventListener('click', () => {
     const cur = this._forumPrefs(code);
-    this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile }, (r) => {
+    this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile, shape: cur.shape }, (r) => {
       if (r?.error) return this._showToast(r.error, 'error');
       this._showToast(t('forum.default_saved'), 'success');
     });
+  });
+  bar.querySelector('#forum-shape')?.addEventListener('change', (e) => {
+    this._applyForumChrome(document.getElementById('messages'), this._setForumPrefs(code, { shape: this._forumParseShape(e.target.value) }));
   });
   bar.querySelector('#forum-tile-size')?.addEventListener('input', (e) => {
     this._applyForumChrome(document.getElementById('messages'), this._setForumPrefs(code, { tile: this._forumParseTile(e.target.value) }));

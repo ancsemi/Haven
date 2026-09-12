@@ -22,6 +22,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   opens the composer with the title, tags and Closed box, and for the author
   the text as well, so a topic can be reworded without hunting for the
   message. Reported by @birdcrazy.
+- **Tile shapes for the galleries (#5645).** The forum gallery and the
+  Files & Media photos and videos tabs have a Shape picker next to the size
+  slider: square, or 4:3, 3:2 and 16:9 in wide and tall. The forum's
+  Set as default carries the shape too. Requested by @quakeman00.
 - **Hide the Send button (#5654).** Settings, Layout, Message Box has a
   switch for people who only ever press Enter. Requested by @quakeman00.
 - **A default layout for a forum (#5656).** The list, gallery or feed view
