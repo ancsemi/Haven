@@ -17756,7 +17756,6 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* Banner visible — base: header & topic above banner */
-.main.has-banner .channel-header,
 .main.has-banner .channel-topic-bar,
 /* The banner is absolutely positioned at z-index 0, so it paints over any
    sibling that is not itself positioned. The header and topic bar were lifted
@@ -17766,6 +17765,13 @@ ul.chat-list { list-style-type: disc; }
 .main.has-banner .welcome-screen {
   position: relative;
   z-index: 1;
+}
+/* The header keeps the z-index:2 it has without a banner. This selector
+   outranks .channel-header, so listing it above at 1 put the encryption menu
+   back under the DM safety notice whenever a banner was up (#5639). */
+.main.has-banner .channel-header {
+  position: relative;
+  z-index: 2;
 }
 
 /* ── Full Header (default): opaque backgrounds ─── */
