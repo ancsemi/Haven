@@ -1426,6 +1426,50 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_poll_votes_msg ON poll_votes(message_id);
   `);
 
+  // ── Required roles are membership (#5649) ──
+  // A membership row the gate created is marked, so it can be taken back
+  // when the person stops passing the gate; rows added by hand are not.
+  try {
+    db.prepare("SELECT via_role_gate FROM channel_members LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channel_members ADD COLUMN via_role_gate INTEGER NOT NULL DEFAULT 0");
+  }
+  // One-time: the role-side "grant these channels" lists become Required
+  // roles on those channels (any of the roles that granted it), and the
+  // role-side switch is turned off. Same intent, one place to see it.
+  try {
+    const done = db.prepare("SELECT value FROM server_settings WHERE key = 'role_links_migrated'").get();
+    if (!done) {
+      const rows = db.prepare(`
+        SELECT rca.channel_id, rca.role_id FROM role_channel_access rca
+        JOIN roles r ON r.id = rca.role_id
+        WHERE r.link_channel_access = 1 AND rca.grant_on_promote = 1
+      `).all();
+      const byChannel = new Map();
+      for (const r of rows) {
+        if (!byChannel.has(r.channel_id)) byChannel.set(r.channel_id, new Set());
+        byChannel.get(r.channel_id).add(r.role_id);
+      }
+      let converted = 0;
+      for (const [chId, roleIds] of byChannel) {
+        const ch = db.prepare('SELECT id, role_gate FROM channels WHERE id = ? AND is_dm = 0').get(chId);
+        if (!ch) continue;
+        let gate = null;
+        try { gate = JSON.parse(ch.role_gate || 'null'); } catch { gate = null; }
+        const roles = new Set(Array.isArray(gate && gate.roles) ? gate.roles.map(Number) : []);
+        roleIds.forEach(id => roles.add(id));
+        db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?')
+          .run(JSON.stringify({ mode: gate && gate.mode === 'all' ? 'all' : 'any', roles: [...roles] }), chId);
+        converted++;
+      }
+      db.prepare('UPDATE roles SET link_channel_access = 0').run();
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('role_links_migrated', '1')").run();
+      if (converted) console.log(`[migration] Role channel access lists became Required roles on ${converted} channel(s) (#5649)`);
+    }
+  } catch (err) {
+    console.error('[migration] role channel access → required roles failed:', err.message);
+  }
+
   // ── Scheduled messages (#5638): held on the server until send_at ──
   db.exec(`
     CREATE TABLE IF NOT EXISTS scheduled_messages (

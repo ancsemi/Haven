@@ -4562,17 +4562,7 @@ _renderRoleDetail() {
       <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.auto_assign_hint')}</small>
       <div class="role-channel-access-section">
         <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.channel_access')}</h5>
-        <label class="toggle-row">
-          <span>${t('settings.admin.role_form.link_channel_access')}</span>
-          <input type="checkbox" id="role-edit-link-channel-access" ${role.link_channel_access ? 'checked' : ''}>
-        </label>
-        <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.link_channel_access_hint')}</small>
-        <div id="role-channel-access-panel" style="display:${role.link_channel_access ? 'block' : 'none'};margin-top:8px;">
-          <div class="role-channel-access-list" id="role-channel-access-list">
-            <p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${t('modals.common.loading')}</p>
-          </div>
-          <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn" title="${this._escapeHtml(t('settings.admin.role_form.reapply_access_tooltip'))}">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
-        </div>
+        <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.channel_access_hint')}</small>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>
       <p class="perm-admin-note" id="perm-admin-note">${role.level === 0 ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note')}</p>
@@ -4597,10 +4587,6 @@ _renderRoleDetail() {
 
   // Toggle permissions visibility based on the current role level.
   this._updateRoleLevelPermsVis('role-edit-level', 'role-permissions-list', 'perm-admin-note');
-
-  // Toggle channel access panel visibility
-  const linkCheckbox = document.getElementById('role-edit-link-channel-access');
-  const accessPanel = document.getElementById('role-channel-access-panel');
 
   // Role icon upload/remove
   this._pendingRoleIcon = undefined;
@@ -4643,22 +4629,6 @@ _renderRoleDetail() {
     if (removeBtn) removeBtn.remove();
     this._showToast(t('settings.admin.role_form.icon_removed_role'), 'success');
   });
-  linkCheckbox.addEventListener('change', () => {
-    accessPanel.style.display = linkCheckbox.checked ? 'block' : 'none';
-    if (linkCheckbox.checked) this._loadRoleChannelAccess(role.id);
-  });
-  // Load channel access if already enabled
-  if (role.link_channel_access) this._loadRoleChannelAccess(role.id);
-
-  // Reapply button
-  document.getElementById('rca-reapply-btn').addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_reapply_confirm'))) return;
-    this._roleEmit('reapply-role-access', { roleId: role.id }, (res) => {
-      if (res && res.error) return this._showToast(res.error, 'error');
-      this._showToast(t(res.affected === 1 ? 'settings.admin.roles_reapplied_one' : 'settings.admin.roles_reapplied_other', { count: res.affected }), 'success');
-    });
-  });
-
   // The Save button lives in the modal-actions bar (always visible). Show it
   // when a role is selected, and wire up the click handler.
   const saveBtn = document.getElementById('save-role-btn');
@@ -4668,17 +4638,8 @@ _renderRoleDetail() {
   saveBtn.parentNode.replaceChild(freshSaveBtn, saveBtn);
   freshSaveBtn.addEventListener('click', () => {
     const perms = [...panel.querySelectorAll('.role-perm-checkbox:checked')].map(cb => cb.dataset.perm);
-    const linkEnabled = document.getElementById('role-edit-link-channel-access').checked;
     freshSaveBtn.disabled = true;
     freshSaveBtn.textContent = t('settings.admin.roles_saving');
-
-    // Collect channel access config
-    const accessRows = [...panel.querySelectorAll('.rca-channel-row')];
-    const accessData = accessRows.map(row => ({
-      channelId: parseInt(row.dataset.channelId, 10),
-      grant: row.querySelector('.rca-grant')?.checked || false,
-      revoke: row.querySelector('.rca-revoke')?.checked || false
-    })).filter(a => a.channelId);
 
     this._roleEmit('update-role', {
       roleId: role.id,
@@ -4687,29 +4648,12 @@ _renderRoleDetail() {
       color: document.getElementById('role-edit-color').value,
       icon: this._pendingRoleIcon !== undefined ? this._pendingRoleIcon : role.icon,
       autoAssign: document.getElementById('role-edit-auto-assign').checked,
-      linkChannelAccess: linkEnabled,
+      // Channel access lives on the channel now, as Required roles (#5649).
+      linkChannelAccess: false,
       maxUploadMb: parseInt(document.getElementById('role-edit-upload-mb')?.value, 10) || null,
       permissions: perms
     }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); freshSaveBtn.disabled = false; freshSaveBtn.textContent = t('settings.admin.roles_save'); return; }
-
-      // Save channel access config separately
-      if (linkEnabled && accessData.length) {
-        this._roleEmit('update-role-channel-access', {
-          roleId: role.id,
-          linkEnabled: true,
-          access: accessData
-        }, (accRes) => {
-          if (accRes && accRes.error) this._showToast(accRes.error, 'error');
-        });
-      } else if (!linkEnabled) {
-        // Disable channel access linking
-        this._roleEmit('update-role-channel-access', {
-          roleId: role.id,
-          linkEnabled: false,
-          access: []
-        });
-      }
 
       // Reset button BEFORE re-render (re-render clones the button,
       // so the clone must inherit the clean state, not "Saving...").

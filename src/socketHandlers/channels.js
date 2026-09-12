@@ -1315,14 +1315,22 @@ module.exports = function register(socket, ctx) {
       console.error('Set role gate error:', err);
       return cb({ error: 'Failed to save the role gate' });
     }
+    // Holding the required roles is membership (#5649): everyone who passes
+    // the gate is put in the channel, and rows the gate added come out for
+    // anyone who no longer passes. Removing the gate keeps whoever it let in.
+    if (!stored) {
+      db.prepare('UPDATE channel_members SET via_role_gate = 0 WHERE channel_id = ?').run(channel.id);
+    }
+    let changes = [];
+    try { changes = ctx.syncRoleGateMemberships({ channelId: channel.id }); } catch (err) { console.error('role gate membership sync failed:', err.message); }
+    const joined = new Set(changes.filter(c => c.joined).map(c => c.userId));
     // Anyone who no longer qualifies leaves the room now; broadcastChannelLists
     // rebuilds every list, so their sidebar entry goes with it.
-    if (stored) {
-      const fresh = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id);
-      for (const [, s] of io.sockets.sockets) {
-        if (!s.user || s.user.isAdmin) continue;
-        if (!ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
-      }
+    const fresh = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id);
+    for (const [, s] of io.sockets.sockets) {
+      if (!s.user || s.user.isAdmin) continue;
+      if (joined.has(s.user.id)) s.join(`channel:${channel.code}`);
+      else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
     }
     broadcastChannelLists();
     io.to(`channel:${code}`).emit('channel-role-gate-updated', { code, roleGate: stored ? JSON.parse(stored) : null });

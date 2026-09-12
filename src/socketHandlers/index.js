@@ -94,8 +94,12 @@ function setupSocketHandlers(io, db, opts = {}) {
   const {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
     userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
-    parseRoleGate, roleGateAllows, getUserUploadMb
+    parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   } = createPermissions(db);
+
+  // Required roles are membership (#5649): settle every gated channel once
+  // at start-up, so an update or a migration leaves nobody half in.
+  try { syncRoleGateMemberships(); } catch (err) { console.error('role gate membership sync failed:', err.message); }
 
   // ── Shared state Maps ───────────────────────────────────
   const channelUsers        = new Map(); // code → Map<userId, { id, username, socketId, avatar?, avatar_shape? }>
@@ -2209,7 +2213,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Permissions
       getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
       userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
-      parseRoleGate, roleGateAllows, getUserUploadMb,
+      parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers, emitDmPresence,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,

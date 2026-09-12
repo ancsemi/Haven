@@ -51,6 +51,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   Reported by @quakeman00.
 
 ### Changed
+- **Required roles are membership now (#5649).** Channel access lives in
+  one place, on the channel: right-click it, Channel Functions, Required
+  roles. Anyone who holds the roles (any of them, or all of them) is put in
+  the channel the moment they get them, from an admin or a role menu, and
+  taken out the moment they lose them. People added by hand keep their
+  membership but only see the channel while they hold the roles. The
+  role-side Grant and Revoke channel list, and the Reapply button, are
+  gone: on first start any channels a role used to grant become Required
+  roles on those channels, so nothing that worked stops working. Suggested
+  by @quakeman00.
 - **The GIF button hides when no GIF provider is set up (#5654).** On those
   servers it only ever opened an empty picker. Suggested by @birdcrazy.
 - **A quote needs a space after the > (#5654).** A line like ">implying" or
