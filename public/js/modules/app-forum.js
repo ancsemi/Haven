@@ -540,7 +540,7 @@ _openForumComposer(existing = null) {
   overlay.id = 'forum-post-modal';
   overlay.innerHTML = `
     <div class="modal forum-post-modal">
-      <div class="modal-header"><h3>${existing ? t('forum.edit_post') : t('forum.new_post')}</h3><button class="modal-close" type="button">&times;</button></div>
+      <div class="modal-header forum-modal-header"><h3>${existing ? t('forum.edit_post') : t('forum.new_post')}</h3><button class="modal-close" type="button">&times;</button></div>
       <div class="modal-body">
         <label class="forum-field"><span>${t('forum.title')}</span><input type="text" id="forum-post-title" maxlength="120" placeholder="${t('forum.title_placeholder')}" value="${existing ? this._escapeHtml(existing.title || '') : ''}"></label>
         ${bodyField}

@@ -1690,13 +1690,15 @@
 }
 
 /* Win95 settings modal — full blue title bar like real Win95 */
-[data-theme="win95"] .settings-header {
+[data-theme="win95"] .settings-header,
+[data-theme="win95"] .forum-modal-header {
   background: linear-gradient(90deg, #000080, #1084d0);
   padding: 0.25rem 0.5rem;
   border-bottom: none;
   min-height: 1.5rem;
 }
-[data-theme="win95"] .settings-header h3 {
+[data-theme="win95"] .settings-header h3,
+[data-theme="win95"] .forum-modal-header h3 {
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1705,7 +1707,8 @@
   padding: 0;
   background: none;
 }
-[data-theme="win95"] .settings-close-btn {
+[data-theme="win95"] .settings-close-btn,
+[data-theme="win95"] .modal-close {
   width: 1.125rem; height: 1.125rem;
   background: #bfbfbf;
   border: 2px outset #fff;
@@ -1715,7 +1718,8 @@
   padding: 0;
   line-height: 1;
 }
-[data-theme="win95"] .settings-close-btn:hover { background: #dfdfdf; }
+[data-theme="win95"] .settings-close-btn:hover,
+[data-theme="win95"] .modal-close:hover { background: #dfdfdf; }
 
 /* Win95 admin save bar — beveled gray box with black text */
 [data-theme="win95"] .admin-save-bar {
@@ -10893,6 +10897,13 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-bottom: 1px solid var(--border);
 }
 
+.forum-modal-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
 .settings-tab-bar {
   display: flex;
   gap: 0.25rem;
@@ -10920,8 +10931,10 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-color: var(--accent);
 }
 .settings-close-btn { margin-left: 0; }
+.modal-close { margin-left: auto; }
 
-.settings-header h3 {
+.settings-header h3,
+.forum-modal-header h3 {
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -10929,7 +10942,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   margin: 0;
 }
 
-.settings-close-btn {
+.settings-close-btn,
+.modal-close {
   width: 2rem;
   height: 2rem;
   display: flex;
@@ -10943,7 +10957,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.settings-close-btn:hover {
+.settings-close-btn:hover,
+.modal-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -19622,7 +19637,7 @@ ul.chat-list { list-style-type: disc; }
 
 /* ── Forum channels: topic cards, list or gallery, toolbar ─────────────── */
 .messages.forum-view { display: flex; flex-direction: column; padding: 0.75rem 1rem 1.5rem; }
-.forum-toolbar { position: sticky; top: 0; z-index: 3; background: var(--bg-primary); padding: 0.25rem 0 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+.forum-toolbar { position: sticky; top: 0; z-index: 3; background: var(--bg-primary); padding: 0.25rem 0.25rem 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
 .forum-toolbar-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .forum-toolbar-row + .forum-toolbar-row { margin-top: 0.5rem; }
 .forum-sort-view { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
