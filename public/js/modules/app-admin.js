@@ -2955,7 +2955,7 @@ _showSlashDropdown(query) {
   const q = String(query || '').toLowerCase();
   // Bot commands carry the channel their bot is set up in and are only
   // offered there. Built-in commands have no channel and show everywhere (#5635).
-  const offered = this.slashCommands.filter(c => !c.channelCode || c.channelCode === this.currentChannel);
+  const offered = this.slashCommands.filter(c => !c.channelCodes || c.channelCodes.includes(this.currentChannel));
   const filtered = offered
     .filter(c => String(c.cmd || '').toLowerCase().startsWith(q))
     // For base queries like "rss", show "/rss add" before plain "/rss" so
