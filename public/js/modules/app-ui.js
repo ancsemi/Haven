@@ -275,7 +275,6 @@ _setupUI() {
   document.getElementById('schedule-save')?.addEventListener('click', () => this._submitSchedule());
   document.getElementById('schedule-modal')?.addEventListener('click', (e) => { if (e.target.id === 'schedule-modal') e.target.style.display = 'none'; });
 
-
   const sendLaterText = document.getElementById('schedule-text');
   sendLaterText.addEventListener('keydown', (e) => {
     // Markdown Formatting shortcuts
