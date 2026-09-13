@@ -275,6 +275,21 @@ _setupUI() {
   document.getElementById('schedule-save')?.addEventListener('click', () => this._submitSchedule());
   document.getElementById('schedule-modal')?.addEventListener('click', (e) => { if (e.target.id === 'schedule-modal') e.target.style.display = 'none'; });
 
+
+  const sendLaterText = document.getElementById('schedule-text');
+  sendLaterText.addEventListener('keydown', (e) => {
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
+  sendLaterText.addEventListener('paste', (e) => {
+    // insert a markdown link when a link is pasted over selected text
+    if (this._handleMarkdownLinkPaste(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
+
   // Join channel
   const joinBtn = document.getElementById('join-channel-btn');
   const codeInput = document.getElementById('channel-code-input');
@@ -6508,22 +6523,6 @@ _openScheduleModal(prefill = '') {
   this._scheduleEditingId = null;
   document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
   modal.style.display = 'flex';
-
-  // Markdown Formatting shortcuts
-  text.addEventListener('keydown', (e) => {
-    // Markdown Formatting shortcuts
-    if (this._handleMarkdownShortcuts(text, e)) {
-      e.preventDefault();
-    }
-  });
-
-  // insert a markdown link when a link is pasted over selected text
-  text.addEventListener('paste', (e) => {
-    if (this._handleMarkdownLinkPaste(text, e)) {
-      e.preventDefault();
-    }
-  });
-
   text.focus();
   this._loadScheduledList();
 },
