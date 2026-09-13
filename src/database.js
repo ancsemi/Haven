@@ -1464,6 +1464,11 @@ function initDatabase() {
       }
       db.prepare('UPDATE roles SET link_channel_access = 0').run();
       db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('role_links_migrated', '1')").run();
+      // An existing server gets a one-time notice for admins about the change
+      // in how channel access works. Nothing to explain on a fresh install.
+      // TEMPORARY: remove this flag and the notice modal after the 4.8.x cycle.
+      const existing = db.prepare('SELECT COUNT(*) AS c FROM channels WHERE is_dm = 0').get().c;
+      if (existing) db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('role_gate_notice', '1')").run();
       if (converted) console.log(`[migration] Role channel access lists became Required roles on ${converted} channel(s) (#5649)`);
     }
   } catch (err) {

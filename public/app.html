@@ -4014,6 +4014,19 @@
     </div>
   </div>
 
+  <!-- TEMPORARY (#5649): one-time admin notice that channel access moved to Required roles. Remove after the 4.8.x cycle. -->
+  <div class="modal-overlay" id="role-gate-notice-modal" style="display:none">
+    <div class="modal" style="width:520px">
+      <h3>🔑 <span data-i18n="modals.role_gate_notice.title">Channel access works differently now</span></h3>
+      <p style="font-size:0.85rem;line-height:1.5" data-i18n="modals.role_gate_notice.p1">Roles no longer carry a list of channels to grant or revoke. Instead, each channel says which roles open it: right-click the channel, Channel Functions, Required roles. Anyone who holds those roles is put in the channel the moment they get them and taken out the moment they lose them.</p>
+      <p style="font-size:0.85rem;line-height:1.5" data-i18n="modals.role_gate_notice.p2">Nothing you had set up was lost. Any channel a role used to grant has been converted into Required roles on that channel, so the same people still get in. People you added to a channel by hand keep their place.</p>
+      <p class="muted-text" style="font-size:0.78rem" data-i18n="modals.role_gate_notice.p3">Only admins see this, and only once.</p>
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent" id="role-gate-notice-ok" data-i18n="modals.role_gate_notice.ok">Got it</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scheduled send (#5638): right-click Send, or /schedule -->
   <div class="modal-overlay" id="schedule-modal" style="display:none">
     <div class="modal" style="width:480px">

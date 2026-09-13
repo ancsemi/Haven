@@ -145,6 +145,7 @@ module.exports = function register(socket, ctx) {
       'automod_scan_dms', 'automod_block_ip_urls', 'automod_block_punycode',
       'automod_block_obfuscated', 'automod_preview_allowlist_only', 'automod_escalation',
       'automod_ban_ip', 'automod_log_channel', 'automod_words',
+      'role_gate_notice', // TEMPORARY (#5649): one-time admin notice, remove after the 4.8.x cycle
       'voice_force_relay',
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
@@ -171,6 +172,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'automod_link_exempt_level') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100) return; }
     if (key === 'automod_link_min_account_hours') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 8760) return; }
     if (key === 'automod_log_channel' && value && !/^[a-f0-9]{8}$/i.test(value)) return;
+    if (key === 'role_gate_notice' && !['0', '1'].includes(value)) return;
     // Word groups (#5614): stored normalised, so a hand-edited or oversized
     // payload never reaches the matcher.
     if (key === 'automod_words') {

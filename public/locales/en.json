@@ -2785,6 +2785,13 @@
       "title": "Rename Channel",
       "prompt": "Rename #{{name}}:\nEnter new name:"
     },
+    "role_gate_notice": {
+      "title": "Channel access works differently now",
+      "p1": "Roles no longer carry a list of channels to grant or revoke. Instead, each channel says which roles open it: right-click the channel, Channel Functions, Required roles. Anyone who holds those roles is put in the channel the moment they get them and taken out the moment they lose them.",
+      "p2": "Nothing you had set up was lost. Any channel a role used to grant has been converted into Required roles on that channel, so the same people still get in. People you added to a channel by hand keep their place.",
+      "p3": "Only admins see this, and only once.",
+      "ok": "Got it"
+    },
     "schedule": {
       "title": "Send later",
       "hint": "The message waits on the server and goes out at the time you pick, whether or not you are online. Not available in direct messages.",

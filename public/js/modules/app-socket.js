@@ -2408,6 +2408,20 @@ _setupSocketListeners() {
     // No GIF provider on this server: the button would only open an empty
     // picker, so it goes (#5654).
     document.documentElement.toggleAttribute('data-no-gif', settings && settings.gif_search_available === 'false');
+    // TEMPORARY (#5649): a one-time notice to admins that channel access moved
+    // from roles to the channel's Required roles. Remove after the 4.8.x cycle.
+    if (settings && settings.role_gate_notice === '1' && !this._roleGateNoticeShown &&
+        (this.user?.isAdmin || this._hasPerm?.('manage_roles') || this._hasPerm?.('manage_server'))) {
+      this._roleGateNoticeShown = true;
+      const modal = document.getElementById('role-gate-notice-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('role-gate-notice-ok')?.addEventListener('click', () => {
+          modal.style.display = 'none';
+          this.socket.emit('update-server-setting', { key: 'role_gate_notice', value: '0' });
+        }, { once: true });
+      }
+    }
     this._applyServerSettings();
     this._renderChannelTemplates();
     this._maybeShowSetupWizard();
