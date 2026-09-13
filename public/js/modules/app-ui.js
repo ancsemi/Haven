@@ -6502,6 +6502,22 @@ _openScheduleModal(prefill = '') {
   this._scheduleEditingId = null;
   document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
   modal.style.display = 'flex';
+
+  // Markdown Formatting shortcuts
+  text.addEventListener('keydown', (e) => {
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(text, e)) {
+      e.preventDefault();
+    }
+  });
+
+  // insert a markdown link when a link is pasted over selected text
+  text.addEventListener('paste', (e) => {
+    if (this._handleMarkdownLinkPaste(text, e)) {
+      e.preventDefault();
+    }
+  });
+
   text.focus();
   this._loadScheduledList();
 },
