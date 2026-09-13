@@ -201,9 +201,15 @@ _setupUI() {
       if (e.key === 'Escape') { this._hideFerryDropdown(); return; }
     }
 
+    // Ctrl + Enter opens scheduled send modal
+    // Just Enter sends the message
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      this._sendMessage();
+      if (e.ctrlKey) {
+        this._openScheduleModal();
+      } else {
+        e.preventDefault();
+        this._sendMessage();
+      }
     }
 
     // Up arrow on empty input → edit last own message (toggleable)
