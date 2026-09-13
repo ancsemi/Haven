@@ -105,7 +105,7 @@ test('forum topics carry titles and tags, sort and filter, and channels can be N
     assert.strictEqual(posted[0].title, 'First topic');
     assert.deepStrictEqual(posted[0].tags, ['Art']);
     assert.strictEqual(posted[1].title, undefined, 'no title given');
-    assert.deepStrictEqual(posted[1].tags, ['Question', 'Art'], 'unknown tag dropped');
+    assert.deepStrictEqual(posted[1].tags, ['Question', 'Art', 'Nope'], 'custom tags stay on the topic');
     const h = await history(A, code);
     const byId = Object.fromEntries(h.messages.map((m) => [m.id, m]));
     assert.strictEqual(byId[posted[2].id].title, 'Third topic');
@@ -143,6 +143,52 @@ test('forum topics carry titles and tags, sort and filter, and channels can be N
     assert.deepStrictEqual(d.tags, ['Tip']);
     const h = await history(A, code, { sort: 'created' });
     assert.strictEqual(h.messages.find((m) => m.id === posted[1].id).title, 'Renamed topic');
+  });
+
+  await t.test('a topic keeps a request status and can be moved planned → in progress → complete', async () => {
+    assert.strictEqual(posted[0].request_status, 'planned');
+    const upd = next(A, 'topic-updated', (d) => d && d.messageId === posted[0].id && d.request_status === 'in_progress');
+    A.emit('set-topic-meta', { messageId: posted[0].id, title: posted[0].title, tags: posted[0].tags || [], requestStatus: 'in_progress' });
+    const d = await upd;
+    assert.ok(d, 'topic-updated arrived with in_progress');
+    assert.strictEqual(d.request_status, 'in_progress');
+    const done = next(A, 'topic-updated', (x) => x && x.messageId === posted[0].id && x.request_status === 'complete');
+    A.emit('set-topic-meta', { messageId: posted[0].id, title: posted[0].title, tags: posted[0].tags || [], requestStatus: 'complete' });
+    assert.strictEqual((await done).request_status, 'complete');
+    const h = await history(A, code, { requestStatus: 'complete' });
+    assert.ok(h.messages.some((m) => m.id === posted[0].id), 'complete filter includes the topic');
+    const planned = await history(A, code, { requestStatus: 'planned' });
+    assert.ok(!planned.messages.some((m) => m.id === posted[0].id), 'planned filter drops the completed topic');
+  });
+
+  await t.test('a topic keeps a type, blocked status, and a subtask checklist', async () => {
+    await wait(1100);
+    const p = next(A, 'new-message', (d) => d && d.message && d.message.title === 'Login timeout');
+    A.emit('send-message', {
+      code, content: 'Users sit on the spinner', title: 'Login timeout', tags: ['Question'],
+      requestStatus: 'blocked', topicKind: 'bug', subtasks: ['Reproduce on desktop', 'Check token refresh'],
+    });
+    const created = await p;
+    assert.ok(created, 'bug topic arrived');
+    assert.strictEqual(created.message.topic_kind, 'bug');
+    assert.strictEqual(created.message.request_status, 'blocked');
+    assert.strictEqual(created.message.subtasks.length, 2);
+    assert.strictEqual(created.message.subtasks[0].title, 'Reproduce on desktop');
+    assert.strictEqual(created.message.subtasks[0].done, false);
+    const upd = next(A, 'topic-updated', (d) => d && d.messageId === created.message.id && d.subtasks && d.subtasks[0].done);
+    A.emit('set-topic-meta', {
+      messageId: created.message.id, title: created.message.title, tags: created.message.tags || [],
+      requestStatus: 'blocked', topicKind: 'bug',
+      subtasks: created.message.subtasks.map((s, i) => ({ ...s, done: i === 0 })),
+    });
+    const d = await upd;
+    assert.ok(d.subtasks[0].done, 'first subtask ticked');
+    const bugs = await history(A, code, { topicKind: 'bug' });
+    assert.ok(bugs.messages.some((m) => m.id === created.message.id), 'type filter includes the bug');
+    const features = await history(A, code, { topicKind: 'feature' });
+    assert.ok(!features.messages.some((m) => m.id === created.message.id), 'feature filter drops the bug');
+    const blocked = await history(A, code, { requestStatus: 'blocked' });
+    assert.ok(blocked.messages.some((m) => m.id === created.message.id), 'blocked filter includes the topic');
   });
 
   await t.test('a channel can be flagged NSFW and the flag travels in channels-list', async () => {

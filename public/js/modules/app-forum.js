@@ -48,6 +48,8 @@ _forumPrefs(code) {
     shape: this._forumParseShape(own && saved.shape ? saved.shape : def.shape),
     tags: Array.isArray(saved.tags) ? saved.tags : [],
     tagMode: saved.tagMode === 'all' ? 'all' : 'some',
+    requestStatus: this._forumParseStatus(saved.requestStatus) || '',
+    topicKind: this._forumParseKind(saved.topicKind) || '',
   };
 },
 
@@ -64,7 +66,7 @@ _tileShapeOptionsHtml(current) {
 },
 _forumParseTile(v) {
   const n = Number(v);
-  if (!Number.isFinite(n)) return 11;
+  if (!Number.isFinite(n)) return 13;
   return Math.min(28, Math.max(7, Math.round(n * 2) / 2));
 },
 _applyForumChrome(container, prefs) {
@@ -101,7 +103,7 @@ _getMessagesParams(code, extra = {}) {
   const c = code || this.currentChannel;
   if (!this._isForumChannel(c)) return { code: c, ...extra };
   const p = this._forumPrefs(c);
-  return { code: c, sort: p.sort, tags: p.tags, tagMode: p.tagMode, ...extra };
+  return { code: c, sort: p.sort, tags: p.tags, tagMode: p.tagMode, requestStatus: p.requestStatus || undefined, topicKind: p.topicKind || undefined, ...extra };
 },
 
 _forumReload() {
@@ -123,12 +125,16 @@ _forumTitleOf(msg) {
 },
 
 _forumSnippetOf(msg) {
-  const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^\[file:/.test(l));
+  let text = String(msg.content || '');
+  for (const u of (this._pullImageUrls ? this._pullImageUrls(text) : [])) text = text.split(u).join(' ');
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl?.(l) && !/^\[file:/.test(l));
   const body = msg.title ? lines.join(' ') : lines.slice(1).join(' ');
-  return body.replace(/[*_`>#]/g, '').slice(0, 220);
+  return body.replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').slice(0, 220);
 },
 
 _forumThumbOf(msg) {
+  const found = this._pullImageUrls ? this._pullImageUrls(msg.content) : [];
+  if (found.length) return found[0];
   const content = String(msg.content || '');
   for (const line of content.split(/\s+/)) {
     const l = line.trim();
@@ -138,11 +144,176 @@ _forumThumbOf(msg) {
   return null;
 },
 
+// Thread replies arrive after the list card is gone, and get-thread-messages
+// used to write parentContent as textContent — so a photo topic became a URL.
+_paintForumParentPreview(content) {
+  const previewEl = document.getElementById('thread-parent-preview');
+  if (!previewEl) return;
+  previewEl.innerHTML = this._formatContent ? this._formatContent(String(content || '')) : this._escapeHtml(String(content || ''));
+  this._flushPendingMedia && this._flushPendingMedia();
+  this._lazyMedia && this._lazyPump && this._lazyPump();
+},
+
+_forumTypeCatalog() {
+  return [
+    { id: 'request', group: 'board', status: true, subtasks: true, tags: ['priority', 'mobile', 'desktop', 'api', 'ui'] },
+    { id: 'report', group: 'board', status: true, subtasks: true, tags: ['urgent', 'security', 'repro', 'regression'] },
+    { id: 'bug', group: 'board', status: true, subtasks: true, tags: ['repro', 'regression', 'crash', 'ui', 'mobile'] },
+    { id: 'feature', group: 'board', status: true, subtasks: true, tags: ['ux', 'api', 'mobile', 'desktop'] },
+    { id: 'chore', group: 'board', status: true, subtasks: true, tags: ['cleanup', 'deps', 'perf', 'refactor'] },
+    { id: 'idea', group: 'board', status: true, subtasks: false, tags: ['brainstorm', 'later', 'research'] },
+    { id: 'docs', group: 'board', status: true, subtasks: true, tags: ['howto', 'api', 'changelog'] },
+    { id: 'showcase', group: 'social', status: false, subtasks: false, tags: ['wip', 'finished', 'feedback'] },
+    { id: 'hobby', group: 'social', status: false, subtasks: false, tags: ['photo', 'music', 'game', 'craft'] },
+    { id: 'chat', group: 'social', status: false, subtasks: false, tags: ['off-topic', 'help', 'intro'] },
+    { id: 'discussion', group: 'social', status: false, subtasks: false, tags: ['question', 'opinion', 'news'] },
+    { id: 'announcement', group: 'meta', status: false, subtasks: false, tags: ['update', 'event', 'rules'] },
+  ];
+},
+_forumKinds() { return this._forumTypeCatalog().map((x) => x.id); },
+_forumTypeOf(id) { return this._forumTypeCatalog().find((x) => x.id === id) || this._forumTypeCatalog()[0]; },
+_forumTypeGroups() {
+  return [
+    { id: 'board', kinds: ['request', 'report', 'bug', 'feature', 'chore', 'idea', 'docs'] },
+    { id: 'social', kinds: ['showcase', 'hobby', 'chat', 'discussion'] },
+    { id: 'meta', kinds: ['announcement'] },
+  ];
+},
+_forumStatuses() { return ['planned', 'in_progress', 'blocked', 'review', 'complete']; },
+_forumParseKind(v) { return this._forumKinds().includes(v) ? v : ''; },
+_forumParseStatus(v) { return this._forumStatuses().includes(v) ? v : ''; },
+_forumKindLabel(kind) { return kind ? t(`forum.kind_${kind}`) : t('forum.kind_all'); },
+_forumStatusLabel(status) { return status ? t(`forum.status_${status}`) : t('forum.status_all'); },
+_forumKindGlyph(kind) {
+  return { request: '📋', report: '🚩', feature: '✨', bug: '🐛', chore: '🔧', docs: '📄', idea: '💡', showcase: '🖼️', hobby: '🎯', chat: '💬', discussion: '💭', announcement: '📣' }[kind] || '';
+},
+_forumKindOptions(selected, includeAll) {
+  const groups = this._forumTypeGroups().map((g) => {
+    const opts = g.kinds.map((k) => `<option value="${k}"${selected === k ? ' selected' : ''}>${this._forumKindGlyph(k)} ${this._forumKindLabel(k)}</option>`).join('');
+    return `<optgroup label="${t(`forum.group_${g.id}`)}">${opts}</optgroup>`;
+  }).join('');
+  return (includeAll ? `<option value="">${t('forum.kind_all')}</option>` : '') + groups;
+},
+_forumParseSubtasks(raw) {
+  let arr = raw;
+  if (typeof raw === 'string') { try { arr = JSON.parse(raw); } catch { return []; } }
+  if (!Array.isArray(arr)) return [];
+  return arr.map((item, i) => {
+    if (typeof item === 'string') return { id: `s${i}`, title: item.trim().slice(0, 140), done: false };
+    if (!item || typeof item !== 'object') return null;
+    const title = String(item.title || '').trim().slice(0, 140);
+    if (!title) return null;
+    return { id: String(item.id || `s${i}`).slice(0, 16), title, done: !!item.done };
+  }).filter(Boolean).slice(0, 40);
+},
+
+_paintForumSubtasks(topic) {
+  const preview = document.getElementById('thread-parent-preview');
+  let box = document.getElementById('forum-subtasks');
+  if (!box && preview) {
+    box = document.createElement('div');
+    box.id = 'forum-subtasks';
+    box.className = 'forum-subtasks';
+    preview.after(box);
+  }
+  if (!box) return;
+  if (!this._isForumFeed?.() || !topic) { box.hidden = true; box.innerHTML = ''; return; }
+  const items = this._forumParseSubtasks(topic.subtasks);
+  const canEdit = this.user && (topic.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages')));
+  const done = items.filter((x) => x.done).length;
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="forum-subtasks-hdr">${t('forum.subtasks')}${items.length ? ` · ${t('forum.subtasks_progress', { done, total: items.length })}` : ''}</div>
+    <ul class="forum-subtask-list">${items.map((item) => `
+      <li class="forum-subtask${item.done ? ' done' : ''}">
+        <label><input type="checkbox" data-subtask-id="${this._escapeHtml(item.id)}"${item.done ? ' checked' : ''}${canEdit ? '' : ' disabled'}> <span>${this._escapeHtml(item.title)}</span></label>
+        ${canEdit ? `<button type="button" class="forum-subtask-del" data-subtask-id="${this._escapeHtml(item.id)}" title="${t('forum.subtask_remove')}">✕</button>` : ''}
+      </li>`).join('')}</ul>
+    ${canEdit ? `<form class="forum-subtask-add"><input type="text" maxlength="140" placeholder="${t('forum.subtask_placeholder')}"><button type="submit">${t('forum.subtask_add')}</button></form>` : ''}`;
+  box.querySelectorAll('input[type="checkbox"][data-subtask-id]').forEach((cb) => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const next = this._forumParseSubtasks(topic.subtasks).map((item) => item.id === cb.dataset.subtaskId ? { ...item, done: cb.checked } : item);
+      this._forumSaveSubtasks(topic, next);
+    });
+  });
+  box.querySelectorAll('.forum-subtask-del').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._forumSaveSubtasks(topic, this._forumParseSubtasks(topic.subtasks).filter((item) => item.id !== btn.dataset.subtaskId));
+    });
+  });
+  box.querySelector('.forum-subtask-add')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = box.querySelector('.forum-subtask-add input');
+    const title = input && input.value.trim();
+    if (!title) return;
+    const next = [...this._forumParseSubtasks(topic.subtasks), { id: `n${Date.now().toString(36)}`, title, done: false }];
+    input.value = '';
+    this._forumSaveSubtasks(topic, next);
+  });
+},
+
+_forumSaveSubtasks(topic, subtasks) {
+  topic.subtasks = subtasks;
+  this.socket.emit('set-topic-meta', {
+    messageId: topic.id,
+    title: topic.title || this._forumTitleOf(topic),
+    tags: Array.isArray(topic.tags) ? topic.tags : [],
+    closed: !!topic.closed,
+    requestStatus: topic.request_status || null,
+    topicKind: topic.topic_kind || null,
+    subtasks,
+  });
+  if (this._activeThreadParent === topic.id) this._paintForumSubtasks(topic);
+},
+
+_forumStatusRank(msg) {
+  if (msg.closed || msg.request_status === 'complete') return 5;
+  if (msg.request_status === 'in_progress') return 0;
+  if (msg.request_status === 'blocked') return 1;
+  if (msg.request_status === 'review') return 2;
+  if (msg.request_status === 'planned') return 3;
+  return 4;
+},
+
 _forumSortTopics(list) {
   const p = this._forumPrefs();
   const key = p.sort === 'created' ? (m) => new Date(m.created_at).getTime() || 0 : (m) => this._forumActivityOf(m);
-  // Pinned first, then open topics, then closed ones (#5624), each by the chosen order.
-  return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.closed ? 1 : 0) - (b.closed ? 1 : 0) || key(b) - key(a) || b.id - a.id);
+  // Pinned first, then in progress / planned / open, then complete or closed.
+  return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || this._forumStatusRank(a) - this._forumStatusRank(b) || key(b) - key(a) || b.id - a.id);
+},
+
+_forumHash(title) {
+  let h = 17;
+  for (const c of String(title || '')) h = h * 31 + c.charCodeAt(0);
+  return h >>> 0;
+},
+
+_forumGlyph(msg) {
+  const tags = Array.isArray(msg.tags) ? msg.tags : [];
+  const emojiRe = /[\p{Extended_Pictographic}\p{So}]/u;
+  for (const tag of tags) {
+    const m = String(tag).match(emojiRe);
+    if (m) return m[0];
+  }
+  const title = this._forumTitleOf(msg);
+  const em = title.match(emojiRe);
+  if (em) return em[0];
+  const letter = title.trim().split('').find((c) => /\p{L}|\p{N}/u.test(c));
+  return letter ? letter.toUpperCase() : '⬡';
+},
+
+_forumThumbArt(msg) {
+  const h = this._forumHash(this._forumTitleOf(msg));
+  const hue = h % 360;
+  const light = document.documentElement.classList.contains('light') || (document.documentElement.getAttribute('data-theme') || '').includes('light');
+  const s1 = light ? 35 : 55;
+  const v1 = light ? 92 : 42;
+  const s2 = light ? 25 : 60;
+  const v2 = light ? 98 : 20;
+  const angle = (h % 8) * 45;
+  return `linear-gradient(${angle}deg, hsl(${hue} ${s1}% ${v1}%), hsl(${(hue + 48) % 360} ${s2}% ${v2}%))`;
 },
 
 // ── Rendering ──────────────────────────────────────────────
@@ -157,18 +328,19 @@ _renderForum(messages) {
   container.classList.add('forum-view');
   this._applyForumChrome(container, p);
   container.innerHTML = '';
+  const topics = this._forumSortTopics((messages || []).filter(m => m && !m.thread_id && (m.type || 'user') === 'user'));
+  for (const m of topics) this._forumTopics.set(m.id, m);
   container.appendChild(this._forumToolbarEl(code));
   this._applyForumChrome(container, p);
   const grid = document.createElement('div');
   grid.className = 'forum-topics';
   grid.id = 'forum-topics';
-  const topics = this._forumSortTopics((messages || []).filter(m => m && !m.thread_id && (m.type || 'user') === 'user'));
-  for (const m of topics) { this._forumTopics.set(m.id, m); grid.appendChild(this._createForumTopicEl(m)); }
+  for (const m of topics) grid.appendChild(this._createForumTopicEl(m));
   container.appendChild(grid);
   if (!topics.length) {
     const hint = document.createElement('div');
     hint.className = 'forum-empty-hint';
-    hint.textContent = p.tags.length ? t('forum.no_topics_for_tags') : t('app.messages.forum_empty_hint');
+    hint.textContent = (p.tags.length || p.requestStatus || p.topicKind) ? t('forum.no_topics_for_tags') : t('app.messages.forum_empty_hint');
     container.appendChild(hint);
   }
   const more = document.createElement('button');
@@ -184,6 +356,7 @@ _renderForum(messages) {
   container.scrollTop = 0;
   const jumpBtn = document.getElementById('jump-to-bottom');
   if (jumpBtn) jumpBtn.style.display = 'none';
+  this._flushPendingMedia && this._flushPendingMedia();
   this._lazyMedia && this._lazyPump && this._lazyPump();
 },
 
@@ -192,46 +365,42 @@ _forumToolbarEl(code) {
   const bar = document.createElement('div');
   bar.className = 'forum-toolbar';
   bar.id = 'forum-toolbar';
-  const tags = this._forumTagsOf(code);
+  const kindOpts = this._forumKindOptions(p.topicKind, true);
+  const statusOpts = [`<option value="">${t('forum.status_all')}</option>`, ...this._forumStatuses().map((s) => `<option value="${s}"${p.requestStatus === s ? ' selected' : ''}>${this._forumStatusLabel(s)}</option>`)].join('');
   // Whoever can change the channel's settings can make the current view and
   // tile size the layout everyone opens the forum in (#5656).
   const canSetDefault = !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
-  const chip = (tag) => `<button type="button" class="forum-tag-chip${p.tags.includes(tag.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tag.name)}">${tag.emoji ? this._escapeHtml(tag.emoji) + ' ' : ''}${this._escapeHtml(tag.name)}</button>`;
   bar.innerHTML = `
-    <div class="forum-toolbar-row">
-      <button type="button" class="btn-sm btn-accent forum-new-post" id="forum-new-post">✏️ ${t('forum.new_post')}</button>
-      <div class="forum-sort-view">
-        <select id="forum-sort" class="forum-select" title="${t('forum.sort')}">
-          <option value="active"${p.sort === 'active' ? ' selected' : ''}>${t('forum.sort_active')}</option>
-          <option value="created"${p.sort === 'created' ? ' selected' : ''}>${t('forum.sort_created')}</option>
-        </select>
-        <div class="forum-view-toggle" role="group">
-          <button type="button" class="forum-view-btn${p.view === 'list' ? ' active' : ''}" data-view="list" title="${t('forum.view_list')}">☰</button>
-          <button type="button" class="forum-view-btn${p.view === 'gallery' ? ' active' : ''}" data-view="gallery" title="${t('forum.view_gallery')}">▦</button>
-          <button type="button" class="forum-view-btn${p.view === 'feed' ? ' active' : ''}" data-view="feed" title="${t('forum.view_feed')}">▤</button>
-        </div>
-        <label class="forum-tile-size"${p.view === 'gallery' ? '' : ' hidden'}>
-          <span>${t('forum.tile_size')}</span>
-          <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
-        </label>
-        <label class="forum-tile-size forum-tile-shape"${p.view === 'gallery' ? '' : ' hidden'}>
-          <span>${t('forum.shape')}</span>
-          <select id="forum-shape" class="forum-select forum-select-small" aria-label="${t('forum.shape')}">${this._tileShapeOptionsHtml(p.shape)}</select>
-        </label>
-        <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
-        ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>` : ''}
+    <div class="forum-toolbar-row forum-toolbar-hdr">
+      <div class="forum-view-toggle" role="group">
+        <button type="button" class="forum-view-btn${p.view === 'list' ? ' active' : ''}" data-view="list">${t('forum.view_list')}</button>
+        <button type="button" class="forum-view-btn${p.view === 'gallery' ? ' active' : ''}" data-view="gallery">${t('forum.view_gallery')}</button>
+        <button type="button" class="forum-view-btn${p.view === 'feed' ? ' active' : ''}" data-view="feed">${t('forum.view_feed')}</button>
       </div>
+      <label class="forum-tile-size"${p.view === 'gallery' ? '' : ' hidden'}>
+        <span>${t('forum.tile_size')}</span>
+        <input type="range" id="forum-tile-size" min="7" max="28" step="0.5" value="${p.tile}" aria-label="${t('forum.tile_size')}">
+      </label>
+      <label class="forum-tile-size forum-tile-shape"${p.view === 'gallery' ? '' : ' hidden'}>
+        <span>${t('forum.shape')}</span>
+        <select id="forum-shape" class="forum-select forum-select-small" aria-label="${t('forum.shape')}">${this._tileShapeOptionsHtml(p.shape)}</select>
+      </label>
+      <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
+      ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>` : ''}
     </div>
-    ${tags.length ? `<div class="forum-toolbar-row forum-tags-row">
-      ${tags.map(chip).join('')}
-      <select id="forum-tag-mode" class="forum-select forum-select-small" title="${t('forum.tag_matching')}">
-        <option value="some"${p.tagMode === 'some' ? ' selected' : ''}>${t('forum.match_some')}</option>
-        <option value="all"${p.tagMode === 'all' ? ' selected' : ''}>${t('forum.match_all')}</option>
+    <div class="forum-toolbar-row forum-toolbar-controls">
+      <button type="button" class="btn-sm btn-accent forum-new-post" id="forum-new-post">✏️ ${t('forum.new_post')}</button>
+      <select id="forum-kind" class="forum-select" title="${t('forum.kind')}">${kindOpts}</select>
+      <select id="forum-status" class="forum-select" title="${t('forum.status')}">${statusOpts}</select>
+      <select id="forum-sort" class="forum-select" title="${t('forum.sort')}">
+        <option value="active"${p.sort === 'active' ? ' selected' : ''}>${t('forum.sort_active')}</option>
+        <option value="created"${p.sort === 'created' ? ' selected' : ''}>${t('forum.sort_created')}</option>
       </select>
-      ${p.tags.length ? `<button type="button" class="forum-tag-clear" id="forum-tag-clear">${t('forum.clear_tags')}</button>` : ''}
-    </div>` : ''}`;
+    </div>`;
   bar.querySelector('#forum-new-post').addEventListener('click', () => this._openForumComposer());
   bar.querySelector('#forum-sort').addEventListener('change', (e) => { this._setForumPrefs(code, { sort: e.target.value }); this._forumReload(); });
+  bar.querySelector('#forum-kind').addEventListener('change', (e) => { this._setForumPrefs(code, { topicKind: e.target.value || '' }); this._forumReload(); });
+  bar.querySelector('#forum-status').addEventListener('change', (e) => { this._setForumPrefs(code, { requestStatus: e.target.value || '' }); this._forumReload(); });
   bar.querySelectorAll('.forum-view-btn').forEach(b => b.addEventListener('click', () => {
     const next = this._setForumPrefs(code, { view: this._forumParseView(b.dataset.view) });
     bar.querySelectorAll('.forum-view-btn').forEach(x => x.classList.toggle('active', x === b));
@@ -255,25 +424,20 @@ _forumToolbarEl(code) {
   bar.querySelector('#forum-tile-size')?.addEventListener('input', (e) => {
     this._applyForumChrome(document.getElementById('messages'), this._setForumPrefs(code, { tile: this._forumParseTile(e.target.value) }));
   });
-  bar.querySelectorAll('.forum-tag-chip').forEach(c => c.addEventListener('click', () => {
-    const cur = this._forumPrefs(code).tags;
-    const name = c.dataset.tag;
-    this._setForumPrefs(code, { tags: cur.includes(name) ? cur.filter(x => x !== name) : [...cur, name] });
-    this._forumReload();
-  }));
-  bar.querySelector('#forum-tag-mode')?.addEventListener('change', (e) => { this._setForumPrefs(code, { tagMode: e.target.value }); this._forumReload(); });
-  bar.querySelector('#forum-tag-clear')?.addEventListener('click', () => { this._setForumPrefs(code, { tags: [] }); this._forumReload(); });
   return bar;
 },
 
 _createForumTopicEl(msg) {
   const el = document.createElement('div');
+  const status = this._forumParseStatus(msg.request_status);
+  const kind = this._forumParseKind(msg.topic_kind) || 'feature';
   const unread = !!(msg.thread && msg.thread.unread);
-  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (unread ? ' forum-topic-unread' : '');
+  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (status ? ` forum-topic-${status.replace('_', '-')}` : '') + ` forum-topic-kind-${kind}` + (unread ? ' forum-topic-unread' : '');
   el.dataset.msgId = msg.id;
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
   el.dataset.username = msg.username || '';
+  if (status) el.dataset.requestStatus = status;
   // Protected topics carry the same flag and shield as a message in chat, so
   // the card shows it and the context menu offers Unprotect (#5622).
   if (msg.is_archived) { el.classList.add('archived'); el.dataset.archived = '1'; }
@@ -283,22 +447,33 @@ _createForumTopicEl(msg) {
   const count = msg.thread && msg.thread.count ? msg.thread.count : 0;
   const when = this._forumPrefs().sort === 'created' ? new Date(msg.created_at) : new Date(this._forumActivityOf(msg));
   const canEdit = this.user && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('manage_messages')));
+  const glyph = this._forumKindGlyph(kind) || this._forumGlyph(msg);
+  const art = this._forumThumbArt(msg);
+  const statusLabel = status ? this._forumStatusLabel(status) : '';
+  const kindLabel = this._forumKindLabel(kind);
+  const subs = this._forumParseSubtasks(msg.subtasks);
+  const subDone = subs.filter((x) => x.done).length;
+  const tagLine = tags.map((name) => {
+    const tg = tagsOf.find((x) => x.name === name);
+    return `<span class="forum-tag-hash">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}#${this._escapeHtml(name)}</span>`;
+  }).join('');
   el.innerHTML = `
     ${this._forumAvatarHtml(msg)}
-    ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"><span>⬡</span></div>`}
     <div class="forum-topic-body">
-      <div class="forum-topic-tags">${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
+      <div class="forum-topic-meta-top">${this._escapeHtml(msg.username || '')}  ·  ${this._forumAgo(when)}</div>
+      <div class="forum-topic-tags"><span class="forum-tag forum-tag-kind forum-tag-kind-${kind}">${this._forumKindGlyph(kind)} ${this._escapeHtml(kindLabel)}</span>${statusLabel ? `<span class="forum-tag forum-tag-status forum-tag-status-${status}">${this._escapeHtml(statusLabel)}</span>` : ''}${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tagLine}</div>
       <div class="forum-topic-title">${unread ? `<span class="forum-unread-dot" title="${t('forum.unread')}"></span>` : ''}${this._escapeHtml(this._forumTitleOf(msg))}</div>
       <div class="forum-topic-snippet message-content">${this._escapeHtml(this._forumSnippetOf(msg))}</div>
       <div class="forum-topic-meta">
-        <span class="message-author forum-topic-author">${this._escapeHtml(msg.username || '')}</span>
-        <span class="forum-topic-replies" data-thread-parent="${msg.id}">${count ? `💬 ${t('forum.replies', { count })}` : t('thread_runtime.reply_to_topic')}</span>
-        <span class="forum-topic-when" title="${when.toLocaleString()}">${this._forumAgo(when)}</span>
+        <span class="forum-topic-replies${count ? '' : ' forum-topic-replies-empty'}" data-thread-parent="${msg.id}">${count ? `💬 ${t('forum.replies', { count })}` : t('thread_runtime.reply_to_topic')}</span>
+        ${subs.length ? `<span class="forum-topic-subtasks">${t('forum.subtasks_progress', { done: subDone, total: subs.length })}</span>` : ''}
         ${canEdit ? `<button type="button" class="forum-topic-edit" title="${t('forum.edit_post')}">✎</button>` : ''}
       </div>
-    </div>`;
+    </div>
+    ${thumb ? `<div class="forum-topic-thumb"><img ${this._lazySrcAttr ? this._lazySrcAttr(this._imgSrcAttr ? this._imgSrcAttr(thumb) : `src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty" style="background:${art}"><span>${this._escapeHtml(glyph)}</span></div>`}`;
   el.addEventListener('click', (e) => {
     if (e.target.closest('.forum-topic-edit')) { e.stopPropagation(); this._forumEditTopicMeta(msg.id); return; }
+    if (e.target.closest('.forum-tag-status') && canEdit) { e.stopPropagation(); this._forumCycleStatus(msg.id); return; }
     if (e.target.closest('a')) return;
     this._openThread(msg.id);
   });
@@ -317,6 +492,15 @@ _createForumTopicEl(msg) {
     this._showForumTopicContextMenu(e, msg);
   });
   return el;
+},
+
+_forumCycleStatus(messageId) {
+  const topic = this._forumTopics && this._forumTopics.get(messageId);
+  if (!topic) return;
+  const order = this._forumStatuses();
+  const cur = order.indexOf(topic.request_status);
+  const next = order[(cur + 1) % order.length];
+  this.socket.emit('set-topic-meta', { messageId, title: topic.title || this._forumTitleOf(topic), tags: Array.isArray(topic.tags) ? topic.tags : [], closed: !!topic.closed, requestStatus: next, topicKind: topic.topic_kind || null, subtasks: this._forumParseSubtasks(topic.subtasks) });
 },
 
 // Right-click on a topic card. The chat menu's Edit, React and Thread do
@@ -368,7 +552,15 @@ _showForumTopicContextMenu(e, msg) {
     } else if (action === 'unpin') {
       this.socket.emit('unpin-message', { messageId: msgId });
     } else if (action === 'close' || action === 'reopen') {
-      this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], closed: action === 'close' });
+      this.socket.emit('set-topic-meta', {
+        messageId: msgId,
+        title: msg.title || this._forumTitleOf(msg),
+        tags: Array.isArray(msg.tags) ? msg.tags : [],
+        closed: action === 'close',
+        requestStatus: msg.request_status || null,
+        topicKind: msg.topic_kind || null,
+        subtasks: this._forumParseSubtasks(msg.subtasks),
+      });
     } else if (action === 'copy-link') {
       this._copyChannelLink(this.currentChannel, msgId);
     } else if (action === 'archive') {
@@ -422,12 +614,32 @@ _forumAgo(date) {
 _forumInsertTopic(msg) {
   const grid = document.getElementById('forum-topics');
   if (!grid || !msg || msg.thread_id) return;
+  if (this._forumDraftMeta && this.user && msg.user_id === this.user.id) {
+    const draft = this._forumDraftMeta;
+    this._forumDraftMeta = null;
+    if (!this._forumParseSubtasks(msg.subtasks).length && draft.subtasks && draft.subtasks.length) {
+      msg.subtasks = draft.subtasks;
+      this.socket.emit('set-topic-meta', {
+        messageId: msg.id,
+        title: msg.title || this._forumTitleOf(msg),
+        tags: Array.isArray(msg.tags) && msg.tags.length ? msg.tags : (draft.tags || []),
+        closed: !!msg.closed,
+        requestStatus: msg.request_status || draft.requestStatus || null,
+        topicKind: msg.topic_kind || draft.topicKind || null,
+        subtasks: draft.subtasks,
+      });
+    }
+    if ((!Array.isArray(msg.tags) || !msg.tags.length) && draft.tags && draft.tags.length) msg.tags = draft.tags;
+    if (!msg.topic_kind && draft.topicKind) msg.topic_kind = draft.topicKind;
+  }
   const p = this._forumPrefs();
   if (p.tags.length) {
     const has = Array.isArray(msg.tags) ? msg.tags : [];
     const ok = p.tagMode === 'all' ? p.tags.every(x => has.includes(x)) : p.tags.some(x => has.includes(x));
     if (!ok) return;
   }
+  if (p.requestStatus && msg.request_status !== p.requestStatus) return;
+  if (p.topicKind && (msg.topic_kind || (p.topicKind === 'feature' ? 'feature' : '')) !== p.topicKind) return;
   this._forumTopics && this._forumTopics.set(msg.id, msg);
   grid.querySelector(`[data-msg-id="${msg.id}"]`)?.remove();
   const el = this._createForumTopicEl(msg);
@@ -487,10 +699,16 @@ _forumApplyTopicUpdate(data) {
   topic.title = data.title || null;
   topic.tags = Array.isArray(data.tags) ? data.tags : [];
   const wasClosed = !!topic.closed;
+  const wasStatus = topic.request_status || '';
+  const wasKind = topic.topic_kind || '';
   if (typeof data.closed === 'boolean') topic.closed = data.closed;
+  if ('request_status' in data) topic.request_status = data.request_status || null;
+  if ('topic_kind' in data) topic.topic_kind = data.topic_kind || null;
+  if ('subtasks' in data) topic.subtasks = Array.isArray(data.subtasks) ? data.subtasks : [];
+  if (this._activeThreadParent === topic.id) this._paintForumSubtasks(topic);
   // Closing or reopening moves the card between the open and closed groups,
   // so the list is rebuilt rather than the card swapped in place (#5624).
-  if (!!topic.closed !== wasClosed) { this._forumReload(); return; }
+  if (!!topic.closed !== wasClosed || (topic.request_status || '') !== wasStatus || (topic.topic_kind || '') !== wasKind) { this._forumReload(); return; }
   const el = document.querySelector(`#forum-topics [data-msg-id="${data.messageId}"]`);
   if (el) el.replaceWith(this._createForumTopicEl(topic));
 },
@@ -526,8 +744,12 @@ _forumAppendOlder(messages) {
 
 _openForumComposer(existing = null) {
   const code = this.currentChannel;
-  const tags = this._forumTagsOf(code);
+  const channelTags = this._forumTagsOf(code);
   const picked = new Set(existing && Array.isArray(existing.tags) ? existing.tags : []);
+  let status = this._forumParseStatus(existing && existing.request_status) || 'planned';
+  let kind = this._forumParseKind(existing && existing.topic_kind) || 'request';
+  const files = [];
+  const remote = [];
   // The author can rewrite the body from here too; it goes through the
   // ordinary edit path, so it gets the same checks as any message (#5650).
   const canEditBody = !!(existing && this.user && existing.user_id === this.user.id);
@@ -538,34 +760,166 @@ _openForumComposer(existing = null) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'forum-post-modal';
+  const existingSubs = existing ? this._forumParseSubtasks(existing.subtasks).map((x) => x.title).join('\n') : '';
   overlay.innerHTML = `
     <div class="modal forum-post-modal">
-      <div class="modal-header"><h3>${existing ? t('forum.edit_post') : t('forum.new_post')}</h3><button class="modal-close" type="button">&times;</button></div>
+      <div class="modal-controls"><button type="button" class="modal-expand-btn" id="forum-post-close" title="${t('modals.common.close')}">✕</button></div>
+      <h3>${existing ? t('forum.edit_post') : t('forum.new_post')}</h3>
       <div class="modal-body">
+        <label class="forum-field"><span>${t('forum.kind')}</span><select id="forum-post-kind" class="forum-select forum-select-type">${this._forumKindOptions(kind, false)}</select></label>
         <label class="forum-field"><span>${t('forum.title')}</span><input type="text" id="forum-post-title" maxlength="120" placeholder="${t('forum.title_placeholder')}" value="${existing ? this._escapeHtml(existing.title || '') : ''}"></label>
         ${bodyField}
-        ${tags.length ? `<div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker">${tags.map(tg => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(tg.name)}</button>`).join('')}</div></div>` : ''}
-        ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : `<small class="settings-hint">${t('forum.attach_hint')}</small>`}
+        <label class="forum-field forum-status-field"><span>${t('forum.status')}</span><select id="forum-post-status" class="forum-select">${this._forumStatuses().map((s) => `<option value="${s}"${status === s ? ' selected' : ''}>${this._forumStatusLabel(s)}</option>`).join('')}</select></label>
+        <div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker" id="forum-post-tags"></div>
+          <div class="forum-tag-custom"><input type="text" id="forum-post-tag-custom" maxlength="30" placeholder="${t('forum.tag_custom_placeholder')}"><button type="button" id="forum-post-tag-add">${t('forum.tag_custom_add')}</button></div>
+        </div>
+        <label class="forum-field forum-subtasks-field"><span>${t('forum.subtasks')}</span><textarea id="forum-post-subtasks" rows="4" placeholder="${t('forum.subtasks_placeholder')}">${this._escapeHtml(existingSubs)}</textarea></label>
+        ${existing ? '' : `<div class="forum-field forum-attach-field">
+          <span>${t('forum.attach')}</span>
+          <div class="forum-attach-drop" id="forum-attach-drop">
+            <input type="file" id="forum-attach-input" accept="image/jpeg,image/png,image/gif,image/webp,image/*" multiple hidden>
+            <button type="button" class="btn-sm" id="forum-attach-btn">${t('forum.attach_images')}</button>
+            <button type="button" class="btn-sm" id="forum-attach-gif">${t('forum.attach_gif')}</button>
+            <span class="forum-attach-hint">${t('forum.attach_drop')}</span>
+          </div>
+          <div class="forum-attach-thumbs" id="forum-attach-thumbs"></div>
+        </div>`}
+        ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : ''}
       </div>
       <div class="modal-footer"><button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
     </div>`;
+  const modal = overlay.querySelector('.modal');
+  modal.dataset.modalControlsInjected = '1';
   document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.modal-close').addEventListener('click', close);
+  const close = () => {
+    this._forumAttachGif = null;
+    overlay.remove();
+  };
+  overlay.querySelector('#forum-post-close').addEventListener('click', close);
   overlay.querySelector('#forum-post-cancel').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelectorAll('.forum-tag-chip').forEach(c => c.addEventListener('click', () => {
-    const name = c.dataset.tag;
-    if (picked.has(name)) picked.delete(name); else if (picked.size < 5) picked.add(name);
-    c.classList.toggle('active', picked.has(name));
-  }));
+
+  const paintTags = () => {
+    const spec = this._forumTypeOf(kind);
+    const names = [];
+    const seen = new Set();
+    const add = (name, emoji) => {
+      if (!name || seen.has(name.toLowerCase())) return;
+      seen.add(name.toLowerCase());
+      names.push({ name, emoji: emoji || '' });
+    };
+    for (const n of spec.tags) add(n);
+    for (const tg of channelTags) add(tg.name, tg.emoji);
+    for (const n of picked) add(n);
+    overlay.querySelector('#forum-post-tags').innerHTML = names.map((tg) => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}#${this._escapeHtml(tg.name)}</button>`).join('');
+    overlay.querySelectorAll('#forum-post-tags .forum-tag-chip').forEach((c) => c.addEventListener('click', () => {
+      const name = c.dataset.tag;
+      if (picked.has(name)) picked.delete(name);
+      else if (picked.size < 8) picked.add(name);
+      paintTags();
+    }));
+  };
+  const applyType = () => {
+    const spec = this._forumTypeOf(kind);
+    modal.dataset.forumKind = spec.id;
+    modal.dataset.forumGroup = spec.group;
+    overlay.querySelector('.forum-status-field').hidden = !spec.status;
+    overlay.querySelector('.forum-subtasks-field').hidden = !spec.subtasks;
+    paintTags();
+  };
+  const addCustomTag = () => {
+    const input = overlay.querySelector('#forum-post-tag-custom');
+    const name = input.value.trim().replace(/\s+/g, ' ').slice(0, 30);
+    if (!name) return;
+    if (picked.size < 8) picked.add(name);
+    input.value = '';
+    paintTags();
+  };
+  overlay.querySelector('#forum-post-kind').addEventListener('change', (e) => { kind = e.target.value; applyType(); });
+  overlay.querySelector('#forum-post-status').addEventListener('change', (e) => { status = e.target.value; });
+  overlay.querySelector('#forum-post-tag-add').addEventListener('click', addCustomTag);
+  overlay.querySelector('#forum-post-tag-custom').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } });
+  applyType();
+
+  const thumbs = overlay.querySelector('#forum-attach-thumbs');
+  const paintAttach = () => {
+    if (!thumbs) return;
+    thumbs.innerHTML = '';
+    files.forEach((file, i) => {
+      const el = document.createElement('div');
+      el.className = 'forum-attach-thumb';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.alt = file.name;
+      img.onload = () => URL.revokeObjectURL(img.src);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '×';
+      btn.addEventListener('click', () => { files.splice(i, 1); paintAttach(); });
+      el.append(img, btn);
+      thumbs.appendChild(el);
+    });
+    remote.forEach((url, i) => {
+      const el = document.createElement('div');
+      el.className = 'forum-attach-thumb';
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'gif';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '×';
+      btn.addEventListener('click', () => { remote.splice(i, 1); paintAttach(); });
+      el.append(img, btn);
+      thumbs.appendChild(el);
+    });
+  };
+  const takeFiles = (list) => {
+    for (const file of list || []) {
+      if (!file || !/^image\//.test(file.type || '')) continue;
+      if (files.length + remote.length >= 8) break;
+      files.push(file);
+    }
+    paintAttach();
+  };
+  overlay.querySelector('#forum-attach-btn')?.addEventListener('click', () => overlay.querySelector('#forum-attach-input').click());
+  overlay.querySelector('#forum-attach-input')?.addEventListener('change', (e) => { takeFiles(e.target.files); e.target.value = ''; });
+  const drop = overlay.querySelector('#forum-attach-drop');
+  if (drop) {
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); takeFiles(e.dataTransfer && e.dataTransfer.files); });
+  }
+  overlay.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.files;
+    if (items && items.length) takeFiles(items);
+  });
+  this._forumAttachGif = (url) => {
+    if (!url || remote.length + files.length >= 8) return;
+    remote.push(url);
+    paintAttach();
+  };
+  overlay.querySelector('#forum-attach-gif')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const gifBtn = document.getElementById('gif-btn');
+    if (gifBtn) gifBtn.click();
+    else this._showToast?.(t('forum.gif_unavailable'), 'error');
+  });
+
   const titleEl = overlay.querySelector('#forum-post-title');
   titleEl.focus();
-  overlay.querySelector('#forum-post-go').addEventListener('click', () => {
+  overlay.querySelector('#forum-post-go').addEventListener('click', async () => {
     const title = titleEl.value.trim();
+    const spec = this._forumTypeOf(kind);
+    const subtasks = spec.subtasks
+      ? (overlay.querySelector('#forum-post-subtasks')?.value || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).map((titleLine) => ({ title: titleLine, done: false }))
+      : [];
+    const go = overlay.querySelector('#forum-post-go');
     if (existing) {
       const closedBox = overlay.querySelector('#forum-post-closed');
-      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined });
+      const kept = this._forumParseSubtasks(existing.subtasks);
+      const byTitle = new Map(kept.map((x) => [x.title, x]));
+      const merged = spec.subtasks ? subtasks.map((item) => byTitle.get(item.title) || item) : kept;
+      this.socket.emit('set-topic-meta', { messageId: existing.id, title, tags: [...picked], closed: closedBox ? closedBox.checked : undefined, requestStatus: spec.status ? status : null, topicKind: kind, subtasks: merged });
       const bodyEl = overlay.querySelector('#forum-post-body');
       if (bodyEl) {
         const body = bodyEl.value.trim();
@@ -576,9 +930,30 @@ _openForumComposer(existing = null) {
       close();
       return;
     }
-    const body = overlay.querySelector('#forum-post-body').value.trim();
-    if (!title && !body) { titleEl.focus(); return; }
-    this.socket.emit('send-message', { code, content: body || title, title: title || undefined, tags: [...picked] });
+    let body = overlay.querySelector('#forum-post-body')?.value.trim() || '';
+    if (!title && !body && !files.length && !remote.length) { titleEl.focus(); return; }
+    go.disabled = true;
+    const uploaded = [];
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        formData.append('scope', 'channel');
+        formData.append('file', file);
+        const data = await this._uploadWithProgress('/api/upload-file', formData);
+        if (data && data.url) uploaded.push(data.url);
+        else this._showToast?.(data?.error || t('media.upload_failed'), 'error');
+      } catch (err) {
+        this._showToast?.(err.message || t('media.upload_failed'), 'error');
+      }
+    }
+    const extras = [...uploaded, ...remote];
+    if (extras.length) body = [body, ...extras].filter(Boolean).join('\n');
+    const subtaskPayload = subtasks;
+    this._forumDraftMeta = { subtasks: subtaskPayload, tags: [...picked], topicKind: kind, requestStatus: spec.status ? status : null };
+    this.socket.emit('send-message', {
+      code, content: body || title, title: title || undefined, tags: [...picked],
+      requestStatus: spec.status ? status : null, topicKind: kind, subtasks: subtaskPayload,
+    });
     this.notifications && this.notifications.play && this.notifications.play('sent');
     close();
   });

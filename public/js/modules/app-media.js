@@ -1,4 +1,4 @@
-﻿export default {
+export default {
 
 // How many files one message may carry, images and other files together. An
 // admin setting since #5561 (Uploads & Limits); the fixed five it replaces was
@@ -835,7 +835,7 @@ _animAttr(mode) {
 
 // Only these formats can carry animation; skip the rest (e.g. jpeg) entirely.
 _animCanAnimate(url) {
-  return /\.(gif|apng|png|webp)(\?|#|$)/i.test(url || '');
+  return /\.(gif|apng)(\?|#|$)/i.test(url || '');
 },
 
 // One frozen-frame data URL per unique image URL, deduped across every render.
@@ -848,13 +848,23 @@ _frozenFrame(url) {
     const im = new Image();
     im.decoding = 'async';
     im.onload = () => {
-      try {
-        const c = document.createElement('canvas');
-        c.width = im.naturalWidth || 1;
-        c.height = im.naturalHeight || 1;
-        c.getContext('2d').drawImage(im, 0, 0);
-        resolve(c.toDataURL('image/png'));
-      } catch { resolve(null); }
+      const paint = () => {
+        try {
+          if (!im.naturalWidth || !im.naturalHeight) { resolve(null); return; }
+          const c = document.createElement('canvas');
+          c.width = im.naturalWidth;
+          c.height = im.naturalHeight;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(im, 0, 0);
+          const sample = ctx.getImageData(0, 0, Math.min(c.width, 8), Math.min(c.height, 8)).data;
+          let painted = 0;
+          for (let i = 3; i < sample.length; i += 4) painted += sample[i];
+          if (!painted) { resolve(null); return; }
+          resolve(c.toDataURL('image/png'));
+        } catch { resolve(null); }
+      };
+      if (typeof im.decode === 'function') im.decode().then(paint).catch(() => resolve(null));
+      else paint();
     };
     im.onerror = () => resolve(null);
     im.src = url;
@@ -4531,6 +4541,119 @@ _revealHiddenImage(ph) {
   ph.replaceWith(img);
 },
 
+_suggestedImageFilename(src, blob) {
+  let name = '';
+  try {
+    const path = new URL(src, window.location.origin).pathname;
+    name = decodeURIComponent(path.split('/').pop() || '');
+  } catch {}
+  name = String(name || '').replace(/[<>:"|?*\\]/g, '');
+  if (!name || name === 'media-proxy' || name === 'proxy' || name.length > 80 || !/\.[a-z0-9]{2,5}$/i.test(name)) {
+    const ext = ((blob?.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
+    name = `haven-image.${ext}`;
+  }
+  return name;
+},
+
+async _blobForContextImage(src) {
+  if (this._ctxImageBlob && this._ctxImageBlobSrc === src) {
+    try {
+      const warmed = await this._ctxImageBlob;
+      if (warmed) return warmed;
+    } catch { /* fall through */ }
+  }
+  try {
+    const resp = await fetch(src, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('fetch ' + resp.status);
+    return await resp.blob();
+  } catch (fetchErr) {
+    const candidates = [];
+    const lb = document.getElementById('lightbox-img');
+    if (lb?.src) candidates.push(lb);
+    document.querySelectorAll('img.chat-image').forEach(img => {
+      if (img.src === src || this._normalizeImgSrc?.(img.getAttribute('src')) === this._normalizeImgSrc?.(src)) {
+        candidates.push(img);
+      }
+    });
+    for (const img of candidates) {
+      try {
+        if (!img.naturalWidth) continue;
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        const blob = await new Promise((res, rej) =>
+          canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob null')), 'image/png'));
+        if (blob) return blob;
+      } catch { /* tainted or detached */ }
+    }
+    throw fetchErr;
+  }
+},
+
+async _saveContextImage(src) {
+  try {
+    const blob = await this._blobForContextImage(src);
+    const filename = this._suggestedImageFilename(src, blob);
+    if (typeof window.havenDesktop?.saveImage === 'function') {
+      const buf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const chunk = 0x8000;
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      const res = await window.havenDesktop.saveImage({ bytes: btoa(binary), filename });
+      if (res?.cancelled) {
+        this._showToast(t('media_runtime.image.save_cancelled'), 'info');
+        return;
+      }
+      if (res?.ok) {
+        this._showToast(
+          res.path
+            ? t('media_runtime.image.saved_to', { path: res.path })
+            : t('media_runtime.image.saved'),
+          'success'
+        );
+        return;
+      }
+      throw new Error(res?.reason || 'save failed');
+    }
+    if (typeof window.showSaveFilePicker === 'function') {
+      try {
+        const ext = (filename.split('.').pop() || 'png').toLowerCase();
+        const mime = blob.type || 'image/png';
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'Image', accept: { [mime]: ['.' + ext] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        this._showToast(t('media_runtime.image.saved'), 'success');
+        return;
+      } catch (pickerErr) {
+        if (pickerErr && pickerErr.name === 'AbortError') {
+          this._showToast(t('media_runtime.image.save_cancelled'), 'info');
+          return;
+        }
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    this._showToast(t('media_runtime.image.saved'), 'success');
+  } catch (err) {
+    this._showToast(t('media_runtime.image.save_failed', { error: err.message || String(err) }), 'error');
+  }
+},
+
 _showImageContextMenu(e, src, opts = {}) {
   this._hideImageContextMenu();
   const menu = document.createElement('div');
@@ -4576,13 +4699,8 @@ _showImageContextMenu(e, src, opts = {}) {
   menu.addEventListener('click', async (ev) => {
     const action = ev.target.dataset.action;
     if (action === 'save') {
-      const a = document.createElement('a');
-      a.href = src;
-      a.download = src.split('/').pop().split('?')[0] || 'image';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      this._hideImageContextMenu();
+      this._saveContextImage(src);
     } else if (action === 'copy') {
       // Hide the menu immediately so it doesn't sit on screen during
       // the async fetch + clipboard write. We still control the toast.
@@ -4707,6 +4825,16 @@ _showImageContextMenu(e, src, opts = {}) {
           // main-process IPC too — navigator.clipboard is often gesture-
           // locked in Electron BrowserViews after a context menu closes.
           try {
+            // data: / blob: / raw base64 is what Discord pastes as
+            // iVBORw0KGgo… — never put that on the clipboard as text.
+            const srcIsPasteableUrl = typeof src === 'string'
+              && !/^data:/i.test(src)
+              && !/^blob:/i.test(src)
+              && !/^(?:[A-Za-z0-9+/]{80,}={0,2})$/.test(src.replace(/\s+/g, ''))
+              && src.length < 2048;
+            if (!srcIsPasteableUrl) {
+              throw new Error('image pixels unavailable');
+            }
             if (window.havenDesktop?.clipboardWriteText) {
               const res = await window.havenDesktop.clipboardWriteText(src);
               if (res?.ok) {
@@ -4811,7 +4939,9 @@ _lazyBlank() {
 
 // A blank with the real picture's own size, for the unloaded state.
 _lazySizedBlank(w, h) {
-  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'/%3E`;
+  const ww = Math.max(1, parseInt(w, 10) || 1);
+  const hh = Math.max(1, parseInt(h, 10) || 1);
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${ww}' height='${hh}'%3E%3Crect width='100%25' height='100%25' fill='transparent'/%3E%3C/svg%3E`;
 },
 
 // Wrap an emitted `src="…"` attribute so the loader owns the fetch. Attributes
@@ -5001,11 +5131,23 @@ _lazyPump() {
   if (!L || document.hidden) return;
   const vh = window.innerHeight || 800;
   const pending = [];
+  const seen = new Set();
   for (const img of L.near) {
     if (!img.isConnected) { L.near.delete(img); continue; }
     if (img.dataset.lazy !== 'pending') continue;
+    seen.add(img);
     pending.push({ img, distance: this._lazyDistance(img.getBoundingClientRect(), vh) });
   }
+  // Some layouts (Braid, compact, a Tauri webview with a different
+  // overflow parent) never fire the IntersectionObserver we attached.
+  // If the picture is on screen, load it anyway.
+  document.querySelectorAll('img[data-lazy="pending"]').forEach((img) => {
+    if (seen.has(img) || !img.isConnected) return;
+    const distance = this._lazyDistance(img.getBoundingClientRect(), vh);
+    if (distance > (L.NEAR || 800)) return;
+    seen.add(img);
+    pending.push({ img, distance });
+  });
   for (const img of this._lazyPickNext(pending, L.inFlight, L.MAX_PARALLEL)) {
     const onScreen = this._lazyDistance(img.getBoundingClientRect(), vh) === 0;
     img.dataset.lazy = 'loading';
@@ -5043,7 +5185,14 @@ _lazyLoad(img) {
     this._lazyPump();
   };
   img.onload = () => done(true);
-  img.onerror = () => done(false);
+  img.onerror = () => {
+    if (!img.dataset.lazyRetry) {
+      img.dataset.lazyRetry = '1';
+      setTimeout(() => { if (img.dataset.lazy === 'loading') img.src = img.dataset.lazySrc; }, 400);
+      return;
+    }
+    done(false);
+  };
   img.src = img.dataset.lazySrc;
 },
 

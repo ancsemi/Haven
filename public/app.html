@@ -10,9 +10,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.7.1">
+  <link rel="stylesheet" href="/css/style.css?v=4.8.1">
   <script src="/js/theme-compat.js?v=4.1.1"></script>
-  <script src="/js/theme-init.js?v=4.1.3"></script>
+  <script src="/js/theme-init.js?v=4.1.4"></script>
 </head>
 <body data-haven-page="app">
 
@@ -21,10 +21,10 @@
 
       <!-- ─── Server Bar (far left — like Discord) ─────── -->
       <nav class="server-bar" id="server-bar" data-haven-region="server-rail">
-        <div class="server-icon home active" id="home-server" data-i18n-title="app.sidebar.this_server" title="This Server">
+        <button type="button" class="server-icon home active" id="home-server" data-i18n-title="app.sidebar.this_server" title="This Server" aria-haspopup="menu" aria-expanded="false" aria-controls="home-server-menu">
           <span class="server-icon-text">⬡</span>
           <span class="server-status-dot online"></span>
-        </div>
+        </button>
         <div class="server-separator"></div>
         <div id="server-list" data-haven-region="server-list"></div>
         <button class="server-icon add-server" id="add-server-btn" data-i18n-title="app.sidebar.add_server" title="Add Server">
@@ -37,6 +37,13 @@
           <span class="server-icon-text">⟳</span>
         </button>
       </nav>
+      <div id="home-server-menu" class="home-server-menu" hidden role="menu" aria-labelledby="home-server">
+        <button type="button" role="menuitem" data-home-action="add-server" data-i18n="app.sidebar.add_server">Add Server</button>
+        <button type="button" role="menuitem" data-home-action="manage-servers" data-i18n="app.sidebar.manage_servers">Manage Servers</button>
+        <button type="button" role="menuitem" data-home-action="sync-servers" data-i18n="app.sidebar.sync_servers">Sync Server List</button>
+        <button type="button" role="menuitem" data-home-action="server-settings" data-i18n="app.sidebar.server_settings">Server settings</button>
+        <button type="button" role="menuitem" data-home-action="app-settings" data-i18n="app.sidebar.app_settings">App settings</button>
+      </div>
 
       <!-- ─── Left Sidebar ────────────────────────────── -->
       <aside class="sidebar" data-haven-region="navigation-sidebar">
@@ -77,10 +84,11 @@
             </div>
           </div>
 
-          <div class="sidebar-section" data-mod-id="join" data-haven-region="join-channel">
+          <div class="sidebar-section channel-action-sheet" data-mod-id="join" data-haven-region="join-channel">
             <h5 class="section-label collapsible-section-toggle" id="join-section-toggle" style="cursor:pointer;user-select:none">
               <span class="collapse-toggle-arrow" id="join-section-arrow">▾</span>
               <span class="section-label-text" style="flex:1" data-i18n="app.sidebar.join_channel">Join a Channel</span>
+              <button type="button" class="icon-btn small channel-sheet-close" data-close-sheet data-i18n-title="modals.common.close" title="Close">&times;</button>
             </h5>
             <div class="collapsible-section-body" id="join-section-body">
               <div class="input-row">
@@ -91,10 +99,11 @@
             </div>
           </div>
 
-          <div class="sidebar-section" id="admin-controls" data-mod-id="create" data-haven-region="create-channel" style="display:none">
+          <div class="sidebar-section channel-action-sheet" id="admin-controls" data-mod-id="create" data-haven-region="create-channel">
             <h5 class="section-label collapsible-section-toggle" id="create-section-toggle" style="cursor:pointer;user-select:none">
               <span class="collapse-toggle-arrow" id="create-section-arrow">▾</span>
               <span class="section-label-text" style="flex:1" data-i18n="app.sidebar.create_channel">Create Channel</span>
+              <button type="button" class="icon-btn small channel-sheet-close" data-close-sheet data-i18n-title="modals.common.close" title="Close">&times;</button>
             </h5>
             <div class="collapsible-section-body" id="create-section-body">
               <div class="input-row select-row" id="new-channel-template-row" style="gap:6px;margin-bottom:4px">
@@ -133,12 +142,12 @@
 
           <div class="sidebar-split" id="sidebar-split" data-mod-id="channels">
           <div class="sidebar-section channel-section" id="channels-pane" data-haven-region="channels">
-            <h5 class="section-label channels-toggle" id="channels-toggle" style="cursor:pointer;user-select:none"><span class="channels-toggle-arrow" id="channels-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.channels">Channels</span><button class="icon-btn small" id="sub-channel-panel-btn" data-i18n-title="app.actions.sub_channel_subscriptions" title="Sub-channel subscriptions" style="font-size:0.85rem;padding:2px 6px;opacity:0.6;position:relative;z-index:2;display:none">📡</button><button class="icon-btn small" id="organize-channels-btn" data-i18n-title="app.actions.organize_channels" title="Organize channels" style="display:none;font-size:0.85rem;padding:2px 6px;opacity:0.6;position:relative;z-index:2">📋</button></h5>
+            <h5 class="section-label channels-toggle" id="channels-toggle" style="cursor:pointer;user-select:none"><span class="channels-toggle-arrow" id="channels-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.channels">Channels</span><button class="icon-btn small chrome-chip" id="sub-channel-panel-btn" data-i18n-title="app.actions.sub_channel_subscriptions" title="Sub-channel subscriptions" style="position:relative;z-index:2;display:none">📡</button><button class="icon-btn small chrome-chip" id="organize-channels-btn" data-i18n-title="app.actions.organize_channels" title="Organize channels" style="display:none;position:relative;z-index:2">📋</button><button type="button" class="icon-btn small chrome-chip" id="channel-actions-btn" data-i18n-title="app.sidebar.channel_actions" title="Join or create a channel" aria-haspopup="menu" aria-expanded="false" style="position:relative;z-index:2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><span id="channel-actions-menu" class="channel-actions-menu" hidden role="menu"><button type="button" role="menuitem" data-action="join" data-i18n="app.sidebar.action_join">Join channel</button><button type="button" role="menuitem" data-action="create" data-i18n="app.sidebar.action_create">Create channel</button><button type="button" role="menuitem" data-action="temp" data-i18n="app.sidebar.action_temp">Temporary channel</button></span></h5>
             <div class="channel-list" id="channel-list"></div>
           </div>
           <div class="sidebar-split-handle" id="sidebar-split-handle" data-i18n-title="app.actions.drag_to_resize" title="Drag to resize"></div>
           <div class="sidebar-section dm-section-pane" id="dm-pane" data-haven-region="direct-messages">
-            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
+            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" style="display:none"></span><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
             <div class="dm-list-scroll" id="dm-list"></div>
           </div>
         </div>
@@ -192,6 +201,10 @@
               <label class="toggle-row braid-layout-toggle">
                 <span data-i18n="app.theme.compact_layout">Compact layout</span>
                 <input type="checkbox" id="compact-layout-toggle">
+              </label>
+              <label class="toggle-row braid-layout-toggle">
+                <span data-i18n="app.theme.original_layout">Haven (original) layout</span>
+                <input type="checkbox" id="original-layout-toggle">
               </label>
               <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.effect_overlay">Effect Overlay</div>
               <div class="effect-selector" id="effect-selector">
@@ -268,12 +281,14 @@
           <!-- Bottom bar -->
           <div id="voice-bar" class="voice-bar" style="display:none"></div>
           <div class="sidebar-bottom-bar" data-haven-region="sidebar-actions">
-            <button id="theme-popup-toggle" class="sidebar-bottom-btn" data-i18n-title="app.theme.title" title="Themes">🎨</button>
-            <button class="sidebar-bottom-btn" id="activities-btn" data-i18n-title="modals.activities.title" title="Activities">🎮</button>
-            <button class="sidebar-bottom-btn" id="sidebar-members-btn" data-i18n-title="modals.all_members.title" title="All Members" style="display:none">👥</button>
-            <button id="mobile-settings-btn" class="sidebar-bottom-btn mobile-settings-btn" data-i18n-title="settings.title" title="Settings">⚙️</button>
+            <button type="button" id="people-dock-btn" class="sidebar-bottom-btn chrome-chip" data-i18n-title="app.sidebar.people" title="People" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
+            <button type="button" id="dm-dock-btn" class="sidebar-bottom-btn chrome-chip" data-i18n-title="app.sidebar.show_dms" title="Direct messages" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a3.2 3.2 0 0 1-3.2 3.2H8.4L4 21.5V6.2A3.2 3.2 0 0 1 7.2 3h10.6A3.2 3.2 0 0 1 21 6.2Z"/></svg><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span></button>
+            <button type="button" id="theme-popup-toggle" class="sidebar-bottom-btn chrome-chip" data-i18n-title="app.theme.title" title="Themes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-7.8-9-7.8Z"/><circle cx="7.5" cy="11.5" r=".6"/><circle cx="10.5" cy="7.5" r=".6"/><circle cx="15" cy="7.5" r=".6"/></svg></button>
+            <button type="button" class="sidebar-bottom-btn chrome-chip" id="activities-btn" data-i18n-title="modals.activities.title" title="Activities"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9h4M8 7v4M15 8.5h.01M17.5 11h.01"/><path d="M17.3 5H6.7a4.7 4.7 0 0 0-4.6 4L1.3 14a3.2 3.2 0 0 0 5.7 2.6L8.6 14h6.8l1.6 2.6A3.2 3.2 0 0 0 22.7 14l-.8-5a4.7 4.7 0 0 0-4.6-4Z"/></svg></button>
+            <button class="sidebar-bottom-btn chrome-chip" id="sidebar-members-btn" data-i18n-title="modals.all_members.title" title="All Members" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.7 5.5-4.7s4.9 1.7 5.5 4.7"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.9M17.8 14.6c1.5.7 2.4 2 2.7 4"/></svg></button>
+            <button id="mobile-settings-btn" class="sidebar-bottom-btn chrome-chip mobile-settings-btn" data-i18n-title="settings.title" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.01a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg></button>
             <span style="flex:1"></span>
-            <button id="donors-btn" class="sidebar-bottom-btn donate-btn">❤️</button>
+            <button id="donors-btn" class="sidebar-bottom-btn chrome-chip donate-btn" data-i18n-title="modals.donors.title" title="Support Haven"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.3 4.8 13a4.7 4.7 0 0 1 6.6-6.6l.6.6.6-.6a4.7 4.7 0 0 1 6.6 6.6Z"/></svg></button>
             <button id="voice-mute-btn" class="sidebar-bottom-btn voice-header-btn" data-i18n-title="voice.mute" title="Mute" style="display:none">🎙️</button>
             <button id="voice-deafen-btn" class="sidebar-bottom-btn voice-header-btn" data-i18n-title="voice.deafen" title="Deafen" style="display:none">🔊</button>
           </div>
@@ -311,10 +326,10 @@
             <button id="copy-code-btn" class="icon-btn small" data-i18n-title="header.copy_code" title="Copy code">📋</button>
             <button id="channel-code-settings-btn" class="icon-btn small" data-i18n-title="header.channel_code_settings" title="Channel code settings">⚙️</button>
             <span class="header-actions-divider"></span>
-            <button id="search-toggle-btn" class="icon-btn small" data-i18n-title="header.search_messages" title="Search messages (Ctrl+F)">🔍</button>
-            <button id="pinned-toggle-btn" class="icon-btn small" data-i18n-title="header.pinned_messages" title="Pinned messages">📌</button>
-            <button id="gallery-toggle-btn" class="icon-btn small" data-i18n-title="header.media_gallery" title="View files & media">🖼</button>
-            <button id="threads-toggle-btn" class="icon-btn small" data-i18n-title="header.thread_list" title="View threads">🧵</button>
+            <button id="search-toggle-btn" class="icon-btn small chrome-chip" data-i18n-title="header.search_messages" title="Search messages (Ctrl+F)">🔍</button>
+            <button id="pinned-toggle-btn" class="icon-btn small chrome-chip" data-i18n-title="header.pinned_messages" title="Pinned messages">📌</button>
+            <button id="gallery-toggle-btn" class="icon-btn small chrome-chip" data-i18n-title="header.media_gallery" title="View files & media">🖼</button>
+            <button id="threads-toggle-btn" class="icon-btn small chrome-chip header-icon-with-badge" data-i18n-title="header.thread_list" title="View threads">🧵<span class="header-icon-badge" id="threads-toggle-badge" hidden></span></button>
             <button id="move-select-btn" class="icon-btn small" data-i18n-title="header.select_messages_to_move" title="Select messages to move" style="display:none">☰</button>
             <div class="e2e-menu-wrapper" style="display:none" id="e2e-menu-wrapper">
               <button id="e2e-menu-btn" class="icon-btn small" data-i18n-title="header.encryption_options" title="Encryption options">🔐</button>
@@ -402,7 +417,7 @@
           <div style="flex:1"></div>
           <!-- Right-side: dynamic indicators, then voice (always furthest right) -->
           <div class="voice-controls">
-            <button id="mobile-users-btn" class="mobile-users-btn" data-i18n-title="modals.all_members.title" data-i18n-aria-label="modals.all_members.title" title="Members" aria-label="Members">
+            <button type="button" id="mobile-users-btn" class="mobile-users-btn" data-i18n-title="app.sidebar.people" title="People" aria-label="People">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
@@ -411,7 +426,7 @@
               </svg>
             </button>
             <!-- Dynamic indicators (music, streams) inject here via JS -->
-            <button id="voice-join-btn" class="btn-voice" style="display:none"><span data-i18n="voice.join">🎤 Join Voice</span></button>
+            <button id="voice-join-btn" class="btn-voice" hidden style="display:none" aria-hidden="true"><span data-i18n="voice.join">🎤 Join Voice</span></button>
             <div id="voice-active-indicator" class="voice-active-indicator" style="display:none">
               <span class="voice-indicator-icon">🎤</span>
               <span class="voice-indicator-text" data-i18n="header.voice_active">Voice Active</span>
@@ -663,7 +678,7 @@
                 <button id="voice-deafen-btn-header" class="voice-header-btn" data-i18n-title="voice.deafen" title="Deafen" style="display:none">🔊</button>
               </div>
             </div>
-            <button id="voice-join-mobile" class="btn-voice mobile-voice-join" style="display:none">🎤 <span data-i18n="voice.join">Join Voice</span></button>
+            <button id="voice-join-mobile" class="btn-voice mobile-voice-join" style="display:none"><span data-i18n="voice.join">🎤 Join Voice</span></button>
             <div id="voice-users" class="user-list">
               <p class="muted-text" data-i18n="right_sidebar.no_one_in_voice">No one in voice</p>
             </div>
@@ -910,6 +925,7 @@
     <div class="thread-panel-resizer" id="thread-panel-resizer" aria-hidden="true"></div>
     <div class="thread-panel-header">
       <div class="thread-panel-header-top">
+        <button type="button" id="thread-panel-back" class="forum-thread-back" data-i18n="forum.back_to_topics">← Topics</button>
         <span class="thread-panel-icon">🧵</span>
         <span id="thread-panel-title" class="thread-panel-title" data-i18n="thread_runtime.title">Thread</span>
         <button id="thread-panel-pip" class="icon-btn small" data-i18n-title="thread_runtime.pop_out" title="Pop out thread (PiP)" aria-pressed="false">⧉</button>
@@ -2516,10 +2532,10 @@
 
         <!-- Role Management (Admin only) -->
         <div class="admin-settings" id="section-roles" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
+          <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Permissions</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.roles_hint">Member, Mod, and Admin (host) start on every new server. Tick what each role can do, or switch to Users and edit one person.</small>
           <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
+            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Permissions</span></button>
             <button class="btn-sm" id="post-role-menu-btn" data-i18n-title="settings.admin.role_menu.hint" title="Post a message people react to, or click, to give themselves a role">🎭 <span data-i18n="settings.admin.role_menu.post">Post a role menu</span></button>
             <button class="btn-sm" id="reset-roles-btn" data-i18n-title="settings.admin.reset_roles_title" title="Reset all roles to deployment defaults">🔄 <span data-i18n="settings.admin.reset_roles_btn">Reset to Default</span></button>
           </div>
@@ -3250,6 +3266,44 @@
     </div>
   </div>
 
+  <!-- Permissions matrix -->
+  <div class="modal-overlay" id="perm-matrix-overlay" style="display:none">
+    <div class="modal modal-wide perm-matrix-modal">
+      <div class="perm-matrix-header">
+        <h3>👑 <span data-i18n="settings.admin.perm_matrix.title">Permissions</span></h3>
+        <div class="perm-view-toggle" role="tablist">
+          <button type="button" class="perm-view-btn is-active" id="perm-view-roles" data-i18n="settings.admin.perm_matrix.view_roles">Roles</button>
+          <button type="button" class="perm-view-btn" id="perm-view-users" data-i18n="settings.admin.perm_matrix.view_users">Users</button>
+        </div>
+      </div>
+      <p class="muted-text perm-matrix-lead" data-i18n="settings.admin.perm_matrix.lead">New servers start with Member, Mod, and Admin (you). Members can use every public channel. Mods can kick, ban, and run channels. Admin can do everything.</p>
+
+      <div id="perm-roles-pane">
+        <div class="perm-matrix-toolbar">
+          <button type="button" class="btn-sm btn-accent" id="perm-add-role-btn">+ <span data-i18n="settings.admin.perm_matrix.add_role">Add role</span></button>
+        </div>
+        <div class="perm-matrix-scroll">
+          <table class="perm-matrix-table" id="perm-matrix-table"></table>
+        </div>
+      </div>
+
+      <div id="perm-users-pane" hidden>
+        <div class="perm-users-layout">
+          <div class="perm-users-side">
+            <input type="search" id="perm-user-search" class="settings-text-input" data-i18n-placeholder="settings.admin.perm_matrix.search_users" placeholder="Search members…">
+            <div id="perm-user-list" class="perm-user-list"></div>
+          </div>
+          <div id="perm-user-detail" class="perm-user-detail"></div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-sm" id="perm-open-classic-btn" data-i18n="settings.admin.perm_matrix.classic">More options</button>
+        <button type="button" class="btn-sm" id="close-perm-matrix-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Role Management Modal -->
   <div class="modal-overlay" id="role-modal" style="display:none">
     <div class="modal modal-wide role-management-modal">
@@ -3764,7 +3818,6 @@
     <button class="channel-ctx-item" data-action="mark-read">✅ <span data-i18n="context_menu.channel.mark_read">Mark as Read</span></button>
     <button class="channel-ctx-item" data-action="mute">🔔 <span data-i18n="context_menu.channel.mute">Mute Channel</span></button>
     <button class="channel-ctx-item" data-action="copy-channel-link">🔗 <span data-i18n="context_menu.channel.copy_link">Copy Channel Link</span></button>
-    <button class="channel-ctx-item" data-action="join-voice">🎙️ <span data-i18n="voice.join_ctx">Join Voice</span></button>
     <button class="channel-ctx-item" data-action="leave-voice" style="display:none">📴 <span data-i18n="context_menu.channel.disconnect_voice">Disconnect Voice</span></button>
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item" data-action="leave-channel">🚪 <span data-i18n="context_menu.channel.leave">Leave Channel</span></button>
@@ -4459,17 +4512,17 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=4.6.10"></script>
+  <script src="/js/theme.js?v=4.8.1"></script>
   <script src="/js/notifications.js?v=4.6.2"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=4.6.11"></script>
+  <script src="/js/voice.js?v=4.8.1">
   <script src="/js/modmode.js?v=3.16.16"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.7.1"></script>
-  <script src="/js/plugin-loader.js?v=4.6.10"></script>
+  <script type="module" src="/js/app.js?v=4.8.1"></script>
+  <script src="/js/plugin-loader.js?v=4.8.1"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
 </body>

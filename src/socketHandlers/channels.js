@@ -966,7 +966,7 @@ module.exports = function register(socket, ctx) {
       if (!name || seen.has(name.toLowerCase())) continue;
       seen.add(name.toLowerCase());
       tags.push(emoji ? { name, emoji } : { name });
-      if (tags.length >= 20) break;
+      if (tags.length >= 40) break;
     }
     try {
       db.prepare('UPDATE channels SET forum_tags = ? WHERE id = ?').run(tags.length ? JSON.stringify(tags) : null, channel.id);

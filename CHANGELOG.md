@@ -11,6 +11,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+On top of 4.8.0: the permissions grid, original layout and sidebar chrome,
+and the image / Chrome local-network fixes.
+
+### Added
+- **Permissions matrix.** Settings → Permissions is a grid: permission rows,
+  role columns, tickboxes, + / − roles, and one auto-assign radio. New servers
+  start with Member and Mod. A Users tab lists members so you can change one
+  person's role or ticks. Admin stays `is_admin` and cannot be removed.
+- **Haven (original) layout.** Theme → Layout has a third switch that puts
+  the old side buttons, header Join Voice, and the rest of that chrome back.
+- **Sidebar + menu.** Join, create, and temporary channel sit behind one
+  + button on Channels. DMs open from a bottom button. Mention counts live
+  on the threads icon.
+
+### Fixed
+- **Chrome no longer asks for local-network access on every chat load.** Voice
+  STUN probes wait until someone joins a call.
+- **Save Image opens a folder picker** in browsers that have
+  `showSaveFilePicker`, instead of a silent download.
+- **Chat images that showed as a black box in some Tauri profiles.** The lazy
+  placeholder is transparent, static PNGs are not run through the GIF-freeze
+  canvas, on-screen pictures load even when the scroll observer misses them,
+  and E2E image blob URLs are not revoked on the same tick as decode.
+
 ## [4.8.0] - 2026-09-12
 
 Channel access moves to one place: a channel's Required roles now decide
@@ -134,6 +160,12 @@ mode, the squeezed composer and deleted-file retention. One new table
 (thread_reads) is created on first start; nothing to run by hand.
 
 ### Added
+- **Sidebar + menu.** Join, create, and temporary channel sit behind one
+  + button on Channels, so those forms are not always on the sidebar.
+- **DMs on a bottom button.** The list opens as a drawer over the channel
+  list, with the unread count on the button.
+- **Thread count on 🧵.** Mention counts live on the threads icon, same
+  idea as channel unread badges.
 - **Forum unread dots (#5641).** A topic you have not opened, or one with
   replies since you last looked, shows a dot and an accent edge on its card.
   Opening the topic clears it, and a Mark all read button in the forum
@@ -143,6 +175,25 @@ mode, the squeezed composer and deleted-file retention. One new table
   themes no longer stack on Matrix (or any built-in) when their Settings
   toggles are on. Layout lives in Theme → Layout (Braid and Compact) and
   keeps the picker colors.
+- **Forum topic images render as pictures** in the list, gallery and thread,
+  including a caption with a URL on the next line.
+- **Feature-board types and subtasks.** Pick the post type first (request,
+  report, hobby, chat, and the rest). That choice themes New Post and swaps
+  the suggested tags. Custom tags stick. You can attach images and GIFs in
+  the composer. Subtasks typed at create time are saved on the topic.
+- **Forum request status.** A topic can be Planned, In progress, or Complete.
+  Filter the list, set it when you post, click the chip to cycle it, and it
+  travels with the topic so desktop and phone stay in sync.
+- **Forum topics on desktop open the way they do on a phone.** Tapping a
+  topic covers the feed so you reply inside it; the channel composer cannot
+  start a second topic while you are in one. Close returns you to the list.
+- **Braid and Compact layouts live in Theme → Layout.** Either switch turns
+  on that chrome on any palette. Match theme still pairs Braid layout with
+  the Braid / Braid Light colors. Both are gone from the Settings plugin
+  list.
+- **Haven (original) layout.** Theme → Layout has a third switch that puts
+  the old side buttons, header Join Voice, and the rest of that chrome back.
+  Forum boards stay as they are. Turning on Braid or Compact turns it off.
 - **Gallery tile size slider.** Files & Media photos/videos and the forum
   gallery both have a size slider, from a tight mosaic up to poster tiles.
 - **Forum feed view.** A third layout next to List and Gallery: avatar,
@@ -195,6 +246,11 @@ mode, the squeezed composer and deleted-file retention. One new table
   clicking the button under the message, gives the reader the role, and undoing
   either takes it back. Level-0 Groups are made for this. Requested by
   Dispencer2.
+- **Permissions matrix.** Settings → Permissions is a grid: permission rows,
+  role columns, tickboxes, + / − roles, and one auto-assign radio. New servers
+  start with Member, Mod, and Admin (host). A Users tab lists members so you
+  can change one person's role or ticks. Admin stays `is_admin` and cannot be
+  removed.
 
 ### Changed
 - **Deleted files no longer sit around forever.** Attachments from deleted
@@ -206,6 +262,38 @@ mode, the squeezed composer and deleted-file retention. One new table
   first run after updating.
 
 ### Fixed
+- **Home server icon opens a menu.** Add server, manage, sync, server
+  settings and app settings live on the top-left tile.
+- **Braid shows the member list.** People stays open unless you close it,
+  instead of hiding the roster until a Settings toggle.
+- **Join Voice lives on the channel row.** The header and the channel
+  right-click menu no longer offer a second join. After you are in the
+  call, that same chip turns into a red disconnect.
+- **People and Messages sit in the footer.** Same row as Themes and
+  Activities, in Braid and in the classic layout.
+- **Add server and settings live on the home icon.** The rail + / gear /
+  sync chips are gone in both layouts.
+- **Leave Channel and Remove Server wait for OK.** Desktop Tauri's
+  confirm() is a Promise, so those actions used to fire while the dialog
+  was still up.
+- **Forum boards drop the grey topic strip.** Status already lives on
+  the cards, so "Mark these Planned…" and the topic-count line under
+  the title are gone.
+- **Forum filters are just the dropdowns.** The Bug / Feature / UI /
+  Mobile chip row is gone; those tags are not a default for every server.
+- **One mic on the sidebar Join Voice button.** The label already had the
+  emoji, and a second one was sitting in front of it.
+- **In-call controls sit on one row.** Mute, share, leave and the
+  connected label share the dock instead of a chip strip plus a second
+  Voice Connected bar.
+- **Braid was stacking every bot under the first name.** Webhook and import
+  bots often share one account id and only differ by the name on the post.
+  Braid now breaks the card on that name, the way legacy and Compact already
+  did, so Scout, Patch, and the rest keep their own headers.
+- **Theme and Activities match the Messages chip.** Same 2.125rem square in
+  classic, same 2.5rem chip in Braid, instead of the smaller emoji buttons.
+- **Unread DMs on the Messages button.** A red pill with the count sits on
+  the dock icon.
 - **A moderation mute no longer blocks private messages (#5640).** Being
   muted stops you posting in the server's channels for the set time; DMs
   still work, which is also how you can reach a mod about it. Not to be
@@ -265,6 +353,15 @@ mode, the squeezed composer and deleted-file retention. One new table
   first page and keep the top of the list, in the cards and in the feed.
 - **The DM PiP send button is a square that matches the thread panel's (#5601).**
   Thanks to @birdcrazy.
+- **Chrome no longer asks for local-network access on every chat load.** Voice
+  STUN probes wait until someone joins a call, so opening the app is not a
+  WebRTC LAN scan.
+- **Save Image opens a folder picker** in browsers that have
+  `showSaveFilePicker`, instead of a silent download.
+- **Chat images that showed as a black box in some Tauri profiles.** The lazy
+  placeholder is transparent, static PNGs are not run through the GIF-freeze
+  canvas, on-screen pictures load even when the scroll observer misses them,
+  and E2E image blob URLs are not revoked on the same tick as decode.
 
 ## [4.6.1] - 2026-09-09
 

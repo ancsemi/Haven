@@ -139,16 +139,24 @@ class VoiceManager {
     // probe must not overwrite those.
     this._adminIceServersLoaded = false;
 
-    // Fetch server-provided ICE config (may include TURN)
+    // Fetch server-provided ICE config (may include TURN).
+    // Do not probe STUN until someone actually joins a call. A probe
+    // spins up RTCPeerConnection, which gathers LAN candidates, and
+    // Chrome now asks every public-site visitor for local-network
+    // access just because they opened chat.
+    this._stunProbeStarted = false;
+    this._pendingConfiguredStun = null;
     this._fetchIceServers();
-
-    // Probe the default pool in the background and prune dead servers so
-    // future RTCPeerConnections don't waste gathering time on them. Only
-    // applies if the admin hasn't configured their own ICE servers.
-    this._probeDefaultStun();
 
     this._setupSocketListeners();
     this._setupNativeScreenBridge();
+  }
+
+  _ensureStunProbed() {
+    if (this._stunProbeStarted) return;
+    this._stunProbeStarted = true;
+    this._probeDefaultStun();
+    if (this._pendingConfiguredStun) this._probeConfiguredStun(this._pendingConfiguredStun);
   }
 
   // ── Fetch ICE servers from backend (STUN + optional TURN) ──
@@ -200,7 +208,8 @@ class VoiceManager {
         // srflx candidates, which relay-only discards on purpose, so running it
         // any earlier reports every server dead on a perfectly healthy setup.
         // Fire and forget; a dead entry here used to fail completely silently.
-        if (this._adminIceServersLoaded) this._probeConfiguredStun(data.iceServers);
+        this._pendingConfiguredStun = data.iceServers;
+        if (this._stunProbeStarted) this._probeConfiguredStun(data.iceServers);
       }
     } catch (err) {
       console.warn('Could not fetch ICE servers, using defaults:', err && err.message);
@@ -1935,6 +1944,7 @@ class VoiceManager {
   }
 
   async join(channelCode) {
+    this._ensureStunProbed();
     if (this._joinInFlight) return false;
     this._joinInFlight = true;
     this._joiningChannelCode = channelCode;

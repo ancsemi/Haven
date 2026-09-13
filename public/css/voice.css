@@ -683,7 +683,8 @@
   .voice-label-text { display: none; }
 
   #voice-join-btn { display: none !important; }
-  .mobile-voice-join { display: flex !important; }
+  .mobile-voice-join { display: none !important; }
+  html[data-haven-original-layout] .mobile-voice-join { display: flex !important; }
 }
 
 @media (max-width: 480px) {

@@ -358,10 +358,12 @@ window.HavenPluginLoader = (function () {
       }
 
       const instance = new PluginClass();
+      const effectDriven = meta.file === 'BraidLayout.plugin.js'
+        || meta.file === 'CompactLayout.plugin.js';
       const enabled = getEnabledPlugins().includes(meta.file);
-      loadedPlugins.set(meta.file, { instance, meta, enabled });
+      loadedPlugins.set(meta.file, { instance, meta, enabled: enabled || effectDriven, effectDriven });
 
-      if (enabled) {
+      if (enabled || effectDriven) {
         try { instance.start(); } catch (err) { console.error(`[Plugin ${meta.name}] start() error:`, err); }
       }
     } catch (err) {
@@ -446,8 +448,9 @@ window.HavenPluginLoader = (function () {
   function enableTheme(file) {
     const t = loadedThemes.get(file);
     if (!t || t.enabled || suppressExtensions || !t.compatible) return;
-    // A published theme is one of the picker's choices, not a stackable tweak —
-    // turning it on means selecting it, so the two surfaces stay in agreement.
+    // A palette (published or not) is one of the picker's choices, not a
+    // stackable tweak — turning it on means selecting it, so the two
+    // surfaces stay in agreement.
     if (isExclusiveMeta({ ...t.meta, file })) {
       applyFileTheme(file);
       return;
@@ -498,6 +501,7 @@ window.HavenPluginLoader = (function () {
       applyEffects(typeof _getStoredEffectMode === 'function' ? _getStoredEffectMode() : 'auto');
     }
     if (!suppressExtensions && typeof showEffectEditorIfDynamic === 'function') showEffectEditorIfDynamic(theme);
+    if (typeof dispatchHavenThemeChange === 'function') dispatchHavenThemeChange(theme);
   }
 
   function persistThemePreference(theme) {
@@ -560,6 +564,7 @@ window.HavenPluginLoader = (function () {
     }
     if (syncPreference) void persistThemePreference('haven');
     if (notify) HavenApi.UI.showToast(t('settings.plugins_section.theme_fallback'), 'warning');
+    if (typeof dispatchHavenThemeChange === 'function') dispatchHavenThemeChange('haven');
     renderPluginUI();
   }
 
@@ -632,6 +637,7 @@ window.HavenPluginLoader = (function () {
     } else {
       container.innerHTML = '';
       for (const [file, p] of loadedPlugins) {
+        if (p.effectDriven) continue;
         const card = document.createElement('div');
         card.className = 'plugin-card';
         const suppressedLabel = suppressExtensions && p.enabled
@@ -762,6 +768,9 @@ window.HavenPluginLoader = (function () {
 
       setupSafeModeUI();
       renderPluginUI();
+      if (!suppressExtensions && typeof applyEffects === 'function') {
+        applyEffects(typeof _getStoredEffectMode === 'function' ? _getStoredEffectMode() : 'auto');
+      }
       if (recoveryPending) {
         const saved = await persistThemePreference('haven');
         if (saved) {

@@ -4182,10 +4182,6 @@ _initRoleManagement() {
   this._selectedRoleId = null;
   this._adminRoleDisplay = null;
 
-  // Open role editor modal
-  document.getElementById('open-role-editor-btn')?.addEventListener('click', () => {
-    this._openRoleModal();
-  });
   document.getElementById('close-role-modal-btn')?.addEventListener('click', () => {
     document.getElementById('role-modal').style.display = 'none';
   });

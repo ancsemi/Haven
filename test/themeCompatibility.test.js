@@ -360,6 +360,18 @@ test('theme metadata marks a --bg-primary file as a palette', () => {
   assert.equal(meta.palette, true);
 });
 
+test('theme metadata parser reads a paired layout plugin id', () => {
+  const meta = parseThemeMetadata(`/**
+   * @name Braid
+   * @haven-theme-api 1
+   * @haven-layout BraidLayout
+   */`);
+  assert.equal(meta.layout, 'BraidLayout');
+  assert.equal(parseThemeMetadata('/** @name No layout @haven-theme-api 1 */').layout, undefined);
+  assert.equal(parseThemeMetadata('/** @haven-layout ../evil */').layout, undefined);
+});
+
+
 test('theme metadata parser supports compact one-line comment blocks', () => {
   const meta = parseThemeMetadata('/** @name Compact @description One line @version 1.0 @haven-theme-api 2 */');
 

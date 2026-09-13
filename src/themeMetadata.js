@@ -91,6 +91,9 @@ function parseThemeMetadata(content) {
     if (value) meta[property] = value;
   }
 
+  const layout = declarations.find(item => item.tag === 'haven-layout')?.value || '';
+  if (/^[A-Za-z][A-Za-z0-9]{0,63}$/.test(layout)) meta.layout = layout;
+
   const themeApiDeclarations = declarations
     .filter(item => item.tag === 'haven-theme-api')
     .map(item => item.value);

@@ -479,6 +479,7 @@ _renderMessages(messages, lastReadMessageId) {
   this._setupVideos(container);
   // Decrypt E2E images (async — renders as images load)
   this._decryptE2EImages(container);
+  this._lazyPump?.();
   // Wire up decryption-on-click for E2E file attachments (#5310, #5308)
   this._decryptE2EFiles(container);
   // DMs are ciphertext server-side, so their links can only be judged
@@ -1033,6 +1034,8 @@ _createMessageEl(msg, prevMsg) {
     el.dataset.rawContent = msg.content;
     if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
     if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
+    if (msg.webhook_username) el.dataset.webhookUsername = msg.webhook_username;
+    if (msg.imported_from) el.dataset.importedFrom = msg.imported_from;
     if (msg.break_chain) el.dataset.breakChain = '1';
     if (msg.pinned) el.dataset.pinned = '1';
     if (msg.is_archived) el.dataset.archived = '1';
@@ -1158,6 +1161,8 @@ _createMessageEl(msg, prevMsg) {
   el.dataset.rawContent = msg.content;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (msg.persona_username) el.dataset.personaUsername = msg.persona_username;
+  if (msg.webhook_username) el.dataset.webhookUsername = msg.webhook_username;
+  if (msg.imported_from) el.dataset.importedFrom = msg.imported_from;
   if (msg.break_chain) el.dataset.breakChain = '1';
   if (msg.pinned) el.dataset.pinned = '1';
   if (msg.is_archived) el.dataset.archived = '1';

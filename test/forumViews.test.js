@@ -20,7 +20,7 @@ const html = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
 function parseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; }
 function parseTile(v) {
   const n = Number(v);
-  if (!Number.isFinite(n)) return 11;
+  if (!Number.isFinite(n)) return 13;
   return Math.min(28, Math.max(7, Math.round(n * 2) / 2));
 }
 function mediaTilePx(raw) {
@@ -34,20 +34,28 @@ test('forum prefs keep list, gallery, and feed, and clamp tile size', () => {
   assert.equal(parseView('gallery'), 'gallery');
   assert.equal(parseView('list'), 'list');
   assert.equal(parseView('cards'), 'list');
-  assert.equal(parseTile(undefined), 11);
+  assert.equal(parseTile(undefined), 13);
   assert.equal(parseTile(3), 7);
   assert.equal(parseTile(40), 28);
-  assert.equal(parseTile(11.2), 11);
-  assert.equal(parseTile(11.8), 12);
+  assert.equal(parseTile(13.2), 13);
+  assert.equal(parseTile(13.8), 14);
   assert.match(forum, /_forumParseView\(v\) \{ return v === 'gallery' \|\| v === 'feed' \? v : 'list'; \}/);
   assert.match(forum, /Math\.min\(28, Math\.max\(7,/);
   assert.match(forum, /data-view="feed"/);
   assert.match(forum, /id="forum-tile-size"/);
   assert.match(forum, /_forumAvatarHtml/);
+  assert.doesNotMatch(forum, /forum-hdr-count/);
+  assert.doesNotMatch(forum, /forum-tags-row/);
+});
+
+test('forum channels hide the leftover topic strip', () => {
+  const channels = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-channels.js'), 'utf8');
+  assert.match(channels, /isDm \|\| channel\?\.is_forum/);
+  assert.match(css, /html\.forum-channel \.channel-topic-bar/);
 });
 
 test('forum gallery tiles follow --forum-tile and feed is a single column', () => {
-  assert.match(css, /minmax\(var\(--forum-tile, 11rem\), 1fr\)/);
+  assert.match(css, /minmax\(var\(--forum-tile, 13rem\), 1fr\)/);
   assert.match(css, /\.messages\.forum-feed \.forum-topics/);
   assert.match(css, /\.messages\.forum-feed \.forum-topic-avatar/);
   assert.match(css, /\.messages\.forum-feed \.forum-topic-thumb-empty \{ display: none; \}/);
