@@ -1072,8 +1072,13 @@ _formatContent(str) {
   html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
   // Render grouped > blockquotes and preserve attribution lines inside the quote.
+  // A line quotes only when the > is followed by a space, another >, or
+  // nothing at all: ">implying" and ">.<" stay as typed (#5654).
   const blockquotes = [];
-  html = html.replace(/(^|\n)((?:&gt;[^\n]*(?:\n|$))+)/g, (full, pre, block) => {
+  html = html.replace(/(^|\n)((?:&gt;(?:[ \t][^\n]*|&gt;[^\n]*)?(?:\n|$))+)/g, (full, pre, block) => {
+    // A lone ">" with nothing on it is only a blank line inside a quote,
+    // never a quote by itself.
+    if (block.split('\n').every(line => /^&gt;\s*$/.test(line))) return full;
     const lines = block.trim().split('\n').map(line => line.replace(/^&gt;\s?/, ''));
     let authorHtml = '';
     if (lines[0] && /^@[^\s].+ wrote:$/.test(lines[0])) {
@@ -2101,11 +2106,12 @@ _switchGifTab(tab) {
 },
 
 // The proxy reports which provider served the batch — keep the picker
-// footer honest ("Powered by Tenor" vs "Powered by GIPHY").
+// footer honest ("Powered by Tenor" / "KLIPY" / "GIPHY").
 _setGifFooter(provider) {
   if (!provider) return;
+  const label = provider === 'tenor' ? 'Tenor' : provider === 'klipy' ? 'KLIPY' : 'GIPHY';
   const footer = document.querySelector('.gif-picker-footer');
-  if (footer) footer.textContent = t('gifs.powered_by', { provider: provider === 'tenor' ? 'Tenor' : 'GIPHY' });
+  if (footer) footer.textContent = t('gifs.powered_by', { provider: label });
 },
 
 _loadTrendingGifs() {
@@ -2426,8 +2432,12 @@ _renderPollWidget(msgId, poll) {
     const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
     const myVote = voters.some(v => v.user_id === myId);
     const voterNames = poll.anonymous ? '' : voters.map(v => this._escapeHtml(v.username)).join(', ');
-    return `<button class="poll-option${myVote ? ' poll-voted' : ''}" data-msg-id="${msgId}" data-option="${i}" title="${voterNames}">
-      <div class="poll-option-bar" style="width:${pct}%"></div>
+    // An option can carry a picture (#5648). It is part of the button, so a
+    // click on it is a vote, not the lightbox.
+    const img = Array.isArray(poll.images) && typeof poll.images[i] === 'string' && /^\/uploads\//.test(poll.images[i])
+      ? `<img class="poll-option-img" src="${this._escapeHtml(poll.images[i])}" alt="" loading="lazy">` : '';
+    return `<button class="poll-option${myVote ? ' poll-voted' : ''}${img ? ' has-image' : ''}" data-msg-id="${msgId}" data-option="${i}" title="${voterNames}">
+      <div class="poll-option-bar" style="width:${pct}%"></div>${img}
       <span class="poll-option-text">${this._escapeHtml(opt)}</span>
       <span class="poll-option-count">${count} (${pct}%)</span>
     </button>`;
@@ -3329,12 +3339,12 @@ _refreshDMPipHeader(ch, partnerName) {
       statusClass = s === 'dnd' ? 'dnd'
         : s === 'away' ? 'away'
         : s === 'invisible' ? 'invisible'
-        : (onlinePartner.online === false ? 'away' : '');
+        : (onlinePartner.online === false ? 'offline' : '');
     } else {
-      statusClass = 'away'; // partner not in online list → treat as offline/away
+      statusClass = 'offline'; // partner not in online list
     }
     const statusLabel = statusClass === 'dnd' ? t('app.profile.dnd')
-      : statusClass === 'away' ? t('dm_runtime.offline_away')
+      : (statusClass === 'away' || statusClass === 'offline') ? t('dm_runtime.offline_away')
       : statusClass === 'invisible' ? t('app.profile.invisible')
       : t('app.profile.online');
     const statusDot = `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
@@ -3695,6 +3705,9 @@ _openThread(parentId) {
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel
   this._clearThreadMentionsForParent(this.currentChannel, parentId);
+  // The server records the read position when it serves the thread; drop the
+  // forum card's dot right away rather than on the next reload (#5641).
+  if (this._forumActive && this._forumMarkTopicRead) this._forumMarkTopicRead(parentId);
   const panel = document.getElementById('thread-panel');
   if (!panel) return;
   panel.style.display = 'flex';

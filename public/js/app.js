@@ -4,22 +4,22 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.6.8';
-import UIBindMethods   from './modules/app-ui.js?v=4.6.11';
-import MediaMethods    from './modules/app-media.js?v=4.7.5';
-import ContextMethods  from './modules/app-context.js?v=4.6.2';
-import ChannelMethods  from './modules/app-channels.js?v=4.6.10';
-import MessageMethods  from './modules/app-messages.js?v=4.7.5';
-import UserMethods     from './modules/app-users.js?v=4.6.1';
-import VoiceMethods    from './modules/app-voice.js?v=4.5.5';
-import UtilityMethods  from './modules/app-utilities.js?v=4.6.8';
-import AdminMethods    from './modules/app-admin.js?v=4.6.2';
-import PlatformMethods from './modules/app-platform.js?v=4.7.4';
+import SocketMethods   from './modules/app-socket.js?v=4.8.1';
+import UIBindMethods   from './modules/app-ui.js?v=4.8.1';
+import MediaMethods    from './modules/app-media.js?v=4.8.1';
+import ContextMethods  from './modules/app-context.js?v=4.7.1';
+import ChannelMethods  from './modules/app-channels.js?v=4.8.1';
+import MessageMethods  from './modules/app-messages.js?v=4.8.1';
+import UserMethods     from './modules/app-users.js?v=4.7.1';
+import VoiceMethods    from './modules/app-voice.js?v=4.8.1';
+import UtilityMethods  from './modules/app-utilities.js?v=4.8.1';
+import AdminMethods    from './modules/app-admin.js?v=4.8.1';
+import PlatformMethods from './modules/app-platform.js?v=4.8.1';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
-import ForumMethods    from './modules/app-forum.js?v=4.6.10';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.6.2';
-import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.7.3';
+import ForumMethods    from './modules/app-forum.js?v=4.8.1';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.8.1';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.8.1';
 
 class HavenApp {
   constructor() {
@@ -95,6 +95,7 @@ class HavenApp {
       { cmd: 'play',       args: t('commands.args.name_or_url'),       desc: t('commands.description.play') },
       { cmd: 'gif',        args: t('commands.args.query'),             desc: t('commands.description.gif') },
       { cmd: 'poll',       args: t('commands.args.optional_question'), desc: t('commands.description.poll') },
+      { cmd: 'schedule',   args: t('commands.args.optional_text'),     desc: t('commands.description.schedule') },
       { cmd: 'time',       args: t('commands.args.time'),              desc: t('commands.description.time') },
     ];
 
@@ -400,20 +401,34 @@ class HavenApp {
       if (!res.ok) return;
       const data = await res.json();
       if (!data.commands || !data.commands.length) return;
-      const knownCmds = new Set(this.slashCommands.map(c => String(c.cmd || '').toLowerCase()));
+      const known = new Map(this.slashCommands.map(c => [String(c.cmd || '').toLowerCase(), c]));
       for (const bc of data.commands) {
         const cmd = String(bc.command || '').trim();
         if (!cmd) continue;
         const key = cmd.toLowerCase();
-        if (knownCmds.has(key)) continue;
-        knownCmds.add(key);
-        this.slashCommands.push({
+        const channelCode = bc.channel_code || null;
+        const existing = known.get(key);
+        if (existing) {
+          // The same command registered by a second bot in another channel
+          // keeps the one menu entry and adds its channel to it, so the
+          // suggestions show in every channel that has a bot for it. A
+          // built-in command of the same name stays as it is (#5635).
+          if (channelCode && Array.isArray(existing.channelCodes) && !existing.channelCodes.includes(channelCode)) {
+            existing.channelCodes.push(channelCode);
+          }
+          continue;
+        }
+        const entry = {
           cmd,
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`
-        });
+          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`,
+          // A bot lives in one channel, so its commands are only offered there (#5635).
+          channelCodes: channelCode ? [channelCode] : null
+        };
+        known.set(key, entry);
+        this.slashCommands.push(entry);
       }
     } catch { /* non-critical */ }
   }

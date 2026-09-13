@@ -122,6 +122,7 @@ class BraidLayout {
       });
       this._obs.observe(document.getElementById('app-body') || document.body, { childList: true, subtree: true });
       console.log('[BraidLayout] Engaged');
+      document.dispatchEvent(new CustomEvent('haven:braid-layout', { detail: { on: true } }));
     } catch (error) {
       try { this._disengage(false); }
       catch (cleanupError) { console.error('[BraidLayout] Rollback error:', cleanupError); }
@@ -196,6 +197,7 @@ class BraidLayout {
       document.documentElement.classList.remove('braid-people-open', 'braid-sound-open', 'braid-status-open');
       document.documentElement.removeAttribute('data-braid-layout');
       document.documentElement.removeAttribute('data-braid-form');
+      document.dispatchEvent(new CustomEvent('haven:braid-layout', { detail: { on: false } }));
       document.querySelectorAll('[data-braid-run]').forEach((el) => el.removeAttribute('data-braid-run'));
       HavenApi.DOM.removeStyle('BraidLayoutCSS');
       HavenApi.DOM.removeStyle('BraidMotionCSS');

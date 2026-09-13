@@ -260,6 +260,14 @@ _setupUI() {
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
+  // Right-click on Send: send later (#5638). /schedule does the same.
+  document.getElementById('send-btn').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    this._openScheduleModal();
+  });
+  document.getElementById('schedule-cancel')?.addEventListener('click', () => { document.getElementById('schedule-modal').style.display = 'none'; });
+  document.getElementById('schedule-save')?.addEventListener('click', () => this._submitSchedule());
+  document.getElementById('schedule-modal')?.addEventListener('click', (e) => { if (e.target.id === 'schedule-modal') e.target.style.display = 'none'; });
 
   // Join channel
   const joinBtn = document.getElementById('join-channel-btn');
@@ -349,6 +357,19 @@ _setupUI() {
       { danger: true }
     );
     if (!ok) return;
+    // A parent takes its sub-channels with it. Say so, name them, and point
+    // at the way out for anyone who wants to keep some of them.
+    const ch = this.channels.find(c => c.code === code);
+    const subs = ch ? this.channels.filter(c => c.parent_channel_id === ch.id) : [];
+    if (subs.length) {
+      const names = subs.map(s => '#' + s.name).join(', ');
+      const okSubs = await this._showConfirmModal(
+        '⚠️ ' + t('confirm.delete_channel_subs_title'),
+        t('confirm.delete_channel_subs', { names }),
+        { danger: true, confirmLabel: t('confirm.delete_channel_subs_btn') }
+      );
+      if (!okSubs) return;
+    }
     this.socket.emit('delete-channel', { code });
   });
   // Mark channel as read
@@ -1768,6 +1789,17 @@ _setupUI() {
       this._applyMediaTileSize(px);
     });
   }
+  // Tile shape, shared with the forum gallery (#5645).
+  const shapeSel = document.getElementById('media-gallery-shape');
+  if (shapeSel && this._tileShapeOptionsHtml) {
+    let saved = 'square';
+    try { saved = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    shapeSel.innerHTML = this._tileShapeOptionsHtml(saved);
+    shapeSel.addEventListener('change', () => {
+      try { localStorage.setItem('mediaGalleryShape', this._forumParseShape(shapeSel.value)); } catch {}
+      this._applyMediaTileSize();
+    });
+  }
 
   // ── Select / multi-delete bar (#5375) ──
   const selToggle = document.getElementById('media-gallery-select-toggle');
@@ -2097,6 +2129,9 @@ _setupUI() {
 
   // Image click — open lightbox overlay (CSP-safe — no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
+    // A forum card handles its own clicks: the thumbnail opens the topic,
+    // not the lightbox (#5646).
+    if (e.target.closest('.forum-topic')) return;
     // Concealed media (hidden image / unrevealed spoiler) intercepts the click
     // before the lightbox opens.
     if (this._maybeRevealConcealed(e)) return;
@@ -2136,8 +2171,10 @@ _setupUI() {
     }
   }
 
-  // Image right-click — custom context menu for chat thumbnails
+  // Image right-click — custom context menu for chat thumbnails. Forum cards
+  // open their own menus, so both menus no longer stack up there (#5650).
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
+    if (e.target.closest('.forum-topic')) return;
     if (e.target.classList.contains('chat-image')) {
       e.preventDefault();
       this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src);
@@ -6480,7 +6517,50 @@ _addPollOptionRow(list, index) {
     row.remove();
     this._updatePollRemoveButtons();
   });
+  // A picture for the option: uploaded on pick, so the poll can be posted
+  // with the URLs the moment Create is clicked (#5648).
+  const imgBtn = document.createElement('button');
+  imgBtn.type = 'button';
+  imgBtn.className = 'poll-option-imgbtn';
+  imgBtn.textContent = '\ud83d\uddbc\ufe0f';
+  imgBtn.title = t('modals.poll.add_image');
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = 'image/*';
+  file.style.display = 'none';
+  imgBtn.addEventListener('click', () => {
+    if (row.dataset.image) {
+      delete row.dataset.image;
+      imgBtn.classList.remove('has-image');
+      imgBtn.style.backgroundImage = '';
+      imgBtn.title = t('modals.poll.add_image');
+      return;
+    }
+    file.click();
+  });
+  file.addEventListener('change', async () => {
+    const f = file.files && file.files[0];
+    file.value = '';
+    if (!f || !f.type.startsWith('image/')) return;
+    const cap = this._uploadCapMb ? this._uploadCapMb() : 25;
+    if (f.size > cap * 1024 * 1024) return this._showToast(t('media.image_too_large', { maxMb: cap }), 'error');
+    try {
+      const fd = new FormData();
+      fd.append('scope', 'channel');
+      fd.append('image', f);
+      const data = await this._uploadWithProgress('/api/upload', fd);
+      if (!data || !data.url) throw new Error('upload');
+      row.dataset.image = data.url;
+      imgBtn.classList.add('has-image');
+      imgBtn.style.backgroundImage = `url("${data.url}")`;
+      imgBtn.title = t('modals.poll.remove_image');
+    } catch (err) {
+      if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
+    }
+  });
   row.appendChild(input);
+  row.appendChild(imgBtn);
+  row.appendChild(file);
   row.appendChild(removeBtn);
   list.appendChild(row);
   this._updatePollRemoveButtons();
@@ -6504,14 +6584,106 @@ _updatePollRemoveButtons() {
 _submitPoll() {
   const question = document.getElementById('poll-question-input').value.trim();
   if (!question) return;
-  const inputs = document.querySelectorAll('#poll-options-list .poll-option-input');
-  const options = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+  const rows = Array.from(document.querySelectorAll('#poll-options-list .poll-option-row'))
+    .map(r => ({ text: r.querySelector('.poll-option-input')?.value.trim() || '', image: r.dataset.image || null }))
+    .filter(r => r.text);
+  const options = rows.map(r => r.text);
   if (options.length < 2) return;
+  const images = rows.map(r => r.image);
   const multiVote = document.getElementById('poll-multi-vote').checked;
   const anonymous = document.getElementById('poll-anonymous').checked;
 
-  this.socket.emit('create-poll', { question, options, multiVote, anonymous });
+  this.socket.emit('create-poll', { question, options, multiVote, anonymous, ...(images.some(Boolean) && { images }) });
   document.getElementById('poll-modal').style.display = 'none';
+},
+
+/* ── Send later (#5638) ─────────────────────────────── */
+_openScheduleModal(prefill = '') {
+  const modal = document.getElementById('schedule-modal');
+  if (!modal) return;
+  const ch = this.channels?.find(c => c.code === this.currentChannel);
+  if (!ch || ch.is_dm) { this._showToast(t('modals.schedule.not_here'), 'error'); return; }
+  const text = document.getElementById('schedule-text');
+  const when = document.getElementById('schedule-when');
+  text.value = prefill || document.getElementById('message-input')?.value || '';
+  text.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setSeconds(0, 0);
+  when.value = this._toLocalInputValue(d);
+  when.min = this._toLocalInputValue(new Date());
+  this._scheduleEditingId = null;
+  document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
+  modal.style.display = 'flex';
+  text.focus();
+  this._loadScheduledList();
+},
+
+_toLocalInputValue(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+},
+
+_loadScheduledList() {
+  this.socket.timeout(8000).emit('get-scheduled-messages', {}, (err, r) => {
+    if (err || !r) return;
+    this._renderScheduledList(r.items || []);
+  });
+},
+
+_renderScheduledList(items) {
+  const list = document.getElementById('schedule-list');
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<p class="muted-text" style="font-size:0.8rem">${t('modals.schedule.none')}</p>`;
+    return;
+  }
+  list.innerHTML = items.map(it => `<div class="schedule-item" data-id="${it.id}">
+    <div class="schedule-item-main">
+      <span class="schedule-item-when">${this._escapeHtml(new Date(it.sendAt).toLocaleString())}</span>
+      <span class="schedule-item-chan">#${this._escapeHtml(it.channelName || '')}</span>
+      <div class="schedule-item-text">${this._escapeHtml(it.content)}</div>
+    </div>
+    <div class="schedule-item-actions">
+      <button type="button" class="btn-sm" data-act="edit">${t('msg_toolbar.edit')}</button>
+      <button type="button" class="btn-sm danger" data-act="cancel">${t('modals.schedule.cancel_send')}</button>
+    </div>
+  </div>`).join('');
+  list.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+    const id = parseInt(b.closest('.schedule-item').dataset.id, 10);
+    const it = items.find(x => x.id === id);
+    if (!it) return;
+    if (b.dataset.act === 'cancel') {
+      this.socket.emit('cancel-scheduled-message', { id }, (r) => this._renderScheduledList((r && r.items) || []));
+      return;
+    }
+    this._scheduleEditingId = id;
+    document.getElementById('schedule-text').value = it.content;
+    document.getElementById('schedule-when').value = this._toLocalInputValue(new Date(it.sendAt));
+    document.getElementById('schedule-save').textContent = t('modals.common.save');
+  }));
+},
+
+_submitSchedule() {
+  const textEl = document.getElementById('schedule-text');
+  const content = textEl.value.trim();
+  const at = new Date(document.getElementById('schedule-when').value);
+  if (!content) { textEl.focus(); return; }
+  if (isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
+  const editing = this._scheduleEditingId;
+  const done = (r) => {
+    if (!r || r.error) { this._showToast((r && r.error) || t('toasts.role_server_no_response'), 'error'); return; }
+    this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: at.toLocaleString() }), 'success');
+    if (!editing) {
+      const input = document.getElementById('message-input');
+      if (input && input.value.trim() === content) { input.value = ''; input.style.height = 'auto'; }
+    }
+    this._scheduleEditingId = null;
+    textEl.value = '';
+    document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
+    this._renderScheduledList(r.items || []);
+  };
+  if (editing) this.socket.emit('update-scheduled-message', { id: editing, content, sendAt: at.toISOString() }, done);
+  else this.socket.emit('schedule-message', { code: this.currentChannel, content, sendAt: at.toISOString() }, done);
 },
 
 /* ── /time timestamp picker modal ───────────────────── */
@@ -6933,7 +7105,11 @@ _saveRename() {
   if (/\p{M}{4,}/u.test(newName)) {
     return this._showToast(t('toasts.display_name_too_many_marks'), 'error');
   }
-  this.socket.emit('rename-user', { username: newName });
+  // Only an actual change goes to the server; a bio or avatar save with the
+  // name left alone used to announce a rename to the whole channel.
+  if (newName !== (this.user.displayName || this.user.username)) {
+    this.socket.emit('rename-user', { username: newName });
+  }
   // Save bio
   const bioInput = document.getElementById('edit-profile-bio');
   if (bioInput) {
@@ -7044,7 +7220,7 @@ _maybeRevealConcealed(e) {
   return false;
 },
 
-async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false) {
+async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false, opts = {}) {
   if (!this.currentChannel && !targetCode) return;
   // The queue stores the per-image spoiler choice on the File object itself.
   if (!spoiler && file && file._spoiler) spoiler = true;
@@ -7112,9 +7288,13 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
 
     // Send the image URL as a message to the channel that was active at upload time.
     // Prepend persona prefix if this image is bundled with a persona text message.
+    const line = personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url;
+    // A forum topic sent with text collects its picture lines and goes out as
+    // one message instead (#5653).
+    if (opts.returnContent) return line;
     this.socket.emit('send-message', {
       code: targetChannel,
-      content: personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url,
+      content: line,
       isImage: true,
       ...(bundled && { bundled: true })
     });
@@ -7198,6 +7378,11 @@ _applyMediaTileSize(px) {
   const size = px != null ? this._mediaTilePx(px) : this._mediaTilePx();
   const modal = document.getElementById('media-gallery-modal');
   if (modal) modal.style.setProperty('--media-tile', `${size}px`);
+  if (modal && this._tileShapes) {
+    let shape = 'square';
+    try { shape = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    modal.style.setProperty('--media-shape', this._tileShapes()[shape] || '1 / 1');
+  }
   const slider = document.getElementById('media-gallery-tile');
   if (slider && slider.value !== String(size)) slider.value = String(size);
   const wrap = document.getElementById('media-gallery-tile-wrap');

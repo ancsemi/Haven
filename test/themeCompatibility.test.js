@@ -371,6 +371,7 @@ test('theme metadata parser reads a paired layout plugin id', () => {
   assert.equal(parseThemeMetadata('/** @haven-layout ../evil */').layout, undefined);
 });
 
+
 test('theme metadata parser supports compact one-line comment blocks', () => {
   const meta = parseThemeMetadata('/** @name Compact @description One line @version 1.0 @haven-theme-api 2 */');
 

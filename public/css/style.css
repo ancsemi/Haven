@@ -1300,9 +1300,12 @@
   --led-off:       #221800;
   --led-glow:      rgba(255, 176, 0, 0.5);
 
-  --font-main:     'VT323', 'Courier New', monospace;
-  --font-heading:  'VT323', 'Courier New', monospace;
-  --font-mono:     'VT323', 'Courier New', monospace;
+  /* Share Tech Mono, the clean terminal face, instead of the pixel VT323:
+     the pixel font stayed cramped in sub-channel names and other fine print
+     even scaled up, and this reads at normal size (#5606). */
+  --font-main:     'Share Tech Mono', 'Courier New', monospace;
+  --font-heading:  'Share Tech Mono', 'Courier New', monospace;
+  --font-mono:     'Share Tech Mono', 'Courier New', monospace;
 
   --theme-logo:    "📺";
 }
@@ -2170,6 +2173,28 @@ html[data-braid-layout="1"].braid-status-open[data-desktop-app] #status-bar {
 /* User preference: hide status bar everywhere */
 [data-hide-statusbar] .status-bar { display: none !important; }
 [data-hide-statusbar] .status-bar-toggle-tab { display: flex; }
+
+/* Auto-mod word groups (#5614) */
+.automod-word-group { border: 1px solid var(--border-light); border-radius: var(--radius); padding: 0.5rem; margin-bottom: 0.5rem; background: var(--bg-tertiary); }
+.automod-word-group-head { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; }
+.automod-word-group-head .awg-name { flex: 1; min-width: 0; }
+.awg-strikes-label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; }
+.awg-strikes-label input { width: 3.5rem; }
+.automod-word-group .awg-words { width: 100%; resize: vertical; font-family: inherit; }
+
+/* Scheduled messages (#5638) */
+.schedule-item { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.4rem 0; border-bottom: 1px solid var(--border-light); }
+.schedule-item-main { flex: 1; min-width: 0; font-size: 0.8rem; }
+.schedule-item-when { font-weight: 600; }
+.schedule-item-chan { color: var(--text-muted); margin-left: 0.3rem; }
+.schedule-item-text { color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: hidden; }
+.schedule-item-actions { display: flex; gap: 0.25rem; flex-shrink: 0; }
+
+/* User preference: no Send button, Enter sends (#5654) */
+[data-hide-send-btn] #send-btn { display: none !important; }
+/* No GIF provider is configured on this server, so the button would only
+   open an empty picker (#5654) */
+[data-no-gif] #gif-btn { display: none !important; }
 
 /* ── Status bar toggle tab (shows when bar is hidden) ── */
 .status-bar-toggle-tab {
@@ -3703,7 +3728,10 @@ html[data-braid-layout="1"].braid-status-open[data-desktop-app] #status-bar {
   box-sizing: content-box;
   pointer-events: none;
 }
-.dm-pip-status-dot.away    { background: #95a5a6; }
+.dm-pip-status-dot.away    { background: #faa61a; border-radius: 0.125rem 0.125rem 50% 50%; }
+.dm-pip-status-dot.offline { background: #95a5a6; }
+/* The red live badge on a voice participant opens their stream (#5636). */
+.voice-stream-badge.live { cursor: pointer; }
 .dm-pip-status-dot.dnd     { background: #e74c3c; }
 .dm-pip-status-dot.invisible { background: transparent; border-color: var(--text-muted, #888); }
 .dm-pip-title { font-weight: 600; font-size: 0.8125rem; }
@@ -3991,7 +4019,10 @@ html[data-braid-layout="1"].braid-status-open[data-desktop-app] #status-bar {
   min-height: 3.25rem;
   gap: 0.75rem;
   position: relative;
-  z-index: 1;
+  /* Above the messages column: header dropdowns (the encryption menu, for
+     one) were painted under later siblings that also sit at z-index 1, such
+     as the DM safety notice (#5639). */
+  z-index: 2;
 }
 
 .channel-info { display: flex; align-items: center; gap: 0.625rem; min-width: 0; }
@@ -5406,6 +5437,11 @@ details.sound-section:not([open]) .sound-section-label::before {
 .message-input-area {
   display: flex;
   align-items: flex-end;
+  /* In a narrow message column (a half-screen browser with both sidebars
+     open) the toolbar was squeezing the text box down to a few characters.
+     The box keeps a usable width and the toolbar wraps onto its own row
+     above it instead. (#5626) */
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 1rem 1.25rem 1rem;
   position: relative;
@@ -5418,6 +5454,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .message-input-area textarea {
   flex: 1;
+  min-width: 11rem;
   padding: 0.625rem 0.875rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -12557,6 +12594,7 @@ html.forum-thread-open .message-input-area {
     flex-wrap: nowrap;
     align-items: flex-end;
   }
+  .message-input-area textarea { min-width: auto; }
 
   /* Media buttons — compact inline, not a separate row */
   .input-actions-box {
@@ -17257,6 +17295,20 @@ body.is-guest #dm-dock-btn {
 .poll-option:hover {
   border-color: var(--accent, #5865f2);
 }
+/* Picture on an option (#5648): sits above the label inside the same button */
+.poll-option.has-image { flex-wrap: wrap; }
+.poll-option-img {
+  position: relative; z-index: 1;
+  flex: 0 0 100%; width: 100%; max-height: 14rem; object-fit: cover;
+  border-radius: 0.3rem; margin-bottom: 0.4rem; display: block;
+}
+.poll-option-imgbtn {
+  flex: 0 0 auto; width: 2rem; height: 2rem; margin-left: 0.3rem;
+  border: 1px solid var(--border-light); border-radius: 0.3rem;
+  background: var(--bg-tertiary) center / cover no-repeat; color: var(--text-secondary);
+  cursor: pointer; font-size: 0.9rem; line-height: 1;
+}
+.poll-option-imgbtn.has-image { color: transparent; border-color: var(--accent); }
 .poll-option.poll-voted {
   border-color: var(--accent, #5865f2);
 }
@@ -18110,7 +18162,6 @@ html.dms-open .sidebar-split .dm-section-pane,
 }
 
 /* Banner visible — base: header & topic above banner */
-.main.has-banner .channel-header,
 .main.has-banner .channel-topic-bar,
 /* The banner is absolutely positioned at z-index 0, so it paints over any
    sibling that is not itself positioned. The header and topic bar were lifted
@@ -18120,6 +18171,13 @@ html.dms-open .sidebar-split .dm-section-pane,
 .main.has-banner .welcome-screen {
   position: relative;
   z-index: 1;
+}
+/* The header keeps the z-index:2 it has without a banner. This selector
+   outranks .channel-header, so listing it above at 1 put the encryption menu
+   back under the DM safety notice whenever a banner was up (#5639). */
+.main.has-banner .channel-header {
+  position: relative;
+  z-index: 2;
 }
 
 /* ── Full Header (default): opaque backgrounds ─── */
@@ -19500,7 +19558,7 @@ html.dms-open .sidebar-split .dm-section-pane,
 }
 .media-grid-item {
   position: relative;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: var(--media-shape, 1 / 1); /* tile shape picker (#5645) */
   border-radius: 0.375rem;
   overflow: hidden;
   background: var(--bg-secondary);
@@ -19968,7 +20026,7 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .forum-sort-view { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
 .forum-select { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.3rem 0.5rem; font-size: 0.8rem; }
 .forum-select-small { padding: 0.2rem 0.4rem; font-size: 0.72rem; }
-.forum-view-toggle { display: inline-flex; gap: 0.35rem; border: none; flex-wrap: wrap; }
+.forum-view-toggle { display: inline-flex; gap: 0.35rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; flex-wrap: wrap; }
 .forum-tile-size {
   display: inline-flex;
   align-items: center;
@@ -19982,11 +20040,13 @@ html.forum-channel .channel-topic-bar { display: none !important; }
   width: 7.5rem;
   accent-color: var(--accent);
 }
-.forum-view-btn, .forum-status-chip {
+.forum-view-btn { background: transparent; border: none; color: var(--text-muted); padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.9rem; }
+.forum-view-btn.active { background: var(--accent); color: var(--accent-text, #fff); }
+.forum-status-chip {
   background: transparent; border: 1px solid var(--border); border-radius: 12px;
   color: var(--text-muted); padding: 0.2rem 0.65rem; cursor: pointer; font-size: 0.75rem;
 }
-.forum-view-btn.active, .forum-status-chip.active { background: var(--accent); color: var(--accent-text, #fff); border-color: var(--accent); }
+.forum-status-chip.active { background: var(--accent); color: var(--accent-text, #fff); border-color: var(--accent); }
 .forum-status-filter { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; }
 .forum-tag-chip { background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.7rem; font-size: 0.75rem; cursor: pointer; }
 .forum-tag-chip:hover { color: var(--text-primary); border-color: var(--accent); }
@@ -19998,7 +20058,7 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .forum-topic:hover { border-color: var(--accent); transform: translateY(-1px); }
 .forum-topic-pinned { border-color: var(--accent-dim, var(--accent)); }
 .forum-topic-avatar { display: none; }
-.forum-topic-thumb { flex: 0 0 4.5rem; width: 4.5rem; height: 4.5rem; margin-left: auto; border-radius: 0.5rem; overflow: hidden; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
+.forum-topic-thumb { flex: 0 0 5.5rem; width: 5.5rem; height: 5.5rem; margin-left: auto; border-radius: calc(var(--radius) - 2px); overflow: hidden; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
 .forum-topic-thumb img.forum-thumb-img { width: 100%; height: 100%; object-fit: cover; max-width: none; max-height: none; min-width: 0; min-height: 0; margin: 0; }
 .forum-topic-thumb-empty { font-size: 1.7rem; }
 .forum-topic-thumb-empty span { color: rgba(255,255,255,0.88); font-weight: 700; }
@@ -20037,8 +20097,14 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .forum-topic-closed, .forum-topic-complete { opacity: 0.55; }
 .forum-topic-closed:hover, .forum-topic-complete:hover { opacity: 0.85; }
 .forum-field-closed span { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
-.forum-topic-title { font-weight: 700; font-size: 0.95rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.forum-topic-snippet { color: var(--text-secondary); font-size: 0.78rem; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.forum-topic-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* Unread dot on a forum card: a topic you have not opened, or new replies since you did (#5641). */
+.forum-unread-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); margin-right: 0.4rem; vertical-align: middle; position: relative; top: -0.05rem; box-shadow: 0 0 0 2px var(--bg-card); }
+.forum-topic-unread { border-left: 3px solid var(--accent); }
+.messages.forum-gallery .forum-topic-unread, .messages.forum-feed .forum-topic-unread { border-left: none; }
+.messages.forum-gallery .forum-unread-dot { box-shadow: 0 0 0 2px rgba(8,8,14,0.7); }
+.forum-mark-read { white-space: nowrap; }
+.forum-topic-snippet { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .forum-topic-snippet:empty { display: none; }
 .forum-topic-meta { display: flex; align-items: center; gap: 0.75rem; font-size: 0.72rem; color: var(--text-muted); margin-top: auto; padding-top: 0.35rem; }
 .forum-topic-author { color: var(--text-secondary); font-weight: 600; }
@@ -20047,9 +20113,9 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .forum-topic-edit { margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; opacity: 0.6; }
 .forum-topic-edit:hover { opacity: 1; color: var(--accent); }
 .forum-load-more { align-self: center; margin-top: 0.75rem; }
-/* Gallery: taller tiles so title, status and replies sit on the picture. */
+/* Gallery: --forum-shape sets the tile; overlay text sits on a scrim. */
 .messages.forum-gallery .forum-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--forum-tile, 13rem), 1fr)); gap: clamp(0.25rem, calc(var(--forum-tile, 13rem) * 0.05), 0.85rem); }
-.messages.forum-gallery .forum-topic { position: relative; display: flex; flex-direction: column; aspect-ratio: 3 / 4; padding: 0; overflow: hidden; }
+.messages.forum-gallery .forum-topic { position: relative; display: flex; flex-direction: column; aspect-ratio: var(--forum-shape, 1 / 1); padding: 0; overflow: hidden; }
 .messages.forum-gallery .forum-topic-thumb { position: absolute; inset: 0; width: auto; height: auto; margin: 0; border-radius: 0; font-size: 2.4rem; z-index: 0; }
 .messages.forum-gallery .forum-topic-thumb-empty span { font-size: 1.6rem; opacity: 0.45; }
 .messages.forum-gallery .forum-topic-body { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: 1.4rem 0.7rem 0.65rem; gap: 0.2rem; background: linear-gradient(to top, rgba(8,8,14,0.92) 35%, rgba(8,8,14,0.55) 75%, transparent); color: #fff; }
@@ -20058,7 +20124,7 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .messages.forum-gallery .forum-topic-meta-top,
 .messages.forum-gallery .forum-topic-author,
 .messages.forum-gallery .forum-topic-meta { color: rgba(235,235,245,0.85); }
-.messages.forum-gallery .forum-topic-tags { order: -1; }
+.messages.forum-gallery .forum-topic-tags { position: absolute; top: 0.4rem; left: 0.4rem; right: 0.4rem; z-index: 2; }
 .messages.forum-gallery .forum-tag { background: rgba(8,8,14,0.65); color: #fff; }
 .messages.forum-gallery .forum-tag-hash { color: color-mix(in srgb, var(--accent) 60%, #fff); }
 .messages.forum-gallery[data-forum-tile="small"] .forum-topic-snippet { display: none; }
@@ -20102,7 +20168,7 @@ html.forum-channel .channel-topic-bar { display: none !important; }
 .messages.forum-feed .forum-topic-avatar.avatar-square,
 .messages.forum-feed .forum-topic-avatar.avatar-squircle { border-radius: 0.45rem; }
 .messages.forum-feed .forum-topic-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.messages.forum-feed .forum-topic-body { grid-column: 2; grid-row: 1; gap: 0.2rem; }
+.messages.forum-feed .forum-topic-body { grid-column: 2; grid-row: 1; gap: 0.2rem; position: static; padding: 0; background: none; color: inherit; }
 .messages.forum-feed .forum-topic-thumb {
   grid-column: 2;
   grid-row: 2;
@@ -20113,12 +20179,14 @@ html.forum-channel .channel-topic-bar { display: none !important; }
   margin: 0;
   border-radius: 1rem;
   border: 1px solid var(--border);
+  position: static;
 }
 .messages.forum-feed .forum-topic-thumb img.forum-thumb-img { max-height: 22rem; object-fit: cover; }
 .messages.forum-feed .forum-topic-thumb-empty { display: none; }
-.messages.forum-feed .forum-topic-title { font-size: 1.02rem; -webkit-line-clamp: 6; font-weight: 650; }
-.messages.forum-feed .forum-topic-snippet { -webkit-line-clamp: 8; font-size: 0.88rem; }
+.messages.forum-feed .forum-topic-title { font-size: 1.02rem; -webkit-line-clamp: 6; font-weight: 650; color: var(--text-primary); }
+.messages.forum-feed .forum-topic-snippet { display: -webkit-box; -webkit-line-clamp: 8; font-size: 0.88rem; }
 .messages.forum-feed .forum-topic-meta-top { font-weight: 650; color: var(--text-primary); }
+.messages.forum-feed .forum-topic-tags { position: static; }
 .forum-post-modal { max-width: 34rem; width: 94%; padding-top: 1.25rem; }
 .forum-post-modal h3 { padding-right: 2.25rem; }
 .forum-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }

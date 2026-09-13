@@ -264,29 +264,47 @@ export default {
   // ═══════════════════════════════════════════════════════
   // SELF-ASSIGN ROLE MENUS
   // ═══════════════════════════════════════════════════════
-  _openRoleMenuBuilder() {
+  // Post a new menu, or with { messageId } edit one that is already posted:
+  // the same picker, started from what the menu holds, plus the message text
+  // so wording added by hand survives (#5644).
+  _openRoleMenuBuilder(existing = null) {
     const defaults = ['🎮', '🎨', '🎵', '📚', '🎬', '⚽', '💻', '🍕', '🌙', '☀️', '🐱', '🐶', '🚀', '🧪', '🎲', '📷', '🌍', '🔥', '💜', '🍀'];
-    this._roleEmit('get-roles', {}, (res) => {
+    const build = (menu) => this._roleEmit('get-roles', {}, (res) => {
       const roles = (res.roles || []).filter(r => r.scope !== 'channel');
       const chans = this.channels.filter(c => !c.is_dm);
       if (!roles.length) { this._showToast(t('settings.admin.roles_no_custom'), 'error'); return; }
-      const body = `<p class="settings-hint">${t('settings.admin.role_menu.hint')}</p>
-        <label class="settings-label">${t('settings.admin.role_menu.channel')}</label>
+      const saved = new Map(((menu && menu.roles) || []).map(r => [Number(r.roleId), r.emoji]));
+      const maxChars = parseInt(this.serverSettings?.max_message_chars) || 2000;
+      const head = menu
+        ? `<label class="settings-label">${t('settings.admin.role_menu.content_label')}</label>
+        <textarea id="rm-content" class="settings-text-input" rows="4" maxlength="${maxChars}">${this._escapeHtml(menu.content || '')}</textarea>
+        <small class="settings-hint">${t('settings.admin.role_menu.content_hint')}</small>`
+        : `<label class="settings-label">${t('settings.admin.role_menu.channel')}</label>
         <select id="rm-channel" class="settings-text-input">${chans.map(c => `<option value="${c.code}" ${c.code === this.currentChannel ? 'selected' : ''}># ${this._escapeHtml(c.name)}</option>`).join('')}</select>
         <label class="settings-label" style="margin-top:8px">${t('settings.admin.role_menu.title_label')}</label>
-        <input id="rm-title" class="settings-text-input" maxlength="120" placeholder="${this._escapeHtml(t('settings.admin.role_menu.title_placeholder'))}">
+        <input id="rm-title" class="settings-text-input" maxlength="120" placeholder="${this._escapeHtml(t('settings.admin.role_menu.title_placeholder'))}">`;
+      const body = `<p class="settings-hint">${t('settings.admin.role_menu.hint')}</p>
+        ${head}
         <div class="rm-roles">${roles.map((r, i) => `
           <div class="rm-row">
-            <label class="toggle-row"><span><span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span><input type="checkbox" class="rm-role" value="${r.id}"></label>
-            <input class="rm-emoji settings-text-input" maxlength="8" value="${defaults[i % defaults.length]}" title="${this._escapeHtml(t('settings.admin.role_menu.emoji'))}">
+            <label class="toggle-row"><span><span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span><input type="checkbox" class="rm-role" value="${r.id}"${saved.has(r.id) ? ' checked' : ''}></label>
+            <input class="rm-emoji settings-text-input" maxlength="8" value="${this._escapeHtml(saved.get(r.id) || defaults[i % defaults.length])}" title="${this._escapeHtml(t('settings.admin.role_menu.emoji'))}">
           </div>`).join('')}</div>`;
       this._openToolModal({
-        title: t('settings.admin.role_menu.post'), body, confirmText: t('settings.admin.role_menu.post'),
+        title: menu ? t('settings.admin.role_menu.edit') : t('settings.admin.role_menu.post'), body,
+        confirmText: menu ? t('modals.common.save') : t('settings.admin.role_menu.post'),
         onConfirm: (ov) => {
           const entries = [...ov.querySelectorAll('.rm-row')]
             .filter(row => row.querySelector('.rm-role').checked)
             .map(row => ({ roleId: parseInt(row.querySelector('.rm-role').value, 10), emoji: row.querySelector('.rm-emoji').value.trim() }));
           if (!entries.length) { this._showToast(t('settings.admin.role_menu.pick_one'), 'error'); return false; }
+          if (menu) {
+            this.socket.emit('update-role-menu', { messageId: menu.messageId, roles: entries, content: ov.querySelector('#rm-content').value.trim() }, (r) => {
+              if (r?.error) return this._showToast(r.error, 'error');
+              this._showToast(t('settings.admin.role_menu.updated'), 'success');
+            });
+            return;
+          }
           this.socket.emit('create-role-menu', { code: ov.querySelector('#rm-channel').value, title: ov.querySelector('#rm-title').value.trim(), roles: entries }, (r) => {
             if (r?.error) return this._showToast(r.error, 'error');
             this._showToast(t('settings.admin.role_menu.posted'), 'success');
@@ -294,6 +312,14 @@ export default {
         }
       });
     });
+    if (existing && existing.messageId) {
+      this.socket.emit('get-role-menu', { messageId: existing.messageId }, (r) => {
+        if (!r || r.error) { this._showToast((r && r.error) || t('settings.admin.role_menu.gone'), 'error'); return; }
+        build(r);
+      });
+    } else {
+      build(null);
+    }
   },
 
   _renderRoleMenu(msgId, menu) {

@@ -11,18 +11,153 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [4.6.1] - 2026-09-09
+## [Unreleased]
 
-A round of fixes from the issue tracker and the community server. Discord
-emotes show as pictures on both sides of the Ferry bridge, the DM PiP shows
-who is actually online, #channel links survive a rename, thread replies get
-link cards, forum cards show the protection shield, the hover card and the
-role Collapse button behave, CRT text reads bigger, and the topic bar folds
-away. The homepage has full-size screenshots and a gallery. No migration
-steps; the one new column is added on first start.
+On top of 4.8.0: the permissions grid, original layout and sidebar chrome,
+and the image / Chrome local-network fixes.
 
 ### Added
-## [Unreleased]
+- **Permissions matrix.** Settings → Permissions is a grid: permission rows,
+  role columns, tickboxes, + / − roles, and one auto-assign radio. New servers
+  start with Member and Mod. A Users tab lists members so you can change one
+  person's role or ticks. Admin stays `is_admin` and cannot be removed.
+- **Haven (original) layout.** Theme → Layout has a third switch that puts
+  the old side buttons, header Join Voice, and the rest of that chrome back.
+- **Sidebar + menu.** Join, create, and temporary channel sit behind one
+  + button on Channels. DMs open from a bottom button. Mention counts live
+  on the threads icon.
+
+### Fixed
+- **Chrome no longer asks for local-network access on every chat load.** Voice
+  STUN probes wait until someone joins a call.
+- **Save Image opens a folder picker** in browsers that have
+  `showSaveFilePicker`, instead of a silent download.
+- **Chat images that showed as a black box in some Tauri profiles.** The lazy
+  placeholder is transparent, static PNGs are not run through the GIF-freeze
+  canvas, on-screen pictures load even when the scroll observer misses them,
+  and E2E image blob URLs are not revoked on the same tick as decode.
+
+## [4.8.0] - 2026-09-12
+
+Channel access moves to one place: a channel's Required roles now decide
+who is in it, and the role-side Grant and Revoke lists are gone (existing
+setups are converted on first start, and admins get a one-time notice).
+Around that, a batch of community work: forums get their own right-click
+menu, an edit-post composer, a default layout an admin can set, tile
+shapes, and one-topic image posts; polls take pictures; messages can be
+sent later; Auto-Mod gets word groups with weighted strikes; role menus can
+be edited after posting; and a run of fixes from the tracker. Two new
+tables and a few columns are created on first start; nothing to run by hand.
+
+### Added
+- **Edit a posted role menu (#5644).** Right-click a role menu message and
+  pick Edit role menu: tick or untick roles, change their emojis and reword
+  the text. The buttons and reaction chips people already see update in
+  place. Requested by @quakeman00.
+- **Edit a forum post from its card (#5650).** Edit post on a topic's menu
+  opens the composer with the title, tags and Closed box, and for the author
+  the text as well, so a topic can be reworded without hunting for the
+  message. Reported by @birdcrazy.
+- **Send later (#5638).** Right-click the Send button, or type /schedule,
+  to post a message at a time you pick, up to 30 days out. It waits on the
+  server, so it goes out whether or not you are online, and the same window
+  lists what is waiting with Edit and Cancel. Not available in direct
+  messages, which are encrypted in the browser. Requested by @birdcrazy.
+- **Pictures on poll options (#5648).** Each option in the poll creator has
+  a picture button; the picture shows above the option and a click on it is
+  a vote. Requested by @quakeman00.
+- **Word groups in Auto-Mod (#5614).** Settings, Admin, Auto-Mod has a
+  Words section: groups of words or phrases, each worth a number of strikes.
+  A message carrying one is blocked and the strikes count towards the
+  existing warn, mute and ban ladder, so a serious group can mute on the
+  first offence while a mild one takes several. Whole words only, case
+  does not matter, and staff above the skip level are not checked.
+  Requested by @quakeman00.
+- **Tile shapes for the galleries (#5645).** The forum gallery and the
+  Files & Media photos and videos tabs have a Shape picker next to the size
+  slider: square, or 4:3, 3:2 and 16:9 in wide and tall. The forum's
+  Set as default carries the shape too. Requested by @quakeman00.
+- **Hide the Send button (#5654).** Settings, Layout, Message Box has a
+  switch for people who only ever press Enter. Requested by @quakeman00.
+- **A default layout for a forum (#5656).** The list, gallery or feed view
+  and the tile size were only ever remembered per browser, so a forum an
+  admin arranged as a gallery opened as a list for everyone else. Anyone
+  who can change the channel's settings has a Set as default button in the
+  forum toolbar; readers who pick their own view afterwards keep it.
+  Reported by @quakeman00.
+
+### Changed
+- **Required roles are membership now (#5649).** Channel access lives in
+  one place, on the channel: right-click it, Channel Functions, Required
+  roles. Anyone who holds the roles (any of them, or all of them) is put in
+  the channel the moment they get them, from an admin or a role menu, and
+  taken out the moment they lose them. People added by hand keep their
+  membership but only see the channel while they hold the roles. The
+  role-side Grant and Revoke channel list, and the Reapply button, are
+  gone: on first start any channels a role used to grant become Required
+  roles on those channels, so nothing that worked stops working. Suggested
+  by @quakeman00.
+- **The GIF button hides when no GIF provider is set up (#5654).** On those
+  servers it only ever opened an empty picker. Suggested by @birdcrazy.
+- **A quote needs a space after the > (#5654).** A line like ">implying" or
+  ">.<" stays as typed; "> like this" and ">> nested" still quote, and a
+  lone ">" on its own line is no longer an empty quote. Requested by
+  @quakeman00.
+- **The live badge in the voice list stays put (#5636).** It sits at the
+  right edge ahead of the mute icon, so it no longer jumps when someone on
+  push to talk mutes and unmutes. Reported by @quakeman00.
+
+### Fixed
+- **Right-clicking a forum card opened two menus at once (#5650).** The
+  thumbnail gets the image menu, with a View image entry, and the rest of
+  the card gets a menu made for topics: Open, Edit post, Pin, Close, Copy
+  link, Protect, Delete. The chat menu's Edit, React and Thread are gone
+  from there: Edit stacked a second copy of the text on the card, React
+  opened the picker under the composer, and Thread is what a click does.
+  Reported by @quakeman00 and @birdcrazy.
+- **Clicking a forum thumbnail opened the picture and the topic at once
+  (#5646).** A click opens the topic; the picture is under View image on
+  the right-click menu. Reported by @quakeman00.
+- **A picture and text sent together made two forum topics (#5653).** They
+  make one topic now, with the text as its title and the picture on the
+  card. Reported by @birdcrazy.
+- **Watch Stream did nothing once the Join prompt was gone (#5636).** With
+  auto-accept off, the red badge and Watch Stream asked the sharer to resend
+  and landed back at the same prompt check, so the click only ever said
+  Requesting stream. Clicking either now counts as the accept. Reported by
+  @quakeman00.
+- **A slash command registered by two bots showed in one channel (#5635).**
+  The same command set up on two bots in two channels only suggested itself
+  in one of them. It shows in both. Reported by @josolanes.
+- **A role's Members list never showed who held it (#5643).** Every row said
+  Assign, the badge never appeared and there was no Remove, because the list
+  checked a field the server does not send. Reported by @quakeman00.
+- **Encryption menu under the DM safety notice with a banner up (#5639).**
+  The 4.7.0 fix was overridden whenever a server banner was showing.
+  Reported by @birdcrazy.
+- **"fenix is now known as fenix".** Saving your profile for a bio or
+  avatar change sent the unchanged name along and announced a rename to the
+  channel. Only an actual change is announced now, old name first.
+- **Show Status Bar was ignored in the Desktop app (#5647).** The bar is on
+  by default there, as the window's footer, and the switch now turns it
+  off. Reported by @quakeman00 and @birdcrazy.
+
+## [4.7.0] - 2026-09-11
+
+Forums grow up another notch and a big batch of community work lands. Topic
+cards carry an unread dot that follows your account between devices, with a
+Mark all read button; there is a feed view, tile size sliders, closed topics,
+and pinned topics stay on top. Amnibro's role work is in: role and channel
+templates, required roles on a channel, per-role upload caps and self-assign
+role menus. KLIPY joins GIPHY as a GIF provider, Braid and Compact stop
+stacking on Matrix, text can be underlined and coloured, and the pop-up
+notification limit takes a custom gap or Never. Fixes cover mutes (they now
+cover channels, not DMs, muted users cannot edit or react, and mods can
+unmute), Add to Channel is multi-select again, bot slash commands stay in
+their bot's channel, declined screen shares stay silent, the hover card, the
+encryption menu, the DM PiP away colour, sub-channel deletion, stream focus
+mode, the squeezed composer and deleted-file retention. One new table
+(thread_reads) is created on first start; nothing to run by hand.
 
 ### Added
 - **Sidebar + menu.** Join, create, and temporary channel sit behind one
@@ -31,10 +166,11 @@ steps; the one new column is added on first start.
   list, with the unread count on the button.
 - **Thread count on 🧵.** Mention counts live on the threads icon, same
   idea as channel unread badges.
-- **Gallery tile size slider.** Files & Media photos/videos and the forum
-  gallery both have a size slider, from a tight mosaic up to poster tiles.
-- **Forum feed view.** A third layout next to List and Gallery: avatar,
-  text, then a full-width photo, like a Twitter timeline.
+- **Forum unread dots (#5641).** A topic you have not opened, or one with
+  replies since you last looked, shows a dot and an accent edge on its card.
+  Opening the topic clears it, and a Mark all read button in the forum
+  toolbar clears the lot. It is stored on your account, so reading on one
+  device clears it everywhere. Requested by @josolanes.
 - **Theme palettes stay exclusive.** Braid, Braid Light, and Compact file
   themes no longer stack on Matrix (or any built-in) when their Settings
   toggles are on. Layout lives in Theme → Layout (Braid and Compact) and
@@ -58,6 +194,16 @@ steps; the one new column is added on first start.
 - **Haven (original) layout.** Theme → Layout has a third switch that puts
   the old side buttons, header Join Voice, and the rest of that chrome back.
   Forum boards stay as they are. Turning on Braid or Compact turns it off.
+- **Gallery tile size slider.** Files & Media photos/videos and the forum
+  gallery both have a size slider, from a tight mosaic up to poster tiles.
+- **Forum feed view.** A third layout next to List and Gallery: avatar,
+  text, then a full-width photo, like a Twitter timeline.
+- **KLIPY as a GIF provider.** GIF search now supports KLIPY alongside GIPHY
+  and Tenor. Set `KLIPY_API_KEY`, and use `PREFERRED_GIF_SEARCH` (klipy, giphy
+  or tenor) to pick which provider serves the picker when more than one key is
+  set. If the preference is unset or invalid it falls back to whatever is
+  configured: GIPHY first, then KLIPY, then Tenor last, since Tenor is
+  deprecated. Supplemental; existing GIPHY/Tenor setups are unchanged.
 - **Closed forum topics (#5624).** Edit title and tags on a topic has a Closed
   box. A closed topic greys out, carries a Closed tag and sits below the open
   ones, and reopening it puts it back. The author, admins and anyone with
@@ -106,10 +252,14 @@ steps; the one new column is added on first start.
   can change one person's role or ticks. Admin stays `is_admin` and cannot be
   removed.
 
-- **The topic bar folds away (#5625).** A small arrow at its right folds the
-  bar to a thin strip, so "Click to set a topic" stops taking a line for
-  people who never will. It is per browser, and the fold survives channel
-  switches and reloads. Requested by @quakeman00.
+### Changed
+- **Deleted files no longer sit around forever.** Attachments from deleted
+  messages and channels are parked in a deleted-attachments folder, which was
+  only ever emptied when auto-cleanup was on with a max age set, and even then
+  only its top level. They now expire a week after deletion by default,
+  whether cleanup is on or not, and the window is a setting under
+  Auto-Cleanup. Files parked before this release count as expired on the
+  first run after updating.
 
 ### Fixed
 - **Home server icon opens a menu.** Add server, manage, sync, server
@@ -144,6 +294,59 @@ steps; the one new column is added on first start.
   classic, same 2.5rem chip in Braid, instead of the smaller emoji buttons.
 - **Unread DMs on the Messages button.** A red pill with the count sits on
   the dock icon.
+- **A moderation mute no longer blocks private messages (#5640).** Being
+  muted stops you posting in the server's channels for the set time; DMs
+  still work, which is also how you can reach a mod about it. Not to be
+  confused with muting a channel or DM in your own notification settings,
+  which only silences alerts for you.
+- **CRT theme is easier to read (#5606).** The pixel font is swapped for the
+  cleaner Share Tech Mono terminal face, which reads at normal size in
+  sub-channel names and other fine print. Requested by @quakeman00.
+- **Declined screen shares still played their audio (#5636).** With "auto
+  accept screen shares" off, the sound from a share you had not joined played
+  anyway, with no tile to turn it down. The audio now waits until you join.
+  The red live badge next to a person in the voice list opens their stream,
+  which is the way back in after the pop-up is gone; its tooltip says so now.
+  Reported by @quakeman00.
+- **Muted users could still edit messages and react (#5640).** Editing an
+  existing message and adding a reaction now get the same "you are muted"
+  refusal as sending. Reported by @birdcrazy.
+- **No way to lift a mute (#5640).** The user menu has an Unmute entry next
+  to Mute for anyone who can mute, the person gets a toast when it happens,
+  and a mute set through the REST API no longer shows "muted for undefined
+  min".
+- **Add to Channel from the user menu is multi-select again (#5637).** The
+  right-click menu now opens the same tick-the-boxes picker as Settings, All
+  Members, instead of a one-click list that closed after the first channel.
+  Reported by @quakeman00.
+- **Bot slash commands in every channel (#5635, #5504).** A bot's commands
+  only appear in the slash menu while you are in the channel the bot is set
+  up in. Built-in commands are unchanged. Reported by @josolanes.
+- **Hover profile card closed on its own while someone was in voice
+  (#5608).** The member list is redrawn on every presence update, and the
+  card treated the vanished row as the pointer leaving. It now follows the
+  rebuilt row.
+- **Encryption menu drawn under the DM safety notice (#5639).** The channel
+  header sits above the messages column again, so its dropdowns are not
+  covered. Reported by @birdcrazy.
+- **DM PiP showed Away as grey (#5574).** Away is amber like the sidebar,
+  and offline stays grey.
+- **Deleting a parent channel deletes its sub-channels too.** They used to be
+  cut loose instead and turned up as top-level channels nobody had created.
+  Delete now asks a second time when there are sub-channels, names them, and
+  suggests moving any worth keeping to another channel or promoting them to
+  top level first.
+- **Other streams no longer vanish when the focused one ends (#5609).** With
+  several people sharing, double-clicking one stream to focus it hides the
+  rest. If that sharer then stopped, the viewer stayed in focus mode with
+  nothing left to show, so the remaining streams sat invisible in a blank box
+  until something reset it. Focus mode now drops back to the grid the moment
+  the focused stream ends, or is closed or minimised. Reported by @quakeman00.
+- **The text box no longer gets squeezed out by the toolbar (#5626).** In a
+  narrow message column, such as a half-screen browser window with both
+  sidebars open, the upload, emoji, GIF and poll buttons left only a few
+  characters of room to type. The toolbar now moves onto its own row when
+  there is not enough width. Reported by @quakeman00.
 - **Pinned forum topics stay on top.** A reply to another topic could push a
   pinned one down the list, and a pinned topic with old activity could be
   missing from the first page altogether. Pinned topics now load with the
@@ -160,10 +363,29 @@ steps; the one new column is added on first start.
   canvas, on-screen pictures load even when the scroll observer misses them,
   and E2E image blob URLs are not revoked on the same tick as decode.
 
+## [4.6.1] - 2026-09-09
+
+A round of fixes from the issue tracker and the community server. Discord
+emotes show as pictures on both sides of the Ferry bridge, the DM PiP shows
+who is actually online, #channel links survive a rename, thread replies get
+link cards, forum cards show the protection shield, the hover card and the
+role Collapse button behave, CRT text reads bigger, and the topic bar folds
+away. The homepage has full-size screenshots and a gallery. No migration
+steps; the one new column is added on first start.
+
+### Added
+- **The topic bar folds away (#5625).** A small arrow at its right folds the
+  bar to a thin strip, so "Click to set a topic" stops taking a line for
+  people who never will. It is per browser, and the fold survives channel
+  switches and reloads. Requested by @quakeman00.
+
 ### Changed
 - **Homepage.** The logo leads the page, the screenshots are full size with a
   Gallery you can step through with the arrow keys, the phone shot sits beside
   Security and privacy, and a community channel shot follows the feature list.
+  The download section leads with the app, since most people need that and
+  not the server, and the Download button at the top takes you there instead
+  of grabbing the server zip.
 
 ### Fixed
 - **CRT text reads bigger (#5606).** The theme's VT323 face is scaled up a

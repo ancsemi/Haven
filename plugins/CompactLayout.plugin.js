@@ -89,6 +89,7 @@ class CompactLayout {
     try {
       this._syncDesktop();
       if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '1');
+      this._renderControl();
       document.dispatchEvent(new CustomEvent('haven:compact-layout', { detail: { on: true } }));
     } catch (error) {
       this._engaged = false;
@@ -106,7 +107,23 @@ class CompactLayout {
     this._restoreDesktop();
     document.documentElement.removeAttribute('data-compact-layout');
     if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '0');
+    this._renderControl();
     document.dispatchEvent(new CustomEvent('haven:compact-layout', { detail: { on: false } }));
+  }
+
+  _renderControl() {
+    if (!this._control) return;
+    this._control.setAttribute('aria-pressed', this._engaged ? 'true' : 'false');
+    const blocked = this._engaged && this._blocked;
+    this._control.title = blocked
+      ? 'Compact layout is waiting for another layout plugin'
+      : 'Compact layout (Ctrl+Alt+C)';
+    this._control.setAttribute(
+      'aria-label',
+      blocked
+        ? 'Compact layout waiting for another layout plugin'
+        : (this._engaged ? 'Switch to classic layout' : 'Switch to compact layout')
+    );
   }
 
   _syncDesktop() {

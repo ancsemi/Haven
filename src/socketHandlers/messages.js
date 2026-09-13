@@ -363,11 +363,12 @@ module.exports = function register(socket, ctx) {
       db.prepare(`
         SELECT thread_id,
                COUNT(*) as reply_count,
-               MAX(created_at) as last_reply_at
+               MAX(created_at) as last_reply_at,
+               MAX(id) as last_reply_id
         FROM messages WHERE thread_id IN (${ph})
         GROUP BY thread_id
       `).all(...msgIds).forEach(t => {
-        threadMap.set(t.thread_id, { count: t.reply_count, lastReplyAt: utcStamp(t.last_reply_at), participants: [] });
+        threadMap.set(t.thread_id, { count: t.reply_count, lastReplyAt: utcStamp(t.last_reply_at), lastReplyId: t.last_reply_id, participants: [] });
       });
       // Get participants for threads (up to 5 unique usernames)
       if (threadMap.size > 0) {
@@ -390,6 +391,16 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Which reply this account last saw in each topic, for the unread dot on
+    // forum cards (#5641).
+    const threadReadMap = new Map();
+    if (channel.is_forum && msgIds.length > 0) {
+      const rph = msgIds.map(() => '?').join(',');
+      db.prepare(`SELECT thread_id, last_read_reply_id FROM thread_reads WHERE user_id = ? AND thread_id IN (${rph})`)
+        .all(socket.user.id, ...msgIds)
+        .forEach(r => threadReadMap.set(r.thread_id, r.last_read_reply_id));
+    }
+
     const enriched = messages.map(m => {
       const obj = { ...m };
       // Border fit travels with the message (like avatar) so it renders even when
@@ -407,6 +418,15 @@ module.exports = function register(socket, ctx) {
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
       obj.thread = threadMap.get(m.id) || null;
+      // A forum topic is unread until you open it (your own topics start
+      // read), and again whenever a reply lands after the last one you saw.
+      if (channel.is_forum && !m.thread_id) {
+        const tinfo = obj.thread || { count: 0, lastReplyAt: null, lastReplyId: 0, participants: [] };
+        const lastId = tinfo.lastReplyId || 0;
+        const seen = threadReadMap.get(m.id);
+        tinfo.unread = seen !== undefined ? lastId > seen : (m.user_id !== socket.user.id || lastId > 0);
+        obj.thread = tinfo;
+      }
       if ('tags' in m) obj.tags = parseTags(m.tags);
       if ('closed' in m) obj.closed = !!m.closed;
       if ('request_status' in m) obj.request_status = parseRequestStatus(m.request_status);
@@ -1002,16 +1022,16 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
     }
 
-    const activeMute = db.prepare(
-      'SELECT id, expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
-    ).get(socket.user.id);
-    if (activeMute) {
-      const remaining = Math.ceil((new Date(activeMute.expires_at + 'Z') - Date.now()) / 60000);
-      return socket.emit('error-msg', `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
-    }
-
     const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
+
+    // A moderation mute covers the server's channels, not private messages:
+    // a muted person can still DM, which is also how they reach a mod about
+    // the mute (#5640).
+    if (!channel.is_dm) {
+      const sendMute = activeMuteNotice(socket.user.id);
+      if (sendMute) return socket.emit('error-msg', sendMute);
+    }
 
     // Forum topics carry a title and a pick of the channel's tags. Both are
     // ignored outside forum channels so a stale client cannot tag chat.
@@ -1374,6 +1394,127 @@ module.exports = function register(socket, ctx) {
     }, 10000);
   }
 
+  // ── Scheduled messages (#5638) ──────────────────────────
+  // Held on the server, so they go out whether or not the sender is online.
+  // Not for DMs: those are encrypted in the browser, and a message parked
+  // here in plain text would defeat that.
+  const SCHEDULE_MAX_DAYS = 30;
+  const SCHEDULE_MAX_PENDING = 25;
+  function parseSendAt(raw) {
+    const ts = Date.parse(typeof raw === 'string' ? raw : '');
+    if (!Number.isFinite(ts)) return null;
+    if (ts < Date.now() + 15000 || ts > Date.now() + SCHEDULE_MAX_DAYS * 86400000) return null;
+    return new Date(ts).toISOString();
+  }
+  function scheduledList(userId) {
+    return db.prepare(`
+      SELECT s.id, s.content, s.send_at, c.code AS channelCode, c.name AS channelName
+      FROM scheduled_messages s JOIN channels c ON c.id = s.channel_id
+      WHERE s.user_id = ? ORDER BY s.send_at ASC
+    `).all(userId).map(r => ({ id: r.id, content: r.content, sendAt: r.send_at, channelCode: r.channelCode, channelName: r.channelName }));
+  }
+  function scheduleMaxChars() {
+    return parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get()?.value) || 2000;
+  }
+
+  socket.on('schedule-message', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
+    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    const sendAt = parseSendAt(data.sendAt);
+    if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
+    const channel = db.prepare('SELECT id, is_dm, read_only, text_enabled FROM channels WHERE code = ?').get(code);
+    if (!channel) return cb({ error: 'Channel not found' });
+    if (channel.is_dm) return cb({ error: 'Scheduled sends are not available in direct messages' });
+    if (channel.text_enabled === 0) return cb({ error: 'Text messages are disabled in this channel' });
+    if (!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return cb({ error: 'Not a member of this channel' });
+    if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
+    const mute = activeMuteNotice(socket.user.id);
+    if (mute) return cb({ error: mute });
+    const content = sanitizeText(data.content.trim());
+    if (!content) return cb({ error: 'Nothing to send' });
+    // The same checks a live send gets, at the moment it is queued.
+    if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return cb({ error: 'That message was blocked' });
+    const pending = db.prepare('SELECT COUNT(*) AS c FROM scheduled_messages WHERE user_id = ?').get(socket.user.id).c;
+    if (pending >= SCHEDULE_MAX_PENDING) return cb({ error: `You already have ${SCHEDULE_MAX_PENDING} messages waiting to send` });
+    try {
+      const r = db.prepare('INSERT INTO scheduled_messages (user_id, channel_id, content, send_at) VALUES (?, ?, ?, ?)').run(socket.user.id, channel.id, content, sendAt);
+      cb({ success: true, id: r.lastInsertRowid, sendAt, items: scheduledList(socket.user.id) });
+    } catch (err) {
+      console.error('schedule-message error:', err);
+      cb({ error: 'Failed to schedule the message' });
+    }
+  });
+
+  socket.on('get-scheduled-messages', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : (typeof data === 'function' ? data : () => {});
+    try { cb({ items: scheduledList(socket.user.id) }); } catch { cb({ items: [] }); }
+  });
+
+  socket.on('update-scheduled-message', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object' || !isInt(data.id)) return cb({ error: 'Invalid request' });
+    const row = db.prepare('SELECT id, channel_id FROM scheduled_messages WHERE id = ? AND user_id = ?').get(data.id, socket.user.id);
+    if (!row) return cb({ error: 'That scheduled message is gone' });
+    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    const sendAt = parseSendAt(data.sendAt);
+    if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
+    const content = sanitizeText(data.content.trim());
+    if (!content) return cb({ error: 'Nothing to send' });
+    if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id })) return cb({ error: 'That message was blocked' });
+    db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
+    cb({ success: true, items: scheduledList(socket.user.id) });
+  });
+
+  socket.on('cancel-scheduled-message', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object' || !isInt(data.id)) return cb({ error: 'Invalid request' });
+    db.prepare('DELETE FROM scheduled_messages WHERE id = ? AND user_id = ?').run(data.id, socket.user.id);
+    cb({ success: true, items: scheduledList(socket.user.id) });
+  });
+
+  // Every 15 seconds, post whatever has come due. Membership is checked
+  // again at send time, so leaving a channel drops what was queued for it.
+  if (!global.__havenScheduleSweep) {
+    global.__havenScheduleSweep = setInterval(() => {
+      let due = [];
+      try {
+        due = db.prepare(`
+          SELECT s.id, s.user_id, s.channel_id, s.content, c.code, c.name AS channel_name
+          FROM scheduled_messages s JOIN channels c ON c.id = s.channel_id
+          WHERE s.send_at <= ? ORDER BY s.send_at ASC LIMIT 20
+        `).all(new Date().toISOString());
+      } catch (err) { console.error('[schedule-sweep] query error:', err.message); return; }
+      for (const row of due) {
+        try {
+          db.prepare('DELETE FROM scheduled_messages WHERE id = ?').run(row.id);
+          const author = db.prepare('SELECT id, username, display_name, avatar, avatar_shape, border, border_transform, animate_profile FROM users WHERE id = ?').get(row.user_id);
+          const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, row.user_id);
+          if (!author || !member) continue;
+          const result = db.prepare('INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, ?)').run(row.channel_id, row.user_id, row.content);
+          const message = {
+            id: result.lastInsertRowid, content: row.content, created_at: new Date().toISOString(),
+            username: author.display_name || author.username, user_id: author.id,
+            avatar: author.avatar || null, avatar_shape: author.avatar_shape || 'circle',
+            border: author.border || null, borderTransform: parseBorderTransform(author.border_transform),
+            animateProfile: author.animate_profile || 'trigger',
+            reply_to: null, replyContext: null, reactions: [], edited_at: null, thread: null
+          };
+          io.to(`channel:${row.code}`).emit('new-message', { channelCode: row.code, message });
+          sendPushNotifications(row.channel_id, row.code, row.channel_name, author.id, message.username, row.content);
+          fireWebhookCallbacks(row.channel_id, row.code, message);
+          for (const [, s] of io.sockets.sockets) {
+            if (s.user && s.user.id === author.id) s.emit('scheduled-message-sent', { id: row.id, channelCode: row.code, channelName: row.channel_name });
+          }
+        } catch (err) {
+          console.error('[schedule-sweep] send error:', err.message);
+        }
+      }
+    }, 15000);
+  }
+
   // ── Typing indicator ────────────────────────────────────
   socket.on('typing', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -1441,6 +1582,18 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // "You are muted for N more minutes", or null when the user has no active
+  // mute. Sends, edits and reactions in the server's channels all go through
+  // it; DMs are exempt (#5640).
+  function activeMuteNotice(userId) {
+    const row = db.prepare(
+      'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
+    ).get(userId);
+    if (!row) return null;
+    const remaining = Math.ceil((new Date(row.expires_at + 'Z') - Date.now()) / 60000);
+    return `You are muted for ${remaining} more minute${remaining !== 1 ? 's' : ''}`;
+  }
+
   socket.on('edit-message', (data) => {
     if (!data || typeof data !== 'object') return;
     const _editMaxRow = db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
@@ -1454,7 +1607,7 @@ module.exports = function register(socket, ctx) {
     const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
     if (!code) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const msg = db.prepare(
@@ -1468,6 +1621,8 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'edit_own_messages', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to edit messages');
     }
+    const editMute = channel.is_dm ? null : activeMuteNotice(socket.user.id);
+    if (editMute) return socket.emit('error-msg', editMute);
 
     const newContent = sanitizeText(data.content.trim());
     if (!newContent) return;
@@ -1832,6 +1987,8 @@ module.exports = function register(socket, ctx) {
     try {
       if (!data || typeof data !== 'object') return;
       if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+      const reactMute = activeMuteNotice(socket.user.id);
+      if (reactMute) return socket.emit('error-msg', reactMute);
 
       const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
       const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;
@@ -1850,10 +2007,14 @@ module.exports = function register(socket, ctx) {
       // channel — using socket.currentChannel made the reaction silently
       // fail because the message wouldn't be found in that channel. (#bug-#4)
       const msg = db.prepare(
-        'SELECT m.id, c.code, c.id as channel_id FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
+        'SELECT m.id, c.code, c.id as channel_id, c.is_dm FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
       ).get(data.messageId);
       if (!msg) return;
       const code = msg.code;
+      if (!msg.is_dm) {
+        const reactMute = activeMuteNotice(socket.user.id);
+        if (reactMute) return socket.emit('error-msg', reactMute);
+      }
 
       // Verify membership of the channel the message lives in.
       const member = db.prepare(
@@ -1941,6 +2102,14 @@ module.exports = function register(socket, ctx) {
       if (cleanOptions.some(o => o.length > 100)) return;
       const multiVote = !!data.multiVote;
       const anonymous = !!data.anonymous;
+      // One optional picture per option, as an upload path on this server;
+      // anything else is dropped rather than rendered (#5648).
+      const rawImages = Array.isArray(data.images) ? data.images : [];
+      const images = options.map((_, i) => {
+        const u = typeof rawImages[i] === 'string' ? rawImages[i].trim() : '';
+        return UPLOAD_PATH_EXACT_RE.test(u) ? u : null;
+      }).filter((_, i) => options[i] && typeof options[i] === 'string' && options[i].trim());
+      const hasImages = images.some(Boolean);
 
       if (floodCheck('message')) {
         return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
@@ -1965,7 +2134,7 @@ module.exports = function register(socket, ctx) {
       const safeQuestion = sanitizeText(question);
       if (!safeQuestion) return;
 
-      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous });
+      const pollData = JSON.stringify({ question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }) });
       const content = `📊 Poll: ${safeQuestion}`;
       const result = db.prepare(
         'INSERT INTO messages (channel_id, user_id, content, poll_data) VALUES (?, ?, ?, ?)'
@@ -1987,7 +2156,7 @@ module.exports = function register(socket, ctx) {
         reactions: [],
         edited_at: null,
         thread: null,
-        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, votes: {}, totalVotes: 0 }
+        poll: { question: safeQuestion, options: cleanOptions, multiVote, anonymous, ...(hasImages && { images }), votes: {}, totalVotes: 0 }
       };
       cleanOptions.forEach((_, i) => { message.poll.votes[i] = []; });
 
@@ -2155,6 +2324,60 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // Mark every topic in a forum channel read for this account (#5641). Each
+  // topic's row moves to its latest reply, or 0 when it has none, so the dot
+  // comes back only for replies that land after this.
+  socket.on('mark-forum-read', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+
+    const channel = db.prepare('SELECT id, is_forum FROM channels WHERE code = ?').get(code);
+    if (!channel || !channel.is_forum) return;
+
+    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    if (!member && !socket.user.isAdmin) return;
+
+    try {
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
+        SELECT ?, m.id, COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id), 0)
+        FROM messages m
+        WHERE m.channel_id = ? AND m.thread_id IS NULL
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, channel.id);
+      for (const [, s] of io.sockets.sockets) {
+        if (s.user && s.user.id === socket.user.id) s.emit('forum-read', { channelCode: code });
+      }
+    } catch (err) {
+      console.error('Mark forum read error:', err);
+    }
+  });
+
+  // A reply that lands while you have the thread open on screen has been
+  // seen: record it so a reload, or another device, does not flag it (#5641).
+  socket.on('mark-thread-read', (data) => {
+    if (!data || typeof data !== 'object' || !isInt(data.parentId)) return;
+    const parentRow = db.prepare(
+      'SELECT m.id, m.channel_id, c.code as channel_code FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ? AND m.thread_id IS NULL'
+    ).get(data.parentId);
+    if (!parentRow) return;
+    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(parentRow.channel_id, socket.user.id);
+    if (!member && !socket.user.isAdmin) return;
+    try {
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
+        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, data.parentId, data.parentId);
+      for (const [, s] of io.sockets.sockets) {
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId: data.parentId });
+      }
+    } catch (err) {
+      console.error('Mark thread read error:', err);
+    }
+  });
+
   // ═══════════════════════════════════════════════════════
   // THREADS
   // ═══════════════════════════════════════════════════════
@@ -2184,6 +2407,21 @@ module.exports = function register(socket, ctx) {
     if (!member && !socket.user.isAdmin) return;
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
+
+    // Opening a thread marks every reply in it seen for this account, and the
+    // person's other devices drop the unread dot too (#5641).
+    try {
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
+        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, parentId, parentId);
+      for (const [, s] of io.sockets.sockets) {
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId });
+      }
+    } catch (err) {
+      console.error('Thread read error:', err);
+    }
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
@@ -2313,6 +2551,11 @@ module.exports = function register(socket, ctx) {
       const result = db.prepare(
         'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to) VALUES (?, ?, ?, ?, ?)'
       ).run(channel.id, socket.user.id, safeContent, parentId, replyTo);
+      // Your own reply is not news to you (#5641).
+      db.prepare(`
+        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)
+        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
+      `).run(socket.user.id, parentId, result.lastInsertRowid);
 
       const message = {
         id: result.lastInsertRowid,
@@ -2366,6 +2609,9 @@ module.exports = function register(socket, ctx) {
         thread: {
           count: threadCount.count,
           lastReplyAt: lastMsg ? lastMsg.created_at : null,
+          lastReplyId: lastMsg ? lastMsg.id : null,
+          // Lets forum cards light up for everyone but the person who replied (#5641).
+          senderId: socket.user.id,
           participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
         }
       });

@@ -75,6 +75,20 @@ _renderOnlineUsers(users) {
 
   el.innerHTML = html;
 
+  // Re-point the hover card at the rebuilt row. This list is redrawn on every
+  // presence update (someone talking in voice triggers one every few seconds)
+  // and the card's safety net reads a detached trigger as "pointer left", so
+  // without this the card closed by itself under a resting mouse (#5608).
+  const hovered = this._hoverTarget;
+  if (hovered && !hovered.isConnected && hovered.classList && hovered.classList.contains('user-item')) {
+    const uid = hovered.dataset.userId;
+    const fresh = uid ? el.querySelector(`.user-item[data-user-id="${uid}"]`) : null;
+    if (fresh) {
+      this._hoverTarget = fresh;
+      if (this._profilePopupAnchor === hovered) this._profilePopupAnchor = fresh;
+    }
+  }
+
   // Bind gear buttons: same unified menu as right-click, anchored to the gear
   el.querySelectorAll('.user-gear-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -96,52 +110,6 @@ _renderOnlineUsers(users) {
       this.socket.emit('start-dm', { targetUserId: targetId });
       // Re-enable after a timeout in case no response
       setTimeout(() => { btn.disabled = false; btn.style.opacity = ''; }, 5000);
-    });
-  });
-},
-
-// Lightweight channel picker for the user gear menu's "Add to Channel"
-// action. Lists every non-DM, non-private top-level channel the caller can
-// see (admins also see private). Server's `invite-to-channel` handler
-// validates membership/permissions and rejects already-members with a
-// toast, so no need to pre-filter by target's current memberships here.
-_openGearMenuChannelPicker(userId, username, channels) {
-  if (!channels || channels.length === 0) {
-    this._showToast?.(t('users.no_invite_channels'), 'info');
-    return;
-  }
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay aml-channel-picker-overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '100002';
-  overlay.innerHTML = `
-    <div class="modal aml-ch-picker">
-      <div class="aml-ch-picker-header">
-        <h4 class="aml-ch-picker-title">${t('users.add_to_channel_title', { name: this._escapeHtml(username) })}</h4>
-      </div>
-      <div class="aml-channel-list">
-        ${channels.map(c => `
-          <button class="aml-channel-row gm-add-ch-btn" data-cid="${c.id}" data-cname="${this._escapeHtml(c.name)}">
-            <span class="aml-ch-hash">#</span>
-            <span class="aml-ch-name">${this._escapeHtml(c.name)}</span>
-          </button>
-        `).join('')}
-      </div>
-      <div class="modal-actions aml-ch-picker-actions">
-        <button class="btn-sm aml-ch-cancel">${t('modals.common.cancel')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.aml-ch-cancel').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelectorAll('.gm-add-ch-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const channelId = parseInt(btn.dataset.cid);
-      if (!channelId) return;
-      this.socket.emit('invite-to-channel', { targetUserId: userId, channelId });
-      close();
     });
   });
 },
@@ -1197,7 +1165,9 @@ _renderVoiceUsers(users, channelCode) {
         ? t(viewerCount === 1 ? 'users.streaming_viewers_one' : 'users.streaming_viewers_other', { count: viewerCount })
         : t('users.streaming_no_viewers');
       const viewerNames = viewers.map(v => v.username).join(', ');
-      const liveTitle = this._escapeHtml(viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel);
+      // The badge is also the way back into a share you dismissed or did not
+      // auto-accept, so the tooltip says so (#5636).
+      const liveTitle = this._escapeHtml(`${viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel}. ${t('users.stream_click_to_watch')}`);
       streamBadge = `<span class="voice-stream-badge live" title="${liveTitle}">🔴${viewerCount ? ' ' + viewerCount : ''}</span>`;
     }
     if (hasWebcam) {
@@ -1217,17 +1187,18 @@ _renderVoiceUsers(users, channelCode) {
     const statusIcons = [];
     if (u.isMuted) statusIcons.push(`<span class="voice-status-icon is-muted" title="${t('voice.status_muted')}">🎙️</span>`);
     if (u.isDeafened) statusIcons.push(`<span class="voice-status-icon is-deafened" title="${t('voice.status_deafened')}">🔊</span>`);
-    const statusIconsHtml = statusIcons.length
-      ? `<span class="voice-status-icons">${statusIcons.join('')}</span>`
-      : '';
+    // Always rendered, even empty: its margin-left:auto is what pins the live
+    // badge to the right edge, so the badge stays put when the mute icon comes
+    // and goes and is not a moving target for someone on push to talk (#5636).
+    const statusIconsHtml = `<span class="voice-status-icons">${statusIcons.join('')}</span>`;
     const botBadge = u.isBot ? '<span class="bot-badge">BOT</span>' : '';
     return `
       <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
         ${botBadge}
-        ${streamBadge}
         ${statusIconsHtml}
+        ${streamBadge}
         ${isSelf || u.isBot ? '' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
       </div>
     `;
@@ -1277,26 +1248,44 @@ _renderVoiceUsers(users, channelCode) {
       e.stopPropagation();
       const userId = parseInt(badge.closest('.voice-user-item')?.dataset.userId);
       if (isNaN(userId)) return;
-      const hiddenTile = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
-      if (hiddenTile) {
-        this._showStreamTile(`screen-tile-${userId}`, userId);
-      } else if (!document.getElementById(`screen-tile-${userId}`)) {
-        // No tile at all (e.g. we joined after they went live and their stream
-        // never reached us, or we closed our view and the sharer's tile was
-        // since torn down) — actively ask the sharer to (re)send. Arm the
-        // retry watchdog too: a single renegotiate request often loses the
-        // race (the sharer may be mid-signaling-change), which left the viewer
-        // stuck on "Requesting stream…" forever with no second attempt. The
-        // watchdog re-requests a few times until a live video track arrives.
-        // (#5426)
-        if (this.voice) {
-          this.voice.requestScreenStream(userId);
-          this.voice._watchForScreenStream(userId);
-        }
-        this._showToast?.(t('voice.requesting_stream'), 'info');
-      }
+      this._watchStream(userId);
     });
   });
+},
+
+// Open someone's live stream from the voice list: the red badge and the
+// Watch Stream menu entry both land here.
+_watchStream(userId) {
+  const hiddenTile = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
+  if (hiddenTile) { this._showStreamTile(`screen-tile-${userId}`, userId); return; }
+  if (document.getElementById(`screen-tile-${userId}`)) return;
+  // With auto-accept off the share arrived and waited on the Join prompt.
+  // Once that prompt was gone, asking the sharer to resend brought the same
+  // stream back to the same prompt check, so the click only ever produced
+  // "Requesting stream". Clicking here is the accept: open what already
+  // arrived, or take the next arrival without the prompt (#5636).
+  const offered = this._pendingStreamOffers && this._pendingStreamOffers.get(userId);
+  if (offered && offered.getVideoTracks().some(tr => tr.readyState === 'live')) {
+    this._handleScreenStream(userId, offered, { force: true });
+    return;
+  }
+  this._pendingStreamOffers?.delete(userId);
+  if (!this._acceptedStreams) this._acceptedStreams = new Set();
+  this._acceptedStreams.add(userId);
+  if (!this.voice) return;
+  // Media may already be flowing into a receiver nobody rendered.
+  if (this.voice._deliverScreenFromReceivers?.(userId)) return;
+  // No tile at all (e.g. we joined after they went live and their stream
+  // never reached us, or we closed our view and the sharer's tile was
+  // since torn down) — actively ask the sharer to (re)send. Arm the
+  // retry watchdog too: a single renegotiate request often loses the
+  // race (the sharer may be mid-signaling-change), which left the viewer
+  // stuck on "Requesting stream…" forever with no second attempt. The
+  // watchdog re-requests a few times until a live video track arrives.
+  // (#5426)
+  this.voice.requestScreenStream(userId);
+  this.voice._watchForScreenStream(userId);
+  this._showToast?.(t('voice.requesting_stream'), 'info');
 },
 
 _showVoiceUserMenu(anchorEl, userId, username) {
@@ -1366,17 +1355,7 @@ _showVoiceUserMenu(anchorEl, userId, username) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btn.dataset.action === 'watch-stream') {
-        const hidden = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
-        if (hidden) {
-          this._showStreamTile(`screen-tile-${userId}`, userId);
-        } else if (this.voice) {
-          // No tile yet — ask the sharer to (re)send their stream, and arm the
-          // retry watchdog so a single dropped renegotiate doesn't strand the
-          // viewer on "Requesting stream…" with no follow-up attempt. (#5426)
-          this.voice.requestScreenStream(userId);
-          this.voice._watchForScreenStream(userId);
-          this._showToast?.(t('voice.requesting_stream'), 'info');
-        }
+        this._watchStream(userId);
         this._closeVoiceUserMenu();
       } else if (btn.dataset.action === 'mute-user') {
         // Mute: toggle their volume to 0 so YOU can't hear THEM

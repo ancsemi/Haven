@@ -972,6 +972,16 @@ _setupSocketListeners() {
     this._markSelfRole(data.roleId, !!data.held);
   });
 
+  // A role menu was edited: swap in the new buttons wherever that message is
+  // on screen. The click handling is delegated, so fresh HTML just works (#5644).
+  this.socket.on('role-menu-updated', (data) => {
+    if (!data || !data.messageId) return;
+    document.querySelectorAll(`.role-menu-widget[data-msg-id="${data.messageId}"]`).forEach(w => {
+      const html = this._renderRoleMenu(data.messageId, data.roleMenu);
+      if (html) w.outerHTML = html; else w.remove();
+    });
+  });
+
   this.socket.on('channel-joined', (channel) => {
     if (!this.channels.find(c => c.code === channel.code)) {
       this.channels.push(channel);
@@ -1713,6 +1723,17 @@ _setupSocketListeners() {
     if (!this._forumActive) this._bumpForumTopic?.(data.parentId);
   });
 
+  // Forum unread dots are per account, so another device opening a topic or
+  // pressing Mark all read clears them here as well (#5641).
+  this.socket.on('thread-read', (data) => {
+    if (!data || data.channelCode !== this.currentChannel) return;
+    this._forumMarkTopicRead?.(data.parentId);
+  });
+  this.socket.on('forum-read', (data) => {
+    if (!data || data.channelCode !== this.currentChannel) return;
+    this._forumMarkAllRead?.(data.channelCode);
+  });
+
   // Forum topics: retitled or retagged, and the channel's tag list changed.
   this.socket.on('topic-updated', (data) => {
     if (data.channelCode !== this.currentChannel) return;
@@ -1721,6 +1742,18 @@ _setupSocketListeners() {
   this.socket.on('forum-tags-updated', (data) => {
     const ch = this.channels && this.channels.find(c => c.code === data.code);
     if (ch) ch.forum_tags = JSON.stringify(data.tags || []);
+    if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
+  });
+  // A message you scheduled has just gone out (#5638).
+  this.socket.on('scheduled-message-sent', (data) => {
+    if (!data) return;
+    this._showToast(t('modals.schedule.sent', { channel: data.channelName || '' }), 'info');
+    if (document.getElementById('schedule-modal')?.style.display === 'flex') this._loadScheduledList?.();
+  });
+  // An admin set the layout everyone opens this forum in (#5656).
+  this.socket.on('forum-layout-updated', (data) => {
+    const ch = this.channels && this.channels.find(c => c.code === data.code);
+    if (ch) ch.forum_layout = data.layout ? JSON.stringify(data.layout) : null;
     if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
   });
 
@@ -2040,6 +2073,9 @@ _setupSocketListeners() {
           displayContent = t('header.messages.decrypt_failed');
         }
       }
+      // A forum card shows a title and a snippet rather than the message
+      // body, so it is rebuilt from the new text instead of patched in place.
+      if (this._forumActive && this._forumApplyContentEdit?.(data.messageId, displayContent)) return;
       msgEls.forEach((msgEl) => {
         const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
         if (!contentEl) return;
@@ -2168,6 +2204,10 @@ _setupSocketListeners() {
       this._appendSystemMessage(`📌 ${t('header.messages.pinned_by', { name: data.pinnedBy })}`);
       this._markPinUnread?.(data.messageId);
       this._bumpPinIndicator?.(1);
+      // A pinned topic heads the forum list and its menu should offer Unpin,
+      // so the cached topic follows and the cards are rebuilt (#5650).
+      const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+      if (topic) { topic.pinned = 1; if (this._forumActive) this._forumReload(); }
 
       // If the Pins PiP is open, silently re-fetch the updated pin list so the
       // new pin appears without requiring the user to reopen anything.
@@ -2191,6 +2231,8 @@ _setupSocketListeners() {
         const unpinBtn = msgEl.querySelector('[data-action="unpin"]');
         if (unpinBtn) { unpinBtn.dataset.action = 'pin'; unpinBtn.title = t('msg_toolbar.pin'); }
       }
+      const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+      if (topic) { topic.pinned = 0; if (this._forumActive) this._forumReload(); }
       // Remove from pinned sidebar panel if it's open
       const pinnedItem = document.querySelector(`#pinned-panel .pinned-item[data-msg-id="${data.messageId}"]`);
       if (pinnedItem) {
@@ -2322,6 +2364,10 @@ _setupSocketListeners() {
     this._showToast(data.reason ? t('toasts.muted_reason', { duration: data.duration, reason: data.reason }) : t('toasts.muted', { duration: data.duration }), 'error');
   });
 
+  this.socket.on('unmuted', () => {
+    this._showToast(t('toasts.unmuted'), 'success');
+  });
+
   this.socket.on('ban-list', (data) => {
     this._renderBanList(data);
   });
@@ -2361,6 +2407,23 @@ _setupSocketListeners() {
     // Which of these settings also have a value waiting in the environment,
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
+    // No GIF provider on this server: the button would only open an empty
+    // picker, so it goes (#5654).
+    document.documentElement.toggleAttribute('data-no-gif', settings && settings.gif_search_available === 'false');
+    // TEMPORARY (#5649): a one-time notice to admins that channel access moved
+    // from roles to the channel's Required roles. Remove after the 4.8.x cycle.
+    if (settings && settings.role_gate_notice === '1' && !this._roleGateNoticeShown &&
+        (this.user?.isAdmin || this._hasPerm?.('manage_roles') || this._hasPerm?.('manage_server'))) {
+      this._roleGateNoticeShown = true;
+      const modal = document.getElementById('role-gate-notice-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('role-gate-notice-ok')?.addEventListener('click', () => {
+          modal.style.display = 'none';
+          this.socket.emit('update-server-setting', { key: 'role_gate_notice', value: '0' });
+        }, { once: true });
+      }
+    }
     this._applyServerSettings();
     this._renderChannelTemplates();
     this._maybeShowSetupWizard();

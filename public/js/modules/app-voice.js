@@ -1000,17 +1000,25 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
   const label = document.getElementById('screen-share-label');
 
   if (stream) {
-    // Honour auto-accept setting — show a join prompt instead of opening the tile automatically
-    const autoAccept = force || localStorage.getItem('haven_auto_accept_streams') !== 'false';
+    // Honour auto-accept setting — show a join prompt instead of opening the
+    // tile automatically. Clicking the sharer's live badge counts as the
+    // accept for that share, so it skips the prompt too (#5636).
+    const accepted = !!(this._acceptedStreams && this._acceptedStreams.has(userId));
+    const autoAccept = force || accepted || localStorage.getItem('haven_auto_accept_streams') !== 'false';
     if (!autoAccept && userId !== null && userId !== this.user.id) {
       const peer = this.voice.peers.get(userId);
       const who = peer ? peer.username : t('voice.someone');
+      // Keep the offered stream so the live badge can open it after the
+      // prompt has gone (#5636).
+      if (!this._pendingStreamOffers) this._pendingStreamOffers = new Map();
+      this._pendingStreamOffers.set(userId, stream);
       this._showToast(t('voice.sharing_started', { who: this._escapeHtml(who) }), 'info', {
         label: t('voice_runtime.join'),
         onClick: () => this._handleScreenStream(userId, stream, { force: true })
       }, 8000);
       return;
     }
+    this._pendingStreamOffers?.delete(userId);
 
     // Create a tile for this user's stream
     const tileId = `screen-tile-${userId || 'self'}`;
@@ -1158,6 +1166,10 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       grid.appendChild(tile);
     }
 
+    // A share the viewer had to accept may have had its audio parked while
+    // the Join prompt was up. The tile exists now, so let it play (#5636).
+    if (userId !== null && userId !== this.user.id) this.voice.flushPendingScreenAudio?.(userId);
+
     // Show the container BEFORE assigning srcObject — browsers won't decode
     // video frames inside a display:none container, causing a black rectangle
     // that only fixes itself on layout reflow (e.g. resizing the slider).
@@ -1251,7 +1263,10 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       this.socket.emit('stream-watch', { code: this.voice.currentChannel, sharerId: userId });
     }
   } else {
-    // Stream ended — remove this tile
+    // Stream ended — remove this tile. The next share from this person gets
+    // the prompt again, and any offer that never got a tile is gone (#5636).
+    this._pendingStreamOffers?.delete(userId);
+    this._acceptedStreams?.delete(userId);
     const tileId = `screen-tile-${userId || 'self'}`;
     this._stopStreamStallWatchdog(tileId);
     const tile = document.getElementById(tileId);
@@ -1579,6 +1594,14 @@ _updateScreenShareVisibility() {
   const container = document.getElementById('screen-share-container');
   const grid = document.getElementById('screen-share-grid');
   const label = document.getElementById('screen-share-label');
+  // Focus mode hides every tile but the focused one, so once that tile is
+  // gone (its sharer stopped, or it was closed or minimised) the remaining
+  // streams sat invisible in a blank container until something happened to
+  // reset it. Drop back to the grid instead. (#5609)
+  if (container.classList.contains('stream-focus-mode') &&
+      !grid.querySelector('.screen-share-tile.stream-focused:not([data-hidden="true"])')) {
+    this._exitStreamFocus();
+  }
   const totalCount = grid.children.length;
   const visibleCount = grid.querySelectorAll('.screen-share-tile:not([data-hidden=\"true\"])').length;
   const hiddenCount = totalCount - visibleCount;
@@ -1947,28 +1970,33 @@ _toggleStreamFocus(tile) {
   const grid = document.getElementById('screen-share-grid');
   const wasFocused = tile.classList.contains('stream-focused');
 
-  // Remove focus from all tiles first
-  grid.querySelectorAll('.screen-share-tile').forEach(t => {
-    t.classList.remove('stream-focused');
-  });
-  container.classList.remove('stream-focus-mode');
+  // Leave focus mode first, whichever tile held it.
+  this._exitStreamFocus();
+  if (wasFocused) return;
 
-  if (!wasFocused) {
-    tile.classList.add('stream-focused');
-    container.classList.add('stream-focus-mode');
-    // Clear inline max-height so CSS flex constraints take over (viewport-bounded)
-    container.style.maxHeight = '';
-    grid.style.maxHeight = '';
-    const vid = tile.querySelector('video');
-    if (vid) vid.style.maxHeight = '';
-  } else {
-    // Restore slider-based size
-    const saved = localStorage.getItem('haven_stream_size') || '50';
-    const vh = parseInt(saved, 10);
-    container.style.maxHeight = vh + 'vh';
-    grid.style.maxHeight = (vh - 2) + 'vh';
-    document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
-  }
+  tile.classList.add('stream-focused');
+  container.classList.add('stream-focus-mode');
+  // Clear inline max-height so CSS flex constraints take over (viewport-bounded)
+  container.style.maxHeight = '';
+  grid.style.maxHeight = '';
+  const vid = tile.querySelector('video');
+  if (vid) vid.style.maxHeight = '';
+},
+
+// Leave focus mode and put the slider-based size back. Runs on the second
+// double-click, and whenever the focused tile goes away. (#5609)
+_exitStreamFocus() {
+  const container = document.getElementById('screen-share-container');
+  const grid = document.getElementById('screen-share-grid');
+  if (!container || !grid) return;
+  grid.querySelectorAll('.screen-share-tile.stream-focused').forEach(t => t.classList.remove('stream-focused'));
+  if (!container.classList.contains('stream-focus-mode')) return;
+  container.classList.remove('stream-focus-mode');
+  const saved = localStorage.getItem('haven_stream_size') || '50';
+  const vh = parseInt(saved, 10);
+  container.style.maxHeight = vh + 'vh';
+  grid.style.maxHeight = (vh - 2) + 'vh';
+  document.querySelectorAll('.screen-share-tile video').forEach(v => { v.style.maxHeight = (vh - 4) + 'vh'; });
 },
 
 /** Collapse the stream container when all tiles are popped out (no visible streams) */

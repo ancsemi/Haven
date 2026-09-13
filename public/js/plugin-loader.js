@@ -449,7 +449,8 @@ window.HavenPluginLoader = (function () {
     const t = loadedThemes.get(file);
     if (!t || t.enabled || suppressExtensions || !t.compatible) return;
     // A palette (published or not) is one of the picker's choices, not a
-    // stackable tweak — turning it on means selecting it.
+    // stackable tweak — turning it on means selecting it, so the two
+    // surfaces stay in agreement.
     if (isExclusiveMeta({ ...t.meta, file })) {
       applyFileTheme(file);
       return;

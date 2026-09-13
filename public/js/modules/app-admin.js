@@ -473,6 +473,8 @@ _applyServerSettings() {
     if (cleanupSize && this.serverSettings.cleanup_max_size_mb) {
       cleanupSize.value = this.serverSettings.cleanup_max_size_mb;
     }
+    const deletedRet = document.getElementById('deleted-retention-days');
+    if (deletedRet) deletedRet.value = this.serverSettings.deleted_retention_days || '7';
     const maxUpload = document.getElementById('max-upload-mb');
     if (maxUpload) {
       maxUpload.value = this.serverSettings.max_upload_mb || '25';
@@ -911,6 +913,7 @@ _snapshotAdminSettings() {
     cleanup_enabled: this.serverSettings.cleanup_enabled || 'false',
     cleanup_max_age_days: this.serverSettings.cleanup_max_age_days || '0',
     cleanup_max_size_mb: this.serverSettings.cleanup_max_size_mb || '0',
+    deleted_retention_days: this.serverSettings.deleted_retention_days || '7',
     whitelist_enabled: this.serverSettings.whitelist_enabled || 'false',
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
     max_attachments: this.serverSettings.max_attachments || '10',
@@ -1037,6 +1040,12 @@ _saveAdminSettings() {
   const cleanSize = String(Math.max(0, Math.min(100000, parseInt(document.getElementById('cleanup-max-size')?.value) || 0)));
   if (cleanSize !== (snap.cleanup_max_size_mb || '0')) {
     this.socket.emit('update-server-setting', { key: 'cleanup_max_size_mb', value: cleanSize });
+    changed = true;
+  }
+
+  const deletedRet = String(Math.max(1, Math.min(3650, parseInt(document.getElementById('deleted-retention-days')?.value) || 7)));
+  if (deletedRet !== (snap.deleted_retention_days || '7')) {
+    this.socket.emit('update-server-setting', { key: 'deleted_retention_days', value: deletedRet });
     changed = true;
   }
 
@@ -1257,6 +1266,8 @@ _cancelAdminSettings() {
     if (ca) ca.value = snap.cleanup_max_age_days;
     const cs = document.getElementById('cleanup-max-size');
     if (cs) cs.value = snap.cleanup_max_size_mb;
+    const dr = document.getElementById('deleted-retention-days');
+    if (dr) dr.value = snap.deleted_retention_days;
     const wl = document.getElementById('whitelist-enabled');
     if (wl) wl.checked = snap.whitelist_enabled === 'true';
     const mu = document.getElementById('max-upload-mb');
@@ -2163,14 +2174,19 @@ _bindMemberListActions(container) {
   });
 },
 
-_openMemberChannelPicker(userId, username, mode) {
-  // mode: 'add' or 'remove'
+_openMemberChannelPicker(userId, username, mode, channelsOverride = null) {
+  // mode: 'add' or 'remove'. channelsOverride is a ready-made [{ id, name }]
+  // list for callers outside Settings, All Members (the user context menu),
+  // where the member and channel tables are not loaded. The server rejects
+  // channels the user is already in, so no pre-filter is needed there (#5637).
   const member = (this._allMembersData || []).find(m => m.id === userId);
   const allChannels = this._allMembersChannels || [];
   const memberChannelIds = new Set((member && member.channelList ? member.channelList : []).map(c => c.id));
 
   let channels;
-  if (mode === 'add') {
+  if (Array.isArray(channelsOverride)) {
+    channels = channelsOverride;
+  } else if (mode === 'add') {
     // Show channels user is NOT in (top-level only for clarity)
     channels = allChannels.filter(c => !memberChannelIds.has(c.id) && !c.parentId);
   } else {
@@ -2937,7 +2953,10 @@ _showSlashDropdown(query) {
   const host = (this._slashInput && this._slashInput.parentElement) || null;
   if (host && dropdown.parentElement !== host) host.appendChild(dropdown);
   const q = String(query || '').toLowerCase();
-  const filtered = this.slashCommands
+  // Bot commands carry the channel their bot is set up in and are only
+  // offered there. Built-in commands have no channel and show everywhere (#5635).
+  const offered = this.slashCommands.filter(c => !c.channelCodes || c.channelCodes.includes(this.currentChannel));
+  const filtered = offered
     .filter(c => String(c.cmd || '').toLowerCase().startsWith(q))
     // For base queries like "rss", show "/rss add" before plain "/rss" so
     // discoverable subcommands appear first and users don't keep selecting the
@@ -2953,7 +2972,7 @@ _showSlashDropdown(query) {
     })
     .slice(0, 10);
 
-  if (filtered.length === 0 || (query === '' && filtered.length === this.slashCommands.length)) {
+  if (filtered.length === 0 || (query === '' && filtered.length === offered.length)) {
     // Show all on empty query
     if (query === '') {
       // show all
@@ -2963,7 +2982,7 @@ _showSlashDropdown(query) {
     }
   }
 
-  const shown = query === '' ? this.slashCommands.slice(0, 12) : filtered;
+  const shown = query === '' ? offered.slice(0, 12) : filtered;
 
   dropdown.innerHTML = shown.map((c, i) =>
     `<div class="slash-item${i === 0 ? ' active' : ''}" data-cmd="${c.cmd}">
@@ -4539,17 +4558,7 @@ _renderRoleDetail() {
       <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.auto_assign_hint')}</small>
       <div class="role-channel-access-section">
         <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.channel_access')}</h5>
-        <label class="toggle-row">
-          <span>${t('settings.admin.role_form.link_channel_access')}</span>
-          <input type="checkbox" id="role-edit-link-channel-access" ${role.link_channel_access ? 'checked' : ''}>
-        </label>
-        <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.link_channel_access_hint')}</small>
-        <div id="role-channel-access-panel" style="display:${role.link_channel_access ? 'block' : 'none'};margin-top:8px;">
-          <div class="role-channel-access-list" id="role-channel-access-list">
-            <p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${t('modals.common.loading')}</p>
-          </div>
-          <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn" title="${this._escapeHtml(t('settings.admin.role_form.reapply_access_tooltip'))}">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
-        </div>
+        <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.channel_access_hint')}</small>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>
       <p class="perm-admin-note" id="perm-admin-note">${role.level === 0 ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note')}</p>
@@ -4574,10 +4583,6 @@ _renderRoleDetail() {
 
   // Toggle permissions visibility based on the current role level.
   this._updateRoleLevelPermsVis('role-edit-level', 'role-permissions-list', 'perm-admin-note');
-
-  // Toggle channel access panel visibility
-  const linkCheckbox = document.getElementById('role-edit-link-channel-access');
-  const accessPanel = document.getElementById('role-channel-access-panel');
 
   // Role icon upload/remove
   this._pendingRoleIcon = undefined;
@@ -4620,22 +4625,6 @@ _renderRoleDetail() {
     if (removeBtn) removeBtn.remove();
     this._showToast(t('settings.admin.role_form.icon_removed_role'), 'success');
   });
-  linkCheckbox.addEventListener('change', () => {
-    accessPanel.style.display = linkCheckbox.checked ? 'block' : 'none';
-    if (linkCheckbox.checked) this._loadRoleChannelAccess(role.id);
-  });
-  // Load channel access if already enabled
-  if (role.link_channel_access) this._loadRoleChannelAccess(role.id);
-
-  // Reapply button
-  document.getElementById('rca-reapply-btn').addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_reapply_confirm'))) return;
-    this._roleEmit('reapply-role-access', { roleId: role.id }, (res) => {
-      if (res && res.error) return this._showToast(res.error, 'error');
-      this._showToast(t(res.affected === 1 ? 'settings.admin.roles_reapplied_one' : 'settings.admin.roles_reapplied_other', { count: res.affected }), 'success');
-    });
-  });
-
   // The Save button lives in the modal-actions bar (always visible). Show it
   // when a role is selected, and wire up the click handler.
   const saveBtn = document.getElementById('save-role-btn');
@@ -4645,17 +4634,8 @@ _renderRoleDetail() {
   saveBtn.parentNode.replaceChild(freshSaveBtn, saveBtn);
   freshSaveBtn.addEventListener('click', () => {
     const perms = [...panel.querySelectorAll('.role-perm-checkbox:checked')].map(cb => cb.dataset.perm);
-    const linkEnabled = document.getElementById('role-edit-link-channel-access').checked;
     freshSaveBtn.disabled = true;
     freshSaveBtn.textContent = t('settings.admin.roles_saving');
-
-    // Collect channel access config
-    const accessRows = [...panel.querySelectorAll('.rca-channel-row')];
-    const accessData = accessRows.map(row => ({
-      channelId: parseInt(row.dataset.channelId, 10),
-      grant: row.querySelector('.rca-grant')?.checked || false,
-      revoke: row.querySelector('.rca-revoke')?.checked || false
-    })).filter(a => a.channelId);
 
     this._roleEmit('update-role', {
       roleId: role.id,
@@ -4664,29 +4644,12 @@ _renderRoleDetail() {
       color: document.getElementById('role-edit-color').value,
       icon: this._pendingRoleIcon !== undefined ? this._pendingRoleIcon : role.icon,
       autoAssign: document.getElementById('role-edit-auto-assign').checked,
-      linkChannelAccess: linkEnabled,
+      // Channel access lives on the channel now, as Required roles (#5649).
+      linkChannelAccess: false,
       maxUploadMb: parseInt(document.getElementById('role-edit-upload-mb')?.value, 10) || null,
       permissions: perms
     }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); freshSaveBtn.disabled = false; freshSaveBtn.textContent = t('settings.admin.roles_save'); return; }
-
-      // Save channel access config separately
-      if (linkEnabled && accessData.length) {
-        this._roleEmit('update-role-channel-access', {
-          roleId: role.id,
-          linkEnabled: true,
-          access: accessData
-        }, (accRes) => {
-          if (accRes && accRes.error) this._showToast(accRes.error, 'error');
-        });
-      } else if (!linkEnabled) {
-        // Disable channel access linking
-        this._roleEmit('update-role-channel-access', {
-          roleId: role.id,
-          linkEnabled: false,
-          access: []
-        });
-      }
 
       // Reset button BEFORE re-render (re-render clones the button,
       // so the clone must inherit the clean state, not "Saving...").
@@ -4811,7 +4774,10 @@ _openRoleMembersModal(role) {
       return;
     }
     listEl.innerHTML = filtered.map(u => {
-      const hasRole = u.currentRoles.some(r => r.id === role.id && !r.channel_id);
+      // The assignment data lists a held role as role_id, not id, so this
+      // never matched: every row said Assign, the badge never appeared and
+      // there was no Remove to undo it with (#5643).
+      const hasRole = u.currentRoles.some(r => (r.role_id ?? r.id) === role.id && !r.channel_id);
       const color = this._getUserColor(u.username);
       const initial = (u.displayName || u.username).charAt(0).toUpperCase();
       const shapeStyle = u.avatarShape === 'square' ? 'border-radius:4px' : '';
@@ -6353,6 +6319,18 @@ _initAutomodPanel() {
   ['automod-window-hours', 'automod-warn-at', 'automod-mute-at', 'automod-mute-minutes', 'automod-ban-at']
     .forEach(id => on(id, 'change', pushEscalation));
 
+  // Word groups are one JSON setting, saved on the button (#5614).
+  on('automod-word-add-group', 'click', () => this._addAutomodWordGroupRow({ name: '', words: [], strikes: 1 }));
+  on('automod-word-save', 'click', () => {
+    const groups = [...document.querySelectorAll('#automod-word-groups .automod-word-group')].map(row => ({
+      name: row.querySelector('.awg-name').value.trim().slice(0, 40),
+      strikes: Math.min(100, Math.max(1, parseInt(row.querySelector('.awg-strikes').value, 10) || 1)),
+      words: row.querySelector('.awg-words').value.split(/\r?\n|,/).map(w => w.trim()).filter(Boolean).slice(0, 300)
+    })).filter(g => g.words.length);
+    setKey('automod_words', JSON.stringify(groups));
+    this._showToast(t('settings.admin.automod_words_saved'), 'success');
+  });
+
   on('voice-force-relay', 'change', (e) => setKey('voice_force_relay', e.target.checked ? 'true' : 'false'));
   on('fcm-enabled', 'change', (e) => setKey('fcm_enabled', e.target.checked ? 'true' : 'false'));
   on('media-proxy-enabled', 'change', (e) => {
@@ -6428,6 +6406,31 @@ _renderIdleOnline(data) {
 
 // Grey out the rest of the panel when automod is off, so it is obvious that
 // none of the settings below are doing anything.
+_addAutomodWordGroupRow(g) {
+  const host = document.getElementById('automod-word-groups');
+  if (!host) return;
+  const row = document.createElement('div');
+  row.className = 'automod-word-group';
+  row.innerHTML = `
+    <div class="automod-word-group-head">
+      <input type="text" class="settings-text-input awg-name" maxlength="40" placeholder="${this._escapeHtml(t('settings.admin.automod_words_name'))}" value="${this._escapeHtml(g.name || '')}">
+      <label class="awg-strikes-label"><span>${t('settings.admin.automod_words_strikes')}</span><input type="number" class="awg-strikes" min="1" max="100" step="1" value="${Math.min(100, Math.max(1, parseInt(g.strikes, 10) || 1))}"></label>
+      <button type="button" class="btn-sm danger awg-remove" title="${this._escapeHtml(t('settings.admin.automod_words_remove'))}">&times;</button>
+    </div>
+    <textarea class="settings-text-input awg-words" rows="3" placeholder="${this._escapeHtml(t('settings.admin.automod_words_placeholder'))}">${this._escapeHtml((g.words || []).join('\n'))}</textarea>`;
+  row.querySelector('.awg-remove').addEventListener('click', () => row.remove());
+  host.appendChild(row);
+},
+
+_renderAutomodWordGroups(raw) {
+  const host = document.getElementById('automod-word-groups');
+  if (!host) return;
+  host.innerHTML = '';
+  let groups = [];
+  try { groups = JSON.parse(raw || '[]'); } catch {}
+  (Array.isArray(groups) ? groups : []).forEach(g => this._addAutomodWordGroupRow(g || {}));
+},
+
 _syncAutomodVisibility() {
   const body = document.getElementById('automod-body');
   if (!body) return;
@@ -6467,6 +6470,12 @@ _applyAutomodSettings() {
   num('automod-exempt-level', 'automod_link_exempt_level', '50');
   const logCh = document.getElementById('automod-log-channel');
   if (logCh) logCh.value = s.automod_log_channel || '';
+  // Only redraw the word groups when the stored value changed, so an admin
+  // mid-edit is not wiped by an unrelated setting arriving.
+  if (this._automodWordsSeen !== (s.automod_words || '[]')) {
+    this._automodWordsSeen = s.automod_words || '[]';
+    this._renderAutomodWordGroups(this._automodWordsSeen);
+  }
 
   try {
     const c = JSON.parse(s.automod_escalation || '{}');

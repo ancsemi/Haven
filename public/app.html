@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.7.4">
+  <link rel="stylesheet" href="/css/style.css?v=4.8.1">
   <script src="/js/theme-compat.js?v=4.1.1"></script>
   <script src="/js/theme-init.js?v=4.1.4"></script>
 </head>
@@ -106,7 +106,7 @@
               <button type="button" class="icon-btn small channel-sheet-close" data-close-sheet data-i18n-title="modals.common.close" title="Close">&times;</button>
             </h5>
             <div class="collapsible-section-body" id="create-section-body">
-              <div class="input-row" id="new-channel-template-row" style="gap:6px;margin-bottom:4px">
+              <div class="input-row select-row" id="new-channel-template-row" style="gap:6px;margin-bottom:4px">
                 <select id="new-channel-template" data-i18n-title="app.sidebar.templates.hint" title="Start from a template: it ticks the boxes and sets topic, read-only, announcement and slow mode for you" style="flex:1;font-size:0.8rem"></select>
                 <button id="new-channel-template-del" class="btn-sm" type="button" data-i18n-title="app.sidebar.templates.delete_title" title="Delete this saved template" style="display:none">🗑</button>
               </div>
@@ -1477,6 +1477,14 @@
             </button>
           </div>
         </div>
+        <div class="settings-subsection" id="composer-buttons-subsection">
+          <small class="settings-group-label">✉️ <span data-i18n="settings.layout.composer.title">Message Box</span></small>
+          <label class="toggle-row">
+            <span data-i18n="settings.layout.composer.hide_send">Hide the Send button</span>
+            <input type="checkbox" id="hide-send-btn">
+          </label>
+          <small class="settings-hint" style="display:block" data-i18n="settings.layout.composer.hide_send_hint">Enter still sends. Frees the end of the message box if you never click the button.</small>
+        </div>
       </div>
 
       <!-- Font Size -->
@@ -2693,6 +2701,14 @@
             </label>
             <div id="automod-domain-list" class="whitelist-list" style="margin-top:8px"></div>
 
+            <small class="settings-group-label" style="margin-top:14px;display:block">🔤 <span data-i18n="settings.admin.automod_words_group">Words</span></small>
+            <small class="settings-hint" style="display:block" data-i18n="settings.admin.automod_words_hint">Groups of words that block a message, each worth a number of strikes towards the escalation below. Whole words only, case does not matter, one word or phrase per line. Staff at or above the skip level are not checked.</small>
+            <div id="automod-word-groups" style="margin-top:6px"></div>
+            <div class="settings-btn-grid" style="margin-top:6px">
+              <button class="btn-sm" id="automod-word-add-group" data-i18n="settings.admin.automod_words_add">+ Add group</button>
+              <button class="btn-sm btn-accent" id="automod-word-save" data-i18n="settings.admin.automod_words_save">Save words</button>
+            </div>
+
             <small class="settings-group-label" style="margin-top:14px;display:block">⚙️ <span data-i18n="settings.admin.automod_rules_group">Rules</span></small>
             <label class="select-row" style="margin-top:6px">
               <span data-i18n="settings.admin.automod_min_age">New accounts can't post links for (hours)</span>
@@ -3088,6 +3104,11 @@
             <input type="number" id="cleanup-max-size" min="0" max="100000" value="0" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.cleanup_size_hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
+          <label class="select-row">
+            <span data-i18n="settings.admin.deleted_retention">Keep deleted files for (days)</span>
+            <input type="number" id="deleted-retention-days" min="1" max="3650" value="7" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.deleted_retention_hint">Attachments from deleted messages and channels are held this long, then removed for good. This runs whether or not auto-cleanup is enabled (default 7).</small>
           <button class="btn-sm btn-full btn-accent" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 <span data-i18n="settings.admin.cleanup_run_btn">Run Cleanup Now</span></button>
         </div>
 
@@ -4046,6 +4067,41 @@
     </div>
   </div>
 
+  <!-- TEMPORARY (#5649): one-time admin notice that channel access moved to Required roles. Remove after the 4.8.x cycle. -->
+  <div class="modal-overlay" id="role-gate-notice-modal" style="display:none">
+    <div class="modal" style="width:520px">
+      <h3>🔑 <span data-i18n="modals.role_gate_notice.title">Channel access works differently now</span></h3>
+      <p style="font-size:0.85rem;line-height:1.5" data-i18n="modals.role_gate_notice.p1">Roles no longer carry a list of channels to grant or revoke. Instead, each channel says which roles open it: right-click the channel, Channel Functions, Required roles. Anyone who holds those roles is put in the channel the moment they get them and taken out the moment they lose them.</p>
+      <p style="font-size:0.85rem;line-height:1.5" data-i18n="modals.role_gate_notice.p2">Nothing you had set up was lost. Any channel a role used to grant has been converted into Required roles on that channel, so the same people still get in. People you added to a channel by hand keep their place.</p>
+      <p class="muted-text" style="font-size:0.78rem" data-i18n="modals.role_gate_notice.p3">Only admins see this, and only once.</p>
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent" id="role-gate-notice-ok" data-i18n="modals.role_gate_notice.ok">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scheduled send (#5638): right-click Send, or /schedule -->
+  <div class="modal-overlay" id="schedule-modal" style="display:none">
+    <div class="modal" style="width:480px">
+      <h3>⏰ <span data-i18n="modals.schedule.title">Send later</span></h3>
+      <p class="muted-text" style="font-size:0.78rem" data-i18n="modals.schedule.hint">The message waits on the server and goes out at the time you pick, whether or not you are online. Not available in direct messages.</p>
+      <div class="form-group">
+        <label data-i18n="modals.schedule.message_label">Message</label>
+        <textarea id="schedule-text" class="settings-text-input" rows="4" maxlength="2000"></textarea>
+      </div>
+      <div class="form-group" style="margin-top:8px">
+        <label data-i18n="modals.schedule.when_label">Send at</label>
+        <input type="datetime-local" id="schedule-when" class="settings-text-input">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="schedule-cancel" data-i18n="modals.common.close">Close</button>
+        <button class="btn-sm btn-accent" id="schedule-save" data-i18n="modals.schedule.schedule_btn">Schedule</button>
+      </div>
+      <small class="settings-group-label" style="margin-top:12px;display:block" data-i18n="modals.schedule.pending">Waiting to send</small>
+      <div id="schedule-list" style="max-height:220px;overflow-y:auto"></div>
+    </div>
+  </div>
+
   <!-- Timestamp Modal (/time with no args) -->
   <div class="modal-overlay" id="time-modal" style="display:none">
     <div class="modal tsm-modal" style="width:400px">
@@ -4425,6 +4481,7 @@
         <label class="media-gallery-tile-label" id="media-gallery-tile-wrap">
           <span data-i18n="media_gallery.tile_size">Size</span>
           <input type="range" id="media-gallery-tile" min="72" max="360" step="8" value="150" data-i18n-aria-label="media_gallery.tile_size" aria-label="Size">
+          <select id="media-gallery-shape" class="forum-select forum-select-small" data-i18n-aria-label="forum.shape" aria-label="Shape"></select>
         </label>
         <div class="media-gallery-actions" id="media-gallery-actions" style="display:none">
           <button class="btn-sm" id="media-gallery-select-toggle" data-i18n="media_gallery.select">Select</button>
@@ -4455,17 +4512,17 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=4.6.9"></script>
+  <script src="/js/theme.js?v=4.8.1"></script>
   <script src="/js/notifications.js?v=4.6.2"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=4.5.2"></script>
+  <script src="/js/voice.js?v=4.8.1">
   <script src="/js/modmode.js?v=3.16.16"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.7.5"></script>
-  <script src="/js/plugin-loader.js?v=4.6.8"></script>
+  <script type="module" src="/js/app.js?v=4.8.1"></script>
+  <script src="/js/plugin-loader.js?v=4.8.1"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
 </body>

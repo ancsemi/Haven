@@ -702,18 +702,27 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) return;
-    const deletedCodes = [code, ...db.prepare(
-      'SELECT code FROM channels WHERE parent_channel_id = ?'
-    ).all(channel.id).map(row => row.code)];
 
-    // Collect the attachments this channel's messages point at, before the
+    // A parent goes with everything under it. The parent link is ON DELETE
+    // SET NULL, so sub-channels used to survive their parent's deletion as
+    // top-level channels nobody had asked for. The client warns before it
+    // gets here and points at moving any sub-channel worth keeping first.
+    const subChannels = db.prepare(
+      'SELECT id, code, name FROM channels WHERE parent_channel_id = ?'
+    ).all(channel.id);
+    const doomed = [...subChannels, channel]; // sub-channels first, then the parent
+    const deletedCodes = doomed.map(c => c.code);
+    const idMarks = doomed.map(() => '?').join(',');
+    const ids = doomed.map(c => c.id);
+
+    // Collect the attachments these channels' messages point at, before the
     // rows go away. Deleting a channel dropped the messages but left every
     // uploaded file sitting in uploads/ forever — deleting a single message
     // has always cleaned up after itself, and deleting a whole channel is
     // the same thing in bulk. (#5487)
     const doomedUploads = new Set();
     try {
-      const msgs = db.prepare('SELECT content FROM messages WHERE channel_id = ?').all(channel.id);
+      const msgs = db.prepare(`SELECT content FROM messages WHERE channel_id IN (${idMarks})`).all(...ids);
       for (const row of msgs) {
         const text = row.content || '';
         UPLOAD_PATH_RE.lastIndex = 0;
@@ -724,14 +733,16 @@ module.exports = function register(socket, ctx) {
       }
     } catch { /* best-effort cleanup — never block the delete */ }
 
-    const deleteAll = db.transaction((chId) => {
-      db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
-      db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
-      db.prepare('DELETE FROM messages WHERE channel_id = ?').run(chId);
-      db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(chId);
-      db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
+    const deleteAll = db.transaction((chIds) => {
+      for (const chId of chIds) {
+        db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)').run(chId);
+        db.prepare('DELETE FROM pinned_messages WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM messages WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(chId);
+        db.prepare('DELETE FROM channels WHERE id = ?').run(chId);
+      }
     });
-    deleteAll(channel.id);
+    deleteAll(ids);
     for (const deletedCode of deletedCodes) botAudioManager?.stopChannel(deletedCode, 'channel-deleted');
     broadcastChannelLists();
 
@@ -748,13 +759,20 @@ module.exports = function register(socket, ctx) {
       } catch { /* best-effort */ }
     }
 
-    io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
-
-    clearChannelRuntimeState(state, code);
+    for (const deletedCode of deletedCodes) {
+      io.to(`channel:${deletedCode}`).to(`voice:${deletedCode}`).emit('channel-deleted', { code: deletedCode });
+      clearChannelRuntimeState(state, deletedCode);
+    }
 
     _audit({ actor: socket.user, action: 'channel_delete',
       target_type: 'channel', target_id: channel.id, target_name: channel.name,
-      details: { code, parent_channel_id: channel.parent_channel_id || null } });
+      details: { code, parent_channel_id: channel.parent_channel_id || null,
+        sub_channels: subChannels.map(s => ({ code: s.code, name: s.name })) } });
+    for (const sub of subChannels) {
+      _audit({ actor: socket.user, action: 'channel_delete',
+        target_type: 'channel', target_id: sub.id, target_name: sub.name,
+        details: { code: sub.code, parent_channel_id: channel.id, deleted_with_parent: code } });
+    }
   });
 
   // ── Rename channel ──────────────────────────────────────
@@ -957,6 +975,34 @@ module.exports = function register(socket, ctx) {
     } catch (err) {
       console.error('set-forum-tags error:', err);
       socket.emit('error-msg', 'Failed to save forum tags');
+    }
+  });
+
+  // The layout a forum opens in for everyone: list, gallery or feed, plus
+  // the tile size. A reader's own pick, made after this was set, still wins
+  // on their browser (#5656).
+  socket.on('set-forum-layout', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
+    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    if (!channel || channel.is_dm) return cb({ error: 'Channel not found' });
+    if (!_canManageSettingsOf(channel.id)) return cb({ error: 'You don\'t have permission to set the forum layout' });
+    const view = ['list', 'gallery', 'feed'].includes(data.view) ? data.view : 'list';
+    const tileN = Number(data.tile);
+    const tile = Number.isFinite(tileN) ? Math.min(28, Math.max(7, Math.round(tileN * 2) / 2)) : 11;
+    const shapes = ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
+    const shape = shapes.includes(data.shape) ? data.shape : 'square';
+    const layout = { view, tile, shape, at: Date.now() };
+    try {
+      db.prepare('UPDATE channels SET forum_layout = ? WHERE id = ?').run(JSON.stringify(layout), channel.id);
+      broadcastChannelLists();
+      io.to(`channel:${code}`).emit('forum-layout-updated', { code, layout });
+      cb({ success: true, layout });
+    } catch (err) {
+      console.error('set-forum-layout error:', err);
+      cb({ error: 'Failed to save the forum layout' });
     }
   });
 
@@ -1269,14 +1315,22 @@ module.exports = function register(socket, ctx) {
       console.error('Set role gate error:', err);
       return cb({ error: 'Failed to save the role gate' });
     }
+    // Holding the required roles is membership (#5649): everyone who passes
+    // the gate is put in the channel, and rows the gate added come out for
+    // anyone who no longer passes. Removing the gate keeps whoever it let in.
+    if (!stored) {
+      db.prepare('UPDATE channel_members SET via_role_gate = 0 WHERE channel_id = ?').run(channel.id);
+    }
+    let changes = [];
+    try { changes = ctx.syncRoleGateMemberships({ channelId: channel.id }); } catch (err) { console.error('role gate membership sync failed:', err.message); }
+    const joined = new Set(changes.filter(c => c.joined).map(c => c.userId));
     // Anyone who no longer qualifies leaves the room now; broadcastChannelLists
     // rebuilds every list, so their sidebar entry goes with it.
-    if (stored) {
-      const fresh = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id);
-      for (const [, s] of io.sockets.sockets) {
-        if (!s.user || s.user.isAdmin) continue;
-        if (!ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
-      }
+    const fresh = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id);
+    for (const [, s] of io.sockets.sockets) {
+      if (!s.user || s.user.isAdmin) continue;
+      if (joined.has(s.user.id)) s.join(`channel:${channel.code}`);
+      else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
     }
     broadcastChannelLists();
     io.to(`channel:${code}`).emit('channel-role-gate-updated', { code, roleGate: stored ? JSON.parse(stored) : null });

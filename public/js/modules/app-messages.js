@@ -19,6 +19,34 @@ async _sendMessage() {
     return;
   }
 
+  // In a forum, a picture and its text sent together are one topic, the way
+  // the New Post hint says, not an image topic next to a text topic. The
+  // pictures upload first so the topic lands whole (#5653).
+  if (hasImages && content && !content.startsWith('/') && this._isForumChannel?.(this.currentChannel)) {
+    const code = this.currentChannel;
+    const files = [...this._imageQueue];
+    this._clearImageQueue();
+    input.value = '';
+    input.style.height = 'auto';
+    input.focus();
+    this._clearReply();
+    this._hideMentionDropdown();
+    this._hideSlashDropdown();
+    const picker = document.getElementById('emoji-picker');
+    if (picker) picker.style.display = 'none';
+    this._uploadsCancelled = false;
+    const lines = [];
+    for (const file of files) {
+      const line = await this._uploadImage(file, code, true, '', false, { returnContent: true });
+      if (line) lines.push(line);
+      if (this._uploadsCancelled) break;
+    }
+    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n') });
+    this.notifications.play('sent');
+    if (hasFiles) this._flushFileQueue?.();
+    return;
+  }
+
   // (#5335) Sticker shortcode — if the message is exactly `:stickername:`
   // (whitespace-trimmed) and that name matches an uploaded sticker, route
   // it through _sendStickerMessage so it goes out as a standalone sticker
@@ -125,6 +153,15 @@ async _sendMessage() {
         }
         this._hideMentionDropdown();
         this._hideSlashDropdown();
+        return;
+      }
+      if (cmd === 'schedule') {
+        // Send later (#5638): the text after the command is the message.
+        input.value = '';
+        input.style.height = 'auto';
+        this._hideMentionDropdown();
+        this._hideSlashDropdown();
+        this._openScheduleModal?.(arg);
         return;
       }
       if (cmd === 'poll') {
@@ -2225,6 +2262,10 @@ _showMessageContextMenu(e, msgEl) {
       ? `<button class="channel-ctx-item" data-action="unarchive">🛡️ <span>${t('app.messages.unprotect_btn')}</span></button>`
       : `<button class="channel-ctx-item" data-action="archive">🛡️ <span>${t('app.messages.protect_btn')}</span></button>`);
   }
+  // A posted role menu's roles, emojis and text can be changed later (#5644).
+  const canEditRoleMenu = !!msgEl.querySelector('.role-menu-widget') &&
+                          !!(this.user?.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('promote_user'));
+  if (canEditRoleMenu) items.push(`<button class="channel-ctx-item" data-action="edit-role-menu">🎭 <span>${t('settings.admin.role_menu.edit')}</span></button>`);
   // Separator right above Delete
   if (canDelete) {
     items.push('<hr class="channel-ctx-sep">');
@@ -2276,6 +2317,8 @@ _showMessageContextMenu(e, msgEl) {
       this.socket.emit('archive-message', { messageId: msgId });
     } else if (action === 'unarchive') {
       this.socket.emit('unarchive-message', { messageId: msgId });
+    } else if (action === 'edit-role-menu') {
+      this._openRoleMenuBuilder?.({ messageId: msgId });
     } else if (action === 'delete') {
       if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });

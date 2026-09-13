@@ -1,5 +1,6 @@
 ﻿// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
+const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 
 // ── Node.js version guard ─────────────────────────────────
 const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
@@ -162,6 +163,9 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
   try {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
+    // A rename keeps the upload's own timestamp. The retention window counts
+    // from the deletion, so stamp the file now.
+    try { const now = new Date(); fs.utimesSync(dst, now, now); } catch { /* purge falls back to the upload time */ }
   } catch { /* file locked or already moved */ }
 }
 
@@ -2456,9 +2460,12 @@ app.delete('/api/stickers/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
 });
 
-// ── GIF search proxy (GIPHY, with a legacy Tenor fallback) ──
-// GIPHY is the supported provider. Tenor is no longer offered for new
-// setup; an existing tenor_api_key still works if no GIPHY key is set.
+// ── GIF search proxy (GIPHY, KLIPY, or a legacy Tenor fallback) ──
+// Three providers are supported. preferred_gif_search picks which one to use
+// when more than one key is set. If that preference is unset or not a known
+// provider, we fall back to whatever is configured, trying GIPHY first, then
+// KLIPY, and Tenor last (Tenor is deprecated).
+const GIF_FALLBACK_ORDER = ['giphy', 'klipy', 'tenor'];
 function getGifProvider() {
   // Check database first (set via admin panel), fall back to .env
   const readSetting = (key) => {
@@ -2469,16 +2476,41 @@ function getGifProvider() {
     } catch { /* DB not ready yet or no key stored */ }
     return '';
   };
-  const giphyKey = readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '';
-  if (giphyKey) return { provider: 'giphy', key: giphyKey };
-  const tenorKey = readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '';
-  if (tenorKey) return { provider: 'tenor', key: tenorKey };
+  const keys = {
+    giphy: readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '',
+    klipy: readSetting('klipy_api_key') || process.env.KLIPY_API_KEY || '',
+    tenor: readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '',
+  };
+  const preferred = (readSetting('preferred_gif_search') || process.env.PREFERRED_GIF_SEARCH || '')
+    .trim().toLowerCase();
+  // Honour the preference only when it names a known provider that actually
+  // has a key; otherwise fall through to the configured-order fallback.
+  if (GIF_FALLBACK_ORDER.includes(preferred) && keys[preferred]) {
+    return { provider: preferred, key: keys[preferred] };
+  }
+  for (const provider of GIF_FALLBACK_ORDER) {
+    if (keys[provider]) return { provider, key: keys[provider] };
+  }
   return null;
 }
 
-// Both providers normalize to the same result shape the client expects:
+// All providers normalize to the same result shape the client expects:
 // { id, title, tiny (grid thumbnail), full (send URL) }.
 function fetchGifs(kind, q, limit, cfg) {
+  if (cfg.provider === 'klipy') {
+    // The app key is a path segment; the small (220px) gif is the grid
+    // thumbnail and the hd/md gif is the send URL.
+    const path = kind === 'search'
+      ? `gifs/search?q=${encodeURIComponent(q)}&`
+      : 'gifs/trending?';
+    const url = `https://api.klipy.com/api/v1/${encodeURIComponent(cfg.key)}/${path}per_page=${limit}&content_filter=off`;
+    return fetch(url).then(r => r.json()).then(data => (data.data?.data || []).map(g => ({
+      id: g.id,
+      title: g.title || '',
+      tiny: g.file?.sm?.gif?.url || g.file?.xs?.gif?.url || '',
+      full: g.file?.hd?.gif?.url || g.file?.md?.gif?.url || '',
+    })));
+  }
   if (cfg.provider === 'tenor') {
     const base = kind === 'search'
       ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&`
@@ -4406,7 +4438,7 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
   if (io) {
     for (const [, s] of io.sockets.sockets) {
       if (s.user && s.user.id === userId) {
-        s.emit('muted', { reason: safeReason, expiresAt });
+        s.emit('muted', { duration: Math.round(durationMs / 60000), reason: safeReason, expiresAt });
       }
     }
   }
@@ -4730,9 +4762,10 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
 app.get('/api/bot-commands', (req, res) => {
   const { getDb } = require('./src/database');
   const rows = getDb().prepare(`
-    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name
+    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name, c.code as channel_code
     FROM bot_commands bc
     JOIN webhooks w ON bc.webhook_id = w.id
+    LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.is_active = 1
   `).all();
   const commands = [];
@@ -4753,7 +4786,8 @@ app.get('/api/bot-commands', (req, res) => {
           description: typeof sc.description === 'string' && sc.description.trim()
             ? sc.description.trim()
             : (row.description || 'Bot command'),
-          bot_name: row.bot_name || 'Bot'
+          bot_name: row.bot_name || 'Bot',
+          channel_code: row.channel_code || null
         });
       }
       continue;
@@ -4761,7 +4795,8 @@ app.get('/api/bot-commands', (req, res) => {
     commands.push({
       command: row.command,
       description: row.description || '',
-      bot_name: row.bot_name || 'Bot'
+      bot_name: row.bot_name || 'Bot',
+      channel_code: row.channel_code || null
     });
   }
   res.json({ commands });
@@ -5456,6 +5491,16 @@ function runAutoCleanup() {
       return row ? row.value : null;
     };
 
+    // Deleted items never sit around forever. Attachments that message and
+    // channel deletes park in deleted-attachments are removed for good once
+    // they have been there longer than the retention window (a week unless
+    // the admin changes it), whether or not auto-cleanup is switched on.
+    try {
+      const removed = purgeDeletedAttachments(
+        DELETED_ATTACHMENTS_DIR, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
+      if (removed > 0) console.log(`Auto-cleanup: removed ${removed} expired file(s) from deleted-attachments`);
+    } catch (e) { console.error('deleted-attachments purge error:', e.message); }
+
     const enabled = getSetting('cleanup_enabled');
     if (enabled !== 'true') return;
 
@@ -5553,37 +5598,12 @@ function runAutoCleanup() {
       }
     }
 
-    // Purge old files from deleted-attachments only. These are former message
-    // attachments that were relocated here when their message was deleted (by
-    // the steps above, by single-message deletes, or by the orphan-DM sweep).
-    //
-    // We deliberately do NOT scan the main uploads/ directory. That directory
-    // also holds user avatars, persona avatars, custom emojis, soundboard
-    // sounds, and the server icon — none of which are posted media. The old
-    // "delete everything in uploads/ that isn't on a protect-list" approach
-    // kept silently eating any file type nobody remembered to allow-list
-    // (persona avatars in #5423, stickers/emojis before that). Auto-cleanup is
-    // scoped to posts and messages and their attachments — nothing else.
-    if (maxAgeDays > 0) {
-      const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
-      const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-      if (require('fs').existsSync(deletedDir)) {
-        let daDeleted = 0;
-        for (const f of require('fs').readdirSync(deletedDir)) {
-          try {
-            const fp = require('path').join(deletedDir, f);
-            const st = require('fs').statSync(fp);
-            if (st.isFile() && st.mtimeMs < cutoff) {
-              require('fs').unlinkSync(fp);
-              daDeleted++;
-            }
-          } catch { /* skip */ }
-        }
-        if (daDeleted > 0) {
-          console.log(`Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
-        }
-      }
-    }
+    // Files in deleted-attachments are purged on their own clock at the top
+    // of this run, whether or not cleanup is enabled. Nothing here scans the
+    // main uploads/ directory: it also holds avatars, custom emojis,
+    // soundboard sounds, stickers and the server icon, none of which are
+    // posted media, and an allow-list approach kept eating whichever type
+    // nobody remembered to list (#5423).
 
     // 3. (#5282) Orphan-DM sweep — delete any DM channel that has dropped
     // below 2 members (one or both participants deleted their account or

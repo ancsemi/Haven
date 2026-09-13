@@ -1464,6 +1464,7 @@ function initEffectSelector() {
 
   if (!document.documentElement.dataset.compactLayoutBound) {
     document.documentElement.dataset.compactLayoutBound = '1';
+    document.addEventListener('haven:braid-layout', _syncBraidToggle);
     document.addEventListener('haven:compact-layout', _syncCompactToggle);
   }
 

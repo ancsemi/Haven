@@ -791,16 +791,27 @@ module.exports = function register(socket, ctx) {
       details: { durationMinutes, reason, channelCode: muteCode || null } });
   });
 
+  // Anyone who can mute can unmute. Admin-only unmute left a moderator with
+  // mute_user unable to undo their own mute, and nothing in the client ever
+  // sent this event at all, so every mute ran its full timer (#5640).
   socket.on('unmute-user', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!socket.user.isAdmin) {
-      return socket.emit('error-msg', 'Only admins can unmute users');
+    const unmuteCode = socket.currentChannel;
+    const unmuteCh = unmuteCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unmuteCode) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user', unmuteCh ? unmuteCh.id : null)) {
+      return socket.emit('error-msg', 'You don\'t have permission to unmute users');
     }
     if (!isInt(data.userId)) return;
 
-    db.prepare('DELETE FROM mutes WHERE user_id = ?').run(data.userId);
     const targetUser = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
-    socket.emit('error-msg', `Unmuted ${targetUser ? targetUser.username : 'user'}`);
+    if (!targetUser) return socket.emit('error-msg', 'User not found');
+    const wasMuted = db.prepare('SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') LIMIT 1').get(data.userId);
+    db.prepare('DELETE FROM mutes WHERE user_id = ?').run(data.userId);
+    if (!wasMuted) return socket.emit('toast', { message: `${targetUser.username} is not muted`, type: 'info' });
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === data.userId) s.emit('unmuted', {});
+    }
+    socket.emit('toast', { message: `Unmuted ${targetUser.username}`, type: 'success' });
     _audit({ actor: socket.user, action: 'user_unmute',
       target_type: 'user', target_id: data.userId,
       target_name: targetUser ? targetUser.username : null });

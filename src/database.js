@@ -733,6 +733,20 @@ function initDatabase() {
     );
   `);
 
+  // ── Migration: per-thread read positions (#5641) ─────────
+  // Which reply a person last saw in a thread, keyed by the parent message.
+  // Forum topic cards use it for their unread dot, and because it lives on
+  // the account it follows you between devices. A row with 0 means the
+  // thread was opened but had no replies yet.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS thread_reads (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      thread_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      last_read_reply_id INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, thread_id)
+    );
+  `);
+
   // ── Migration: original_name on messages for file uploads ──
   try {
     db.prepare("SELECT original_name FROM messages LIMIT 0").get();
@@ -1100,6 +1114,9 @@ function initDatabase() {
     // decides who is IN the channel; the gate decides who may open it, on top
     // of that, so a channel can ask for one of several roles or all of them.
     { name: 'role_gate',                  sql: "ALTER TABLE channels ADD COLUMN role_gate TEXT DEFAULT NULL" },
+    // Forum layout an admin set for everyone: JSON {"view","tile","at"}.
+    // A reader's own pick, made after "at", still wins on their browser (#5656).
+    { name: 'forum_layout',               sql: "ALTER TABLE channels ADD COLUMN forum_layout TEXT DEFAULT NULL" },
   ];
   for (const col of channelQolCols) {
     try { db.prepare(`SELECT ${col.name} FROM channels LIMIT 0`).get(); } catch { db.exec(col.sql); }
@@ -1376,6 +1393,73 @@ function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_poll_votes_msg ON poll_votes(message_id);
   `);
+
+  // ── Required roles are membership (#5649) ──
+  // A membership row the gate created is marked, so it can be taken back
+  // when the person stops passing the gate; rows added by hand are not.
+  try {
+    db.prepare("SELECT via_role_gate FROM channel_members LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channel_members ADD COLUMN via_role_gate INTEGER NOT NULL DEFAULT 0");
+  }
+  // One-time: the role-side "grant these channels" lists become Required
+  // roles on those channels (any of the roles that granted it), and the
+  // role-side switch is turned off. Same intent, one place to see it.
+  try {
+    const done = db.prepare("SELECT value FROM server_settings WHERE key = 'role_links_migrated'").get();
+    if (!done) {
+      const rows = db.prepare(`
+        SELECT rca.channel_id, rca.role_id FROM role_channel_access rca
+        JOIN roles r ON r.id = rca.role_id
+        WHERE r.link_channel_access = 1 AND rca.grant_on_promote = 1
+      `).all();
+      const byChannel = new Map();
+      for (const r of rows) {
+        if (!byChannel.has(r.channel_id)) byChannel.set(r.channel_id, new Set());
+        byChannel.get(r.channel_id).add(r.role_id);
+      }
+      let converted = 0;
+      for (const [chId, roleIds] of byChannel) {
+        const ch = db.prepare('SELECT id, role_gate FROM channels WHERE id = ? AND is_dm = 0').get(chId);
+        if (!ch) continue;
+        let gate = null;
+        try { gate = JSON.parse(ch.role_gate || 'null'); } catch { gate = null; }
+        const roles = new Set(Array.isArray(gate && gate.roles) ? gate.roles.map(Number) : []);
+        roleIds.forEach(id => roles.add(id));
+        db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?')
+          .run(JSON.stringify({ mode: gate && gate.mode === 'all' ? 'all' : 'any', roles: [...roles] }), chId);
+        converted++;
+      }
+      db.prepare('UPDATE roles SET link_channel_access = 0').run();
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('role_links_migrated', '1')").run();
+      // An existing server gets a one-time notice for admins about the change
+      // in how channel access works. Nothing to explain on a fresh install.
+      // TEMPORARY: remove this flag and the notice modal after the 4.8.x cycle.
+      const existing = db.prepare('SELECT COUNT(*) AS c FROM channels WHERE is_dm = 0').get().c;
+      if (existing) db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('role_gate_notice', '1')").run();
+      if (converted) console.log(`[migration] Role channel access lists became Required roles on ${converted} channel(s) (#5649)`);
+    }
+  } catch (err) {
+    console.error('[migration] role channel access → required roles failed:', err.message);
+  }
+
+  // ── Scheduled messages (#5638): held on the server until send_at ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduled_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      send_at TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_scheduled_send_at ON scheduled_messages(send_at);
+  `);
+
+  // ── Migration: weighted automod strikes (#5614) ──
+  // A word group can be worth more than one strike; link infractions stay at 1.
+  try { db.prepare('SELECT weight FROM automod_infractions LIMIT 0').get(); }
+  catch { db.exec('ALTER TABLE automod_infractions ADD COLUMN weight INTEGER NOT NULL DEFAULT 1'); }
 
   // ── Migration: deleted_users log (audit trail for admin deletions) ──
   db.exec(`

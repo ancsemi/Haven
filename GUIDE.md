@@ -1264,7 +1264,9 @@ be handed to others through the role system, one permission at a time.
 - **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
   disk allows), attachments per message (10 by default), max message length,
   per-member storage usage
-- **Auto-cleanup**: automatic deletion of messages past a chosen age
+- **Auto-cleanup**: automatic deletion of messages past a chosen age, and how
+  long the files left behind by deleted messages and channels are kept before
+  they are removed for good (a week by default)
 - **Server updates**: check for a new Haven release and apply it in place. Haven
   takes a pre-update backup and restarts itself
 
@@ -1316,6 +1318,11 @@ The key is stored server-side, so only admins can see or change it, and every us
 can search GIFs once it is set. No payment is involved; GIPHY's free tier is far more
 than a private server will use. Tenor is no longer supported for new setup; a server
 that already has a Tenor key keeps working until a GIPHY key is set.
+
+KLIPY works as well. Get a key at [klipy.com/developers](https://klipy.com/developers)
+and set `KLIPY_API_KEY` in your `.env` (or Docker environment). If more than one key
+is set, `PREFERRED_GIF_SEARCH` (`klipy`, `giphy` or `tenor`) picks which provider the
+picker uses; without it the server tries GIPHY first, then KLIPY, then Tenor.
 
 ---
 
