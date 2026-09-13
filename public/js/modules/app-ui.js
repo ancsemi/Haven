@@ -201,9 +201,15 @@ _setupUI() {
       if (e.key === 'Escape') { this._hideFerryDropdown(); return; }
     }
 
+    // Ctrl + Enter opens scheduled send modal
+    // Just Enter sends the message
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      this._sendMessage();
+      if (e.ctrlKey) {
+        this._openScheduleModal();
+      } else {
+        e.preventDefault();
+        this._sendMessage();
+      }
     }
 
     // Up arrow on empty input → edit last own message (toggleable)
@@ -268,6 +274,20 @@ _setupUI() {
   document.getElementById('schedule-cancel')?.addEventListener('click', () => { document.getElementById('schedule-modal').style.display = 'none'; });
   document.getElementById('schedule-save')?.addEventListener('click', () => this._submitSchedule());
   document.getElementById('schedule-modal')?.addEventListener('click', (e) => { if (e.target.id === 'schedule-modal') e.target.style.display = 'none'; });
+
+  const sendLaterText = document.getElementById('schedule-text');
+  sendLaterText.addEventListener('keydown', (e) => {
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
+  sendLaterText.addEventListener('paste', (e) => {
+    // insert a markdown link when a link is pasted over selected text
+    if (this._handleMarkdownLinkPaste(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
 
   // Join channel
   const joinBtn = document.getElementById('join-channel-btn');
