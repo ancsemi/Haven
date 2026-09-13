@@ -4,21 +4,22 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.6.2';
-import UIBindMethods   from './modules/app-ui.js?v=4.6.2';
-import MediaMethods    from './modules/app-media.js?v=4.6.2';
+import SocketMethods   from './modules/app-socket.js?v=4.6.8';
+import UIBindMethods   from './modules/app-ui.js?v=4.6.11';
+import MediaMethods    from './modules/app-media.js?v=4.7.5';
 import ContextMethods  from './modules/app-context.js?v=4.6.2';
-import ChannelMethods  from './modules/app-channels.js?v=4.6.2';
-import MessageMethods  from './modules/app-messages.js?v=4.6.2';
+import ChannelMethods  from './modules/app-channels.js?v=4.6.10';
+import MessageMethods  from './modules/app-messages.js?v=4.7.5';
 import UserMethods     from './modules/app-users.js?v=4.6.1';
-import VoiceMethods    from './modules/app-voice.js?v=4.5.1';
-import UtilityMethods  from './modules/app-utilities.js?v=4.6.2';
+import VoiceMethods    from './modules/app-voice.js?v=4.5.5';
+import UtilityMethods  from './modules/app-utilities.js?v=4.6.8';
 import AdminMethods    from './modules/app-admin.js?v=4.6.2';
-import PlatformMethods from './modules/app-platform.js?v=4.5.1';
+import PlatformMethods from './modules/app-platform.js?v=4.7.4';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
-import ForumMethods    from './modules/app-forum.js?v=4.6.2';
+import ForumMethods    from './modules/app-forum.js?v=4.6.10';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.6.2';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.7.3';
 
 class HavenApp {
   constructor() {
@@ -324,6 +325,7 @@ class HavenApp {
     this._setupDiscordImport();
     this._setupAuditLog();
     this._initRoleManagement();
+    this._initPermMatrix();
     this._initServerBranding();
     this._setupResizableSidebars();
     this.modMode = typeof ModMode === 'function' ? new ModMode() : null;
@@ -379,9 +381,7 @@ class HavenApp {
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${this.user.username}`;
 
-    if (this.user.isAdmin || this._hasGlobalPerm('create_channel')) {
-      document.getElementById('admin-controls').style.display = 'block';
-    }
+    this._refreshChannelActions?.();
     if (this.user.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('manage_server')) {
       document.getElementById('admin-mod-panel').style.display = 'block';
     }
@@ -437,6 +437,7 @@ Object.assign(HavenApp.prototype,
   FerryMethods,
   ForumMethods,
   RoleToolMethods,
+  PermMatrixMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

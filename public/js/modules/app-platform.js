@@ -1601,10 +1601,12 @@ _decryptE2EImages(root) {
         // object URL keeps the decrypted bytes alive for the life of the tab,
         // so scrolling a media-heavy DM slowly locks up hundreds of MB. Same
         // revoke-on-load pattern the upload previews use. (#5426)
-        img.addEventListener('load', () => {
-          try { URL.revokeObjectURL(img.src); } catch {}
-        }, { once: true });
-        img.src = URL.createObjectURL(blob);
+        const objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+        // Revoking in the load handler blanks the picture on some Tauri
+        // webviews (the bitmap is still tied to the blob URL). Keep it
+        // a minute, same as decrypted file attachments.
+        setTimeout(() => { try { URL.revokeObjectURL(objectUrl); } catch {} }, 60_000);
         img.classList.remove('e2e-img-loading');
       })
       .catch(() => {

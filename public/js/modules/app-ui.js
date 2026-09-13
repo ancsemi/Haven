@@ -266,7 +266,7 @@ _setupUI() {
   const codeInput = document.getElementById('channel-code-input');
   joinBtn.addEventListener('click', () => {
     const code = codeInput.value.trim();
-    if (code) { this.socket.emit('join-channel', { code }); codeInput.value = ''; }
+    if (code) { this.socket.emit('join-channel', { code }); codeInput.value = ''; this._closeChannelAction?.(); }
   });
   codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
 
@@ -293,10 +293,14 @@ _setupUI() {
         if (all) all.checked = false;
         const durRow = document.getElementById('temp-channel-duration-row');
         if (durRow) durRow.style.display = 'none';
+        this._closeChannelAction?.();
       }
     });
     nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') createBtn.click(); });
   }
+
+  this._bindChannelActions?.();
+  this._bindDmDock?.();
 
   // Toggle temporary channel duration row
   const tempCheckbox = document.getElementById('new-channel-temporary');
@@ -382,23 +386,17 @@ _setupUI() {
     this._closeChannelCtxMenu();
     this._copyChannelLink(code);
   });
-  // Join voice from context menu
-  document.querySelector('[data-action="join-voice"]')?.addEventListener('click', () => {
-    const code = this._ctxMenuChannel;
-    if (!code) return;
-    this._closeChannelCtxMenu();
-    // Switch to the channel first, then join voice
-    this.switchChannel(code);
-    setTimeout(() => this._joinVoice(), 300);
-  });
-  // Leave channel
-  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', () => {
+  // Leave channel — themed confirm. Desktop Tauri patches window.confirm to
+  // return a Promise, so `if (!confirm())` used to be false and the leave
+  // fired while the OK dialog was still on screen.
+  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
     const ch = this.channels.find(c => c.code === code);
     const name = ch ? ch.name : code;
-    if (!confirm(t('confirm.leave_channel', { name }))) return;
+    const ok = await this._showConfirmModal(t('confirm.leave_channel', { name }), '');
+    if (!ok) return;
     this.socket.emit('leave-channel', { code }, (res) => {
       if (res && res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('toasts.left_channel', { name }), 'success');
@@ -1119,10 +1117,10 @@ _setupUI() {
   });
 
   // Voice buttons
-  document.getElementById('voice-join-btn').addEventListener('click', () => this._joinVoice());
-  document.getElementById('voice-join-mobile')?.addEventListener('click', () => {
-    this._joinVoice();
-    this._closeMobilePanels();
+  document.getElementById('people-dock-btn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    this._togglePeoplePanel();
   });
   document.getElementById('voice-mute-btn').addEventListener('click', () => this._toggleMute());
   document.getElementById('voice-deafen-btn').addEventListener('click', () => this._toggleDeafen());
@@ -1735,6 +1733,7 @@ _setupUI() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#media-gallery-modal .media-tab').forEach(b => b.classList.toggle('active', b === btn));
       this._mediaGalleryActiveTab = btn.dataset.tab;
+      this._applyMediaTileSize();
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab);
       // Switching tabs clears selection — selecting items across tabs and
       // hitting Delete would be confusing since each tab has its own scope.
@@ -1756,6 +1755,17 @@ _setupUI() {
       this._mediaGallerySort = sortSel.value || 'date-desc';
       try { localStorage.setItem('mediaGallerySort', this._mediaGallerySort); } catch {}
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+    });
+  }
+
+  const tileSlider = document.getElementById('media-gallery-tile');
+  if (tileSlider) {
+    tileSlider.value = String(this._mediaTilePx());
+    this._applyMediaTileSize();
+    tileSlider.addEventListener('input', () => {
+      const px = this._mediaTilePx(tileSlider.value);
+      try { localStorage.setItem('mediaGalleryTile', String(px)); } catch {}
+      this._applyMediaTileSize(px);
     });
   }
 
@@ -2210,17 +2220,28 @@ _setupUI() {
     }
   });
 
-  // Thread preview click — open thread panel
+  // Thread preview click — open thread panel. In a forum, tapping the
+  // topic itself opens it the same way the phone does.
   document.getElementById('messages').addEventListener('click', (e) => {
     const preview = e.target.closest('.thread-preview');
-    if (!preview) return;
-    const parentId = parseInt(preview.dataset.threadParent);
-    if (parentId) this._openThread(parentId);
+    if (preview) {
+      const parentId = parseInt(preview.dataset.threadParent);
+      if (parentId) this._openThread(parentId);
+      return;
+    }
+    if (!this._isForumFeed?.()) return;
+    if (e.target.closest('a, button, .msg-toolbar, .reaction-badge, input, textarea, video, audio, .poll-widget, .role-menu')) return;
+    const msgEl = e.target.closest('#messages > .message, #messages > .message-compact');
+    if (!msgEl) return;
+    const msgId = parseInt(msgEl.dataset.msgId, 10);
+    if (msgId) this._openThread(msgId);
   });
 
   // Thread panel — close, send
   const threadCloseBtn = document.getElementById('thread-panel-close');
   if (threadCloseBtn) threadCloseBtn.addEventListener('click', () => this._closeThread());
+  const threadBackBtn = document.getElementById('thread-panel-back');
+  if (threadBackBtn) threadBackBtn.addEventListener('click', () => this._closeThread());
 
   const threadPipBtn = document.getElementById('thread-panel-pip');
   if (threadPipBtn) threadPipBtn.addEventListener('click', () => this._toggleThreadPiP());
@@ -3282,12 +3303,11 @@ _setupUI() {
   });
 
   // ── Settings popout modal ────────────────────────────
-  const openSettingsModal = () => {
+  const openSettingsModal = (tab = 'user') => {
     this._snapshotAdminSettings();
     document.getElementById('settings-modal').style.display = 'flex';
     this._syncSettingsNav();
-    // Always open on User tab
-    this._switchSettingsTab('user');
+    this._switchSettingsTab(tab === 'admin' && this._hasAnyAdminSettingsAccess?.() ? 'admin' : 'user');
     // Sync language select with current locale
     const langSelect = document.getElementById('language-select');
     if (langSelect && window.i18n) {
@@ -3318,7 +3338,8 @@ _setupUI() {
       this._setupDesktopAppPrefs?.();
     }
   };
-  document.getElementById('open-settings-btn').addEventListener('click', openSettingsModal);
+  this._openSettingsModal = openSettingsModal;
+  document.getElementById('open-settings-btn').addEventListener('click', () => openSettingsModal());
   document.getElementById('mobile-settings-btn')?.addEventListener('click', () => {
     openSettingsModal();
     document.getElementById('app-body')?.classList.remove('mobile-sidebar-open');
@@ -5175,6 +5196,8 @@ _applyGuestMode() {
   if (dmPane) dmPane.style.display = 'none';
   const split = document.getElementById('sidebar-split-handle');
   if (split) split.style.display = 'none';
+  const dmDock = document.getElementById('dm-dock-btn');
+  if (dmDock) dmDock.hidden = true;
   const dmPip = document.getElementById('dm-pip-panel');
   if (dmPip) dmPip.style.display = 'none';
   document.body.classList.add('is-guest');
@@ -5233,12 +5256,7 @@ _setupServerBar() {
   window.addEventListener('haven-server-badges', (e) => this._updateServerBadgeDots(e.detail));
   window.havenDesktop?.getServerBadges?.().then(b => this._updateServerBadgeDots(b));
 
-  document.getElementById('home-server').addEventListener('click', () => {
-    // Already home — pulse the icon for fun
-    const el = document.getElementById('home-server');
-    el.classList.add('bounce');
-    setTimeout(() => el.classList.remove('bounce'), 400);
-  });
+  this._bindHomeServerMenu();
 
   document.getElementById('add-server-btn').addEventListener('click', () => {
     this._editingServerUrl = null;
@@ -5606,8 +5624,9 @@ _renderManageServersList() {
       document.getElementById('manage-servers-modal').style.display = 'none';
       this._editServer(s.url);
     });
-    row.querySelector('.manage-server-delete').addEventListener('click', () => {
-      if (!confirm(t('confirm.remove_server', { name: s.name }))) return;
+    row.querySelector('.manage-server-delete').addEventListener('click', async () => {
+      const ok = await this._showConfirmModal(t('confirm.remove_server', { name: s.name }), '', { danger: true });
+      if (!ok) return;
       this.serverManager.markRemoved(s.url);
       this.serverManager.remove(s.url);
       // Also drop from Desktop's cross-server history so it stops getting
@@ -5823,6 +5842,105 @@ _withCacheBust(url) {
   return url + (url.includes('?') ? '&' : '?') + '_cb=' + tag;
 },
 
+_bindHomeServerMenu() {
+  const btn = document.getElementById('home-server');
+  const menu = document.getElementById('home-server-menu');
+  if (!btn || !menu || btn.dataset.homeMenuBound === '1') return;
+  btn.dataset.homeMenuBound = '1';
+  const close = () => {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  const place = () => {
+    const r = btn.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+  };
+  const open = () => {
+    const adminItem = menu.querySelector('[data-home-action="server-settings"]');
+    if (adminItem) adminItem.hidden = !this._hasAnyAdminSettingsAccess?.();
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    place();
+  };
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (menu.hidden) open();
+    else close();
+  });
+  document.addEventListener('click', (e) => {
+    if (menu.hidden) return;
+    if (menu.contains(e.target) || btn.contains(e.target)) return;
+    close();
+  });
+  window.addEventListener('resize', () => { if (!menu.hidden) place(); });
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-home-action]');
+    if (!item) return;
+    close();
+    const action = item.dataset.homeAction;
+    if (action === 'add-server') document.getElementById('add-server-btn')?.click();
+    else if (action === 'manage-servers') document.getElementById('manage-servers-btn')?.click();
+    else if (action === 'sync-servers') document.getElementById('sync-servers-btn')?.click();
+    else if (action === 'server-settings') this._openSettingsModal?.('admin');
+    else if (action === 'app-settings') this._openSettingsModal?.('user');
+  });
+},
+
+_togglePeoplePanel() {
+  const html = document.documentElement;
+  const appBody = document.getElementById('app-body');
+  const overlay = document.getElementById('mobile-overlay');
+  const mobile = window.matchMedia('(max-width: 768px)').matches;
+  const right = document.getElementById('right-sidebar');
+
+  if (html.hasAttribute('data-braid-layout')) {
+    const open = !html.classList.contains('braid-people-open');
+    html.classList.toggle('braid-people-open', open);
+    try { localStorage.setItem('haven_braid_people', open ? '1' : '0'); } catch {}
+    if (right) {
+      if (open) {
+        right.classList.remove('collapsed');
+        right.style.display = '';
+        right.style.width = '';
+        right.style.opacity = '';
+        right.style.pointerEvents = '';
+      } else {
+        right.classList.add('collapsed');
+        right.style.display = 'none';
+      }
+    }
+    if (mobile && appBody) {
+      appBody.classList.toggle('mobile-right-open', open);
+      appBody.classList.remove('mobile-sidebar-open');
+      overlay?.classList.toggle('active', open);
+    }
+    return;
+  }
+
+  if (mobile && appBody) {
+    const isOpen = appBody.classList.toggle('mobile-right-open');
+    appBody.classList.remove('mobile-sidebar-open');
+    overlay?.classList.toggle('active', isOpen);
+    return;
+  }
+
+  if (right && this._applySidebarCollapsed) {
+    const collapsed = !right.classList.contains('collapsed');
+    this._applySidebarCollapsed(collapsed);
+    try { localStorage.setItem('haven-sidebar-collapsed', collapsed ? '1' : '0'); } catch {}
+  }
+
+  const dock = document.getElementById('people-dock-btn');
+  if (dock) {
+    const open = html.hasAttribute('data-braid-layout')
+      ? html.classList.contains('braid-people-open')
+      : !!(right && !right.classList.contains('collapsed'));
+    dock.setAttribute('aria-pressed', open ? 'true' : 'false');
+  }
+},
+
 _renderServerBar() {
   const list = document.getElementById('server-list');
   const currentOrigin = window.location.origin;
@@ -5875,11 +5993,12 @@ _renderServerBar() {
   });
 
   list.querySelectorAll('.server-icon.remote').forEach(el => {
-    el.addEventListener('click', (e) => {
+    el.addEventListener('click', async (e) => {
       if (e.target.classList.contains('server-remove')) {
         e.stopPropagation();
         const serverName = el.getAttribute('title')?.split(' — ')[0] || el.dataset.url;
-        if (!confirm(t('confirm.remove_server', { name: serverName }))) return;
+        const ok = await this._showConfirmModal(t('confirm.remove_server', { name: serverName }), '', { danger: true });
+        if (!ok) return;
         this.serverManager.markRemoved(el.dataset.url);
         this.serverManager.remove(el.dataset.url);
         // Also drop from Desktop's cross-server history so it stops getting
@@ -5977,7 +6096,6 @@ _setupImageUpload() {
 
 _setupMobile() {
   const menuBtn = document.getElementById('mobile-menu-btn');
-  const usersBtn = document.getElementById('mobile-users-btn');
   const overlay = document.getElementById('mobile-overlay');
   const appBody = document.getElementById('app-body');
 
@@ -5990,7 +6108,12 @@ _setupMobile() {
   });
 
   // Users button — toggle right sidebar
-  usersBtn.addEventListener('click', () => {
+  const usersBtn = document.getElementById('mobile-users-btn');
+  usersBtn?.addEventListener('click', () => {
+    if (document.documentElement.hasAttribute('data-braid-layout')) {
+      this._togglePeoplePanel();
+      return;
+    }
     const isOpen = appBody.classList.toggle('mobile-right-open');
     appBody.classList.remove('mobile-sidebar-open');
     if (isOpen) overlay.classList.add('active');
@@ -6314,7 +6437,8 @@ _setupCollapsibleSections() {
       bodyEl.classList.add('collapsed');
     }
 
-    toggleEl.addEventListener('click', () => {
+    toggleEl.addEventListener('click', (e) => {
+      if (e.target.closest('[data-close-sheet]')) return;
       const isCollapsed = bodyEl.classList.toggle('collapsed');
       arrowEl?.classList.toggle('collapsed', isCollapsed);
       localStorage.setItem(key, isCollapsed ? '1' : '0');
@@ -7060,7 +7184,25 @@ _renderMediaGallery(data) {
   this._mediaGallerySelected = new Map();
   this._mediaGallerySelectMode = false;
   this._refreshMediaGalleryToolbar();
+  this._applyMediaTileSize();
   this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+},
+
+_mediaTilePx(raw) {
+  const n = parseInt(raw != null ? raw : (() => { try { return localStorage.getItem('mediaGalleryTile'); } catch { return ''; } })(), 10);
+  if (!Number.isFinite(n)) return 150;
+  return Math.min(360, Math.max(72, n));
+},
+
+_applyMediaTileSize(px) {
+  const size = px != null ? this._mediaTilePx(px) : this._mediaTilePx();
+  const modal = document.getElementById('media-gallery-modal');
+  if (modal) modal.style.setProperty('--media-tile', `${size}px`);
+  const slider = document.getElementById('media-gallery-tile');
+  if (slider && slider.value !== String(size)) slider.value = String(size);
+  const wrap = document.getElementById('media-gallery-tile-wrap');
+  const tab = this._mediaGalleryActiveTab || 'photos';
+  if (wrap) wrap.hidden = tab !== 'photos' && tab !== 'videos';
 },
 
 // Build a stable key for a gallery row so the same attachment shared

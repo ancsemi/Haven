@@ -3,6 +3,7 @@
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
 const { isString, isInt, VALID_ROLE_PERMS } = require('./helpers');
+const { seedDefaultRoles } = require('../roleDefaults');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -634,32 +635,183 @@ module.exports = function register(socket, ctx) {
       details: null });
   });
 
+  function canManagePermPanel(socket) {
+    return !!(socket.user && (socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_roles')));
+  }
+
+  function serverRolesWithPerms() {
+    const roles = db.prepare(`
+      SELECT * FROM roles
+      WHERE (scope = 'server' OR scope IS NULL) AND level > 0
+      ORDER BY level DESC
+    `).all();
+    const permissions = db.prepare('SELECT * FROM role_permissions').all();
+    const permMap = {};
+    permissions.forEach(p => {
+      if (!permMap[p.role_id]) permMap[p.role_id] = [];
+      permMap[p.role_id].push(p.permission);
+    });
+    roles.forEach(r => { r.permissions = permMap[r.id] || []; });
+    return roles;
+  }
+
+  function primaryServerRole(userId) {
+    return db.prepare(`
+      SELECT r.* FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.scope = 'server' AND r.level > 0
+      ORDER BY COALESCE(ur.custom_level, r.level) DESC
+      LIMIT 1
+    `).get(userId);
+  }
+
+  socket.on('get-perm-panel', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!canManagePermPanel(socket)) return cb({ error: 'Only admins can manage permissions' });
+    try {
+      const roles = serverRolesWithPerms();
+      let users = [];
+      try {
+        const rows = db.prepare(`
+          SELECT id, username, COALESCE(display_name, username) as displayName,
+                 avatar, avatar_shape, is_admin
+          FROM users
+          ORDER BY is_admin DESC, displayName COLLATE NOCASE
+        `).all();
+        const assignments = db.prepare(`
+          SELECT ur.user_id, ur.role_id FROM user_roles ur
+          JOIN roles r ON r.id = ur.role_id
+          WHERE ur.channel_id IS NULL AND (r.scope = 'server' OR r.scope IS NULL)
+        `).all();
+        const byUser = {};
+        assignments.forEach(a => {
+          if (!byUser[a.user_id]) byUser[a.user_id] = [];
+          byUser[a.user_id].push(a.role_id);
+        });
+        users = rows.map(u => ({
+          id: u.id,
+          username: u.username,
+          displayName: u.displayName,
+          avatar: u.avatar,
+          avatarShape: u.avatar_shape || 'circle',
+          isAdmin: !!u.is_admin,
+          roleIds: byUser[u.id] || [],
+          permissions: getUserGlobalPermissions(u.id),
+        }));
+      } catch (userErr) {
+        console.error('get-perm-panel users error:', userErr);
+      }
+      cb({ roles, users });
+    } catch (err) {
+      console.error('get-perm-panel error:', err);
+      cb({ error: 'Failed to load permissions' });
+    }
+  });
+
+  socket.on('set-user-server-role', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!canManagePermPanel(socket)) return cb({ error: 'Only admins can manage permissions' });
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    const userId = isInt(data.userId) ? data.userId : null;
+    const roleId = isInt(data.roleId) ? data.roleId : null;
+    if (!userId || !roleId) return cb({ error: 'Missing user or role' });
+    if (userId === socket.user.id) return cb({ error: 'You cannot change your own role here' });
+    const target = db.prepare('SELECT id, is_admin FROM users WHERE id = ?').get(userId);
+    if (!target) return cb({ error: 'User not found' });
+    if (target.is_admin) return cb({ error: 'The host keeps Admin. Transfer admin from Server settings.' });
+    const role = db.prepare("SELECT * FROM roles WHERE id = ? AND scope = 'server' AND level > 0").get(roleId);
+    if (!role) return cb({ error: 'Role not found' });
+    if (!socket.user.isAdmin && role.level >= getUserEffectiveLevel(socket.user.id)) {
+      return cb({ error: `You can only assign roles below your level` });
+    }
+    try {
+      db.prepare(`
+        DELETE FROM user_role_perms WHERE user_id = ? AND channel_id IS NULL
+          AND role_id IN (SELECT id FROM roles WHERE scope = 'server')
+      `).run(userId);
+      db.prepare(`
+        DELETE FROM user_roles WHERE user_id = ? AND channel_id IS NULL
+          AND role_id IN (SELECT id FROM roles WHERE scope = 'server')
+      `).run(userId);
+      db.prepare(
+        'INSERT INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, ?)'
+      ).run(userId, roleId, socket.user.id);
+      applyRoleChannelAccess(roleId, userId, 'grant');
+      refreshUserRoles(userId);
+      io.except('bot-sockets').emit('roles-updated');
+      cb({ success: true, permissions: getUserGlobalPermissions(userId), roleIds: [roleId] });
+    } catch (err) {
+      console.error('set-user-server-role error:', err);
+      cb({ error: 'Failed to set role' });
+    }
+  });
+
+  socket.on('set-user-server-perms', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!canManagePermPanel(socket)) return cb({ error: 'Only admins can manage permissions' });
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    const userId = isInt(data.userId) ? data.userId : null;
+    if (!userId || !Array.isArray(data.permissions)) return cb({ error: 'Missing user or permissions' });
+    if (userId === socket.user.id) return cb({ error: 'You cannot change your own permissions here' });
+    const target = db.prepare('SELECT id, is_admin FROM users WHERE id = ?').get(userId);
+    if (!target) return cb({ error: 'User not found' });
+    if (target.is_admin) return cb({ error: 'The host already has every permission' });
+
+    let role = primaryServerRole(userId);
+    if (!role) {
+      const auto = db.prepare("SELECT * FROM roles WHERE auto_assign = 1 AND scope = 'server' LIMIT 1").get();
+      if (!auto) return cb({ error: 'This user has no role to attach permissions to' });
+      db.prepare(
+        'INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, ?)'
+      ).run(userId, auto.id, socket.user.id);
+      role = auto;
+    }
+    if (!socket.user.isAdmin && role.level >= getUserEffectiveLevel(socket.user.id)) {
+      return cb({ error: 'You can only edit people below your level' });
+    }
+
+    const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
+    const requested = data.permissions.filter(p => {
+      if (typeof p !== 'string' || !VALID_ROLE_PERMS.includes(p)) return false;
+      if (!socket.user.isAdmin && (adminOnlyPerms.includes(p) || !userHasPermission(socket.user.id, p))) return false;
+      return true;
+    });
+    const rolePerms = db.prepare(
+      'SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1'
+    ).all(role.id).map(r => r.permission);
+
+    try {
+      db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(userId, role.id);
+      const insert = db.prepare(
+        'INSERT INTO user_role_perms (user_id, role_id, channel_id, permission, allowed) VALUES (?, ?, NULL, ?, ?)'
+      );
+      for (const p of requested) {
+        if (!rolePerms.includes(p)) insert.run(userId, role.id, p, 1);
+      }
+      for (const p of rolePerms) {
+        if (!requested.includes(p)) insert.run(userId, role.id, p, 0);
+      }
+      refreshUserRoles(userId);
+      cb({ success: true, permissions: getUserGlobalPermissions(userId), roleIds: [role.id] });
+    } catch (err) {
+      console.error('set-user-server-perms error:', err);
+      cb({ error: 'Failed to update permissions' });
+    }
+  });
+
   // ── Reset roles to default ─────────────────────────────
   socket.on('reset-roles-to-default', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!socket.user.isAdmin) return cb({ error: 'Only admins can reset roles' });
 
     try {
+      db.exec('DELETE FROM user_role_perms');
       db.exec('DELETE FROM user_roles');
       db.exec('DELETE FROM role_permissions');
       db.exec('DELETE FROM role_channel_access');
       db.exec('DELETE FROM roles');
 
-      const insertRole = db.prepare('INSERT INTO roles (name, level, scope, color) VALUES (?, ?, ?, ?)');
-      const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
-
-      const serverMod = insertRole.run('Server Mod', 50, 'server', '#3498db');
-      ['kick_user','mute_user','delete_message','pin_message','set_channel_topic','manage_sub_channels','rename_channel','rename_sub_channel','delete_lower_messages','manage_webhooks','use_ferry','upload_files','use_voice','view_history','view_all_members','manage_music_queue','delete_own_messages','edit_own_messages']
-        .forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
-
-      const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
-      ['kick_user','mute_user','delete_message','pin_message','manage_sub_channels','rename_sub_channel','delete_lower_messages','upload_files','use_voice','view_history','view_channel_members','manage_music_queue','delete_own_messages','edit_own_messages']
-        .forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
-
-      const userRole = insertRole.run('User', 1, 'server', '#95a5a6');
-      db.prepare('UPDATE roles SET auto_assign = 1 WHERE id = ?').run(userRole.lastInsertRowid);
-      ['delete_own_messages','edit_own_messages','upload_files','use_voice','view_history']
-        .forEach(p => insertPerm.run(userRole.lastInsertRowid, p));
+      seedDefaultRoles(db);
 
       const autoRoles = db.prepare('SELECT id FROM roles WHERE auto_assign = 1 AND scope = ?').all('server');
       for (const ar of autoRoles) {

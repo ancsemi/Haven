@@ -213,10 +213,8 @@ _setupSocketListeners() {
     this._updateBorderPreview();
     // Show admin/mod controls based on role level
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
-    const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
-    document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
+    this._refreshChannelActions?.();
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
-    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
   });
 
   // Roles updated (from admin assigning/revoking, or editing a role we hold)
@@ -241,11 +239,9 @@ _setupSocketListeners() {
     localStorage.setItem('haven_user', JSON.stringify(this.user));
     // Refresh UI to reflect new permissions
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
-    const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
     const canCreateInvites = this.user.isAdmin || this._hasGlobalPerm('manage_server') || this._hasGlobalPerm('invite_users');
-    document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
+    this._refreshChannelActions?.();
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
-    document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
     document.getElementById('sidebar-invite-panel').style.display = canCreateInvites ? 'block' : 'none';
     this._showToast(t('toasts.roles_updated'), 'info');
   });
@@ -1214,7 +1210,7 @@ _setupSocketListeners() {
           this._noMoreFuture = true;
           this._loadingFuture = false;
           this._historyAfter = null;
-          this.socket.emit('get-messages', { code: this.currentChannel });
+          this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
         } else {
           this._appendMessage(data.message, isOwnMessage);
           this._newestMsgId = data.message.id;
@@ -1242,7 +1238,7 @@ _setupSocketListeners() {
       if (data.message.user_id !== this.user.id) {
         const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
         const _isMuted = _mutedChs.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
-        if (!_isMuted) {
+        if (!_isMuted && !this._isDesktopBackgroundView?.()) {
           // Check if message contains @mention of current user.
           // Escape regex chars and use non-word lookahead so usernames
           // containing spaces or symbols still match. (#5273)
@@ -1657,8 +1653,14 @@ _setupSocketListeners() {
     if (data.parentContent) {
       const preview = document.getElementById('thread-parent-preview');
       if (preview) {
-        const text = data.parentContent.length > 120 ? data.parentContent.substring(0, 120) + '…' : data.parentContent;
-        preview.textContent = text;
+        if (this._isForumFeed?.() && this._paintForumParentPreview) {
+          this._paintForumParentPreview(data.parentContent);
+          const topic = this._forumTopics && this._forumTopics.get(this._activeThreadParent);
+          if (topic) this._paintForumSubtasks?.(topic);
+        } else {
+          const text = data.parentContent.length > 120 ? data.parentContent.substring(0, 120) + '…' : data.parentContent;
+          preview.textContent = text;
+        }
       }
     }
     const container = document.getElementById('thread-messages');
@@ -1986,7 +1988,7 @@ _setupSocketListeners() {
     this.user.permissions = data.user.permissions || this.user.permissions || [];
     this.user.globalPermissions = data.user.globalPermissions || this.user.globalPermissions || [];
     const canCreate = data.user.isAdmin || this._hasGlobalPerm('create_channel');
-    document.getElementById('admin-controls').style.display = canCreate ? 'block' : 'none';
+    this._refreshChannelActions?.();
     // Same gate as login and roles-updated, so a moderator who changes their
     // display name keeps the Admin tab instead of losing it until reload.
     const canModerate = data.user.isAdmin || (this.user.effectiveLevel || 0) >= 25;

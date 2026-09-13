@@ -35,6 +35,12 @@
   // Public density state is available before first paint. Layout plugins and
   // themes can react without reading Haven's private message geometry values.
   try {
+    if (localStorage.getItem('haven_original_layout') === '1') {
+      document.documentElement.setAttribute('data-haven-original-layout', '1');
+    }
+  } catch (e) {}
+
+  try {
     var _density = localStorage.getItem('haven-density');
     if (['compact', 'cozy', 'spacious'].indexOf(_density) < 0) _density = 'cozy';
     document.documentElement.setAttribute('data-density', _density);

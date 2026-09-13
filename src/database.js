@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { DB_PATH } = require('./paths');
 const { ensureSearchIndex } = require('./searchIndex');
+const { seedDefaultRoles } = require('./roleDefaults');
 
 let db;
 
@@ -872,40 +873,7 @@ function initDatabase() {
   // Seed default roles if none exist
   const roleCount = db.prepare('SELECT COUNT(*) as cnt FROM roles').get();
   if (roleCount.cnt === 0) {
-    const insertRole = db.prepare('INSERT INTO roles (name, level, scope, color) VALUES (?, ?, ?, ?)');
-    const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
-
-    // Server Mod — level 50 (below admin which is implied level 100)
-    const serverMod = insertRole.run('Server Mod', 50, 'server', '#3498db');
-    const serverModPerms = [
-      'kick_user', 'mute_user', 'delete_message', 'pin_message',
-      'set_channel_topic', 'manage_sub_channels', 'rename_channel',
-      'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
-      'use_ferry',
-      'upload_files', 'use_voice', 'view_history', 'view_all_members',
-      'manage_music_queue',
-      'delete_own_messages', 'edit_own_messages'
-    ];
-    serverModPerms.forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
-
-    // Channel Mod — level 25 (channel-scoped)
-    const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
-    const channelModPerms = [
-      'kick_user', 'mute_user', 'delete_message', 'pin_message',
-      'manage_sub_channels', 'rename_sub_channel', 'delete_lower_messages',
-      'upload_files', 'use_voice', 'view_history', 'view_channel_members', 'manage_music_queue',
-      'delete_own_messages', 'edit_own_messages'
-    ];
-    channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
-
-    // User — level 1 (default role for all new users, auto-assigned)
-    const userRole = insertRole.run('User', 1, 'server', '#95a5a6');
-    db.prepare('UPDATE roles SET auto_assign = 1 WHERE id = ?').run(userRole.lastInsertRowid);
-    const userPerms = [
-      'delete_own_messages', 'edit_own_messages', 'upload_files',
-      'use_voice', 'view_history', 'use_tts'
-    ];
-    userPerms.forEach(p => insertPerm.run(userRole.lastInsertRowid, p));
+    seedDefaultRoles(db);
   }
 
   // ── Migration: add auto_assign column to roles if missing ──
@@ -1620,6 +1588,9 @@ function initDatabase() {
     { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
     // Closed topics grey out and sit below the open ones (#5624).
     { name: 'closed', sql: "ALTER TABLE messages ADD COLUMN closed INTEGER DEFAULT 0" },
+    { name: 'request_status', sql: "ALTER TABLE messages ADD COLUMN request_status TEXT DEFAULT NULL" },
+    { name: 'topic_kind', sql: "ALTER TABLE messages ADD COLUMN topic_kind TEXT DEFAULT NULL" },
+    { name: 'subtasks', sql: "ALTER TABLE messages ADD COLUMN subtasks TEXT DEFAULT NULL" },
   ]) {
     try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }

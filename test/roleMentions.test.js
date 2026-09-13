@@ -123,6 +123,47 @@ test('a forum topic with no replies still gets its reply button', () => {
   assert.match(html, /thread_runtime\.reply_to_topic/);
 });
 
+test('opening a forum topic covers the feed column and keeps the sidebar', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-utilities.js'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+  const ui = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-ui.js'), 'utf8');
+  assert.match(source, /classList\.toggle\('forum-thread'/);
+  assert.match(source, /forum-thread-open/);
+  assert.match(source, /main\.appendChild\(panel\)/);
+  assert.match(source, /thread-panel-back/);
+  assert.match(css, /\.main > \.thread-panel\.forum-thread:not\(\.pip\)/);
+  assert.match(ui, /thread-panel-back/);
+});
+
+test('braid keeps server chips reachable when the sidebar is narrow', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'plugins/BraidLayout.plugin.js'), 'utf8');
+  assert.match(css, /braid-server-strip #server-list\{[^}]*overflow-x:auto/);
+  assert.match(css, /scrollbar-width:thin/);
+  assert.match(css, /braid-server-strip \.server-icon\.add-server\{margin-left:0\}/);
+});
+
+test('braid forum view drops the tall chat padding under the channel topic', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'plugins/BraidLayout.plugin.js'), 'utf8');
+  assert.match(css, /\.messages\.forum-view\{padding-top:\.15rem!important\}/);
+});
+
+test('forum topics turn image URLs into pictures instead of leftover links', () => {
+  const forum = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-forum.js'), 'utf8');
+  const utilities = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-utilities.js'), 'utf8');
+  const socket = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-socket.js'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+  assert.match(utilities, /_pullImageUrls\(str\)/);
+  assert.match(utilities, /A caption with an image URL/);
+  assert.match(forum, /_paintForumParentPreview/);
+  assert.match(forum, /_paintForumSubtasks/);
+  assert.match(forum, /_forumTypeCatalog\(\)/);
+  assert.match(forum, /_forumAttachGif/);
+  assert.match(forum, /_forumDraftMeta/);
+  assert.match(forum, /_imgSrcAttr\(thumb\)/);
+  assert.match(socket, /_paintForumParentPreview\(data\.parentContent\)/);
+  assert.match(css, /\.thread-panel\.forum-thread \.thread-parent-preview/);
+});
+
 test('outside a forum an empty thread renders nothing', () => {
   const app = loadApp();
   assert.equal(app._renderThreadPreview(42, { count: 0 }), '');

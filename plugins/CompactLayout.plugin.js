@@ -1,8 +1,8 @@
 /**
  * @name Compact Layout
- * @description Reversible desktop layout that folds the server rail into the navigation sidebar and docks account and voice controls in its footer. Preserves Haven's tablet, mobile, and message-density behavior.
+ * @description Reversible desktop layout from Theme → Layout (Compact layout). Folds the server rail into the navigation sidebar and docks account and voice controls in its footer. Works with any palette. Preserves Haven's tablet, mobile, and message-density behavior.
  * @author bernardokcosta
- * @version 1.0.0
+ * @version 1.1.0
  */
 class CompactLayout {
   start() {
@@ -18,7 +18,6 @@ class CompactLayout {
 
     try {
       HavenApi.DOM.addStyle('CompactLayout', CompactLayout.CSS);
-      this._buildControl();
       this._listen(document, 'keydown', (event) => {
         if (!event.ctrlKey || !event.altKey || event.key.toLowerCase() !== 'c') return;
         event.preventDefault();
@@ -36,9 +35,18 @@ class CompactLayout {
         if (event.detail?.owner !== 'CompactLayout') this._syncDesktop();
       });
       this._listen(this._media, 'change', () => this._syncDesktop());
+      this._listen(document, 'haven:layout-effect', (event) => {
+        if (typeof event.detail?.compact !== 'boolean') return;
+        if (event.detail.compact) this._engage();
+        else this._disengage();
+      });
+      this._listen(document, 'haven:original-layout', (event) => {
+        if (event.detail?.original) this._disengage();
+      });
 
-      if (HavenApi.Data.load('CompactLayout', 'layoutOn', '1') !== '0') this._engage(false);
-      else this._renderControl();
+      const saved = HavenApi.Data.load('CompactLayout', 'layoutOn', null);
+      const originalOn = document.documentElement.hasAttribute('data-haven-original-layout');
+      if (saved !== '0' && !originalOn) this._engage(false);
     } catch (error) {
       this.stop();
       throw error;
@@ -52,8 +60,6 @@ class CompactLayout {
       target.removeEventListener(type, listener, options);
     }
     this._listeners = [];
-    this._control?.remove();
-    this._control = null;
     this._media = null;
     HavenApi.DOM.removeStyle('CompactLayout');
     this._started = false;
@@ -68,39 +74,27 @@ class CompactLayout {
     return HavenApi.DOM.query(`[data-haven-region="${CompactLayout.REGIONS[name]}"]`);
   }
 
-  _buildControl() {
-    const actions = this._region('sidebarActions');
-    if (!actions || this._control) return;
-    const control = document.createElement('button');
-    control.type = 'button';
-    control.textContent = 'C';
-    control.title = 'Compact layout (Ctrl+Alt+C)';
-    control.setAttribute('aria-label', 'Switch to compact layout');
-    control.setAttribute('aria-pressed', 'false');
-    control.setAttribute('data-compact-layout-control', '');
-    control.addEventListener('click', () => this._toggle());
-    actions.prepend(control);
-    this._control = control;
-  }
-
   _toggle() {
     this._engaged ? this._disengage() : this._engage();
   }
 
   _engage(persist = true) {
     if (this._engaged) return;
+    if (typeof window.setHavenOriginalLayout === 'function'
+        && document.documentElement.hasAttribute('data-haven-original-layout')) {
+      window.setHavenOriginalLayout(false);
+    }
     this._engaged = true;
     document.documentElement.setAttribute('data-compact-layout', '1');
     try {
       this._syncDesktop();
       if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '1');
-      this._renderControl();
+      document.dispatchEvent(new CustomEvent('haven:compact-layout', { detail: { on: true } }));
     } catch (error) {
       this._engaged = false;
       try { this._restoreDesktop(); }
       finally {
         document.documentElement.removeAttribute('data-compact-layout');
-        this._renderControl();
       }
       throw error;
     }
@@ -112,22 +106,7 @@ class CompactLayout {
     this._restoreDesktop();
     document.documentElement.removeAttribute('data-compact-layout');
     if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '0');
-    this._renderControl();
-  }
-
-  _renderControl() {
-    if (!this._control) return;
-    this._control.setAttribute('aria-pressed', this._engaged ? 'true' : 'false');
-    const blocked = this._engaged && this._blocked;
-    this._control.title = blocked
-      ? 'Compact layout is waiting for another layout plugin'
-      : 'Compact layout (Ctrl+Alt+C)';
-    this._control.setAttribute(
-      'aria-label',
-      blocked
-        ? 'Compact layout waiting for another layout plugin'
-        : (this._engaged ? 'Switch to classic layout' : 'Switch to compact layout')
-    );
+    document.dispatchEvent(new CustomEvent('haven:compact-layout', { detail: { on: false } }));
   }
 
   _syncDesktop() {
@@ -152,7 +131,6 @@ class CompactLayout {
     }
     if (HavenApi.Layout && !HavenApi.Layout.acquire('CompactLayout')) {
       this._blocked = true;
-      this._renderControl();
       return;
     }
 
@@ -163,7 +141,6 @@ class CompactLayout {
     this._move(voiceControls, footer, account);
     this._dockVoiceControls(voiceControls);
     document.documentElement.setAttribute('data-compact-layout-desktop', '1');
-    this._renderControl();
   }
 
   _move(element, parent, before) {
@@ -216,7 +193,6 @@ class CompactLayout {
     this._blocked = Boolean(
       this._engaged && HavenApi.Layout?.owner && HavenApi.Layout.owner !== 'CompactLayout'
     );
-    this._renderControl();
   }
 }
 
@@ -281,35 +257,6 @@ html[data-compact-layout-desktop="1"] :where([data-haven-region="voice-controls"
   justify-content: flex-start;
   overflow-x: auto;
   padding: 0.375rem 0.5rem;
-}
-
-html[data-haven-theme-api="1"] :where([data-compact-layout-control]) {
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  font: 700 0.75rem var(--font-mono);
-  cursor: pointer;
-}
-
-html[data-haven-theme-api="1"] :where([data-compact-layout-control]):hover {
-  border-color: var(--accent);
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-html[data-haven-theme-api="1"] :where([data-compact-layout-control]):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-html[data-haven-theme-api="1"] :where([data-compact-layout-control][aria-pressed="true"]) {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-text);
 }
 `;
 

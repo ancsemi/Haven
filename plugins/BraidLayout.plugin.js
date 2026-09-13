@@ -1,8 +1,8 @@
 /**
  * @name Braid Layout
- * @description Vastly simplified two-edge layout: folds the server rail into the sidebar, docks the full voice controls bottom-left, tucks header extras into a kebab menu, merges message runs into cards, and calms the chrome. One-key toggle (Ctrl+Shift+B) between Braid and the classic layout. Suspends itself while Mod Mode edits the layout. Pairs with the Braid / Braid Light themes, and respects every other theme: cosmetic shape rules use :where() so any [data-theme] override wins.
+ * @description Two-edge rounded layout driven from Theme → Effect Overlay (Braid layout). Folds the server rail into the sidebar, docks voice bottom-left, tucks header extras into a kebab menu, and merges message runs into cards. Match theme turns it on with the Braid palettes; you can stack it on any other theme. Suspends itself while Mod Mode edits the layout.
  * @author Amnibro
- * @version 1.9
+ * @version 2.11
  */
 class BraidLayout {
   static _DENSITIES = [
@@ -18,21 +18,10 @@ class BraidLayout {
     this._suspended = false;
     this._transitioning = false;
     HavenApi.DOM.addStyle('BraidPillCSS', BraidLayout._PILL_CSS);
-    this._buildReturnPill();
-    // One shortcut, both directions: the way back must never be buried.
-    // Ctrl+Alt+B is the browser-safe twin (Chrome eats Ctrl+Shift+B on web).
-    const kd = (e) => {
-      if (e.ctrlKey && (e.shiftKey || e.altKey) && (e.key === 'B' || e.key === 'b')) {
-        e.preventDefault();
-        this._toggleLayout();
-      }
-    };
-    document.addEventListener('keydown', kd, true);
-    this._permListeners.push([document, 'keydown', kd, true]);
     const ownerChanged = (event) => {
       if (event.detail?.owner || this._stopping || this._transitioning
           || document.documentElement.hasAttribute('data-haven-layout-editing')) return;
-      if (HavenApi.Data.load('BraidLayout', 'layoutOn', '1') === '0') return;
+      if (!this._wantsLayout()) return;
       if (this._engaged && this._suspended) this._resume();
       else if (!this._engaged) this._engage();
     };
@@ -44,21 +33,42 @@ class BraidLayout {
         if (this._engaged && !this._suspended) this._suspend();
         return;
       }
-      if (HavenApi.Data.load('BraidLayout', 'layoutOn', '1') === '0') return;
+      if (!this._wantsLayout()) return;
       if (event.detail?.owner && event.detail.owner !== 'BraidLayout') return;
       if (this._engaged) this._resume();
       else this._engage();
     };
     document.addEventListener('haven:layout-editing', editingChanged);
     this._permListeners.push([document, 'haven:layout-editing', editingChanged]);
-    const layoutOn = HavenApi.Data.load('BraidLayout', 'layoutOn', '1') !== '0';
-    if (layoutOn && !document.documentElement.hasAttribute('data-haven-layout-editing')) this._engage();
-    else if (layoutOn) console.log('[BraidLayout] Waiting for Mod Mode to finish');
-    else console.log('[BraidLayout] Started dormant — classic layout (pill or Ctrl+Shift+B to re-engage)');
+    const fxChanged = (event) => {
+      if (this._stopping) return;
+      this._syncFromEffect(event.detail?.braid);
+    };
+    document.addEventListener('haven:layout-effect', fxChanged);
+    this._permListeners.push([document, 'haven:layout-effect', fxChanged]);
+    this._syncFromEffect();
   }
 
-  _toggleLayout() {
-    this._engaged ? this._disengage() : this._engage();
+  _wantsLayout() {
+    try {
+      return typeof window !== 'undefined' && window.isHavenEffectActive?.('braid') === true;
+    } catch {
+      return false;
+    }
+  }
+
+  _syncFromEffect(want) {
+    const on = typeof want === 'boolean' ? want : this._wantsLayout();
+    if (on) {
+      if (document.documentElement.hasAttribute('data-haven-layout-editing')) {
+        console.log('[BraidLayout] Waiting for Mod Mode to finish');
+        return;
+      }
+      if (!this._engaged) this._engage();
+      return;
+    }
+    if (this._engaged) this._disengage(false);
+    else console.log('[BraidLayout] Dormant until the Braid layout effect is on');
   }
 
   // Everything visual lives between _engage and _disengage, so "back to
@@ -77,7 +87,6 @@ class BraidLayout {
     this._suspended = false;
     this._engaged = true;
     try {
-      HavenApi.Data.save('BraidLayout', 'layoutOn', '1');
       HavenApi.DOM.addStyle('BraidLayoutCSS', BraidLayout._LAYOUT_CSS);
       HavenApi.DOM.addStyle('BraidShapeCSS', BraidLayout._SHAPE_CSS);
       HavenApi.DOM.addStyle('BraidFormCSS', BraidLayout._FORM_CSS);
@@ -195,7 +204,6 @@ class BraidLayout {
       HavenApi.DOM.removeStyle('BraidFormOwn');
       HavenApi.DOM.removeStyle('BraidDensityCSS');
       this._suspended = false;
-      if (persist) HavenApi.Data.save('BraidLayout', 'layoutOn', '0');
       console.log('[BraidLayout] Disengaged — classic layout');
     } finally {
       HavenApi.Layout?.release('BraidLayout');
@@ -314,6 +322,7 @@ class BraidLayout {
       parent.insertBefore(el, before || null);
     };
     adopt(document.getElementById('voice-settings-panel'), dock);
+    adopt(document.getElementById('voice-bar'), dock);
     adopt(panel, dock);
     // Both mute/deafen pairs (header pair is default, bottom-bar pair is
     // the haven_sidebar_voice_controls opt-in — stock shows one at a time)
@@ -372,11 +381,11 @@ class BraidLayout {
     }
     this._setLS('haven_hide_desktop_banner', '1');
     this._setLS('haven_hide_android_banner', '1');
-    this._setLS('haven_members_collapsed', '1');
   }
 
   _setPeopleOpen(open) {
     document.documentElement.classList.toggle('braid-people-open', !!open);
+    try { localStorage.setItem('haven_braid_people', open ? '1' : '0'); } catch {}
     const right = document.getElementById('right-sidebar');
     if (!right) return;
     if (open) {
@@ -407,27 +416,9 @@ class BraidLayout {
       '<span class="braid-ham"><span class="braid-ham-line"></span><span class="braid-ham-line"></span><span class="braid-ham-line"></span></span>' +
       '<span class="braid-ham-label">Menu</span></button>';
     host.prepend(wrap);
-    // Themes and the layout switch keep first-class seats next to the Menu
-    // — always one click, never buried.
-    if (bar && !document.getElementById('braid-theme-btn')) {
-      const mk = (id, title, paths, onClick) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.id = id;
-        b.className = 'braid-bar-btn';
-        b.title = title;
-        b.setAttribute('aria-label', title);
-        b.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
-        b.addEventListener('click', onClick);
-        bar.appendChild(b);
-      };
-      mk('braid-theme-btn', 'Themes',
-        '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-7.8-9-7.8Z"/><circle cx="7.5" cy="11.5" r=".6"/><circle cx="10.5" cy="7.5" r=".6"/><circle cx="15" cy="7.5" r=".6"/>',
-        () => document.getElementById('theme-popup-toggle')?.click());
-      mk('braid-classic-btn', 'Classic layout (Ctrl+Shift+B)',
-        '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16M3 9h6"/>',
-        () => this._disengage());
-    }
+    // Theme + activities stay the stock buttons (same 2.5rem chip as DMs).
+    // A second braid-theme-btn used to sit next to them at a different size.
+    document.getElementById('braid-theme-btn')?.remove();
     // The menu lives on <body>: the blurred header is a containing block
     // (backdrop-filter) with overflow:hidden, which would trap and clip
     // even a position:fixed dropdown rendered inside it.
@@ -526,7 +517,6 @@ class BraidLayout {
       if (mm) mm.toggle();
       else document.getElementById('mod-mode-settings-toggle')?.click();
     });
-    addItem(I.classic, 'Classic layout', () => this._disengage(), 'Ctrl⇧B');
     addLabel('App');
     addProxy('theme-popup-toggle', I.palette, 'Themes');
     addProxy('activities-btn', I.game, 'Activities');
@@ -540,14 +530,6 @@ class BraidLayout {
     if (desktopBanner) addItem(I.desktop, 'Desktop app', () => (desktopBanner.querySelector('a') || desktopBanner).click());
     const androidBanner = document.getElementById('android-beta-banner');
     if (androidBanner) addItem(I.phone, 'Android app', () => androidBanner.click());
-    const peopleHdr = document.getElementById('mobile-users-btn');
-    if (peopleHdr) {
-      this._listen(peopleHdr, 'click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this._setPeopleOpen(!document.documentElement.classList.contains('braid-people-open'));
-      }, true);
-    }
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const opening = !menu.classList.contains('open');
@@ -761,7 +743,7 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
       document.documentElement.setAttribute('data-braid-layout', '1');
       document.documentElement.setAttribute('data-braid-form', '1');
       this._applyDensity();
-      this._setPeopleOpen(document.documentElement.classList.contains('braid-people-open'));
+      this._setPeopleOpen(localStorage.getItem('haven_braid_people') !== '0');
       this._applyLayout();
     } catch (error) {
       this._suspended = true;
@@ -798,6 +780,7 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
       btn.dataset.braidIcon = '1';
       btn.dataset.braidOrig = btn.innerHTML;
       btn.innerHTML = markup;
+      if (id === 'theme-popup-toggle' || id === 'activities-btn') btn.classList.add('chrome-chip');
     });
   }
 
@@ -877,18 +860,22 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
   // made a 600-message channel load go quadratic (622ms vs 80ms).
   // Attribute marking here is O(n) per observer batch.
   //
-  // Runs chain on AUTHOR, not on the app's compact grouping: consecutive
-  // posts by the same user (same persona, no explicit break_chain, not a
-  // system notice) merge into one card even when the app rendered them as
-  // separate full .message elements. A continuing .message gets
-  // data-braid-cont="1" — its avatar/header hide and its timestamp
-  // surfaces in the gutter on hover via data-time-short.
+  // Runs chain on the same identity the app uses to compact: account,
+  // persona, and the name on the post. Webhook / Ferry / import bots often
+  // share one user_id and only differ by username — chaining on id alone
+  // hid Patch, Relay, and the rest under the first bot's header.
+  // A continuing .message gets data-braid-cont="1" — its avatar/header hide
+  // and its timestamp surfaces in the gutter on hover via data-time-short.
   _markRuns() {
     const runOf = (first, last) => (first ? (last ? 'solo' : 'start') : (last ? 'end' : 'mid'));
     const chainKey = (el) => {
       if (!el || (!el.classList.contains('message') && !el.classList.contains('message-compact'))) return null;
       if (el.classList.contains('system-message') || el.classList.contains('announcement')) return null;
-      return `${el.dataset.userId || '?'}|${el.dataset.personaId || ''}`;
+      const name = el.dataset.username || '';
+      const personaName = el.dataset.personaUsername || '';
+      const webhook = el.dataset.webhookUsername || '';
+      const imported = el.dataset.importedFrom || '';
+      return `${el.dataset.userId || ''}|${el.dataset.personaId || ''}|${name}|${personaName}|${webhook}|${imported}`;
     };
     const nodes = [...document.querySelectorAll('.messages > .message, .messages > .message-compact')];
     for (let i = 0; i < nodes.length; i++) {
@@ -954,23 +941,37 @@ html[data-braid-layout="1"] .sidebar-section[data-mod-id="join"] .section-label,
 html[data-braid-layout="1"] .sidebar-section#admin-controls .section-label{padding:.3125rem .5rem!important}
 html[data-braid-layout="1"] .user-bar{padding:.5rem .625rem!important}
 html[data-braid-layout="1"] .sidebar-bottom-bar{padding:.375rem .5rem!important}
-html[data-braid-layout="1"] .message-input-area .icon-btn,
-html[data-braid-layout="1"] .message-input-area>button,
-html[data-braid-layout="1"] .message-input-container .icon-btn{width:2rem;height:2rem}
 html[data-braid-layout="1"] body,
 html[data-braid-layout="1"] #app{overflow:hidden}
-html[data-braid-layout="1"] #app-body{display:flex!important;flex-direction:row!important;min-height:0;height:100%}
+html[data-braid-layout="1"] #app{display:flex!important;flex-direction:column!important}
+html[data-braid-layout="1"] #app-body{display:flex!important;flex-direction:row!important;min-height:0;flex:1 1 auto!important;height:auto!important}
+html[data-braid-layout="1"][data-desktop-app]{--thread-footer-offset:0px}
+html[data-braid-layout="1"][data-desktop-app] .status-bar,
+html[data-braid-layout="1"][data-desktop-app] #status-bar{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;padding:0!important;border:0!important;overflow:hidden!important}
+html[data-braid-layout="1"].braid-status-open[data-desktop-app] .status-bar,
+html[data-braid-layout="1"].braid-status-open[data-desktop-app] #status-bar{display:flex!important;visibility:visible!important;height:auto!important;min-height:1.75rem!important;padding:.3125rem 1rem!important;border-top:1px solid var(--border)!important;overflow:visible!important}
 html[data-braid-layout="1"] .server-bar{display:none!important}
 /* width deliberately NOT !important — the stock resize handle writes an
    inline style.width (persisted as haven_sidebar_width) and must win */
 html[data-braid-layout="1"] .sidebar{width:var(--sidebar-width);min-width:12.5rem;max-width:25rem;flex:0 0 auto!important;background:var(--bg-secondary)!important;border-right:1px solid var(--border)!important;display:flex!important;flex-direction:column!important;position:relative;z-index:5}
-html[data-braid-layout="1"] .braid-server-strip{display:flex;align-items:center;gap:.3125rem;padding:.625rem .625rem .5rem;overflow-x:auto;border-bottom:1px solid var(--border);flex-shrink:0;scrollbar-width:none}
-html[data-braid-layout="1"] .braid-server-strip::-webkit-scrollbar{display:none;width:0;height:0}
+html[data-braid-layout="1"] .braid-server-strip{display:flex;align-items:center;gap:.3125rem;padding:.5rem .625rem .375rem;overflow:visible;border-bottom:1px solid var(--border);flex-shrink:0}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers{display:none!important}
 html[data-braid-layout="1"] .braid-server-strip .server-icon{width:2.25rem!important;height:2.25rem!important;min-width:2.25rem;border-radius:.6875rem!important;flex-shrink:0;position:relative}
-/* #server-list is a plain block div — inside the horizontal strip its
-   children would stack vertically (exactly what broke multi-server
-   setups). Flex it inline so every icon rides the same row. */
-html[data-braid-layout="1"] .braid-server-strip #server-list{display:flex;align-items:center;gap:.3125rem;min-width:0;flex-shrink:0}
+/* Home + add/manage/sync stay pinned. Extra servers scroll in the
+   middle with a thin bar, the way Compact layout does, so a narrow
+   sidebar does not hide the chips with no way to get them back. */
+html[data-braid-layout="1"] .braid-server-strip #home-server,
+html[data-braid-layout="1"] .braid-server-strip .server-separator,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers,
+html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers{flex-shrink:0}
+html[data-braid-layout="1"] .braid-server-strip #server-list{display:flex;align-items:center;gap:.3125rem;flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text-primary) 28%,transparent) transparent}
+html[data-braid-layout="1"] .braid-server-strip #server-list::-webkit-scrollbar{display:block;width:0;height:6px}
+html[data-braid-layout="1"] .braid-server-strip #server-list::-webkit-scrollbar-track{background:transparent}
+html[data-braid-layout="1"] .braid-server-strip #server-list::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text-primary) 28%,transparent);border-radius:999px}
+html[data-braid-layout="1"] .braid-server-strip #server-list::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--text-primary) 45%,transparent)}
 html[data-braid-layout="1"] .braid-server-strip .server-separator{width:1px;height:1.375rem;background:var(--border);border-radius:0;margin:0 .1875rem;flex-shrink:0}
 html[data-braid-layout="1"] .braid-server-strip .server-icon-img{border-radius:inherit}
 html[data-braid-layout="1"] .braid-server-strip .server-icon>img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
@@ -984,7 +985,7 @@ html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server{border-c
 html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server,
 html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers,
 html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers{width:1.875rem!important;height:1.875rem!important;min-width:1.875rem;border-radius:.5625rem!important}
-html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server{margin-left:auto}
+html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server{margin-left:0}
 html[data-braid-layout="1"] .braid-server-strip .server-icon.add-server .server-icon-text{font-size:1rem}
 html[data-braid-layout="1"] .braid-server-strip .server-icon.manage-servers .server-icon-text,
 html[data-braid-layout="1"] .braid-server-strip .server-icon.sync-servers .server-icon-text{font-size:.875rem}
@@ -1008,8 +1009,10 @@ html[data-braid-layout="1"] #create-section-body.collapsed{display:none!importan
 html[data-braid-layout="1"] .sidebar-split{flex:1;min-height:0;display:flex;flex-direction:column;border:0!important}
 html[data-braid-layout="1"] .channel-section{flex:1;min-height:0;padding:2px .375rem .375rem!important;border:0!important}
 html[data-braid-layout="1"] .dm-section-pane{flex:0 0 auto;max-height:28%;padding:2px .375rem .375rem!important;border-top:1px solid var(--border)!important}
+html[data-braid-layout="1"] .sidebar.dms-open .dm-section-pane{max-height:min(58%,22rem)!important;height:min(58%,22rem)!important;padding:.35rem .5rem .5rem!important}
+html[data-braid-layout="1"] .channel-action-sheet.sheet-open{padding:.5rem .65rem!important;margin:.35rem .5rem 0!important;border:1px solid var(--border)!important;border-radius:.75rem!important;background:var(--bg-card)!important}
 html[data-braid-layout="1"] .section-label.channels-toggle,
-html[data-braid-layout="1"] .section-label.dm-section-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.5rem .5rem .25rem!important}
+html[data-braid-layout="1"] .section-label.dm-section-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.5rem .375rem .25rem!important}
 html[data-braid-layout="1"] .channel-item{margin:1px .375rem!important;padding:var(--braid-chan-pad-y) var(--braid-chan-pad-x)!important;border-radius:.625rem!important}
 html[data-braid-layout="1"] .channel-item.active{background:var(--bg-active)!important}
 html[data-braid-layout="1"] .sidebar-bottom{order:4;border-top:1px solid var(--border)!important;background:var(--bg-secondary)!important;flex-shrink:0}
@@ -1020,28 +1023,38 @@ html[data-braid-layout="1"] .theme-popup{position:fixed!important;left:1rem!impo
 html[data-braid-layout="1"] .main{flex:1!important;min-width:0!important;display:flex!important;flex-direction:column!important;background:var(--bg-primary)!important;position:relative}
 html[data-braid-layout="1"] .channel-header{flex:0 0 var(--braid-bar-h)!important;min-height:var(--braid-bar-h)!important;max-height:var(--braid-bar-h)!important;padding:0 .75rem 0 1rem!important;gap:.375rem!important;overflow:hidden;display:flex;align-items:center!important;background:color-mix(in srgb,var(--bg-secondary) 90%,transparent)!important;backdrop-filter:saturate(180%) blur(16px)!important;-webkit-backdrop-filter:saturate(180%) blur(16px)!important;border-bottom:1px solid var(--border)!important}
 html[data-braid-layout="1"] #channel-header-name{font-size:.90625rem!important;font-weight:650!important;letter-spacing:-.02em!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(40vw,20rem)}
-html[data-braid-layout="1"] .header-actions-box{display:flex!important;align-items:center;gap:2px!important;padding:0!important;border:0!important;background:transparent!important}
-html[data-braid-layout="1"] .header-actions-box .channel-code-tag,
-html[data-braid-layout="1"] .header-actions-box #copy-code-btn,
-html[data-braid-layout="1"] .header-actions-box #channel-code-settings-btn,
-html[data-braid-layout="1"] .header-actions-box .header-actions-divider{display:none!important}
-html[data-braid-layout="1"] .header-actions-box .icon-btn{width:2.125rem;height:2.125rem;border-radius:.625rem;color:var(--text-muted)}
-html[data-braid-layout="1"] .header-actions-box .icon-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
+html[data-braid-layout="1"] .header-actions-box,
+html[data-braid-layout="1"] #header-actions-box{display:none!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar .chrome-chip{width:2.5rem!important;height:2.5rem!important;padding:0!important;border-radius:.75rem!important;border:1px solid var(--braid-btn-line)!important;background:var(--braid-btn-bg)!important;color:var(--text-secondary)!important;opacity:1!important;box-sizing:border-box;display:inline-flex!important;align-items:center;justify-content:center}
+html[data-braid-layout="1"] .channels-toggle{width:auto!important;max-width:100%;align-self:stretch;box-sizing:border-box!important;overflow:visible!important;margin-left:.375rem!important;margin-right:.375rem!important}
+html[data-braid-layout="1"] .channels-toggle .chrome-chip{width:1.5rem!important;height:1.5rem!important;min-width:0!important;min-height:0!important;padding:0!important;border-radius:.5rem!important;border:1px solid var(--braid-btn-line)!important;background:var(--braid-btn-bg)!important;color:var(--text-secondary)!important;opacity:1!important;display:inline-flex!important;align-items:center;justify-content:center}
+html[data-braid-layout="1"] .chrome-chip:hover{background:var(--braid-btn-bg-hover)!important;color:var(--accent)!important;border-color:color-mix(in srgb,var(--accent) 40%,var(--braid-btn-line))!important}
 html[data-braid-layout="1"] #desktop-app-banner,
 html[data-braid-layout="1"] #android-beta-banner,
 html[data-braid-layout="1"] #update-banner{display:none!important;visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important}
 html[data-braid-layout="1"] .voice-controls{display:flex;align-items:center;gap:.25rem;margin-left:auto;flex-shrink:0}
 html[data-braid-layout="1"] .voice-active-indicator,
-html[data-braid-layout="1"] .btn-voice{border-radius:999px!important;border:1px solid var(--border)!important;background:var(--bg-tertiary)!important;color:var(--text-secondary)!important;font-size:.75rem!important;font-weight:550!important;padding:.25rem .625rem!important;box-shadow:none!important}
+html[data-braid-layout="1"] .btn-voice,
+html[data-braid-layout="1"] #voice-join-btn{display:none!important}
+html[data-braid-layout="1"] .voice-leave-square{width:2.25rem!important;height:2.25rem!important;border-radius:.5rem!important;border:0!important;background:var(--danger,#ed4245)!important;color:#fff!important;padding:0!important;box-shadow:none!important}
+html[data-braid-layout="1"] .channel-header .voice-controls{margin-left:.5rem}
+html[data-braid-layout="1"] .channel-join-voice{width:1.625rem;height:1.625rem;border-radius:.5rem;border:1px solid var(--braid-btn-line);background:var(--braid-btn-bg)}
 html[data-braid-layout="1"] .voice-active-indicator{background:color-mix(in srgb,var(--accent) 10%,var(--bg-tertiary))!important;border-color:color-mix(in srgb,var(--accent) 28%,var(--border))!important;color:var(--accent)!important}
-html[data-braid-layout="1"] .voice-controls button[style*="background"],
+html[data-braid-layout="1"] .voice-controls button[style*="background"]:not(.voice-leave-square),
 html[data-braid-layout="1"] .voice-controls div[style*="background"],
 html[data-braid-layout="1"] .voice-controls span[style*="background"]{background:var(--bg-tertiary)!important;color:var(--text-secondary)!important;border:1px solid var(--border)!important;border-radius:999px!important;box-shadow:none!important}
 /* ── Voice dock ── the relocated stock controls, bottom-left. Camera,
    screen share, soundboard, listen-together, settings (stream quality
    lives in there), people, leave — every streaming option in reach. */
-html[data-braid-layout="1"] #braid-voice-dock{flex-shrink:0;display:flex;flex-direction:column;min-width:0}
-html[data-braid-layout="1"] #braid-voice-dock .voice-panel{border-top:1px solid var(--border)!important;border-bottom:0!important;background:var(--bg-secondary)!important;padding:.4375rem .5rem!important;gap:.25rem!important;justify-content:flex-start!important;flex-wrap:wrap}
+html[data-braid-layout="1"] #braid-voice-dock{flex-shrink:0;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:.375rem;min-width:0;padding:.4375rem .625rem;border-top:1px solid var(--border)}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel{border:0!important;background:transparent!important;padding:0!important;gap:.25rem!important;justify-content:flex-start!important;flex-wrap:nowrap;flex:1 1 auto;min-width:0}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar{display:flex;flex-direction:row;align-items:center;gap:.375rem;padding:0;margin:0;border:0;background:transparent;flex:0 1 auto;min-width:0}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-top{align-items:center;width:auto;gap:.375rem}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-status-copy{flex-direction:row;align-items:center;gap:.375rem}
+html[data-braid-layout="1"] #braid-voice-dock .voice-bar-actions{flex-direction:row;align-items:center}
+html[data-braid-layout="1"] #braid-voice-dock .voice-panel-leave{display:none!important}
+html[data-braid-layout="1"] #mobile-users-btn{display:none!important}
+html[data-braid-layout="1"] .channel-join-voice.is-leave{background:var(--danger,#ed4245)!important;border-color:var(--danger,#ed4245)!important;color:#fff!important}
 html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn,
 html[data-braid-layout="1"] #braid-voice-dock .voice-header-btn{width:2rem;height:2rem;border-radius:.625rem!important;border:1px solid var(--braid-btn-line)!important;background:var(--braid-btn-bg)!important;color:var(--text-primary)!important;font-size:.875rem;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;cursor:pointer;transition:background .15s,color .15s,border-color .15s,transform .12s}
 html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn:hover,
@@ -1067,8 +1080,31 @@ html[data-braid-layout="1"] .sidebar-bottom .voice-bar-leave{border-radius:.625r
 html[data-braid-layout="1"] .sidebar-bottom .voice-bar-leave:hover{background:color-mix(in srgb,var(--danger) 18%,var(--bg-secondary))!important;border-color:var(--danger)!important;color:var(--danger)!important}
 html[data-braid-layout="1"] .message-area{flex:1;min-height:0;display:flex;flex-direction:column}
 html[data-braid-layout="1"] .messages{padding:var(--braid-msg-pad-y) var(--braid-msg-pad-x) .5rem!important;width:100%;box-sizing:border-box}
+html[data-braid-layout="1"] .messages.forum-view{padding-top:.15rem!important}
+html[data-braid-layout="1"] .messages.forum-view .forum-toolbar{padding-top:0}
+html[data-braid-layout="1"] .main:has(.messages.forum-view) .channel-topic-bar{padding-bottom:.1rem!important}
 html[data-braid-layout="1"] .message-input-area,
-html[data-braid-layout="1"] .message-input-container{padding:.5rem 1rem .75rem!important;width:100%;box-sizing:border-box;border-top:1px solid var(--border)!important;background:color-mix(in srgb,var(--bg-secondary) 94%,transparent)!important}
+html[data-braid-layout="1"] .message-input-container{align-items:center!important;min-height:calc(2.5rem + 1rem);padding:.5rem .625rem!important;width:100%;box-sizing:border-box;border-top:1px solid var(--border)!important;background:color-mix(in srgb,var(--bg-secondary) 94%,transparent)!important;gap:.375rem!important}
+html[data-braid-layout="1"] .input-actions-box{border:0!important;background:transparent!important;padding:0!important;gap:.375rem!important;align-items:center}
+html[data-braid-layout="1"] .input-actions-divider{display:none!important}
+html[data-braid-layout="1"] .input-actions-box button,
+html[data-braid-layout="1"] .message-input-area .btn-upload,
+html[data-braid-layout="1"] .message-input-area .btn-emoji,
+html[data-braid-layout="1"] .message-input-area .btn-gif,
+html[data-braid-layout="1"] .message-input-area .btn-poll,
+html[data-braid-layout="1"] .message-input-area .btn-time,
+html[data-braid-layout="1"] .message-input-area .btn-burn,
+html[data-braid-layout="1"] .message-input-area .btn-send,
+html[data-braid-layout="1"] .message-input-area>button{width:2.5rem!important;height:2.5rem!important;min-width:2.5rem;min-height:2.5rem;padding:0!important;border-radius:.75rem!important;border:1px solid var(--braid-btn-line)!important;background:var(--braid-btn-bg)!important;color:var(--text-secondary)!important;box-sizing:border-box;display:inline-flex!important;align-items:center;justify-content:center}
+html[data-braid-layout="1"] .input-actions-box button:hover,
+html[data-braid-layout="1"] .message-input-area .btn-upload:hover,
+html[data-braid-layout="1"] .message-input-area .btn-emoji:hover,
+html[data-braid-layout="1"] .message-input-area .btn-gif:hover,
+html[data-braid-layout="1"] .message-input-area .btn-poll:hover,
+html[data-braid-layout="1"] .message-input-area .btn-time:hover,
+html[data-braid-layout="1"] .message-input-area .btn-burn:hover{background:var(--braid-btn-bg-hover)!important;color:var(--accent)!important;border-color:color-mix(in srgb,var(--accent) 40%,var(--braid-btn-line))!important}
+html[data-braid-layout="1"] .message-input-area .btn-send{background:var(--accent)!important;color:var(--accent-text,#fff)!important;border-color:var(--accent)!important}
+html[data-braid-layout="1"] .message-input-area textarea{min-height:2.5rem!important;padding:.5rem .875rem!important;border-radius:.75rem!important;line-height:1.4}
 html[data-braid-layout="1"] .right-sidebar,
 html[data-braid-layout="1"] .right-sidebar.collapsed,
 html[data-braid-layout="1"] #right-sidebar{display:none!important;width:0!important;min-width:0!important;max-width:0!important;border:0!important;opacity:0!important;pointer-events:none!important;overflow:hidden!important}
@@ -1086,8 +1122,20 @@ html[data-braid-layout="1"].braid-sound-open #soundboard-sidebar,
 html[data-braid-layout="1"].braid-sound-open .soundboard-sidebar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
 html[data-braid-layout="1"].braid-status-open .status-bar,
 html[data-braid-layout="1"].braid-status-open #status-bar{display:flex!important;visibility:visible!important;pointer-events:auto!important}
-html[data-braid-layout="1"] .sidebar-bottom-bar{display:flex!important;padding:.5rem .625rem!important;gap:.375rem!important}
-html[data-braid-layout="1"] .sidebar-bottom-bar>*:not(.braid-more-wrap):not(.braid-bar-btn){display:none!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar{display:flex!important;padding:.5rem .625rem!important;gap:.375rem!important;overflow:visible!important}
+html[data-braid-layout="1"] .sidebar-bottom-bar>*:not(.braid-more-wrap):not(.braid-bar-btn):not(#people-dock-btn):not(#dm-dock-btn):not(#theme-popup-toggle):not(#activities-btn){display:none!important}
+html[data-braid-layout="1"] #people-dock-btn,
+html[data-braid-layout="1"] #dm-dock-btn,
+html[data-braid-layout="1"] #theme-popup-toggle,
+html[data-braid-layout="1"] #activities-btn{display:inline-flex!important;align-items:center;justify-content:center;position:relative;overflow:visible!important;width:2.5rem!important;height:2.5rem!important;padding:0!important;border:1px solid var(--braid-btn-line)!important;border-radius:.75rem!important;background:var(--braid-btn-bg)!important;color:var(--text-secondary)!important}
+html[data-braid-layout="1"] #people-dock-btn:hover,
+html[data-braid-layout="1"] #dm-dock-btn:hover,
+html[data-braid-layout="1"] #theme-popup-toggle:hover,
+html[data-braid-layout="1"] #activities-btn:hover,
+html[data-braid-layout="1"].dms-open #dm-dock-btn,
+html[data-braid-layout="1"] .sidebar.dms-open #dm-dock-btn,
+html[data-braid-layout="1"] #people-dock-btn[aria-pressed="true"]{background:var(--braid-btn-bg-hover)!important;color:var(--accent)!important;border-color:color-mix(in srgb,var(--accent) 40%,var(--braid-btn-line))!important}
+html[data-braid-layout="1"] #dm-unread-badge{background:var(--danger,#ed4245)!important;color:#fff!important}
 html[data-braid-layout="1"] .braid-bar-btn{flex:0 0 auto;width:2.5rem;height:2.5rem;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--braid-btn-line)!important;border-radius:.75rem;background:var(--braid-btn-bg);color:var(--text-secondary);cursor:pointer;padding:0;transition:background .15s,color .15s,border-color .15s,transform .12s}
 html[data-braid-layout="1"] .braid-bar-btn:hover{background:var(--braid-btn-bg-hover);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--braid-btn-line))!important}
 html[data-braid-layout="1"] .braid-bar-btn:active{transform:scale(.93)}
@@ -1122,6 +1170,7 @@ html[data-braid-layout="1"] .welcome-content h2{font-size:1.625rem;font-weight:6
 html[data-braid-layout="1"] .welcome-content p{color:var(--text-muted);font-size:.9375rem;line-height:1.5}
 @media (max-width:53.75rem){
 html[data-braid-layout="1"] .messages{padding:.875rem .75rem!important;max-width:none}
+html[data-braid-layout="1"] .messages.forum-view{padding-top:.15rem!important}
 html[data-braid-layout="1"] .server-bar{display:none!important}
 html[data-braid-layout="1"].braid-people-open .right-sidebar{position:fixed;right:0;top:0;bottom:0;z-index:40;max-width:86vw!important}
 }

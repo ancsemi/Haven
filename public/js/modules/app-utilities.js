@@ -300,6 +300,23 @@ _isImageUrl(str) {
   return false;
 },
 
+_pullImageUrls(str) {
+  const out = [];
+  const seen = new Set();
+  const add = (u) => {
+    if (!u || seen.has(u)) return;
+    seen.add(u);
+    out.push(u);
+  };
+  const text = String(str || '');
+  const re = /(?:https?:\/\/[^\s<>"']+?|\/uploads\/(?:[\w\-]+\/)?[\w\-.]+)\.(?:jpg|jpeg|png|gif|webp|svg)(?:\?[^\s<>"']*)?/gi;
+  let m;
+  while ((m = re.exec(text))) add(m[0]);
+  const md = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/uploads\/[^)\s]+)\)/gi;
+  while ((m = md.exec(text))) add(m[1]);
+  return out;
+},
+
 // Auto-link and markdown image handlers run after `_escapeHtml`, so query
 // strings arrive as `?ex=…&amp;is=…`. Feed those straight to the media proxy
 // and Discord (Ferry attachments) 404s — the phone client never HTML-escapes
@@ -779,6 +796,26 @@ _formatContent(str) {
     if (this._isImageUrl(u) && /^https?:\/\//i.test(u)) {
       if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
       return `<img ${this._lazySrcAttr(this._imgSrcAttr(u))} class="chat-image" alt="image">`;
+    }
+  }
+
+  // A caption with an image URL on the next line (or after the sentence) used
+  // to linkify the URL. Split those out so the picture actually renders.
+  {
+    const embedded = this._pullImageUrls(str);
+    if (embedded.length && embedded.some((u) => str.trim() !== u)) {
+      let rest = str;
+      const chunks = [];
+      for (const u of embedded) {
+        const i = rest.indexOf(u);
+        if (i < 0) continue;
+        const before = rest.slice(0, i).trim();
+        if (before) chunks.push(this._formatContent(before));
+        chunks.push(this._formatContent(u));
+        rest = rest.slice(i + u.length);
+      }
+      if (rest.trim()) chunks.push(this._formatContent(rest.trim()));
+      return chunks.join('');
     }
   }
 
@@ -2261,6 +2298,10 @@ _saveGifFavorites() {
 },
 
 _sendGifMessage(url) {
+  if (typeof this._forumAttachGif === 'function') {
+    this._forumAttachGif(url);
+    return;
+  }
   if (!this.currentChannel || !url) return;
   const payload = {
     code: this.currentChannel,
@@ -3143,21 +3184,29 @@ _persistThreadMentions() {
   try { localStorage.setItem('haven_thread_mentions', JSON.stringify(this._threadMentions || {})); } catch {}
 },
 _updateThreadMentionsPill() {
-  const pill = document.getElementById('thread-mentions-pill');
-  const cnt = document.getElementById('thread-mentions-pill-count');
-  if (!pill || !cnt) return;
   if (!this._threadMentions) {
     try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
     catch { this._threadMentions = {}; }
   }
-  const list = (this._threadMentions[this.currentChannel] || []);
-  if (list.length === 0) {
-    pill.style.display = 'none';
-    return;
+  const total = Object.values(this._threadMentions).reduce((n, list) => n + (Array.isArray(list) ? list.length : 0), 0);
+  const badge = document.getElementById('threads-toggle-badge');
+  const btn = document.getElementById('threads-toggle-btn');
+  if (badge) {
+    if (total > 0) {
+      badge.hidden = false;
+      badge.textContent = total > 99 ? '99+' : String(total);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
   }
-  pill.style.display = '';
-  cnt.textContent = String(list.length);
-  pill.title = t(list.length === 1 ? 'thread_runtime.mention_one' : 'thread_runtime.mention_other', { count: list.length });
+  if (btn) {
+    btn.title = total > 0
+      ? t(total === 1 ? 'thread_runtime.mention_one' : 'thread_runtime.mention_other', { count: total })
+      : t('header.thread_list');
+  }
+  const pill = document.getElementById('thread-mentions-pill');
+  if (pill) pill.style.display = 'none';
 },
 _openMostRecentThreadMention() {
   if (!this._threadMentions) return;
@@ -3650,17 +3699,42 @@ _openThread(parentId) {
   if (!panel) return;
   panel.style.display = 'flex';
   panel.dataset.parentId = parentId;
-  this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
+  const forum = !!this._isForumFeed?.();
+  panel.classList.toggle('forum-thread', forum);
+  document.documentElement.classList.toggle('forum-thread-open', forum);
+  if (!panel._havenHome) panel._havenHome = { parent: panel.parentNode, next: panel.nextSibling };
+  const main = document.querySelector('.main');
+  if (forum && main && panel.parentNode !== main) main.appendChild(panel);
+  if (!forum) this._restoreThreadPanelHome(panel);
+  const backBtn = document.getElementById('thread-panel-back');
+  if (backBtn) backBtn.style.display = forum ? 'inline-flex' : 'none';
+  // Covers the feed column only, so the server rail and channel list stay put.
+  this._setThreadPiPEnabled(forum ? false : localStorage.getItem('haven_thread_panel_pip') === '1');
 
   // Request thread messages from server
   this.socket.emit('get-thread-messages', { parentId });
 
   // Update header
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
-  const author = msgEl?.querySelector('.message-author')?.textContent || t('thread_runtime.starter');
-  document.getElementById('thread-panel-title').textContent = t('msg_toolbar.thread');
-  const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
-  document.getElementById('thread-parent-preview').textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
+  const author = msgEl?.querySelector('.forum-topic-meta-top')?.textContent?.split('·')[0]?.trim()
+    || msgEl?.querySelector('.message-author')?.textContent || t('thread_runtime.starter');
+  const topic = this._forumTopics && this._forumTopics.get(parentId);
+  const status = topic && this._forumParseStatus ? this._forumParseStatus(topic.request_status) : topic && topic.request_status;
+  const kind = topic && this._forumParseKind ? this._forumParseKind(topic.topic_kind) : '';
+  const statusLabel = status && this._forumStatusLabel ? this._forumStatusLabel(status) : '';
+  const kindLabel = kind && this._forumKindLabel ? this._forumKindLabel(kind) : '';
+  document.getElementById('thread-panel-title').textContent = forum && topic
+    ? [this._forumTitleOf(topic), kindLabel, statusLabel].filter(Boolean).join(' · ')
+    : t('msg_toolbar.thread');
+  const previewEl = document.getElementById('thread-parent-preview');
+  if (forum && topic) {
+    this._paintForumParentPreview(topic.content);
+    this._paintForumSubtasks(topic);
+  } else {
+    const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
+    previewEl.textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
+    this._paintForumSubtasks?.(null);
+  }
 
   const avatarImg = msgEl?.querySelector('.message-avatar-img');
   let avatar = null;
@@ -3729,6 +3803,13 @@ _toggleThreadPiP() {
   this._setThreadPiPEnabled(!panel.classList.contains('pip'));
 },
 
+_restoreThreadPanelHome(panel) {
+  const home = panel && panel._havenHome;
+  if (!home || !home.parent || panel.parentNode === home.parent) return;
+  if (home.next && home.next.parentNode === home.parent) home.parent.insertBefore(panel, home.next);
+  else home.parent.appendChild(panel);
+},
+
 _closeThread() {
   this._activeThreadParent = null;
   this._clearThreadReply();
@@ -3736,7 +3817,14 @@ _closeThread() {
   if (panel) {
     panel.style.display = 'none';
     panel.dataset.parentId = '';
+    panel.classList.remove('forum-thread');
+    this._restoreThreadPanelHome(panel);
   }
+  const backBtn = document.getElementById('thread-panel-back');
+  if (backBtn) backBtn.style.display = 'none';
+  document.documentElement.classList.remove('forum-thread-open');
+  const subs = document.getElementById('forum-subtasks');
+  if (subs) { subs.hidden = true; subs.innerHTML = ''; }
 },
 
 _sendThreadMessage() {

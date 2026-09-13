@@ -91,6 +91,9 @@ function parseThemeMetadata(content) {
     if (value) meta[property] = value;
   }
 
+  const layout = declarations.find(item => item.tag === 'haven-layout')?.value || '';
+  if (/^[A-Za-z][A-Za-z0-9]{0,63}$/.test(layout)) meta.layout = layout;
+
   const themeApiDeclarations = declarations
     .filter(item => item.tag === 'haven-theme-api')
     .map(item => item.value);
@@ -100,6 +103,10 @@ function parseThemeMetadata(content) {
   return {
     ...meta,
     ...classifyThemeApi(declared === undefined ? null : declared),
+    // A file that sets the page background is a full palette, not a stackable
+    // tweak. Settings toggles for those used to keep injecting :root tokens
+    // after the picker moved to Matrix.
+    palette: typeof content === 'string' && /--bg-primary\s*:/.test(content),
   };
 }
 
