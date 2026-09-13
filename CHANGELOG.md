@@ -11,7 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.8.0] - 2026-09-12
+
+Channel access moves to one place: a channel's Required roles now decide
+who is in it, and the role-side Grant and Revoke lists are gone (existing
+setups are converted on first start, and admins get a one-time notice).
+Around that, a batch of community work: forums get their own right-click
+menu, an edit-post composer, a default layout an admin can set, tile
+shapes, and one-topic image posts; polls take pictures; messages can be
+sent later; Auto-Mod gets word groups with weighted strikes; role menus can
+be edited after posting; and a run of fixes from the tracker. Two new
+tables and a few columns are created on first start; nothing to run by hand.
 
 ### Added
 - **Edit a posted role menu (#5644).** Right-click a role menu message and
