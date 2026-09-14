@@ -818,46 +818,71 @@ _formatContent(str) {
 
   let html = this._escapeHtml(withEmotes);
 
-  // ── Protect color delimiters before Markdown/link parsing ──
-  // Keep the color contents in the normal formatting pipeline, but replace
-  // both delimiters with placeholders so URL/Markdown parsing cannot consume
-  // the #c closing delimiter.
-  const colorSpans = [];
-  let colorIndex = 0;
+    // ── Protect color delimiters before Markdown/link parsing ──
+    // Replace only the color delimiters with placeholders. The content between
+    // them remains in the normal formatting pipeline so spoilers, links,
+    // Markdown, etc. can still be parsed inside a colored span.
+    const colorSpans = [];
+    let colorIndex = 0;
+    const colorOpenRe = /c#([0-9a-fA-F]{6})|c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)/g;
 
-  html = html.replace(/c#([0-9a-fA-F]{6})|c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)/g, (full, hex, r, g, b, offset, source) => {
-    let color;
+    let colorMatch;
+    const colorRanges = [];
+    while ((colorMatch = colorOpenRe.exec(html)) !== null) {
+      let color;
 
-    if (hex) {
-      color = `#${hex}`;
-    } else {
-      if (Number(r) > 255 || Number(g) > 255 || Number(b) > 255) {
-        return full;
+      if (colorMatch[1]) {
+        color = `#${colorMatch[1]}`;
+      } else {
+        const r = Number(colorMatch[2]);
+        const g = Number(colorMatch[3]);
+        const b = Number(colorMatch[4]);
+
+        if (r > 255 || g > 255 || b > 255) continue;
+
+        color = `rgb(${r},${g},${b})`;
       }
-      color = `rgb(${r},${g},${b})`;
+
+      const start = colorMatch.index;
+      const contentStart = colorMatch.index + colorMatch[0].length;
+      const end = html.indexOf('#c', contentStart);
+
+      if (end === -1) continue;
+
+      colorRanges.push({
+        start,
+        openEnd: contentStart,
+        end,
+        color,
+        index: colorIndex++
+      });
+
+      // Do not let another color opening inside this region become a separate
+      // range. The first #c closes the current color span.
+      colorOpenRe.lastIndex = end + 2;
     }
 
-    // Only protect this opening delimiter if a matching #c exists.
-    const end = source.indexOf('#c', offset + full.length);
-    if (end === -1) return full;
+    // Replace from right to left so the recorded offsets remain valid.
+    for (let i = colorRanges.length - 1; i >= 0; i--) {
+      const range = colorRanges[i];
+      const startToken = `\x00COLORSTART_${range.index}\x00`;
+      const endToken = `\x00COLOREND_${range.index}\x00`;
 
-    const idx = colorIndex++;
-    colorSpans.push({ color, index: idx });
+      html =
+        html.slice(0, range.end) +
+        endToken +
+        html.slice(range.end + 2);
 
-    return `\x00COLORSTART_${idx}\x00`;
-  });
-
-  // Replace each corresponding #c with its end placeholder.
-  // The search is performed against the current html, after all opening
-  // delimiters have already been replaced.
-  colorSpans.forEach(({ index }) => {
-    const startToken = `\x00COLORSTART_${index}\x00`;
-    const end = html.indexOf('#c', html.indexOf(startToken) + startToken.length);
-
-    if (end !== -1) {
-      html =html.slice(0, end) + `\x00COLOREND_${index}\x00` + html.slice(end + 2);
+      html =
+        html.slice(0, range.start) +
+        startToken +
+        html.slice(range.openEnd);
+      
+      colorSpans.unshift({
+        color: range.color,
+        index: range.index
+      });
     }
-  });
 
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
