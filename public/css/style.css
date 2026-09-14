@@ -9464,6 +9464,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   text-decoration: underline;
 }
 
+.message-link {
+  background: rgba(124, 92, 252, 0.12);
+  color: var(--text-link);
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.message-link:hover {
+  background: rgba(124, 92, 252, 0.24);
+  text-decoration: underline;
+}
+
 /* Pinned-message indicator dot on the 📌 toggle button when the active
    channel has at least one pinned message. */
 #pinned-toggle-btn { position: relative; }

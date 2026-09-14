@@ -835,7 +835,7 @@ _formatContent(str) {
     const safeUrl = this._rawHttpUrl(url);
     if (!safeUrl) return full;
     const idx = mdLinks.length;
-    mdLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow" title="${this._escapeHtml(safeUrl)}" data-masked-link="true">${text}</a>`);
+    mdLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow" title="${this._escapeHtml(safeUrl)}" class="message-link" data-masked-link="true">${text}</a>`);
     return `\x00MDLINK_${idx}\x00`;
   });
 
@@ -853,7 +853,7 @@ _formatContent(str) {
           ? this._hiddenImagePlaceholder(safeUrl)
           : `<img ${this._imgSrcAttr(safeUrl)} class="chat-image" alt="image" loading="lazy">`);
       } else {
-        autoLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow">${this._escapeHtml(safeUrl)}</a>`);
+        autoLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="message-link">${this._escapeHtml(safeUrl)}</a>`);
       }
       return `\x00AUTOLINK_${idx}\x00`;
     }
