@@ -819,8 +819,9 @@ _formatContent(str) {
   let html = this._escapeHtml(withEmotes);
 
   // ── Protect color delimiters before Markdown/link parsing ──
-  // Keep the color contents in the normal formatting pipeline, but protect
-  // c#... and #c from URL parsing and other Markdown passes.
+  // Keep the color contents in the normal formatting pipeline, but replace
+  // both delimiters with placeholders so URL/Markdown parsing cannot consume
+  // the #c closing delimiter.
   const colorSpans = [];
   let colorIndex = 0;
 
@@ -836,6 +837,7 @@ _formatContent(str) {
       color = `rgb(${r},${g},${b})`;
     }
 
+    // Only protect this opening delimiter if a matching #c exists.
     const end = source.indexOf('#c', offset + full.length);
     if (end === -1) return full;
 
@@ -845,22 +847,17 @@ _formatContent(str) {
     return `\x00COLORSTART_${idx}\x00`;
   });
 
-  // Pair each protected opening with the next #c.
-  // Only #c following a protected color opening is consumed.
-  if (colorSpans.length) {
-    let searchFrom = 0;
-    for (const { index } of colorSpans) {
-      const startToken = `\x00COLORSTART_${index}\x00`;
-      const start = html.indexOf(startToken, searchFrom);
-      if (start === -1) continue;
+  // Replace each corresponding #c with its end placeholder.
+  // The search is performed against the current html, after all opening
+  // delimiters have already been replaced.
+  colorSpans.forEach(({ index }) => {
+    const startToken = `\x00COLORSTART_${index}\x00`;
+    const end = html.indexOf('#c', html.indexOf(startToken) + startToken.length);
 
-      const end = html.indexOf('#c', start + startToken.length);
-      if (end === -1) continue;
-
-      html = html.slice(0, end) + `\x00COLOREND_${index}\x00` + html.slice(end + 2);
-      searchFrom = end + `\x00COLOREND_${index}\x00`.length;
+    if (end !== -1) {
+      html =html.slice(0, end) + `\x00COLOREND_${index}\x00` + html.slice(end + 2);
     }
-  }
+  });
 
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
