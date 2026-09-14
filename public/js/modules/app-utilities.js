@@ -818,6 +818,50 @@ _formatContent(str) {
 
   let html = this._escapeHtml(withEmotes);
 
+  // ── Protect color delimiters before Markdown/link parsing ──
+  // Keep the color contents in the normal formatting pipeline, but protect
+  // c#... and #c from URL parsing and other Markdown passes.
+  const colorSpans = [];
+  let colorIndex = 0;
+
+  html = html.replace(/c#([0-9a-fA-F]{6})|c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)/g, (full, hex, r, g, b, offset, source) => {
+    let color;
+
+    if (hex) {
+      color = `#${hex}`;
+    } else {
+      if (Number(r) > 255 || Number(g) > 255 || Number(b) > 255) {
+        return full;
+      }
+      color = `rgb(${r},${g},${b})`;
+    }
+
+    const end = source.indexOf('#c', offset + full.length);
+    if (end === -1) return full;
+
+    const idx = colorIndex++;
+    colorSpans.push({ color, index: idx });
+
+    return `\x00COLORSTART_${idx}\x00`;
+  });
+
+  // Pair each protected opening with the next #c.
+  // Only #c following a protected color opening is consumed.
+  if (colorSpans.length) {
+    let searchFrom = 0;
+    for (const { index } of colorSpans) {
+      const startToken = `\x00COLORSTART_${index}\x00`;
+      const start = html.indexOf(startToken, searchFrom);
+      if (start === -1) continue;
+
+      const end = html.indexOf('#c', start + startToken.length);
+      if (end === -1) continue;
+
+      html = html.slice(0, end) + `\x00COLOREND_${index}\x00` + html.slice(end + 2);
+      searchFrom = end + `\x00COLOREND_${index}\x00`.length;
+    }
+  }
+
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
   // ![alt](url)
@@ -1053,15 +1097,6 @@ _formatContent(str) {
     return `\x00BLOCKQUOTE_${idx}\x00`;
   });
 
-  // Render c#RRGGBB...#c color spans (HEX color code)
-  html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, '<span style="color:#$1">$2</span>');
-
-  // Render c#(R,G,B)...#c color spans (RGB color code)
-  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (_, r, g, b, text) => {
-    if (r > 255 || g > 255 || b > 255) return _;
-    return `<span style="color:rgb(${r},${g},${b})">${text}</span>`;
-  });
-
   // ── Headings: # H1, ## H2, ### H3 at start of line ──
   html = html.replace(/(^|\n)(#{1,3})\s+(.+)/g, (_, pre, hashes, text) => {
     const level = hashes.length;
@@ -1212,6 +1247,14 @@ _formatContent(str) {
   // ── Restore Discord emotes ──
   emotes.forEach((el, idx) => {
     html = html.replace(`\x00DEMOTE_${idx}\x00`, () => el);
+  });
+
+  // ── Restore color spans ──
+  // Restore after all Markdown/link parsing so URLs remain clickable and
+  // the #c delimiter cannot be consumed as a URL fragment.
+  colorSpans.forEach(({ color, index }) => {
+    html = html.replace(`\x00COLORSTART_${index}\x00`, `<span style="color:${color}">`);
+    html = html.replace(`\x00COLOREND_${index}\x00`, '</span>');
   });
 
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
