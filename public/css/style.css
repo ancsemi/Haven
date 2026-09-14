@@ -10493,6 +10493,11 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   color: transparent !important;
 }
 
+/* render custom text color when revieled spoiler is a child of colored-message-text */
+.colored-message-text .spoiler.revealed {
+  color: inherit;
+}
+
 /* Custom emoji render as <img>, which `color: transparent` can't hide, so
    they'd otherwise show through an unrevealed text spoiler. Keep them laid
    out (the blur box stays the right size) but invisible until revealed. */
