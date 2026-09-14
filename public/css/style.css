@@ -10488,6 +10488,11 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   user-select: auto;
 }
 
+/* hide colored message text c#RRGGBB---#c inside spoilers */
+.spoiler:not(.revealed) .colored-message-text {
+  color: transparent !important;
+}
+
 /* Custom emoji render as <img>, which `color: transparent` can't hide, so
    they'd otherwise show through an unrevealed text spoiler. Keep them laid
    out (the blur box stays the right size) but invisible until revealed. */

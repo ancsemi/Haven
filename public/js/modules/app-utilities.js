@@ -1253,7 +1253,7 @@ _formatContent(str) {
   // Restore after all Markdown/link parsing so URLs remain clickable and
   // the #c delimiter cannot be consumed as a URL fragment.
   colorSpans.forEach(({ color, index }) => {
-    html = html.replace(`\x00COLORSTART_${index}\x00`, `<span style="color:${color}">`);
+    html = html.replace(`\x00COLORSTART_${index}\x00`, `<span class="colored-message-text" style="color:${color}">`);
     html = html.replace(`\x00COLOREND_${index}\x00`, '</span>');
   });
 
