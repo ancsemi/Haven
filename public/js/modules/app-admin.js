@@ -659,6 +659,8 @@ _applyServerSettings() {
   // Show/hide the banner display section in user settings
   const bannerSection = document.getElementById('section-banner-display');
   if (bannerSection) bannerSection.style.display = hasBanner ? '' : 'none';
+  const bannerNavItem = document.querySelector('.settings-nav-item[data-target="section-banner-display"]');
+  if (bannerNavItem) bannerNavItem.style.display = hasBanner ? '' : 'none';
   if (bannerDisplay && bannerImg) {
     if (hasBanner) {
       bannerImg.src = this.serverSettings.server_banner;
