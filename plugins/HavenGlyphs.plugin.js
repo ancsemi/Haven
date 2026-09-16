@@ -376,6 +376,7 @@ HavenGlyphs.CSS = `@font-face {
   font-style: normal;
   font-variant: normal;
   line-height: 1;
+  text-indent: 0;
   text-rendering: auto;
   display: inline-block;
   -moz-osx-font-smoothing: grayscale;

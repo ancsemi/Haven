@@ -26,6 +26,7 @@ test('every Haven Glyphs map entry has a local Font Awesome rule', () => {
     assert.match(HavenGlyphs.CSS, cssClassPattern(name), `${emoji} is missing CSS for ${name}`);
   }
   assert.match(HavenGlyphs.CSS, /url\('\/fonts\/fa-solid-900\.woff2'\)/);
+  assert.match(HavenGlyphs.CSS, /\.haven-glyph\s*\{[^}]*text-indent:\s*0;/s);
   assert.doesNotMatch(HavenGlyphs.CSS, /https?:\/\//i);
 });
 
