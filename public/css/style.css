@@ -2186,8 +2186,8 @@ html.rgb-cycling *::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.625rem;
+  height: 2.625rem;
   flex-shrink: 0;
   border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 0.5rem;
