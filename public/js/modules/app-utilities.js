@@ -277,7 +277,7 @@ _replaceBurnedMessage(el) {
   const content = el.querySelector('.message-content');
   if (!content) return;
   const doneText = t('messages.burn_done');
-  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
+  content.innerHTML = `<span class="muted-text burn-complete-label" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
   el.classList.remove('message-burn-pending');
   el.classList.add('message-burned');
 },

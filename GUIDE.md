@@ -692,7 +692,7 @@ Your theme choice is saved per browser.
 
 ### Bundled optional themes and plugins
 
-Haven also ships a couple of extras that are **installed but switched off by default**, so you will not see them until an admin turns them on. They are already on your server, including in the Docker image. There is nothing to download.
+Haven also ships optional extras that are **installed but switched off by default**, so you will not see them until an admin turns them on. They are already on your server, including in the Docker image. There is nothing to download.
 
 | File | What it is |
 |------|-----------|
@@ -702,6 +702,8 @@ Haven also ships a couple of extras that are **installed but switched off by def
 | `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |
+| `plugins/HavenGlyphs.plugin.js` | Reversible contextual interface icons using the bundled local Font Awesome font |
+| `public/fonts/fa-solid-900.woff2` | Local Font Awesome Solid font used by Haven Glyphs |
 
 To make a bundled theme available to everyone, go to **Settings → Admin → 🏠 Branding → Custom Themes** and publish it. Publishing is what adds its button to the theme picker in the sidebar. Until then it stays hidden even though the file is present, which is the usual reason a theme "looks missing" after an update.
 
@@ -715,6 +717,11 @@ Compact and classic layout without disabling the plugin.
 Only one structural layout plugin can be active at a time. If Braid Layout is
 already engaged, Compact waits until Braid restores the native layout, and vice
 versa.
+
+Haven Glyphs is optional per browser under **Settings → Plugins & Themes**. It
+uses the bundled local Font Awesome font for interface affordances. Message
+bodies, reactions, emoji/GIF pickers, soundboard names, user content, and form
+fields stay unchanged. It can be disabled from the same settings screen.
 
 Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
 

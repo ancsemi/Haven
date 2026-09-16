@@ -1,0 +1,8 @@
+Font Awesome Free 6.7.2
+
+The fa-solid-900.woff2 file is from Font Awesome Free by Fonticons, Inc.
+The font is licensed under the SIL Open Font License 1.1.
+The included icons are licensed under CC BY 4.0.
+
+SIL Open Font License: https://scripts.sil.org/OFL
+Creative Commons Attribution 4.0: https://creativecommons.org/licenses/by/4.0/
