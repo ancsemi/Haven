@@ -536,8 +536,8 @@
     "shuffle_off": "Embaralhamento desativado",
     "music_playing": "Música tocando",
     "music_show_player": "Clique para mostrar o player de música",
-    "music_shared_spotify": "🎵 🟢 Spotify (via YouTube) — compartilhado por {{user}}",
-    "music_shared": "🎵 {{platform}} — compartilhado por {{user}}",
+    "music_shared_spotify": "Spotify (via YouTube) — compartilhado por {{user}}",
+    "music_shared": "{{platform}} — compartilhado por {{user}}",
     "music": "Música",
     "someone": "alguém",
     "panel": {

@@ -8,6 +8,7 @@ const HavenGlyphs = require('../plugins/HavenGlyphs.plugin.js');
 
 const ROOT = path.join(__dirname, '..');
 const pluginSource = fs.readFileSync(path.join(ROOT, 'plugins/HavenGlyphs.plugin.js'), 'utf8');
+const roleToolsSource = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-role-tools.js'), 'utf8');
 const fontNotice = fs.readFileSync(path.join(ROOT, 'public/fonts/NOTICE.txt'), 'utf8');
 
 function cssClassPattern(name) {
@@ -40,7 +41,8 @@ test('known settings, voice, admin, and file UI glyphs are mapped', () => {
     '📏': 'fa-ruler', '▪️': 'fa-square', '◾': 'fa-square', '⬛': 'fa-square',
     '✉️': 'fa-envelope', '✨': 'fa-wand-magic-sparkles', '☑️': 'fa-circle-check',
     '🗝️': 'fa-key', '🎟️': 'fa-ticket', '⏰': 'fa-clock', '📅': 'fa-calendar-days',
-    '🕐': 'fa-clock', 'ℹ️': 'fa-circle-info', '🩸': 'fa-droplet', '🐍': 'fa-code'
+    '🕐': 'fa-clock', 'ℹ️': 'fa-circle-info', '🩸': 'fa-droplet', '🐍': 'fa-code',
+    '🤝': 'fa-handshake', '📸': 'fa-camera'
   };
   for (const [emoji, name] of Object.entries(expected)) {
     assert.equal(HavenGlyphs.ICON_MAP[emoji][0], name, `${emoji} mapping changed`);
@@ -54,11 +56,14 @@ test('Haven Glyphs scopes hosts and protects user content', () => {
     '.settings-nav-item', '.settings-group-label', '.voice-bar-icon',
     '.music-pip-label-icon', '.music-pip-vol-icon', '.viewer-eye',
     '.organize-tag-icon', '.thread-mention-badge', '.import-channel-type-icon',
-    '.connectivity-test-icon', '.wizard-check', '.file-type-icon'
+    '.connectivity-test-icon', '.wizard-check', '.file-type-icon',
+    '#section-score-badges > .settings-hint', '.role-tpl-emoji',
+    '.connection-icon', '.stream-size-label',
+    '[data-i18n-title="modals.game_overlay.volume_label"]'
   ];
   const protectedContent = [
     '.message-content', '.reaction', '.emoji-only-msg', '.soundboard-btn',
-    '.channel-name', '.profile-bio', '.theme-icon', '[data-user-content]'
+    '.channel-name', '.profile-bio', '.theme-icon', '.reply-preview', '[data-user-content]'
   ];
 
   for (const selector of expectedHosts) assert.match(HavenGlyphs.ICON_EXPLICIT_SELECTOR, literalPattern(selector));
@@ -77,10 +82,28 @@ test('Haven Glyphs scopes hosts and protects user content', () => {
   const ordinaryHost = { matches() { return false; } };
   assert.equal(plugin._iconExcluded(protectedElement, explicitHost), false);
   assert.equal(plugin._iconExcluded(protectedElement, ordinaryHost), true);
-  assert.match(pluginSource, /let current = element;/);
-  assert.match(pluginSource, /data-i18n-html/);
+
+  const translatedChild = {
+    hasAttribute(name) { return name === 'data-i18n'; }
+  };
+  const translatedSpan = {
+    tagName: 'SPAN', children: [translatedChild],
+    closest() { return null; }
+  };
+  const broadSection = {
+    tagName: 'DIV', children: [translatedChild],
+    closest() { return null; }
+  };
+  assert.equal(plugin._iconHost(translatedSpan), translatedSpan);
+  assert.equal(plugin._iconHost(broadSection), null);
   assert.match(pluginSource, /const isLeading = at !== -1 && \/\^\\s\*\$\/\.test\(data\.slice\(0, at\)\);/);
   assert.doesNotMatch(pluginSource, /\/tmp\/opencode|https?:\/\//i);
+});
+
+test('native channel template options use text-only labels', () => {
+  assert.doesNotMatch(roleToolsSource, /label: `\$\{tp\.emoji\}/);
+  assert.doesNotMatch(roleToolsSource, /label: `💾/);
+  assert.doesNotMatch(roleToolsSource, /replace\(\/\^💾/);
 });
 
 test('the bundled icon font is present and non-empty', () => {

@@ -563,8 +563,8 @@
     "shuffle_off": "Shuffle off",
     "music_playing": "Music playing",
     "music_show_player": "Click to show music player",
-    "music_shared_spotify": "🎵 🟢 Spotify (via YouTube) — shared by {{user}}",
-    "music_shared": "🎵 {{platform}} — shared by {{user}}",
+    "music_shared_spotify": "Spotify (via YouTube) — shared by {{user}}",
+    "music_shared": "{{platform}} — shared by {{user}}",
     "music": "Music",
     "someone": "someone",
     "panel": {

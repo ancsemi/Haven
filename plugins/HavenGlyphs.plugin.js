@@ -64,16 +64,12 @@ class HavenGlyphs {
     const direct = element.closest(HavenGlyphs.ICON_HOST_SELECTOR);
     if (direct) return direct;
 
-    // Some static labels put the icon in a wrapper immediately before a
-    // translated child, such as "🔒 <span data-i18n>Private</span>". Check
-    // the current wrapper too: settings navigation uses a div, not a span.
-    let current = element;
-    while (current && current !== document.body) {
-      if ([...current.children].some(child =>
-        child.hasAttribute('data-i18n') || child.hasAttribute('data-i18n-html'))) {
-        return current;
-      }
-      current = current.parentElement;
+    // Some static labels put the icon in a span immediately before a
+    // translated child, such as "🔒 <span data-i18n>Private</span>". Do not
+    // climb farther: a broad ancestor may contain unrelated or user content.
+    if (element.tagName === 'SPAN' && [...element.children].some(child =>
+      child.hasAttribute('data-i18n') || child.hasAttribute('data-i18n-html'))) {
+      return element;
     }
     return null;
   }
@@ -165,6 +161,9 @@ HavenGlyphs.ICON_EXPLICIT_SELECTOR = [
   '.risky-download-icon', '.transfer-admin-warning-icon', '.dm-safety-icon',
   '.rac-channel-icon', '.rac-card-locked', '.badge-scope', '.aml-member-storage',
   '.settings-nav-item', '.settings-group-label',
+  '#section-score-badges > .settings-hint', '#totp-manage-area > .settings-hint:first-child',
+  '.role-tpl-emoji', '.connection-icon', '.stream-size-label',
+  '[data-i18n-title="modals.game_overlay.volume_label"]',
   '#manage-servers-btn .server-icon-text', '#sync-servers-btn .server-icon-text',
   '#webcam-label', '#screen-share-label',
   '.voice-bar-icon', '.music-pip-label-icon', '.music-pip-vol-icon',
@@ -203,6 +202,7 @@ HavenGlyphs.ICON_EXCLUSION_SELECTOR = [
   '.activity-name, .activity-title, .connection-name, .connection-label',
   '.role-name, .role-label, .tag-name, .topic-title, .thread-topic-title',
   '.thread-msg-content, .thread-msg-author, .thread-list-author, .thread-list-preview',
+  '.reply-preview',
   '.forum-topic-title, .forum-topic-meta, .file-name, .file-info, .role-preview-item',
   '.mobile-server-item, .server-item, .server-button',
   '[data-user-content]'
@@ -272,6 +272,7 @@ HavenGlyphs.ICON_MAP = Object.freeze({
   '\u2744': ['fa-snowflake'], '\ud83d\udd25': ['fa-fire'], '\ud83d\udc8d': ['fa-ring'],
   '\ud83e\uddca': ['fa-icicles'], '\ud83c\udf0a': ['fa-water'],
   '\ud83c\udf89': ['fa-champagne-glasses'], '\ud83c\udf0e': ['fa-globe'],
+  '\ud83e\udd1d': ['fa-handshake'], '\ud83d\udcf8': ['fa-camera'],
   '\ud83d\udcf2': ['fa-mobile-screen'], '\ud83d\udccf': ['fa-ruler'],
   '\u25aa\ufe0f': ['fa-square'], '\u25aa': ['fa-square'], '\u25fe': ['fa-square'], '\u2b1b': ['fa-square'],
   '\u2709\ufe0f': ['fa-envelope'], '\u2709': ['fa-envelope'], '\u2728': ['fa-wand-magic-sparkles'],
@@ -333,7 +334,8 @@ HavenGlyphs.ICON_CODEPOINTS = Object.freeze({
   'fa-floppy-disk': 'f0c7', 'fa-folder': 'f07b', 'fa-folder-open': 'f07c',
   'fa-forward-step': 'f051', 'fa-gamepad': 'f11b', 'fa-gear': 'f013', 'fa-gem': 'f3a5',
   'fa-globe': 'f0ac', 'fa-grip-lines-vertical': 'f7a5', 'fa-grip-vertical': 'f58e',
-  'fa-hand': 'f256', 'fa-headphones': 'f025', 'fa-heart': 'f004', 'fa-hourglass-half': 'f252',
+  'fa-hand': 'f256', 'fa-handshake': 'f2b5', 'fa-headphones': 'f025', 'fa-heart': 'f004',
+  'fa-hourglass-half': 'f252',
   'fa-house': 'f015', 'fa-icicles': 'f7ad', 'fa-icons': 'f86d', 'fa-image': 'f03e',
   'fa-key': 'f084', 'fa-keyboard': 'f11c', 'fa-khanda': 'f66d', 'fa-language': 'f1ab',
   'fa-laptop': 'f109', 'fa-lightbulb': 'f0eb', 'fa-link': 'f0c1', 'fa-lock': 'f023',

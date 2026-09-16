@@ -165,8 +165,8 @@ export default {
 
   _channelTemplateList() {
     return [
-      ...this._builtinChannelTemplates().map(tp => ({ id: 'b:' + tp.key, label: `${tp.emoji} ${t(`app.sidebar.templates.${tp.key}`)}`, fields: tp.fields, saved: false })),
-      ...this._savedChannelTemplates().map((tp, i) => ({ id: 's:' + i, label: `💾 ${tp.name}`, fields: tp.fields, saved: true })),
+      ...this._builtinChannelTemplates().map(tp => ({ id: 'b:' + tp.key, label: t(`app.sidebar.templates.${tp.key}`), fields: tp.fields, saved: false })),
+      ...this._savedChannelTemplates().map((tp, i) => ({ id: 's:' + i, label: tp.name, fields: tp.fields, saved: true })),
     ];
   },
 
@@ -245,7 +245,7 @@ export default {
   async _deleteChannelTemplate(id) {
     const tp = this._channelTemplateList().find(x => x.id === id);
     if (!tp || !tp.saved) return;
-    const ok = await this._showConfirmModal(t('app.sidebar.templates.delete_title'), t('app.sidebar.templates.delete_prompt', { name: tp.label.replace(/^💾 /, '') }));
+    const ok = await this._showConfirmModal(t('app.sidebar.templates.delete_title'), t('app.sidebar.templates.delete_prompt', { name: tp.label }));
     if (!ok) return;
     const idx = parseInt(id.slice(2), 10);
     this._storeChannelTemplates(this._savedChannelTemplates().filter((_, i) => i !== idx));
