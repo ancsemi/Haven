@@ -79,6 +79,15 @@ class HavenGlyphs {
     return !!element.closest(HavenGlyphs.ICON_EXCLUSION_SELECTOR);
   }
 
+  _iconSpec(emoji, host) {
+    // Deafen buttons draw their own red slash while active. Keep the base
+    // speaker there so the control does not show a slashed microphone twice.
+    if (emoji === '🔇' && host?.matches?.('#voice-deafen-btn, #voice-deafen-btn-header')) {
+      return ['fa-volume-high'];
+    }
+    return HavenGlyphs.ICON_MAP[emoji];
+  }
+
   _sweepIcons(root) {
     if (root.nodeType === 3) {
       this._swapIconNode(root);
@@ -117,7 +126,7 @@ class HavenGlyphs {
       found = true;
       if (index > 0) fragment.appendChild(document.createTextNode(data.slice(0, index)));
       const icon = document.createElement('i');
-      const [name, extra] = HavenGlyphs.ICON_MAP[hit];
+      const [name, extra] = this._iconSpec(hit, host);
       icon.className = 'haven-glyph ' + name + (extra ? ' ' + extra : '');
       icon.setAttribute('aria-hidden', 'true');
       fragment.appendChild(icon);
@@ -215,7 +224,7 @@ HavenGlyphs.ICON_MAP = Object.freeze({
   '\ud83d\uddbc\ufe0f': ['fa-image'], '\ud83d\uddbc': ['fa-image'],
   '\ud83d\udcf7': ['fa-camera'], '\ud83d\udcf9': ['fa-video'],
   '\ud83c\udfa4': ['fa-microphone'], '\ud83c\udf99\ufe0f': ['fa-microphone'],
-  '\ud83d\udd07': ['fa-microphone-slash'], '\ud83d\udd0a': ['fa-volume-high'],
+  '\ud83d\udd07': ['fa-volume-xmark'], '\ud83d\udd0a': ['fa-volume-high'],
   '\ud83d\udd14': ['fa-bell'], '\ud83d\udd15': ['fa-bell-slash'],
   '\ud83d\udccb': ['fa-clipboard'], '\ud83d\udd10': ['fa-lock'],
   '\ud83d\udd11': ['fa-key'], '\ud83d\udd12': ['fa-lock'], '\ud83d\udd13': ['fa-unlock'],
@@ -359,6 +368,7 @@ HavenGlyphs.ICON_CODEPOINTS = Object.freeze({
   'fa-up-down-left-right': 'f0b2', 'fa-up-right-and-down-left-from-center': 'f424',
   'fa-up-right-from-square': 'f35d', 'fa-unlock': 'f09c', 'fa-user': 'f007',
   'fa-user-secret': 'f21b', 'fa-users': 'f0c0', 'fa-video': 'f03d', 'fa-volume-high': 'f028',
+  'fa-volume-xmark': 'f6a9',
   'fa-wand-magic-sparkles': 'e2ca', 'fa-water': 'f773', 'fa-window-maximize': 'f2d0',
   'fa-wrench': 'f0ad', 'fa-xmark': 'f00d', 'fa-chevron-left': 'f053', 'fa-chevron-right': 'f054'
 });
@@ -382,6 +392,8 @@ HavenGlyphs.CSS = `@font-face {
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
 }
+.user-action-btn > .haven-glyph { color: var(--text-secondary); }
+.user-action-btn:hover > .haven-glyph { color: var(--text-primary); }
 .haven-glyph.fa-spin { animation: haven-glyph-spin 2s linear infinite; }
 @keyframes haven-glyph-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 ` + Object.entries(HavenGlyphs.ICON_CODEPOINTS)

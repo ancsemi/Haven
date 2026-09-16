@@ -27,6 +27,7 @@ test('every Haven Glyphs map entry has a local Font Awesome rule', () => {
   }
   assert.match(HavenGlyphs.CSS, /url\('\/fonts\/fa-solid-900\.woff2'\)/);
   assert.match(HavenGlyphs.CSS, /\.haven-glyph\s*\{[^}]*text-indent:\s*0;/s);
+  assert.match(HavenGlyphs.CSS, /\.user-action-btn\s*>\s*\.haven-glyph\s*\{[^}]*color:\s*var\(--text-secondary\);/s);
   assert.doesNotMatch(HavenGlyphs.CSS, /https?:\/\//i);
 });
 
@@ -34,6 +35,17 @@ test('soundboard and Listen Together use distinct interface glyphs', () => {
   assert.equal(HavenGlyphs.ICON_MAP['🎵'][0], 'fa-music');
   assert.equal(HavenGlyphs.ICON_MAP['🎶'][0], 'fa-headphones');
   assert.notEqual(HavenGlyphs.ICON_MAP['🎵'][0], HavenGlyphs.ICON_MAP['🎶'][0]);
+});
+
+test('speaker mute and deafen controls use speaker glyphs without duplicate slashes', () => {
+  const plugin = new HavenGlyphs();
+  const deafenButton = {
+    matches(selector) { return selector === '#voice-deafen-btn, #voice-deafen-btn-header'; }
+  };
+  assert.equal(HavenGlyphs.ICON_MAP['🔇'][0], 'fa-volume-xmark');
+  assert.equal(HavenGlyphs.ICON_MAP['🔊'][0], 'fa-volume-high');
+  assert.deepEqual(plugin._iconSpec('🔇', deafenButton), ['fa-volume-high']);
+  assert.deepEqual(plugin._iconSpec('🔇', { matches() { return false; } }), ['fa-volume-xmark']);
 });
 
 test('known settings, voice, admin, and file UI glyphs are mapped', () => {
