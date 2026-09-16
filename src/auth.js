@@ -501,9 +501,8 @@ router.post('/register', authLimiter, async (req, res) => {
           return res.status(403).json({error: 'This invite link has expired.'});
         }
         if (inviteRow.max_uses > 0) {
-          const used = db.prepare(
-            'SELECT COUNT(*) AS n FROM invite_code_uses WHERE invite_code_id = ?'
-          ).get(inviteRow.id).n;
+          // The link's own counter, not the surviving use rows (#5562).
+          const used = db.prepare('SELECT spent AS n FROM invite_codes WHERE id = ?').get(inviteRow.id).n;
 
           if (used >= inviteRow.max_uses) {
             return res.status(403).json({error: 'This invite link has reached its use limit.'});
@@ -601,6 +600,7 @@ router.post('/register', authLimiter, async (req, res) => {
       db.prepare(
         'INSERT INTO invite_code_uses (invite_code_id, user_id) VALUES (?, ?)'
       ).run(inviteRow.id, result.lastInsertRowid);
+      db.prepare('UPDATE invite_codes SET spent = spent + 1 WHERE id = ?').run(inviteRow.id);
     }
 
     provisionNewUser(db, result.lastInsertRowid, username, req.app.get('io'));

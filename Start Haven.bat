@@ -122,69 +122,24 @@ if not exist "%HAVEN_DATA%\.env" (
     echo.
 )
 
-:: Detect local IP for SSL certificate SAN (Subject Alternative Name)
-set "LOCAL_IP=127.0.0.1"
-for /f "tokens=2 delims=:" %%A in ('ipconfig ^| findstr /R /C:"IPv4 Address"') do (
-    for /f "tokens=*" %%B in ("%%A") do (
-        if not "%%B"=="" set "LOCAL_IP=%%B"
-    )
-)
-
-:: Generate self-signed SSL certs in data directory if missing (skip if FORCE_HTTP=true)
-:: Restructured to use goto labels instead of a compound else-if + call subroutine.
-:: The previous approach caused cmd.exe to exit rather than return from the subroutine
-:: on some Windows versions when call :_gen_ssl_cert was nested inside an else-if block.
-:: With goto labels, %OPENSSL_CMD% is referenced as a plain statement (not inside any
-:: compound block) so it expands correctly at execution time without a workaround. (#5351, #5358)
+:: Generate self-signed SSL certs in data directory if missing (skip if FORCE_HTTP=true).
+:: Haven makes the certificate itself with Node (scripts\gen-cert.js), so OpenSSL is
+:: no longer needed. Windows ships OpenSSH, which is not OpenSSL, and machines without
+:: openssl.exe used to fall back to HTTP silently.
 if /I "%FORCE_HTTP%"=="true" (
     echo  [*] FORCE_HTTP=true -- skipping SSL certificate generation
     echo.
     goto :ssl_done
 )
-if exist "%HAVEN_DATA%\certs\cert.pem" goto :ssl_done
+if exist "%HAVEN_DATA%\certs\cert.pem" if exist "%HAVEN_DATA%\certs\key.pem" goto :ssl_done
 
 echo  [*] Generating self-signed SSL certificate...
-if not exist "%HAVEN_DATA%\certs" mkdir "%HAVEN_DATA%\certs"
-
-:: Try to find openssl on PATH first, then check common install locations
-set "OPENSSL_CMD="
-where openssl >nul 2>&1
-if not errorlevel 1 set "OPENSSL_CMD=openssl"
-
-if not defined OPENSSL_CMD (
-    for %%D in (
-        "C:\Program Files\OpenSSL-Win64\bin"
-        "C:\Program Files\OpenSSL\bin"
-        "C:\Program Files (x86)\OpenSSL-Win32\bin"
-        "C:\OpenSSL-Win64\bin"
-        "C:\OpenSSL-Win32\bin"
-        "C:\OpenSSL\bin"
-    ) do (
-        if exist "%%~D\openssl.exe" if not defined OPENSSL_CMD (
-            set "OPENSSL_CMD=%%~D\openssl.exe"
-            echo  [*] Found OpenSSL at %%~D
-        )
-    )
-)
-
-if not defined OPENSSL_CMD (
-    echo  [!] OpenSSL not found on PATH or in common install directories.
-    echo      Haven will run in HTTP mode. See README for details.
-    echo      To enable HTTPS, install OpenSSL or add it to your PATH.
-    echo      Common install location: C:\Program Files\OpenSSL-Win64\bin
-    echo.
-    goto :ssl_done
-)
-
-:: SAN (Subject Alternative Name) is required by modern browsers for HTTPS.
-:: %OPENSSL_CMD% is a plain statement here (outside any compound block) so it
-:: expands at execution time — no subroutine needed. (#5351, #5358)
-"%OPENSSL_CMD%" req -x509 -newkey rsa:2048 -keyout "%HAVEN_DATA%\certs\key.pem" -out "%HAVEN_DATA%\certs\cert.pem" -days 3650 -nodes -subj "/CN=Haven" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:%LOCAL_IP%"
+node "%~dp0scripts\gen-cert.js"
 if exist "%HAVEN_DATA%\certs\cert.pem" (
     echo  [OK] SSL certificate generated in %HAVEN_DATA%\certs
 ) else (
-    echo  [!] SSL certificate generation failed.
-    echo      Haven will run in HTTP mode. See README for details.
+    echo  [!] SSL certificate generation failed. See the output above.
+    echo      Haven will run in HTTP mode.
 )
 echo.
 :ssl_done

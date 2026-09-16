@@ -1,13 +1,15 @@
 /**
  * Security headers in plain-HTTP mode.
  *
- * A Haven with no certificate runs plain HTTP. It used to send
- * upgrade-insecure-requests and HSTS anyway, so a remote visitor's browser
- * re-requested every stylesheet and script over https on a port with nothing
- * listening for TLS: unstyled page, dead buttons. Whoever set it up saw a
- * perfect page, because browsers treat localhost as trustworthy and skip the
- * upgrade. The Windows installer produces exactly this state when OpenSSL is
- * missing, so it reached a self-hoster (2026-09-05).
+ * A Haven serving plain HTTP used to send upgrade-insecure-requests and HSTS
+ * anyway, so a remote visitor's browser re-requested every stylesheet and
+ * script over https on a port with nothing listening for TLS: unstyled page,
+ * dead buttons. Whoever set it up saw a perfect page, because browsers treat
+ * localhost as trustworthy and skip the upgrade. Back then a missing
+ * certificate was enough to land there (the Windows installer skipped the
+ * certificate whenever OpenSSL was missing, which reached a self-hoster on
+ * 2026-09-05); now Haven makes its own certificate, and plain HTTP is only
+ * ever the explicit FORCE_HTTP=true mode this test runs in.
  *
  *   node --test test/httpModeHeaders.test.js
  */
@@ -35,9 +37,11 @@ const head = (p) => new Promise((res, rej) => {
 
 test.before(async () => {
   fs.mkdirSync(DATA, { recursive: true });
-  // No certs in the data dir and no FORCE_HTTP: the accidental plain-HTTP mode.
-  const env = { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin' };
-  delete env.FORCE_HTTP;
+  // Plain HTTP on purpose. A certless start without FORCE_HTTP now makes its
+  // own certificate (see autoCert.integration.test.js), so FORCE_HTTP=true is
+  // the one remaining way to serve plain HTTP, and the headers that assume
+  // HTTPS must stay off in it.
+  const env = { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true' };
   delete env.SSL_CERT_PATH;
   delete env.SSL_KEY_PATH;
   server = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env, stdio: 'ignore' });

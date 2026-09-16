@@ -1286,6 +1286,65 @@ function _updateEffectButtons(container, mode) {
   });
 }
 
+// Effects used to live only in localStorage. The desktop app can land on a
+// different storage origin between launches (http vs https autodetect), and
+// hardened browsers wipe local storage, so the pick came back as the theme's
+// defaults while the theme itself survived through the server. Mirror the
+// choice to user_preferences the way theme does.
+function _persistEffects(raw) {
+  localStorage.setItem('haven_effects', raw);
+  if (typeof socket !== 'undefined' && socket && socket.connected) {
+    socket.emit('set-preference', { key: 'effects', value: raw });
+  }
+}
+
+// Called from the socket 'preferences' handler before the theme is applied,
+// so the theme pass picks the restored effects up in the same go.
+function syncEffectsFromServer(raw) {
+  if (typeof raw !== 'string' || !raw) return;
+  try { localStorage.setItem('haven_effects', raw); } catch (e) {}
+  const container = document.getElementById('effect-selector');
+  if (container) _updateEffectButtons(container, _getStoredEffectMode());
+}
+
+function _layoutPlugin(file) {
+  return window.HavenPluginLoader?.loadedPlugins?.get(file)?.instance;
+}
+
+function _syncBraidToggle() {
+  const box = document.getElementById('braid-layout-toggle');
+  if (box) box.checked = document.documentElement.hasAttribute('data-braid-layout');
+}
+
+function _syncCompactToggle() {
+  const box = document.getElementById('compact-layout-toggle');
+  if (box) box.checked = document.documentElement.hasAttribute('data-compact-layout');
+}
+
+function _setLayoutPlugin(file, on, dataKey) {
+  try {
+    window.HavenApi?.Data?.save(dataKey, 'layoutOn', on ? '1' : '0');
+  } catch {}
+  if (on) window.HavenPluginLoader?.enablePlugin?.(file);
+  const inst = _layoutPlugin(file);
+  if (on) inst?._engage?.();
+  else inst?._disengage?.();
+}
+
+function _setBraidLayout(on) {
+  if (on) _setLayoutPlugin('CompactLayout.plugin.js', false, 'CompactLayout');
+  _setLayoutPlugin('BraidLayout.plugin.js', on, 'BraidLayout');
+  _syncBraidToggle();
+  _syncCompactToggle();
+}
+
+function _setCompactLayout(on) {
+  if (on) _setLayoutPlugin('BraidLayout.plugin.js', false, 'BraidLayout');
+  _setLayoutPlugin('CompactLayout.plugin.js', on, 'CompactLayout');
+  _syncBraidToggle();
+  _syncCompactToggle();
+}
+
 function initEffectSelector() {
   const container = document.getElementById('effect-selector');
   if (!container) return;
@@ -1294,16 +1353,34 @@ function initEffectSelector() {
   applyEffects(mode);
   _updateEffectButtons(container, mode);
 
+  const braidBox = document.getElementById('braid-layout-toggle');
+  if (braidBox && !braidBox.dataset.bound) {
+    braidBox.dataset.bound = '1';
+    braidBox.addEventListener('change', () => _setBraidLayout(braidBox.checked));
+    _syncBraidToggle();
+  }
+  const compactBox = document.getElementById('compact-layout-toggle');
+  if (compactBox && !compactBox.dataset.bound) {
+    compactBox.dataset.bound = '1';
+    compactBox.addEventListener('change', () => _setCompactLayout(compactBox.checked));
+    _syncCompactToggle();
+  }
+  if (!document.documentElement.dataset.layoutTogglesBound) {
+    document.documentElement.dataset.layoutTogglesBound = '1';
+    document.addEventListener('haven:braid-layout', _syncBraidToggle);
+    document.addEventListener('haven:compact-layout', _syncCompactToggle);
+  }
+
   container.querySelectorAll('.effect-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const fx = btn.dataset.effect;
 
       if (fx === 'auto') {
-        localStorage.setItem('haven_effects', 'auto');
+        _persistEffects('auto');
         applyEffects('auto');
         _updateEffectButtons(container, 'auto');
       } else if (fx === 'none') {
-        localStorage.setItem('haven_effects', 'none');
+        _persistEffects('none');
         applyEffects('none');
         _updateEffectButtons(container, 'none');
       } else {
@@ -1317,11 +1394,11 @@ function initEffectSelector() {
         }
 
         if (current.length === 0) {
-          localStorage.setItem('haven_effects', 'none');
+          _persistEffects('none');
           applyEffects('none');
           _updateEffectButtons(container, 'none');
         } else {
-          localStorage.setItem('haven_effects', JSON.stringify(current));
+          _persistEffects(JSON.stringify(current));
           applyEffects(current);
           _updateEffectButtons(container, current);
         }
@@ -1516,15 +1593,14 @@ function initThemeSwitcher(containerId, socket) {
       if (_isHavenSafeMode() || _isThemeRecoveryPending()) return;
       const theme = btn.dataset.theme;
 
-      // Switching to a built-in theme: remove any injected file-theme links
+      localStorage.setItem('haven_theme', theme);
       if (!theme.startsWith('file:')) {
         document.querySelectorAll('link[id^="haven-theme-"]').forEach(l => l.remove());
-        // Re-inject user-enabled custom CSS tweaks that survived the theme switch
         window.HavenPluginLoader?.reapplyEnabledThemes?.();
+        window.HavenPluginLoader?.renderPluginUI?.();
       }
 
       document.documentElement.setAttribute('data-theme', theme.startsWith('file:') ? 'haven' : theme);
-      localStorage.setItem('haven_theme', theme);
 
       document.querySelectorAll('.theme-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.theme === theme);

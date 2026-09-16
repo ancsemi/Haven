@@ -1,16 +1,64 @@
 ﻿export default {
 
+// How many files one message may carry, images and other files together. An
+// admin setting since #5561 (Uploads & Limits); the fixed five it replaces was
+// too few for people dumping a folder of tools into a channel in one go.
+_maxAttachments() {
+  const n = parseInt(this.serverSettings?.max_attachments);
+  return Number.isFinite(n) ? Math.max(1, Math.min(50, n)) : 10;
+},
+
+_composerAttachmentCount() {
+  return (this._imageQueue?.length || 0) + (this._fileQueue?.length || 0);
+},
+
+// Route a batch of dropped, pasted or picked files into the main composer
+// queues: images preview as thumbnails, anything else as a chip. Stops at the
+// cap with one toast rather than one per leftover file. (#5561)
+_queueComposerFiles(files) {
+  const list = Array.from(files || []).filter(Boolean);
+  if (!list.length) return;
+  // One toast for the whole batch when there is nowhere to send it, rather
+  // than one per file from the queue functions below.
+  if (!this.currentChannel) return this._showToast(t('media.select_channel_first'), 'error');
+  const ch = this.channels.find(c => c.code === this.currentChannel);
+  if (ch && ch.media_enabled === 0) return this._showToast(t('media.uploads_disabled'), 'error');
+  const max = this._maxAttachments();
+  for (const file of list) {
+    if (this._composerAttachmentCount() >= max) {
+      this._showToast(t('media.max_attachments_n', { n: max }), 'error');
+      break;
+    }
+    if (file.type && file.type.startsWith('image/')) this._queueImage(file);
+    else this._queueGeneralFile(file);
+  }
+},
+
+// Same for the thread composer, which keeps one mixed queue.
+_queueThreadFiles(files) {
+  const list = Array.from(files || []).filter(Boolean);
+  if (!list.length) return;
+  const max = this._maxAttachments();
+  for (const file of list) {
+    if ((this._threadPending?.length || 0) >= max) {
+      this._showToast(t('media.max_attachments_n', { n: max }), 'error');
+      break;
+    }
+    this._queueThreadFile(file);
+  }
+},
+
 // ── Image Queue (paste/drop → preview → send on Enter) ──
 
 _queueImage(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('media.image_too_large', { maxMb: _maxMb }), 'error');
   }
   if (!this._imageQueue) this._imageQueue = [];
-  if (this._imageQueue.length >= 5) {
-    return this._showToast(t('media.max_images'), 'error');
+  if (this._composerAttachmentCount() >= this._maxAttachments()) {
+    return this._showToast(t('media.max_attachments_n', { n: this._maxAttachments() }), 'error');
   }
   this._imageQueue.push(file);
   this._renderImageQueue();
@@ -147,13 +195,13 @@ _queueGeneralFile(file) {
   if (_ch && _ch.media_enabled === 0) {
     return this._showToast(t('media.uploads_disabled'), 'error');
   }
-  const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const maxMb = this._uploadCapMb();
   if (file.size > maxMb * 1024 * 1024) {
     return this._showToast(t('media.file_too_large', { maxMb }), 'error');
   }
   if (!this._fileQueue) this._fileQueue = [];
-  if (this._fileQueue.length >= 5) {
-    return this._showToast(t('media.max_files'), 'error');
+  if (this._composerAttachmentCount() >= this._maxAttachments()) {
+    return this._showToast(t('media.max_attachments_n', { n: this._maxAttachments() }), 'error');
   }
   this._fileQueue.push(file);
   this._renderImageQueue();
@@ -178,14 +226,14 @@ async _flushFileQueue() {
 
 _queueImageForPiP(file, targetCode) {
   if (!file || !file.type.startsWith('image/')) return;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('media.image_too_large', { maxMb: _maxMb }), 'error');
   }
   if (!this._pipImageQueue) this._pipImageQueue = [];
   if (!this._pipImageQueueTarget) this._pipImageQueueTarget = targetCode;
-  if (this._pipImageQueue.length >= 5) {
-    return this._showToast(t('media.max_images'), 'error');
+  if (this._pipImageQueue.length >= this._maxAttachments()) {
+    return this._showToast(t('media.max_attachments_n', { n: this._maxAttachments() }), 'error');
   }
   this._pipImageQueue.push(file);
   this._pipImageQueueTarget = targetCode;
@@ -256,13 +304,13 @@ async _flushPiPImageQueue(bundled = false) {
 // the reply is actually sent, matching the main and DM composers.
 _queueThreadFile(file) {
   if (!file) return;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('media.file_too_large', { maxMb: _maxMb }), 'error');
   }
   if (!this._threadPending) this._threadPending = [];
-  if (this._threadPending.length >= 5) {
-    return this._showToast(t('media.max_attachments'), 'error');
+  if (this._threadPending.length >= this._maxAttachments()) {
+    return this._showToast(t('media.max_attachments_n', { n: this._maxAttachments() }), 'error');
   }
   this._threadPending.push(file);
   this._renderThreadPending();
@@ -650,7 +698,7 @@ _setViewerChatAnimPref(pref) {
 
 // The address to judge "can this animate" by, unwrapping the media proxy.
 _chatImgRealUrl(img) {
-  return img.getAttribute('data-mp-origin') || img.getAttribute('src') || '';
+  return img.getAttribute('data-mp-origin') || img.getAttribute('data-lazy-src') || img.getAttribute('src') || '';
 },
 
 _applyViewerChatAnimPref() {
@@ -2325,6 +2373,56 @@ _toggleSoundboardSidebar() {
   window._updateSbToggleRight?.();
 },
 
+// Hotkey chip with its clear control, or the "Set hotkey" link. Shared by the
+// Sound Manager grid/list, the pop-out and the sidebar list, so every layout
+// can bind and unbind a key (the sidebar used to render a read-only chip).
+_sbHotkeyControlsHtml(name, hk) {
+  const n = this._escapeHtml(name);
+  return hk
+    ? `<span class="sb-hotkey-row">
+         <span class="sb-hotkey">${this._escapeHtml(hk)}</span>
+         <span class="sb-hotkey-clear" data-sound="${n}" title="${t('media_runtime.sound.remove_hotkey')}">&times;</span>
+       </span>`
+    : `<span class="sb-hotkey-set" data-sound="${n}">${t('media_runtime.sound.set_hotkey')}</span>`;
+},
+
+// Set / clear / right-click-to-record on every .soundboard-btn inside grid.
+// rerender() redraws the layout that owns the grid after a clear.
+_bindSbHotkeyControls(grid, hotkeyMap, rerender) {
+  grid.querySelectorAll('.sb-hotkey-set').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const name = el.dataset.sound;
+      this._recordingHotkeyFor = name;
+      const btn = el.closest('.soundboard-btn');
+      if (btn) btn.classList.add('hotkey-recording');
+      this._showToast(t('media_runtime.sound.press_hotkey', { name }), 'info');
+    });
+  });
+  grid.querySelectorAll('.sb-hotkey-clear').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const name = el.dataset.sound;
+      const hk = hotkeyMap[name];
+      if (!hk) return;
+      delete this._soundHotkeys[hk];
+      localStorage.setItem('haven_sound_hotkeys', JSON.stringify(this._soundHotkeys));
+      this._showToast(t('media_runtime.sound.hotkey_removed', { name }), 'info');
+      rerender();
+    });
+  });
+  grid.querySelectorAll('.soundboard-btn').forEach(btn => {
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (e.target.closest('.sb-hotkey-clear')) return;
+      const name = btn.dataset.name;
+      this._recordingHotkeyFor = name;
+      btn.classList.add('hotkey-recording');
+      this._showToast(t('media_runtime.sound.press_hotkey', { name }), 'info');
+    });
+  });
+},
+
 _renderSoundboardSidebar(filter = '') {
   const grid = document.getElementById('sb-sidebar-grid');
   if (!grid) return;
@@ -2346,7 +2444,7 @@ _renderSoundboardSidebar(filter = '') {
 
   const renderBtn = (s) => {
     const hk = hotkeyMap[s.name];
-    const hotkeyHtml = hk ? `<span class="sb-hotkey">${this._escapeHtml(hk)}</span>` : '';
+    const hotkeyHtml = this._sbHotkeyControlsHtml(s.name, hk);
     return `<button class="soundboard-btn${this._soundPrefs[s.name]?.hidden ? ' hidden-sound' : ''}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-name">${this._escapeHtml(s.name)}</span>${hotkeyHtml}</button>`;
   };
 
@@ -2369,8 +2467,12 @@ _renderSoundboardSidebar(filter = '') {
     renderGroup('Built-in', builtinSounds, 'haven_sb_sidebar_builtin_open', builtinOpen);
 
   grid.querySelectorAll('.soundboard-btn').forEach(btn => {
-    btn.addEventListener('click', () => this._playSoundFile(btn.dataset.url));
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('.sb-hotkey-clear') || e.target.closest('.sb-hotkey-set')) return;
+      this._playSoundFile(btn.dataset.url);
+    });
   });
+  this._bindSbHotkeyControls(grid, hotkeyMap, () => this._renderSoundboardSidebar(filter));
   // Persist open/closed state of each category.
   grid.querySelectorAll('details.sb-sidebar-group').forEach(d => {
     d.addEventListener('toggle', () => {
@@ -2401,7 +2503,7 @@ _popOutSoundboard() {
       <div class="sound-search-row" style="padding:0;margin-bottom:0">
         <input type="text" id="sb-pip-search" placeholder="${t('modals.sound_manager.search_placeholder')}" class="settings-text-input" style="flex:1;font-size:0.75rem">
       </div>
-      <div id="sb-pip-grid" class="sb-pip-grid"></div>
+      <div id="sb-pip-grid" class="soundboard-grid sb-pip-grid"></div>
     </div>
   `;
   document.body.appendChild(pip);
@@ -2715,13 +2817,7 @@ _renderSoundboard(filter = '') {
   const html = sounds.length === 0
     ? `<p class="muted-text" style="grid-column:1/-1">${t(filter ? 'media_runtime.sound.no_matches' : 'modals.sound_manager.no_sounds')}</p>`
     : sounds.map(s => {
-        const hk = hotkeyMap[s.name];
-        const hotkeyHtml = hk
-          ? `<span class="sb-hotkey-row">
-               <span class="sb-hotkey">${this._escapeHtml(hk)}</span>
-               <span class="sb-hotkey-clear" data-sound="${this._escapeHtml(s.name)}" title="${t('media_runtime.sound.remove_hotkey')}">&times;</span>
-             </span>`
-           : `<span class="sb-hotkey-set" data-sound="${this._escapeHtml(s.name)}">${t('media_runtime.sound.set_hotkey')}</span>`;
+        const hotkeyHtml = this._sbHotkeyControlsHtml(s.name, hotkeyMap[s.name]);
         return `<button class="soundboard-btn${this._soundPrefs[s.name]?.hidden ? ' hidden-sound' : ''}" data-name="${this._escapeHtml(s.name)}" data-url="${this._escapeHtml(s.url)}"><span class="sb-hide-btn" data-sound="${this._escapeHtml(s.name)}" title="${t(this._soundPrefs[s.name]?.hidden ? 'media_runtime.sound.show' : 'media_runtime.sound.hide')}">👁️</span><span class="sb-name">${this._escapeHtml(s.name)}</span>
           ${hotkeyHtml}
         </button>`;
@@ -2743,36 +2839,10 @@ _renderSoundboard(filter = '') {
       });
     });
 
-    // "Set hotkey" link
-    grid.querySelectorAll('.sb-hotkey-set').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const name = el.dataset.sound;
-        this._recordingHotkeyFor = name;
-        const btn = el.closest('.soundboard-btn');
-        if (btn) btn.classList.add('hotkey-recording');
-        this._showToast(t('media_runtime.sound.press_hotkey', { name }), 'info');
-      });
-    });
-
-    // "×" remove hotkey button
-    grid.querySelectorAll('.sb-hotkey-clear').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const name = el.dataset.sound;
-        const hk = hotkeyMap[name];
-        if (hk) {
-          delete this._soundHotkeys[hk];
-          localStorage.setItem('haven_sound_hotkeys', JSON.stringify(this._soundHotkeys));
-          this._showToast(t('media_runtime.sound.hotkey_removed', { name }), 'info');
-          this._renderSoundboard(
-            this._soundboardPip
-              ? (document.getElementById('sb-pip-search')?.value?.trim() || '')
-              : (document.getElementById('soundboard-search')?.value?.trim() || '')
-          );
-        }
-      });
-    });
+    const currentFilter = () => this._soundboardPip
+      ? (document.getElementById('sb-pip-search')?.value?.trim() || '')
+      : (document.getElementById('soundboard-search')?.value?.trim() || '');
+    this._bindSbHotkeyControls(grid, hotkeyMap, () => this._renderSoundboard(currentFilter()));
 
     // Hide / show button (👁️)
     grid.querySelectorAll('.sb-hide-btn').forEach(el => {
@@ -2789,17 +2859,6 @@ _renderSoundboard(filter = '') {
       });
     });
 
-    // Right-click also starts hotkey recording
-    grid.querySelectorAll('.soundboard-btn').forEach(btn => {
-      btn.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        if (e.target.closest('.sb-hotkey-clear')) return;
-        const name = btn.dataset.name;
-        this._recordingHotkeyFor = name;
-        btn.classList.add('hotkey-recording');
-        this._showToast(t('media_runtime.sound.press_hotkey', { name }), 'info');
-      });
-    });
   });
 },
 
@@ -3691,34 +3750,73 @@ async _uploadBotAvatar(botId, file) {
   }
 },
 
+// Helper function to simplify picker setups
+_setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange, buttonDataKey) {
+  if (!allowedValues.includes(defaultValue)) {
+    throw new Error(`Invalid default value "${defaultValue}" for ${pickerId}`);
+  }
+
+  const picker = document.getElementById(pickerId);
+  if (!picker) return null;
+
+  const dataKeys = Array.isArray(dataKey) ? dataKey : [dataKey];
+  buttonDataKey ??= dataKeys[0];
+  const apply = (value, notify = false) => {
+    dataKeys.forEach(key => {
+      document.documentElement.dataset[key] = value;
+    });
+
+    picker.querySelectorAll('.density-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset[buttonDataKey] === value);
+    });
+    if (notify) onChange?.(value);
+  };
+
+  const stored = localStorage.getItem(storageKey);
+  const saved = allowedValues.includes(stored) ? stored : defaultValue;
+  apply(saved);
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('.density-btn');
+    if (!btn || !picker.contains(btn)) return;
+    const value = btn.dataset[buttonDataKey];
+    if (!allowedValues.includes(value)) return;
+
+    apply(value, true);
+    localStorage.setItem(storageKey, value);
+  });
+  return saved;
+},
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // LAYOUT DENSITY
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 _setupDensityPicker() {
-  const picker = document.getElementById('density-picker');
-  if (!picker) return;
+  const pickerId = 'density-picker';
+  const storageKey = 'haven-density';
+  const allowedValues = ['compact', 'cozy', 'spacious'];
+  const defaultValue = 'cozy';
+  const dataKey = ['density', 'havenDensity'];
+  const buttonDataKey = 'density';
+  const onChange = (density) => {
+    document.dispatchEvent(new CustomEvent('haven:density-change', {detail: { density }}))
+  };
 
-  // Restore saved density
-  const stored = localStorage.getItem('haven-density');
-  const saved = ['compact', 'cozy', 'spacious'].includes(stored) ? stored : 'cozy';
-  document.documentElement.dataset.density = saved;
-  document.documentElement.dataset.havenDensity = saved;
-  picker.querySelectorAll('.density-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.density === saved);
-  });
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange, buttonDataKey);
+},
 
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('.density-btn');
-    if (!btn) return;
-    const density = btn.dataset.density;
-    document.documentElement.dataset.density = density;
-    document.documentElement.dataset.havenDensity = density;
-    localStorage.setItem('haven-density', density);
-    document.dispatchEvent(new CustomEvent('haven:density-change', { detail: { density } }));
-    picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+// ── Channel Scrolling Picker ──
+// Sets data-channel-scroll on <html>; CSS handles the layout. Persists the
+// viewer's choice and applies it live without a reload.
+_setupChannelScrollPicker() {
+  const pickerId = 'channel-scroll-picker';
+  const storageKey = 'haven-channel-scroll';
+  const allowedValues = ['separate', 'combined'];
+  const defaultValue = 'separate';
+  const dataKey = 'channelScroll';
+
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey);
 },
 
 // ── Toggle Style Picker (sliders vs checkboxes) ──
@@ -3726,25 +3824,14 @@ _setupDensityPicker() {
 // applies the same value pre-paint, so this only has to keep the buttons in
 // step and persist the choice.
 _setupToggleStylePicker() {
-  const picker = document.getElementById('toggle-style-picker');
-  if (!picker) return;
+  const pickerId = 'toggle-style-picker';
+  const storageKey = 'haven-toggle-style';
+  const allowedValues = ['switch', 'box'];
+  const defaultValue = 'switch';
+  const dataKey = 'toggleStyle';
+  const buttonDataKey = 'togglestyle';
 
-  // Sliders are the default; only an explicit 'box' choice differs.
-  const saved = localStorage.getItem('haven-toggle-style') === 'box' ? 'box' : 'switch';
-  document.documentElement.dataset.toggleStyle = saved;
-  picker.querySelectorAll('.density-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.togglestyle === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('.density-btn');
-    if (!btn) return;
-    const style = btn.dataset.togglestyle === 'box' ? 'box' : 'switch';
-    document.documentElement.dataset.toggleStyle = style;
-    localStorage.setItem('haven-toggle-style', style);
-    picker.querySelectorAll('.density-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, null, buttonDataKey);
 },
 
 // ── Animated Profile Pictures Picker (viewer side) ──
@@ -3823,26 +3910,14 @@ _setupZoomSlider() {
 },
 
 // ── Emoji Reaction Size Picker ──
-
 _setupEmojiSizePicker() {
-  const picker = document.getElementById('emoji-size-picker');
-  if (!picker) return;
+  const pickerId = 'emoji-size-picker';
+  const storageKey = 'haven-emojisize';
+  const allowedValues = ['small', 'normal', 'large', 'x-large'];
+  const defaultValue = 'normal';
+  const dataKey = 'emojisize';
 
-  const saved = localStorage.getItem('haven-emojisize') || 'normal';
-  document.documentElement.dataset.emojisize = saved;
-  picker.querySelectorAll('[data-emojisize]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.emojisize === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-emojisize]');
-    if (!btn) return;
-    const size = btn.dataset.emojisize;
-    document.documentElement.dataset.emojisize = size;
-    localStorage.setItem('haven-emojisize', size);
-    picker.querySelectorAll('[data-emojisize]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey);
 },
 
 // ── Debug Section ──
@@ -3911,6 +3986,22 @@ _setupDebugSection() {
       try {
         if (relayCb.checked) localStorage.setItem('haven_screen_relay_profile', '1');
         else localStorage.removeItem('haven_screen_relay_profile');
+      } catch {}
+      if (this.voice && typeof this.voice.reapplyScreenBitrate === 'function') {
+        this.voice.reapplyScreenBitrate();
+      }
+    });
+  }
+
+  // #5426: automatic relay detection for the profile above. On unless the
+  // person switched it off; voice.js reads the flag live on every apply.
+  const relayAutoCb = document.getElementById('pref-debug-screen-relay-auto');
+  if (relayAutoCb) {
+    try { relayAutoCb.checked = localStorage.getItem('haven_screen_relay_auto') !== '0'; } catch {}
+    relayAutoCb.addEventListener('change', () => {
+      try {
+        if (relayAutoCb.checked) localStorage.removeItem('haven_screen_relay_auto');
+        else localStorage.setItem('haven_screen_relay_auto', '0');
       } catch {}
       if (this.voice && typeof this.voice.reapplyScreenBitrate === 'function') {
         this.voice.reapplyScreenBitrate();
@@ -4024,26 +4115,17 @@ _applyEmbedSize(mode) {
 // ── Role Display Picker ──
 
 _setupRoleDisplayPicker() {
-  const picker = document.getElementById('role-display-picker');
-  if (!picker) return;
-
-  const saved = localStorage.getItem('haven-role-display') || 'colored-name';
-  document.documentElement.dataset.roleDisplay = saved;
-  picker.querySelectorAll('[data-roledisplay]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.roledisplay === saved);
-  });
-
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-roledisplay]');
-    if (!btn) return;
-    const mode = btn.dataset.roledisplay;
-    document.documentElement.dataset.roleDisplay = mode;
-    localStorage.setItem('haven-role-display', mode);
-    picker.querySelectorAll('[data-roledisplay]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+  const pickerId = 'role-display-picker';
+  const storageKey = 'haven-role-display';
+  const allowedValues = ['colored-name', 'dot'];
+  const defaultValue = 'colored-name';
+  const dataKey = 'roledisplay';
+  const onChange = () => {
     // Re-render member list to reflect the change
     if (this._updateUsers) this._updateUsers();
-  });
+  };
+
+  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange);
 },
 
 // ── Toolbar Icon Style Picker ──
@@ -4217,41 +4299,64 @@ _getLightboxImages() {
   // Use whichever container opened the lightbox (main feed, thread panel, DM PiP)
   const container = this._lightboxContainer || document.getElementById('messages');
   if (!container) return [];
-  return Array.from(container.querySelectorAll('.chat-image')).map(img => img.src);
+  return Array.from(container.querySelectorAll('.chat-image'));
+},
+
+/** Point the lightbox at one chat image. A decrypted DM image has no usable
+ *  src any more (the feed revokes its object URL once painted, #5426), so it
+ *  is decrypted again on demand; until then the lightbox shows nothing but
+ *  the backdrop, which is what it used to show forever. (#5568) */
+_lightboxShow(imgEl, fallbackSrc = '') {
+  const lbImg = document.getElementById('lightbox-img');
+  if (!lbImg) return;
+  const seq = (this._lightboxSeq = (this._lightboxSeq || 0) + 1);
+  if (this._lightboxBlobUrl) {
+    try { URL.revokeObjectURL(this._lightboxBlobUrl); } catch { /* already gone */ }
+    this._lightboxBlobUrl = null;
+  }
+  if (imgEl && imgEl.dataset && imgEl.dataset.e2eSrc && this._e2eImageBlob) {
+    lbImg.src = '';
+    this._e2eImageBlob(imgEl).then(blob => {
+      if (seq !== this._lightboxSeq) return; // moved on or closed meanwhile
+      this._lightboxBlobUrl = URL.createObjectURL(blob);
+      lbImg.src = this._lightboxBlobUrl;
+    }).catch(() => { if (seq === this._lightboxSeq) lbImg.src = ''; });
+    return;
+  }
+  lbImg.src = imgEl ? imgEl.src : fallbackSrc;
 },
 
 _lightboxNavigate(dir) {
   const imgs = this._getLightboxImages();
-  const lbImg = document.getElementById('lightbox-img');
-  if (!lbImg || imgs.length < 2) return;
-  const curIdx = imgs.indexOf(lbImg.src);
-  if (curIdx < 0) return;
-  const newIdx = curIdx + dir;
+  if (imgs.length < 2 || !(this._lightboxIndex >= 0)) return;
+  const newIdx = this._lightboxIndex + dir;
   if (newIdx < 0 || newIdx >= imgs.length) return;
-  lbImg.src = imgs[newIdx];
+  this._lightboxIndex = newIdx;
+  this._lightboxShow(imgs[newIdx]);
   this._updateLightboxNav();
 },
 
 _updateLightboxNav() {
   const imgs = this._getLightboxImages();
-  const lbImg = document.getElementById('lightbox-img');
   const prevBtn = document.getElementById('lightbox-prev');
   const nextBtn = document.getElementById('lightbox-next');
-  if (!lbImg || !prevBtn || !nextBtn) return;
-  const curIdx = imgs.indexOf(lbImg.src);
+  if (!prevBtn || !nextBtn) return;
+  const curIdx = this._lightboxIndex >= 0 ? this._lightboxIndex : -1;
   prevBtn.disabled = curIdx <= 0;
   nextBtn.disabled = curIdx < 0 || curIdx >= imgs.length - 1;
-  // Hide nav if only one image
-  const showNav = imgs.length > 1;
+  // Hide nav when there is nothing to step through
+  const showNav = imgs.length > 1 && curIdx >= 0;
   prevBtn.style.display = showNav ? '' : 'none';
   nextBtn.style.display = showNav ? '' : 'none';
 },
 
-_openLightbox(src) {
+_openLightbox(src, imgEl = null) {
   const lb = document.getElementById('image-lightbox');
   const img = document.getElementById('lightbox-img');
   if (!lb || !img) return;
-  img.src = src;
+  const imgs = this._getLightboxImages();
+  this._lightboxIndex = imgEl ? imgs.indexOf(imgEl) : imgs.findIndex(i => i.src === src);
+  this._lightboxShow(imgEl || imgs[this._lightboxIndex] || null, src);
   lb.style.display = 'flex';
   this._updateLightboxNav();
 },
@@ -4261,6 +4366,12 @@ _closeLightbox() {
   if (lb) { lb.style.display = 'none'; }
   const img = document.getElementById('lightbox-img');
   if (img) { img.src = ''; }
+  this._lightboxSeq = (this._lightboxSeq || 0) + 1;
+  if (this._lightboxBlobUrl) {
+    try { URL.revokeObjectURL(this._lightboxBlobUrl); } catch { /* already gone */ }
+    this._lightboxBlobUrl = null;
+  }
+  this._lightboxIndex = -1;
   this._hideImageContextMenu();
 },
 
@@ -4420,12 +4531,43 @@ _revealHiddenImage(ph) {
   ph.replaceWith(img);
 },
 
-_showImageContextMenu(e, src) {
+// A picture in an encrypted DM is decrypted in the browser, and the feed lets
+// go of the decrypted bytes once it has painted them, so the <img> src is a
+// dead object URL: opening or saving it gave a blank page. A fresh copy is
+// decrypted for the new tab or the download and released a minute later
+// (#5663).
+_freshImageUrl(img) {
+  if (img && img.dataset && img.dataset.e2eSrc && this._e2eImageBlob) {
+    return this._e2eImageBlob(img).then(blob => {
+      const url = URL.createObjectURL(blob);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 60000);
+      return { url, blob, ephemeral: true };
+    });
+  }
+  return Promise.resolve({ url: this._lazyRealSrc ? this._lazyRealSrc(img) : (img && img.src) || '', blob: null, ephemeral: false });
+},
+
+_openImageInNewTab(img) {
+  this._freshImageUrl(img).then(({ url, ephemeral }) => {
+    if (!url) return;
+    // An object URL only resolves for a tab that shares this page's session,
+    // so the decrypted copy opens without noopener; a plain link keeps it.
+    if (ephemeral) window.open(url, '_blank'); else window.open(url, '_blank', 'noopener,noreferrer');
+  }).catch(() => this._showToast?.(t('media_runtime.image.open_failed'), 'error'));
+},
+
+_showImageContextMenu(e, src, opts = {}) {
   this._hideImageContextMenu();
   const menu = document.createElement('div');
   menu.id = 'image-context-menu';
   menu.className = 'image-context-menu';
+  // opts.viewImage: the <img> to open in the lightbox from a View entry, for
+  // places where a left click does something else, like a forum card (#5646).
+  // opts.sourceImg: the <img> the menu was opened on, so an encrypted DM
+  // picture can be decrypted again for Open and Save (#5663).
+  const sourceImg = opts.sourceImg || opts.viewImage || null;
   menu.innerHTML = `
+    ${opts.viewImage ? `<button data-action="view">🔍 ${t('media_runtime.image.view')}</button>` : ''}
     <button data-action="save">💾 ${t('media_runtime.image.save')}</button>
     <button data-action="copy">📋 ${t('media_runtime.image.copy')}</button>
     <button data-action="open">🔗 ${t('media_runtime.image.open_new_tab')}</button>
@@ -4462,13 +4604,21 @@ _showImageContextMenu(e, src) {
   menu.addEventListener('click', async (ev) => {
     const action = ev.target.dataset.action;
     if (action === 'save') {
-      const a = document.createElement('a');
-      a.href = src;
-      a.download = src.split('/').pop().split('?')[0] || 'image';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      this._hideImageContextMenu();
+      this._freshImageUrl(sourceImg).then(({ url, blob }) => {
+        const href = url || src;
+        const a = document.createElement('a');
+        a.href = href;
+        const mime = blob && blob.type ? blob.type.split('/')[1] : '';
+        a.download = (sourceImg && sourceImg.dataset && sourceImg.dataset.e2eSrc)
+          ? `image.${(mime || 'png').replace('jpeg', 'jpg')}`
+          : (src.split('/').pop().split('?')[0] || 'image');
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }).catch(() => this._showToast?.(t('media_runtime.image.open_failed'), 'error'));
+      return;
     } else if (action === 'copy') {
       // Hide the menu immediately so it doesn't sit on screen during
       // the async fetch + clipboard write. We still control the toast.
@@ -4622,8 +4772,13 @@ _showImageContextMenu(e, src) {
         }
       })();
       return;
+    } else if (action === 'view') {
+      this._hideImageContextMenu();
+      this._openLightbox(src, opts.viewImage);
+      return;
     } else if (action === 'open') {
-      window.open(src, '_blank', 'noopener,noreferrer');
+      if (sourceImg) this._openImageInNewTab(sourceImg);
+      else window.open(src, '_blank', 'noopener,noreferrer');
     } else if (action === 'hide') {
       this._hideImage(src);
       // Collapse every live copy of this image to a placeholder right away.
@@ -4658,6 +4813,308 @@ _showImageContextMenu(e, src) {
 _hideImageContextMenu() {
   const existing = document.getElementById('image-context-menu');
   if (existing) existing.remove();
+},
+
+
+// ── Lazy media queue ──
+//
+// Chat images, stickers, GIFs and link-preview pictures used to load the
+// moment a message rendered, and every one of the 100 messages kept in the
+// DOM held its decoded bitmap. On a busy channel that was most of the
+// renderer's memory (about 430 MB on the desktop app). Now an image only
+// fetches when it comes within LAZY_NEAR px of the box it scrolls in, a few
+// at a time with the closest first, and it is let go again once it scrolls
+// LAZY_FAR px away or the window has been hidden for a while. After the first
+// load the picture's own size is remembered, and the blank that stands in for
+// it while unloaded has exactly that size, so max-width, the image size
+// setting and the window size all treat the blank like the picture and
+// nothing in the history moves.
+//
+// The whole document is watched, so the main chat, the thread panel, DM
+// pop-outs and search results all take part, and each image is observed
+// relative to the scroll box it lives in (a viewport-rooted observer never
+// sees anything scrolled out of a nested box, margin or not).
+//
+// The first load is the one time a picture changes size. When that picture
+// sits above what the reader is looking at, the content would slide down by
+// its height, and the browser's own scroll anchoring did not catch it in the
+// chat box, so the loader keeps its own anchor: on every scroll it notes the
+// element at the top of the box and where it sits, and right after a picture
+// above it grows, it moves the scroll by exactly the drift.
+
+_lazyBlank() {
+  return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+},
+
+// A blank with the real picture's own size, for the unloaded state.
+_lazySizedBlank(w, h) {
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'/%3E`;
+},
+
+// Wrap an emitted `src="…"` attribute so the loader owns the fetch. Attributes
+// without a src (media-proxy placeholders) pass through untouched, and so does
+// everything when the loader is not running (no IntersectionObserver).
+_lazySrcAttr(attrs) {
+  const s = String(attrs || '');
+  if (!this._lazyMedia) return s;
+  return s.replace(/(^|\s)src="/, `$1src="${this._lazyBlank()}" data-lazy-src="`);
+},
+
+// The URL a lazy image shows or will show, for the lightbox and copy actions.
+_lazyRealSrc(img) {
+  return (img && (img.dataset?.lazySrc || img.getAttribute?.('src'))) || '';
+},
+
+// Distance from the viewport, in px. Zero for anything on screen.
+_lazyDistance(rect, viewportHeight) {
+  const top = rect.top, bottom = rect.bottom;
+  if (bottom >= 0 && top <= viewportHeight) return 0;
+  return top > viewportHeight ? top - viewportHeight : -bottom;
+},
+
+// Which pending images to start now: closest first, never more than
+// maxParallel in flight. Pure, so the test can drive it.
+_lazyPickNext(pending, inFlight, maxParallel) {
+  const room = Math.max(0, maxParallel - inFlight);
+  return [...pending].sort((a, b) => a.distance - b.distance).slice(0, room).map(p => p.img);
+},
+
+_lazySelector() {
+  return 'img.chat-image, img.sticker-img, img.lp-image, img.link-preview-gallery-img';
+},
+
+// The box an element scrolls in, or null when only the page scrolls.
+_lazyScrollerOf(el) {
+  let node = el && el.parentElement;
+  while (node && node !== document.body) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === 'auto' || oy === 'scroll') return node;
+    node = node.parentElement;
+  }
+  return null;
+},
+
+_setupLazyMedia() {
+  if (this._lazyMedia || typeof IntersectionObserver !== 'function' || typeof MutationObserver !== 'function') return;
+  const L = this._lazyMedia = {
+    NEAR: 800, FAR: 2400, MAX_PARALLEL: 3, HIDDEN_UNLOAD_MS: 20000,
+    near: new Set(), inFlight: 0, hiddenTimer: null,
+    obs: new Map(), byImg: new WeakMap(), anchors: new Map(), growing: new Set(),
+  };
+  const sel = this._lazySelector();
+  const each = (root, fn) => {
+    if (!root || root.nodeType !== 1) return;
+    if (root.matches(sel)) fn(root);
+    root.querySelectorAll(sel).forEach(fn);
+  };
+  // Fires right after the layout in which a picture took its real size, so
+  // the scroll is corrected before anyone sees the slide.
+  if (typeof ResizeObserver === 'function') {
+    L.ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        if (!L.growing.has(e.target)) continue;
+        L.growing.delete(e.target);
+        this._lazyHoldAnchor(this._lazyScrollerOf(e.target));
+      }
+    });
+  }
+  each(document.body, (img) => this._lazyAdopt(img));
+  L.mo = new MutationObserver((muts) => {
+    for (const m of muts) {
+      m.removedNodes.forEach((n) => each(n, (img) => this._lazyForget(img)));
+      m.addedNodes.forEach((n) => each(n, (img) => this._lazyAdopt(img)));
+    }
+  });
+  L.mo.observe(document.body, { childList: true, subtree: true });
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(L.hiddenTimer);
+    if (document.hidden) L.hiddenTimer = setTimeout(() => this._lazyUnloadAll(), L.HIDDEN_UNLOAD_MS);
+    else this._lazyPump();
+  });
+  window.addEventListener('resize', () => { for (const sc of L.obs.keys()) if (sc) this._lazyRecordAnchor(sc); });
+},
+
+// One near/far observer pair per scroll box, made on first use, plus the
+// scroll listener that keeps that box's anchor fresh.
+_lazyObserversFor(scroller) {
+  const L = this._lazyMedia;
+  let o = L.obs.get(scroller);
+  if (o) return o;
+  o = {
+    near: new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) L.near.add(e.target); else L.near.delete(e.target);
+      }
+      this._lazyPump();
+    }, { root: scroller, rootMargin: `${L.NEAR}px 0px` }),
+    far: new IntersectionObserver((entries) => {
+      for (const e of entries) if (!e.isIntersecting) this._lazyUnload(e.target);
+    }, { root: scroller, rootMargin: `${L.FAR}px 0px` }),
+  };
+  L.obs.set(scroller, o);
+  if (scroller) {
+    scroller.addEventListener('scroll', () => this._lazyRecordAnchor(scroller), { passive: true });
+    this._lazyRecordAnchor(scroller);
+  }
+  return o;
+},
+
+// Note the first message at the top edge of a scroll box and where it sits.
+// Sticky bits (a toolbar, a date divider) do not move with the content, so
+// they are passed over for the first thing underneath them.
+_lazyRecordAnchor(sc) {
+  const L = this._lazyMedia;
+  if (!L || !sc) return;
+  const r = sc.getBoundingClientRect();
+  if (r.height <= 0 || r.width <= 0) return;
+  const edge = r.top + 1;
+  let cands = sc.querySelectorAll('[data-msg-id]');
+  if (!cands.length) cands = sc.children;
+  for (const el of cands) {
+    const b = el.getBoundingClientRect();
+    if (b.height <= 0 || b.bottom <= edge) continue;
+    const pos = getComputedStyle(el).position;
+    if (pos === 'sticky' || pos === 'fixed') continue;
+    L.anchors.set(sc, { el, top: b.top });
+    return;
+  }
+  L.anchors.delete(sc);
+},
+
+// Put the anchor back where it was noted, after something above it grew.
+_lazyHoldAnchor(sc) {
+  const L = this._lazyMedia;
+  if (!L || !sc) return;
+  const a = L.anchors.get(sc);
+  if (!a || !a.el.isConnected || !sc.contains(a.el)) return;
+  const now = a.el.getBoundingClientRect().top;
+  const drift = now - a.top;
+  if (Math.abs(drift) < 1) return;
+  // A drift of more than a screen is a stale note, not a picture; start over.
+  if (Math.abs(drift) > sc.clientHeight) { this._lazyRecordAnchor(sc); return; }
+  sc.scrollTop += drift;
+  a.top = a.el.getBoundingClientRect().top;
+},
+
+_lazyAdopt(img) {
+  const L = this._lazyMedia;
+  if (!L) return;
+  if (img.closest('.lightbox, .image-lightbox, [data-no-lazy]')) return;
+  // E2E pictures arrive without a src and get a blob: from the decryptor.
+  if (img.classList.contains('e2e-img-pending') || img.classList.contains('e2e-img-loading') || img.classList.contains('e2e-img-failed')) return;
+  if (!img.dataset.lazy) {
+    const src = img.dataset.lazySrc || img.getAttribute('src') || '';
+    if (!src || src.startsWith('data:') || src.startsWith('blob:')) return;
+    img.dataset.lazySrc = src;
+    img.dataset.lazy = 'pending';
+    img.decoding = 'async';
+    if (img.getAttribute('src') !== this._lazyBlank()) img.src = this._lazyBlank();
+    if (L.ro) L.ro.observe(img);
+  }
+  // Observing an already observed target is a no-op, so a node that moved
+  // between boxes (a message promoted into a pop-out) is simply re-homed.
+  const prev = L.byImg.get(img);
+  const o = this._lazyObserversFor(this._lazyScrollerOf(img));
+  if (prev && prev !== o) { prev.near.unobserve(img); prev.far.unobserve(img); }
+  L.byImg.set(img, o);
+  o.near.observe(img);
+  o.far.observe(img);
+},
+
+// Stop watching an image that left the document, so the observers do not
+// keep detached nodes alive.
+_lazyForget(img) {
+  const L = this._lazyMedia;
+  if (!L) return;
+  const o = L.byImg.get(img);
+  if (o) { o.near.unobserve(img); o.far.unobserve(img); }
+  if (L.ro) L.ro.unobserve(img);
+  L.near.delete(img);
+  L.growing.delete(img);
+},
+
+_lazyPump() {
+  const L = this._lazyMedia;
+  if (!L || document.hidden) return;
+  const vh = window.innerHeight || 800;
+  const pending = [];
+  for (const img of L.near) {
+    if (!img.isConnected) { L.near.delete(img); continue; }
+    if (img.dataset.lazy !== 'pending') continue;
+    pending.push({ img, distance: this._lazyDistance(img.getBoundingClientRect(), vh) });
+  }
+  for (const img of this._lazyPickNext(pending, L.inFlight, L.MAX_PARALLEL)) {
+    const onScreen = this._lazyDistance(img.getBoundingClientRect(), vh) === 0;
+    img.dataset.lazy = 'loading';
+    L.inFlight++;
+    const start = () => this._lazyLoad(img);
+    // Visible images start now; the ones just outside wait for an idle
+    // slice so a fast scroll never fights the fetches for the main thread.
+    onScreen || typeof requestIdleCallback !== 'function' ? start() : requestIdleCallback(start, { timeout: 250 });
+  }
+},
+
+_lazyLoad(img) {
+  const L = this._lazyMedia;
+  const sc = this._lazyScrollerOf(img);
+  const firstLoad = !img.dataset.lazyW;
+  const wasAtBottom = !!sc && (sc.scrollHeight - sc.scrollTop - sc.clientHeight) <= 4;
+  if (sc && firstLoad) {
+    // A fresh anchor for this load; scrolling in the meantime refreshes it.
+    if (!L.anchors.has(sc)) this._lazyRecordAnchor(sc);
+    if (L.ro) L.growing.add(img);
+  }
+  const done = (ok) => {
+    img.onload = img.onerror = null;
+    L.inFlight = Math.max(0, L.inFlight - 1);
+    if (!img.isConnected) { L.growing.delete(img); return this._lazyPump(); }
+    img.dataset.lazy = ok ? 'loaded' : 'error';
+    if (ok && img.naturalWidth && img.naturalHeight) {
+      img.dataset.lazyW = img.naturalWidth;
+      img.dataset.lazyH = img.naturalHeight;
+    }
+    // The resize callback normally beat us here; if it did not (no size
+    // change, or no ResizeObserver), settle now.
+    if (L.growing.delete(img)) this._lazyHoldAnchor(sc);
+    this._lazySettleBottom(sc, wasAtBottom);
+    this._lazyPump();
+  };
+  img.onload = () => done(true);
+  img.onerror = () => done(false);
+  img.src = img.dataset.lazySrc;
+},
+
+// Someone reading the newest messages stays glued to the bottom while a
+// picture there takes its size, the way they did when pictures loaded at
+// once.
+_lazySettleBottom(sc, wasAtBottom) {
+  if (!sc) return;
+  const mainChat = sc.id === 'messages' && typeof this._coupledToBottom === 'boolean';
+  const glued = mainChat ? this._coupledToBottom : wasAtBottom;
+  if (!glued) return;
+  if (mainChat && this._debouncedScrollToBottom) this._debouncedScrollToBottom();
+  else sc.scrollTop = sc.scrollHeight;
+},
+
+_lazyUnload(img) {
+  const L = this._lazyMedia;
+  if (!L || img.dataset.lazy !== 'loaded') return;
+  img.dataset.lazy = 'pending';
+  // A GIF frozen to its first frame for the viewer's animation preference
+  // comes back animated, so let the freeze run again on the next load.
+  if (img.dataset.chatAnimDone) {
+    delete img.dataset.chatAnimDone;
+    delete img.dataset.chatAnimatedSrc;
+    delete img.dataset.chatAnimPlaying;
+  }
+  const w = +img.dataset.lazyW, h = +img.dataset.lazyH;
+  img.src = (w && h) ? this._lazySizedBlank(w, h) : this._lazyBlank();
+},
+
+_lazyUnloadAll() {
+  const L = this._lazyMedia;
+  if (!L) return;
+  document.querySelectorAll('img[data-lazy="loaded"]').forEach((img) => this._lazyUnload(img));
 },
 
 };

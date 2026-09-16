@@ -62,7 +62,8 @@ test.before(async () => {
   fs.mkdirSync(DATA, { recursive: true });
   server = spawn(process.execPath, ['server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(PORT), HAVEN_DATA_DIR: DATA },
+    // Plain HTTP on purpose: without FORCE_HTTP a certless Haven now makes its own certificate.
+    env: { ...process.env, PORT: String(PORT), HAVEN_DATA_DIR: DATA, FORCE_HTTP: 'true' },
     stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {

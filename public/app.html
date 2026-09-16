@@ -10,9 +10,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=3.52.0">
+  <link rel="stylesheet" href="/css/style.css?v=4.8.1">
   <script src="/js/theme-compat.js?v=4.1.1"></script>
-  <script src="/js/theme-init.js?v=4.1.2"></script>
+  <script src="/js/theme-init.js?v=4.1.3"></script>
 </head>
 <body data-haven-page="app">
 
@@ -97,6 +97,10 @@
               <span class="section-label-text" style="flex:1" data-i18n="app.sidebar.create_channel">Create Channel</span>
             </h5>
             <div class="collapsible-section-body" id="create-section-body">
+              <div class="input-row select-row" id="new-channel-template-row" style="gap:6px;margin-bottom:4px">
+                <select id="new-channel-template" data-i18n-title="app.sidebar.templates.hint" title="Start from a template: it ticks the boxes and sets topic, read-only, announcement and slow mode for you" style="flex:1;font-size:0.8rem"></select>
+                <button id="new-channel-template-del" class="btn-sm" type="button" data-i18n-title="app.sidebar.templates.delete_title" title="Delete this saved template" style="display:none">🗑</button>
+              </div>
               <div class="input-row">
                 <input type="text" id="new-channel-name"
                        data-i18n-placeholder="app.sidebar.channel_name_placeholder" placeholder="Channel name..." maxlength="50">
@@ -180,7 +184,16 @@
             </div>
             <!-- Effect overlay picker (mashup) -->
             <div class="effect-overlay-section">
-              <div class="theme-popup-title" style="margin-top: 2px;" data-i18n="app.theme.effect_overlay">Effect Overlay</div>
+              <div class="theme-popup-title" style="margin-top: 2px;" data-i18n="app.theme.layout">Layout</div>
+              <label class="toggle-row braid-layout-toggle">
+                <span data-i18n="app.theme.braid_layout">Braid layout</span>
+                <input type="checkbox" id="braid-layout-toggle">
+              </label>
+              <label class="toggle-row braid-layout-toggle">
+                <span data-i18n="app.theme.compact_layout">Compact layout</span>
+                <input type="checkbox" id="compact-layout-toggle">
+              </label>
+              <div class="theme-popup-title" style="margin-top: 8px;" data-i18n="app.theme.effect_overlay">Effect Overlay</div>
               <div class="effect-selector" id="effect-selector">
                 <button class="effect-btn active" data-effect="auto" data-i18n-title="app.theme.match_theme" title="Match theme">⟳</button>
                 <button class="effect-btn" data-effect="none" data-i18n-title="app.theme.no_effects" title="No effects">🚫</button>
@@ -525,6 +538,7 @@
           </div>
           <div id="message-input-area" class="message-input-area" data-haven-region="composer">
             <div class="pip-input-resizer" aria-hidden="true"></div>
+            <button id="composer-plus-btn" class="btn-composer-plus" type="button" data-i18n-title="app.input_bar.plus_btn" title="More" aria-expanded="false">+</button>
             <div class="input-actions-box">
               <button id="upload-btn" class="btn-upload" data-i18n-title="media.upload_file_title" title="Upload File">
                 <svg class="upload-icon-default" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -554,6 +568,30 @@
                   <line x1="2"  y1="20" x2="22" y2="20"/>
                 </svg>
               </button>
+              <span class="input-actions-divider" id="time-divider"></span>
+              <button id="time-btn" class="btn-poll btn-time" data-i18n-title="app.input_bar.time_btn" title="Insert timestamp">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"/>
+                  <line x1="12" y1="12" x2="12" y2="7"/>
+                  <line x1="12" y1="12" x2="15.5" y2="13.5"/>
+                </svg>
+              </button>
+              <span class="input-actions-divider"></span>
+              <button id="format-btn" class="btn-poll btn-format" data-i18n-title="app.input_bar.format_btn" title="Formatting and commands">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"/>
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                </svg>
+              </button>
+              <span class="input-actions-divider"></span>
+              <button id="voice-btn" class="btn-poll btn-voice-msg" data-i18n-title="app.input_bar.voice_btn" title="Record a voice message">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="3" width="6" height="11" rx="3"/>
+                  <path d="M5 11a7 7 0 0 0 14 0"/>
+                  <line x1="12" y1="18" x2="12" y2="21"/>
+                  <line x1="9" y1="21" x2="15" y2="21"/>
+                </svg>
+              </button>
               <span class="input-actions-divider" id="burn-divider" style="display:none"></span>
               <button id="burn-btn" class="btn-burn" data-i18n-title="app.input_bar.burn_btn" title="Burn after read (DM only)" style="display:none">🔥</button>
             </div>
@@ -569,6 +607,20 @@
               <div class="gif-picker-grid" id="gif-grid"></div>
               <div class="gif-picker-footer" data-i18n="header.powered_by_giphy">Powered by GIPHY</div>
             </div>
+            <div id="format-picker" class="gif-picker format-picker" style="display:none">
+              <div class="gif-picker-tabs">
+                <button type="button" class="gif-tab active" data-format-tab="markdown" data-i18n="format_picker.tab_formatting">Formatting</button>
+                <button type="button" class="gif-tab" data-format-tab="commands" data-i18n="format_picker.tab_commands">Commands</button>
+              </div>
+              <div class="format-picker-list" id="format-picker-list"></div>
+            </div>
+            <div id="voice-record-bar" class="voice-record-bar" style="display:none">
+              <span class="voice-rec-dot" aria-hidden="true"></span>
+              <span id="voice-rec-time" class="voice-rec-time">0:00</span>
+              <span class="voice-rec-hint" data-i18n="voice_message.recording_hint">Recording. Click the mic or Send to post it, Escape to throw it away.</span>
+              <button type="button" class="btn-sm" id="voice-rec-cancel" data-i18n="modals.common.cancel">Cancel</button>
+              <button type="button" class="btn-sm btn-accent" id="voice-rec-send" data-i18n="voice_message.send">Send</button>
+            </div>
             <div id="mention-dropdown" class="mention-dropdown" style="display:none"></div>
             <div id="channel-dropdown" class="mention-dropdown" style="display:none"></div>
             <div id="emoji-dropdown" class="emoji-dropdown" style="display:none"></div>
@@ -583,7 +635,7 @@
               </svg>
             </button>
           </div>
-          <input type="file" id="file-input" style="display:none">
+          <input type="file" id="file-input" multiple style="display:none">
         </div>
       </main>
 
@@ -894,6 +946,7 @@
         <button id="thread-panel-pip" class="icon-btn small" data-i18n-title="thread_runtime.pop_out" title="Pop out thread (PiP)" aria-pressed="false">⧉</button>
         <button id="thread-panel-close" class="icon-btn small" data-i18n-title="modals.common.close" title="Close">&times;</button>
       </div>
+      <div class="thread-forum-bar" id="thread-forum-bar" style="display:none"></div>
       <div class="thread-parent-meta" id="thread-parent-meta">
         <div class="thread-parent-avatar-wrap" id="thread-parent-avatar-wrap"></div>
         <span class="thread-parent-name" id="thread-parent-name" data-i18n="thread_runtime.starter">Thread starter</span>
@@ -1087,6 +1140,34 @@
       <div class="modal-actions">
         <button class="btn-sm" id="cancel-server-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent" id="save-server-btn" data-i18n="modals.add_server.add_btn">Add Server</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timezone / Time Format Modal -->
+  <div class="modal-overlay" id="timezone-modal" style="display:none">
+    <div class="modal">
+      <h3>🌎 <span data-i18n="modals.timezone.title">Time &amp; Timezone</span></h3>
+      <p class="modal-desc" data-i18n="modals.timezone.desc">Set your preferred timezone and formatting here. These settings will be persisted to your account and will be used across all your devices. Your timezone is never revealed to any user.</p>
+      <div class="form-group">
+        <label data-i18n="modals.timezone.zone_label">Timezone</label>
+        <select id="timezone-select" class="form-select" style="width:100%"></select>
+      </div>
+      <div class="form-group">
+        <label data-i18n="modals.timezone.format_label">Time format</label>
+        <select id="timeformat-select" class="form-select" style="width:100%">
+          <option value="12" data-i18n="modals.timezone.format_12">12-hour</option>
+          <option value="24" data-i18n="modals.timezone.format_24">24-hour (military)</option>
+        </select>
+      </div>
+      <div class="tz-preview" style="margin:4px 0 12px;padding:12px;border:1px solid var(--border, rgba(255,255,255,0.08));border-radius:8px;text-align:center">
+        <small class="muted-text" style="display:block;opacity:0.6;margin-bottom:4px" data-i18n="modals.timezone.preview_label">This is how times will look</small>
+        <div id="timezone-preview" style="font-size:1.05rem;font-weight:600">—</div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-sm danger" id="timezone-erase-btn" style="display:none" data-i18n="modals.timezone.erase">Erase</button>
+        <button type="button" class="btn-sm" id="timezone-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>
+        <button type="button" class="btn-sm btn-accent" id="timezone-confirm-btn" data-i18n="modals.timezone.confirm">Confirm</button>
       </div>
     </div>
   </div>
@@ -1315,14 +1396,16 @@
                past it, which is how Activity ended up effectively hidden. -->
           <div class="settings-nav-user">
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_appearance">Appearance</div>
-          <div class="settings-nav-item active" data-target="section-language">🗣️ <span data-i18n="settings.nav.language">Language</span></div>
-          <div class="settings-nav-item" data-target="section-density">📐 <span data-i18n="settings.nav.layout">Layout &amp; Density</span></div>
-          <div class="settings-nav-item" data-target="section-font-size">🔤 <span data-i18n="settings.nav.text_size">Text Size</span></div>
-          <div class="settings-nav-item" data-target="section-emoji-size">😀 <span data-i18n="settings.nav.emoji_size">Emoji Size</span></div>
+          <div class="settings-nav-item active" data-target="section-language">🗣️ <span data-i18n="settings.nav.localization">Localization</span></div>
+          <div class="settings-nav-item" data-target="section-layout">📐 <span data-i18n="settings.nav.layout">Layout &amp; Density</span></div>
+          <div class="settings-nav-item" data-target="section-zoom">🔍 <span data-i18n="settings.nav.zoom">Zoom</span></div>
+          <div class="settings-nav-item" data-target="section-reaction-size">😀 <span data-i18n="settings.nav.reaction_size">Reaction Size</span></div>
           <div class="settings-nav-item" data-target="section-role-display">🎨 <span data-i18n="settings.nav.role_display">Role Display</span></div>
           <div class="settings-nav-item" data-target="section-toolbar-icons">🧰 <span data-i18n="settings.nav.toolbar_icons">Toolbar Icons</span></div>
           <div class="settings-nav-item" data-target="section-image-display">🖼️ <span data-i18n="settings.nav.image_display">Image Display</span></div>
           <div class="settings-nav-item" data-target="section-embed-size">📺 <span data-i18n="settings.nav.embeds_media">Embeds &amp; Media</span></div>
+          <div class="settings-nav-item" data-target="section-banner-display">🏞️ <span data-i18n="settings.nav.banner_display">Banner Display</span></div>
+          <div class="settings-nav-item" data-target="section-toggle-style">🎚️ <span data-i18n="settings.nav.toggle_style">Toggle Style</span></div>
           <div class="settings-nav-item" data-target="section-statusbar">📊 <span data-i18n="settings.nav.status_bar">Status Bar</span></div>
 
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_chat">Chat</div>
@@ -1352,6 +1435,7 @@
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_server">Server</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-update" style="display:none">⬆️ <span data-i18n="settings.nav.server_updates">Server Updates</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-custom-tos" style="display:none">⚖️ <span data-i18n="settings.nav.tos">Terms of Service</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 <span data-i18n="settings.nav.tunnel">Tunnel</span></div>
 
@@ -1385,9 +1469,9 @@
         </nav>
         <div class="settings-body" id="settings-body-user">
 
-      <!-- Language Section -->
+      <!-- Localization Section -->
       <div class="settings-section" id="section-language">
-        <h5 class="settings-section-title">🗣️ <span data-i18n="settings.language_section.title">Language</span></h5>
+        <h5 class="settings-section-title">🗣️ <span data-i18n="settings.localization_section.title">Localization</span></h5>
         <label class="select-row">
           <span data-i18n="settings.language_section.label">Language</span>
           <select id="language-select" class="settings-select">
@@ -1403,98 +1487,66 @@
           </select>
         </label>
         <small class="settings-hint" data-i18n="settings.language_section.hint">Changes apply immediately</small>
-      </div>
 
-      <div class="settings-section" id="section-density">
-        <h5 class="settings-section-title">📐 <span data-i18n="settings.layout_density.title">Layout Density</span></h5>
-        <div class="density-picker" id="density-picker">
-          <button type="button" class="density-btn" data-density="compact" data-i18n-title="settings.layout_density.compact_hint" title="Compact — tighter spacing, smaller avatars">
-            <span class="density-icon">▪️</span>
-            <span class="density-label" data-i18n="settings.layout_density.compact">Compact</span>
-          </button>
-          <button type="button" class="density-btn active" data-density="cozy" data-i18n-title="settings.layout_density.cozy_hint" title="Cozy — default balanced layout">
-            <span class="density-icon">◾</span>
-            <span class="density-label" data-i18n="settings.layout_density.cozy">Cozy</span>
-          </button>
-          <button type="button" class="density-btn" data-density="spacious" data-i18n-title="settings.layout_density.spacious_hint" title="Spacious — more breathing room">
-            <span class="density-icon">⬛</span>
-            <span class="density-label" data-i18n="settings.layout_density.spacious">Spacious</span>
-          </button>
+        <div class="settings-subsection" id="timezone-subsection">
+          <small class="settings-group-label">🌎 <span data-i18n="settings.timezone_section.title">Timezone</span></small>
+          <div class="select-row">
+            <span id="timezone-current-summary" data-i18n="settings.timezone_section.not_set">Using this device's timezone</span>
+            <button type="button" class="btn-sm" id="configure-time-btn" data-i18n="settings.timezone_section.configure">Configure Time</button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.timezone_section.hint">Saved to your account and used on every device</small>
         </div>
       </div>
 
-      <!-- Animated profile pictures (viewer side). The pfp owner can already turn
-           their own animation off for everyone; this is the other half, so a
-           viewer who doesn't want moving avatars can stop seeing them. -->
-      <div class="settings-section" id="section-animate-pfp" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">✨ <span data-i18n="settings.animate_pfp.title">Animated Profile Pictures</span></h5>
-        <div class="density-picker" id="animate-pfp-picker">
-          <button type="button" class="density-btn" data-animpfp="always" data-i18n-title="settings.animate_pfp.always_hint" title="Always: animated avatars loop constantly">
-            <span class="density-icon">▶️</span>
-            <span class="density-label" data-i18n="settings.animate_pfp.always">Always</span>
-          </button>
-          <button type="button" class="density-btn active" data-animpfp="hover" data-i18n-title="settings.animate_pfp.hover_hint" title="On hover: play while you hover a message or open a profile">
-            <span class="density-icon">🖱️</span>
-            <span class="density-label" data-i18n="settings.animate_pfp.hover">On hover</span>
-          </button>
-          <button type="button" class="density-btn" data-animpfp="never" data-i18n-title="settings.animate_pfp.never_hint" title="Never: show the first frame only">
-            <span class="density-icon">⏸️</span>
-            <span class="density-label" data-i18n="settings.animate_pfp.never">Never</span>
-          </button>
+      <div class="settings-section" id="section-layout">
+        <h5 class="settings-section-title">📐 <span data-i18n="settings.layout.title">Layout</span></h5>
+        <div class="settings-subsection" id="layout-density-subsection">
+          <small class="settings-group-label">📏 <span data-i18n="settings.layout.density.title">Layout Density</span></small>
+          <div class="density-picker" id="density-picker">
+            <button type="button" class="density-btn" data-density="compact" data-i18n-title="settings.layout.density.compact_hint" title="Compact — tighter spacing, smaller avatars">
+              <span class="density-icon">▪️</span>
+              <span class="density-label" data-i18n="settings.layout.density.compact">Compact</span>
+            </button>
+            <button type="button" class="density-btn active" data-density="cozy" data-i18n-title="settings.layout.density.cozy_hint" title="Cozy — default balanced layout">
+              <span class="density-icon">◾</span>
+              <span class="density-label" data-i18n="settings.layout.density.cozy">Cozy</span>
+            </button>
+            <button type="button" class="density-btn" data-density="spacious" data-i18n-title="settings.layout.density.spacious_hint" title="Spacious — more breathing room">
+              <span class="density-icon">⬛</span>
+              <span class="density-label" data-i18n="settings.layout.density.spacious">Spacious</span>
+            </button>
+          </div>
         </div>
-        <small class="settings-hint" data-i18n="settings.animate_pfp.hint">Applies to everyone's avatars and borders as you see them. Anyone who has turned animation off for their own profile stays still regardless.</small>
-      </div>
-
-      <!-- Animated images in chat (#5526). Separate from the avatar setting above:
-           a GIF someone posted is content, an avatar is ambient, so this one
-           stays at Always unless the viewer asks otherwise. -->
-      <div class="settings-section" id="section-animate-chat" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎞️ <span data-i18n="settings.animate_chat.title">Animated Images in Chat</span></h5>
-        <div class="density-picker" id="animate-chat-picker">
-          <button type="button" class="density-btn active" data-animchat="always" data-i18n-title="settings.animate_chat.always_hint" title="Always: GIFs loop constantly">
-            <span class="density-icon">▶️</span>
-            <span class="density-label" data-i18n="settings.animate_chat.always">Always</span>
-          </button>
-          <button type="button" class="density-btn" data-animchat="hover" data-i18n-title="settings.animate_chat.hover_hint" title="On hover: play only while you point at the image">
-            <span class="density-icon">🖱️</span>
-            <span class="density-label" data-i18n="settings.animate_chat.hover">On hover</span>
-          </button>
-          <button type="button" class="density-btn" data-animchat="never" data-i18n-title="settings.animate_chat.never_hint" title="Never: show the first frame only">
-            <span class="density-icon">⏸️</span>
-            <span class="density-label" data-i18n="settings.animate_chat.never">Never</span>
-          </button>
+        <div class="settings-subsection" id="channel-scrolling-subsection">
+          <small class="settings-group-label">📜 <span data-i18n="settings.layout.channel_scrolling.title">Channel Scrolling</span></small>
+          <div class="channel-scroll-picker" id="channel-scroll-picker">
+            <button type="button" class="density-btn active" data-channel-scroll="separate" data-i18n-title="settings.layout.channel_scrolling.separate_hint" title="Separate — separate scrollbars for channels and DMs">
+              <span class="density-icon">📜📜</span>
+              <span class="density-label" data-i18n="settings.layout.channel_scrolling.separate">Separate</span>
+            </button>
+            <button type="button" class="density-btn" data-channel-scroll="combined" data-i18n-title="settings.layout.channel_scrolling.combined_hint" title="Combined — one scrollbar for both channels and DMs">
+              <span class="density-icon">📜</span>
+              <span class="density-label" data-i18n="settings.layout.channel_scrolling.combined">Combined</span>
+            </button>
+          </div>
         </div>
-        <small class="settings-hint" data-i18n="settings.animate_chat.hint">Applies to GIFs and other animated images posted in messages, for you only. Nobody else's view changes.</small>
-      </div>
-
-      <!-- Toggle Style (sliders vs checkboxes) -->
-      <div class="settings-section" id="section-toggle-style" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎚️ <span data-i18n="settings.toggle_style.title">Toggle Style</span></h5>
-        <div class="font-size-picker" id="toggle-style-picker">
-          <button type="button" class="density-btn active" data-togglestyle="switch" data-i18n-title="settings.toggle_style.switch_hint" title="Sliding switches (default)">
-            <span class="density-icon">🎚️</span>
-            <span class="density-label" data-i18n="settings.toggle_style.switch">Sliders</span>
-          </button>
-          <button type="button" class="density-btn" data-togglestyle="box" data-i18n-title="settings.toggle_style.box_hint" title="Classic square checkboxes">
-            <span class="density-icon">☑️</span>
-            <span class="density-label" data-i18n="settings.toggle_style.box">Boxes</span>
-          </button>
+        <div class="settings-subsection" id="composer-buttons-subsection">
+          <small class="settings-group-label">✉️ <span data-i18n="settings.layout.composer.title">Message Box</span></small>
+          <label class="toggle-row">
+            <span data-i18n="settings.layout.composer.hide_send">Hide the Send button</span>
+            <input type="checkbox" id="hide-send-btn">
+          </label>
+          <small class="settings-hint" style="display:block" data-i18n="settings.layout.composer.hide_send_hint">Enter still sends. Frees the end of the message box if you never click the button.</small>
+          <label class="toggle-row">
+            <span data-i18n="settings.layout.composer.compact">Fold the buttons into one + button</span>
+            <input type="checkbox" id="compact-composer">
+          </label>
+          <small class="settings-hint" style="display:block" data-i18n="settings.layout.composer.compact_hint">Upload, emoji, GIF and the rest sit behind a single + at the start of the message box, so the box gets the room.</small>
         </div>
-        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.toggle_style.hint">Applies to on/off settings. Lists you tick items in, like permissions and channel pickers, always stay as boxes.</small>
-      </div>
-
-      <!-- Soundboard Sidebar Setting -->
-      <div class="settings-section" id="section-soundboard-mode" style="border-top: 1px solid var(--border-light); padding-top: 14px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎵 <span data-i18n="settings.soundboard_section.title">Soundboard</span></h5>
-        <label class="checkbox-row" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8125rem">
-          <input type="checkbox" id="soundboard-sidebar-mode-settings" style="cursor:pointer">
-          <span data-i18n="settings.soundboard_section.sidebar_mode">Sidebar mode</span>
-        </label>
-        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.soundboard_section.sidebar_mode_hint">Open the soundboard as a pinned sidebar panel instead of a popup.</small>
       </div>
 
       <!-- Font Size -->
-      <div class="settings-section" id="section-font-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+      <div class="settings-section" id="section-zoom" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🔍 <span data-i18n="settings.zoom.title">Zoom</span></h5>
         <div class="zoom-control" id="zoom-control">
           <button type="button" class="zoom-step" id="zoom-out-btn" title="Zoom out" aria-label="Zoom out" data-i18n-title="settings.zoom.out" data-i18n-aria-label="settings.zoom.out">−</button>
@@ -1506,7 +1558,7 @@
       </div>
 
       <!-- Emoji Reaction Size -->
-      <div class="settings-section" id="section-emoji-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+      <div class="settings-section" id="section-reaction-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">😀 <span data-i18n="settings.reaction_size.title">Reaction Size</span></h5>
         <div class="font-size-picker" id="emoji-size-picker">
           <button type="button" class="density-btn" data-emojisize="small" title="Small reactions" data-i18n-title="settings.reaction_size.small_hint">
@@ -1546,7 +1598,7 @@
 
       <!-- Toolbar Icon Style -->
       <div class="settings-section" id="section-toolbar-icons" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎛️ <span data-i18n="settings.toolbar_icons.title">Toolbar Icons</span></h5>
+        <h5 class="settings-section-title">🧰 <span data-i18n="settings.toolbar_icons.title">Toolbar Icons</span></h5>
         <div class="density-picker" id="toolbar-icon-picker">
           <button type="button" class="density-btn active" data-toolbaricons="mono" title="Use sleek monochrome icons in message toolbars" data-i18n-title="settings.toolbar_icons.monochrome_hint">
             <span class="density-icon" aria-hidden="true">
@@ -1579,21 +1631,69 @@
         <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.toolbar_icons.hint">Applies to message and thread hover action bars.</small>
       </div>
 
-      <!-- Image Display Mode -->
-      <!-- Renamed from the Layout Density section's id, which it duplicated.
-           getElementById always resolved to the first match, so this section
-           had no working nav anchor at all. -->
       <div class="settings-section" id="section-image-display" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🖼️ <span data-i18n="settings.image_display.title">Image Display</span></h5>
-        <div class="density-picker" id="image-mode-picker">
-          <button type="button" class="density-btn active" data-image-mode="thumbnail" data-i18n-title="settings.image_display.thumbnail_hint" title="Thumbnail — small preview, click to enlarge">
-            <span class="density-icon">🔍</span>
-            <span class="density-label" data-i18n="settings.image_display.thumbnail">Thumbnail</span>
-          </button>
-          <button type="button" class="density-btn" data-image-mode="full" data-i18n-title="settings.image_display.full_hint" title="Full — large inline images like Discord">
-            <span class="density-icon">🖼️</span>
-            <span class="density-label" data-i18n="settings.image_display.full">Full</span>
-          </button>
+
+        <!-- Image Display Mode -->
+        <!-- Renamed from the Layout Density section's id, which it duplicated.
+            getElementById always resolved to the first match, so this section
+            had no working nav anchor at all. -->
+        <div class="settings-subsection" id="image-mode-subsection">
+          <small class="settings-group-label">🖼️ <span data-i18n="settings.image_display.image_mode.title">Image Display Mode</span></small>
+          <div class="density-picker" id="image-mode-picker">
+            <button type="button" class="density-btn active" data-image-mode="thumbnail" data-i18n-title="settings.image_display.image_mode.thumbnail_hint" title="Thumbnail — small preview, click to enlarge">
+              <span class="density-icon">🔍</span>
+              <span class="density-label" data-i18n="settings.image_display.image_mode.thumbnail">Thumbnail</span>
+            </button>
+            <button type="button" class="density-btn" data-image-mode="full" data-i18n-title="settings.image_display.image_mode.full_hint" title="Full — large inline images like Discord">
+              <span class="density-icon">🖼️</span>
+              <span class="density-label" data-i18n="settings.image_display.image_mode.full">Full</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Animated profile pictures (viewer side). The pfp owner can already turn
+            their own animation off for everyone; this is the other half, so a
+            viewer who doesn't want moving avatars can stop seeing them. -->
+        <div class="settings-subsection" id="animate-pfp-subsection">
+          <small class="settings-group-label">✨ <span data-i18n="settings.image_display.animate_pfp.title">Animated Profile Pictures</span></small>
+          <div class="density-picker" id="animate-pfp-picker">
+            <button type="button" class="density-btn" data-animpfp="always" data-i18n-title="settings.image_display.animate_pfp.always_hint" title="Always: animated avatars loop constantly">
+              <span class="density-icon">▶️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_pfp.always">Always</span>
+            </button>
+            <button type="button" class="density-btn active" data-animpfp="hover" data-i18n-title="settings.image_display.animate_pfp.hover_hint" title="On hover: play while you hover a message or open a profile">
+              <span class="density-icon">🖱️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_pfp.hover">On hover</span>
+            </button>
+            <button type="button" class="density-btn" data-animpfp="never" data-i18n-title="settings.image_display.animate_pfp.never_hint" title="Never: show the first frame only">
+              <span class="density-icon">⏸️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_pfp.never">Never</span>
+            </button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.image_display.animate_pfp.hint">Applies to everyone's avatars and borders as you see them. Anyone who has turned animation off for their own profile stays still regardless.</small>
+        </div>
+
+        <!-- Animated images in chat (#5526). Separate from the avatar setting above:
+            a GIF someone posted is content, an avatar is ambient, so this one
+            stays at Always unless the viewer asks otherwise. -->
+        <div class="settings-subsection" id="animate-chat-subsection">
+          <small class="settings-group-label">🎞️ <span data-i18n="settings.image_display.animate_chat.title">Animated Images in Chat</span></small>
+          <div class="density-picker" id="animate-chat-picker">
+            <button type="button" class="density-btn active" data-animchat="always" data-i18n-title="settings.image_display.animate_chat.always_hint" title="Always: GIFs loop constantly">
+              <span class="density-icon">▶️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_chat.always">Always</span>
+            </button>
+            <button type="button" class="density-btn" data-animchat="hover" data-i18n-title="settings.image_display.animate_chat.hover_hint" title="On hover: play only while you point at the image">
+              <span class="density-icon">🖱️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_chat.hover">On hover</span>
+            </button>
+            <button type="button" class="density-btn" data-animchat="never" data-i18n-title="settings.image_display.animate_chat.never_hint" title="Never: show the first frame only">
+              <span class="density-icon">⏸️</span>
+              <span class="density-label" data-i18n="settings.image_display.animate_chat.never">Never</span>
+            </button>
+          </div>
+          <small class="settings-hint" data-i18n="settings.image_display.animate_chat.hint">Applies to GIFs and other animated images posted in messages, for you only. Nobody else's view changes.</small>
         </div>
       </div>
 
@@ -1645,6 +1745,32 @@
         <small class="settings-hint" data-i18n="settings.banner_display.hint">How the banner interacts with the channel header area. These settings are per-device.</small>
       </div>
 
+      <!-- Toggle Style (sliders vs checkboxes) -->
+      <div class="settings-section" id="section-toggle-style" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🎚️ <span data-i18n="settings.toggle_style.title">Toggle Style</span></h5>
+        <div class="font-size-picker" id="toggle-style-picker">
+          <button type="button" class="density-btn active" data-togglestyle="switch" data-i18n-title="settings.toggle_style.switch_hint" title="Sliding switches (default)">
+            <span class="density-icon">🎚️</span>
+            <span class="density-label" data-i18n="settings.toggle_style.switch">Sliders</span>
+          </button>
+          <button type="button" class="density-btn" data-togglestyle="box" data-i18n-title="settings.toggle_style.box_hint" title="Classic square checkboxes">
+            <span class="density-icon">☑️</span>
+            <span class="density-label" data-i18n="settings.toggle_style.box">Boxes</span>
+          </button>
+        </div>
+        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.toggle_style.hint">Applies to on/off settings. Lists you tick items in, like permissions and channel pickers, always stay as boxes.</small>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="settings-section" id="section-statusbar" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">📊 <span data-i18n="settings.status_bar_section.title">Status Bar</span></h5>
+        <label class="toggle-row">
+          <span data-i18n="settings.status_bar_section.show">Show Status Bar</span>
+          <input type="checkbox" id="show-status-bar">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.status_bar_section.hint">Show the status bar at the bottom of the screen with server, ping, channel, and online info.</small>
+      </div>
+
       <!-- Chat Behavior -->
       <div class="settings-section" id="section-chat-behavior" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">💬 <span data-i18n="settings.chat_behavior.title">Chat</span></h5>
@@ -1665,73 +1791,14 @@
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.hover_profile_card_hint">Hovering over a name or avatar shows a quick profile preview. Clicking opens the full card either way.</small>
       </div>
 
-      <!-- Status Bar -->
-      <div class="settings-section" id="section-statusbar" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">📊 <span data-i18n="settings.status_bar_section.title">Status Bar</span></h5>
-        <label class="toggle-row">
-          <span data-i18n="settings.status_bar_section.show">Show Status Bar</span>
-          <input type="checkbox" id="show-status-bar">
+      <!-- Soundboard Sidebar Setting -->
+      <div class="settings-section" id="section-soundboard-mode" style="border-top: 1px solid var(--border-light); padding-top: 14px; margin-top: 8px;">
+        <h5 class="settings-section-title">🎛️ <span data-i18n="settings.soundboard_section.title">Soundboard</span></h5>
+        <label class="checkbox-row" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8125rem">
+          <input type="checkbox" id="soundboard-sidebar-mode-settings" style="cursor:pointer">
+          <span data-i18n="settings.soundboard_section.sidebar_mode">Sidebar mode</span>
         </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.status_bar_section.hint">Show the status bar at the bottom of the screen with server, ping, channel, and online info.</small>
-      </div>
-
-      <!-- Game Score Badges -->
-      <div class="settings-section" id="section-score-badges" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🚢 <span data-i18n="settings.score_badges.title">Score Badges</span></h5>
-        <label class="toggle-row">
-          <span data-i18n="settings.score_badges.hide_others">Hide other players' score badges</span>
-          <input type="checkbox" id="hide-other-scores">
-        </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_others_hint">Don't show 🚢 badges next to other users in the member list.</small>
-        <label class="toggle-row">
-          <span data-i18n="settings.score_badges.hide_own">Hide my score badge from this server</span>
-          <input type="checkbox" id="hide-own-score">
-        </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_own_hint">Other users (and you) won't see your 🚢 badge anywhere on this server, including the leaderboard.</small>
-      </div>
-
-      <!-- Activity / Rich Presence -->
-      <div class="settings-section" id="section-activity" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🎮 <span data-i18n="settings.activity_section.title">Activity</span></h5>
-        <label class="toggle-row">
-          <span data-i18n="settings.activity_section.share">Share my activity</span>
-          <input type="checkbox" id="share-activity">
-        </label>
-        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.activity_section.share_hint">Others can see what you're playing or listening to. Games and music only appear once you link an account below. Nothing is ever shared while your status is Invisible.</small>
-
-        <div id="activity-suboptions" style="display:none;padding-left:10px;border-left:2px solid var(--border-light);margin-bottom:10px">
-          <label class="toggle-row">
-            <span data-i18n="settings.activity_section.show_games">Show games</span>
-            <input type="checkbox" id="share-game-activity">
-          </label>
-          <label class="toggle-row">
-            <span data-i18n="settings.activity_section.show_music">Show music</span>
-            <input type="checkbox" id="share-music-activity">
-          </label>
-        </div>
-
-        <h5 class="settings-section-title" style="margin-top:12px">🔗 <span data-i18n="settings.activity_section.connections">Connections</span></h5>
-        <div id="connections-list">
-          <small class="settings-hint" data-i18n="modals.common.loading">Loading…</small>
-        </div>
-        <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.activity_section.connections_hint">Haven's own music player needs no connection — it shares automatically while you're listening in a voice channel.</small>
-
-        <!-- Listening presence (any music player) -->
-        <div id="listening-connection" style="margin-top:14px">
-          <h5 class="settings-section-title">🎶 <span data-i18n="settings.listening.title">Listening Webhook</span></h5>
-          <small class="settings-hint" style="display:block;margin-bottom:8px" data-i18n-html="settings.listening.note">Please refer to the <a href="https://github.com/ancsemi/Haven/blob/main/docs/listening-api.md" target="_blank" rel="noopener noreferrer">Listening API</a>.</small>
-          <label class="toggle-row">
-            <span data-i18n="settings.listening.toggle">Show my music on Haven</span>
-            <input type="checkbox" id="listening-enabled">
-          </label>
-          <div id="listening-url-row" hidden style="margin-top:8px">
-            <label class="connection-field">
-              <span data-i18n="settings.listening.url_label">Your webhook URL</span>
-              <input type="text" id="listening-url" readonly autocomplete="off" spellcheck="false">
-            </label>
-            <small class="settings-hint" style="display:block;margin-top:4px" data-i18n="settings.listening.url_hint">Point your player's plugin or script at this URL. Keep it secret; anyone with it can post to your profile.</small>
-          </div>
-        </div>
+        <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.soundboard_section.sidebar_mode_hint">Open the soundboard as a pinned sidebar panel instead of a popup.</small>
       </div>
 
       <!-- Sounds Section -->
@@ -1753,6 +1820,11 @@
             <input type="checkbox" id="notif-mentions-enabled" checked>
           </label>
           <label class="toggle-row">
+            <span data-i18n="settings.sounds_section.role_mentions">@Role mentions</span>
+            <input type="checkbox" id="notif-role-mentions-enabled" checked>
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.role_mentions_hint">Pings for roles you hold, like @Moderators. Off means they count as ordinary messages.</small>
+          <label class="toggle-row">
             <span data-i18n="settings.sounds_section.replies">Replies</span>
             <input type="checkbox" id="notif-replies-enabled" checked>
           </label>
@@ -1768,7 +1840,13 @@
               <option value="60000" data-i18n="settings.sounds_section.popup_1m">At most 1 per minute</option>
               <option value="300000" data-i18n="settings.sounds_section.popup_5m">At most 1 every 5 min</option>
               <option value="900000" data-i18n="settings.sounds_section.popup_15m">At most 1 every 15 min</option>
+              <option value="-1" data-i18n="settings.sounds_section.popup_never">Never (sounds and badges still work)</option>
+              <option value="custom" data-i18n="settings.sounds_section.popup_custom">Custom…</option>
             </select>
+          </label>
+          <label class="select-row" id="notif-popup-custom-row" style="display:none">
+            <span data-i18n="settings.sounds_section.popup_custom_minutes">Minutes between pop-ups</span>
+            <input type="number" id="notif-popup-custom-minutes" min="1" max="1440" step="1" class="settings-number-input" style="width:5.5rem">
           </label>
           <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.popup_limit_hint">Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected.</small>
           <label class="toggle-row">
@@ -1904,6 +1982,70 @@
           <small class="settings-hint" id="push-notif-status" data-i18n="settings.push_section.checking">Checking...</small>
           <small class="settings-hint" style="opacity:0.5" data-i18n="settings.push_section.hint">Receive notifications even when Haven is closed</small>
         </div>
+      </div>
+
+      <!-- Activity / Rich Presence -->
+      <div class="settings-section" id="section-activity" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🎮 <span data-i18n="settings.activity_section.title">Activity</span></h5>
+        <label class="toggle-row">
+          <span data-i18n="settings.activity_section.share">Share my activity</span>
+          <input type="checkbox" id="share-activity">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.activity_section.share_hint">Others can see what you're playing or listening to. Games and music only appear once you link an account below. Nothing is ever shared while your status is Invisible.</small>
+
+        <div id="activity-suboptions" style="display:none;padding-left:10px;border-left:2px solid var(--border-light);margin-bottom:10px">
+          <label class="toggle-row">
+            <span data-i18n="settings.activity_section.show_games">Show games</span>
+            <input type="checkbox" id="share-game-activity">
+          </label>
+          <label class="toggle-row">
+            <span data-i18n="settings.activity_section.show_music">Show music</span>
+            <input type="checkbox" id="share-music-activity">
+          </label>
+        </div>
+
+        <h5 class="settings-section-title" style="margin-top:12px">🔗 <span data-i18n="settings.activity_section.connections">Connections</span></h5>
+        <div id="connections-list">
+          <small class="settings-hint" data-i18n="modals.common.loading">Loading…</small>
+        </div>
+        <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.activity_section.connections_hint">Haven's own music player needs no connection — it shares automatically while you're listening in a voice channel.</small>
+
+        <!-- Listening presence (any music player) -->
+        <div id="listening-connection" style="margin-top:14px">
+          <h5 class="settings-section-title">🎶 <span data-i18n="settings.listening.title">Listening Webhook</span></h5>
+          <small class="settings-hint" style="display:block;margin-bottom:8px" data-i18n-html="settings.listening.note">Please refer to the <a href="https://github.com/ancsemi/Haven/blob/main/docs/listening-api.md" target="_blank" rel="noopener noreferrer">Listening API</a>.</small>
+          <label class="toggle-row">
+            <span data-i18n="settings.listening.toggle">Show my music on Haven</span>
+            <input type="checkbox" id="listening-enabled">
+          </label>
+          <div id="listening-url-row" hidden style="margin-top:8px">
+            <label class="connection-field">
+              <span data-i18n="settings.listening.url_label">Your webhook URL</span>
+              <input type="text" id="listening-url" readonly autocomplete="off" spellcheck="false">
+            </label>
+            <small class="settings-hint" style="display:block;margin-top:4px" data-i18n="settings.listening.url_hint">Point your player's plugin or script at this URL. Keep it secret; anyone with it can post to your profile.</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Score Badges -->
+      <div class="settings-section" id="section-score-badges" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🚢 <span data-i18n="settings.score_badges.title">Score Badges</span></h5>
+        <label class="toggle-row">
+          <span data-i18n="settings.score_badges.hide_others">Hide other players' score badges</span>
+          <input type="checkbox" id="hide-other-scores">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_others_hint">Don't show 🚢 badges next to other users in the member list.</small>
+        <label class="toggle-row">
+          <span data-i18n="settings.score_badges.hide_own">Hide my score badge from this server</span>
+          <input type="checkbox" id="hide-own-score">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.score_badges.hide_own_hint">Other users (and you) won't see your 🚢 badge anywhere on this server, including the leaderboard.</small>
+        <label class="toggle-row">
+          <span data-i18n="settings.nsfw.hide">Hide NSFW channels</span>
+          <input type="checkbox" id="hide-nsfw-channels">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.nsfw.hide_hint">Channels an admin marked 🔞 leave your sidebar until you turn this off. Handy on a phone in public.</small>
       </div>
 
       <!-- Password Change Section -->
@@ -2179,6 +2321,14 @@
           <p class="settings-hint" data-i18n="settings.debug_section.screen_relay_profile_hint">Turn this on if your screen share stutters and drifts out of sync for viewers, but only when the call goes through a TURN server and never on your local network. It lowers the video bitrate back to the pre-3.18.1 values and lets the encoder drop frames when the connection is struggling, instead of holding the framerate and letting the backlog grow. Picture quality will be lower. Only the person sharing needs it on. (#5426)</p>
         </div>
 
+        <div class="settings-group">
+          <label class="toggle-row">
+            <input type="checkbox" id="pref-debug-screen-relay-auto" checked>
+            <span class="toggle-label" data-i18n="settings.debug_section.screen_relay_auto">Soften screen share automatically for relayed viewers</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.debug_section.screen_relay_auto_hint">On by default. When a viewer can only be reached through a TURN relay, your share to that one viewer uses the gentler profile above, while viewers on a direct connection keep the full-quality one. Turn this off if you would rather the toggle above be the only thing that decides. (#5426)</p>
+        </div>
+
         <div class="desktop-pref-row">
           <label class="toggle-row">
             <input type="checkbox" id="pref-debug-voice-glare-ice-fix">
@@ -2352,7 +2502,61 @@
           </div>
         </div>
 
+        <!-- Custom Terms of Service (Admin only) -->
+        <div class="admin-settings" id="section-custom-tos" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">⚖️ <span data-i18n="settings.admin.custom_tos_title">Custom Terms of Service</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.custom_tos_hint">Add custom terms that appear before the default ToS on the login page. Supports plain text. Leave empty to show only the default Haven ToS.</small>
+          <textarea id="custom-tos-input" class="settings-textarea" rows="6" maxlength="50000" data-i18n-placeholder="settings.admin.custom_tos_placeholder" placeholder="Enter your custom terms of service..." style="margin-top:8px;width:100%;resize:vertical;min-height:80px;font-size:0.75rem;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-family:inherit;"></textarea>
+        </div>
+        
+        <!-- Voice and Connectivity -->
+        <div class="admin-settings" id="section-connectivity" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">📡 <span data-i18n="settings.admin.connectivity_title">Voice &amp; Connectivity</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.connectivity_hint">STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on "ICE: Connecting...", set your own servers here.</small>
+          <label class="select-row" style="margin-top:8px; align-items:flex-start">
+            <span data-i18n="settings.admin.stun_urls">STUN servers</span>
+            <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:monospace; font-size:0.75rem"></textarea>
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.stun_urls_hint">One stun: URI per line (or comma separated). Blank = built-in defaults.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.turn_url">TURN server (optional)</span>
+            <input type="text" id="turn-url-input" class="settings-text-input" placeholder="turn:turn.example.com:3478" style="flex:1">
+          </label>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.turn_username">TURN username</span>
+            <input type="text" id="turn-username-input" class="settings-text-input" autocomplete="off" style="flex:1">
+          </label>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.turn_password">TURN password</span>
+            <input type="password" id="turn-password-input" class="settings-text-input" autocomplete="new-password" style="flex:1">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.turn_hint">A TURN server relays traffic for users behind strict NATs that STUN alone can't connect. Only needed if some users still can't connect after setting STUN. Username/password apply to static-credential TURN servers.</small>
+          <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border)">
+            <button class="btn-sm btn-accent" id="test-connectivity-btn">🩺 <span data-i18n="settings.admin.test_connectivity_btn">Test voice connectivity</span></button>
+            <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.test_connectivity_hint">Checks the servers above the same way a call does, and says in plain English what works and what doesn't. Save your changes first.</small>
+            <div id="connectivity-test-result" style="display:none;margin-top:10px"></div>
+          </div>
+        </div>
+
+        <!-- Tunnel settings (Admin only) -->
+        <div class="admin-settings" id="section-tunnel" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🧭 <span data-i18n="settings.admin.tunnel_title">Tunnel</span></h5>
+          <label class="select-row">
+            <span data-i18n="settings.admin.tunnel_provider">Provider</span>
+            <select id="tunnel-provider-select">
+              <option value="localtunnel">LocalTunnel</option>
+              <option value="cloudflared">Cloudflared</option>
+            </select>
+          </label>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+            <button class="btn-sm btn-accent" id="tunnel-toggle-btn" data-i18n="settings.admin.tunnel_start_btn">Start Tunnel</button>
+            <span id="tunnel-status-display" class="muted-text" data-i18n="settings.admin.tunnel_inactive" style="font-size:0.6875rem;">Inactive</span>
+          </div>
+        </div>
+
+        <!-- show members -->
         <div class="admin-settings" id="section-members" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">👥 <span data-i18n="settings.admin.members_title">Members</span></h5>
           <label class="select-row">
             <span data-i18n="settings.admin.show_members">Show Members</span>
             <select id="member-visibility-select">
@@ -2373,11 +2577,58 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.update_banner_hint">When enabled, the "update available" banner is only shown to admins</small>
           <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.hide_disabled_badges_label">Hide the crossed-out icons in the channel list</span>
+            <input type="checkbox" id="hide-disabled-badges">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.hide_disabled_badges_hint">Channels with screen share or music turned off show small crossed-out icons next to their name. Turn this on to hide those icons for everyone.</small>
+          <label class="toggle-row" style="margin-top:8px">
             <span data-i18n="settings.admin.admin_pw_reset_label">Allow admin password reset</span>
             <input type="checkbox" id="admin-password-reset-enabled">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.admin_pw_reset_hint">⚠️ When enabled, admins can reset any user's password to a one-time temp value. The user must change it on next login. Resetting a password also wipes that user's E2E DM history (their wrap key derives from the password). The fact that this is enabled is exposed via /api/public-config so users can see whether admins on this server have this power.</small>
         </div>
+
+        <!-- Role Management (Admin only) -->
+        <div class="admin-settings" id="section-roles" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
+          <div style="margin-top:8px;display:flex;gap:6px">
+            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
+            <button class="btn-sm" id="post-role-menu-btn" data-i18n-title="settings.admin.role_menu.hint" title="Post a message people react to, or click, to give themselves a role">🎭 <span data-i18n="settings.admin.role_menu.post">Post a role menu</span></button>
+            <button class="btn-sm" id="reset-roles-btn" data-i18n-title="settings.admin.reset_roles_title" title="Reset all roles to deployment defaults">🔄 <span data-i18n="settings.admin.reset_roles_btn">Reset to Default</span></button>
+          </div>
+          <div class="settings-group" style="margin-top:12px">
+            <small class="settings-group-label" data-i18n="settings.admin.role_icon_visibility">Role Icon Visibility</small>
+            <label class="toggle-row">
+              <span data-i18n="settings.admin.role_icon_sidebar">Show role icons in sidebar</span>
+              <input type="checkbox" id="role-icon-sidebar" checked>
+            </label>
+            <label class="toggle-row">
+              <span data-i18n="settings.admin.role_icon_chat">Show role icons in chat</span>
+              <input type="checkbox" id="role-icon-chat">
+            </label>
+            <label class="toggle-row">
+              <span data-i18n="settings.admin.role_icon_after_name">Show role icons after username</span>
+              <input type="checkbox" id="role-icon-after-name">
+            </label>
+            <small class="settings-hint" data-i18n="settings.admin.role_icon_hint">Controls where role icons appear. "After username" moves icons to the right side of the name instead of the left.</small>
+          </div>
+          <div class="settings-group" style="margin-top:12px">
+            <small class="settings-group-label" data-i18n="settings.admin.channel_creator_role_group">Channel Creator Role</small>
+            <label class="select-row">
+              <span data-i18n="settings.admin.channel_creator_role_label">Role given to a channel's creator</span>
+              <select id="channel-creator-role-select">
+                <option value="default" data-i18n="settings.admin.channel_creator_role_default">Default (highest channel role)</option>
+                <option value="none" data-i18n="settings.admin.channel_creator_role_none">None</option>
+              </select>
+            </label>
+            <small class="settings-hint" data-i18n="settings.admin.channel_creator_role_hint">When a non-admin who can create channels makes one, they are given this role inside that channel so they can manage it. Admins are never affected.</small>
+          </div>
+          <div id="roles-list-preview" style="margin-top:8px;">
+          </div>
+        </div>
+
+        <!-- Moderation -->
         <div class="admin-settings" id="section-moderation" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.moderation_title">Moderation</span></h5>
 
@@ -2394,6 +2645,7 @@
           <div id="idle-online-list" class="whitelist-list" style="margin-top:8px"></div>
         </div>
 
+        <!-- Security -->
         <div class="admin-settings" id="section-security" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔒 <span data-i18n="settings.admin.security_title">Security</span></h5>
 
@@ -2472,6 +2724,8 @@
             <input type="checkbox" id="fcm-enabled">
           </label>
         </div>
+
+        <!-- Auto-mod -->
         <div class="admin-settings" id="section-automod" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.automod_title">Auto-Mod</span></h5>
           <small class="settings-hint" style="display:block" data-i18n="settings.admin.automod_desc">Checks the links in messages, edits, DMs, profiles and channel topics against a domain policy you control. Blocked content is rejected before it is saved, so it never reaches anyone else. This matters more than it sounds: Haven renders linked images and link previews directly from the other site, so a hostile link exposes the IP address of everyone who scrolls past it, not just whoever clicks.</small>
@@ -2504,6 +2758,14 @@
               <input type="checkbox" id="automod-include-subdomains" checked>
             </label>
             <div id="automod-domain-list" class="whitelist-list" style="margin-top:8px"></div>
+
+            <small class="settings-group-label" style="margin-top:14px;display:block">🔤 <span data-i18n="settings.admin.automod_words_group">Words</span></small>
+            <small class="settings-hint" style="display:block" data-i18n="settings.admin.automod_words_hint">Groups of words that block a message, each worth a number of strikes towards the escalation below. Whole words only, case does not matter, one word or phrase per line. Staff at or above the skip level are not checked.</small>
+            <div id="automod-word-groups" style="margin-top:6px"></div>
+            <div class="settings-btn-grid" style="margin-top:6px">
+              <button class="btn-sm" id="automod-word-add-group" data-i18n="settings.admin.automod_words_add">+ Add group</button>
+              <button class="btn-sm btn-accent" id="automod-word-save" data-i18n="settings.admin.automod_words_save">Save words</button>
+            </div>
 
             <small class="settings-group-label" style="margin-top:14px;display:block">⚙️ <span data-i18n="settings.admin.automod_rules_group">Rules</span></small>
             <label class="select-row" style="margin-top:6px">
@@ -2545,6 +2807,8 @@
             <div id="automod-log-list" class="whitelist-list" style="margin-top:8px"></div>
           </div>
         </div>
+
+        <!-- Whitelist -->
         <div class="admin-settings" id="section-whitelist" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.whitelist_title">Whitelist</span></h5>
           <label class="toggle-row">
@@ -2610,6 +2874,8 @@
             </div>
           </div>
         </div>
+
+        <!-- invites -->
         <div class="admin-settings" id="section-invite" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle invite-server-config">🌐 <span data-i18n="settings.admin.invite_title">Server Invite Code</span></h5>
           <small class="settings-hint invite-server-config" data-i18n="settings.admin.invite_hint">A single code that adds people to every channel &amp; sub-channel on the server</small>
@@ -2665,6 +2931,7 @@
             <small class="settings-hint" data-i18n="settings.admin.max_invite_uses_hint">The maximum number of uses an invite link can be set to. Admin and manage-server permission ignore this limit. (0 = unlimited)</small>
           </div>
         </div>
+
         <!-- (#5381) Guest mode — password-less drop-in access scoped to a whitelist of channels -->
         <div class="admin-settings" id="section-guests" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle" data-i18n="settings.admin.guests_title">👤 Join as Guest</h5>
@@ -2686,24 +2953,126 @@
             </div>
           </div>
         </div>
-        <div class="admin-settings" id="section-cleanup" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🗑️ <span data-i18n="settings.admin.cleanup_title">Auto-Cleanup</span></h5>
-          <label class="toggle-row">
-            <span data-i18n="settings.admin.cleanup_enabled">Enabled</span>
-            <input type="checkbox" id="cleanup-enabled">
+
+        <!-- emojis -->
+        <div class="admin-settings" id="section-emojis" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">😎 <span data-i18n="settings.admin.emojis_title">Custom Emojis</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.emojis_hint">Upload images for custom server emojis</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-accent" id="open-emoji-manager-btn">⚙️ <span data-i18n="settings.admin.manage_emojis_btn">Manage Emojis</span></button>
+          </div>
+          <small class="settings-group-label" style="margin-top:14px;display:block">🔄 <span data-i18n="settings.admin.emoji_auto_update_group">Built-in emoji updates</span></small>
+          <small class="settings-hint" style="display:block" data-i18n="settings.admin.emoji_auto_update_desc">Allow Haven to check Unicode.org for new emoji standards. This check is only performed at server boot, and only when the current standard file on disk was created over a month ago. If a new standard is available, Haven will automatically download the emoji pack and regenerate all your built-in emojis based on the new standard. This does not affect your custom emojis in any way.</small>
+          <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.emoji_auto_update_disk">When this setting is turned off, Haven will use the latest available standard on disk. If a standard was never downloaded before, Haven will default to Unicode standard 16.0 which is bundled with the server.</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.emoji_auto_update_label">Enable automatic Unicode.org upgrade</span>
+            <input type="checkbox" id="unicode-emoji-auto-update">
           </label>
-          <label class="select-row">
-            <span data-i18n="settings.admin.cleanup_max_age">Max Age (days)</span>
-            <input type="number" id="cleanup-max-age" min="0" max="3650" value="0" class="settings-number-input">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.cleanup_age_hint">Delete messages older than N days (0 = off)</small>
-          <label class="select-row">
-            <span data-i18n="settings.admin.cleanup_max_size">Max DB Size (MB)</span>
-            <input type="number" id="cleanup-max-size" min="0" max="100000" value="0" class="settings-number-input">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.cleanup_size_hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
-          <button class="btn-sm btn-full btn-accent" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 <span data-i18n="settings.admin.cleanup_run_btn">Run Cleanup Now</span></button>
+          <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.emoji_auto_update_ps">PS: This feature has nothing to do with emoji styling. That is entirely dependent on your OS, and rendering will vary from machine to machine. This feature only guarantees you'll have the latest available emojis built into your Haven server.</small>
         </div>
+
+        <!-- stickers -->
+        <div class="admin-settings" id="section-stickers" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🖼️ <span data-i18n="settings.admin.stickers_title">Stickers</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.stickers_hint">Upload sticker images grouped into packs</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-accent" id="open-sticker-manager-btn">⚙️ <span data-i18n="settings.admin.manage_stickers_btn">Manage Stickers</span></button>
+          </div>
+        </div>
+
+        <!-- sounds -->
+        <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🔊 <span data-i18n="settings.admin.sounds_title">Custom Sounds</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.sounds_hint">Upload audio files for custom notification sounds</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-accent" id="open-sound-manager-btn">⚙️ <span data-i18n="settings.admin.manage_sounds_btn">Manage Sounds</span></button>
+          </div>
+        </div>
+
+        <!-- Uploads and limits -->
+        <div class="admin-settings" id="section-uploads" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">📁 <span data-i18n="settings.admin.uploads_title">Uploads &amp; Limits</span></h5>
+          <label class="select-row">
+            <span data-i18n="settings.admin.max_upload">Max Upload Size (MB)</span>
+            <input type="number" id="max-upload-mb" min="1" max="102400" value="25" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload in MB (default 25). No hard cap — limited by your server's available disk space.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_attachments">Max Attachments per Message</span>
+            <input type="number" id="max-attachments" min="1" max="50" value="10" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_attachments_hint">How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_message_chars">Max Message Length (characters)</span>
+            <input type="number" id="max-message-chars" min="200" max="100000" value="2000" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_message_chars_hint">Maximum characters per message, post, or DM (200–100000, default 2000)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_sound">Max Sound File Size (KB)</span>
+            <input type="number" id="max-sound-kb" min="256" max="10240" value="1024" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_sound_hint">Max soundboard upload size (256–10240 KB, default 1024 / 1 MB)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_emoji">Max Emoji File Size (KB)</span>
+            <input type="number" id="max-emoji-kb" min="64" max="1024" value="256" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_emoji_hint">Max custom emoji upload size (64–1024 KB, default 256)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_sticker">Max Sticker File Size (KB)</span>
+            <input type="number" id="max-sticker-kb" min="256" max="10240" value="1024" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_sticker_hint">Max sticker upload size (256–10240 KB, default 1024 / 1 MB). Bump this up to allow larger GIF-style stickers.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_poll_options">Max Poll Options</span>
+            <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_poll_hint">Maximum answer choices per poll (2–25, default 10)</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.session_duration">Login session duration</span>
+            <select id="session-duration-days" class="settings-select">
+              <option value="0" data-i18n="settings.admin.session_duration_never">Never expire (recommended)</option>
+              <option value="1" data-i18n="settings.admin.session_duration_1_day">1 day</option>
+              <option value="7" data-i18n="settings.admin.session_duration_7_days">7 days</option>
+              <option value="30" data-i18n="settings.admin.session_duration_30_days">30 days</option>
+              <option value="90" data-i18n="settings.admin.session_duration_90_days">90 days</option>
+              <option value="365" data-i18n="settings.admin.session_duration_365_days">365 days</option>
+            </select>
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.session_duration_hint">How long a login token stays valid before users must sign in again. "Never expire" keeps users logged in until they hit Logout or change their password. Applies to new logins only; existing tokens keep their original expiry until they expire or rotate.</small>
+        </div>
+
+        <!-- Webhooks / Bots (Admin only) -->
+        <div class="admin-settings" id="section-bots" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🤖 <span data-i18n="settings.admin.bots_title">Webhooks / Bots</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.bots_hint">Create and manage webhook bots that can post messages to channels.</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-bot-editor-btn">⚙️ <span data-i18n="settings.admin.manage_bots_btn">Manage Bots</span></button>
+          </div>
+          <div id="webhooks-list" style="margin-top:8px;">
+            <p class="muted-text" data-i18n="settings.admin.no_bots">No bots configured</p>
+          </div>
+        </div>
+
+        <!-- Ferry: Haven <-> Discord bridge (Admin only) -->
+        <div class="admin-settings" id="section-ferry" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🛶 <span data-i18n="settings.admin.ferry_title">Ferry (Discord bridge)</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.ferry_hint">Relay messages between Haven channels and Discord channels. Needs your own Discord bot, which takes about two minutes to create.</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-ferry-btn">🛶 <span data-i18n="settings.admin.manage_ferry_btn">Set up Ferry</span></button>
+          </div>
+          <p class="muted-text" id="ferry-summary" style="margin-top:8px;font-size:.78rem;" data-i18n="settings.admin.ferry_not_configured">Not configured</p>
+        </div>
+
+        <!-- Discord Import (Admin only) -->
+        <div class="admin-settings" id="section-import" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">📦 <span data-i18n="settings.admin.import_title">Discord Import</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.import_hint">Import channels and messages from a Discord export file</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-import-btn">📦 <span data-i18n="settings.admin.import_btn">Import from Discord</span></button>
+          </div>
+        </div>
+
+        <!-- Backups -->
         <div class="admin-settings" id="section-backup" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">💾 <span data-i18n="settings.admin.backup_title">Server Backup</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.backup_hint">Download a backup of this server, or restore from a previous backup. Useful when you don't have shell access to the host machine.</small>
@@ -2776,194 +3145,31 @@
           </div>
         </div>
 
-        <div class="admin-settings" id="section-uploads" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">📁 <span data-i18n="settings.admin.uploads_title">Uploads &amp; Limits</span></h5>
+        <!-- Cleanup -->
+        <div class="admin-settings" id="section-cleanup" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🗑️ <span data-i18n="settings.admin.cleanup_title">Auto-Cleanup</span></h5>
+          <label class="toggle-row">
+            <span data-i18n="settings.admin.cleanup_enabled">Enabled</span>
+            <input type="checkbox" id="cleanup-enabled">
+          </label>
           <label class="select-row">
-            <span data-i18n="settings.admin.max_upload">Max Upload Size (MB)</span>
-            <input type="number" id="max-upload-mb" min="1" max="102400" value="25" class="settings-number-input">
+            <span data-i18n="settings.admin.cleanup_max_age">Max Age (days)</span>
+            <input type="number" id="cleanup-max-age" min="0" max="3650" value="0" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload in MB (default 25). No hard cap — limited by your server's available disk space.</small>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.max_message_chars">Max Message Length (characters)</span>
-            <input type="number" id="max-message-chars" min="200" max="100000" value="2000" class="settings-number-input">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_message_chars_hint">Maximum characters per message, post, or DM (200–100000, default 2000)</small>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.max_sound">Max Sound File Size (KB)</span>
-            <input type="number" id="max-sound-kb" min="256" max="10240" value="1024" class="settings-number-input">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_sound_hint">Max soundboard upload size (256–10240 KB, default 1024 / 1 MB)</small>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.max_emoji">Max Emoji File Size (KB)</span>
-            <input type="number" id="max-emoji-kb" min="64" max="1024" value="256" class="settings-number-input">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_emoji_hint">Max custom emoji upload size (64–1024 KB, default 256)</small>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.max_sticker">Max Sticker File Size (KB)</span>
-            <input type="number" id="max-sticker-kb" min="256" max="10240" value="1024" class="settings-number-input">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_sticker_hint">Max sticker upload size (256–10240 KB, default 1024 / 1 MB). Bump this up to allow larger GIF-style stickers.</small>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.max_poll_options">Max Poll Options</span>
-            <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_poll_hint">Maximum answer choices per poll (2–25, default 10)</small>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.session_duration">Login session duration</span>
-            <select id="session-duration-days" class="settings-select">
-              <option value="0" data-i18n="settings.admin.session_duration_never">Never expire (recommended)</option>
-              <option value="1" data-i18n="settings.admin.session_duration_1_day">1 day</option>
-              <option value="7" data-i18n="settings.admin.session_duration_7_days">7 days</option>
-              <option value="30" data-i18n="settings.admin.session_duration_30_days">30 days</option>
-              <option value="90" data-i18n="settings.admin.session_duration_90_days">90 days</option>
-              <option value="365" data-i18n="settings.admin.session_duration_365_days">365 days</option>
-            </select>
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.session_duration_hint">How long a login token stays valid before users must sign in again. "Never expire" keeps users logged in until they hit Logout or change their password. Applies to new logins only; existing tokens keep their original expiry until they expire or rotate.</small>
-        </div>
-        <div class="admin-settings" id="section-connectivity" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">📡 <span data-i18n="settings.admin.connectivity_title">Voice &amp; Connectivity</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.connectivity_hint">STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on "ICE: Connecting...", set your own servers here.</small>
-          <label class="select-row" style="margin-top:8px; align-items:flex-start">
-            <span data-i18n="settings.admin.stun_urls">STUN servers</span>
-            <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:monospace; font-size:0.75rem"></textarea>
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.stun_urls_hint">One stun: URI per line (or comma separated). Blank = built-in defaults.</small>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.turn_url">TURN server (optional)</span>
-            <input type="text" id="turn-url-input" class="settings-text-input" placeholder="turn:turn.example.com:3478" style="flex:1">
-          </label>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.turn_username">TURN username</span>
-            <input type="text" id="turn-username-input" class="settings-text-input" autocomplete="off" style="flex:1">
-          </label>
-          <label class="select-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.turn_password">TURN password</span>
-            <input type="password" id="turn-password-input" class="settings-text-input" autocomplete="new-password" style="flex:1">
-          </label>
-          <small class="settings-hint" data-i18n="settings.admin.turn_hint">A TURN server relays traffic for users behind strict NATs that STUN alone can't connect. Only needed if some users still can't connect after setting STUN. Username/password apply to static-credential TURN servers.</small>
-          <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border)">
-            <button class="btn-sm btn-accent" id="test-connectivity-btn">🩺 <span data-i18n="settings.admin.test_connectivity_btn">Test voice connectivity</span></button>
-            <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.test_connectivity_hint">Checks the servers above the same way a call does, and says in plain English what works and what doesn't. Save your changes first.</small>
-            <div id="connectivity-test-result" style="display:none;margin-top:10px"></div>
-          </div>
-        </div>
-        <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🔊 <span data-i18n="settings.admin.sounds_title">Custom Sounds</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.sounds_hint">Upload audio files for custom notification sounds</small>
-          <div style="margin-top:8px;">
-            <button class="btn-sm btn-accent" id="open-sound-manager-btn">⚙️ <span data-i18n="settings.admin.manage_sounds_btn">Manage Sounds</span></button>
-          </div>
-        </div>
-        <div class="admin-settings" id="section-emojis" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">😎 <span data-i18n="settings.admin.emojis_title">Custom Emojis</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.emojis_hint">Upload images for custom server emojis</small>
-          <div style="margin-top:8px;">
-            <button class="btn-sm btn-accent" id="open-emoji-manager-btn">⚙️ <span data-i18n="settings.admin.manage_emojis_btn">Manage Emojis</span></button>
-          </div>
-          <small class="settings-group-label" style="margin-top:14px;display:block">🔄 <span data-i18n="settings.admin.emoji_auto_update_group">Built-in emoji updates</span></small>
-          <small class="settings-hint" style="display:block" data-i18n="settings.admin.emoji_auto_update_desc">Allow Haven to check Unicode.org for new emoji standards. This check is only performed at server boot, and only when the current standard file on disk was created over a month ago. If a new standard is available, Haven will automatically download the emoji pack and regenerate all your built-in emojis based on the new standard. This does not affect your custom emojis in any way.</small>
-          <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.emoji_auto_update_disk">When this setting is turned off, Haven will use the latest available standard on disk. If a standard was never downloaded before, Haven will default to Unicode standard 16.0 which is bundled with the server.</small>
-          <label class="toggle-row" style="margin-top:8px">
-            <span data-i18n="settings.admin.emoji_auto_update_label">Enable automatic Unicode.org upgrade</span>
-            <input type="checkbox" id="unicode-emoji-auto-update">
-          </label>
-          <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.emoji_auto_update_ps">PS: This feature has nothing to do with emoji styling. That is entirely dependent on your OS, and rendering will vary from machine to machine. This feature only guarantees you'll have the latest available emojis built into your Haven server.</small>
-        </div>
-        <div class="admin-settings" id="section-stickers" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🖼️ <span data-i18n="settings.admin.stickers_title">Stickers</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.stickers_hint">Upload sticker images grouped into packs</small>
-          <div style="margin-top:8px;">
-            <button class="btn-sm btn-accent" id="open-sticker-manager-btn">⚙️ <span data-i18n="settings.admin.manage_stickers_btn">Manage Stickers</span></button>
-          </div>
-        </div>
-        <!-- Role Management (Admin only) -->
-        <div class="admin-settings" id="section-roles" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
-          <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
-            <button class="btn-sm" id="reset-roles-btn" data-i18n-title="settings.admin.reset_roles_title" title="Reset all roles to deployment defaults">🔄 <span data-i18n="settings.admin.reset_roles_btn">Reset to Default</span></button>
-          </div>
-          <div class="settings-group" style="margin-top:12px">
-            <small class="settings-group-label" data-i18n="settings.admin.role_icon_visibility">Role Icon Visibility</small>
-            <label class="toggle-row">
-              <span data-i18n="settings.admin.role_icon_sidebar">Show role icons in sidebar</span>
-              <input type="checkbox" id="role-icon-sidebar" checked>
-            </label>
-            <label class="toggle-row">
-              <span data-i18n="settings.admin.role_icon_chat">Show role icons in chat</span>
-              <input type="checkbox" id="role-icon-chat">
-            </label>
-            <label class="toggle-row">
-              <span data-i18n="settings.admin.role_icon_after_name">Show role icons after username</span>
-              <input type="checkbox" id="role-icon-after-name">
-            </label>
-            <small class="settings-hint" data-i18n="settings.admin.role_icon_hint">Controls where role icons appear. "After username" moves icons to the right side of the name instead of the left.</small>
-          </div>
-          <div class="settings-group" style="margin-top:12px">
-            <small class="settings-group-label" data-i18n="settings.admin.channel_creator_role_group">Channel Creator Role</small>
-            <label class="select-row">
-              <span data-i18n="settings.admin.channel_creator_role_label">Role given to a channel's creator</span>
-              <select id="channel-creator-role-select">
-                <option value="default" data-i18n="settings.admin.channel_creator_role_default">Default (highest channel role)</option>
-                <option value="none" data-i18n="settings.admin.channel_creator_role_none">None</option>
-              </select>
-            </label>
-            <small class="settings-hint" data-i18n="settings.admin.channel_creator_role_hint">When a non-admin who can create channels makes one, they are given this role inside that channel so they can manage it. Admins are never affected.</small>
-          </div>
-          <div id="roles-list-preview" style="margin-top:8px;">
-          </div>
-        </div>
-        <!-- Tunnel settings (Admin only) -->
-        <div class="admin-settings" id="section-tunnel" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🧭 <span data-i18n="settings.admin.tunnel_title">Tunnel</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.cleanup_age_hint">Delete messages older than N days (0 = off)</small>
           <label class="select-row">
-            <span data-i18n="settings.admin.tunnel_provider">Provider</span>
-            <select id="tunnel-provider-select">
-              <option value="localtunnel">LocalTunnel</option>
-              <option value="cloudflared">Cloudflared</option>
-            </select>
+            <span data-i18n="settings.admin.cleanup_max_size">Max DB Size (MB)</span>
+            <input type="number" id="cleanup-max-size" min="0" max="100000" value="0" class="settings-number-input">
           </label>
-          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
-            <button class="btn-sm btn-accent" id="tunnel-toggle-btn" data-i18n="settings.admin.tunnel_start_btn">Start Tunnel</button>
-            <span id="tunnel-status-display" class="muted-text" data-i18n="settings.admin.tunnel_inactive" style="font-size:0.6875rem;">Inactive</span>
-          </div>
+          <small class="settings-hint" data-i18n="settings.admin.cleanup_size_hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
+          <label class="select-row">
+            <span data-i18n="settings.admin.deleted_retention">Keep deleted files for (days)</span>
+            <input type="number" id="deleted-retention-days" min="1" max="3650" value="7" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.deleted_retention_hint">Attachments from deleted messages and channels are held this long, then removed for good. This runs whether or not auto-cleanup is enabled (default 7).</small>
+          <button class="btn-sm btn-full btn-accent" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 <span data-i18n="settings.admin.cleanup_run_btn">Run Cleanup Now</span></button>
         </div>
-        <!-- Webhooks / Bots (Admin only) -->
-        <div class="admin-settings" id="section-bots" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🤖 <span data-i18n="settings.admin.bots_title">Webhooks / Bots</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.bots_hint">Create and manage webhook bots that can post messages to channels.</small>
-          <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-bot-editor-btn">⚙️ <span data-i18n="settings.admin.manage_bots_btn">Manage Bots</span></button>
-          </div>
-          <div id="webhooks-list" style="margin-top:8px;">
-            <p class="muted-text" data-i18n="settings.admin.no_bots">No bots configured</p>
-          </div>
-        </div>
-        <!-- Ferry: Haven <-> Discord bridge (Admin only) -->
-        <div class="admin-settings" id="section-ferry" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🛶 <span data-i18n="settings.admin.ferry_title">Ferry (Discord bridge)</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.ferry_hint">Relay messages between Haven channels and Discord channels. Needs your own Discord bot, which takes about two minutes to create.</small>
-          <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-ferry-btn">🛶 <span data-i18n="settings.admin.manage_ferry_btn">Set up Ferry</span></button>
-          </div>
-          <p class="muted-text" id="ferry-summary" style="margin-top:8px;font-size:.78rem;" data-i18n="settings.admin.ferry_not_configured">Not configured</p>
-        </div>
-        <!-- Custom Terms of Service (Admin only) -->
-        <div class="admin-settings" id="section-custom-tos" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">⚖️ <span data-i18n="settings.admin.custom_tos_title">Custom Terms of Service</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.custom_tos_hint">Add custom terms that appear before the default ToS on the login page. Supports plain text. Leave empty to show only the default Haven ToS.</small>
-          <textarea id="custom-tos-input" class="settings-textarea" rows="6" maxlength="50000" data-i18n-placeholder="settings.admin.custom_tos_placeholder" placeholder="Enter your custom terms of service..." style="margin-top:8px;width:100%;resize:vertical;min-height:80px;font-size:0.75rem;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-family:inherit;"></textarea>
-        </div>
-        <!-- Discord Import (Admin only) -->
-        <div class="admin-settings" id="section-import" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">📦 <span data-i18n="settings.admin.import_title">Discord Import</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.import_hint">Import channels and messages from a Discord export file</small>
-          <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-import-btn">📦 <span data-i18n="settings.admin.import_btn">Import from Discord</span></button>
-          </div>
-        </div>
+
         <!-- Mod Mode (Admin only) -->
         <div class="admin-settings" id="section-modmode" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔧 <span data-i18n="settings.admin.modmode_title">Mod Mode</span></h5>
@@ -2971,6 +3177,7 @@
           <button class="btn-sm btn-full" id="mod-mode-settings-toggle" style="margin-top:6px;">🔧 <span data-i18n="settings.admin.modmode_toggle_btn">Toggle Mod Mode</span></button>
           <button class="btn-sm btn-full" id="mod-mode-reset" data-i18n="settings.admin.modmode_reset_btn" style="margin-top:6px;">↺ Reset Layout</button>
         </div>
+
         <!-- Audit Log (Admin only) -->
         <div class="admin-settings" id="section-audit-log" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">📜 <span data-i18n="settings.admin.audit_log_title">Audit Log</span></h5>
@@ -3524,7 +3731,6 @@
           </label>
           <div>
             <h6 style="margin:0 0 4px;font-size:0.82rem;font-weight:600" data-i18n="settings.admin.invite_links.channels_granted">Channels this link grants</h6>
-            <small class="settings-hint" data-i18n="settings.admin.invite_links_channels_hint">Leave all checked to grant every public channel.</small>
             <div id="invite-new-channels" style="margin-top:6px;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px">
               <p class="muted-text" style="margin:4px 0;font-size:0.85rem" data-i18n="settings.admin.loading_channels">Loading channels…</p>
             </div>
@@ -3677,6 +3883,26 @@
       <div class="cfn-row" data-fn="forum" data-i18n-title="channel_functions.forum_hint" title="Each message is a topic. Replies go in its thread and bump the topic back to the newest end of the channel">
         <span class="cfn-label">🗂️ <span data-i18n="channel_functions.forum">Forum</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="forum-tags" data-i18n-title="channel_functions.forum_tags_hint" title="The tags topics in this forum can carry, one per line">
+        <span class="cfn-label">🏷️ <span data-i18n="channel_functions.forum_tags">Forum tags</span></span>
+        <span class="cfn-badge cfn-static">…</span>
+      </div>
+      <div class="cfn-row" data-fn="nsfw" data-i18n-title="channel_functions.nsfw_hint" title="Mark this channel NSFW. Members can hide NSFW channels from their sidebar in Settings">
+        <span class="cfn-label">🔞 <span data-i18n="channel_functions.nsfw">NSFW</span></span>
+        <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="private" data-i18n-title="channel_functions.private_hint" title="Only members can see this channel. Turning it on keeps everyone who is already in; turning it off opens it to the whole server, history included">
+        <span class="cfn-label">🔒 <span data-i18n="channel_functions.private">Private</span></span>
+        <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="role-gate" data-i18n-title="channel_functions.role_gate_hint" title="Only people holding the chosen roles can open this channel: any one of them, or all of them">
+        <span class="cfn-label">🎟️ <span data-i18n="channel_functions.role_gate">Required roles</span></span>
+        <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="save-template" data-i18n-title="channel_functions.save_template_hint" title="Keep this channel's setup as a template in the Create Channel picker">
+        <span class="cfn-label">💾 <span data-i18n="channel_functions.save_template">Save as template</span></span>
+        <span class="cfn-badge cfn-off">→</span>
       </div>
       <div class="cfn-divider"></div>
       <div class="cfn-row" data-fn="slow-mode" data-i18n-title="channel_functions.slow_mode_hint" title="Require a cooldown between messages (0 = off)">
@@ -3854,11 +4080,154 @@
       <div class="form-group poll-settings-row" style="margin-top:10px">
         <label class="poll-checkbox-label"><input type="checkbox" id="poll-multi-vote"> <span data-i18n="modals.poll.multi_vote">Allow multiple votes</span></label>
         <label class="poll-checkbox-label"><input type="checkbox" id="poll-anonymous"> <span data-i18n="modals.poll.anonymous">Anonymous votes</span></label>
+        <label class="poll-checkbox-label" id="poll-columns-wrap" style="display:none"><span data-i18n="modals.poll.columns">Columns</span>
+          <select id="poll-columns" class="settings-select" style="margin-left:6px;max-width:90px">
+            <option value="0" data-i18n="modals.poll.columns_auto">One per row</option>
+            <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+          </select>
+        </label>
       </div>
       <div class="modal-actions">
         <button class="btn-sm" id="poll-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent" id="poll-create-btn" data-i18n="modals.poll.create_btn">Create Poll</button>
       </div>
+    </div>
+  </div>
+
+  <!-- TEMPORARY (#5649): one-time admin notice that channel access moved to Required roles. Remove after the 4.8.x cycle. -->
+  <div class="modal-overlay" id="role-gate-notice-modal" style="display:none">
+    <div class="modal" style="width:520px">
+      <h3>🔑 <span data-i18n="modals.role_gate_notice.title">Channel access works differently now</span></h3>
+      <p style="font-size:0.85rem;line-height:1.5" data-i18n="modals.role_gate_notice.p1">Roles no longer carry a list of channels to grant or revoke. Instead, each channel says which roles open it: right-click the channel, Channel Functions, Required roles. Anyone who holds those roles is put in the channel the moment they get them and taken out the moment they lose them.</p>
+      <p style="font-size:0.85rem;line-height:1.5" data-i18n="modals.role_gate_notice.p2">Nothing you had set up was lost. Any channel a role used to grant has been converted into Required roles on that channel, so the same people still get in. People you added to a channel by hand keep their place.</p>
+      <p class="muted-text" style="font-size:0.78rem" data-i18n="modals.role_gate_notice.p3">Only admins see this, and only once.</p>
+      <div class="modal-actions">
+        <button class="btn-sm btn-accent" id="role-gate-notice-ok" data-i18n="modals.role_gate_notice.ok">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scheduled send (#5638): right-click Send, or /schedule -->
+  <div class="modal-overlay" id="schedule-modal" style="display:none">
+    <div class="modal" style="width:480px">
+      <h3>⏰ <span data-i18n="modals.schedule.title">Send later</span></h3>
+      <p class="muted-text" style="font-size:0.78rem" data-i18n="modals.schedule.hint">The message waits on the server and goes out at the time you pick, whether or not you are online. Not available in direct messages.</p>
+      <div class="form-group">
+        <label data-i18n="modals.schedule.message_label">Message</label>
+        <textarea id="schedule-text" class="settings-text-input" rows="4" maxlength="2000"></textarea>
+      </div>
+      <div class="form-group" style="margin-top:8px">
+        <label data-i18n="modals.schedule.when_label">Send at</label>
+        <!-- Custom wall-clock fields (mirrors the /time picker) so the entered
+             time is read in the user's configured timezone rather than the
+             browser's, which a hardened browser can report incorrectly. -->
+        <div class="tsm-row" role="group" data-i18n-aria-label="modals.time.date_label" aria-label="Date">
+          <div class="tsm-field">
+            <label for="sch-year" data-i18n="modals.time.year">Year</label>
+            <input type="number" id="sch-year" class="tsm-input" min="1970" max="9999" step="1" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="tsm-field">
+            <label for="sch-month" data-i18n="modals.time.month">Month</label>
+            <input type="number" id="sch-month" class="tsm-input" min="1" max="12" step="1" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="tsm-field">
+            <label for="sch-day" data-i18n="modals.time.day">Day</label>
+            <input type="number" id="sch-day" class="tsm-input" min="1" max="31" step="1" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="tsm-field tsm-cal-field">
+            <label aria-hidden="true">&nbsp;</label>
+            <button type="button" id="sch-cal-btn" class="tsm-cal-btn" data-i18n-title="modals.time.calendar" title="Open calendar">📅</button>
+            <input type="date" id="sch-cal-input" class="tsm-cal-native" tabindex="-1" aria-hidden="true">
+          </div>
+        </div>
+        <div class="tsm-row" role="group" data-i18n-aria-label="modals.time.time_label" aria-label="Time">
+          <div class="tsm-field">
+            <label for="sch-hour" data-i18n="modals.time.hour">Hour</label>
+            <input type="number" id="sch-hour" class="tsm-input" min="0" max="23" step="1" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="tsm-field">
+            <label for="sch-minute" data-i18n="modals.time.minute">Minute</label>
+            <input type="number" id="sch-minute" class="tsm-input" min="0" max="59" step="1" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="tsm-field">
+            <label for="sch-second" data-i18n="modals.time.second">Second</label>
+            <input type="number" id="sch-second" class="tsm-input" min="0" max="59" step="1" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="tsm-field tsm-meridiem-field">
+            <label aria-hidden="true">&nbsp;</label>
+            <div class="tsm-meridiem" role="group" data-i18n-aria-label="modals.time.clock_mode" aria-label="Clock mode">
+              <button type="button" class="tsm-mer-btn" data-mer="24" data-i18n="modals.time.hour_24">24HR</button>
+              <button type="button" class="tsm-mer-btn" data-mer="AM" data-i18n="modals.time.am">AM</button>
+              <button type="button" class="tsm-mer-btn" data-mer="PM" data-i18n="modals.time.pm">PM</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="schedule-cancel" data-i18n="modals.common.close">Close</button>
+        <button class="btn-sm btn-accent" id="schedule-save" data-i18n="modals.schedule.schedule_btn">Schedule</button>
+      </div>
+      <small class="settings-group-label" style="margin-top:12px;display:block" data-i18n="modals.schedule.pending">Waiting to send</small>
+      <div id="schedule-list" style="max-height:220px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- Timestamp Modal (/time with no args) -->
+  <div class="modal-overlay" id="time-modal" style="display:none">
+    <div class="modal tsm-modal" style="width:400px">
+      <div class="tsm-header">
+        <div class="tsm-clock" aria-hidden="true">🕐</div>
+        <p class="modal-desc tsm-subtitle" data-i18n="commands.description.time">Insert a time everyone sees in their own timezone</p>
+        <p class="tsm-syntax" data-i18n="commands.time_usage">Usage: /time 8pm</p>
+      </div>
+
+      <!-- Date row -->
+      <div class="tsm-row" role="group" data-i18n-aria-label="modals.time.date_label" aria-label="Date">
+        <div class="tsm-field">
+          <label for="tsm-year" data-i18n="modals.time.year">Year</label>
+          <input type="number" id="tsm-year" class="tsm-input" min="1970" max="9999" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-month" data-i18n="modals.time.month">Month</label>
+          <input type="number" id="tsm-month" class="tsm-input" min="1" max="12" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-day" data-i18n="modals.time.day">Day</label>
+          <input type="number" id="tsm-day" class="tsm-input" min="1" max="31" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field tsm-cal-field">
+          <label aria-hidden="true">&nbsp;</label>
+          <button type="button" id="tsm-cal-btn" class="tsm-cal-btn" data-i18n-title="modals.time.calendar" title="Open calendar">📅</button>
+          <input type="date" id="tsm-cal-input" class="tsm-cal-native" tabindex="-1" aria-hidden="true">
+        </div>
+      </div>
+
+      <!-- Time row -->
+      <div class="tsm-row" role="group" data-i18n-aria-label="modals.time.time_label" aria-label="Time">
+        <div class="tsm-field">
+          <label for="tsm-hour" data-i18n="modals.time.hour">Hour</label>
+          <input type="number" id="tsm-hour" class="tsm-input" min="0" max="23" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-minute" data-i18n="modals.time.minute">Minute</label>
+          <input type="number" id="tsm-minute" class="tsm-input" min="0" max="59" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field">
+          <label for="tsm-second" data-i18n="modals.time.second">Second</label>
+          <input type="number" id="tsm-second" class="tsm-input" min="0" max="59" step="1" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="tsm-field tsm-meridiem-field">
+          <label aria-hidden="true">&nbsp;</label>
+          <div class="tsm-meridiem" role="group" data-i18n-aria-label="modals.time.clock_mode" aria-label="Clock mode">
+            <button type="button" class="tsm-mer-btn" data-mer="24" data-i18n="modals.time.hour_24">24HR</button>
+            <button type="button" class="tsm-mer-btn" data-mer="AM" data-i18n="modals.time.am">AM</button>
+            <button type="button" class="tsm-mer-btn" data-mer="PM" data-i18n="modals.time.pm">PM</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Styles: every format previewed, each with its own insert -->
+      <div class="tsm-styles" id="tsm-styles"></div>
     </div>
   </div>
 
@@ -4179,6 +4548,11 @@
             <option value="name-desc" data-i18n="media_gallery.sort_name_za">Name Z→A</option>
           </select>
         </label>
+        <label class="media-gallery-tile-label" id="media-gallery-tile-wrap">
+          <span data-i18n="media_gallery.tile_size">Size</span>
+          <input type="range" id="media-gallery-tile" min="72" max="360" step="8" value="150" data-i18n-aria-label="media_gallery.tile_size" aria-label="Size">
+          <select id="media-gallery-shape" class="forum-select forum-select-small" data-i18n-aria-label="forum.shape" aria-label="Shape"></select>
+        </label>
         <div class="media-gallery-actions" id="media-gallery-actions" style="display:none">
           <button class="btn-sm" id="media-gallery-select-toggle" data-i18n="media_gallery.select">Select</button>
           <span class="media-gallery-selection-info" id="media-gallery-selection-info" style="display:none"></span>
@@ -4208,17 +4582,17 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=4.1.1"></script>
-  <script src="/js/notifications.js?v=3.16.16"></script>
+  <script src="/js/theme.js?v=4.6.10"></script>
+  <script src="/js/notifications.js?v=4.6.2"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=3.34.7"></script>
+  <script src="/js/voice.js?v=4.8.1"></script>
   <script src="/js/modmode.js?v=3.16.16"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.1.3"></script>
-  <script src="/js/plugin-loader.js?v=4.1.2"></script>
+  <script type="module" src="/js/app.js?v=4.8.10"></script>
+  <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>
 </body>

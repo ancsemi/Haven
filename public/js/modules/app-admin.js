@@ -473,9 +473,15 @@ _applyServerSettings() {
     if (cleanupSize && this.serverSettings.cleanup_max_size_mb) {
       cleanupSize.value = this.serverSettings.cleanup_max_size_mb;
     }
+    const deletedRet = document.getElementById('deleted-retention-days');
+    if (deletedRet) deletedRet.value = this.serverSettings.deleted_retention_days || '7';
     const maxUpload = document.getElementById('max-upload-mb');
     if (maxUpload) {
       maxUpload.value = this.serverSettings.max_upload_mb || '25';
+    }
+    const maxAttach = document.getElementById('max-attachments');
+    if (maxAttach) {
+      maxAttach.value = this.serverSettings.max_attachments || '10';
     }
     const maxSoundKb = document.getElementById('max-sound-kb');
     if (maxSoundKb) {
@@ -547,6 +553,8 @@ _applyServerSettings() {
     if (updateBannerAdminOnly) {
       updateBannerAdminOnly.checked = this.serverSettings.update_banner_admin_only === 'true';
     }
+    const hideDisabledBadges = document.getElementById('hide-disabled-badges');
+    if (hideDisabledBadges) hideDisabledBadges.checked = this.serverSettings.hide_disabled_channel_badges === 'true';
     const defaultTheme = document.getElementById('default-theme-select');
     if (defaultTheme) {
       defaultTheme.value = this.serverSettings.default_theme || '';
@@ -651,6 +659,8 @@ _applyServerSettings() {
   // Show/hide the banner display section in user settings
   const bannerSection = document.getElementById('section-banner-display');
   if (bannerSection) bannerSection.style.display = hasBanner ? '' : 'none';
+  const bannerNavItem = document.querySelector('.settings-nav-item[data-target="section-banner-display"]');
+  if (bannerNavItem) bannerNavItem.style.display = hasBanner ? '' : 'none';
   if (bannerDisplay && bannerImg) {
     if (hasBanner) {
       bannerImg.src = this.serverSettings.server_banner;
@@ -905,8 +915,10 @@ _snapshotAdminSettings() {
     cleanup_enabled: this.serverSettings.cleanup_enabled || 'false',
     cleanup_max_age_days: this.serverSettings.cleanup_max_age_days || '0',
     cleanup_max_size_mb: this.serverSettings.cleanup_max_size_mb || '0',
+    deleted_retention_days: this.serverSettings.deleted_retention_days || '7',
     whitelist_enabled: this.serverSettings.whitelist_enabled || 'false',
     max_upload_mb: this.serverSettings.max_upload_mb || '25',
+    max_attachments: this.serverSettings.max_attachments || '10',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_sticker_kb: this.serverSettings.max_sticker_kb || '1024',
@@ -914,6 +926,7 @@ _snapshotAdminSettings() {
     session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
+    hide_disabled_channel_badges: this.serverSettings.hide_disabled_channel_badges || 'false',
     admin_password_reset_enabled: this.serverSettings.admin_password_reset_enabled || 'false',
     unicode_emoji_auto_update: this.serverSettings.unicode_emoji_auto_update || 'false',
     registration_captcha_enabled: this.serverSettings.registration_captcha_enabled || 'false',
@@ -1032,6 +1045,12 @@ _saveAdminSettings() {
     changed = true;
   }
 
+  const deletedRet = String(Math.max(1, Math.min(3650, parseInt(document.getElementById('deleted-retention-days')?.value) || 7)));
+  if (deletedRet !== (snap.deleted_retention_days || '7')) {
+    this.socket.emit('update-server-setting', { key: 'deleted_retention_days', value: deletedRet });
+    changed = true;
+  }
+
   const wlEnabled = document.getElementById('whitelist-enabled')?.checked ? 'true' : 'false';
   if (wlEnabled !== snap.whitelist_enabled) {
     this.socket.emit('whitelist-toggle', { enabled: wlEnabled === 'true' });
@@ -1042,6 +1061,12 @@ _saveAdminSettings() {
   const maxUpload = String(Math.max(1, Math.min(102400, parseInt(document.getElementById('max-upload-mb')?.value) || 25)));
   if (maxUpload !== (snap.max_upload_mb || '25')) {
     this.socket.emit('update-server-setting', { key: 'max_upload_mb', value: maxUpload });
+    changed = true;
+  }
+
+  const maxAttach = String(Math.max(1, Math.min(50, parseInt(document.getElementById('max-attachments')?.value) || 10)));
+  if (maxAttach !== (snap.max_attachments || '10')) {
+    this.socket.emit('update-server-setting', { key: 'max_attachments', value: maxAttach });
     changed = true;
   }
 
@@ -1085,6 +1110,11 @@ _saveAdminSettings() {
   const updateBannerAdminOnly = document.getElementById('update-banner-admin-only')?.checked ? 'true' : 'false';
   if (updateBannerAdminOnly !== (snap.update_banner_admin_only || 'false')) {
     this.socket.emit('update-server-setting', { key: 'update_banner_admin_only', value: updateBannerAdminOnly });
+    changed = true;
+  }
+  const hideDisabledBadges = document.getElementById('hide-disabled-badges')?.checked ? 'true' : 'false';
+  if (hideDisabledBadges !== (snap.hide_disabled_channel_badges || 'false')) {
+    this.socket.emit('update-server-setting', { key: 'hide_disabled_channel_badges', value: hideDisabledBadges });
     changed = true;
   }
 
@@ -1238,10 +1268,14 @@ _cancelAdminSettings() {
     if (ca) ca.value = snap.cleanup_max_age_days;
     const cs = document.getElementById('cleanup-max-size');
     if (cs) cs.value = snap.cleanup_max_size_mb;
+    const dr = document.getElementById('deleted-retention-days');
+    if (dr) dr.value = snap.deleted_retention_days;
     const wl = document.getElementById('whitelist-enabled');
     if (wl) wl.checked = snap.whitelist_enabled === 'true';
     const mu = document.getElementById('max-upload-mb');
     if (mu) mu.value = snap.max_upload_mb || '25';
+    const ma = document.getElementById('max-attachments');
+    if (ma) ma.value = snap.max_attachments || '10';
     const msk = document.getElementById('max-sound-kb');
     if (msk) msk.value = snap.max_sound_kb || '1024';
     const mek = document.getElementById('max-emoji-kb');
@@ -1256,6 +1290,8 @@ _cancelAdminSettings() {
     if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
+    const hdb = document.getElementById('hide-disabled-badges');
+    if (hdb) hdb.checked = snap.hide_disabled_channel_badges === 'true';
     const dt = document.getElementById('default-theme-select');
     if (dt) dt.value = snap.default_theme || '';
     const dl = document.getElementById('default-locale-select');
@@ -1605,10 +1641,10 @@ _renderBanList(bans) {
       <div class="ban-info">
         <strong>${this._escapeHtml(b.username)}</strong>
         <span class="ban-reason">${b.reason ? this._escapeHtml(b.reason) : t('settings.admin.no_reason')}</span>
-        <span class="ban-date">${new Date(b.created_at).toLocaleDateString()}</span>
+        <span class="ban-date">${this._fmtDate(b.created_at)}</span>
         ${b.appeal ? `
         <div class="ban-appeal">
-          <span class="ban-appeal-label">📝 ${t('settings.admin.ban_appeal_label')}${b.appeal_at ? ' · ' + new Date(b.appeal_at).toLocaleDateString() : ''}</span>
+          <span class="ban-appeal-label">📝 ${t('settings.admin.ban_appeal_label')}${b.appeal_at ? ' · ' + this._fmtDate(b.appeal_at) : ''}</span>
           <span class="ban-appeal-text">${this._escapeHtml(b.appeal)}</span>
         </div>` : ''}
       </div>
@@ -1654,7 +1690,7 @@ _renderIpBanList(bans) {
       <div class="ban-info">
         <strong>${this._escapeHtml(b.ip)}</strong>
         <span class="ban-reason">${b.reason ? this._escapeHtml(b.reason) : t('settings.admin.no_reason')}</span>
-        <span class="ban-date">${new Date(b.created_at).toLocaleDateString()}${b.banned_by_name ? ` — ${this._escapeHtml(b.banned_by_name)}` : ''}</span>
+        <span class="ban-date">${this._fmtDate(b.created_at)}${b.banned_by_name ? ` — ${this._escapeHtml(b.banned_by_name)}` : ''}</span>
       </div>
       <div class="ban-actions">
         <button class="btn-sm btn-unban" data-ip="${this._escapeHtml(b.ip)}">${t('settings.admin.unban_btn')}</button>
@@ -1681,7 +1717,7 @@ _renderDeletedUsersList(entries) {
         <strong>${this._escapeHtml(e.display_name || e.username)}</strong>
         ${e.display_name ? `<span class="ban-reason">@${this._escapeHtml(e.username)}</span>` : ''}
         <span class="ban-reason">${e.reason ? this._escapeHtml(e.reason) : t('settings.admin.no_reason')}</span>
-        <span class="ban-date">${new Date(e.deleted_at).toLocaleDateString()}${e.deleted_by_name ? ` ${t('settings.admin.deleted_by', { name: this._escapeHtml(e.deleted_by_name) })}` : ''}</span>
+        <span class="ban-date">${this._fmtDate(e.deleted_at)}${e.deleted_by_name ? ` ${t('settings.admin.deleted_by', { name: this._escapeHtml(e.deleted_by_name) })}` : ''}</span>
       </div>
     </div>
   `).join('');
@@ -1954,7 +1990,7 @@ _renderAllMembers(members) {
     const bannedBadge = m.banned ? `<span class="aml-banned-badge">${t('settings.admin.badge_banned')}</span>` : '';
     const onlineDot = m.online && !m.banned ? 'aml-online' : 'aml-offline';
     const created = m.createdAt ? new Date(m.createdAt.endsWith('Z') ? m.createdAt : m.createdAt + 'Z') : null;
-    const joinedStr = created ? created.toLocaleDateString() : '';
+    const joinedStr = created ? this._fmtDate(created) : '';
     const isNew = created && (Date.now() - created.getTime()) < 7 * 24 * 60 * 60 * 1000;
     const newBadge = isNew ? `<span class="aml-new-badge">${t('settings.admin.badge_new')}</span>` : '';
 
@@ -2140,14 +2176,19 @@ _bindMemberListActions(container) {
   });
 },
 
-_openMemberChannelPicker(userId, username, mode) {
-  // mode: 'add' or 'remove'
+_openMemberChannelPicker(userId, username, mode, channelsOverride = null) {
+  // mode: 'add' or 'remove'. channelsOverride is a ready-made [{ id, name }]
+  // list for callers outside Settings, All Members (the user context menu),
+  // where the member and channel tables are not loaded. The server rejects
+  // channels the user is already in, so no pre-filter is needed there (#5637).
   const member = (this._allMembersData || []).find(m => m.id === userId);
   const allChannels = this._allMembersChannels || [];
   const memberChannelIds = new Set((member && member.channelList ? member.channelList : []).map(c => c.id));
 
   let channels;
-  if (mode === 'add') {
+  if (Array.isArray(channelsOverride)) {
+    channels = channelsOverride;
+  } else if (mode === 'add') {
     // Show channels user is NOT in (top-level only for clarity)
     channels = allChannels.filter(c => !memberChannelIds.has(c.id) && !c.parentId);
   } else {
@@ -2439,6 +2480,11 @@ _handleMarkdownShortcuts(inputEl, event) {
     return this._wrapSelectedText(input, '*', `*`, true);
   }
 
+  // Underline (Ctrl/Cmd + U).
+  if (key === 'u' && !event.shiftKey) {
+    return this._wrapSelectedText(input, '__', `__`, true);
+  }
+
   // Bold (Ctrl/Cmd + B). Shift+B is the bookmarks bar in Chrome.
   if (key === 'b' && !event.shiftKey) {
     return this._wrapSelectedText(input, '**', `**`, true);
@@ -2465,6 +2511,17 @@ _handleMarkdownShortcuts(inputEl, event) {
   // Spoiler (Ctrl/Cmd + Shift + P)
   if (event.shiftKey && key === 'p') {
     return this._wrapSelectedText(input, '||', `||`);
+  }
+
+  // Text color (Ctrl/Cmd + Shift + F) (F for font, since c for code is already taken)
+  if (event.shiftKey && key === 'f') {
+    const colorPrefix = 'c#(51,153,255)'
+    if (!this._wrapSelectedText(input, colorPrefix, '#c')) return false;
+
+    // Move cursor to just before ")" so the user can edit the color
+    const cursorPos = input.selectionStart + (colorPrefix.length - 1);
+    input.setSelectionRange(cursorPos, cursorPos);
+    return true;
   }
   return false;
 },
@@ -2530,8 +2587,12 @@ _showMentionDropdown() {
     if ('everyone'.startsWith(query)) everyoneOptions.push({ name: 'everyone', label: '@everyone', desc: t('settings.admin.mention_everyone_desc') });
     if ('here'.startsWith(query)) everyoneOptions.push({ name: 'here', label: '@here', desc: t('settings.admin.mention_here_desc') });
   }
+  // Roles sit behind the same permission, since a role ping fans out the same way. (#5579)
+  const roleOptions = canMentionEveryone
+    ? (this._mentionableRoles || []).filter(r => r && r.name && r.name.toLowerCase().startsWith(query)).slice(0, 5)
+    : [];
 
-  if (filtered.length === 0 && everyoneOptions.length === 0) {
+  if (filtered.length === 0 && everyoneOptions.length === 0 && roleOptions.length === 0) {
     dropdown.style.display = 'none';
     return;
   }
@@ -2545,8 +2606,14 @@ _showMentionDropdown() {
     return `<div class="mention-item${active}" data-username="${opt.name}" data-everyone="1"><strong>${opt.label}</strong> <span class="mention-item-handle">${this._escapeHtml(opt.desc)}</span></div>`;
   }).join('');
 
+  const roleItems = roleOptions.map((r, i) => {
+    const active = (i === 0 && filtered.length === 0 && everyoneOptions.length === 0) ? ' active' : '';
+    const dot = r.color ? `<span class="mention-role-dot" style="background:${this._escapeHtml(r.color)}"></span>` : '';
+    return `<div class="mention-item${active}" data-username="${this._escapeHtml(r.name)}" data-role="1">${dot}<strong>@${this._escapeHtml(r.name)}</strong> <span class="mention-item-handle">${this._escapeHtml(t('settings.admin.mention_role_desc'))}</span></div>`;
+  }).join('');
+
   const memberItems = filtered.map((m, i) => {
-    const isFirstMember = (i === 0 && everyoneOptions.length === 0);
+    const isFirstMember = (i === 0 && everyoneOptions.length === 0 && roleOptions.length === 0);
     const nick = m.id && this._nicknames ? this._nicknames[m.id] : '';
     const display = nick || m.username || m.loginName || '';
     const login = m.loginName || m.username || '';
@@ -2556,7 +2623,7 @@ _showMentionDropdown() {
     return `<div class="mention-item${isFirstMember ? ' active' : ''}" data-username="${this._escapeHtml(login)}">${this._escapeHtml(display)}${suffix}</div>`;
   }).join('');
 
-  dropdown.innerHTML = everyoneItems + memberItems;
+  dropdown.innerHTML = everyoneItems + roleItems + memberItems;
 
   dropdown.style.display = 'block';
 
@@ -2888,7 +2955,10 @@ _showSlashDropdown(query) {
   const host = (this._slashInput && this._slashInput.parentElement) || null;
   if (host && dropdown.parentElement !== host) host.appendChild(dropdown);
   const q = String(query || '').toLowerCase();
-  const filtered = this.slashCommands
+  // Bot commands carry the channel their bot is set up in and are only
+  // offered there. Built-in commands have no channel and show everywhere (#5635).
+  const offered = this.slashCommands.filter(c => !c.channelCodes || c.channelCodes.includes(this.currentChannel));
+  const filtered = offered
     .filter(c => String(c.cmd || '').toLowerCase().startsWith(q))
     // For base queries like "rss", show "/rss add" before plain "/rss" so
     // discoverable subcommands appear first and users don't keep selecting the
@@ -2904,7 +2974,7 @@ _showSlashDropdown(query) {
     })
     .slice(0, 10);
 
-  if (filtered.length === 0 || (query === '' && filtered.length === this.slashCommands.length)) {
+  if (filtered.length === 0 || (query === '' && filtered.length === offered.length)) {
     // Show all on empty query
     if (query === '') {
       // show all
@@ -2914,13 +2984,13 @@ _showSlashDropdown(query) {
     }
   }
 
-  const shown = query === '' ? this.slashCommands.slice(0, 12) : filtered;
+  const shown = query === '' ? offered.slice(0, 12) : filtered;
 
   dropdown.innerHTML = shown.map((c, i) =>
     `<div class="slash-item${i === 0 ? ' active' : ''}" data-cmd="${c.cmd}">
       <span class="slash-cmd">/${c.cmd}</span>
       ${c.args ? `<span class="slash-args">${this._escapeHtml(c.args)}</span>` : ''}
-      <span class="slash-desc">${this._escapeHtml(c.desc)}</span>
+      <span class="slash-desc">${this._escapeHtml((c.descByChannel && c.descByChannel[this.currentChannel]) || c.desc)}</span>
     </div>`
   ).join('');
 
@@ -3274,7 +3344,7 @@ _uploadGeneralFile(file, targetCode) {
   if (_ugCh && _ugCh.media_enabled === 0) {
     return this._showToast(t('media.uploads_disabled'), 'error');
   }
-  const maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const maxMb = this._uploadCapMb();
   if (file.size > maxMb * 1024 * 1024) {
     this._showToast(t('media.file_too_large', { maxMb }), 'error');
     return;
@@ -4121,19 +4191,10 @@ _initRoleManagement() {
   document.getElementById('close-role-modal-btn')?.addEventListener('click', () => {
     document.getElementById('role-modal').style.display = 'none';
   });
-  document.getElementById('create-role-btn')?.addEventListener('click', async () => {
-    const name = await this._showPromptModal(t('settings.admin.roles_create_title'), t('settings.admin.roles_create_hint'));
-    if (!name || !name.trim()) return;
-    const levelStr = await this._showPromptModal(t('settings.admin.roles_level_title'), t('settings.admin.roles_level_hint'), '25');
-    if (levelStr === null) return;
-    const level = parseInt(levelStr, 10);
-    if (isNaN(level) || level < 0 || level > 99) { this._showToast(t('settings.admin.roles_level_invalid'), 'error'); return; }
-    this._roleEmit('create-role', { name: name.trim(), level, color: '#aaaaaa' }, (res) => {
-      if (res.error) { this._showToast(res.error, 'error'); return; }
-      this._showToast(t('settings.admin.roles_created'), 'success');
-      this._loadRoles();
-    });
-  });
+  // New roles start from a template (moderator, helper, group...) so the
+  // permission set does not have to be ticked box by box every time.
+  document.getElementById('create-role-btn')?.addEventListener('click', () => this._openRoleTemplatePicker());
+  document.getElementById('post-role-menu-btn')?.addEventListener('click', () => this._openRoleMenuBuilder());
 
   // Assign role modal handlers
   document.getElementById('cancel-assign-role-btn')?.addEventListener('click', () => {
@@ -4485,6 +4546,9 @@ _renderRoleDetail() {
       <input type="number" class="settings-number-input" id="role-edit-level" value="${role.level}" min="0" max="99">
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.color')}</label>
       <input type="color" id="role-edit-color" value="${role.color || '#aaaaaa'}" style="width:50px;height:30px;border:none;cursor:pointer">
+      <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.upload_cap')}</label>
+      <input type="number" class="settings-number-input" id="role-edit-upload-mb" value="${role.max_upload_mb || ''}" min="1" max="102400" placeholder="${this._escapeHtml(t('settings.admin.role_form.upload_cap_placeholder', { mb: parseInt(this.serverSettings?.max_upload_mb, 10) || 25 }))}">
+      <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.upload_cap_hint')}</small>
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.icon')}</label>
       <div class="role-icon-upload-row">
         ${role.icon ? `<img class="role-icon-preview" src="${this._escapeHtml(role.icon)}" alt="${t('settings.admin.role_form.icon')}">` : `<div class="role-icon-preview" style="display:flex;align-items:center;justify-content:center;font-size:0.6875rem;color:var(--text-muted)">${t('settings.admin.role_form.icon_none')}</div>`}
@@ -4500,17 +4564,7 @@ _renderRoleDetail() {
       <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.auto_assign_hint')}</small>
       <div class="role-channel-access-section">
         <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.channel_access')}</h5>
-        <label class="toggle-row">
-          <span>${t('settings.admin.role_form.link_channel_access')}</span>
-          <input type="checkbox" id="role-edit-link-channel-access" ${role.link_channel_access ? 'checked' : ''}>
-        </label>
-        <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.link_channel_access_hint')}</small>
-        <div id="role-channel-access-panel" style="display:${role.link_channel_access ? 'block' : 'none'};margin-top:8px;">
-          <div class="role-channel-access-list" id="role-channel-access-list">
-            <p class="muted-text" style="padding:12px;text-align:center;font-size:0.75rem">${t('modals.common.loading')}</p>
-          </div>
-          <button class="btn-sm btn-accent rca-reapply-btn" id="rca-reapply-btn" title="${this._escapeHtml(t('settings.admin.role_form.reapply_access_tooltip'))}">🔄 ${t('settings.admin.role_form.reapply_access')}</button>
-        </div>
+        <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.channel_access_hint')}</small>
       </div>
       <h5 class="settings-section-subtitle" style="margin-top:12px;">${t('settings.admin.role_form.permissions')}</h5>
       <p class="perm-admin-note" id="perm-admin-note">${role.level === 0 ? t('settings.admin.role_form.level_0_role_note') : t('settings.admin.role_form.admin_only_note')}</p>
@@ -4535,10 +4589,6 @@ _renderRoleDetail() {
 
   // Toggle permissions visibility based on the current role level.
   this._updateRoleLevelPermsVis('role-edit-level', 'role-permissions-list', 'perm-admin-note');
-
-  // Toggle channel access panel visibility
-  const linkCheckbox = document.getElementById('role-edit-link-channel-access');
-  const accessPanel = document.getElementById('role-channel-access-panel');
 
   // Role icon upload/remove
   this._pendingRoleIcon = undefined;
@@ -4581,22 +4631,6 @@ _renderRoleDetail() {
     if (removeBtn) removeBtn.remove();
     this._showToast(t('settings.admin.role_form.icon_removed_role'), 'success');
   });
-  linkCheckbox.addEventListener('change', () => {
-    accessPanel.style.display = linkCheckbox.checked ? 'block' : 'none';
-    if (linkCheckbox.checked) this._loadRoleChannelAccess(role.id);
-  });
-  // Load channel access if already enabled
-  if (role.link_channel_access) this._loadRoleChannelAccess(role.id);
-
-  // Reapply button
-  document.getElementById('rca-reapply-btn').addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_reapply_confirm'))) return;
-    this._roleEmit('reapply-role-access', { roleId: role.id }, (res) => {
-      if (res && res.error) return this._showToast(res.error, 'error');
-      this._showToast(t(res.affected === 1 ? 'settings.admin.roles_reapplied_one' : 'settings.admin.roles_reapplied_other', { count: res.affected }), 'success');
-    });
-  });
-
   // The Save button lives in the modal-actions bar (always visible). Show it
   // when a role is selected, and wire up the click handler.
   const saveBtn = document.getElementById('save-role-btn');
@@ -4606,17 +4640,8 @@ _renderRoleDetail() {
   saveBtn.parentNode.replaceChild(freshSaveBtn, saveBtn);
   freshSaveBtn.addEventListener('click', () => {
     const perms = [...panel.querySelectorAll('.role-perm-checkbox:checked')].map(cb => cb.dataset.perm);
-    const linkEnabled = document.getElementById('role-edit-link-channel-access').checked;
     freshSaveBtn.disabled = true;
     freshSaveBtn.textContent = t('settings.admin.roles_saving');
-
-    // Collect channel access config
-    const accessRows = [...panel.querySelectorAll('.rca-channel-row')];
-    const accessData = accessRows.map(row => ({
-      channelId: parseInt(row.dataset.channelId, 10),
-      grant: row.querySelector('.rca-grant')?.checked || false,
-      revoke: row.querySelector('.rca-revoke')?.checked || false
-    })).filter(a => a.channelId);
 
     this._roleEmit('update-role', {
       roleId: role.id,
@@ -4625,28 +4650,12 @@ _renderRoleDetail() {
       color: document.getElementById('role-edit-color').value,
       icon: this._pendingRoleIcon !== undefined ? this._pendingRoleIcon : role.icon,
       autoAssign: document.getElementById('role-edit-auto-assign').checked,
-      linkChannelAccess: linkEnabled,
+      // Channel access lives on the channel now, as Required roles (#5649).
+      linkChannelAccess: false,
+      maxUploadMb: parseInt(document.getElementById('role-edit-upload-mb')?.value, 10) || null,
       permissions: perms
     }, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); freshSaveBtn.disabled = false; freshSaveBtn.textContent = t('settings.admin.roles_save'); return; }
-
-      // Save channel access config separately
-      if (linkEnabled && accessData.length) {
-        this._roleEmit('update-role-channel-access', {
-          roleId: role.id,
-          linkEnabled: true,
-          access: accessData
-        }, (accRes) => {
-          if (accRes && accRes.error) this._showToast(accRes.error, 'error');
-        });
-      } else if (!linkEnabled) {
-        // Disable channel access linking
-        this._roleEmit('update-role-channel-access', {
-          roleId: role.id,
-          linkEnabled: false,
-          access: []
-        });
-      }
 
       // Reset button BEFORE re-render (re-render clones the button,
       // so the clone must inherit the clean state, not "Saving...").
@@ -4699,6 +4708,7 @@ _renderRoleDetail() {
       color: role.color || '#aaaaaa',
       icon: role.icon || null,
       autoAssign: false,
+      maxUploadMb: role.max_upload_mb || null,
       permissions: role.permissions || []
     }, (res) => {
       if (res && res.error) { this._showToast(res.error, 'error'); return; }
@@ -4770,7 +4780,10 @@ _openRoleMembersModal(role) {
       return;
     }
     listEl.innerHTML = filtered.map(u => {
-      const hasRole = u.currentRoles.some(r => r.id === role.id && !r.channel_id);
+      // The assignment data lists a held role as role_id, not id, so this
+      // never matched: every row said Assign, the badge never appeared and
+      // there was no Remove to undo it with (#5643).
+      const hasRole = u.currentRoles.some(r => (r.role_id ?? r.id) === role.id && !r.channel_id);
       const color = this._getUserColor(u.username);
       const initial = (u.displayName || u.username).charAt(0).toUpperCase();
       const shapeStyle = u.avatarShape === 'square' ? 'border-radius:4px' : '';
@@ -5316,6 +5329,7 @@ _openRoleAssignCenter(preSelectUserId = null) {
   this._racSelectedUser = null;
   this._racSelectedChannel = null; // null = server-wide, number = channel id
   this._racPendingChanges = {}; // key: `${userId}:${channelId||'server'}` → { assignments: { [roleId]: {level, customPerms, applyToSubs} }, removals: [roleId, ...] }
+  this._racCollapsed = new Set(); // `${key}:${roleId}` cards folded away while their edits stay pending (#5607)
 
   document.getElementById('rac-user-list').innerHTML = `<p class="rac-placeholder">${t('modals.common.loading')}</p>`;
   document.getElementById('rac-channel-list').innerHTML = `<p class="rac-placeholder">${t('settings.admin.roles_select_user')}</p>`;
@@ -5643,7 +5657,11 @@ _renderRacConfig() {
     const effectivePerms = assignment && assignment.customPerms
       ? assignment.customPerms
       : [...(card.defaultPerms || [])];
-    const expanded = !!assignment;
+    // Collapsed is a view state on top of the pending assignment, so a card
+    // with edits, or a pending add, can be folded away without losing them.
+    // The Collapse button used to do nothing at all for those (#5607).
+    if (!this._racCollapsed) this._racCollapsed = new Set();
+    const expanded = !!assignment && !this._racCollapsed.has(`${key}:${card.roleId}`);
     const applyToSubs = !!(assignment && assignment.applyToSubs);
 
     let stateBadge = '';
@@ -5846,16 +5864,25 @@ _renderRacConfig() {
       const p = ensurePending();
       const card = cards.find(c => c.roleId === rid);
       if (!card) return;
+      const collapsedKey = `${key}:${rid}`;
       if (p.assignments && p.assignments[rid]) {
-        // Already expanded — collapse by removing the assignment IF nothing
-        // was changed from the held state. Otherwise keep it.
-        const a = p.assignments[rid];
-        const unchanged = card.held
-          && a.level === card.heldLevel
-          && JSON.stringify((a.customPerms || []).slice().sort()) === JSON.stringify((card.defaultPerms || []).slice().sort())
-          && !a.applyToSubs;
-        if (unchanged) delete p.assignments[rid];
+        if (this._racCollapsed.has(collapsedKey)) {
+          // Folded away with edits still pending: open it back up.
+          this._racCollapsed.delete(collapsedKey);
+        } else {
+          // Collapse by dropping the assignment when nothing was changed from
+          // the held state. With edits, or a pending add, keep them and just
+          // fold the editor (#5607).
+          const a = p.assignments[rid];
+          const unchanged = card.held
+            && a.level === card.heldLevel
+            && JSON.stringify((a.customPerms || []).slice().sort()) === JSON.stringify((card.defaultPerms || []).slice().sort())
+            && !a.applyToSubs;
+          if (unchanged) delete p.assignments[rid];
+          else this._racCollapsed.add(collapsedKey);
+        }
       } else {
+        this._racCollapsed.delete(collapsedKey);
         // Expand: seed an assignment from the current held values (or preset).
         p.assignments[rid] = {
           level: card.held ? card.heldLevel : card.defaultLevel,
@@ -6134,7 +6161,7 @@ _setupAuditLog() {
     if (!iso) return '';
     try {
       const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-      return d.toLocaleString();
+      return this._fmtDateTime(d);
     } catch { return iso; }
   };
 
@@ -6298,6 +6325,18 @@ _initAutomodPanel() {
   ['automod-window-hours', 'automod-warn-at', 'automod-mute-at', 'automod-mute-minutes', 'automod-ban-at']
     .forEach(id => on(id, 'change', pushEscalation));
 
+  // Word groups are one JSON setting, saved on the button (#5614).
+  on('automod-word-add-group', 'click', () => this._addAutomodWordGroupRow({ name: '', words: [], strikes: 1 }));
+  on('automod-word-save', 'click', () => {
+    const groups = [...document.querySelectorAll('#automod-word-groups .automod-word-group')].map(row => ({
+      name: row.querySelector('.awg-name').value.trim().slice(0, 40),
+      strikes: Math.min(100, Math.max(1, parseInt(row.querySelector('.awg-strikes').value, 10) || 1)),
+      words: row.querySelector('.awg-words').value.split(/\r?\n|,/).map(w => w.trim()).filter(Boolean).slice(0, 300)
+    })).filter(g => g.words.length);
+    setKey('automod_words', JSON.stringify(groups));
+    this._showToast(t('settings.admin.automod_words_saved'), 'success');
+  });
+
   on('voice-force-relay', 'change', (e) => setKey('voice_force_relay', e.target.checked ? 'true' : 'false'));
   on('fcm-enabled', 'change', (e) => setKey('fcm_enabled', e.target.checked ? 'true' : 'false'));
   on('media-proxy-enabled', 'change', (e) => {
@@ -6373,6 +6412,31 @@ _renderIdleOnline(data) {
 
 // Grey out the rest of the panel when automod is off, so it is obvious that
 // none of the settings below are doing anything.
+_addAutomodWordGroupRow(g) {
+  const host = document.getElementById('automod-word-groups');
+  if (!host) return;
+  const row = document.createElement('div');
+  row.className = 'automod-word-group';
+  row.innerHTML = `
+    <div class="automod-word-group-head">
+      <input type="text" class="settings-text-input awg-name" maxlength="40" placeholder="${this._escapeHtml(t('settings.admin.automod_words_name'))}" value="${this._escapeHtml(g.name || '')}">
+      <label class="awg-strikes-label"><span>${t('settings.admin.automod_words_strikes')}</span><input type="number" class="awg-strikes" min="1" max="100" step="1" value="${Math.min(100, Math.max(1, parseInt(g.strikes, 10) || 1))}"></label>
+      <button type="button" class="btn-sm danger awg-remove" title="${this._escapeHtml(t('settings.admin.automod_words_remove'))}">&times;</button>
+    </div>
+    <textarea class="settings-text-input awg-words" rows="3" placeholder="${this._escapeHtml(t('settings.admin.automod_words_placeholder'))}">${this._escapeHtml((g.words || []).join('\n'))}</textarea>`;
+  row.querySelector('.awg-remove').addEventListener('click', () => row.remove());
+  host.appendChild(row);
+},
+
+_renderAutomodWordGroups(raw) {
+  const host = document.getElementById('automod-word-groups');
+  if (!host) return;
+  host.innerHTML = '';
+  let groups = [];
+  try { groups = JSON.parse(raw || '[]'); } catch {}
+  (Array.isArray(groups) ? groups : []).forEach(g => this._addAutomodWordGroupRow(g || {}));
+},
+
 _syncAutomodVisibility() {
   const body = document.getElementById('automod-body');
   if (!body) return;
@@ -6412,6 +6476,12 @@ _applyAutomodSettings() {
   num('automod-exempt-level', 'automod_link_exempt_level', '50');
   const logCh = document.getElementById('automod-log-channel');
   if (logCh) logCh.value = s.automod_log_channel || '';
+  // Only redraw the word groups when the stored value changed, so an admin
+  // mid-edit is not wiped by an unrelated setting arriving.
+  if (this._automodWordsSeen !== (s.automod_words || '[]')) {
+    this._automodWordsSeen = s.automod_words || '[]';
+    this._renderAutomodWordGroups(this._automodWordsSeen);
+  }
 
   try {
     const c = JSON.parse(s.automod_escalation || '{}');

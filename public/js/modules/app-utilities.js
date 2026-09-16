@@ -293,7 +293,9 @@ _isImageUrl(str) {
   // basename. Must stay in lockstep with the early-return regex in
   // `_formatContent` or classified-as-image messages render as empty.
   if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
+  // The query part stops at whitespace: two Discord CDN links on separate
+  // lines used to match as one URL, which drew one broken image for the pair.
+  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>\s]*)?$/i.test(trimmed)) return true;
   // GIPHY / Tenor GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
   if (/^https:\/\/(media|c)\.tenor\.com\/.+/i.test(trimmed)) return true;
@@ -386,6 +388,9 @@ _highlightSearch(escapedHtml, query) {
 // Capped at 27 to avoid jumbo-sizing a wall of emoji.
 _isEmojiOnly(str) {
   if (!str || !str.trim()) return false;
+  // A Discord emote token counts as one emoji, like a resolved :name: does.
+  const discordEmotes = (str.match(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g) || []).length;
+  str = str.replace(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g, ' ');
   const customMatches = str.match(/:([a-zA-Z0-9_-]+):/g) || [];
   // Only expand custom tokens that actually exist as loaded emojis
   const resolvedCustom = customMatches.filter(m => {
@@ -404,8 +409,19 @@ _isEmojiOnly(str) {
   if (s.trim().length > 0) return false;
   let unicodeCount = 0;
   try { unicodeCount = (str.match(/[\p{Extended_Pictographic}]/gu) || []).length; } catch {}
-  const total = resolvedCustom.length + unicodeCount;
+  const total = resolvedCustom.length + unicodeCount + discordEmotes;
   return total >= 1 && total <= 27;
+},
+
+// Markup for one Discord emote token. Haven's own emoji of that name is
+// preferred so a server carrying the same set shows its copy; the fallback is
+// the server-side emote cache, and a failed load turns back into the :name:
+// text (the capture-phase error listener in app-ui.js does that).
+_discordEmoteHtml(name, id, animated) {
+  const label = this._escapeHtml(`:${name}:`);
+  const own = this._findNamedEmoji(name);
+  if (own) return `<img src="${this._escapeHtml(own.url)}" alt="${label}" title="${label}" class="custom-emoji">`;
+  return `<img src="/api/ferry/emote/${id}.${animated ? 'gif' : 'png'}" alt="${label}" title="${label}" class="custom-emoji discord-emote">`;
 },
 
 // Resolve a `:name:` shortcode to an image emoji — checks the bundled
@@ -453,6 +469,34 @@ _emojiSearchMatch(emoji, keywords, rawQuery) {
   return false;
 },
 
+// ── Role mentions (#5579) ──
+// "@Moderators" lights up for everyone holding the role and pings them,
+// unless they have turned role pings off. Sending one needs the same
+// permission as @everyone, which the server enforces.
+
+/** Fetch the server's roles for rendering and the @ picker. Re-run whenever
+ *  the server says its roles changed. */
+_refreshMentionableRoles() {
+  if (!this.socket) return;
+  try {
+    this.socket.emit('get-roles', null, (res) => {
+      const roles = res && Array.isArray(res.roles) ? res.roles : [];
+      this._mentionableRoles = roles
+        .filter(r => r && r.name)
+        .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, level: r.level }));
+    });
+  } catch { /* offline: keep whatever we had */ }
+},
+
+/** True when `content` pings a role the viewer holds and role pings are on. */
+_mentionsMyRole(content) {
+  if (!content || (this.notifications && this.notifications.roleMentionsEnabled === false)) return false;
+  const mine = (this.user && Array.isArray(this.user.roles)) ? this.user.roles : [];
+  if (!mine.length) return false;
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return mine.some(r => r && r.name && new RegExp(`(?<![\\w@])@${esc(r.name)}(?!\\w)`, 'i').test(content));
+},
+
 // ── Timestamps that follow the reader (<t:1780853820:R>) ──
 // One instant in the message, rendered in whatever timezone and locale the
 // person reading it is in, which is the whole point for scheduling across a
@@ -469,6 +513,119 @@ _timeLocale() {
   if (!ui) return browser[0] || undefined;
   const base = ui.split('-')[0];
   return browser.find(l => String(l).toLowerCase().split('-')[0] === base) || ui;
+},
+
+/** The reader's confirmed IANA timezone, or undefined to let the browser use
+ *  the device zone. Only a value the user actively confirmed counts; Skip and
+ *  "Remind later" leave this unset so nothing changes from Haven's old
+ *  browser-default behaviour. Passing an IANA id to Intl means DST and any
+ *  historical offset change are resolved per-instant — never a frozen offset. */
+_userTimeZone() {
+  const tz = this._userPrefs && this._userPrefs.timezone;
+  if (typeof tz !== 'string' || !tz) return undefined;
+  // A zone this browser does not know (a newer zone name on an older engine,
+  // or a stray value) would make every Intl call throw and take the message
+  // list with it. Check it once per value and fall back to the browser's own
+  // zone when it is unknown.
+  if (this._tzCheckedValue !== tz) {
+    this._tzCheckedValue = tz;
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); this._tzCheckedOk = true; }
+    catch { this._tzCheckedOk = false; }
+  }
+  return this._tzCheckedOk ? tz : undefined;
+},
+
+/** The reader's confirmed hour cycle as an Intl `hour12` value: true for 12h,
+ *  false for 24h, undefined to keep the locale's own default. */
+_userHour12() {
+  const f = this._userPrefs && this._userPrefs.time_format;
+  if (f === '12') return true;
+  if (f === '24') return false;
+  return undefined;
+},
+
+/** Merge the reader's persisted timezone + hour cycle into a set of
+ *  Intl.DateTimeFormat options. Both `timeZone` and `hour12` are legal
+ *  alongside dateStyle/timeStyle as well as explicit component options, so
+ *  every existing call site can route through here unchanged. */
+_dtOpts(opts) {
+  const out = Object.assign({}, opts);
+  const tz = this._userTimeZone();
+  if (tz && out.timeZone === undefined) out.timeZone = tz;
+  const h12 = this._userHour12();
+  if (h12 !== undefined && out.hour12 === undefined && out.hourCycle === undefined) out.hour12 = h12;
+  return out;
+},
+
+/** Central time/date formatters. All timestamp rendering across the app goes
+ *  through these so a confirmed timezone/format applies everywhere at once and
+ *  an unset preference falls back to exactly what the browser did before.
+ *  `locale` defaults to the browser default (what every call site used before);
+ *  the <t:> token formatter passes _timeLocale() to keep its own behaviour. */
+_fmtTime(value, opts = { hour: '2-digit', minute: '2-digit' }, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleTimeString(locale, this._dtOpts(opts));
+},
+_fmtDate(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleDateString(locale, this._dtOpts(opts));
+},
+_fmtDateTime(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleString(locale, this._dtOpts(opts));
+},
+
+// ── Wall-clock <-> instant in the reader's confirmed zone ───────────────
+// The formatters above render an instant; these go the other way, for the
+// features that let someone type a wall-clock time (the /time command and its
+// modal). With no timezone confirmed they fall back to the device zone, so the
+// behaviour is unchanged; with one set the entered time is anchored to that
+// zone instead of whatever the browser reports, which is the whole point on a
+// privacy browser that lies about the system clock.
+
+/** The wall-clock parts of an instant in the confirmed zone (or the device
+ *  zone when none is set). monthIndex is 0-based to match the Date API. */
+_zonedParts(date, tz = this._userTimeZone()) {
+  const d = (date instanceof Date) ? date : new Date(date);
+  if (!tz) {
+    return { year: d.getFullYear(), monthIndex: d.getMonth(), day: d.getDate(),
+             hour: d.getHours(), minute: d.getMinutes(), second: d.getSeconds() };
+  }
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const m = {};
+  for (const p of parts) if (p.type !== 'literal') m[p.type] = p.value;
+  let hour = Number(m.hour);
+  if (hour === 24) hour = 0; // some engines report midnight as 24
+  return { year: Number(m.year), monthIndex: Number(m.month) - 1, day: Number(m.day),
+           hour, minute: Number(m.minute), second: Number(m.second) };
+},
+
+/** Milliseconds that `tz` is ahead of UTC at instant `ts` (negative if behind). */
+_zoneOffsetMs(tz, ts) {
+  const p = this._zonedParts(new Date(ts), tz);
+  const asUTC = Date.UTC(p.year, p.monthIndex, p.day, p.hour, p.minute, p.second);
+  return asUTC - ts;
+},
+
+/** Turn a wall-clock (year, 0-based month, day, hour, minute, second) read in
+ *  the confirmed zone into the matching instant. With no zone set this is
+ *  exactly new Date(y, mo, d, ...) in the device zone, so the fallback path is
+ *  byte-for-byte the old behaviour. */
+_wallToInstant(y, moIndex, d, h, mi, s, tz = this._userTimeZone()) {
+  if (!tz) return new Date(y, moIndex, d, h, mi, s, 0);
+  const naive = Date.UTC(y, moIndex, d, h, mi, s);
+  // One correction, then a second pass so a DST boundary resolves correctly.
+  let inst = naive - this._zoneOffsetMs(tz, naive);
+  inst = naive - this._zoneOffsetMs(tz, inst);
+  return new Date(inst);
+},
+
+/** "Now" decomposed into the confirmed zone's wall-clock, for seeding pickers. */
+_nowZonedParts() {
+  return this._zonedParts(new Date());
 },
 
 /** "in 5 minutes" / "3 hours ago", in the largest unit that still reads well. */
@@ -495,19 +652,19 @@ _formatTimestampToken(seconds, style = 'f') {
   let text;
   try {
     switch (style) {
-      case 't': text = date.toLocaleTimeString(locale, { timeStyle: 'short' }); break;
-      case 'T': text = date.toLocaleTimeString(locale, { timeStyle: 'medium' }); break;
-      case 'd': text = date.toLocaleDateString(locale, { dateStyle: 'short' }); break;
-      case 'D': text = date.toLocaleDateString(locale, { dateStyle: 'long' }); break;
-      case 'F': text = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'short' }); break;
+      case 't': text = this._fmtTime(date, { timeStyle: 'short' }, locale); break;
+      case 'T': text = this._fmtTime(date, { timeStyle: 'medium' }, locale); break;
+      case 'd': text = this._fmtDate(date, { dateStyle: 'short' }, locale); break;
+      case 'D': text = this._fmtDate(date, { dateStyle: 'long' }, locale); break;
+      case 'F': text = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'short' }, locale); break;
       case 'R': text = this._relativeTimestamp(date.getTime(), locale); break;
-      default:  text = date.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' }); break;
+      default:  text = this._fmtDateTime(date, { dateStyle: 'long', timeStyle: 'short' }, locale); break;
     }
   } catch { return null; }
   // The hover title always spells the instant out in full, so a relative or
   // time-only token can still be pinned down without asking the sender.
   let title = text;
-  try { title = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'long' }); } catch { /* keep the visible text */ }
+  try { title = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'long' }, locale); } catch { /* keep the visible text */ }
   if (style === 'R') this._startTimestampTicker();
   return `<time class="chat-timestamp" datetime="${this._escapeHtml(date.toISOString())}" data-ts="${Math.trunc(seconds)}" data-tstyle="${this._escapeHtml(style)}" title="${this._escapeHtml(title)}">${this._escapeHtml(text)}</time>`;
 },
@@ -584,11 +741,14 @@ _parseTimeExpression(input, now = new Date()) {
   let when;
   if (ymd) {
     const y = Number(ymd[1]), mo = Number(ymd[2]) - 1, d = Number(ymd[3]);
-    when = new Date(y, mo, d, hour, mi, 0, 0);
-    // Reject dates that do not exist (JS rolls 2026-02-31 into March).
-    if (when.getFullYear() !== y || when.getMonth() !== mo || when.getDate() !== d) return null;
+    when = this._wallToInstant(y, mo, d, hour, mi, 0);
+    // Reject dates that do not exist (JS rolls 2026-02-31 into March), checked
+    // in the same zone the wall-clock was read in.
+    const back = this._zonedParts(when);
+    if (back.year !== y || back.monthIndex !== mo || back.day !== d) return null;
   } else {
-    when = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (dayShift || 0), hour, mi, 0, 0);
+    const nowP = this._zonedParts(now);
+    when = this._wallToInstant(nowP.year, nowP.monthIndex, nowP.day + (dayShift || 0), hour, mi, 0);
     // A bare time that already went by today means the next one. Someone
     // saying "8pm" at nine in the evening is scheduling, not reminiscing.
     if (dayShift === null && when.getTime() <= now.getTime()) when = new Date(when.getTime() + 86400000);
@@ -639,11 +799,15 @@ _formatContent(str) {
         const mime = this._escapeHtml(typeof meta.mime === 'string' ? meta.mime : 'application/octet-stream');
         const size = Number(meta.size) || 0;
         const sizeStr = this._escapeHtml(this._formatFileSize ? this._formatFileSize(size) : (size + ' B'));
-        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
+        // A voice message in a DM shows as one, with its length, and a click
+        // decrypts it into a player (#5665).
+        const voiceDur = this._voiceMessageLength(name);
+        const label = voiceDur !== null ? t('app.messages.voice_message') : name;
+        return `<div class="file-attachment e2e-file-pending${voiceDur !== null ? ' voice-message' : ''}" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
           <button type="button" class="file-download-link e2e-file-download">
-            <span class="file-icon">🔒</span>
-            <span class="file-name">${name}</span>
-            <span class="file-size">(${sizeStr})</span>
+            <span class="file-icon">${voiceDur !== null ? '🎤' : '🔒'}</span>
+            <span class="file-name">${label}</span>
+            <span class="file-size">(${voiceDur !== null ? voiceDur : sizeStr})</span>
             <span class="file-download-arrow">⬇</span>
           </button>
         </div>`;
@@ -682,6 +846,15 @@ _formatContent(str) {
       'cpl','inf','reg','dll','ocx','sys','drv',
       'sh','app','dmg','pkg','deb','rpm','appimage',
     ]);
+    // A voice message from the mic button: a small player with its length
+    // rather than a file name and size (#5665).
+    const voiceDur = this._voiceMessageLength(fileName);
+    if (voiceDur !== null) {
+      return `<div class="file-attachment voice-message">
+        <div class="file-info">🎤 <span class="file-name">${t('app.messages.voice_message')}</span> <span class="file-size">(${voiceDur})</span></div>
+        <audio controls preload="metadata" src="${fileUrl}" class="file-audio"></audio>
+      </div>`;
+    }
     // Audio/video get inline players. The extension lists are optimistic —
     // a container being playable depends on the codecs inside it, not just the
     // extension (a .mov holding ProRes or HEVC won't decode in most browsers).
@@ -713,12 +886,13 @@ _formatContent(str) {
 
   // Render server-hosted stickers inline at sticker dimensions (CSS-controlled)
   if (/^\/uploads\/stickers\/[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
-    return `<img src="${this._escapeHtml(str.trim())}" class="sticker-img" alt="sticker">`;
+    return `<img ${this._lazySrcAttr(`src="${this._escapeHtml(str.trim())}"`)} class="sticker-img" alt="sticker">`;
   }
 
   // Render server-hosted images inline (early return)
-  // No loading="lazy" — content-visibility:auto on .message already skips off-screen
-  // rendering; lazy loading on top creates 0→real-height jumps when scrolling history.
+  // Inline images go through the lazy media queue (app-media.js): the loader
+  // fetches them near the viewport, closest first, and pins their box so
+  // scrolling history never jumps.
   // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
   // Basename allows dots (`photo.edit.jpg`) and one extra path segment so this
   // matches `_isImageUrl` / Haven Mobile. The previous `[\w\-]+` pattern
@@ -726,7 +900,7 @@ _formatContent(str) {
   if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
     const u = str.trim();
     if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
-    return `<img src="${this._escapeHtml(u)}" class="chat-image" alt="image">`;
+    return `<img ${this._lazySrcAttr(`src="${this._escapeHtml(u)}"`)} class="chat-image" alt="image">`;
   }
 
   // Remote image-only messages (Ferry Discord attachments, pasted CDN URLs).
@@ -735,7 +909,7 @@ _formatContent(str) {
     const u = str.trim();
     if (this._isImageUrl(u) && /^https?:\/\//i.test(u)) {
       if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
-      return `<img ${this._imgSrcAttr(u)} class="chat-image" alt="image">`;
+      return `<img ${this._lazySrcAttr(this._imgSrcAttr(u))} class="chat-image" alt="image">`;
     }
   }
 
@@ -759,7 +933,38 @@ _formatContent(str) {
     return `\x00TIMESTAMP_${idx}\x00`;
   });
 
-  let html = this._escapeHtml(withTimestamps);
+  // ── Discord custom emotes: <:name:id> / <a:name:id> ──
+  // Relayed by Ferry, or typed by someone who wants the emote to show on the
+  // Discord side of a bridge. Pulled out before escaping like the timestamps,
+  // and before the :name: pass below so the shortcode inside the token is not
+  // resolved on its own. A Haven emoji of the same name wins; otherwise the
+  // picture comes from the server's emote cache (/api/ferry/emote/), which
+  // answers 404 on a server without the bridge, and the :name: text stays.
+  const emotes = [];
+  const withEmotes = withTimestamps.replace(/<(a?):([A-Za-z0-9_]{2,32}):(\d{15,25})>/g, (full, anim, name, id) => {
+    const idx = emotes.length;
+    emotes.push(this._discordEmoteHtml(name, id, !!anim));
+    return `\x00DEMOTE_${idx}\x00`;
+  });
+
+  let html = this._escapeHtml(withEmotes);
+
+  // ── Colour spans: c#RRGGBB…#c and c#(R,G,B)…#c ──
+  // Marked out before the link pass, so a closing #c is never swallowed into
+  // the URL in front of it, and restored last, so the colour reaches text
+  // inside a quote or a spoiler as well (#5661).
+  const colorOpens = [];
+  html = html.replace(/c#([0-9a-fA-F]{6})([\s\S]+?)#c/g, (full, hex, inner) => {
+    const idx = colorOpens.length;
+    colorOpens.push(`<span style="color:#${hex}">`);
+    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+  });
+  html = html.replace(/c#\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)([\s\S]+?)#c/g, (full, r, g, b, inner) => {
+    const [rr, gg, bb] = [r, g, b].map(v => Math.min(255, parseInt(v, 10)));
+    const idx = colorOpens.length;
+    colorOpens.push(`<span style="color:rgb(${rr},${gg},${bb})">`);
+    return `\x00COLOR_${idx}\x00${inner}\x00ENDCOLOR\x00`;
+  });
 
   // ── Markdown images & links (extract before auto-linking) ──
   const mdLinks = [];
@@ -857,6 +1062,16 @@ _formatContent(str) {
       if (this.user && this.user.id) nameToUserId.set(low, this.user.id);
     }
   }
+  // Role mentions (#5579): every role name is a valid @target, styled as a
+  // role and lit up for a viewer who holds it.
+  const roleByName = new Map();
+  const myRoleIds = new Set(((this.user && this.user.roles) || []).map(r => r && r.id));
+  for (const r of (this._mentionableRoles || [])) {
+    if (!r || !r.name) continue;
+    const low = r.name.toLowerCase();
+    roleByName.set(low, { name: r.name, color: r.color, mine: myRoleIds.has(r.id) });
+    validNames.add(low);
+  }
   const allNames = [...validNames].sort((a, b) => b.length - a.length);
   const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Build alt list of known names; also keep a generic fallback for any
@@ -870,6 +1085,12 @@ _formatContent(str) {
     const isKnown = validNames.has(lower);
     const isSelf  = lower === selfLogin;
     if (!isKnown && !isSelf) return match;
+    // A role, unless a member shares the name, in which case the person wins.
+    const role = roleByName.get(lower);
+    if (role && !nameToUserId.has(lower) && !isSelf) {
+      const style = role.color ? ` style="--role-color:${this._escapeHtml(role.color)}"` : '';
+      return `<span class="mention mention-role${role.mine ? ' mention-self' : ''}"${style}>@${this._escapeHtml(role.name)}</span>`;
+    }
     // Prefer the viewer's personal nickname for that user, then the
     // server-side display name, then the raw token. (#5290)
     const uid = nameToUserId.get(lower);
@@ -893,20 +1114,37 @@ _formatContent(str) {
   // ## headings or message IDs (#1234) don't get linkified spuriously.
   if (Array.isArray(this.channels) && this.channels.length) {
     const chanByName = new Map();
+    const nameByCode = new Map();
+    // Names a channel used to have, so a #old-name typed before a rename
+    // still points at it and reads as the name it has now (#5602). A current
+    // name always wins over another channel's former one.
+    const formerByName = new Map();
     for (const c of this.channels) {
       if (c && c.name && c.code && !c.is_dm) {
         chanByName.set(String(c.name).toLowerCase(), c.code);
+        nameByCode.set(c.code, String(c.name));
+        let former = [];
+        try { former = typeof c.former_names === 'string' ? JSON.parse(c.former_names) : (c.former_names || []); } catch { former = []; }
+        if (Array.isArray(former)) for (const old of former) {
+          if (typeof old === 'string' && old) formerByName.set(old.toLowerCase(), c.code);
+        }
       }
     }
     if (chanByName.size > 0) {
+      // Names with spaces are typed as #foo_bar — try the literal form
+      // first, then fall back to a space-substituted lookup so spaced
+      // channel names resolve too.
+      const lookup = (map, lower) => map.get(lower) || map.get(lower.replace(/_/g, ' '));
       html = html.replace(/(?<![\w#&])#([\p{L}\p{N}\p{Emoji_Presentation}_-][\p{L}\p{N}\p{Emoji_Presentation}_-]{0,49})/gu, (match, name) => {
         const lower = name.toLowerCase();
-        // Names with spaces are typed as #foo_bar — try the literal form
-        // first, then fall back to a space-substituted lookup so spaced
-        // channel names resolve too.
-        let code = chanByName.get(lower) || chanByName.get(lower.replace(/_/g, ' '));
-        if (!code) return match;
-        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(name)}</span>`;
+        let code = lookup(chanByName, lower);
+        let label = name;
+        if (!code) {
+          code = lookup(formerByName, lower);
+          if (!code) return match;
+          label = (nameByCode.get(code) || name).replace(/\s+/g, '_');
+        }
+        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(label)}</span>`;
       });
     }
   }
@@ -920,6 +1158,9 @@ _formatContent(str) {
     if (emoji) return `<img src="${this._escapeHtml(emoji.url)}" alt=":${this._escapeHtml(name)}:" title=":${this._escapeHtml(name)}:" class="custom-emoji">`;
     return match;
   });
+
+  // Render __underline__
+  html = html.replace(/__(.+?)__/g, '<u>$1</u>');
 
   // Render /me action text (italic)
   if (html.startsWith('_') && html.endsWith('_') && html.length > 2) {
@@ -942,8 +1183,13 @@ _formatContent(str) {
   html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
   // Render grouped > blockquotes and preserve attribution lines inside the quote.
+  // A line quotes only when the > is followed by a space, another >, or
+  // nothing at all: ">implying" and ">.<" stay as typed (#5654).
   const blockquotes = [];
-  html = html.replace(/(^|\n)((?:&gt;[^\n]*(?:\n|$))+)/g, (full, pre, block) => {
+  html = html.replace(/(^|\n)((?:&gt;(?:[ \t][^\n]*|&gt;[^\n]*)?(?:\n|$))+)/g, (full, pre, block) => {
+    // A lone ">" with nothing on it is only a blank line inside a quote,
+    // never a quote by itself.
+    if (block.split('\n').every(line => /^&gt;\s*$/.test(line))) return full;
     const lines = block.trim().split('\n').map(line => line.replace(/^&gt;\s?/, ''));
     let authorHtml = '';
     if (lines[0] && /^@[^\s].+ wrote:$/.test(lines[0])) {
@@ -951,9 +1197,15 @@ _formatContent(str) {
     }
     const textHtml = lines.join('<br>');
     const idx = blockquotes.length;
-    blockquotes.push(`${pre}<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
-    return `\x00BLOCKQUOTE_${idx}\x00`;
+    blockquotes.push(`<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
+    // The line break after the quote stays in the text, so a list that
+    // follows still starts on its own line; the <br> it turns into is
+    // dropped again when the quote is put back (#5661).
+    return `${pre}\x00BLOCKQUOTE_${idx}\x00${block.endsWith('\n') ? '\n' : ''}`;
   });
+
+  // (Colour spans were marked out before the link pass and are put back at
+  // the very end.)
 
   // ── Headings: # H1, ## H2, ### H3 at start of line ──
   html = html.replace(/(^|\n)(#{1,3})\s+(.+)/g, (_, pre, hashes, text) => {
@@ -1073,7 +1325,7 @@ _formatContent(str) {
   });
 
   blockquotes.forEach((block, idx) => {
-    html = html.replace(`\x00BLOCKQUOTE_${idx}\x00`, block);
+    html = html.replace(new RegExp(`(?:<br>)?\\x00BLOCKQUOTE_${idx}\\x00(?:<br>)?`), () => block);
   });
 
   // ── Restore fenced code blocks ──
@@ -1102,23 +1354,46 @@ _formatContent(str) {
     html = html.replace(`\x00TIMESTAMP_${idx}\x00`, () => el);
   });
 
+  // ── Restore Discord emotes ──
+  emotes.forEach((el, idx) => {
+    html = html.replace(`\x00DEMOTE_${idx}\x00`, () => el);
+  });
+
+  // ── Colour spans go back last, around whatever was rendered inside them ──
+  colorOpens.forEach((open, idx) => {
+    html = html.replace(`\x00COLOR_${idx}\x00`, () => open);
+  });
+  html = html.replace(/\x00ENDCOLOR\x00/g, '</span>');
+
   if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
 
   return html;
 },
 
+// "1:05" for a voice-message-1m05s.weba name, "" for a voice message with
+// no length in its name, null for any other file (#5665).
+_voiceMessageLength(name) {
+  if (!/^voice-message/i.test(String(name || ''))) return null;
+  const m = String(name).match(/(\d+)m(\d+)s/);
+  return m ? `${Number(m[1])}:${String(m[2]).padStart(2, '0')}` : '';
+},
+
 _formatTime(dateStr) {
   const date = new Date(dateStr);
   const now = new Date();
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const isToday = date.toDateString() === now.toDateString();
+  const time = this._fmtTime(date);
+  // Compare the calendar day in the reader's chosen zone (falls back to the
+  // device zone when unset), so "today"/"yesterday" don't drift across a date
+  // boundary when a timezone is picked.
+  const dayKey = (d) => this._fmtDate(d, { year: 'numeric', month: '2-digit', day: '2-digit' });
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const isToday = dayKey(date) === dayKey(now);
+  const isYesterday = dayKey(date) === dayKey(yesterday);
 
   if (isToday) return t('utils.today_at', { time });
   if (isYesterday) return t('utils.yesterday_at', { time });
-  return `${date.toLocaleDateString()} ${time}`;
+  return `${this._fmtDate(date)} ${time}`;
 },
 
 _getUserColor(username) {
@@ -1957,11 +2232,12 @@ _switchGifTab(tab) {
 },
 
 // The proxy reports which provider served the batch — keep the picker
-// footer honest ("Powered by Tenor" vs "Powered by GIPHY").
+// footer honest ("Powered by Tenor" / "KLIPY" / "GIPHY").
 _setGifFooter(provider) {
   if (!provider) return;
+  const label = provider === 'tenor' ? 'Tenor' : provider === 'klipy' ? 'KLIPY' : 'GIPHY';
   const footer = document.querySelector('.gif-picker-footer');
-  if (footer) footer.textContent = t('gifs.powered_by', { provider: provider === 'tenor' ? 'Tenor' : 'GIPHY' });
+  if (footer) footer.textContent = t('gifs.powered_by', { provider: label });
 },
 
 _loadTrendingGifs() {
@@ -2278,8 +2554,12 @@ _renderPollWidget(msgId, poll) {
     const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
     const myVote = voters.some(v => v.user_id === myId);
     const voterNames = poll.anonymous ? '' : voters.map(v => this._escapeHtml(v.username)).join(', ');
-    return `<button class="poll-option${myVote ? ' poll-voted' : ''}" data-msg-id="${msgId}" data-option="${i}" title="${voterNames}">
-      <div class="poll-option-bar" style="width:${pct}%"></div>
+    // An option can carry a picture (#5648). It is part of the button, so a
+    // click on it is a vote, not the lightbox.
+    const img = Array.isArray(poll.images) && typeof poll.images[i] === 'string' && /^\/uploads\//.test(poll.images[i])
+      ? `<img class="poll-option-img" src="${this._escapeHtml(poll.images[i])}" alt="" loading="lazy">` : '';
+    return `<button class="poll-option${myVote ? ' poll-voted' : ''}${img ? ' has-image' : ''}" data-msg-id="${msgId}" data-option="${i}" title="${voterNames}">
+      <div class="poll-option-bar" style="width:${pct}%"></div>${img}
       <span class="poll-option-text">${this._escapeHtml(opt)}</span>
       <span class="poll-option-count">${count} (${pct}%)</span>
     </button>`;
@@ -2290,9 +2570,11 @@ _renderPollWidget(msgId, poll) {
   if (poll.anonymous) settings.push(t('poll.anonymous'));
   const settingsHtml = settings.length ? `<div class="poll-settings-info">${settings.join(' · ')}</div>` : '';
 
+  // A picture poll can sit in columns (#5648).
+  const cols = Number(poll.columns) > 1 ? Math.min(5, Math.floor(Number(poll.columns))) : 0;
   return `<div class="poll-widget" data-msg-id="${msgId}">
     <div class="poll-question">${this._escapeHtml(poll.question)}</div>
-    <div class="poll-options">${optionsHtml}</div>
+    <div class="poll-options${cols ? ' poll-grid' : ''}"${cols ? ` style="--poll-cols:${cols}"` : ''}>${optionsHtml}</div>
     <div class="poll-footer">${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml ? ' · ' : ''}${settingsHtml}</div>
   </div>`;
 },
@@ -2882,8 +3164,19 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
 // THREADS
 // ═══════════════════════════════════════════════════════
 
-_renderThreadPreview(parentId, thread) {
-  if (!thread || !thread.count) return '';
+_renderThreadPreview(parentId, thread, opts = {}) {
+  if (!thread) return '';
+  if (!thread.count) {
+    // A forum topic with no replies yet gets the same button as an
+    // invitation, so a fresh topic reads as a topic rather than a message.
+    if (!opts.forum) return '';
+    return `
+    <button class="thread-preview thread-preview-empty" data-thread-parent="${parentId}">
+      <span class="thread-preview-count">${t('thread_runtime.reply_to_topic')}</span>
+      <span class="thread-preview-arrow">›</span>
+    </button>
+  `;
+  }
   const participantAvatars = (thread.participants || []).map(p => {
     if (p.avatar) {
       return `<img class="thread-participant-avatar" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
@@ -3101,12 +3394,48 @@ _openDMPiP(code) {
   const titleEl = document.getElementById('dm-pip-title');
   if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
 
-  // Header avatar — pulled from the partner's online presence (best effort)
+  this._refreshDMPipHeader(ch, partnerName);
+  // Ask for the DM's own online list so the header is right straight away,
+  // not only after the next presence change (#5574).
+  this.socket.emit('request-online-users', { code });
+
+  // Banner background: use server banner as a subtle backdrop
+  const bannerEl = document.getElementById('dm-pip-banner');
+  const bannerUrl = this.serverSettings && this.serverSettings.server_banner;
+  if (bannerEl) {
+    if (bannerUrl) {
+      bannerEl.style.backgroundImage = `url("${bannerUrl.replace(/"/g, '\\"')}")`;
+      panel.classList.remove('no-banner');
+    } else {
+      bannerEl.style.backgroundImage = '';
+      panel.classList.add('no-banner');
+    }
+  }
+  this._openDMPiPBody(ch, code, panel);
+},
+
+// Header avatar and status dot for the open DM PiP. Runs when the panel opens
+// and again on every presence broadcast (#5574): it used to render once, from
+// whatever the online list held at that moment, so a PiP opened before the
+// list arrived, or whose partner came online later, kept the grey dot and the
+// initial for as long as the panel stayed open.
+_refreshDMPipHeader(ch, partnerName) {
+  if (!ch) {
+    const code = this._activeDMPip;
+    ch = code ? (this.channels || []).find(c => c.code === code) : null;
+    if (!ch) return;
+  }
+  if (!partnerName) partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
   const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
   if (avatarWrap) {
     const partnerId = ch.dm_target && ch.dm_target.id;
-    const onlinePartner = partnerId && this._lastOnlineUsers
-      ? this._lastOnlineUsers.find(u => u.id === partnerId)
+    // The DM's own list first: the list for the channel on screen only has
+    // the partner in it when they happen to share that channel (#5574).
+    const dmList = this._onlineByChannel && this._onlineByChannel.get(ch.code);
+    const onlinePartner = partnerId
+      ? ((dmList && dmList.find(u => u.id === partnerId))
+        || (this._lastOnlineUsers ? this._lastOnlineUsers.find(u => u.id === partnerId) : null)
+        || null)
       : null;
     const avatarUrl = (onlinePartner && onlinePartner.avatar) || (ch.dm_target && ch.dm_target.avatar);
     const shape = (onlinePartner && onlinePartner.avatarShape)
@@ -3126,12 +3455,12 @@ _openDMPiP(code) {
       statusClass = s === 'dnd' ? 'dnd'
         : s === 'away' ? 'away'
         : s === 'invisible' ? 'invisible'
-        : (onlinePartner.online === false ? 'away' : '');
+        : (onlinePartner.online === false ? 'offline' : '');
     } else {
-      statusClass = 'away'; // partner not in online list → treat as offline/away
+      statusClass = 'offline'; // partner not in online list
     }
     const statusLabel = statusClass === 'dnd' ? t('app.profile.dnd')
-      : statusClass === 'away' ? t('dm_runtime.offline_away')
+      : (statusClass === 'away' || statusClass === 'offline') ? t('dm_runtime.offline_away')
       : statusClass === 'invisible' ? t('app.profile.invisible')
       : t('app.profile.online');
     const statusDot = `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
@@ -3145,19 +3474,10 @@ _openDMPiP(code) {
       avatarWrap.innerHTML = `<span class="dm-pip-avatar-initial">${this._escapeHtml(initial)}</span>${statusDot}`;
     }
   }
+},
 
-  // Banner background — use server banner as a subtle backdrop
-  const bannerEl = document.getElementById('dm-pip-banner');
-  const bannerUrl = this.serverSettings && this.serverSettings.server_banner;
-  if (bannerEl) {
-    if (bannerUrl) {
-      bannerEl.style.backgroundImage = `url("${bannerUrl.replace(/"/g, '\\"')}")`;
-      panel.classList.remove('no-banner');
-    } else {
-      bannerEl.style.backgroundImage = '';
-      panel.classList.add('no-banner');
-    }
-  }
+// The rest of opening a DM PiP: everything after the header and banner.
+_openDMPiPBody(ch, code, panel) {
 
   // Restore geometry from localStorage
   this._applyDMPiPGeometry(panel);
@@ -3501,6 +3821,9 @@ _openThread(parentId) {
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel
   this._clearThreadMentionsForParent(this.currentChannel, parentId);
+  // The server records the read position when it serves the thread; drop the
+  // forum card's dot right away rather than on the next reload (#5641).
+  if (this._forumActive && this._forumMarkTopicRead) this._forumMarkTopicRead(parentId);
   const panel = document.getElementById('thread-panel');
   if (!panel) return;
   panel.style.display = 'flex';
@@ -3524,6 +3847,9 @@ _openThread(parentId) {
   const parentUserIdRaw = msgEl?.dataset?.userId;
   const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
   this._setThreadParentHeader({ userId: parentUserId, username: author, avatar, avatarShape });
+  // A forum topic opens across the chat column with a title bar; this runs
+  // after the header above so the bar's title is what shows (#5659).
+  this._forumApplyThreadChrome?.(parentId);
 
   // Focus input
   const input = document.getElementById('thread-input');
@@ -3592,6 +3918,7 @@ _closeThread() {
     panel.style.display = 'none';
     panel.dataset.parentId = '';
   }
+  this._forumApplyThreadChrome?.(null);
 },
 
 _sendThreadMessage() {
@@ -3687,7 +4014,7 @@ _appendThreadMessage(msg) {
   if (msg.avatar) el.dataset.avatar = msg.avatar;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   if (threadCompact) {
-    const shortTime = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const shortTime = this._fmtTime(msg.created_at);
     el.innerHTML = `
       <div class="thread-msg-row">
         <div class="thread-msg-avatar thread-msg-compact-spacer"><span class="thread-compact-time">${this._escapeHtml(shortTime)}</span></div>
@@ -3723,6 +4050,8 @@ _appendThreadMessage(msg) {
     `;
   }
   container.appendChild(el);
+  // Link cards in threads, the same as in the channel (#5620).
+  this._fetchLinkPreviews(el);
   try { this._decryptE2EImages?.(el); } catch {}
   try { this._decryptE2EFiles?.(el); } catch {}
   try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch {}
@@ -3777,8 +4106,10 @@ _promoteThreadCompactToFull(compactEl) {
 _updateThreadPreview(parentId, thread) {
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
   if (!msgEl) return;
+  if (msgEl.classList.contains('forum-topic')) { this._forumBump && this._forumBump(parentId, thread); return; }
   const oldPreview = msgEl.querySelector('.thread-preview');
-  const newHtml = this._renderThreadPreview(parentId, thread);
+  const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  const newHtml = this._renderThreadPreview(parentId, thread, { forum: !!(ch && ch.is_forum) });
   if (oldPreview) {
     oldPreview.outerHTML = newHtml;
   } else if (newHtml) {
@@ -3809,6 +4140,15 @@ _renderReplyBanner(replyCtx) {
 },
 
 _setReply(msgEl, msgId) {
+  // In a forum a reply to a topic belongs in the topic's thread: that is what
+  // bumps it, and it keeps the answer under the question instead of posting
+  // a second topic that quotes the first. (#144)
+  const forumCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  if (forumCh && forumCh.is_forum && msgEl && msgEl.closest && msgEl.closest('#messages')) {
+    this._clearReply();
+    this._openThread(msgId);
+    return;
+  }
   // Get message info — works for both full messages and compact messages
   let author = msgEl.querySelector('.message-author')?.textContent;
   if (!author) {
@@ -3899,7 +4239,14 @@ _startEditMessage(msgEl, msgId) {
   textarea.value = rawText;
   textarea.rows = 1;
   textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // The same drag bar the composer has, so a long message can be pulled
+  // open while editing it (#5662).
+  const grip = document.createElement('div');
+  grip.className = 'pip-input-resizer edit-resizer';
+  grip.setAttribute('aria-hidden', 'true');
+  contentEl.appendChild(grip);
   contentEl.appendChild(textarea);
+  this._bindInputResizer?.(grip);
 
   // Track active edit textarea for emoji picker redirection
   this._activeEditTextarea = textarea;
@@ -3978,6 +4325,17 @@ _startEditMessage(msgEl, msgId) {
 
   textarea.addEventListener('keydown', (e) => {
     e.stopPropagation();
+
+    // Ctrl/Cmd+E toggles the emoji picker for this edit. The global shortcut
+    // in app-ui.js can't fire here because we stopPropagation above, so it's
+    // re-handled locally; _activeEditTextarea (set above) routes the pick into
+    // this textarea rather than the main composer.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === 'e') {
+      e.preventDefault();
+      this._activeEditTextarea = textarea;
+      this._toggleEmojiPicker();
+      return;
+    }
 
     // Handle @mention and :emoji dropdown navigation in edit mode
     const mentionDd = document.getElementById('mention-dropdown');

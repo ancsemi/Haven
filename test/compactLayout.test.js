@@ -641,7 +641,8 @@ test('public density and layout-editing hooks are wired into core state changes'
   const braid = fs.readFileSync(path.join(ROOT, 'plugins/BraidLayout.plugin.js'), 'utf8');
 
   assert.match(themeInit, /data-haven-density/);
-  assert.match(media, /dataset\.havenDensity/);
+  // Set directly, or through the shared picker helper's key list (#5582).
+  assert.match(media, /dataset\.havenDensity|['"]havenDensity['"]/);
   assert.match(media, /haven:density-change/);
   assert.match(modMode, /data-haven-layout-editing/);
   assert.match(modMode, /haven:layout-editing/);

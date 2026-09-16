@@ -47,8 +47,32 @@ const DEFAULTS = {
     windowHours: 24, warnAt: 1, muteAt: 3, muteMinutes: 60, banAt: 5
   }),
   automod_ban_ip: 'false',                  // escalated bans also ban the offender's recent IPs
-  automod_log_channel: ''                   // channel code to mirror automod actions into
+  automod_log_channel: '',                  // channel code to mirror automod actions into
+  // Word groups (#5614): [{ name, words: [...], strikes }]. A message carrying
+  // any word of a group is blocked and counts `strikes` towards escalation.
+  automod_words: '[]'
 };
+
+// Parse the stored word groups into one regex per group, harshest first.
+// Whole words (or phrases) only, case-insensitive, so "class" never trips a
+// group that lists "ass".
+function compileWordGroups(raw) {
+  let groups = [];
+  try { groups = JSON.parse(raw || '[]'); } catch { groups = []; }
+  if (!Array.isArray(groups)) return [];
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  return groups.map(g => {
+    const words = Array.isArray(g && g.words) ? g.words.map(w => String(w || '').trim()).filter(Boolean) : [];
+    if (!words.length) return null;
+    try {
+      return {
+        name: String((g && g.name) || '').slice(0, 40) || 'words',
+        strikes: Math.min(100, Math.max(1, parseInt(g && g.strikes, 10) || 1)),
+        re: new RegExp('(?<![\\p{L}\\p{N}_])(?:' + words.map(esc).join('|') + ')(?![\\p{L}\\p{N}_])', 'iu')
+      };
+    } catch { return null; }
+  }).filter(Boolean).sort((a, b) => b.strikes - a.strikes);
+}
 
 function settings() {
   const now = Date.now();
@@ -69,7 +93,7 @@ function settings() {
     }
   } catch { /* table not created yet */ }
 
-  _cache = { settings: s, allow, deny, expires: now + CACHE_MS };
+  _cache = { settings: s, allow, deny, words: compileWordGroups(s.automod_words), expires: now + CACHE_MS };
   return s;
 }
 
@@ -130,6 +154,26 @@ function checkText(text, ctx = {}) {
   if (Number.isFinite(exemptLevel) && exemptLevel >= 0 &&
       Number.isFinite(ctx.effectiveLevel) && ctx.effectiveLevel >= exemptLevel) {
     return { ok: true };
+  }
+
+  // ── Word groups (#5614) ──
+  // Before the link rules, and independent of the link policy being on. DMs
+  // are ciphertext here, so they cannot be checked.
+  if (ctx.surface !== 'dm') {
+    for (const g of _cache.words || []) {
+      const m = g.re.exec(text);
+      if (m) {
+        return {
+          ok: false,
+          rule: 'word',
+          host: null,
+          excerpt: String(m[0]).slice(0, 60),
+          weight: g.strikes,
+          group: g.name,
+          message: `That message has a word this server does not allow (${g.name}).`
+        };
+      }
+    }
   }
 
   const links = extractUrls(text);
@@ -200,10 +244,12 @@ function recordInfraction(userId, verdict, channelId) {
   const db = getDb();
   const cfg = escalationConfig();
 
+  // A word group can be worth several strikes; everything else is one (#5614).
+  const weight = Math.min(100, Math.max(1, parseInt(verdict.weight, 10) || 1));
   try {
     db.prepare(
-      'INSERT INTO automod_infractions (user_id, rule, channel_id, host, excerpt) VALUES (?, ?, ?, ?, ?)'
-    ).run(userId, verdict.rule, channelId || null, verdict.host || null, (verdict.excerpt || '').slice(0, 300));
+      'INSERT INTO automod_infractions (user_id, rule, channel_id, host, excerpt, weight) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, verdict.rule, channelId || null, verdict.host || null, (verdict.excerpt || '').slice(0, 300), weight);
   } catch (err) {
     console.error('automod: failed to record infraction', err);
     return { count: 0, action: 'none', muteMinutes: 0 };
@@ -212,10 +258,10 @@ function recordInfraction(userId, verdict, channelId) {
   let count = 0;
   try {
     count = db.prepare(
-      `SELECT COUNT(*) AS c FROM automod_infractions
+      `SELECT COALESCE(SUM(weight), 0) AS c FROM automod_infractions
        WHERE user_id = ? AND created_at >= datetime('now', ?)`
     ).get(userId, `-${cfg.windowHours} hours`).c;
-  } catch { count = 1; }
+  } catch { count = weight; }
 
   // Highest threshold that has been reached wins.
   let action = 'none';

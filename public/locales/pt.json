@@ -200,7 +200,10 @@
     },
     "theme": {
       "title": "Tema",
+      "layout": "Layout",
       "effect_overlay": "Sobreposição de efeitos",
+      "braid_layout": "Layout Braid",
+      "compact_layout": "Layout Compact",
       "close": "Fechar",
       "speed": "Velocidade",
       "vibrancy": "Vivacidade",
@@ -1301,6 +1304,7 @@
       "admin_group": "Administração",
       "server_updates": "Atualizações do servidor",
       "branding": "Identidade visual",
+      "tos": "Termos de serviço",
       "members": "Membros",
       "whitelist": "Lista de permissões",
       "invite": "Código de convite",
@@ -1327,12 +1331,14 @@
       "group_integrations": "Integrações",
       "group_maintenance": "Manutenção",
       "group_appearance": "Aparência",
-      "text_size": "Tamanho do texto",
-      "emoji_size": "Tamanho dos emojis",
+      "zoom": "Zoom",
+      "reaction_size": "Tamanho das reações",
       "role_display": "Exibição dos cargos",
       "toolbar_icons": "Ícones da barra de ferramentas",
       "image_display": "Exibição de imagens",
       "embeds_media": "Incorporações e mídia",
+      "banner_display": "Exibição do banner",
+      "toggle_style": "Estilo dos interruptores",
       "status_bar": "Barra de status",
       "group_chat": "Chat",
       "chat_behavior": "Comportamento do chat",
@@ -1352,34 +1358,24 @@
       "auto": "Automático",
       "hint": "As alterações são aplicadas imediatamente"
     },
-    "layout_density": {
-      "title": "Densidade da disposição",
-      "compact": "Compacta",
-      "compact_hint": "Compacta — menos espaço e avatares menores",
-      "cozy": "Confortável",
-      "cozy_hint": "Confortável — disposição equilibrada padrão",
-      "spacious": "Espaçosa",
-      "spacious_hint": "Espaçosa — mais espaço entre os elementos"
-    },
-    "animate_pfp": {
-      "title": "Fotos de perfil animadas",
-      "always": "Sempre",
-      "always_hint": "Sempre: os avatares animados ficam em looping o tempo todo",
-      "hover": "Ao passar o mouse",
-      "hover_hint": "Ao passar o mouse: reproduz enquanto você aponta para uma mensagem ou abre um perfil",
-      "never": "Nunca",
-      "never_hint": "Nunca: mostra apenas o primeiro quadro",
-      "hint": "Vale para os avatares e bordas de todo mundo, do jeito que você vê. Quem desativou a animação no próprio perfil continua parado de qualquer forma."
-    },
-    "animate_chat": {
-      "title": "Imagens animadas no chat",
-      "always": "Sempre",
-      "hover": "Ao passar o mouse",
-      "never": "Nunca",
-      "always_hint": "Sempre: os GIFs ficam em looping o tempo todo",
-      "hover_hint": "Ao passar o mouse: só reproduz enquanto você aponta para a imagem",
-      "never_hint": "Nunca: mostra apenas o primeiro quadro",
-      "hint": "Vale para GIFs e outras imagens animadas enviadas nas mensagens, só para você. A visualização de mais ninguém muda."
+    "layout": {
+      "title": "Layout",
+      "density": {
+        "title": "Densidade da disposição",
+        "compact": "Compacta",
+        "compact_hint": "Compacta — menos espaço e avatares menores",
+        "cozy": "Confortável",
+        "cozy_hint": "Confortável — disposição equilibrada padrão",
+        "spacious": "Espaçosa",
+        "spacious_hint": "Espaçosa — mais espaço entre os elementos"
+      },
+      "channel_scrolling": {
+        "title": "Deslocamento de canais",
+        "separate": "Separado",
+        "separate_hint": "Separado — barras de deslocamento separadas para canais e MDs",
+        "combined": "Combinado",
+        "combined_hint": "Combinado — uma única barra de deslocamento para canais e MDs"
+      }
     },
     "toggle_style": {
       "title": "Estilo dos controles",
@@ -1444,10 +1440,33 @@
     },
     "image_display": {
       "title": "Exibição de imagens",
-      "thumbnail": "Miniatura",
-      "thumbnail_hint": "Miniatura — prévia pequena; clique para ampliar",
-      "full": "Completa",
-      "full_hint": "Completa — imagens grandes na mensagem, como no Discord"
+      "image_mode": {
+        "title": "Modo de exibição de imagens",
+        "thumbnail": "Miniatura",
+        "thumbnail_hint": "Miniatura — prévia pequena; clique para ampliar",
+        "full": "Completa",
+        "full_hint": "Completa — imagens grandes na mensagem, como no Discord"
+      },
+      "animate_pfp": {
+        "title": "Fotos de perfil animadas",
+        "always": "Sempre",
+        "always_hint": "Sempre: os avatares animados ficam em looping o tempo todo",
+        "hover": "Ao passar o mouse",
+        "hover_hint": "Ao passar o mouse: reproduz enquanto você aponta para uma mensagem ou abre um perfil",
+        "never": "Nunca",
+        "never_hint": "Nunca: mostra apenas o primeiro quadro",
+        "hint": "Vale para os avatares e bordas de todo mundo, do jeito que você vê. Quem desativou a animação no próprio perfil continua parado de qualquer forma."
+      },
+      "animate_chat": {
+        "title": "Imagens animadas no chat",
+        "always": "Sempre",
+        "hover": "Ao passar o mouse",
+        "never": "Nunca",
+        "always_hint": "Sempre: os GIFs ficam em looping o tempo todo",
+        "hover_hint": "Ao passar o mouse: só reproduz enquanto você aponta para a imagem",
+        "never_hint": "Nunca: mostra apenas o primeiro quadro",
+        "hint": "Vale para GIFs e outras imagens animadas enviadas nas mensagens, só para você. A visualização de mais ninguém muda."
+      }
     },
     "embed_display": {
       "title": "Prévias de links",
@@ -1980,7 +1999,6 @@
       "invite_links_label": "Rótulo",
       "invite_links_label_hint": "Para sua referência, ex.: \"Promoção no Reddit\"",
       "invite_links_label_placeholder": "Nome opcional",
-      "invite_links_channels_hint": "Deixe todos marcados para conceder todos os canais públicos.",
       "invite_links_max_uses": "Máximo de usos",
       "invite_links_max_uses_hint": "0 = ilimitado. Conta pessoas distintas.",
       "invite_links_custom_code": "Código personalizado",
@@ -2032,7 +2050,6 @@
         "active": "Ativo",
         "channel_one": "{{count}} canal",
         "channel_other": "{{count}} canais",
-        "all_public_channels": "todos os canais públicos",
         "never": "Nunca",
         "no_label": "(sem rótulo)",
         "copy_link": "Copiar link",
@@ -3229,6 +3246,7 @@
     "sort_smallest": "Menores primeiro",
     "sort_name_az": "Nome A→Z",
     "sort_name_za": "Nome Z→A",
+    "tile_size": "Tamanho",
     "select": "Selecionar",
     "cancel_select": "Cancelar",
     "selected": "{{count}} selecionado(s)",

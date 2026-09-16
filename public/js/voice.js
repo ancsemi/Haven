@@ -29,6 +29,7 @@ class VoiceManager {
     this.isScreenSharing = false;
     this.isWebcamActive = false;
     this.peers = new Map();         // userId → { connection, stream, username }
+    this._relayPeers = new Set();   // userIds whose selected ICE pair runs through a TURN relay (#5426)
     this.currentChannel = null;
     this.isMuted = false;
     this.isDeafened = false;
@@ -143,10 +144,14 @@ class VoiceManager {
     // Fetch server-provided ICE config (may include TURN)
     this._fetchIceServers();
 
-    // Probe the default pool in the background and prune dead servers so
-    // future RTCPeerConnections don't waste gathering time on them. Only
-    // applies if the admin hasn't configured their own ICE servers.
-    this._probeDefaultStun();
+    // The STUN probe (prune dead servers so later peer connections do not
+    // wait on them) used to run on page load. It opens an RTCPeerConnection,
+    // which gathers LAN candidates, and Chrome now asks every visitor of a
+    // public site for local-network access the moment that happens, so
+    // opening chat at all raised the prompt. It waits for the first voice
+    // join instead. Amnibro traced it.
+    this._stunProbeStarted = false;
+    this._pendingConfiguredStun = null;
 
     this._setupSocketListeners();
     this._setupNativeScreenBridge();
@@ -201,10 +206,25 @@ class VoiceManager {
         // srflx candidates, which relay-only discards on purpose, so running it
         // any earlier reports every server dead on a perfectly healthy setup.
         // Fire and forget; a dead entry here used to fail completely silently.
-        if (this._adminIceServersLoaded) this._probeConfiguredStun(data.iceServers);
+        if (this._adminIceServersLoaded) {
+          if (this._stunProbeStarted) this._probeConfiguredStun(data.iceServers);
+          else this._pendingConfiguredStun = data.iceServers;
+        }
       }
     } catch (err) {
       console.warn('Could not fetch ICE servers, using defaults:', err && err.message);
+    }
+  }
+
+  // Run the STUN probes once, on the first voice join (see the constructor).
+  _ensureStunProbed() {
+    if (this._stunProbeStarted) return;
+    this._stunProbeStarted = true;
+    try { this._probeDefaultStun(); } catch { /* fire and forget */ }
+    if (this._pendingConfiguredStun) {
+      const list = this._pendingConfiguredStun;
+      this._pendingConfiguredStun = null;
+      try { this._probeConfiguredStun(list); } catch { /* fire and forget */ }
     }
   }
 
@@ -1241,7 +1261,7 @@ class VoiceManager {
           missing.forEach(track => conn.addTrack(track, this.screenStream));
           const res = this.screenResolution;
           const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
-          this._applyScreenBitrate(conn, maxBitrate);
+          this._applyScreenBitrate(conn, maxBitrate, targetUserId);
         }
 
         // Renegotiate to include the video tracks (or refresh an existing
@@ -2060,6 +2080,7 @@ class VoiceManager {
     if (this._joinInFlight) return false;
     this._joinInFlight = true;
     this._joiningChannelCode = channelCode;
+    this._ensureStunProbed();
     try {
       const preservedMuteState = this.isMuted;
       const preservedDeafenState = this.isDeafened;
@@ -2720,7 +2741,7 @@ class VoiceManager {
           peer.connection.addTrack(track, this.screenStream);
         });
         // Cap the video bitrate so WebRTC doesn't starve framerate
-        this._applyScreenBitrate(peer.connection, maxBitrate);
+        this._applyScreenBitrate(peer.connection, maxBitrate, userId);
         renegotiations.push(this._renegotiate(userId, peer.connection));
       }
       await Promise.all(renegotiations);
@@ -3027,8 +3048,8 @@ class VoiceManager {
 
     // Update bitrate cap on all peer senders
     const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
-    for (const [, peer] of this.peers) {
-      this._applyScreenBitrate(peer.connection, maxBitrate);
+    for (const [userId, peer] of this.peers) {
+      this._applyScreenBitrate(peer.connection, maxBitrate, userId);
     }
   }
 
@@ -3059,8 +3080,64 @@ class VoiceManager {
     try { return localStorage.getItem('haven_screen_relay_profile') === '1'; } catch { return false; }
   }
 
-  _screenBitrateFor(res) {
-    const table = this._screenRelayProfileEnabled()
+  // Automatic version of the toggle above (#5426). Two setups confirmed the
+  // gentler profile is what a relayed share needs, and nobody should have to
+  // know what a TURN server is to get it. Once a peer connection settles, its
+  // selected candidate pair says whether the path runs through a relay; those
+  // peers get the gentler profile on their sender only, so a viewer on a direct
+  // route in the same call keeps the full-quality share. On by default, with a
+  // Debug switch for anyone who wants the toggle above to be the only decider.
+  _screenRelayAutoEnabled() {
+    try { return localStorage.getItem('haven_screen_relay_auto') !== '0'; } catch { return true; }
+  }
+
+  _screenRelayProfileFor(userId) {
+    if (this._screenRelayProfileEnabled()) return true;
+    return this._screenRelayAutoEnabled() && userId != null && !!this._relayPeers && this._relayPeers.has(userId);
+  }
+
+  _peerIdForConnection(connection) {
+    for (const [id, peer] of this.peers) if (peer.connection === connection) return id;
+    return null;
+  }
+
+  // Ask the connection's stats which candidate pair it settled on and note
+  // whether either end is a relay candidate. Runs on every (re)connect, since
+  // an ICE restart can move a call on or off the relay.
+  async _detectRelayPath(userId, connection) {
+    if (!connection || typeof connection.getStats !== 'function') return;
+    if (!this._relayPeers) this._relayPeers = new Set();
+    let relayed = false;
+    try {
+      const stats = await connection.getStats();
+      const byId = new Map();
+      stats.forEach((r) => byId.set(r.id, r));
+      let pair = null;
+      stats.forEach((r) => {
+        if (!pair && r.type === 'transport' && r.selectedCandidatePairId) pair = byId.get(r.selectedCandidatePairId) || null;
+      });
+      if (!pair) {
+        stats.forEach((r) => {
+          if (!pair && r.type === 'candidate-pair' && r.state === 'succeeded' && (r.nominated || r.selected)) pair = r;
+        });
+      }
+      if (!pair) return;
+      const local = byId.get(pair.localCandidateId);
+      const remote = byId.get(pair.remoteCandidateId);
+      relayed = !!((local && local.candidateType === 'relay') || (remote && remote.candidateType === 'relay'));
+    } catch { return; }
+    if (this.peers.get(userId)?.connection !== connection) return;   // torn down while we waited
+    const was = this._relayPeers.has(userId);
+    if (relayed) this._relayPeers.add(userId); else this._relayPeers.delete(userId);
+    if (was === relayed) return;
+    if (relayed) console.log('[Voice] Peer', userId, 'is reached through a relay; the gentler screen share profile applies to that viewer');
+    if (this.isScreenSharing) {
+      this._applyScreenBitrate(connection, this._screenBitrates[this.screenResolution] || this._screenBitrates[0], userId);
+    }
+  }
+
+  _screenBitrateFor(res, relayProfile = this._screenRelayProfileEnabled()) {
+    const table = relayProfile
       ? { 0: 3_000_000, 720: 1_500_000, 1080: 3_000_000, 1440: 5_000_000 }
       : this._screenBitrates;
     return table[res] || table[0];
@@ -3071,14 +3148,14 @@ class VoiceManager {
   reapplyScreenBitrate() {
     if (!this.isScreenSharing) return;
     const maxBitrate = this._screenBitrateFor(this.screenResolution);
-    for (const [, peer] of this.peers) {
-      this._applyScreenBitrate(peer.connection, maxBitrate);
+    for (const [userId, peer] of this.peers) {
+      this._applyScreenBitrate(peer.connection, maxBitrate, userId);
     }
   }
 
-  _applyScreenBitrate(connection, maxBitrate) {
+  _applyScreenBitrate(connection, maxBitrate, userId = this._peerIdForConnection(connection)) {
     try {
-      const relayProfile = this._screenRelayProfileEnabled();
+      const relayProfile = this._screenRelayProfileFor(userId);
       const senders = connection.getSenders();
       for (const sender of senders) {
         if (sender.track && sender.track.kind === 'video' &&
@@ -3088,7 +3165,7 @@ class VoiceManager {
             params.encodings = [{}];
           }
           params.encodings[0].maxBitrate = relayProfile
-            ? this._screenBitrateFor(this.screenResolution)
+            ? this._screenBitrateFor(this.screenResolution, true)
             : maxBitrate;
           // Per-encoding cap is the primary control; framerate hint also helps
           // browsers that respect it (Chromium-based ones do). Under the relay
@@ -3352,7 +3429,7 @@ class VoiceManager {
       // Cap bitrate for this new peer
       const res = this.screenResolution;
       const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
-      this._applyScreenBitrate(connection, maxBitrate);
+      this._applyScreenBitrate(connection, maxBitrate, userId);
     }
 
     // If our webcam is active, add the webcam video track
@@ -3556,6 +3633,8 @@ class VoiceManager {
           clearTimeout(this._disconnectTimers[userId]);
           delete this._disconnectTimers[userId];
         }
+        // Relay or direct? Decides which screen share profile this viewer gets. (#5426)
+        this._detectRelayPath(userId, connection);
         // ICE/DTLS just came (back) up. If this peer is screen-sharing,
         // the video m-line may need a fresh delivery into the UI — ontrack
         // does not always re-fire after an ICE restart, so the tile that
@@ -3611,12 +3690,15 @@ class VoiceManager {
       if (audioEl) audioEl.remove();
       const screenAudioEl = document.getElementById(`voice-audio-screen-${userId}`);
       const hasNativeScreenPeer = this._nativeScreenPeers?.has(userId);
-      if (!hasNativeScreenPeer &&
-          (screenAudioEl || this.screenGainNodes.has(userId))) {
-        this._cleanupScreenPlayback(userId);
+      if (!hasNativeScreenPeer) {
+        if (screenAudioEl || this.screenGainNodes.has(userId)) {
+          this._cleanupScreenPlayback(userId);
+        }
+        this._pendingScreenAudio?.delete(userId);
+        this._screenDelivered.delete(userId);
       }
       this.gainNodes.delete(userId);
-      if (!hasNativeScreenPeer) this._screenDelivered.delete(userId);
+      this._relayPeers?.delete(userId);
       this.peers.delete(userId);
       // Always stop the analyser here too, not just in voice-user-left.
       // _restartIce failure calls _removePeer directly (without _stopAnalyser),
@@ -3961,7 +4043,32 @@ class VoiceManager {
 
   // ── Screen Share Audio ────────────────────────────────
 
+  // With "auto-accept screen shares" off, the video side waits for the Join
+  // prompt in _handleScreenStream, but the audio track used to play the moment
+  // it arrived: a share you never accepted was audible with no tile and no
+  // volume control to silence it (#5636). Park the audio until the tile
+  // exists; _handleScreenStream flushes it once the viewer joins. With the
+  // setting on (the default) nothing changes.
+  _screenAudioDeferred(userId) {
+    let autoAccept = true;
+    try { autoAccept = localStorage.getItem('haven_auto_accept_streams') !== 'false'; } catch {}
+    if (autoAccept) return false;
+    return !document.getElementById(`screen-tile-${userId}`);
+  }
+
+  flushPendingScreenAudio(userId) {
+    const stream = this._pendingScreenAudio && this._pendingScreenAudio.get(userId);
+    if (!stream) return;
+    this._pendingScreenAudio.delete(userId);
+    this._playScreenAudio(userId, stream);
+  }
+
   _playScreenAudio(userId, stream) {
+    if (this._screenAudioDeferred(userId)) {
+      if (!this._pendingScreenAudio) this._pendingScreenAudio = new Map();
+      this._pendingScreenAudio.set(userId, stream);
+      return;
+    }
     const key = `screen-${userId}`;
     let audioEl = document.getElementById(`voice-audio-${key}`);
     if (!audioEl) {

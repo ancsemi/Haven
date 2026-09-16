@@ -185,19 +185,13 @@ _setupSocketListeners() {
       this.user.animateProfile = data.animateProfile === 'disabled' ? 'disabled' : 'trigger';
     }
     localStorage.setItem('haven_user', JSON.stringify(this.user));
-    // (#5394) Merge server-stored nicknames. Server is authoritative for any
-    // key it knows about; localStorage keeps anything the server doesn't have yet.
+    // (#5394) Server-stored nicknames are the record. localStorage is only a
+    // cache for the first paint before this event lands. The old merge also
+    // pushed any localStorage-only nickname back up on every connect, so a
+    // nickname cleared from one device came back from any other device that
+    // still had it cached, and could never be removed for good. (#5560)
     if (data.nicknames && typeof data.nicknames === 'object') {
-      const serverNicks = data.nicknames;
-      const localNicks = this._nicknames || {};
-      // Migrate: push localStorage-only nicknames to the server once.
-      const toSync = {};
-      for (const [id, nick] of Object.entries(localNicks)) {
-        if (nick && !serverNicks[id]) toSync[id] = nick;
-      }
-      if (Object.keys(toSync).length) this.socket.emit('set-nicknames-bulk', { nicknames: toSync });
-      // Server wins on conflict.
-      this._nicknames = { ...localNicks, ...serverNicks };
+      this._nicknames = { ...data.nicknames };
       localStorage.setItem('haven_nicknames', JSON.stringify(this._nicknames));
     }
     // Init E2E encryption AFTER socket is fully connected & server handlers registered
@@ -227,6 +221,7 @@ _setupSocketListeners() {
 
   // Roles updated (from admin assigning/revoking, or editing a role we hold)
   this.socket.on('roles-updated', (data) => {
+    this._refreshMentionableRoles?.();
     // The server also fires this with NO payload as a plain "the server's role
     // list changed" nudge (role edited, roles reset, admin role display
     // changed) for anyone with the Role Management modal open. There's no
@@ -303,6 +298,8 @@ _setupSocketListeners() {
     this.voice?.deferChannelGone?.(6000);
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
+    // Role names for @Role mentions: rendering and the @ picker. (#5579)
+    this._refreshMentionableRoles?.();
 
     // (#5399 follow-up) Reconcile per-channel mute prefs with the server
     // once per session so the server can honor them when fanning out
@@ -965,6 +962,30 @@ _setupSocketListeners() {
     this.switchChannel(channel.code);
   });
 
+  this.socket.on('channel-role-gate-updated', (data) => {
+    const ch = this.channels.find(c => c.code === data.code);
+    if (!ch) return;
+    ch.role_gate = data.roleGate ? JSON.stringify(data.roleGate) : null;
+    if (this._ctxMenuChannel === data.code) this._updateChannelFunctionsPanel?.(ch);
+  });
+
+  // Your own role-menu choice landed (from a click or a reaction); paint every
+  // button for that role, in this channel and any other menu that lists it.
+  this.socket.on('self-role-updated', (data) => {
+    if (!data) return;
+    this._markSelfRole(data.roleId, !!data.held);
+  });
+
+  // A role menu was edited: swap in the new buttons wherever that message is
+  // on screen. The click handling is delegated, so fresh HTML just works (#5644).
+  this.socket.on('role-menu-updated', (data) => {
+    if (!data || !data.messageId) return;
+    document.querySelectorAll(`.role-menu-widget[data-msg-id="${data.messageId}"]`).forEach(w => {
+      const html = this._renderRoleMenu(data.messageId, data.roleMenu);
+      if (html) w.outerHTML = html; else w.remove();
+    });
+  });
+
   this.socket.on('channel-joined', (channel) => {
     if (!this.channels.find(c => c.code === channel.code)) {
       this.channels.push(channel);
@@ -1017,6 +1038,11 @@ _setupSocketListeners() {
       }
     }
 
+    if (this._forumLoadingMore && this._forumActive) {
+      this._forumLoadingMore = false;
+      this._forumAppendOlder(data.messages);
+      return;
+    }
     if (this._historyBefore) {
       // Pagination request — prepend older messages
       this._historyBefore = null;
@@ -1027,7 +1053,8 @@ _setupSocketListeners() {
       }
       if (data.messages.length < 80) this._noMoreHistory = true;
       this._oldestMsgId = data.messages[0].id;
-      this._prependMessages(data.messages);
+      if (this._isForumFeed?.()) this._appendOlderForum(data.messages);
+      else this._prependMessages(data.messages);
       // Release lock AFTER DOM manipulation so scroll-triggered re-requests
       // don't fire while _prependMessages is adjusting scroll position.
       this._loadingHistory = false;
@@ -1094,6 +1121,13 @@ _setupSocketListeners() {
       if (this._suppressCoupleCheck) return;
       const st = msgContainer.scrollTop;
       const dist = msgContainer.scrollHeight - msgContainer.clientHeight - st;
+      if (this._isForumFeed?.()) {
+        // Newest first: nothing to couple to at the bottom, and no jump button.
+        this._coupledToBottom = false;
+        if (jumpBtn) jumpBtn.classList.remove('visible');
+        lastScrollTop = st;
+        return;
+      }
       if (dist < 200 && this._noMoreFuture !== false) {
         // Only couple if the DOM contains the actual latest messages.
         // When newer messages have been trimmed, the scroll "bottom" is
@@ -1120,7 +1154,11 @@ _setupSocketListeners() {
     msgContainer.addEventListener('scroll', () => {
       if (this._suppressCoupleCheck) return;
       const now = Date.now();
-      if (msgContainer.scrollTop < 200 && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
+      // A forum feed runs newest first, so its older topics load from the bottom.
+      const forumFeed = !!this._isForumFeed?.();
+      const distEnd = msgContainer.scrollHeight - msgContainer.clientHeight - msgContainer.scrollTop;
+      const atOlderEdge = forumFeed ? distEnd < 200 : msgContainer.scrollTop < 200;
+      if (atOlderEdge && !this._forumActive && !this._noMoreHistory && !this._loadingHistory && this._oldestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
         this._loadingHistory = true;
         this._historyBefore = this._oldestMsgId;
         this._historyDebounce = now;
@@ -1135,7 +1173,7 @@ _setupSocketListeners() {
       // Forward pagination: load newer messages when near the bottom and
       // the DOM window doesn't extend to the latest messages.
       const distBottom = msgContainer.scrollHeight - msgContainer.clientHeight - msgContainer.scrollTop;
-      if (distBottom < 200 && !this._noMoreFuture && !this._loadingFuture && this._newestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
+      if (!forumFeed && distBottom < 200 && !this._noMoreFuture && !this._loadingFuture && this._newestMsgId && this.currentChannel && now - this._historyDebounce > 300) {
         this._loadingFuture = true;
         this._historyAfter = this._newestMsgId;
         this._historyDebounce = now;
@@ -1225,7 +1263,7 @@ _setupSocketListeners() {
           const _isAnnouncement = _notifCh && _notifCh.notification_type === 'announcement';
           const _isReplyToMe = data.message.replyContext && data.message.replyContext.user_id === this.user.id;
           const _isDm = _notifCh && _notifCh.is_dm;
-          const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content);
+          const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
           const _notifOpts = _isMention ? { isMention: true } : _isReplyToMe ? { isReply: true } : _isDm ? { isDm: true } : null;
           if (_isMention) {
             this.notifications.play('mention', { isMention: true });
@@ -1288,7 +1326,7 @@ _setupSocketListeners() {
         const _isAnnouncement2 = _notifCh2 && _notifCh2.notification_type === 'announcement';
         const _isReplyToMe2 = data.message.replyContext && data.message.replyContext.user_id === this.user.id;
         const _isDm2 = _notifCh2 && _notifCh2.is_dm;
-        const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content);
+        const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
         const _notifOpts2 = _isMention2 ? { isMention: true } : _isReplyToMe2 ? { isReply: true } : _isDm2 ? { isDm: true } : null;
         if (_isMention2) {
           this.notifications.play('mention', { isMention: true });
@@ -1321,6 +1359,12 @@ _setupSocketListeners() {
   });
 
   this.socket.on('online-users', (data) => {
+    // Every list is kept by channel (the socket sits in every room it
+    // belongs to), so a DM PiP can read its own partner's presence instead
+    // of the list for whatever channel is on screen (#5574).
+    if (!this._onlineByChannel) this._onlineByChannel = new Map();
+    this._onlineByChannel.set(data.channelCode, data.users || []);
+    if (this._activeDMPip && data.channelCode === this._activeDMPip) this._refreshDMPipHeader?.();
     if (data.channelCode === this.currentChannel) {
       // In 'all' mode the list includes offline members too; only count truly online users
       const trueOnlineCount = data.visibilityMode === 'all'
@@ -1630,6 +1674,8 @@ _setupSocketListeners() {
     const container = document.getElementById('thread-messages');
     if (!container) return;
     container.innerHTML = '';
+    // A forum topic shows its whole first post above the replies (#5659).
+    this._forumThreadRenderTopic?.();
     if (data.messages) {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }
@@ -1646,7 +1692,7 @@ _setupSocketListeners() {
       const _meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const mentionRegex = _meEsc ? new RegExp(`@${_meEsc}(?!\\w)`, 'i') : null;
       const everyoneRegex = /(?<![\w@])@(everyone|here)\b/i;
-      const _isMention = (mentionRegex && mentionRegex.test(msg.content || '')) || everyoneRegex.test(msg.content || '');
+      const _isMention = (mentionRegex && mentionRegex.test(msg.content || '')) || everyoneRegex.test(msg.content || '') || this._mentionsMyRole?.(msg.content || '');
       const _isReplyToMe = msg.replyContext && msg.replyContext.user_id === this.user.id;
       if ((_isMention || _isReplyToMe) && !_isMuted) {
         this._recordThreadMention(data.channelCode, data.parentId, msg);
@@ -1674,7 +1720,41 @@ _setupSocketListeners() {
   this.socket.on('thread-updated', (data) => {
     if (data.channelCode !== this.currentChannel) return;
     this._updateThreadPreview(data.parentId, data.thread);
-    this._bumpForumTopic?.(data.parentId);
+    if (!this._forumActive) this._bumpForumTopic?.(data.parentId);
+  });
+
+  // Forum unread dots are per account, so another device opening a topic or
+  // pressing Mark all read clears them here as well (#5641).
+  this.socket.on('thread-read', (data) => {
+    if (!data || data.channelCode !== this.currentChannel) return;
+    this._forumMarkTopicRead?.(data.parentId);
+  });
+  this.socket.on('forum-read', (data) => {
+    if (!data || data.channelCode !== this.currentChannel) return;
+    this._forumMarkAllRead?.(data.channelCode);
+  });
+
+  // Forum topics: retitled or retagged, and the channel's tag list changed.
+  this.socket.on('topic-updated', (data) => {
+    if (data.channelCode !== this.currentChannel) return;
+    this._forumApplyTopicUpdate?.(data);
+  });
+  this.socket.on('forum-tags-updated', (data) => {
+    const ch = this.channels && this.channels.find(c => c.code === data.code);
+    if (ch) ch.forum_tags = JSON.stringify(data.tags || []);
+    if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
+  });
+  // A message you scheduled has just gone out (#5638).
+  this.socket.on('scheduled-message-sent', (data) => {
+    if (!data) return;
+    this._showToast(t('modals.schedule.sent', { channel: data.channelName || '' }), 'info');
+    if (document.getElementById('schedule-modal')?.style.display === 'flex') this._loadScheduledList?.();
+  });
+  // An admin set the layout everyone opens this forum in (#5656).
+  this.socket.on('forum-layout-updated', (data) => {
+    const ch = this.channels && this.channels.find(c => c.code === data.code);
+    if (ch) ch.forum_layout = data.layout ? JSON.stringify(data.layout) : null;
+    if (data.code === this.currentChannel && this._forumActive) this._forumReload?.();
   });
 
   // ── Polls ─────────────────────────────────────────
@@ -1993,6 +2073,9 @@ _setupSocketListeners() {
           displayContent = t('header.messages.decrypt_failed');
         }
       }
+      // A forum card shows a title and a snippet rather than the message
+      // body, so it is rebuilt from the new text instead of patched in place.
+      if (this._forumActive && this._forumApplyContentEdit?.(data.messageId, displayContent)) return;
       msgEls.forEach((msgEl) => {
         const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
         if (!contentEl) return;
@@ -2002,7 +2085,7 @@ _setupSocketListeners() {
         if (!editedTag) {
           editedTag = document.createElement('span');
           editedTag.className = 'edited-tag';
-          editedTag.title = t('header.messages.edited_at', { date: new Date(data.editedAt).toLocaleString() });
+          editedTag.title = t('header.messages.edited_at', { date: this._fmtDateTime(data.editedAt) });
           editedTag.textContent = t('header.messages.edited');
           contentEl.appendChild(editedTag);
         }
@@ -2121,6 +2204,10 @@ _setupSocketListeners() {
       this._appendSystemMessage(`📌 ${t('header.messages.pinned_by', { name: data.pinnedBy })}`);
       this._markPinUnread?.(data.messageId);
       this._bumpPinIndicator?.(1);
+      // A pinned topic heads the forum list and its menu should offer Unpin,
+      // so the cached topic follows and the cards are rebuilt (#5650).
+      const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+      if (topic) { topic.pinned = 1; if (this._forumActive) this._forumReload(); }
 
       // If the Pins PiP is open, silently re-fetch the updated pin list so the
       // new pin appears without requiring the user to reopen anything.
@@ -2144,6 +2231,8 @@ _setupSocketListeners() {
         const unpinBtn = msgEl.querySelector('[data-action="unpin"]');
         if (unpinBtn) { unpinBtn.dataset.action = 'pin'; unpinBtn.title = t('msg_toolbar.pin'); }
       }
+      const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+      if (topic) { topic.pinned = 0; if (this._forumActive) this._forumReload(); }
       // Remove from pinned sidebar panel if it's open
       const pinnedItem = document.querySelector(`#pinned-panel .pinned-item[data-msg-id="${data.messageId}"]`);
       if (pinnedItem) {
@@ -2215,12 +2304,20 @@ _setupSocketListeners() {
         if (msgEl.classList.contains('message-compact') && content && !content.querySelector('.archived-tag')) {
           content.insertAdjacentHTML('afterbegin', `<span class="archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
         }
+        // A forum topic card shows the shield with its tags (#5622).
+        const forumTags = msgEl.classList.contains('forum-topic') ? msgEl.querySelector('.forum-topic-tags') : null;
+        if (forumTags && !forumTags.querySelector('.archived-tag')) {
+          forumTags.insertAdjacentHTML('afterbegin', `<span class="forum-tag forum-tag-protected archived-tag" title="${t('app.messages.protected')}">🛡️</span>`);
+        }
         // Update toolbar: swap archive → unarchive
         const archBtn = msgEl.querySelector('[data-action="archive"]');
         if (archBtn) { archBtn.dataset.action = 'unarchive'; archBtn.title = t('app.messages.unprotect_btn'); }
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.protected_by', { name: data.archivedBy })}`);
     }
+    // Keep the cached topic in step so a re-rendered card keeps its shield.
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 1;
   });
 
   this.socket.on('message-unarchived', (data) => {
@@ -2240,6 +2337,8 @@ _setupSocketListeners() {
       }
       this._appendSystemMessage(`🛡️ ${t('header.messages.message_unprotected')}`);
     }
+    const topic = this._forumTopics && this._forumTopics.get(data.messageId);
+    if (topic) topic.is_archived = 0;
   });
 
   // ── Admin moderation events ────────────────────────
@@ -2263,6 +2362,10 @@ _setupSocketListeners() {
 
   this.socket.on('muted', (data) => {
     this._showToast(data.reason ? t('toasts.muted_reason', { duration: data.duration, reason: data.reason }) : t('toasts.muted', { duration: data.duration }), 'error');
+  });
+
+  this.socket.on('unmuted', () => {
+    this._showToast(t('toasts.unmuted'), 'success');
   });
 
   this.socket.on('ban-list', (data) => {
@@ -2304,13 +2407,33 @@ _setupSocketListeners() {
     // Which of these settings also have a value waiting in the environment,
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
+    // No GIF provider on this server: the button would only open an empty
+    // picker, so it goes (#5654).
+    document.documentElement.toggleAttribute('data-no-gif', settings && settings.gif_search_available === 'false');
+    // TEMPORARY (#5649): a one-time notice to admins that channel access moved
+    // from roles to the channel's Required roles. Remove after the 4.8.x cycle.
+    if (settings && settings.role_gate_notice === '1' && !this._roleGateNoticeShown &&
+        (this.user?.isAdmin || this._hasPerm?.('manage_roles') || this._hasPerm?.('manage_server'))) {
+      this._roleGateNoticeShown = true;
+      const modal = document.getElementById('role-gate-notice-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('role-gate-notice-ok')?.addEventListener('click', () => {
+          modal.style.display = 'none';
+          this.socket.emit('update-server-setting', { key: 'role_gate_notice', value: '0' });
+        }, { once: true });
+      }
+    }
     this._applyServerSettings();
+    this._renderChannelTemplates();
     this._maybeShowSetupWizard();
   });
 
   this.socket.on('server-setting-changed', (data) => {
     this.serverSettings[data.key] = data.value;
     this._applyServerSettings();
+    if (data.key === 'channel_templates') this._renderChannelTemplates();
+    if (data.key === 'hide_disabled_channel_badges') this._renderChannels?.();
   });
 
   // ── Webhooks list ──────────────────────────────────
@@ -2334,15 +2457,28 @@ _setupSocketListeners() {
   // ── User preferences (persistent theme etc.) ───────
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
+    // The top-bar Android banner waits for this record before it shows (#5594).
+    this._syncAndroidBanner?.();
+    // Effects come back from the server like the theme does; restore them
+    // first so applyThemeFromServer() applies the saved pick, not the default.
+    if (prefs.effects && typeof syncEffectsFromServer === 'function') syncEffectsFromServer(prefs.effects);
     if (prefs.theme) {
       // User has a saved personal theme preference — apply it
       applyThemeFromServer(prefs.theme, true, true);
     } else if (this.serverSettings.default_theme) {
       // No personal preference — apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);
+    } else if (prefs.effects && typeof applyEffects === 'function') {
+      // No theme pass to carry them, so the restored effects apply here.
+      applyEffects(_getStoredEffectMode());
     }
     // Sync hide-own-score toggle to the server's stored value so reopening
     // settings on a fresh device shows the correct state.
+    if (prefs.hide_nsfw != null) {
+      try { localStorage.setItem('haven_hide_nsfw', prefs.hide_nsfw); } catch {}
+      const nsfwToggle = document.getElementById('hide-nsfw-channels');
+      if (nsfwToggle) nsfwToggle.checked = prefs.hide_nsfw === 'true';
+    }
     if (prefs.hide_score_badge != null) {
       try { localStorage.setItem('haven_hide_own_score', prefs.hide_score_badge); } catch {}
       const ownToggle = document.getElementById('hide-own-score');
@@ -2351,6 +2487,10 @@ _setupSocketListeners() {
     // Activity toggles live entirely server-side (other clients must honour
     // them), so the UI can only be correct once prefs land.
     this._syncActivityUI?.();
+    // Reflect any saved timezone/format in the settings row now that prefs are
+    // known. The first-run modal itself is gated separately via the welcome
+    // popup sequencer (_shouldShowTzPrompt).
+    this._updateTimezoneSummary?.();
   });
 
   // Server's verdict on the recovery-codes notice (see the connect handler's

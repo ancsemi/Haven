@@ -238,8 +238,22 @@ function toReplyContext(row) {
   };
 }
 
+// ── Role mentions (#5579) ────────────────────────────────────────
+// "@Moderators" pings everyone holding that role, which is @everyone in a
+// smaller hat, so a sender without mention_everyone gets the treatment they
+// get for @everyone: the text stays, a zero-width space stops the ping.
+function stripRoleMentions(content, roleNames) {
+  if (typeof content !== 'string' || !content.includes('@')) return content;
+  const names = (roleNames || []).map(n => String(n || '').trim()).filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  if (!names.length) return content;
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?<![\\w@])@(${names.map(esc).join('|')})(?!\\w)`, 'gi');
+  return content.replace(re, '@\u200B$1');
+}
+
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
   sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline,
-  replyAuthorUsername, toReplyContext,
+  replyAuthorUsername, toReplyContext, stripRoleMentions,
 };

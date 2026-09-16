@@ -21,6 +21,11 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
   src: url('/fonts/vt323-latin.woff2?v=1') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
@@ -29,6 +34,11 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
   src: url('/fonts/vt323-latin-ext.woff2?v=1') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
@@ -37,6 +47,11 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
   src: url('/fonts/vt323-vietnamese.woff2?v=1') format('woff2');
   unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
 }
@@ -1285,9 +1300,12 @@
   --led-off:       #221800;
   --led-glow:      rgba(255, 176, 0, 0.5);
 
-  --font-main:     'VT323', 'Courier New', monospace;
-  --font-heading:  'VT323', 'Courier New', monospace;
-  --font-mono:     'VT323', 'Courier New', monospace;
+  /* Share Tech Mono, the clean terminal face, instead of the pixel VT323:
+     the pixel font stayed cramped in sub-channel names and other fine print
+     even scaled up, and this reads at normal size (#5606). */
+  --font-main:     'Share Tech Mono', 'Courier New', monospace;
+  --font-heading:  'Share Tech Mono', 'Courier New', monospace;
+  --font-mono:     'Share Tech Mono', 'Courier New', monospace;
 
   --theme-logo:    "📺";
 }
@@ -1672,13 +1690,15 @@
 }
 
 /* Win95 settings modal — full blue title bar like real Win95 */
-[data-theme="win95"] .settings-header {
+[data-theme="win95"] .settings-header,
+[data-theme="win95"] .forum-modal-header {
   background: linear-gradient(90deg, #000080, #1084d0);
   padding: 0.25rem 0.5rem;
   border-bottom: none;
   min-height: 1.5rem;
 }
-[data-theme="win95"] .settings-header h3 {
+[data-theme="win95"] .settings-header h3,
+[data-theme="win95"] .forum-modal-header h3 {
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1687,7 +1707,8 @@
   padding: 0;
   background: none;
 }
-[data-theme="win95"] .settings-close-btn {
+[data-theme="win95"] .settings-close-btn,
+[data-theme="win95"] .modal-close {
   width: 1.125rem; height: 1.125rem;
   background: #bfbfbf;
   border: 2px outset #fff;
@@ -1697,7 +1718,8 @@
   padding: 0;
   line-height: 1;
 }
-[data-theme="win95"] .settings-close-btn:hover { background: #dfdfdf; }
+[data-theme="win95"] .settings-close-btn:hover,
+[data-theme="win95"] .modal-close:hover { background: #dfdfdf; }
 
 /* Win95 admin save bar — beveled gray box with black text */
 [data-theme="win95"] .admin-save-bar {
@@ -2139,6 +2161,140 @@ html.rgb-cycling *::after {
 [data-hide-statusbar] .status-bar { display: none !important; }
 [data-hide-statusbar] .status-bar-toggle-tab { display: flex; }
 
+/* Auto-mod word groups (#5614) */
+.automod-word-group { border: 1px solid var(--border-light); border-radius: var(--radius); padding: 0.5rem; margin-bottom: 0.5rem; background: var(--bg-tertiary); }
+.automod-word-group-head { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; }
+.automod-word-group-head .awg-name { flex: 1; min-width: 0; }
+.awg-strikes-label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; }
+.awg-strikes-label input { width: 3.5rem; }
+.automod-word-group .awg-words { width: 100%; resize: vertical; font-family: inherit; }
+
+/* Scheduled messages (#5638) */
+.schedule-item { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.4rem 0; border-bottom: 1px solid var(--border-light); }
+.schedule-item-main { flex: 1; min-width: 0; font-size: 0.8rem; }
+.schedule-item-when { font-weight: 600; }
+.schedule-item-chan { color: var(--text-muted); margin-left: 0.3rem; }
+.schedule-item-text { color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: hidden; }
+.schedule-item-actions { display: flex; gap: 0.25rem; flex-shrink: 0; }
+
+/* User preference: no Send button, Enter sends (#5654) */
+[data-hide-send-btn] #send-btn { display: none !important; }
+/* One + button in place of the toolbar (#5654). The toolbar itself becomes
+   the menu that opens above the +, with each button's title as its label. */
+.btn-composer-plus { display: none; }
+[data-compact-composer] .btn-composer-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 0.5rem;
+  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+  color: var(--text-secondary);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+[data-compact-composer] .btn-composer-plus:hover,
+[data-compact-composer] .btn-composer-plus[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+[data-compact-composer] .input-actions-box {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 1.25rem;
+  margin-bottom: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.125rem;
+  padding: 0.375rem;
+  min-width: 13rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1050;
+}
+[data-compact-composer] .input-actions-box.open { display: flex; }
+[data-compact-composer] .input-actions-box .input-actions-divider { display: none !important; }
+[data-compact-composer] .input-actions-box > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+[data-compact-composer] .input-actions-box > button::after {
+  content: attr(title);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Voice messages (#5665) */
+.btn-voice-msg.recording { color: #e74c5f; animation: voice-rec-pulse 1s ease-in-out infinite; }
+@keyframes voice-rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.voice-record-bar {
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  bottom: 100%;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1050;
+}
+.voice-rec-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #e74c5f; animation: voice-rec-pulse 1s ease-in-out infinite; flex-shrink: 0; }
+.voice-rec-time { font-variant-numeric: tabular-nums; font-weight: 700; }
+.voice-rec-hint { flex: 1; font-size: 0.8rem; color: var(--text-muted); }
+.file-attachment.voice-message { max-width: 22rem; }
+.file-attachment.voice-message .file-audio { width: 100%; margin-top: 0.4rem; }
+
+/* Formatting guide and command list (#5654) */
+.format-picker { width: 24rem; max-height: 28rem; }
+.format-picker-list {
+  overflow-y: auto;
+  padding: 0.4rem 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.format-row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.15rem 0.6rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+}
+.format-row:hover { background: var(--bg-tertiary); }
+.format-row-label { font-size: 0.82rem; font-weight: 600; }
+.format-row-syntax { font-size: 0.74rem; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; }
+.format-row-demo { grid-column: 2; font-size: 0.8rem; }
+.format-row-command { grid-template-columns: 1fr; }
+.format-row-cmd { font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+.format-row-desc { font-size: 0.74rem; color: var(--text-muted); }
+.format-picker-hint { padding: 0.5rem 0.75rem 0; font-size: 0.72rem; color: var(--text-muted); }
+/* No GIF provider is configured on this server, so the button would only
+   open an empty picker (#5654) */
+[data-no-gif] #gif-btn { display: none !important; }
+
 /* ── Status bar toggle tab (shows when bar is hidden) ── */
 .status-bar-toggle-tab {
   display: none;
@@ -2371,6 +2527,16 @@ html.rgb-cycling *::after {
   border-top: 1px solid var(--border);
   margin-top: 0.5rem;
   padding-top: 0.375rem;
+}
+.braid-layout-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.35rem 0 0.15rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  cursor: pointer;
 }
 
 .effect-selector {
@@ -3660,7 +3826,10 @@ html.rgb-cycling *::after {
   box-sizing: content-box;
   pointer-events: none;
 }
-.dm-pip-status-dot.away    { background: #95a5a6; }
+.dm-pip-status-dot.away    { background: #faa61a; border-radius: 0.125rem 0.125rem 50% 50%; }
+.dm-pip-status-dot.offline { background: #95a5a6; }
+/* The red live badge on a voice participant opens their stream (#5636). */
+.voice-stream-badge.live { cursor: pointer; }
 .dm-pip-status-dot.dnd     { background: #e74c3c; }
 .dm-pip-status-dot.invisible { background: transparent; border-color: var(--text-muted, #888); }
 .dm-pip-title { font-weight: 600; font-size: 0.8125rem; }
@@ -3809,17 +3978,20 @@ html.rgb-cycling *::after {
   overflow-y: auto;
 }
 .dm-pip-send {
-  background: var(--accent, #5865f2);
-  color: var(--accent-text);
-  border: none;
-  border-radius: 0.375rem;
-  padding: 0 0.625rem;
-  cursor: pointer;
+  width: 2.125rem;
+  height: 2.125rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
 }
-.dm-pip-send:hover { filter: brightness(1.1); }
+.dm-pip-send:hover { filter: brightness(1.15); }
 
 /* Drag handle at the top of PiP input areas — drag upward to expand the textarea */
 .pip-input-resizer {
@@ -3847,6 +4019,8 @@ html.rgb-cycling *::after {
   opacity: 1;
   background: var(--accent, #5865f2);
 }
+/* The same bar on the message edit box (#5662) */
+.message.editing .message-content, .message-compact.editing .message-content { position: relative; padding-top: 0.875rem; }
 
 /* Emoji picker trigger button shared by DM PiP and thread input areas */
 .pip-input-emoji-btn {
@@ -3945,7 +4119,10 @@ html.rgb-cycling *::after {
   min-height: 3.25rem;
   gap: 0.75rem;
   position: relative;
-  z-index: 1;
+  /* Above the messages column: header dropdowns (the encryption menu, for
+     one) were painted under later siblings that also sit at z-index 1, such
+     as the DM safety notice (#5639). */
+  z-index: 2;
 }
 
 .channel-info { display: flex; align-items: center; gap: 0.625rem; min-width: 0; }
@@ -5144,6 +5321,11 @@ select.cfn-select.cfn-input {
   padding: 0 0.125rem; border-radius: 0.1875rem; transition: color 0.15s, background 0.15s;
 }
 .sb-hotkey-clear:hover { color: var(--danger); background: rgba(240,71,71,0.15); }
+/* Row layouts (list mode, sidebar) get a finger-sized clear target. */
+.soundboard-grid.list-mode .sb-hotkey-clear,
+#sb-sidebar-grid .sb-hotkey-clear { font-size: 1rem; padding: 0 0.375rem; }
+#sb-sidebar-grid .soundboard-btn { justify-content: space-between; }
+#sb-sidebar-grid .sb-hotkey-row, #sb-sidebar-grid .sb-hotkey-set { flex-shrink: 0; margin-left: 0.5rem; }
 .sb-hotkey-set {
   font-size: 0.5625rem; color: var(--accent); cursor: pointer; opacity: 0.7;
   transition: opacity 0.15s;
@@ -5264,6 +5446,9 @@ details.sound-section:not([open]) .sound-section-label::before {
 }
 
 .message-content a { color: var(--text-link); }
+/* A thin underline so a link reads as one on any palette, not only by its
+   colour; a coloured span around it cannot repaint it (#5661). */
+.message-content a:not(.file-download-link) { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
 
 .message-compact {
   display: flex;
@@ -5333,6 +5518,11 @@ details.sound-section:not([open]) .sound-section-label::before {
 .message-input-area {
   display: flex;
   align-items: flex-end;
+  /* In a narrow message column (a half-screen browser with both sidebars
+     open) the toolbar was squeezing the text box down to a few characters.
+     The box keeps a usable width and the toolbar wraps onto its own row
+     above it instead. (#5626) */
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 1rem 1.25rem 1rem;
   position: relative;
@@ -5345,6 +5535,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 
 .message-input-area textarea {
   flex: 1;
+  min-width: 11rem;
   padding: 0.625rem 0.875rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -6840,10 +7031,16 @@ details.sound-section:not([open]) .sound-section-label::before {
   cursor: pointer;
   transition: opacity 0.15s ease;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .chat-image:hover { opacity: 0.85; }
+
+/* Lazy media queue: a quiet block while an inline image waits for its turn. */
+img[data-lazy="pending"],
+img[data-lazy="loading"] { background: var(--bg-tertiary); }
+img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
+@keyframes lazy-media-in { from { opacity: 0.4; } to { opacity: 1; } }
 
 /* E2E encrypted image loading states */
 .e2e-img-pending,
@@ -8611,6 +8808,39 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .thread-panel.pip .thread-panel-resizer {
   display: none;
 }
+/* A forum topic opens across the whole chat column with a title bar (#5659).
+   --thread-forum-left is set from the chat column's left edge by the app. */
+.thread-panel.thread-panel-forum:not(.pip) {
+  left: var(--thread-forum-left, 0px);
+  width: auto;
+  max-width: none;
+  animation: none;
+}
+.thread-panel.thread-panel-forum:not(.pip) .thread-panel-resizer { display: none; }
+.thread-panel-forum .thread-parent-meta,
+.thread-panel-forum .thread-parent-preview { display: none; }
+.thread-forum-bar { display: flex; gap: 0.75rem; align-items: flex-start; margin-top: 0.6rem; }
+.thread-forum-thumb {
+  flex: 0 0 4.5rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+  background: var(--bg-input);
+}
+.thread-forum-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thread-forum-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.thread-forum-title { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+.thread-forum-meta { font-size: 0.75rem; color: var(--text-muted); }
+.thread-forum-layout { flex: none; white-space: nowrap; }
+.thread-topic-body {
+  padding: 0.75rem 1rem 0.9rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.thread-panel:not(.thread-panel-forum) .thread-topic-body { font-size: 0.85rem; }
 @keyframes thread-slide-in {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
@@ -9193,6 +9423,21 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
    @MENTION STYLES
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
+/* Forum channels (#144): topics wear their reply button, empty forums explain themselves. */
+.thread-preview-empty { opacity: 0.7; }
+.thread-preview-empty:hover { opacity: 1; }
+.forum-empty-hint {
+  margin: 1.5rem auto;
+  max-width: 34rem;
+  padding: 0.875rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
 /* <t:...> timestamps. Same instant for everyone, each reader's own clock. */
 .chat-timestamp {
   background: rgba(124, 92, 252, 0.12);
@@ -9202,6 +9447,141 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   cursor: help;
 }
 
+/* ── /time timestamp modal ─────────────────────────────── */
+.tsm-header { margin-bottom: 1rem; }
+.tsm-clock {
+  font-size: 2.25rem;
+  line-height: 1;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+.tsm-subtitle {
+  text-align: center;
+  margin-bottom: 0.375rem;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+.tsm-syntax {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.tsm-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+.tsm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+.tsm-field > label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.tsm-input {
+  width: 100%;
+  padding: 0.5rem 0.5rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  text-align: center;
+  transition: border-color var(--transition);
+}
+.tsm-input:focus { border-color: var(--accent); outline: none; }
+
+/* Calendar button reuses the native date input from search: the <input
+   type="date"> stays visually hidden and its picker is opened on demand. */
+.tsm-cal-field { flex: 0 0 auto; position: relative; }
+.tsm-cal-btn {
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.tsm-cal-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+.tsm-cal-native {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+}
+
+.tsm-meridiem-field { flex: 0 0 auto; }
+.tsm-meridiem { display: flex; }
+.tsm-mer-btn {
+  padding: 0.5rem 0.5rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-left-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.tsm-mer-btn:first-child {
+  border-left-width: 1px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.tsm-mer-btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.tsm-mer-btn:hover { color: var(--text-primary); }
+.tsm-mer-btn.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* Every style previewed on its own row with a dedicated insert button. */
+.tsm-styles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.875rem;
+}
+.tsm-style-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tsm-style-preview {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+/* Let a long "Full Date/Time" wrap in the row instead of overflowing. */
+.tsm-style-preview .chat-timestamp { white-space: normal; }
+.tsm-style-insert { flex: 0 0 auto; }
+.tsm-style-preview:empty::after { content: "—"; color: var(--text-muted); }
+.tsm-style-preview.tsm-invalid { color: var(--text-muted); }
+
 .mention {
   background: rgba(124, 92, 252, 0.15);
   color: var(--accent);
@@ -9210,6 +9590,9 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-weight: 600;
   cursor: default;
 }
+
+.mention.mention-role { color: var(--role-color, var(--accent)); }
+.mention-role-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; }
 
 .mention.mention-self {
   background: rgba(124, 92, 252, 0.3);
@@ -10250,6 +10633,9 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 .spoiler:not(.revealed) .custom-emoji {
   visibility: hidden;
 }
+/* Coloured text and links set their own colour, which showed straight
+   through the spoiler box (#5661). */
+.spoiler:not(.revealed) * { color: transparent !important; }
 
 /* Inline code sets its own color and background, so `color: transparent`
    can't hide it and it would show through an unrevealed spoiler. It's a
@@ -10664,6 +11050,13 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-bottom: 1px solid var(--border);
 }
 
+.forum-modal-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
 .settings-tab-bar {
   display: flex;
   gap: 0.25rem;
@@ -10691,8 +11084,10 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-color: var(--accent);
 }
 .settings-close-btn { margin-left: 0; }
+.modal-close { margin-left: auto; }
 
-.settings-header h3 {
+.settings-header h3,
+.forum-modal-header h3 {
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -10700,7 +11095,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   margin: 0;
 }
 
-.settings-close-btn {
+.settings-close-btn,
+.modal-close {
   width: 2rem;
   height: 2rem;
   display: flex;
@@ -10714,7 +11110,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.settings-close-btn:hover {
+.settings-close-btn:hover,
+.modal-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -10953,6 +11350,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-bottom: 1px solid var(--border);
 }
 .settings-section:last-child { border-bottom: none; }
+
+.settings-subsection { margin-top: 0.6rem; }
 
 /* ── Admin section divider ── */
 .admin-section-divider {
@@ -12197,6 +12596,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
     flex-wrap: nowrap;
     align-items: flex-end;
   }
+  .message-input-area textarea { min-width: auto; }
 
   /* Media buttons — compact inline, not a separate row */
   .input-actions-box {
@@ -13453,6 +13853,10 @@ video:-webkit-full-screen {
   overflow-y: auto;
   flex: 1;
   min-height: 5rem;
+  /* It also carries .soundboard-grid for the list-view styles; that class caps
+     height and pads the Sound Manager grid, neither of which fits the pop-out. */
+  max-height: none;
+  padding: 0;
 }
 @media (max-width: 768px) {
   .sb-pip-overlay {
@@ -14246,6 +14650,15 @@ ul.chat-list { list-style-type: disc; }
 .channel-topic-bar:hover {
   color: var(--text-primary);
 }
+
+/* Fold arrow on the topic bar (#5625). Folded, the bar is a thin strip with
+   just the arrow at the right, so the placeholder stops taking a line. */
+.channel-topic-bar { display: flex; align-items: center; gap: 0.5rem; }
+.channel-topic-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.channel-topic-toggle { flex: none; margin-left: auto; background: none; border: 0; color: inherit; opacity: 0.55; cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 0 0.25rem; }
+.channel-topic-toggle:hover { opacity: 1; }
+.channel-topic-bar.collapsed { padding-top: 0; padding-bottom: 0; min-height: 0.8rem; }
+.channel-topic-bar.collapsed .channel-topic-text { display: none; }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    User Status Dots
@@ -16016,7 +16429,8 @@ ul.chat-list { list-style-type: disc; }
    LAYOUT DENSITY PICKER
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-.density-picker {
+.density-picker,
+.channel-scroll-picker {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
@@ -16276,6 +16690,13 @@ ul.chat-list { list-style-type: disc; }
   min-height: 0;
   flex: 1;
 }
+/* Expand scroll area to include scrolling join/create channel sections when screen height is short*/
+@media (max-height: 550px) {
+  .sidebar-mod-container {
+    overflow: auto;
+    display: block;
+  }
+}
 
 .mod-mode-active .mod-draggable {
   cursor: move;
@@ -16469,9 +16890,22 @@ ul.chat-list { list-style-type: disc; }
 .sidebar-split {
   flex: 1;
   min-height: 0;
-  display: flex;
   flex-direction: column;
+}
+[data-channel-scroll="separate"] .sidebar-split {
+  display: flex;
   overflow: hidden;
+}
+[data-channel-scroll="combined"] .sidebar-split {
+  display: block;
+  overflow: auto;
+}
+/* Short screen: use the expanded scrolling behavior regardless of mode */
+@media (max-height: 550px) {
+  [data-channel-scroll="separate"] .sidebar-split {
+    display: block;
+    overflow: auto;
+  }
 }
 
 /* Channels pane (top) */
@@ -16517,7 +16951,6 @@ ul.chat-list { list-style-type: disc; }
 /* Drag handle between channels & DMs — blends with natural section border */
 .sidebar-split-handle {
   height: 0;
-  cursor: row-resize;
   position: relative;
   flex-shrink: 0;
   z-index: 5;
@@ -16526,6 +16959,18 @@ ul.chat-list { list-style-type: disc; }
   padding: 0.25rem 0;
   box-sizing: content-box;
   transition: border-color 0.15s;
+}
+[data-channel-scroll="separate"] .sidebar-split-handle {
+  cursor: row-resize;
+}
+[data-channel-scroll="combined"] .sidebar-split-handle {
+  cursor: auto;
+}
+/* Short screen: use the expanded scrolling behavior regardless of mode */
+@media (max-height: 550px) {
+  [data-channel-scroll="separate"] .sidebar-split-handle {
+    cursor: auto;
+  }
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -16662,6 +17107,27 @@ ul.chat-list { list-style-type: disc; }
 .poll-option:hover {
   border-color: var(--accent, #5865f2);
 }
+/* Picture on an option (#5648): sits above the label inside the same button */
+.poll-option.has-image { flex-wrap: wrap; }
+.poll-option-img {
+  position: relative; z-index: 1;
+  flex: 0 0 100%; width: 100%; max-height: 14rem; object-fit: cover;
+  border-radius: 0.3rem; margin-bottom: 0.4rem; display: block;
+}
+.poll-option-imgbtn {
+  flex: 0 0 auto; width: 2rem; height: 2rem; margin-left: 0.3rem;
+  border: 1px solid var(--border-light); border-radius: 0.3rem;
+  background: var(--bg-tertiary) center / cover no-repeat; color: var(--text-secondary);
+  cursor: pointer; font-size: 0.9rem; line-height: 1;
+}
+.poll-option-imgbtn.has-image { color: transparent; border-color: var(--accent); }
+/* A big picture poll in columns, square thumbnails, so 16 options fit on a
+   screen instead of one tall scroll (#5648) */
+.poll-options.poll-grid { display: grid; grid-template-columns: repeat(var(--poll-cols, 2), minmax(0, 1fr)); gap: 0.4rem; }
+.poll-grid .poll-option { flex-direction: column; align-items: stretch; }
+.poll-grid .poll-option-img { aspect-ratio: 1 / 1; height: auto; max-height: none; }
+.poll-grid .poll-option-text { white-space: normal; }
+.poll-grid .poll-option-count { margin-left: 0; }
 .poll-option.poll-voted {
   border-color: var(--accent, #5865f2);
 }
@@ -17501,7 +17967,6 @@ ul.chat-list { list-style-type: disc; }
 }
 
 /* Banner visible — base: header & topic above banner */
-.main.has-banner .channel-header,
 .main.has-banner .channel-topic-bar,
 /* The banner is absolutely positioned at z-index 0, so it paints over any
    sibling that is not itself positioned. The header and topic bar were lifted
@@ -17511,6 +17976,13 @@ ul.chat-list { list-style-type: disc; }
 .main.has-banner .welcome-screen {
   position: relative;
   z-index: 1;
+}
+/* The header keeps the z-index:2 it has without a banner. This selector
+   outranks .channel-header, so listing it above at 1 put the encryption menu
+   back under the DM safety notice whenever a banner was up (#5639). */
+.main.has-banner .channel-header {
+  position: relative;
+  z-index: 2;
 }
 
 /* ── Full Header (default): opaque backgrounds ─── */
@@ -18886,12 +19358,12 @@ ul.chat-list { list-style-type: disc; }
 }
 .media-gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--media-tile, 150px), 1fr));
   gap: 0.5rem;
 }
 .media-grid-item {
   position: relative;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: var(--media-shape, 1 / 1); /* tile shape picker (#5645) */
   border-radius: 0.375rem;
   overflow: hidden;
   background: var(--bg-secondary);
@@ -18990,7 +19462,7 @@ ul.chat-list { list-style-type: disc; }
 .media-list-jump:hover { color: var(--text); border-color: var(--accent); }
 @media (max-width: 600px) {
   .media-gallery-modal { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; }
-  .media-gallery-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.25rem; }
+  .media-gallery-grid { gap: 0.25rem; }
 }
 
 /* Media gallery toolbar: sort dropdown + select/delete bar (#5375) */
@@ -19019,6 +19491,18 @@ ul.chat-list { list-style-type: disc; }
   padding: 0.25rem 0.5rem;
   font-size: 0.8rem;
   cursor: pointer;
+}
+.media-gallery-tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.media-gallery-tile-label[hidden] { display: none; }
+.media-gallery-tile-label input[type="range"] {
+  width: 7.5rem;
+  accent-color: var(--accent);
 }
 .media-gallery-actions {
   display: inline-flex;
@@ -19310,3 +19794,190 @@ ul.chat-list { list-style-type: disc; }
   margin-right: 6px;
   vertical-align: middle;
 }
+
+/* ── Forum channels: topic cards, list or gallery, toolbar ─────────────── */
+.messages.forum-view { display: flex; flex-direction: column; padding: 0.75rem 1rem 1.5rem; }
+.forum-toolbar { position: sticky; top: 0; z-index: 3; background: var(--bg-primary); padding: 0.25rem 0.25rem 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+.forum-toolbar-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.forum-toolbar-row + .forum-toolbar-row { margin-top: 0.5rem; }
+.forum-sort-view { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+.forum-select { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.3rem 0.5rem; font-size: 0.8rem; }
+.forum-select-small { padding: 0.2rem 0.4rem; font-size: 0.72rem; }
+.forum-view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.forum-tile-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.forum-tile-size[hidden] { display: none; }
+.forum-tile-size input[type="range"] {
+  width: 7.5rem;
+  accent-color: var(--accent);
+}
+.forum-view-btn { background: transparent; border: none; color: var(--text-muted); padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.9rem; }
+.forum-view-btn.active { background: var(--accent); color: var(--accent-text, #fff); }
+.forum-tag-chip { background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.7rem; font-size: 0.75rem; cursor: pointer; }
+.forum-tag-chip:hover { color: var(--text-primary); border-color: var(--accent); }
+.forum-tag-chip.active { background: var(--accent); color: var(--accent-text, #fff); border-color: var(--accent); }
+.forum-tag-clear { background: none; border: none; color: var(--text-link); font-size: 0.75rem; cursor: pointer; }
+.forum-new-post { white-space: nowrap; }
+.forum-topics { display: flex; flex-direction: column; gap: 0.5rem; }
+.forum-topic { display: flex; gap: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem; cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+.forum-topic:hover { border-color: var(--accent); transform: translateY(-1px); }
+.forum-topic-pinned { border-color: var(--accent-dim, var(--accent)); }
+.forum-topic-avatar { display: none; }
+.forum-topic-thumb { flex: 0 0 5.5rem; width: 5.5rem; height: 5.5rem; border-radius: calc(var(--radius) - 2px); overflow: hidden; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
+.forum-topic-thumb img.forum-thumb-img { width: 100%; height: 100%; object-fit: cover; max-width: none; max-height: none; min-width: 0; min-height: 0; margin: 0; }
+/* The glyph colour lives on the span: the tile is a 35% accent tint over the
+   card, not an accent fill, so the accent-on-accent-text contract does not apply. */
+.forum-topic-thumb-empty { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 35%, var(--bg-card)), var(--bg-card)); font-size: 1.6rem; }
+.forum-topic-thumb-empty span { color: var(--accent); }
+.forum-topic-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.forum-topic-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.forum-topic-tags:empty { display: none; }
+.forum-tag { background: var(--bg-tertiary); color: var(--text-secondary); border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.68rem; }
+.forum-tag-pinned { color: var(--accent); }
+.forum-tag-closed { color: var(--text-muted); }
+.forum-topic-closed { opacity: 0.55; }
+.forum-topic-closed:hover { opacity: 0.85; }
+/* NSFW topics (#5633): the picture and preview sit blurred behind a label until
+   clicked, like a spoiler, and the title stays readable. Anyone who hides NSFW
+   channels does not get the card at all. */
+.forum-tag-nsfw { color: #e74c5f; }
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb { position: relative; }
+.messages.forum-gallery .forum-topic-nsfw:not(.revealed) .forum-topic-thumb { position: absolute; }
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb img.forum-thumb-img,
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb-empty span { filter: blur(18px); transform: scale(1.1); }
+.forum-topic-nsfw:not(.revealed) .forum-topic-thumb::after {
+  content: attr(data-nsfw-label);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.3rem;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.forum-topic-nsfw:not(.revealed) .forum-topic-snippet { filter: blur(6px); user-select: none; }
+.forum-field-closed span { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.forum-topic-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* Unread dot on a forum card: a topic you have not opened, or new replies since you did (#5641). */
+.forum-unread-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); margin-right: 0.4rem; vertical-align: middle; position: relative; top: -0.05rem; box-shadow: 0 0 0 2px var(--bg-card); }
+.forum-topic-unread { border-left: 3px solid var(--accent); }
+.messages.forum-gallery .forum-topic-unread, .messages.forum-feed .forum-topic-unread { border-left: none; }
+.messages.forum-gallery .forum-unread-dot { box-shadow: 0 0 0 2px rgba(8,8,14,0.7); }
+.forum-mark-read { white-space: nowrap; }
+.forum-topic-snippet { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.forum-topic-snippet:empty { display: none; }
+.forum-topic-meta { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; color: var(--text-muted); margin-top: auto; padding-top: 0.25rem; }
+.forum-topic-author { color: var(--text-secondary); font-weight: 600; }
+.forum-topic-replies { color: var(--accent); }
+.forum-topic-edit { margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; opacity: 0.6; }
+.forum-topic-edit:hover { opacity: 1; color: var(--accent); }
+.forum-load-more { align-self: center; margin-top: 0.75rem; }
+/* Gallery: a grid of true squares, the image fills the tile, the words sit on a scrim. */
+.messages.forum-gallery .forum-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--forum-tile, 11rem), 1fr)); gap: clamp(0.25rem, calc(var(--forum-tile, 11rem) * 0.05), 0.85rem); }
+.messages.forum-gallery .forum-topic { position: relative; display: block; aspect-ratio: var(--forum-shape, 1 / 1); padding: 0; overflow: hidden; }
+.messages.forum-gallery .forum-topic-thumb { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; font-size: 2.4rem; }
+.messages.forum-gallery .forum-topic-body { position: absolute; left: 0; right: 0; bottom: 0; padding: 1.25rem 0.6rem 0.5rem; gap: 0.15rem; background: linear-gradient(to top, rgba(8,8,14,0.88), rgba(8,8,14,0.55) 60%, transparent); color: #fff; }
+.messages.forum-gallery .forum-topic-title { color: #fff; font-size: 0.9rem; }
+.messages.forum-gallery .forum-topic-snippet { display: none; }
+.messages.forum-gallery .forum-topic-author, .messages.forum-gallery .forum-topic-meta { color: rgba(235,235,245,0.85); }
+.messages.forum-gallery .forum-topic-tags { position: absolute; top: 0.4rem; left: 0.4rem; right: 0.4rem; }
+.messages.forum-gallery .forum-tag { background: rgba(8,8,14,0.65); color: #fff; }
+.messages.forum-gallery[data-forum-tile="small"] .forum-topic-title { font-size: 0.78rem; -webkit-line-clamp: 2; }
+.messages.forum-gallery[data-forum-tile="small"] .forum-topic-tags { display: none; }
+.messages.forum-gallery[data-forum-tile="large"] .forum-topic-title { font-size: 1.12rem; -webkit-line-clamp: 4; }
+
+/* Twitter-style feed: avatar + text + a full-width photo. */
+.messages.forum-feed .forum-topics { display: flex; flex-direction: column; gap: 0; max-width: 37rem; width: 100%; margin: 0 auto; }
+.messages.forum-feed .forum-topic {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  row-gap: 0.45rem;
+  align-items: start;
+  padding: 0.85rem 0.35rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.messages.forum-feed .forum-topic:hover { border-color: transparent; transform: none; background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
+.messages.forum-feed .forum-topic-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #fff;
+  flex: none;
+}
+.messages.forum-feed .forum-topic-avatar.avatar-square,
+.messages.forum-feed .forum-topic-avatar.avatar-squircle { border-radius: 0.45rem; }
+.messages.forum-feed .forum-topic-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.messages.forum-feed .forum-topic-body { grid-column: 2; grid-row: 1; gap: 0.2rem; position: static; padding: 0; background: none; color: inherit; }
+.messages.forum-feed .forum-topic-thumb {
+  grid-column: 2;
+  grid-row: 2;
+  flex: none;
+  width: 100%;
+  height: auto;
+  max-height: 22rem;
+  margin: 0;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  position: static;
+}
+.messages.forum-feed .forum-topic-thumb img.forum-thumb-img { max-height: 22rem; object-fit: cover; }
+.messages.forum-feed .forum-topic-thumb-empty { display: none; }
+.messages.forum-feed .forum-topic-title { font-size: 1.02rem; -webkit-line-clamp: 6; color: var(--text-primary); }
+.messages.forum-feed .forum-topic-snippet { display: -webkit-box; -webkit-line-clamp: 8; }
+.messages.forum-feed .forum-topic-tags { position: static; }
+.forum-post-modal { max-width: 34rem; width: 94%; }
+.forum-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
+.forum-field input, .forum-field textarea { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem; font: inherit; }
+.forum-tag-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+/* Settings search */
+.settings-search-wrap { padding: 0.5rem 0.75rem 0.25rem; }
+.settings-search { width: 100%; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 0.6rem; font-size: 0.82rem; }
+.settings-search-hidden { display: none !important; }
+
+/* ── Role tools: templates, gates, self-assign menus ───────────── */
+.tool-modal .tool-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.tool-modal .tool-modal-body { max-height: 60vh; overflow: auto; }
+.tool-modal .settings-text-input { width: 100%; box-sizing: border-box; }
+.role-tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 8px; margin-top: 10px; }
+.role-tpl-card { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 0.6rem; background: var(--bg-secondary, var(--bg-card)); color: var(--text-primary); cursor: pointer; font: inherit; }
+.role-tpl-card:hover { border-color: var(--accent); background: var(--bg-hover, var(--bg-card)); }
+.role-tpl-card .role-tpl-emoji { font-size: 1.4rem; }
+.role-tpl-card small { color: var(--text-secondary, var(--text-muted)); font-size: 0.72rem; line-height: 1.25; }
+.rg-mode { display: flex; gap: 12px; margin: 8px 0; }
+.rg-mode .toggle-row { flex: 1; }
+.rg-roles, .rm-roles { max-height: 40vh; overflow: auto; border: 1px solid var(--border); border-radius: 0.5rem; padding: 4px 8px; margin-top: 8px; }
+.rm-row { display: flex; align-items: center; gap: 8px; }
+.rm-row .toggle-row { flex: 1; }
+.rm-row .rm-emoji { width: 3.6rem !important; text-align: center; }
+.role-menu-widget { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.role-menu-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--role-c, var(--border-light)); background: color-mix(in srgb, var(--role-c, var(--accent)) 12%, transparent); color: var(--text-primary); cursor: pointer; font: inherit; font-size: 0.8rem; transition: background .15s, transform .1s; }
+.role-menu-btn:hover { background: color-mix(in srgb, var(--role-c, var(--accent)) 24%, transparent); }
+.role-menu-btn:active { transform: scale(0.97); }
+.role-menu-btn.held { background: var(--role-c, var(--accent)); color: #fff; }
+.role-menu-btn .rm-state { opacity: 0.8; font-weight: 700; }
+.role-menu-btn:disabled { opacity: 0.6; cursor: wait; }

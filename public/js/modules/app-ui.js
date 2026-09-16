@@ -89,6 +89,15 @@ _handleAutocompleteKeydown(e) {
 _setupUI() {
   const msgInput = document.getElementById('message-input');
 
+  // A Discord emote whose picture cannot be fetched (bridge off, emote deleted,
+  // offline) shows its :name: instead of a broken image. Error events do not
+  // bubble, so this listens in the capture phase.
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || !img.classList.contains('discord-emote')) return;
+    img.replaceWith(document.createTextNode(img.alt || ''));
+  }, true);
+
   // Shorter placeholder on narrow screens to prevent wrapping
   if (window.innerWidth <= 480) {
     msgInput.placeholder = t('app.messages.placeholder_short');
@@ -192,9 +201,15 @@ _setupUI() {
       if (e.key === 'Escape') { this._hideFerryDropdown(); return; }
     }
 
+    // Ctrl + Enter opens scheduled send modal
+    // Just Enter sends the message
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      this._sendMessage();
+      if (e.ctrlKey) {
+        this._openScheduleModal();
+      } else {
+        e.preventDefault();
+        this._sendMessage();
+      }
     }
 
     // Up arrow on empty input → edit last own message (toggleable)
@@ -251,6 +266,28 @@ _setupUI() {
   });
 
   document.getElementById('send-btn').addEventListener('click', () => this._sendMessage());
+  // Right-click on Send: send later (#5638). /schedule does the same.
+  document.getElementById('send-btn').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    this._openScheduleModal();
+  });
+  document.getElementById('schedule-cancel')?.addEventListener('click', () => { document.getElementById('schedule-modal').style.display = 'none'; });
+  document.getElementById('schedule-save')?.addEventListener('click', () => this._submitSchedule());
+  document.getElementById('schedule-modal')?.addEventListener('click', (e) => { if (e.target.id === 'schedule-modal') e.target.style.display = 'none'; });
+
+  const sendLaterText = document.getElementById('schedule-text');
+  sendLaterText.addEventListener('keydown', (e) => {
+    // Markdown Formatting shortcuts
+    if (this._handleMarkdownShortcuts(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
+  sendLaterText.addEventListener('paste', (e) => {
+    // insert a markdown link when a link is pasted over selected text
+    if (this._handleMarkdownLinkPaste(sendLaterText, e)) {
+      e.preventDefault();
+    }
+  });
 
   // Join channel
   const joinBtn = document.getElementById('join-channel-btn');
@@ -273,7 +310,8 @@ _setupUI() {
       const addAllMembers = document.getElementById('new-channel-add-all')?.checked || false;
       const isForum = document.getElementById('new-channel-forum')?.checked || false;
       if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum });
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, ...this._channelTemplateExtras() });
+        this._resetChannelTemplate();
         nameInput.value = '';
         const pvt = document.getElementById('new-channel-private');
         if (pvt) pvt.checked = false;
@@ -335,6 +373,19 @@ _setupUI() {
       { danger: true }
     );
     if (!ok) return;
+    // A parent takes its sub-channels with it. Say so, name them, and point
+    // at the way out for anyone who wants to keep some of them.
+    const ch = this.channels.find(c => c.code === code);
+    const subs = ch ? this.channels.filter(c => c.parent_channel_id === ch.id) : [];
+    if (subs.length) {
+      const names = subs.map(s => '#' + s.name).join(', ');
+      const okSubs = await this._showConfirmModal(
+        '⚠️ ' + t('confirm.delete_channel_subs_title'),
+        t('confirm.delete_channel_subs', { names }),
+        { danger: true, confirmLabel: t('confirm.delete_channel_subs_btn') }
+      );
+      if (!okSubs) return;
+    }
     this.socket.emit('delete-channel', { code });
   });
   // Mark channel as read
@@ -500,8 +551,19 @@ _setupUI() {
       // The ordering rule just changed under the open channel; reload it so
       // the topics re-sort now instead of on the next visit.
       if (code === this.currentChannel) {
-        setTimeout(() => this.socket.emit('get-messages', { code }), 400);
+        setTimeout(() => this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(code) : { code }), 400);
       }
+    } else if (fn === 'private') {
+      const newVal = ch && ch.is_private ? 0 : 1;
+      optimistic({ is_private: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'private' });
+    } else if (fn === 'nsfw') {
+      const newVal = ch && ch.is_nsfw ? 0 : 1;
+      optimistic({ is_nsfw: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'nsfw' });
+    } else if (fn === 'forum-tags') {
+      document.getElementById('channel-functions-panel').style.display = 'none';
+      this._forumEditTags?.(code);
     } else if (fn === 'slow-mode') {
       const badge = row.querySelector('.cfn-badge');
       if (!badge || badge.tagName === 'INPUT') return;
@@ -545,6 +607,10 @@ _setupUI() {
       const newType = isAnnouncement ? 'default' : 'announcement';
       optimistic({ notification_type: newType });
       this.socket.emit('set-notification-type', { code, type: newType });
+    } else if (fn === 'role-gate') {
+      this._openRoleGateModal(code);
+    } else if (fn === 'save-template') {
+      this._saveChannelAsTemplate(code);
     } else if (fn === 'default-role') {
       // (#5389) Dropdown of available server roles. Selecting one fires
       // set-channel-default-role; selecting "None" clears the default.
@@ -1711,6 +1777,7 @@ _setupUI() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#media-gallery-modal .media-tab').forEach(b => b.classList.toggle('active', b === btn));
       this._mediaGalleryActiveTab = btn.dataset.tab;
+      this._applyMediaTileSize();
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab);
       // Switching tabs clears selection — selecting items across tabs and
       // hitting Delete would be confusing since each tab has its own scope.
@@ -1732,6 +1799,28 @@ _setupUI() {
       this._mediaGallerySort = sortSel.value || 'date-desc';
       try { localStorage.setItem('mediaGallerySort', this._mediaGallerySort); } catch {}
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+    });
+  }
+
+  const tileSlider = document.getElementById('media-gallery-tile');
+  if (tileSlider) {
+    tileSlider.value = String(this._mediaTilePx());
+    this._applyMediaTileSize();
+    tileSlider.addEventListener('input', () => {
+      const px = this._mediaTilePx(tileSlider.value);
+      try { localStorage.setItem('mediaGalleryTile', String(px)); } catch {}
+      this._applyMediaTileSize(px);
+    });
+  }
+  // Tile shape, shared with the forum gallery (#5645).
+  const shapeSel = document.getElementById('media-gallery-shape');
+  if (shapeSel && this._tileShapeOptionsHtml) {
+    let saved = 'square';
+    try { saved = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    shapeSel.innerHTML = this._tileShapeOptionsHtml(saved);
+    shapeSel.addEventListener('change', () => {
+      try { localStorage.setItem('mediaGalleryShape', this._forumParseShape(shapeSel.value)); } catch {}
+      this._applyMediaTileSize();
     });
   }
 
@@ -2063,12 +2152,15 @@ _setupUI() {
 
   // Image click — open lightbox overlay (CSP-safe — no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
+    // A forum card handles its own clicks: the thumbnail opens the topic,
+    // not the lightbox (#5646).
+    if (e.target.closest('.forum-topic')) return;
     // Concealed media (hidden image / unrevealed spoiler) intercepts the click
     // before the lightbox opens.
     if (this._maybeRevealConcealed(e)) return;
     if (e.target.classList.contains('chat-image')) {
       this._lightboxContainer = document.getElementById('messages');
-      this._openLightbox(e.target.src);
+      this._openLightbox(this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, e.target);
     }
     // Spoiler reveal toggle (text spoilers)
     if (e.target.closest('.spoiler')) {
@@ -2090,23 +2182,40 @@ _setupUI() {
         }
         if (e.target.classList.contains('chat-image')) {
           this._lightboxContainer = el;
-          this._openLightbox(e.target.src);
+          this._openLightbox(this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, e.target);
         }
       });
       el.addEventListener('contextmenu', (e) => {
         if (e.target.classList.contains('chat-image')) {
           e.preventDefault();
-          this._showImageContextMenu(e, e.target.src);
+          this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
         }
+      });
+      // Middle click on a picture opens it in a new tab, like a link (#5663).
+      el.addEventListener('auxclick', (e) => {
+        if (e.button !== 1) return;
+        const img = e.target.closest('img.chat-image');
+        if (!img) return;
+        e.preventDefault();
+        this._openImageInNewTab(img);
       });
     }
   }
+  document.getElementById('messages').addEventListener('auxclick', (e) => {
+    if (e.button !== 1) return;
+    const img = e.target.closest('img.chat-image');
+    if (!img) return;
+    e.preventDefault();
+    this._openImageInNewTab(img);
+  });
 
-  // Image right-click — custom context menu for chat thumbnails
+  // Image right-click — custom context menu for chat thumbnails. Forum cards
+  // open their own menus, so both menus no longer stack up there (#5650).
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
+    if (e.target.closest('.forum-topic')) return;
     if (e.target.classList.contains('chat-image')) {
       e.preventDefault();
-      this._showImageContextMenu(e, e.target.src);
+      this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
     }
   });
 
@@ -2247,19 +2356,20 @@ _setupUI() {
     if (!items) return;
     const targetCode = this._activeDMPip;
     if (!targetCode) return;
+    let handled = false;
     for (const item of items) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (!file) continue;
-        e.preventDefault();
-        if (item.type.startsWith('image/')) {
-          this._queueImageForPiP(file, targetCode);
-        } else {
-          this._uploadGeneralFile(file, targetCode);
-        }
-        return;
+      if (item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      e.preventDefault();
+      handled = true;
+      if (item.type.startsWith('image/')) {
+        this._queueImageForPiP(file, targetCode);
+      } else {
+        this._uploadGeneralFile(file, targetCode);
       }
     }
+    if (handled) return;
 
     // insert a markdown link when a link is pasted over selected text
     if (this._handleMarkdownLinkPaste(dmPipInput, e)) {
@@ -2419,15 +2529,12 @@ _setupUI() {
       const items = e.clipboardData?.items;
       if (!items) return;
       if (!this._activeThreadParent) return;
-      for (const item of items) {
-        if (item.kind === 'file') {
-          const file = item.getAsFile();
-          if (!file) continue;
-          e.preventDefault();
-          // Hold it, don't post it. Flushed on send. (#thread-paste-instant)
-          this._queueThreadFile(file);
-          return;
-        }
+      // Hold them, don't post them. Flushed on send. (#thread-paste-instant)
+      const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+      if (files.length) {
+        e.preventDefault();
+        this._queueThreadFiles(files);
+        return;
       }
 
       // insert a markdown link when a link is pasted over selected text
@@ -2444,8 +2551,7 @@ _setupUI() {
       e.preventDefault();
       threadArea.classList.remove('drag-over');
       if (!this._activeThreadParent) return;
-      const file = e.dataTransfer?.files[0];
-      if (file) this._queueThreadFile(file);
+      this._queueThreadFiles(e.dataTransfer?.files);
     });
   }
 
@@ -2595,40 +2701,7 @@ _setupUI() {
   // We set both `height` and `min-height` inline so the auto-grow `input`
   // handler (which sets `height = 'auto'` then caps at a small default) can't
   // collapse the textarea back down after the user has manually expanded it.
-  document.querySelectorAll('.pip-input-resizer').forEach(handle => {
-    let startY = 0;
-    let startHeight = 0;
-    let ta = null;
-    let cap = 600;
-
-    const onMove = (e) => {
-      if (!ta) return;
-      const delta = startY - e.clientY; // positive when dragging up
-      const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
-      ta.style.height = `${newHeight}px`;
-      ta.style.minHeight = `${newHeight}px`;
-      ta.style.maxHeight = `${cap}px`;
-    };
-
-    const onUp = () => {
-      ta = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-
-    handle.addEventListener('mousedown', (e) => {
-      ta = handle.parentElement?.querySelector('textarea');
-      if (!ta) return;
-      startY = e.clientY;
-      startHeight = ta.getBoundingClientRect().height;
-      // Cap manual expansion at ~60% of viewport so the textarea can never
-      // swallow the entire chat pane. Min 200px on tiny windows.
-      cap = Math.max(200, Math.floor(window.innerHeight * 0.6));
-      e.preventDefault();
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  });
+  document.querySelectorAll('.pip-input-resizer').forEach(handle => this._bindInputResizer(handle));
 
   // Emoji picker toggle
   document.getElementById('emoji-btn').addEventListener('click', () => {
@@ -2929,6 +3002,22 @@ _setupUI() {
   }
 
   // ── Poll vote click (delegated from messages container) ──
+  // Role menu buttons: one click gives you the role, another takes it back.
+  document.getElementById('messages').addEventListener('click', (e) => {
+    const btn = e.target.closest('.role-menu-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    const messageId = parseInt(btn.dataset.msgId, 10);
+    const roleId = parseInt(btn.dataset.roleId, 10);
+    if (!messageId || !roleId) return;
+    btn.disabled = true;
+    this.socket.emit('toggle-self-role', { messageId, roleId, held: !btn.classList.contains('held') }, (res) => {
+      btn.disabled = false;
+      if (res?.error) return this._showToast(res.error, 'error');
+      this._markSelfRole(roleId, !!res?.held);
+    });
+  });
+
   document.getElementById('messages').addEventListener('click', (e) => {
     const optBtn = e.target.closest('.poll-option');
     if (!optBtn) return;
@@ -2946,6 +3035,9 @@ _setupUI() {
   // ── Poll creation modal ──
   document.getElementById('poll-btn').addEventListener('click', () => {
     this._openPollModal();
+  });
+  document.getElementById('time-btn')?.addEventListener('click', () => {
+    this._openTimeModal();
   });
 
   // (#5280) Burn-after-read toggle (DM-only, default 30 s).
@@ -2979,6 +3071,38 @@ _setupUI() {
   document.getElementById('poll-modal').addEventListener('click', (e) => {
     if (e.target.id === 'poll-modal') e.target.style.display = 'none';
   });
+
+  // ── /time timestamp picker modal ──
+  const timeModal = document.getElementById('time-modal');
+  if (timeModal) {
+    const refresh = () => this._tsmUpdatePreview();
+    ['tsm-year', 'tsm-month', 'tsm-day', 'tsm-hour', 'tsm-minute', 'tsm-second']
+      .forEach(id => document.getElementById(id)?.addEventListener('input', refresh));
+    timeModal.querySelectorAll('.tsm-mer-btn').forEach(b => {
+      b.addEventListener('click', () => { this._tsmSetMeridiem(b.dataset.mer); refresh(); });
+    });
+    document.getElementById('tsm-cal-btn')?.addEventListener('click', () => {
+      const di = document.getElementById('tsm-cal-input');
+      if (!di) return;
+      const cur = this._tsmBuildDate();
+      // Seed the native picker with the fields' current date so it opens there,
+      // decomposed in the same zone the wall-clock fields are read in.
+      if (cur) {
+        const p = n => String(n).padStart(2, '0');
+        const parts = this._zonedParts(cur);
+        di.value = `${parts.year}-${p(parts.monthIndex + 1)}-${p(parts.day)}`;
+      }
+      try { di.showPicker(); } catch { di.focus(); di.click(); }
+    });
+    document.getElementById('tsm-cal-input')?.addEventListener('change', () => this._tsmSyncFromCalendar());
+    document.getElementById('tsm-styles')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tsm-style-insert');
+      if (btn) this._tsmInsert(btn.dataset.style);
+    });
+    timeModal.addEventListener('click', (e) => {
+      if (e.target.id === 'time-modal') e.target.style.display = 'none';
+    });
+  }
 
   // Rename username
   document.getElementById('rename-btn').addEventListener('click', () => {
@@ -3332,33 +3456,62 @@ _setupUI() {
   });
 
   // ── Settings scroll-spy ──────────────────────────────
-  // (language picker is built above; scroll-spy follows)
-  // The settings body is one long scrolling column, not a tab switcher, so the
-  // nav highlight used to sit on whatever was last clicked (or "Language" by
-  // default) no matter where you'd scrolled to. That made the nav actively
-  // misleading — it would claim you were in Language while you were looking at
-  // Activity. Track the topmost visible section instead.
-  const settingsBody = document.getElementById('settings-body-user');
-  if (settingsBody) {
+  // Settings bodies are long scrolling columns rather than tab switchers.
+  // Keep the corresponding nav item highlighted as the user scrolls.
+  //
+  // User settings:
+  //   #settings-body-user
+  //   .settings-nav-user
+  //
+  // Admin settings:
+  //   #settings-body-admin
+  //   .settings-nav-admin-group
+  //
+  // Each body has its own independent scroll-spy so the user and admin nav
+  // states cannot interfere with each other.
+  const setupSettingsScrollSpy = (settingsBody, navSelector) => {
+    if (!settingsBody) return;
+
     const syncNavHighlight = () => {
       if (Date.now() < (this._settingsSpyMuteUntil || 0)) return;
-      const navItems = Array.from(document.querySelectorAll('.settings-nav-user .settings-nav-item'));
-      if (!navItems.length) return;
-      const bodyTop = settingsBody.getBoundingClientRect().top;
 
-      let current = null;
-      for (const item of navItems) {
+      // Only consider nav items whose corresponding section currently exists
+      // and is visible. This is important for admin settings because many of
+      // the admin nav entries start with display:none.
+      const navItems = Array.from(document.querySelectorAll(`${navSelector} .settings-nav-item`));
+      const visibleNavItems = navItems.filter(item => {
+        if (item.offsetParent === null) return false;
+
         const section = document.getElementById(item.dataset.target);
-        if (!section || section.offsetParent === null) continue;
-        // The last section whose top has passed the viewport top is the one
-        // being read; anything below that hasn't been reached yet.
-        if (section.getBoundingClientRect().top - bodyTop <= 8) current = item;
-        else break;
+        return section && section.offsetParent !== null;
+      });
+
+      if (!visibleNavItems.length) return;
+
+      const bodyTop = settingsBody.getBoundingClientRect().top;
+      let current = null;
+      for (const item of visibleNavItems) {
+        const section = document.getElementById(item.dataset.target);
+        if (!section) continue;
+
+        // The last section whose top has passed the top of the scrolling
+        // body is the section currently being viewed.
+        if (section.getBoundingClientRect().top - bodyTop <= 8) {
+          current = item;
+        } else {
+          break;
+        }
       }
-      if (!current) current = navItems[0];
+
+      // Before the first section reaches the top, highlight the first
+      // visible section.
+      if (!current) current = visibleNavItems[0];
+
+      // Nothing to do if the correct item is already highlighted.
       if (current.classList.contains('active')) return;
 
-      navItems.forEach(n => n.classList.remove('active'));
+      // Only modify nav items belonging to this scroll-spy.
+      visibleNavItems.forEach(item => item.classList.remove('active'));
       current.classList.add('active');
       // Keep the highlighted entry reachable in a long nav list.
       current.scrollIntoView({ block: 'nearest' });
@@ -3370,13 +3523,92 @@ _setupUI() {
       spyQueued = true;
       requestAnimationFrame(() => { spyQueued = false; syncNavHighlight(); });
     }, { passive: true });
-  }
+
+    // Set the correct highlight immediately in case the settings body is
+    // already scrolled when the spy is initialized.
+    syncNavHighlight();
+  };
+  // User settings scroll-spy
+  setupSettingsScrollSpy(document.getElementById('settings-body-user'), '.settings-nav-user');
+  // Admin settings scroll-spy
+  setupSettingsScrollSpy(document.getElementById('settings-body-admin'), '.settings-nav-admin-group');
 
   // ── Language switcher ────────────────────────────────
   document.getElementById('language-select')?.addEventListener('change', (e) => {
     if (window.i18n) i18n.setLocale(e.target.value);
   });
   this._buildLanguagePicker();
+
+  // ── Voice messages (#5665) ────────────────────────────
+  document.getElementById('voice-btn')?.addEventListener('click', () => this._toggleVoiceMessage());
+  document.getElementById('voice-rec-cancel')?.addEventListener('click', () => this._stopVoiceMessage(false));
+  document.getElementById('voice-rec-send')?.addEventListener('click', () => this._stopVoiceMessage(true));
+
+  // ── One + button in place of the toolbar (#5654) ──────
+  // With the setting on, the toolbar is hidden and becomes the menu the +
+  // opens; the buttons keep their own handlers, only their home moves.
+  const plusBtn = document.getElementById('composer-plus-btn');
+  const actionsBox = document.querySelector('#message-input-area .input-actions-box');
+  this._closeComposerMenu = () => {
+    actionsBox?.classList.remove('open');
+    plusBtn?.setAttribute('aria-expanded', 'false');
+  };
+  if (plusBtn && actionsBox) {
+    plusBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !actionsBox.classList.contains('open');
+      actionsBox.classList.toggle('open', open);
+      plusBtn.setAttribute('aria-expanded', String(open));
+    });
+    // Picking a tool closes the menu; the tool's own picker takes over.
+    actionsBox.addEventListener('click', (e) => {
+      if (document.documentElement.hasAttribute('data-compact-composer') && e.target.closest('button')) setTimeout(() => this._closeComposerMenu(), 0);
+    });
+    document.addEventListener('click', (e) => {
+      if (actionsBox.classList.contains('open') && !e.target.closest('.input-actions-box') && e.target !== plusBtn) this._closeComposerMenu();
+    });
+  }
+
+  // ── Formatting guide and command list (#5654) ─────────
+  const formatBtn = document.getElementById('format-btn');
+  const formatPicker = document.getElementById('format-picker');
+  if (formatBtn && formatPicker) {
+    let formatTab = 'markdown';
+    const renderFormatPicker = () => {
+      formatPicker.querySelectorAll('.gif-tab').forEach(b => b.classList.toggle('active', b.dataset.formatTab === formatTab));
+      const list = document.getElementById('format-picker-list');
+      if (list) list.innerHTML = formatTab === 'markdown' ? this._formatGuideHtml() : this._commandGuideHtml();
+    };
+    formatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = formatPicker.style.display === 'none';
+      const emojiPicker = document.getElementById('emoji-picker');
+      const gifPicker = document.getElementById('gif-picker');
+      if (emojiPicker) emojiPicker.style.display = 'none';
+      if (gifPicker) gifPicker.style.display = 'none';
+      formatPicker.style.display = open ? 'flex' : 'none';
+      if (open) renderFormatPicker();
+    });
+    formatPicker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tab = e.target.closest('[data-format-tab]');
+      if (tab) { formatTab = tab.dataset.formatTab; renderFormatPicker(); return; }
+      const row = e.target.closest('.format-row');
+      if (!row) return;
+      if (row.dataset.cmd) this._insertSlashCommand(row.dataset.cmd);
+      else this._wrapComposerSelection(row.dataset.before || '', row.dataset.after || '', row.dataset.sample || '', row.dataset.block === '1');
+      formatPicker.style.display = 'none';
+    });
+    document.addEventListener('click', (e) => {
+      if (formatPicker.style.display !== 'none' && !e.target.closest('#format-picker') && !e.target.closest('#format-btn')) formatPicker.style.display = 'none';
+    });
+  }
+
+  // ── Timezone (Configure Time) ────────────────────────
+  document.getElementById('configure-time-btn')?.addEventListener('click', () => {
+    this._openTimezoneModal({ firstRun: false });
+  });
+  this._updateTimezoneSummary?.();
 
   // ── Password change ──────────────────────────────────
   document.getElementById('change-password-btn').addEventListener('click', async () => {
@@ -4095,7 +4327,7 @@ _setupUI() {
       }
       listEl.innerHTML = files.map(f => {
         const safeName = f.name.replace(/[<>"&]/g, c => ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', '&': '&amp;' }[c]));
-        const when = new Date(f.mtime).toLocaleString();
+        const when = this._fmtDateTime(f.mtime);
         return `<div style="display:flex;gap:6px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:6px 8px;border-radius:4px">
           <div style="min-width:0;flex:1">
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.85em">${safeName}</div>
@@ -4367,13 +4599,25 @@ _setupUI() {
     if (!confirm(t('settings.admin.registration.clear_confirm'))) return;
     this.socket.emit('clear-registration-token');
   });
-  document.getElementById('copy-registration-token-btn')?.addEventListener('click', () => {
-    const tok = document.getElementById('registration-token-value')?.textContent;
-    if (tok && tok !== '—') {
-      const onCopied = () => this._showToast?.(t('settings.admin.registration.copied'), 'success');
-      (navigator.clipboard?.writeText
-        ? navigator.clipboard.writeText(tok).then(onCopied).catch(() => onCopied())
-        : onCopied());
+  document.getElementById('copy-registration-token-btn')?.addEventListener('click', async () => {
+    const tok = document.getElementById('registration-token-value')?.textContent?.trim();
+    if (!tok || tok === '—') return;
+    const onCopied = () => this._showToast?.(t('settings.admin.registration.copied'), 'success');
+    // The old handler toasted "copied" from the rejection path too, so in the
+    // desktop app (clipboard write refused without a fresh user activation)
+    // the toast lied while the clipboard kept its previous contents.
+    try {
+      const res = await window.havenDesktop?.clipboardWriteText?.(tok);
+      if (res?.ok) return onCopied();
+    } catch {}
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard api');
+      await navigator.clipboard.writeText(tok);
+      return onCopied();
+    } catch {
+      let ok = false;
+      this._copyTextFallback(tok, () => { ok = true; onCopied(); });
+      if (!ok) this._showToast?.(t('settings.admin.registration.copy_failed'), 'error');
     }
   });
 
@@ -4572,14 +4816,14 @@ _setupUI() {
             ? `<span style="color:var(--danger,#e84a4a)">● ${t('settings.admin.invite_links.expired')}</span>`
             : `<span style="color:var(--green,#43b581)">● ${t('settings.admin.invite_links.active')}</span>`;
       const link = `${origin}/?invite=${encodeURIComponent(ic.code)}`;
-      const chCount = (ic.channels && ic.channels.length)
-        ? t(ic.channels.length === 1 ? 'settings.admin.invite_links.channel_one' : 'settings.admin.invite_links.channel_other', { count: ic.channels.length })
-        : t('settings.admin.invite_links.all_public_channels');
+      const chCount = t(ic.channels.length === 1
+          ? 'settings.admin.invite_links.channel_one'
+          : 'settings.admin.invite_links.channel_other', { count: ic.channels.length }
+      );
       const uses = ic.max_uses > 0 ? `${ic.use_count} / ${ic.max_uses}` : `${ic.use_count}`;
-      const expiry = ic.expires_at ? new Date(ic.expires_at).toLocaleString() : t('settings.admin.invite_links.never');
+      const expiry = ic.expires_at ? this._fmtDateTime(ic.expires_at) : t('settings.admin.invite_links.never');
       const label = ic.label ? this._escapeHtml(ic.label) : `<em style="opacity:.6">${t('settings.admin.invite_links.no_label')}</em>`;
-      const editorChannels = _inviteChannelChecks('invite-edit-channel-cb',
-        (ic.channels && ic.channels.length) ? new Set(ic.channels) : null);
+      const editorChannels = _inviteChannelChecks('invite-edit-channel-cb', new Set(ic.channels || []));
       return `<div class="invite-code-card" data-id="${ic.id}" style="border:1px solid var(--border);border-radius:8px;padding:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <div style="font-weight:600">${label} &nbsp;<code style="font-size:.85rem">${this._escapeHtml(ic.code)}</code></div>
@@ -4641,7 +4885,7 @@ _setupUI() {
     const total = cbs.length;
     const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
     // All checked → [] = "grant all public" (future-proof as new channels appear).
-    const channels = (total > 0 && picked.length === total) ? [] : picked;
+    const channels = picked;
 
     const maxUsesValue = document.getElementById('invite-new-maxuses')?.value;
     const maxUses = maxUsesValue === '' ? 1 : parseInt(maxUsesValue);
@@ -4713,7 +4957,7 @@ _setupUI() {
       const cbs = Array.from(card.querySelectorAll('.invite-edit-channel-cb'));
       const total = cbs.length;
       const picked = cbs.filter(cb => cb.checked).map(cb => parseInt(cb.dataset.cid)).filter(Number.isFinite);
-      const channels = (total > 0 && picked.length === total) ? [] : picked;
+      const channels = picked;
       const maxUses = parseInt(card.querySelector('[data-role="edit-maxuses"]')?.value) || 0;
       const payload = { id, channels, maxUses };
       const exp = parseInt(card.querySelector('[data-role="edit-expiry"]')?.value);
@@ -4867,7 +5111,7 @@ async _copyInviteCard(card) {
 
   if (invite?.expires_at) {
     const expiryDate = new Date(invite.expires_at);
-    if (!Number.isNaN(expiryDate.getTime())) expiryText = expiryDate.toLocaleString();
+    if (!Number.isNaN(expiryDate.getTime())) expiryText = this._fmtDateTime(expiryDate);
   }
 
   const invitedText = t('settings.admin.invite_links.card_invited', { server: brandText });
@@ -5816,14 +6060,11 @@ _setupImageUpload() {
     fileInput.click();
   });
 
+  // The picker, the clipboard and a drop can all hand over several files at
+  // once; every one of them queues, up to the admin's cap. (#5561)
   fileInput.addEventListener('change', () => {
-    if (!fileInput.files[0]) return;
-    const file = fileInput.files[0];
-    if (file.type.startsWith('image/')) {
-      this._queueImage(file);
-    } else {
-      this._queueGeneralFile(file);
-    }
+    if (!fileInput.files.length) return;
+    this._queueComposerFiles(fileInput.files);
     fileInput.value = '';
   });
 
@@ -5832,19 +6073,10 @@ _setupImageUpload() {
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    for (const item of items) {
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        e.preventDefault();
-        this._queueImage(item.getAsFile());
-        return;
-      }
-      if (item.kind === 'file') {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) this._queueGeneralFile(file);
-        return;
-      }
-    }
+    const files = Array.from(items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+    if (!files.length) return;
+    e.preventDefault();
+    this._queueComposerFiles(files);
   });
 
   // Drag & drop — QUEUE instead of uploading immediately
@@ -5860,13 +6092,7 @@ _setupImageUpload() {
   messageArea.addEventListener('drop', (e) => {
     e.preventDefault();
     messageArea.classList.remove('drag-over');
-    const file = e.dataTransfer?.files[0];
-    if (!file) return;
-    if (file.type.startsWith('image/')) {
-      this._queueImage(file);
-    } else {
-      this._queueGeneralFile(file);
-    }
+    this._queueComposerFiles(e.dataTransfer?.files);
   });
 },
 
@@ -6228,6 +6454,9 @@ _openPollModal() {
   document.getElementById('poll-question-input').value = '';
   document.getElementById('poll-multi-vote').checked = false;
   document.getElementById('poll-anonymous').checked = false;
+  const colSel = document.getElementById('poll-columns');
+  if (colSel) colSel.value = '0';
+  this._updatePollColumnsVis();
   const list = document.getElementById('poll-options-list');
   list.innerHTML = '';
   for (let i = 0; i < 2; i++) {
@@ -6255,7 +6484,52 @@ _addPollOptionRow(list, index) {
     row.remove();
     this._updatePollRemoveButtons();
   });
+  // A picture for the option: uploaded on pick, so the poll can be posted
+  // with the URLs the moment Create is clicked (#5648).
+  const imgBtn = document.createElement('button');
+  imgBtn.type = 'button';
+  imgBtn.className = 'poll-option-imgbtn';
+  imgBtn.textContent = '\ud83d\uddbc\ufe0f';
+  imgBtn.title = t('modals.poll.add_image');
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = 'image/*';
+  file.style.display = 'none';
+  imgBtn.addEventListener('click', () => {
+    if (row.dataset.image) {
+      delete row.dataset.image;
+      imgBtn.classList.remove('has-image');
+      imgBtn.style.backgroundImage = '';
+      imgBtn.title = t('modals.poll.add_image');
+      this._updatePollColumnsVis();
+      return;
+    }
+    file.click();
+  });
+  file.addEventListener('change', async () => {
+    const f = file.files && file.files[0];
+    file.value = '';
+    if (!f || !f.type.startsWith('image/')) return;
+    const cap = this._uploadCapMb ? this._uploadCapMb() : 25;
+    if (f.size > cap * 1024 * 1024) return this._showToast(t('media.image_too_large', { maxMb: cap }), 'error');
+    try {
+      const fd = new FormData();
+      fd.append('scope', 'channel');
+      fd.append('image', f);
+      const data = await this._uploadWithProgress('/api/upload', fd);
+      if (!data || !data.url) throw new Error('upload');
+      row.dataset.image = data.url;
+      imgBtn.classList.add('has-image');
+      imgBtn.style.backgroundImage = `url("${data.url}")`;
+      imgBtn.title = t('modals.poll.remove_image');
+      this._updatePollColumnsVis();
+    } catch (err) {
+      if (!err?.aborted) this._showToast(err?.message || t('toasts.upload_failed'), 'error');
+    }
+  });
   row.appendChild(input);
+  row.appendChild(imgBtn);
+  row.appendChild(file);
   row.appendChild(removeBtn);
   list.appendChild(row);
   this._updatePollRemoveButtons();
@@ -6274,19 +6548,560 @@ _updatePollRemoveButtons() {
   const list = document.getElementById('poll-options-list');
   const btns = list.querySelectorAll('.poll-option-remove');
   btns.forEach(b => { b.style.display = list.children.length > 2 ? '' : 'none'; });
+  this._updatePollColumnsVis();
+},
+
+// The Columns choice only matters for a picture poll (#5648).
+_updatePollColumnsVis() {
+  const wrap = document.getElementById('poll-columns-wrap');
+  if (!wrap) return;
+  const any = [...document.querySelectorAll('#poll-options-list .poll-option-row')].some(r => r.dataset.image);
+  wrap.style.display = any ? '' : 'none';
 },
 
 _submitPoll() {
   const question = document.getElementById('poll-question-input').value.trim();
   if (!question) return;
-  const inputs = document.querySelectorAll('#poll-options-list .poll-option-input');
-  const options = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+  const rows = Array.from(document.querySelectorAll('#poll-options-list .poll-option-row'))
+    .map(r => ({ text: r.querySelector('.poll-option-input')?.value.trim() || '', image: r.dataset.image || null }))
+    .filter(r => r.text);
+  const options = rows.map(r => r.text);
   if (options.length < 2) return;
+  const images = rows.map(r => r.image);
   const multiVote = document.getElementById('poll-multi-vote').checked;
   const anonymous = document.getElementById('poll-anonymous').checked;
+  const hasImages = images.some(Boolean);
+  const columns = hasImages ? (parseInt(document.getElementById('poll-columns')?.value, 10) || 0) : 0;
 
-  this.socket.emit('create-poll', { question, options, multiVote, anonymous });
+  this.socket.emit('create-poll', { question, options, multiVote, anonymous, ...(hasImages && { images }), ...(columns > 1 && { columns }) });
   document.getElementById('poll-modal').style.display = 'none';
+},
+
+// The drag bar above a text box. Bound once per handle; the edit box makes
+// its own handle on the fly (#5662).
+// ── Formatting guide and command list (#5654) ─────────────
+// Every markdown trick the message formatter understands, in one place. A
+// click wraps the selection (or drops a sample) into the message box.
+_formatGuideRows() {
+  return [
+    { key: 'bold',      before: '**', after: '**' },
+    { key: 'italic',    before: '*',  after: '*' },
+    { key: 'underline', before: '__', after: '__' },
+    { key: 'strike',    before: '~~', after: '~~' },
+    { key: 'highlight', before: '==', after: '==' },
+    { key: 'spoiler',   before: '||', after: '||' },
+    { key: 'code',      before: '`',  after: '`' },
+    { key: 'codeblock', before: '```\n', after: '\n```', block: true },
+    { key: 'quote',     before: '> ',  after: '', block: true },
+    { key: 'heading',   before: '# ',  after: '', block: true },
+    { key: 'list',      before: '- ',  after: '', block: true },
+    { key: 'numbered',  before: '1. ', after: '', block: true },
+    { key: 'link',      before: '[',   after: '](https://example.com)' },
+    { key: 'colour',    before: 'c#FF00EF ', after: ' #c' },
+    { key: 'rule',      before: '---', after: '', block: true, sample: '' },
+    { key: 'table',     before: '| A | B |\n| --- | --- |\n| 1 | 2 |', after: '', block: true, sample: '' },
+    { key: 'mention',   before: '@',  after: '', sample: '' },
+    { key: 'channel',   before: '#',  after: '', sample: '' },
+    { key: 'emoji',     before: ':',  after: ':', sample: 'smile' },
+  ];
+},
+
+_formatGuideHtml() {
+  return this._formatGuideRows().map(r => {
+    const sample = r.sample !== undefined ? r.sample : t('format_picker.sample_text');
+    const syntax = r.before + sample + r.after;
+    const demo = (r.block || !sample) ? '' : `<span class="format-row-demo message-content">${this._formatContent(syntax)}</span>`;
+    return `<button type="button" class="format-row" data-before="${this._escapeHtml(r.before)}" data-after="${this._escapeHtml(r.after)}" data-sample="${this._escapeHtml(sample)}"${r.block ? ' data-block="1"' : ''}>
+      <span class="format-row-label">${this._escapeHtml(t(`format_picker.${r.key}`))}</span>
+      <code class="format-row-syntax">${this._escapeHtml(syntax)}</code>${demo}</button>`;
+  }).join('');
+},
+
+// The same list the / dropdown offers, for the current channel, including
+// the bot commands registered here.
+_commandGuideHtml() {
+  const code = this.currentChannel;
+  const cmds = (this.slashCommands || []).filter(c => c && c.cmd && (!Array.isArray(c.channelCodes) || c.channelCodes.includes(code)));
+  if (!cmds.length) return `<div class="format-picker-hint">${this._escapeHtml(t('format_picker.no_commands'))}</div>`;
+  const rows = cmds.map(c => {
+    const desc = (c.descByChannel && code && c.descByChannel[code]) || c.desc || '';
+    return `<button type="button" class="format-row format-row-command" data-cmd="${this._escapeHtml(c.cmd)}">
+      <span class="format-row-cmd">/${this._escapeHtml(c.cmd)}${c.args ? ' ' + this._escapeHtml(c.args) : ''}</span>
+      <span class="format-row-desc">${this._escapeHtml(desc)}</span></button>`;
+  }).join('');
+  return `<div class="format-picker-hint">${this._escapeHtml(t('format_picker.commands_hint'))}</div>${rows}`;
+},
+
+// Wrap the selection in the message box (or the box being edited) with a
+// markdown pair, or drop a sample in when nothing is selected. Block-level
+// syntax starts on its own line.
+_wrapComposerSelection(before, after, sample = '', block = false) {
+  const input = this._activeEditTextarea || document.getElementById('message-input');
+  if (!input) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  const selected = input.value.slice(start, end);
+  const inner = selected || sample;
+  const lead = (block && start > 0 && input.value[start - 1] !== '\n') ? '\n' : '';
+  input.focus();
+  input.setRangeText(lead + before + inner + after, start, end, 'end');
+  if (!selected && sample) {
+    const s = start + lead.length + before.length;
+    input.setSelectionRange(s, s + sample.length);
+  }
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+
+// Put a command at the front of the message box, replacing one already there.
+_insertSlashCommand(cmd) {
+  const input = document.getElementById('message-input');
+  if (!input) return;
+  input.value = '/' + cmd + ' ' + input.value.replace(/^\/\S*\s?/, '');
+  input.focus();
+  input.setSelectionRange(cmd.length + 2, cmd.length + 2);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+
+// ── Voice messages (#5665) ─────────────────────────────────
+// Click the mic to record, click it again (or Send) to post the recording as
+// an audio attachment; Cancel or Escape throws it away. It goes out through
+// the same upload as any file, so in an encrypted DM it is encrypted like
+// one. Five minutes is the ceiling.
+_voiceMimeChoice() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  const wants = [
+    ['audio/webm;codecs=opus', 'weba'], ['audio/webm', 'weba'],
+    ['audio/ogg;codecs=opus', 'ogg'], ['audio/mp4', 'm4a'],
+  ];
+  for (const [mime, ext] of wants) {
+    try { if (MediaRecorder.isTypeSupported(mime)) return { mime, ext }; } catch { /* next */ }
+  }
+  return null;
+},
+
+async _toggleVoiceMessage() {
+  if (this._voiceRec) { this._stopVoiceMessage(true); return; }
+  const ch = this.channels.find(c => c.code === this.currentChannel);
+  if (!ch) return;
+  if (ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
+  const choice = this._voiceMimeChoice();
+  if (!choice || !navigator.mediaDevices?.getUserMedia) { this._showToast(t('voice_message.unsupported'), 'error'); return; }
+  let stream;
+  try {
+    // The same microphone voice chat uses, when one was picked.
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    const savedInputId = localStorage.getItem('haven_input_device') || '';
+    if (savedInputId) audio.deviceId = { exact: savedInputId };
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+    catch { delete audio.deviceId; stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+  } catch {
+    this._showToast(t('voice_message.mic_denied'), 'error');
+    return;
+  }
+  const chunks = [];
+  let recorder;
+  try { recorder = new MediaRecorder(stream, { mimeType: choice.mime }); }
+  catch { recorder = new MediaRecorder(stream); }
+  const rec = { recorder, stream, chunks, ext: choice.ext, mime: recorder.mimeType || choice.mime, startedAt: Date.now(), code: this.currentChannel, send: false, timer: null };
+  recorder.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) chunks.push(e.data); });
+  recorder.addEventListener('stop', () => this._finishVoiceMessage(rec));
+  try {
+    recorder.start(250);
+  } catch {
+    // A browser that has the API but cannot encode from this input.
+    try { stream.getTracks().forEach(tr => tr.stop()); } catch { /* nothing to stop */ }
+    this._showToast(t('voice_message.unsupported'), 'error');
+    return;
+  }
+  this._voiceRec = rec;
+  const bar = document.getElementById('voice-record-bar');
+  if (bar) bar.style.display = 'flex';
+  document.getElementById('voice-btn')?.classList.add('recording');
+  const tick = () => {
+    const s = Math.floor((Date.now() - rec.startedAt) / 1000);
+    const el = document.getElementById('voice-rec-time');
+    if (el) el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (s >= 300) this._stopVoiceMessage(true);
+  };
+  tick();
+  rec.timer = setInterval(tick, 250);
+  this._voiceRecKeyHandler = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this._stopVoiceMessage(false); } };
+  document.addEventListener('keydown', this._voiceRecKeyHandler, true);
+},
+
+_stopVoiceMessage(send) {
+  const rec = this._voiceRec;
+  if (!rec) return;
+  rec.send = !!send;
+  rec.seconds = Math.round((Date.now() - rec.startedAt) / 1000);
+  clearInterval(rec.timer);
+  if (this._voiceRecKeyHandler) {
+    document.removeEventListener('keydown', this._voiceRecKeyHandler, true);
+    this._voiceRecKeyHandler = null;
+  }
+  const bar = document.getElementById('voice-record-bar');
+  if (bar) bar.style.display = 'none';
+  document.getElementById('voice-btn')?.classList.remove('recording');
+  this._voiceRec = null;
+  try {
+    if (rec.recorder.state !== 'inactive') rec.recorder.stop();
+    else this._finishVoiceMessage(rec);
+  } catch { this._finishVoiceMessage(rec); }
+},
+
+_finishVoiceMessage(rec) {
+  try { rec.stream.getTracks().forEach(tr => tr.stop()); } catch { /* already stopped */ }
+  if (rec.done) return;
+  rec.done = true;
+  if (!rec.send || !rec.chunks.length) return;
+  if (!rec.seconds || rec.seconds < 1) { this._showToast(t('voice_message.too_short'), 'error'); return; }
+  const type = String(rec.mime || '').split(';')[0] || 'audio/webm';
+  const blob = new Blob(rec.chunks, { type });
+  const m = Math.floor(rec.seconds / 60), s = rec.seconds % 60;
+  // The length rides in the name so the message can show it without loading
+  // the audio: voice-message-1m05s.weba.
+  const file = new File([blob], `voice-message-${m}m${String(s).padStart(2, '0')}s.${rec.ext}`, { type });
+  this._uploadGeneralFile(file, rec.code);
+},
+
+_bindInputResizer(handle) {
+  if (!handle || handle._resizerBound) return;
+  handle._resizerBound = true;
+  let startY = 0;
+  let startHeight = 0;
+  let ta = null;
+  let cap = 600;
+
+  const onMove = (e) => {
+    if (!ta) return;
+    const delta = startY - e.clientY; // positive when dragging up
+    const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
+    ta.style.height = `${newHeight}px`;
+    ta.style.minHeight = `${newHeight}px`;
+    ta.style.maxHeight = `${cap}px`;
+  };
+
+  const onUp = () => {
+    ta = null;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+
+  handle.addEventListener('mousedown', (e) => {
+    ta = handle.parentElement?.querySelector('textarea');
+    if (!ta) return;
+    startY = e.clientY;
+    startHeight = ta.getBoundingClientRect().height;
+    // Cap manual expansion at ~60% of viewport so the textarea can never
+    // swallow the entire chat pane. Min 200px on tiny windows.
+    cap = Math.max(200, Math.floor(window.innerHeight * 0.6));
+    e.preventDefault();
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+},
+
+/* ── Send later (#5638) ─────────────────────────────── */
+_openScheduleModal(prefill = '') {
+  const modal = document.getElementById('schedule-modal');
+  if (!modal) return;
+  const ch = this.channels?.find(c => c.code === this.currentChannel);
+  if (!ch || ch.is_dm) { this._showToast(t('modals.schedule.not_here'), 'error'); return; }
+  const text = document.getElementById('schedule-text');
+  text.value = prefill || document.getElementById('message-input')?.value || '';
+  text.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
+  // Default to one hour out, on the whole minute, seeded in the user's zone.
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setSeconds(0, 0);
+  this._wireScheduleFields();
+  this._seedScheduleFields(d);
+  this._scheduleEditingId = null;
+  document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
+  modal.style.display = 'flex';
+  text.focus();
+  this._loadScheduledList();
+},
+
+/** Load an instant into the Send-at fields, decomposed into the user's
+ *  confirmed timezone (device zone when none is set). */
+_seedScheduleFields(d) {
+  const parts = this._zonedParts(d);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('sch-year', parts.year);
+  set('sch-month', parts.monthIndex + 1);
+  set('sch-day', parts.day);
+  set('sch-minute', parts.minute);
+  set('sch-second', parts.second);
+  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (parts.hour < 12 ? 'AM' : 'PM'), parts.hour, this._schScope());
+},
+
+/** Wire the Send-at picker once: meridiem toggle and the calendar helper,
+ *  reusing the /time picker's field logic under the schedule scope. */
+_wireScheduleFields() {
+  if (this._scheduleFieldsWired) return;
+  this._scheduleFieldsWired = true;
+  const scope = this._schScope();
+  document.querySelectorAll('#schedule-modal .tsm-mer-btn').forEach(b => {
+    b.addEventListener('click', () => this._tsmSetMeridiem(b.dataset.mer, undefined, scope));
+  });
+  document.getElementById('sch-cal-btn')?.addEventListener('click', () => {
+    const di = document.getElementById('sch-cal-input');
+    if (!di) return;
+    const cur = this._tsmBuildDate(scope);
+    if (cur) {
+      const p = n => String(n).padStart(2, '0');
+      const parts = this._zonedParts(cur);
+      di.value = `${parts.year}-${p(parts.monthIndex + 1)}-${p(parts.day)}`;
+    }
+    try { di.showPicker(); } catch { di.focus(); di.click(); }
+  });
+  document.getElementById('sch-cal-input')?.addEventListener('change', () => {
+    const v = document.getElementById('sch-cal-input')?.value; // YYYY-MM-DD
+    const m = v && v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return;
+    document.getElementById('sch-year').value = Number(m[1]);
+    document.getElementById('sch-month').value = Number(m[2]);
+    document.getElementById('sch-day').value = Number(m[3]);
+  });
+},
+
+_loadScheduledList() {
+  this.socket.timeout(8000).emit('get-scheduled-messages', {}, (err, r) => {
+    if (err || !r) return;
+    this._renderScheduledList(r.items || []);
+  });
+},
+
+_renderScheduledList(items) {
+  const list = document.getElementById('schedule-list');
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<p class="muted-text" style="font-size:0.8rem">${t('modals.schedule.none')}</p>`;
+    return;
+  }
+  list.innerHTML = items.map(it => `<div class="schedule-item" data-id="${it.id}">
+    <div class="schedule-item-main">
+      <span class="schedule-item-when">${this._escapeHtml(this._fmtDateTime(it.sendAt))}</span>
+      <span class="schedule-item-chan">#${this._escapeHtml(it.channelName || '')}</span>
+      <div class="schedule-item-text">${this._escapeHtml(it.content)}</div>
+    </div>
+    <div class="schedule-item-actions">
+      <button type="button" class="btn-sm" data-act="edit">${t('msg_toolbar.edit')}</button>
+      <button type="button" class="btn-sm danger" data-act="cancel">${t('modals.schedule.cancel_send')}</button>
+    </div>
+  </div>`).join('');
+  list.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+    const id = parseInt(b.closest('.schedule-item').dataset.id, 10);
+    const it = items.find(x => x.id === id);
+    if (!it) return;
+    if (b.dataset.act === 'cancel') {
+      this.socket.emit('cancel-scheduled-message', { id }, (r) => this._renderScheduledList((r && r.items) || []));
+      return;
+    }
+    this._scheduleEditingId = id;
+    document.getElementById('schedule-text').value = it.content;
+    this._wireScheduleFields();
+    this._seedScheduleFields(new Date(it.sendAt));
+    document.getElementById('schedule-save').textContent = t('modals.common.save');
+  }));
+},
+
+_submitSchedule() {
+  const textEl = document.getElementById('schedule-text');
+  const content = textEl.value.trim();
+  // Read the wall-clock in the user's confirmed zone (device fallback), so the
+  // absolute instant sent to the server is the moment the user actually meant,
+  // not whatever the browser's clock/zone claims. toISOString() below is still
+  // a plain UTC handoff; only the zone the fields are read in has changed.
+  const at = this._tsmBuildDate(this._schScope());
+  if (!content) { textEl.focus(); return; }
+  if (!at || isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
+  const editing = this._scheduleEditingId;
+  const done = (r) => {
+    if (!r || r.error) { this._showToast((r && r.error) || t('toasts.role_server_no_response'), 'error'); return; }
+    this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: this._fmtDateTime(at) }), 'success');
+    if (!editing) {
+      const input = document.getElementById('message-input');
+      if (input && input.value.trim() === content) { input.value = ''; input.style.height = 'auto'; }
+    }
+    this._scheduleEditingId = null;
+    textEl.value = '';
+    document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');
+    this._renderScheduledList(r.items || []);
+  };
+  if (editing) this.socket.emit('update-scheduled-message', { id: editing, content, sendAt: at.toISOString() }, done);
+  else this.socket.emit('schedule-message', { code: this.currentChannel, content, sendAt: at.toISOString() }, done);
+},
+
+/* ── /time timestamp picker modal ───────────────────── */
+// Opened by `/time` with no argument. It builds the very same <t:...> token
+// the text command does, so the render side (_formatTimestampToken) is reused
+// untouched — the modal is only a friendlier way to choose the instant.
+
+/** True when the reader's locale keeps a 24-hour clock. Falls back to 24-hour
+ *  when the browser cannot report an hour cycle, per the feature's default. */
+_tsm24hDefault() {
+  // A confirmed clock preference wins over the locale probe.
+  const h12 = this._userHour12?.();
+  if (h12 === true) return false;
+  if (h12 === false) return true;
+  try {
+    const hc = new Intl.DateTimeFormat(this._timeLocale?.(), { hour: 'numeric' })
+      .resolvedOptions().hourCycle;
+    if (hc) return hc === 'h23' || hc === 'h24';
+    // Older engines omit hourCycle: probe whether an afternoon hour prints a
+    // meridiem marker instead.
+    const s = new Date(2020, 0, 1, 13).toLocaleTimeString(this._timeLocale?.(), { hour: 'numeric' });
+    return !/[ap]\.?\s?m/i.test(s);
+  } catch { return true; }
+},
+
+_openTimeModal() {
+  const modal = document.getElementById('time-modal');
+  if (!modal) return;
+  // Seed "now" in the reader's confirmed zone (device zone when none is set),
+  // so a privacy browser reporting a false clock does not preset the wrong time.
+  const now = this._nowZonedParts();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('tsm-year', now.year);
+  set('tsm-month', now.monthIndex + 1);
+  set('tsm-day', now.day);
+  set('tsm-minute', now.minute);
+  set('tsm-second', now.second);
+  // Default the clock mode to the reader's own convention, then seed the hour
+  // field in whatever units that mode expects.
+  this._tsmSetMeridiem(this._tsm24hDefault() ? '24' : (now.hour < 12 ? 'AM' : 'PM'), now.hour);
+  this._tsmRenderStyles();
+  this._tsmUpdatePreview();
+  modal.style.display = 'flex';
+  document.getElementById('tsm-hour')?.focus();
+},
+
+/** The two wall-clock pickers that share this field logic. Each names its modal
+ *  (for the meridiem buttons), its field id prefix, and where its 24/AM/PM
+ *  state lives. Defaulting every function to the /time scope keeps that
+ *  picker's existing call sites untouched. */
+_tsmScope() { return { modalId: 'time-modal', prefix: 'tsm', meridiemKey: '_tsmMeridiem' }; },
+_schScope() { return { modalId: 'schedule-modal', prefix: 'sch', meridiemKey: '_schMeridiem' }; },
+
+/** Switch the 24HR / AM / PM segmented control. `seedHour24`, when given, is a
+ *  0–23 hour to load into the field in the new mode's units. */
+_tsmSetMeridiem(mode, seedHour24, scope = this._tsmScope()) {
+  this[scope.meridiemKey] = mode;
+  document.querySelectorAll(`#${scope.modalId} .tsm-mer-btn`).forEach(b => {
+    b.classList.toggle('active', b.dataset.mer === mode);
+  });
+  const hourEl = document.getElementById(`${scope.prefix}-hour`);
+  if (!hourEl) return;
+  const cur = Number(hourEl.value);
+  // Reuse whatever hour is already showing when the user flips the toggle, so
+  // "8 PM" stays 8 PM going to 24-hour (→ 20) and back.
+  let h24 = Number.isFinite(seedHour24) ? seedHour24 : this._tsmReadHour24(cur, scope);
+  if (!Number.isFinite(h24)) h24 = 0;
+  if (mode === '24') {
+    hourEl.min = 0; hourEl.max = 23;
+    hourEl.value = h24;
+  } else {
+    hourEl.min = 1; hourEl.max = 12;
+    hourEl.value = ((h24 % 12) || 12);
+  }
+},
+
+/** Convert the hour field's current number into 0–23, honouring the mode. */
+_tsmReadHour24(raw, scope = this._tsmScope()) {
+  const h = Number(raw);
+  if (!Number.isFinite(h)) return NaN;
+  if (this[scope.meridiemKey] === '24') return h;
+  const base = h % 12;
+  return this[scope.meridiemKey] === 'PM' ? base + 12 : base;
+},
+
+/** Read all fields into a Date, interpreting the entered wall-clock in the
+ *  reader's confirmed timezone (device zone when none is set), or null if the
+ *  combination is not a real calendar instant. */
+_tsmBuildDate(scope = this._tsmScope()) {
+  const num = id => Number(document.getElementById(id)?.value);
+  const y = num(`${scope.prefix}-year`), mo = num(`${scope.prefix}-month`), d = num(`${scope.prefix}-day`);
+  const mi = num(`${scope.prefix}-minute`), se = num(`${scope.prefix}-second`);
+  const h24 = this._tsmReadHour24(document.getElementById(`${scope.prefix}-hour`)?.value, scope);
+  if (![y, mo, d, mi, se, h24].every(Number.isFinite)) return null;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  if (h24 < 0 || h24 > 23 || mi < 0 || mi > 59 || se < 0 || se > 59) return null;
+  // Interpret the entered wall-clock in the reader's confirmed zone (device
+  // zone when none is set), so the instant matches what the person meant.
+  const when = this._wallToInstant(y, mo - 1, d, h24, mi, se);
+  // Reject dates JS silently rolls forward (e.g. 2026-02-31 → March), checked
+  // in the same zone the wall-clock was read in.
+  const back = this._zonedParts(when);
+  if (back.year !== y || back.monthIndex !== mo - 1 || back.day !== d) return null;
+  return when;
+},
+
+/** Build the seven style rows once — each a live preview plus its own Insert
+ *  button. Order follows the format list the feature documents. */
+_tsmRenderStyles() {
+  const box = document.getElementById('tsm-styles');
+  if (!box || box.childElementCount) return;
+  const label = this._escapeHtml(t('modals.time.insert_btn'));
+  box.innerHTML = ['F', 'f', 'D', 'd', 't', 'T', 'R'].map(s =>
+    `<div class="tsm-style-row" data-style="${s}">` +
+      `<span class="tsm-style-preview"></span>` +
+      `<button type="button" class="btn-sm btn-accent tsm-style-insert" data-style="${s}">${label}</button>` +
+    `</div>`).join('');
+},
+
+/** Refresh every style's preview from the current field values. */
+_tsmUpdatePreview() {
+  const box = document.getElementById('tsm-styles');
+  if (!box) return;
+  const when = this._tsmBuildDate();
+  const secs = when ? Math.floor(when.getTime() / 1000) : null;
+  box.querySelectorAll('.tsm-style-row').forEach(row => {
+    const prev = row.querySelector('.tsm-style-preview');
+    const btn = row.querySelector('.tsm-style-insert');
+    const html = secs !== null ? this._formatTimestampToken(secs, row.dataset.style) : null;
+    if (html) {
+      prev.classList.remove('tsm-invalid');
+      prev.innerHTML = html;
+      if (btn) { btn.disabled = false; btn.setAttribute('aria-label', `${t('modals.time.insert_btn')}: ${prev.textContent}`); }
+    } else {
+      prev.classList.add('tsm-invalid');
+      prev.textContent = '—';
+      if (btn) btn.disabled = true;
+    }
+  });
+},
+
+/** Pull the native date input's YYYY-MM-DD back into the Year/Month/Day
+ *  fields. The picker itself is the search feature's <input type="date">. */
+_tsmSyncFromCalendar() {
+  const v = document.getElementById('tsm-cal-input')?.value; // YYYY-MM-DD
+  if (!v) return;
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return;
+  document.getElementById('tsm-year').value = Number(m[1]);
+  document.getElementById('tsm-month').value = Number(m[2]);
+  document.getElementById('tsm-day').value = Number(m[3]);
+  this._tsmUpdatePreview();
+},
+
+_tsmInsert(style) {
+  const when = this._tsmBuildDate();
+  if (!when) return;
+  const s = ['F', 'f', 'D', 'd', 't', 'T', 'R'].includes(style) ? style : 'f';
+  const token = `<t:${Math.floor(when.getTime() / 1000)}:${s}>`;
+  const input = document.getElementById('message-input');
+  document.getElementById('time-modal').style.display = 'none';
+  if (!input) return;
+  // Insert at the caret so the token can sit inside a sentence the user is
+  // already writing; fall back to the end when there is no selection.
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : input.value.length;
+  input.value = input.value.slice(0, start) + token + input.value.slice(end);
+  input.style.height = 'auto';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+  try { input.setSelectionRange(start + token.length, start + token.length); } catch { /* not a text input */ }
 },
 
 /* ── iOS Keyboard Layout Fix ────────────────────────── */
@@ -6555,7 +7370,11 @@ _saveRename() {
   if (/\p{M}{4,}/u.test(newName)) {
     return this._showToast(t('toasts.display_name_too_many_marks'), 'error');
   }
-  this.socket.emit('rename-user', { username: newName });
+  // Only an actual change goes to the server; a bio or avatar save with the
+  // name left alone used to announce a rename to the whole channel.
+  if (newName !== (this.user.displayName || this.user.username)) {
+    this.socket.emit('rename-user', { username: newName });
+  }
   // Save bio
   const bioInput = document.getElementById('edit-profile-bio');
   if (bioInput) {
@@ -6666,14 +7485,14 @@ _maybeRevealConcealed(e) {
   return false;
 },
 
-async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false) {
+async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false, opts = {}) {
   if (!this.currentChannel && !targetCode) return;
   // The queue stores the per-image spoiler choice on the File object itself.
   if (!spoiler && file && file._spoiler) spoiler = true;
   // Capture the target channel NOW (before any await) so a mid-upload channel
   // switch doesn't send the image to the wrong channel.
   const targetChannel = targetCode || this.currentChannel;
-  const _maxMb = parseInt(this.serverSettings?.max_upload_mb) || 25;
+  const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('toasts.image_too_large', { max: _maxMb }), 'error');
   }
@@ -6734,9 +7553,13 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
 
     // Send the image URL as a message to the channel that was active at upload time.
     // Prepend persona prefix if this image is bundled with a persona text message.
+    const line = personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url;
+    // A forum topic sent with text collects its picture lines and goes out as
+    // one message instead (#5653).
+    if (opts.returnContent) return line;
     this.socket.emit('send-message', {
       code: targetChannel,
-      content: personaPrefix + (spoiler ? 'spoiler-img:' : '') + data.url,
+      content: line,
       isImage: true,
       ...(bundled && { bundled: true })
     });
@@ -6806,7 +7629,30 @@ _renderMediaGallery(data) {
   this._mediaGallerySelected = new Map();
   this._mediaGallerySelectMode = false;
   this._refreshMediaGalleryToolbar();
+  this._applyMediaTileSize();
   this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+},
+
+_mediaTilePx(raw) {
+  const n = parseInt(raw != null ? raw : (() => { try { return localStorage.getItem('mediaGalleryTile'); } catch { return ''; } })(), 10);
+  if (!Number.isFinite(n)) return 150;
+  return Math.min(360, Math.max(72, n));
+},
+
+_applyMediaTileSize(px) {
+  const size = px != null ? this._mediaTilePx(px) : this._mediaTilePx();
+  const modal = document.getElementById('media-gallery-modal');
+  if (modal) modal.style.setProperty('--media-tile', `${size}px`);
+  if (modal && this._tileShapes) {
+    let shape = 'square';
+    try { shape = this._forumParseShape(localStorage.getItem('mediaGalleryShape')); } catch {}
+    modal.style.setProperty('--media-shape', this._tileShapes()[shape] || '1 / 1');
+  }
+  const slider = document.getElementById('media-gallery-tile');
+  if (slider && slider.value !== String(size)) slider.value = String(size);
+  const wrap = document.getElementById('media-gallery-tile-wrap');
+  const tab = this._mediaGalleryActiveTab || 'photos';
+  if (wrap) wrap.hidden = tab !== 'photos' && tab !== 'videos';
 },
 
 // Build a stable key for a gallery row so the same attachment shared
@@ -6904,7 +7750,7 @@ _renderMediaGalleryTab(tab) {
     try {
       const d = new Date(iso);
       if (isNaN(d)) return '';
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      return this._fmtDate(d, { year: 'numeric', month: 'short', day: 'numeric' });
     } catch { return ''; }
   };
   const esc = (s) => this._escapeHtml ? this._escapeHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

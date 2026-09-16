@@ -51,6 +51,13 @@ class BraidLayout {
     };
     document.addEventListener('haven:layout-editing', editingChanged);
     this._permListeners.push([document, 'haven:layout-editing', editingChanged]);
+    const fxChanged = (event) => {
+      if (typeof event.detail?.braid !== 'boolean') return;
+      if (event.detail.braid) this._engage();
+      else this._disengage();
+    };
+    document.addEventListener('haven:layout-effect', fxChanged);
+    this._permListeners.push([document, 'haven:layout-effect', fxChanged]);
     const layoutOn = HavenApi.Data.load('BraidLayout', 'layoutOn', '1') !== '0';
     if (layoutOn && !document.documentElement.hasAttribute('data-haven-layout-editing')) this._engage();
     else if (layoutOn) console.log('[BraidLayout] Waiting for Mod Mode to finish');
@@ -113,6 +120,7 @@ class BraidLayout {
       });
       this._obs.observe(document.getElementById('app-body') || document.body, { childList: true, subtree: true });
       console.log('[BraidLayout] Engaged');
+      document.dispatchEvent(new CustomEvent('haven:braid-layout', { detail: { on: true } }));
     } catch (error) {
       try { this._disengage(false); }
       catch (cleanupError) { console.error('[BraidLayout] Rollback error:', cleanupError); }
@@ -187,6 +195,7 @@ class BraidLayout {
       document.documentElement.classList.remove('braid-people-open', 'braid-sound-open', 'braid-status-open');
       document.documentElement.removeAttribute('data-braid-layout');
       document.documentElement.removeAttribute('data-braid-form');
+      document.dispatchEvent(new CustomEvent('haven:braid-layout', { detail: { on: false } }));
       document.querySelectorAll('[data-braid-run]').forEach((el) => el.removeAttribute('data-braid-run'));
       HavenApi.DOM.removeStyle('BraidLayoutCSS');
       HavenApi.DOM.removeStyle('BraidMotionCSS');
@@ -620,7 +629,7 @@ class BraidLayout {
 
   _injectDensityCard() {
     if (document.getElementById('braid-density-card')) return;
-    const anchor = document.getElementById('section-font-size');
+    const anchor = document.getElementById('section-zoom');
     if (!anchor) return;
     const card = document.createElement('div');
     card.className = 'settings-section';
@@ -665,7 +674,7 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
 
   _injectTextSliders() {
     if (document.getElementById('braid-text-sliders')) return;
-    const anchor = document.getElementById('section-font-size');
+    const anchor = document.getElementById('section-zoom');
     if (!anchor) return;
     const card = document.createElement('div');
     card.className = 'settings-section';
@@ -820,9 +829,9 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
     const hex = '<path d="M12 2.5 20.2 7.25v9.5L12 21.5 3.8 16.75v-9.5Z"/>';
     const map = {
       'section-language': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/>',
-      'section-density': '<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M9 3v18M3 9h6"/>',
-      'section-font-size': '<path d="M4 19 10 5h1.5L17.5 19M6.2 14h8.1M19 12v7M16.5 14.5 19 12l2.5 2.5"/>',
-      'section-emoji-size': '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+      'section-layout': '<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M9 3v18M3 9h6"/>',
+      'section-zoom': '<path d="M4 19 10 5h1.5L17.5 19M6.2 14h8.1M19 12v7M16.5 14.5 19 12l2.5 2.5"/>',
+      'section-reaction-size': '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
       'section-role-display': '<path d="M12 2.7 20 7v10l-8 4.3L4 17V7Z"/><circle cx="12" cy="10" r="2.2"/><path d="M8.5 16.2c.7-1.8 1.9-2.7 3.5-2.7s2.8.9 3.5 2.7"/>',
       'section-toolbar-icons': '<path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.4-2.4Z"/>',
       'section-image-display': '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 3 3 4-4 4 4"/>',

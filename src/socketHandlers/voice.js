@@ -174,6 +174,10 @@ module.exports = function register(socket, ctx) {
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(vch.id, socket.user.id);
     if (!vMember) return socket.emit('error-msg', 'Not a member of this channel');
+    // A role gate on the channel covers its voice room too (#5597).
+    if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(vch.id))) {
+      return socket.emit('error-msg', 'This channel needs a role you do not hold');
+    }
 
     const vchSettings = db.prepare('SELECT voice_enabled, voice_user_limit, voice_bitrate FROM channels WHERE code = ?').get(code);
     if (vchSettings && vchSettings.voice_enabled === 0) {

@@ -186,32 +186,33 @@ _initDesktopAppBanner() {
  *  is shown via the unified welcome-popup queue (see `_initWelcomePopups`). */
 _initAndroidBetaBanner() {
   // ── Top-bar banner ──
-  // Only permanently hidden if user checked "Don't show this again";
-  // the X button is session-only so it returns on next visit.
-  const permaDismissed = localStorage.getItem('haven_ab_banner_nodisplay');
-  const sessionDismissed = sessionStorage.getItem('haven_ab_banner_session');
-  if (!permaDismissed && !sessionDismissed) {
-    const banner = document.getElementById('android-beta-banner');
-    if (banner) {
-      banner.style.display = 'inline-flex';
-      banner.addEventListener('click', (e) => {
-        // Don't open modal if dismiss button was clicked
-        if (e.target.closest('.android-beta-dismiss')) return;
-        const modal = document.getElementById('android-beta-modal');
-        if (modal) modal.style.display = 'flex';
+  // Gone for good once the person closes it, or ticks "Don't show this
+  // again" on the promo. The record lives with the account like the promo's
+  // own, with a localStorage copy for the moment before preferences arrive.
+  // Nothing wrote the permanent flag before, so the banner came back on
+  // every reload whatever was clicked (#5594).
+  const banner = document.getElementById('android-beta-banner');
+  if (banner && !banner.dataset.wired) {
+    banner.dataset.wired = '1';
+    banner.addEventListener('click', (e) => {
+      // Don't open modal if dismiss button was clicked
+      if (e.target.closest('.android-beta-dismiss')) return;
+      const modal = document.getElementById('android-beta-modal');
+      if (modal) modal.style.display = 'flex';
+    });
+    const dismissBtn = document.getElementById('android-beta-dismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try { localStorage.setItem('haven_ab_banner_nodisplay', '1'); } catch { /* storage unavailable */ }
+        if (this._userPrefs) this._userPrefs.android_banner_seen = 'true';
+        this.socket?.emit('set-preference', { key: 'android_banner_seen', value: 'true' });
+        this._syncAndroidBanner();
       });
-      const dismissBtn = document.getElementById('android-beta-dismiss');
-      if (dismissBtn) {
-        dismissBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          banner.style.display = 'none';
-          // Session-only: banner comes back on next page load
-          sessionStorage.setItem('haven_ab_banner_session', '1');
-        });
-      }
     }
   }
+  this._syncAndroidBanner();
 
   // ── Wire the modal's own close buttons (Maybe Later, Submit, overlay
   // click) to just hide the modal. The welcome-popup queue takes care of
@@ -231,6 +232,23 @@ _initAndroidBetaBanner() {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.style.display = 'none';
   });
+},
+
+/** Show or hide the top-bar Android banner from what is known right now:
+ *  closed once (account record or its local copy), or the promo's "Don't
+ *  show this again" ticked. Runs at start-up, when preferences arrive, and
+ *  after either dismissal (#5594). Until the account's record is in, the
+ *  banner stays down rather than flashing at someone who already closed it. */
+_syncAndroidBanner() {
+  const banner = document.getElementById('android-beta-banner');
+  if (!banner) return;
+  let local = false;
+  try { local = !!localStorage.getItem('haven_ab_banner_nodisplay'); } catch { /* storage unavailable */ }
+  const prefs = this._userPrefs || {};
+  const gone = local || prefs.android_banner_seen === 'true' || prefs.promo_seen_android === 'true';
+  if (gone) { banner.style.display = 'none'; return; }
+  if (!this._userPrefs) return;
+  banner.style.display = 'inline-flex';
 },
 
 // ── Welcome Popup Queue (#5391 followup) ───────────────
@@ -287,6 +305,11 @@ _initWelcomePopups() {
     }
   } catch { /* storage unavailable: nothing to carry over */ }
 
+  this._runWelcomePromoQueue();
+},
+
+/** The app-promo sequencer. */
+_runWelcomePromoQueue() {
   // ── Build the queue ──
   // Each entry: { id, modalId, prefKey, checkboxId, shouldShow }. A popup is
   // filtered out only if its persisted "Don't show again" pref is set.
@@ -383,6 +406,9 @@ _initWelcomePopups() {
         const checkbox = document.getElementById(entry.checkboxId);
         if (checkbox && checkbox.checked) {
           this.socket.emit('set-preference', { key: entry.prefKey, value: 'true' });
+          if (this._userPrefs) this._userPrefs[entry.prefKey] = 'true';
+          // The Android promo's box retires the top-bar banner too (#5594).
+          if (entry.prefKey === 'promo_seen_android') this._syncAndroidBanner?.();
         }
         idx++;
         // Tiny delay so the close animation / focus shift completes before
@@ -395,6 +421,201 @@ _initWelcomePopups() {
 
   // Defer initial show so the app shell finishes painting first.
   setTimeout(showCurrent, 1200);
+},
+
+// ── Persisted timezone / time-format ────────────────────────────────────
+// Storage (server-side user_preferences): `timezone` is an IANA zone id, so
+// Intl resolves DST per-instant rather than freezing an offset; `time_format`
+// is '12' or '24'. Nothing is asked at login: the modal opens from Settings,
+// Localization, Configure Time, and until someone saves a zone every time
+// follows the browser as before.
+
+/** Common IANA zones for the rare engine without Intl.supportedValuesOf. */
+_fallbackTimezones() {
+  return [
+    'UTC', 'America/Los_Angeles', 'America/Denver', 'America/Chicago',
+    'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Paris',
+    'Europe/Berlin', 'Europe/Moscow', 'Africa/Johannesburg', 'Asia/Dubai',
+    'Asia/Kolkata', 'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Sydney',
+    'Pacific/Auckland',
+  ];
+},
+
+/** Fill the timezone dropdown once from the full IANA list (or the fallback),
+ *  always including the device's own zone and UTC. */
+_buildTimezoneSelect() {
+  const sel = document.getElementById('timezone-select');
+  if (!sel || sel.dataset.built === '1') return;
+  let zones = [];
+  try { zones = (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone') : []; } catch { zones = []; }
+  if (!zones.length) zones = this._fallbackTimezones();
+  let browserTz = 'UTC';
+  try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
+  if (browserTz && !zones.includes(browserTz)) zones = [browserTz, ...zones];
+  if (!zones.includes('UTC')) zones = ['UTC', ...zones];
+  const frag = document.createDocumentFragment();
+  for (const z of zones) {
+    const o = document.createElement('option');
+    o.value = z;
+    o.textContent = z.replace(/_/g, ' ');
+    frag.appendChild(o);
+  }
+  sel.innerHTML = '';
+  sel.appendChild(frag);
+  sel.dataset.built = '1';
+},
+
+/** Open the modal. `firstRun` is informational; the buttons behave the same
+ *  whether it was opened automatically or from settings. `onClose` runs after
+ *  Skip / Remind later (Confirm reloads instead). */
+_openTimezoneModal({ firstRun = false, onClose = null } = {}) {
+  const modal = document.getElementById('timezone-modal');
+  if (!modal) { if (onClose) onClose(); return; }
+  this._buildTimezoneSelect();
+  const tzSel = document.getElementById('timezone-select');
+  const fmtSel = document.getElementById('timeformat-select');
+
+  // Seed from the saved prefs, else the browser's current zone / clock.
+  let browserTz = 'UTC';
+  try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
+  const wantTz = (this._userPrefs && this._userPrefs.timezone) || browserTz;
+  if (tzSel) {
+    tzSel.value = wantTz;
+    if (tzSel.value !== wantTz) { // zone not in the list: add and select it
+      const o = document.createElement('option');
+      o.value = wantTz; o.textContent = wantTz.replace(/_/g, ' ');
+      tzSel.appendChild(o); tzSel.value = wantTz;
+    }
+  }
+  const wantFmt = (this._userPrefs && this._userPrefs.time_format) || (this._tsm24hDefault?.() ? '24' : '12');
+  if (fmtSel) fmtSel.value = wantFmt;
+
+  this._tzModalOnClose = typeof onClose === 'function' ? onClose : null;
+
+  // Erase only shows once a zone is saved; it clears the saved zone and
+  // returns the account to the browser default.
+  const hasTz = !!(this._userPrefs && this._userPrefs.timezone);
+  const eraseBtn = document.getElementById('timezone-erase-btn');
+  if (eraseBtn) eraseBtn.style.display = hasTz ? '' : 'none';
+
+  if (!this._tzModalWired) {
+    this._tzModalWired = true;
+    const live = () => this._updateTimezonePreview();
+    tzSel?.addEventListener('change', live);
+    fmtSel?.addEventListener('change', live);
+    document.getElementById('timezone-erase-btn')?.addEventListener('click', () => this._resolveTimezoneModal('erase'));
+    document.getElementById('timezone-cancel-btn')?.addEventListener('click', () => this._resolveTimezoneModal('cancel'));
+    document.getElementById('timezone-confirm-btn')?.addEventListener('click', () => this._resolveTimezoneModal('confirm'));
+    // A click on the backdrop closes without saving, like Cancel.
+    modal.addEventListener('click', (e) => { if (e.target === modal) this._resolveTimezoneModal('cancel'); });
+  }
+
+  this._updateTimezonePreview();
+  // When opened from the settings panel, close it first so this modal is not
+  // stacked behind it (both share the same modal-overlay z-index). Harmless on
+  // the first-run path, where settings is already closed.
+  const settings = document.getElementById('settings-modal');
+  if (settings) settings.style.display = 'none';
+  modal.style.display = 'flex';
+},
+
+/** Live sample of the chosen zone + format, refreshed on every change. */
+_updateTimezonePreview() {
+  const el = document.getElementById('timezone-preview');
+  if (!el) return;
+  const tz = document.getElementById('timezone-select')?.value;
+  const fmt = document.getElementById('timeformat-select')?.value;
+  const opts = { dateStyle: 'full', timeStyle: 'medium' };
+  if (tz) opts.timeZone = tz;
+  if (fmt === '12') opts.hour12 = true;
+  else if (fmt === '24') opts.hour12 = false;
+  try { el.textContent = new Date().toLocaleString(this._timeLocale?.(), opts); }
+  catch { el.textContent = new Date().toLocaleString(); }
+},
+
+/** Handle one of the three buttons. */
+_resolveTimezoneModal(action) {
+  const modal = document.getElementById('timezone-modal');
+  const tz = document.getElementById('timezone-select')?.value;
+  const fmt = document.getElementById('timeformat-select')?.value === '24' ? '24' : '12';
+  const onClose = this._tzModalOnClose; this._tzModalOnClose = null;
+  if (modal) modal.style.display = 'none';
+
+  if (action === 'confirm') {
+    // Saves both prefs, then reloads so every already-rendered timestamp picks
+    // up the new zone/format. onClose (the promo queue) is intentionally not
+    // run — the reload re-evaluates it cleanly afterwards.
+    this._saveTimezonePrefs(tz, fmt);
+    return;
+  }
+  if (action === 'erase') {
+    // Clear the saved zone/format and reload so every timestamp reverts to the
+    // browser default. onClose is not run — the reload re-evaluates cleanly.
+    this._eraseTimezonePrefs();
+    return;
+  }
+  // Cancel persists nothing.
+  if (onClose) onClose();
+},
+
+/** Delete the saved timezone/format, then reload once the server confirms. */
+_eraseTimezonePrefs() {
+  this._userPrefs = this._userPrefs || {};
+  delete this._userPrefs.timezone;
+  delete this._userPrefs.time_format;
+  this._updateTimezoneSummary?.();
+
+  const reload = () => { try { location.reload(); } catch { /* non-browser */ } };
+  if (!this.socket) { reload(); return; }
+
+  // Delete both rows and reload once their deletions are acknowledged.
+  const pending = new Set(['timezone', 'time_format']);
+  let timer = null;
+  const finish = () => { this.socket.off('preference-deleted', onDeleted); clearTimeout(timer); reload(); };
+  const onDeleted = ({ key } = {}) => { pending.delete(key); if (!pending.size) finish(); };
+  this.socket.on('preference-deleted', onDeleted);
+  timer = setTimeout(finish, 1500);
+  this.socket.emit('delete-preference', { key: 'timezone' });
+  this.socket.emit('delete-preference', { key: 'time_format' });
+},
+
+/** Persist timezone + format, wait for the server to confirm, then reload. */
+_saveTimezonePrefs(tz, fmt) {
+  const zone = (typeof tz === 'string' && tz) ? tz : null;
+  const format = fmt === '24' ? '24' : '12';
+  this._userPrefs = this._userPrefs || {};
+  if (zone) this._userPrefs.timezone = zone;
+  this._userPrefs.time_format = format;
+  this._updateTimezoneSummary?.();
+
+  const reload = () => { try { location.reload(); } catch { /* non-browser */ } };
+  if (!this.socket || !zone) { reload(); return; }
+
+  // Reload only once the writes are acknowledged, so a fresh get-preferences
+  // after the reload is guaranteed to return them. A short timeout guards
+  // against a dropped ack so we never hang on this screen.
+  const pending = new Set(['timezone', 'time_format']);
+  let timer = null;
+  const finish = () => { this.socket.off('preference-saved', onSaved); clearTimeout(timer); reload(); };
+  const onSaved = ({ key } = {}) => { pending.delete(key); if (!pending.size) finish(); };
+  this.socket.on('preference-saved', onSaved);
+  timer = setTimeout(finish, 1500);
+  this.socket.emit('set-preference', { key: 'timezone', value: zone });
+  this.socket.emit('set-preference', { key: 'time_format', value: format });
+},
+
+/** Reflect the saved (or unset) state in the settings row. */
+_updateTimezoneSummary() {
+  const el = document.getElementById('timezone-current-summary');
+  if (!el) return;
+  const tz = this._userPrefs && this._userPrefs.timezone;
+  const fmt = this._userPrefs && this._userPrefs.time_format;
+  if (tz) {
+    const fmtLabel = fmt ? ` · ${t(fmt === '24' ? 'settings.timezone_section.fmt_24' : 'settings.timezone_section.fmt_12')}` : '';
+    el.textContent = tz.replace(/_/g, ' ') + fmtLabel;
+  } else {
+    el.textContent = t('settings.timezone_section.not_set');
+  }
 },
 
 async _setupDesktopShortcuts() {
@@ -699,7 +920,7 @@ async _initE2E() {
       // If keys were auto-reset during init (backup unwrap failed), notify
       if (this.e2e.keysWereReset) {
         setTimeout(() => {
-          this._appendE2ENotice(t('platform.e2e.keys_regenerated', { date: new Date().toLocaleString() }));
+          this._appendE2ENotice(t('platform.e2e.keys_regenerated', { date: this._fmtDateTime(new Date()) }));
         }, 500);
       }
     } else {
@@ -807,7 +1028,7 @@ async _e2eSetupListeners() {
       // Store it so it survives the message re-render triggered by _retryDecryptForUser.
       const ch = this.channels.find(c => c.code === this.currentChannel);
       if (ch && ch.is_dm && ch.dm_target && ch.dm_target.id === data.userId) {
-        this._pendingE2ENotice = t('platform.e2e.partner_keys_changed', { name: ch.dm_target.username, date: new Date().toLocaleString() });
+        this._pendingE2ENotice = t('platform.e2e.partner_keys_changed', { name: ch.dm_target.username, date: this._fmtDateTime(new Date()) });
       }
     }
 
@@ -892,7 +1113,7 @@ async _recoverE2EFromBackup() {
   if (synced.ok) {
     await this.e2e.publishKey(this.socket);
     this._dmPublicKeys = {};
-    this._appendE2ENotice(t('platform.e2e.keys_recovered_notice', { date: new Date().toLocaleString() }));
+    this._appendE2ENotice(t('platform.e2e.keys_recovered_notice', { date: this._fmtDateTime(new Date()) }));
     this._showToast(t('platform.e2e.keys_recovered'), 'success');
 
     // Re-fetch messages if currently in a DM so they attempt decryption again.
@@ -1358,7 +1579,7 @@ async _performE2EKeyReset() {
     this._dmPublicKeys = {};
 
     // Post a timestamped notice in the current chat
-    this._appendE2ENotice(t('platform.e2e.keys_reset_notice', { date: new Date().toLocaleString() }));
+    this._appendE2ENotice(t('platform.e2e.keys_reset_notice', { date: this._fmtDateTime(new Date()) }));
 
     this._showToast(t('platform.e2e.keys_reset'), 'success');
     console.log('[E2E] Keys reset by user');
@@ -1475,6 +1696,8 @@ _decryptE2EFiles(root) {
           mediaEl.preload = 'metadata';
           mediaEl.src = objectUrl;
           mediaEl.className = isVideo ? 'file-video' : 'file-audio';
+          // The click that decrypted a voice message was a play click (#5665).
+          if (isAudio && /^voice-message/i.test(name)) mediaEl.autoplay = true;
 
           row.classList.remove('e2e-file-loading');
           row.innerHTML = '';
@@ -1565,7 +1788,6 @@ _decryptE2EImages(root) {
     img.classList.remove('e2e-img-pending');
     img.classList.add('e2e-img-loading');
     const url = img.dataset.e2eSrc;
-    const mime = img.dataset.e2eMime || 'image/png';
 
     // Only fetch local upload paths to prevent SSRF
     if (!url || !url.startsWith('/uploads/')) {
@@ -1575,11 +1797,8 @@ _decryptE2EImages(root) {
       return;
     }
 
-    fetch(url)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-      .then(buf => this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk))
-      .then(plain => {
-        const blob = new Blob([plain], { type: mime });
+    this._e2eImageBlob(img, partner)
+      .then(blob => {
         // Hand the blob back once the browser has decoded it. Without this the
         // object URL keeps the decrypted bytes alive for the life of the tab,
         // so scrolling a media-heavy DM slowly locks up hundreds of MB. Same
@@ -1596,6 +1815,30 @@ _decryptE2EImages(root) {
         img.classList.add('e2e-img-failed');
       });
   });
+},
+
+/** The DM partner whose key decrypts media under `node`: the PiP's partner
+ *  when the node lives in the PiP, otherwise the open DM's. */
+_e2ePartnerForNode(node) {
+  const inPip = !!(node && node.closest && node.closest('#dm-pip-messages'));
+  return inPip && this._activeDMPip
+    ? this._getE2EPartnerFor(this._activeDMPip)
+    : this._getE2EPartner();
+},
+
+/** Fetch and decrypt one E2E image to a Blob. The feed uses it to paint, and
+ *  the lightbox uses it again on click, because the feed's object URL is
+ *  revoked as soon as the image has painted (#5426) and a second look needs
+ *  a second decrypt rather than the bytes kept alive on every node. (#5568) */
+_e2eImageBlob(img, partner = null) {
+  const url = img && img.dataset ? img.dataset.e2eSrc : '';
+  const mime = (img && img.dataset && img.dataset.e2eMime) || 'image/png';
+  if (!partner) partner = this._e2ePartnerForNode(img);
+  if (!partner || !url || !url.startsWith('/uploads/')) return Promise.reject(new Error('not decryptable here'));
+  return fetch(url)
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(buf => this.e2e.decryptBytes(new Uint8Array(buf), partner.userId, partner.publicKeyJwk))
+    .then(plain => new Blob([plain], { type: mime }));
 },
 
 };

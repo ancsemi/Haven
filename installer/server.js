@@ -159,34 +159,15 @@ async function runInstall(config, res) {
     send(res, { step: 'ssl', state: 'active', label: 'Generating SSL certificate\u2026', progress: 50 });
     const certDir = path.join(DATA_DIR, 'certs');
     const certPath = path.join(certDir, 'cert.pem');
-    const keyPath = path.join(certDir, 'key.pem');
     if (fs.existsSync(certPath)) {
       send(res, { step: 'ssl', state: 'done', label: 'SSL certificate exists', progress: 60 });
     } else {
       try {
         fs.mkdirSync(certDir, { recursive: true });
-        // Detect local IP for SAN extension
-        let localIp = '127.0.0.1';
-        try {
-          const nets = os.networkInterfaces();
-          for (const ifaces of Object.values(nets)) {
-            for (const iface of ifaces) {
-              if (!iface.internal && iface.family === 'IPv4') { localIp = iface.address; break; }
-            }
-            if (localIp !== '127.0.0.1') break;
-          }
-        } catch {}
-
-        const sanArg = IS_WIN ? [] : ['-addext', `subjectAltName=IP:127.0.0.1,IP:${localIp},DNS:localhost`];
-        await run('openssl', [
-          'req', '-x509', '-newkey', 'rsa:2048',
-          '-keyout', keyPath, '-out', certPath,
-          '-days', '3650', '-nodes', '-subj', '/CN=Haven',
-          ...sanArg
-        ]);
+        require('../src/selfsignedCert').ensureCerts(certDir);
         send(res, { step: 'ssl', state: 'done', label: 'SSL certificate generated', progress: 60 });
-      } catch {
-        send(res, { step: 'ssl', state: 'done', label: 'Skipped (OpenSSL not found, will use HTTP)', progress: 60 });
+      } catch (err) {
+        send(res, { step: 'ssl', state: 'error', label: `SSL generation failed: ${err.message}`, progress: 60 });
       }
     }
 

@@ -1,5 +1,6 @@
 ﻿// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
+const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 
 // ── Node.js version guard ─────────────────────────────────
 const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
@@ -162,6 +163,9 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
   try {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
+    // A rename keeps the upload's own timestamp. The retention window counts
+    // from the deletion, so stamp the file now.
+    try { const now = new Date(); fs.utimesSync(dst, now, now); } catch { /* purge falls back to the upload time */ }
   } catch { /* file locked or already moved */ }
 }
 
@@ -414,6 +418,21 @@ app.set('isIpBanned', isIpBanned);
 
 // ── Helper: verify admin from DB (don't trust JWT claims alone) ─────
 // JWT isAdmin may be stale if admin was demoted since token was issued.
+// Upload cap for one user: the server setting, or a higher one from a role
+// they hold (roles.max_upload_mb). Admins are checked against the setting.
+function uploadCapMb(user) {
+  const db = require('./src/database').getDb();
+  const base = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25;
+  if (verifyAdminFromDb(user)) return base;
+  try {
+    const row = db.prepare(`
+      SELECT MAX(r.max_upload_mb) AS cap FROM roles r JOIN user_roles ur ON ur.role_id = r.id
+      WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.max_upload_mb IS NOT NULL
+    `).get(user.id);
+    return Math.max(base, parseInt(row?.cap, 10) || 0);
+  } catch { return base; }
+}
+
 function verifyAdminFromDb(user) {
   if (!user) return false;
   try {
@@ -482,10 +501,23 @@ let currentReferrerPolicy = DEFAULT_REFERRER_POLICY;
 let sslCert = process.env.SSL_CERT_PATH;
 let sslKey  = process.env.SSL_KEY_PATH;
 
-// If not explicitly configured, check if the startup scripts generated certs
+const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+
+// If not explicitly configured, use the certs in the data directory, and make
+// them ourselves when they are missing. The startup scripts used to need an
+// openssl.exe for this, which Windows does not ship (OpenSSH is not OpenSSL),
+// so those machines silently fell back to HTTP.
 if (!sslCert && !sslKey) {
   const autoCert = path.join(CERTS_DIR, 'cert.pem');
   const autoKey  = path.join(CERTS_DIR, 'key.pem');
+  if (!forceHttp && !(fs.existsSync(autoCert) && fs.existsSync(autoKey))) {
+    try {
+      const made = require('./src/selfsignedCert').ensureCerts(CERTS_DIR);
+      console.log(`🔒 Generated a self-signed certificate in ${CERTS_DIR} (${made.names.join(', ')})`);
+    } catch (err) {
+      console.warn('⚠️  Could not generate a self-signed certificate:', err.message);
+    }
+  }
   if (fs.existsSync(autoCert) && fs.existsSync(autoKey)) {
     sslCert = autoCert;
     sslKey  = autoKey;
@@ -496,7 +528,6 @@ if (!sslCert && !sslKey) {
   if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
 }
 
-const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
 
 app.use(helmet({
@@ -1812,12 +1843,11 @@ app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Enforce DB-configurable max upload size (same setting as general file uploads)
-    const maxMbRow = getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
-    const maxBytes = (parseInt(maxMbRow?.value) || 25) * 1024 * 1024;
-    if (req.file.size > maxBytes) {
+    // Enforce the upload cap: the server setting, raised by any role that says so
+    const capMb = uploadCapMb(user);
+    if (req.file.size > capMb * 1024 * 1024) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: `Image too large (max ${maxMbRow?.value || 25} MB)` });
+      return res.status(400).json({ error: `Image too large (max ${capMb} MB)` });
     }
 
     // Validate file magic bytes (don't trust MIME type alone)
@@ -1886,12 +1916,11 @@ app.post('/api/upload-file', uploadLimiter, uploadDiskGuard, (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Enforce DB-configurable max upload size
-    const maxMbRow = getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
-    const maxBytes = (parseInt(maxMbRow?.value) || 25) * 1024 * 1024;
-    if (req.file.size > maxBytes) {
+    // Enforce the upload cap: the server setting, raised by any role that says so
+    const capMb = uploadCapMb(user);
+    if (req.file.size > capMb * 1024 * 1024) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: `File too large (max ${maxMbRow?.value || 25} MB)` });
+      return res.status(400).json({ error: `File too large (max ${capMb} MB)` });
     }
 
     const isImage = /^image\//.test(req.file.mimetype);
@@ -2201,6 +2230,57 @@ app.get('/api/standard-emojis', (req, res) => {
   res.json(require('./src/emoji').getEmojiData() || { categories: {}, names: {}, modifierBase: [] });
 });
 
+// ── Discord emote cache ─────────────────────────────────
+// A Discord custom emote travels as <:name:id> (or <a:name:id> when animated),
+// whether Ferry relayed it or a Haven member typed it so it shows on the
+// Discord side. Clients render that token as an inline image and load it from
+// here rather than from cdn.discordapp.com, so a third-party host never sees
+// who is scrolling through a bridged channel: the server fetches each emote
+// once and keeps it on disk. Only a server with the bridge switched on fetches
+// anything; everywhere else the client gets a 404 and shows the :name: text.
+const DISCORD_EMOTE_DIR = path.join(DATA_DIR, 'cache', 'discord-emotes');
+const DISCORD_EMOTE_MAX_BYTES = 512 * 1024;
+const DISCORD_EMOTE_MAX_FILES = 5000;
+const discordEmoteMisses = new Map();    // file -> when Discord last said it does not exist
+const discordEmoteInflight = new Map();  // file -> download in progress, so a burst of renders is one fetch
+const discordEmoteLimiter = require('express-rate-limit')({ windowMs: 60 * 1000, max: 300, message: { error: 'Rate limit exceeded' } });
+
+app.get('/api/ferry/emote/:file', discordEmoteLimiter, async (req, res) => {
+  const m = /^(\d{15,25})\.(png|gif)$/.exec(String(req.params.file || ''));
+  if (!m) return res.status(400).end();
+  const file = m[0];
+  const full = path.join(DISCORD_EMOTE_DIR, file);
+  // An emote id never changes what it points at, so a copy is good forever.
+  const sendOpts = { maxAge: 365 * 24 * 60 * 60 * 1000, immutable: true };
+  if (fs.existsSync(full)) return res.sendFile(full, sendOpts);
+
+  let ferryOn = false;
+  try { ferryOn = !!require('./src/ferry').getFerryState().enabled; } catch { /* bridge not loaded */ }
+  if (!ferryOn) return res.status(404).end();
+  const missedAt = discordEmoteMisses.get(file);
+  if (missedAt && Date.now() - missedAt < 6 * 60 * 60 * 1000) return res.status(404).end();
+
+  let job = discordEmoteInflight.get(file);
+  if (!job) {
+    job = (async () => {
+      fs.mkdirSync(DISCORD_EMOTE_DIR, { recursive: true });
+      if (fs.readdirSync(DISCORD_EMOTE_DIR).length >= DISCORD_EMOTE_MAX_FILES) return false;
+      const r = await fetch(`https://cdn.discordapp.com/emojis/${file}?size=64`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok || !/^image\//i.test(r.headers.get('content-type') || '')) return false;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (!buf.length || buf.length > DISCORD_EMOTE_MAX_BYTES) return false;
+      const tmp = `${full}.${process.pid}.${Date.now()}.tmp`;
+      fs.writeFileSync(tmp, buf);
+      fs.renameSync(tmp, full);
+      return true;
+    })().catch(() => false).finally(() => discordEmoteInflight.delete(file));
+    discordEmoteInflight.set(file, job);
+  }
+  if (await job) return res.sendFile(full, sendOpts);
+  discordEmoteMisses.set(file, Date.now());
+  res.status(404).end();
+});
+
 app.delete('/api/emojis/:name', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
@@ -2380,9 +2460,12 @@ app.delete('/api/stickers/:name', (req, res) => {
   } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
 });
 
-// ── GIF search proxy (GIPHY, with a legacy Tenor fallback) ──
-// GIPHY is the supported provider. Tenor is no longer offered for new
-// setup; an existing tenor_api_key still works if no GIPHY key is set.
+// ── GIF search proxy (GIPHY, KLIPY, or a legacy Tenor fallback) ──
+// Three providers are supported. preferred_gif_search picks which one to use
+// when more than one key is set. If that preference is unset or not a known
+// provider, we fall back to whatever is configured, trying GIPHY first, then
+// KLIPY, and Tenor last (Tenor is deprecated).
+const GIF_FALLBACK_ORDER = ['giphy', 'klipy', 'tenor'];
 function getGifProvider() {
   // Check database first (set via admin panel), fall back to .env
   const readSetting = (key) => {
@@ -2393,16 +2476,41 @@ function getGifProvider() {
     } catch { /* DB not ready yet or no key stored */ }
     return '';
   };
-  const giphyKey = readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '';
-  if (giphyKey) return { provider: 'giphy', key: giphyKey };
-  const tenorKey = readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '';
-  if (tenorKey) return { provider: 'tenor', key: tenorKey };
+  const keys = {
+    giphy: readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '',
+    klipy: readSetting('klipy_api_key') || process.env.KLIPY_API_KEY || '',
+    tenor: readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '',
+  };
+  const preferred = (readSetting('preferred_gif_search') || process.env.PREFERRED_GIF_SEARCH || '')
+    .trim().toLowerCase();
+  // Honour the preference only when it names a known provider that actually
+  // has a key; otherwise fall through to the configured-order fallback.
+  if (GIF_FALLBACK_ORDER.includes(preferred) && keys[preferred]) {
+    return { provider: preferred, key: keys[preferred] };
+  }
+  for (const provider of GIF_FALLBACK_ORDER) {
+    if (keys[provider]) return { provider, key: keys[provider] };
+  }
   return null;
 }
 
-// Both providers normalize to the same result shape the client expects:
+// All providers normalize to the same result shape the client expects:
 // { id, title, tiny (grid thumbnail), full (send URL) }.
 function fetchGifs(kind, q, limit, cfg) {
+  if (cfg.provider === 'klipy') {
+    // The app key is a path segment; the small (220px) gif is the grid
+    // thumbnail and the hd/md gif is the send URL.
+    const path = kind === 'search'
+      ? `gifs/search?q=${encodeURIComponent(q)}&`
+      : 'gifs/trending?';
+    const url = `https://api.klipy.com/api/v1/${encodeURIComponent(cfg.key)}/${path}per_page=${limit}&content_filter=off`;
+    return fetch(url).then(r => r.json()).then(data => (data.data?.data || []).map(g => ({
+      id: g.id,
+      title: g.title || '',
+      tiny: g.file?.sm?.gif?.url || g.file?.xs?.gif?.url || '',
+      full: g.file?.hd?.gif?.url || g.file?.md?.gif?.url || '',
+    })));
+  }
   if (cfg.provider === 'tenor') {
     const base = kind === 'search'
       ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&`
@@ -2760,9 +2868,13 @@ function extractFullBackup(zipPath, stagedDb, stagedUploads, onProgress) {
           try { manifest = JSON.parse((await readEntryBuffer(zipfile, manifestEntry)).toString('utf8')); }
           catch { throw bad('Invalid backup: corrupt manifest.json'); }
           if (manifest.app !== 'haven') throw bad('Not a Haven backup file');
-          if (manifest.mode !== 'full') throw bad('Only full backups can be restored automatically. Structure-only backups must be re-imported manually.');
+          // A backup made with Messages ticked carries the whole database and
+          // can be restored whether or not Uploaded files was ticked too: the
+          // database is swapped in, and the uploads folder is only replaced
+          // when the backup has one. A channels/users/settings-only backup
+          // has no database to restore from (#5660).
           const dbEntry = find('haven.db');
-          if (!dbEntry) throw bad('Invalid full backup: missing haven.db');
+          if (!dbEntry) throw bad('This backup has no database in it (Messages was unticked when it was made), so it cannot be restored here. Make the backup with Messages ticked; Uploaded files is optional.');
 
           // Progress accounting: total = the DB clone + every upload file
           // (uncompressed bytes). Emitted (throttled to ~400ms) via onProgress
@@ -4330,7 +4442,7 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
   if (io) {
     for (const [, s] of io.sockets.sockets) {
       if (s.user && s.user.id === userId) {
-        s.emit('muted', { reason: safeReason, expiresAt });
+        s.emit('muted', { duration: Math.round(durationMs / 60000), reason: safeReason, expiresAt });
       }
     }
   }
@@ -4654,9 +4766,10 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
 app.get('/api/bot-commands', (req, res) => {
   const { getDb } = require('./src/database');
   const rows = getDb().prepare(`
-    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name
+    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name, c.code as channel_code
     FROM bot_commands bc
     JOIN webhooks w ON bc.webhook_id = w.id
+    LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.is_active = 1
   `).all();
   const commands = [];
@@ -4677,7 +4790,8 @@ app.get('/api/bot-commands', (req, res) => {
           description: typeof sc.description === 'string' && sc.description.trim()
             ? sc.description.trim()
             : (row.description || 'Bot command'),
-          bot_name: row.bot_name || 'Bot'
+          bot_name: row.bot_name || 'Bot',
+          channel_code: row.channel_code || null
         });
       }
       continue;
@@ -4685,7 +4799,8 @@ app.get('/api/bot-commands', (req, res) => {
     commands.push({
       command: row.command,
       description: row.description || '',
-      bot_name: row.bot_name || 'Bot'
+      bot_name: row.bot_name || 'Bot',
+      channel_code: row.channel_code || null
     });
   }
   res.json({ commands });
@@ -5380,6 +5495,16 @@ function runAutoCleanup() {
       return row ? row.value : null;
     };
 
+    // Deleted items never sit around forever. Attachments that message and
+    // channel deletes park in deleted-attachments are removed for good once
+    // they have been there longer than the retention window (a week unless
+    // the admin changes it), whether or not auto-cleanup is switched on.
+    try {
+      const removed = purgeDeletedAttachments(
+        DELETED_ATTACHMENTS_DIR, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
+      if (removed > 0) console.log(`Auto-cleanup: removed ${removed} expired file(s) from deleted-attachments`);
+    } catch (e) { console.error('deleted-attachments purge error:', e.message); }
+
     const enabled = getSetting('cleanup_enabled');
     if (enabled !== 'true') return;
 
@@ -5477,37 +5602,12 @@ function runAutoCleanup() {
       }
     }
 
-    // Purge old files from deleted-attachments only. These are former message
-    // attachments that were relocated here when their message was deleted (by
-    // the steps above, by single-message deletes, or by the orphan-DM sweep).
-    //
-    // We deliberately do NOT scan the main uploads/ directory. That directory
-    // also holds user avatars, persona avatars, custom emojis, soundboard
-    // sounds, and the server icon — none of which are posted media. The old
-    // "delete everything in uploads/ that isn't on a protect-list" approach
-    // kept silently eating any file type nobody remembered to allow-list
-    // (persona avatars in #5423, stickers/emojis before that). Auto-cleanup is
-    // scoped to posts and messages and their attachments — nothing else.
-    if (maxAgeDays > 0) {
-      const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
-      const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-      if (require('fs').existsSync(deletedDir)) {
-        let daDeleted = 0;
-        for (const f of require('fs').readdirSync(deletedDir)) {
-          try {
-            const fp = require('path').join(deletedDir, f);
-            const st = require('fs').statSync(fp);
-            if (st.isFile() && st.mtimeMs < cutoff) {
-              require('fs').unlinkSync(fp);
-              daDeleted++;
-            }
-          } catch { /* skip */ }
-        }
-        if (daDeleted > 0) {
-          console.log(`Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
-        }
-      }
-    }
+    // Files in deleted-attachments are purged on their own clock at the top
+    // of this run, whether or not cleanup is enabled. Nothing here scans the
+    // main uploads/ directory: it also holds avatars, custom emojis,
+    // soundboard sounds, stickers and the server icon, none of which are
+    // posted media, and an allow-list approach kept eating whichever type
+    // nobody remembered to list (#5423).
 
     // 3. (#5282) Orphan-DM sweep — delete any DM channel that has dropped
     // below 2 members (one or both participants deleted their account or
@@ -6039,6 +6139,17 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, HOST, () => {
+  // Print the machine's LAN address rather than a YOUR_IP placeholder, which
+  // more than one self-hoster has read as a broken config. (#5572)
+  const lanIps = [];
+  try {
+    for (const ifaces of Object.values(require('os').networkInterfaces())) {
+      for (const i of ifaces || []) {
+        if (i.family === 'IPv4' && !i.internal) lanIps.push(i.address);
+      }
+    }
+  } catch { /* leave the placeholder */ }
+  const networkLine = `${protocol}://${lanIps[0] || 'YOUR_IP'}:${PORT}`;
   console.log(`
 â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•╗
 ║       ðŸ   HAVEN is running               ║
@@ -6049,6 +6160,9 @@ server.listen(PORT, HOST, () => {
 ║  Admin:   ${(process.env.ADMIN_USERNAME || 'admin').padEnd(29)}║
 â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   `);
+  if (lanIps.length > 1) {
+    console.log(`  Also reachable on: ${lanIps.slice(1).map(ip => `${protocol}://${ip}:${PORT}`).join(', ')}`);
+  }
   // Tunnel is now started manually via the admin panel button (no auto-start)
   // Dynamic DNS auto-updater (kicks in only if DDNS_PROVIDER is set in .env)
   try { startDdns(); } catch (err) { console.warn('[ddns] failed to start:', err && err.message); }

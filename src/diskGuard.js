@@ -83,8 +83,11 @@ function _warnLow(free) {
 function _maxUploadBytes() {
   try {
     const { getDb } = require('./database');
-    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
-    return (parseInt(row?.value, 10) || 25) * 1024 * 1024;
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
+    let cap = parseInt(row?.value, 10) || 25;
+    try { cap = Math.max(cap, parseInt(db.prepare('SELECT MAX(max_upload_mb) AS m FROM roles').get()?.m, 10) || 0); } catch {}
+    return cap * 1024 * 1024;
   } catch {
     return 25 * 1024 * 1024;
   }

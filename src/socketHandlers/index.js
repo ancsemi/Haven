@@ -93,8 +93,13 @@ function setupSocketHandlers(io, db, opts = {}) {
   // ── Permission helpers (shared across all connections) ───
   const {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
-    userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay
+    userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
+    parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   } = createPermissions(db);
+
+  // Required roles are membership (#5649): settle every gated channel once
+  // at start-up, so an update or a migration leaves nobody half in.
+  try { syncRoleGateMemberships(); } catch (err) { console.error('role gate membership sync failed:', err.message); }
 
   // ── Shared state Maps ───────────────────────────────────
   const channelUsers        = new Map(); // code → Map<userId, { id, username, socketId, avatar?, avatar_shape? }>
@@ -409,7 +414,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
         FROM channels c WHERE c.is_dm = 0
         UNION
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm,
@@ -417,7 +422,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ? AND c.is_dm = 1
@@ -434,7 +439,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ?
@@ -479,7 +484,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                      c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                      c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                      c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-                     c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum
+                     c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout
               FROM channels c
               JOIN channel_members cm ON c.id = cm.channel_id
               WHERE cm.user_id = ?
@@ -489,6 +494,10 @@ function setupSocketHandlers(io, db, opts = {}) {
         }
       }
     }
+
+    // A role gate hides the channel from anyone who fails it, membership or
+    // not. Admins see everything, as they do for private channels.
+    if (!isAdmin) channels = channels.filter(ch => ch.is_dm || roleGateAllows(userId, ch));
 
     if (channels.length > 0) {
       const channelIds = channels.map(c => c.id);
@@ -558,7 +567,9 @@ function setupSocketHandlers(io, db, opts = {}) {
 
         if (ch.is_dm) {
           const otherUser = db.prepare(`
-            SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u
+            SELECT u.id, COALESCE(u.display_name, u.username) as username,
+                   u.avatar, u.avatar_shape AS avatarShape
+            FROM users u
             JOIN channel_members cm ON u.id = cm.user_id
             WHERE cm.channel_id = ? AND u.id != ?
           `).get(ch.id, userId);
@@ -567,7 +578,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           } else {
             // Self-DM: only one channel_members row, no "other" user. Use self as the partner.
             const self = db.prepare(
-              'SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?'
+              'SELECT id, COALESCE(display_name, username) as username, avatar, avatar_shape AS avatarShape FROM users WHERE id = ?'
             ).get(userId);
             ch.dm_target = self || null;
             ch.is_self_dm = 1;
@@ -790,6 +801,21 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── emitOnlineUsers ─────────────────────────────────────
+  // A DM room only got a fresh online list while somebody was looking at it,
+  // so a DM PiP opened from another channel showed its partner as away and
+  // never caught them coming online (#5574). Every presence change now also
+  // refreshes the user's DM rooms. A DM has two members, so each list is tiny.
+  function emitDmPresence(userId) {
+    try {
+      const rows = db.prepare(`
+        SELECT c.code FROM channels c
+        JOIN channel_members cm ON cm.channel_id = c.id
+        WHERE c.is_dm = 1 AND cm.user_id = ?
+      `).all(userId);
+      for (const r of rows) emitOnlineUsers(r.code);
+    } catch { /* presence is best-effort */ }
+  }
+
   function emitOnlineUsers(code) {
     const room = channelUsers.get(code);
 
@@ -2187,8 +2213,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Permissions
       getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
       userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
+      parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
-      broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers,
+      broadcastChannelLists, broadcastVoiceUsers, emitOnlineUsers, emitDmPresence,
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode,
       // Push / webhooks
@@ -2317,6 +2344,14 @@ function setupSocketHandlers(io, db, opts = {}) {
       for (const code of affectedChannels) {
         emitOnlineUsers(code);
       }
+
+      // Gone for good (no other tab or device still connected): tell DM
+      // partners, whether or not either side was looking at the DM (#5574).
+      let stillConnected = false;
+      for (const [, s] of io.of('/').sockets) {
+        if (s.user && s.user.id === socket.user.id && s.id !== socket.id) { stillConnected = true; break; }
+      }
+      if (!stillConnected) emitDmPresence(socket.user.id);
 
       for (const code of Array.from(voiceUsers.keys())) {
         const room = voiceUsers.get(code);

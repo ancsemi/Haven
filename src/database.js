@@ -434,6 +434,7 @@ function initDatabase() {
   insertSetting.run('registration_rate_limit_per_hour', '20');   // the cap value when enabled
   insertSetting.run('max_invite_uses', '0');            // the maximum uses each non-admin/manage-server invite link can accept
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
+  insertSetting.run('max_attachments', '10');           // files one message may queue, images and other files together (1-50) (#5561)
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
@@ -728,6 +729,20 @@ function initDatabase() {
       channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
       last_read_message_id INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (user_id, channel_id)
+    );
+  `);
+
+  // ── Migration: per-thread read positions (#5641) ─────────
+  // Which reply a person last saw in a thread, keyed by the parent message.
+  // Forum topic cards use it for their unread dot, and because it lives on
+  // the account it follows you between devices. A row with 0 means the
+  // thread was opened but had no replies yet.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS thread_reads (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      thread_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      last_read_reply_id INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, thread_id)
     );
   `);
 
@@ -1115,6 +1130,10 @@ function initDatabase() {
     // Forum mode (#144): each top-level message is a topic, and the channel
     // lists topics by their latest thread activity instead of creation time.
     { name: 'is_forum',          sql: "ALTER TABLE channels ADD COLUMN is_forum INTEGER DEFAULT 0" },
+    // Forum parity: a per-channel tag list (JSON array of {name, emoji}) that
+    // topics pick from, and an NSFW flag users can hide behind a preference.
+    { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
+    { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
     // #5390 — extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,
@@ -1123,6 +1142,13 @@ function initDatabase() {
     // (recurring sweep) instead of being a one-shot.
     { name: 'auto_delete_mode',           sql: "ALTER TABLE channels ADD COLUMN auto_delete_mode TEXT DEFAULT 'delete'" },
     { name: 'auto_delete_interval_hours', sql: "ALTER TABLE channels ADD COLUMN auto_delete_interval_hours INTEGER DEFAULT NULL" },
+    // Role gate: JSON {"mode":"any"|"all","roles":[id,...]}. Membership still
+    // decides who is IN the channel; the gate decides who may open it, on top
+    // of that, so a channel can ask for one of several roles or all of them.
+    { name: 'role_gate',                  sql: "ALTER TABLE channels ADD COLUMN role_gate TEXT DEFAULT NULL" },
+    // Forum layout an admin set for everyone: JSON {"view","tile","at"}.
+    // A reader's own pick, made after "at", still wins on their browser (#5656).
+    { name: 'forum_layout',               sql: "ALTER TABLE channels ADD COLUMN forum_layout TEXT DEFAULT NULL" },
   ];
   for (const col of channelQolCols) {
     try { db.prepare(`SELECT ${col.name} FROM channels LIMIT 0`).get(); } catch { db.exec(col.sql); }
@@ -1251,6 +1277,18 @@ function initDatabase() {
     db.prepare("SELECT imported_from FROM messages LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE messages ADD COLUMN imported_from TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: invite_codes.spent (#5562) ──
+  // Redemptions used to be counted from invite_code_uses, whose rows go with
+  // the user (ON DELETE CASCADE), so deleting an account handed its use back
+  // to a single-use link. `spent` only ever goes up. Seeded from the rows
+  // that still exist, which is the best the old data can offer.
+  try {
+    db.prepare("SELECT spent FROM invite_codes LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE invite_codes ADD COLUMN spent INTEGER DEFAULT 0");
+    db.exec("UPDATE invite_codes SET spent = (SELECT COUNT(*) FROM invite_code_uses u WHERE u.invite_code_id = invite_codes.id)");
   }
 
   // ── Migration: webhook_avatar column on messages (Discord import avatars) ──
@@ -1388,6 +1426,73 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_poll_votes_msg ON poll_votes(message_id);
   `);
 
+  // ── Required roles are membership (#5649) ──
+  // A membership row the gate created is marked, so it can be taken back
+  // when the person stops passing the gate; rows added by hand are not.
+  try {
+    db.prepare("SELECT via_role_gate FROM channel_members LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channel_members ADD COLUMN via_role_gate INTEGER NOT NULL DEFAULT 0");
+  }
+  // One-time: the role-side "grant these channels" lists become Required
+  // roles on those channels (any of the roles that granted it), and the
+  // role-side switch is turned off. Same intent, one place to see it.
+  try {
+    const done = db.prepare("SELECT value FROM server_settings WHERE key = 'role_links_migrated'").get();
+    if (!done) {
+      const rows = db.prepare(`
+        SELECT rca.channel_id, rca.role_id FROM role_channel_access rca
+        JOIN roles r ON r.id = rca.role_id
+        WHERE r.link_channel_access = 1 AND rca.grant_on_promote = 1
+      `).all();
+      const byChannel = new Map();
+      for (const r of rows) {
+        if (!byChannel.has(r.channel_id)) byChannel.set(r.channel_id, new Set());
+        byChannel.get(r.channel_id).add(r.role_id);
+      }
+      let converted = 0;
+      for (const [chId, roleIds] of byChannel) {
+        const ch = db.prepare('SELECT id, role_gate FROM channels WHERE id = ? AND is_dm = 0').get(chId);
+        if (!ch) continue;
+        let gate = null;
+        try { gate = JSON.parse(ch.role_gate || 'null'); } catch { gate = null; }
+        const roles = new Set(Array.isArray(gate && gate.roles) ? gate.roles.map(Number) : []);
+        roleIds.forEach(id => roles.add(id));
+        db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?')
+          .run(JSON.stringify({ mode: gate && gate.mode === 'all' ? 'all' : 'any', roles: [...roles] }), chId);
+        converted++;
+      }
+      db.prepare('UPDATE roles SET link_channel_access = 0').run();
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('role_links_migrated', '1')").run();
+      // An existing server gets a one-time notice for admins about the change
+      // in how channel access works. Nothing to explain on a fresh install.
+      // TEMPORARY: remove this flag and the notice modal after the 4.8.x cycle.
+      const existing = db.prepare('SELECT COUNT(*) AS c FROM channels WHERE is_dm = 0').get().c;
+      if (existing) db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('role_gate_notice', '1')").run();
+      if (converted) console.log(`[migration] Role channel access lists became Required roles on ${converted} channel(s) (#5649)`);
+    }
+  } catch (err) {
+    console.error('[migration] role channel access → required roles failed:', err.message);
+  }
+
+  // ── Scheduled messages (#5638): held on the server until send_at ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduled_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      send_at TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_scheduled_send_at ON scheduled_messages(send_at);
+  `);
+
+  // ── Migration: weighted automod strikes (#5614) ──
+  // A word group can be worth more than one strike; link infractions stay at 1.
+  try { db.prepare('SELECT weight FROM automod_infractions LIMIT 0').get(); }
+  catch { db.exec('ALTER TABLE automod_infractions ADD COLUMN weight INTEGER NOT NULL DEFAULT 1'); }
+
   // ── Migration: deleted_users log (audit trail for admin deletions) ──
   db.exec(`
     CREATE TABLE IF NOT EXISTS deleted_users (
@@ -1424,6 +1529,13 @@ function initDatabase() {
     db.prepare("SELECT read_only FROM channels LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE channels ADD COLUMN read_only INTEGER DEFAULT 0");
+  }
+
+  // ── Migration: former channel names, so a #old-name link keeps resolving (#5602) ──
+  try {
+    db.prepare("SELECT former_names FROM channels LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE channels ADD COLUMN former_names TEXT DEFAULT NULL");
   }
 
   // ── Migration: encrypted server list for cross-device sync ──────────
@@ -1469,6 +1581,27 @@ function initDatabase() {
   } catch {
     db.exec('ALTER TABLE bot_commands ADD COLUMN subcommands_json TEXT DEFAULT NULL');
   }
+
+  // ── Migration: per-role upload cap ──────────────────────
+  // NULL means the role says nothing and the server-wide max_upload_mb applies.
+  // A user's cap is the highest one among the roles they hold.
+  try {
+    db.prepare('SELECT max_upload_mb FROM roles LIMIT 0').get();
+  } catch {
+    db.exec('ALTER TABLE roles ADD COLUMN max_upload_mb INTEGER DEFAULT NULL');
+  }
+
+  // ── Role menus: a message people react to, or click, to give themselves a role ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS role_menus (
+      message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL,
+      created_by INTEGER,
+      title TEXT DEFAULT '',
+      data TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
   // ── Migration: split manage_channel_settings out of create_channel (#5467) ──
   // Editing an existing channel's settings used to ride on create_channel, so
@@ -1565,6 +1698,18 @@ function initDatabase() {
     db.exec("ALTER TABLE messages ADD COLUMN thread_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE CASCADE");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL");
+  // ── Migration: forum topics carry a title and tags ──────
+  for (const col of [
+    { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },
+    { name: 'tags',  sql: "ALTER TABLE messages ADD COLUMN tags TEXT DEFAULT NULL" },
+    // Closed topics grey out and sit below the open ones (#5624).
+    { name: 'closed', sql: "ALTER TABLE messages ADD COLUMN closed INTEGER DEFAULT 0" },
+    // NSFW topics blur their picture and preview until clicked, and stay out
+    // of the list for anyone who hides NSFW channels (#5633).
+    { name: 'nsfw', sql: "ALTER TABLE messages ADD COLUMN nsfw INTEGER DEFAULT 0" },
+  ]) {
+    try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
+  }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL");
 
   // ── Audit log ───────────────────────────────────────────

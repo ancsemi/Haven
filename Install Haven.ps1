@@ -505,16 +505,11 @@ $ui['btnNext3'].Add_Click({
     $certDir = "$DATA_DIR\certs"
     if (!(Test-Path "$certDir\cert.pem")) {
         if (!(Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir -Force | Out-Null }
-        $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
-        if ($opensslPath) {
-            $sslOutput = & openssl req -x509 -newkey rsa:2048 -keyout "$certDir\key.pem" -out "$certDir\cert.pem" -days 3650 -nodes -subj "/CN=Haven" 2>&1
-            if (Test-Path "$certDir\cert.pem") {
-                Set-Step 'step4' 'done' 'SSL certificate generated'
-            } else {
-                Set-Step 'step4' 'error' "SSL generation failed: $sslOutput"
-            }
+        $sslOutput = & node "$HAVEN_DIR\scripts\gen-cert.js" 2>&1
+        if (Test-Path "$certDir\cert.pem") {
+            Set-Step 'step4' 'done' 'SSL certificate generated'
         } else {
-            Set-Step 'step4' 'done' 'Skipped (OpenSSL not found, will use HTTP)'
+            Set-Step 'step4' 'error' "SSL generation failed: $sslOutput"
         }
     } else {
         Set-Step 'step4' 'done' 'SSL certificate exists'

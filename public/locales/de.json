@@ -644,6 +644,7 @@
       "desktop_app": "Desktop-App",
       "admin_group": "Admin",
       "branding": "Branding",
+      "tos": "Nutzungsbedingungen",
       "members": "Mitglieder",
       "whitelist": "Whitelist",
       "invite": "Einladungscode",
@@ -666,14 +667,24 @@
       "auto": "Automatisch",
       "hint": "Änderungen werden sofort übernommen"
     },
-    "layout_density": {
-      "title": "Layout-Dichte",
-      "compact": "Kompakt",
-      "compact_hint": "Kompakt — engere Abstände, kleinere Avatare",
-      "cozy": "Gemütlich",
-      "cozy_hint": "Gemütlich — Standard-Layout",
-      "spacious": "Geräumig",
-      "spacious_hint": "Geräumig — mehr Weißraum"
+    "layout": {
+      "title": "Layout",
+      "density": {
+        "title": "Layout-Dichte",
+        "compact": "Kompakt",
+        "compact_hint": "Kompakt — engere Abstände, kleinere Avatare",
+        "cozy": "Gemütlich",
+        "cozy_hint": "Gemütlich — Standard-Layout",
+        "spacious": "Geräumig",
+        "spacious_hint": "Geräumig — mehr Weißraum"
+      },
+      "channel_scrolling": {
+        "title": "Kanal-Scrolling",
+        "separate": "Getrennt",
+        "separate_hint": "Getrennt — separate Scrollleisten für Kanäle und DMs",
+        "combined": "Kombiniert",
+        "combined_hint": "Kombiniert — eine Scrollleiste für Kanäle und DMs"
+      }
     },
     "font_size": {
       "title": "Schriftgröße",
@@ -688,10 +699,13 @@
     },
     "image_display": {
       "title": "Bildanzeige",
-      "thumbnail": "Vorschaubild",
-      "thumbnail_hint": "Vorschaubild — kleines Vorschaubild, klicken zum Vergrößern",
-      "full": "Vollbild",
-      "full_hint": "Vollbild — große Inline-Bilder wie Discord"
+      "image_mode": {
+        "title": "Bildanzeigemodus",
+        "thumbnail": "Vorschaubild",
+        "thumbnail_hint": "Vorschaubild — kleines Vorschaubild, klicken zum Vergrößern",
+        "full": "Vollbild",
+        "full_hint": "Vollbild — große Inline-Bilder wie Discord"
+      }
     },
     "sounds_section": {
       "title": "Töne",

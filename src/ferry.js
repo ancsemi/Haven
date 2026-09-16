@@ -38,6 +38,7 @@ const USER_AGENT = 'DiscordBot (https://github.com/ancsemi/Haven, 1.0)';
 // ── Gateway intents ─────────────────────────────────────────
 const INTENT_GUILDS          = 1 << 0;
 const INTENT_GUILD_MEMBERS   = 1 << 1;   // privileged, only requested for DM lookup
+const INTENT_GUILD_EXPRESSIONS = 1 << 3; // emote list changes, so :name: keeps matching after an admin adds one
 const INTENT_GUILD_MESSAGES  = 1 << 9;
 const INTENT_MESSAGE_CONTENT = 1 << 15;  // privileged. Without it every message body is empty
 
@@ -228,7 +229,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // ══════════════════════════════════════════════════════════════
 
 function currentIntents() {
-  let intents = INTENT_GUILDS | INTENT_GUILD_MESSAGES | INTENT_MESSAGE_CONTENT;
+  let intents = INTENT_GUILDS | INTENT_GUILD_EXPRESSIONS | INTENT_GUILD_MESSAGES | INTENT_MESSAGE_CONTENT;
   // The member intent is only needed to look people up for DM autocomplete.
   // Asking for a privileged intent the admin never enabled kills the whole
   // connection with a 4014, so it is opt-in twice over: the DM setting has to
@@ -439,6 +440,12 @@ function handleDispatch(type, d) {
       if (!d.unavailable) guilds.delete(d.id);
       break;
 
+    case 'GUILD_EMOJIS_UPDATE': {
+      const g = guilds.get(d.guild_id);
+      if (g) g.emojis = emojiMap(d.emojis);
+      break;
+    }
+
     case 'CHANNEL_CREATE':
     case 'CHANNEL_UPDATE':
       cacheChannel(d);
@@ -475,7 +482,19 @@ function cacheGuild(g) {
       category: c.parent_id ? (byId.get(c.parent_id)?.name || null) : null,
     });
   }
-  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels });
+  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels, emojis: emojiMap(g.emojis) });
+}
+
+// Lowercased name -> { id, name, animated }, so a Haven :name: can go out as
+// the guild's own emote. GUILD_CREATE carries the full list and
+// GUILD_EMOJIS_UPDATE replaces it whenever an admin adds or removes one.
+function emojiMap(list) {
+  const map = new Map();
+  for (const e of list || []) {
+    if (!e || !e.id || !e.name) continue;
+    map.set(String(e.name).toLowerCase(), { id: String(e.id), name: String(e.name), animated: !!e.animated });
+  }
+  return map;
 }
 
 function cacheChannel(c) {
@@ -592,12 +611,20 @@ function buildHavenContent(msg) {
   const authored = [];
   const media = [];
 
-  const text = translateDiscordEmotes(translateDiscordMentions(msg.content || '', msg)).trim();
+  // Custom emotes stay as Discord wrote them, <:name:id> or <a:name:id>. Every
+  // Haven client renders that token as the emote itself, through the server's
+  // emote cache, so nothing is lost by keeping the id. Folding it to :name:
+  // used to leave a bare shortcode on any server without a same-named emoji.
+  const text = translateDiscordMentions(msg.content || '', msg).trim();
   if (text) authored.push(text);
 
   for (const att of msg.attachments || []) {
     if (att.url) media.push(att.url);
   }
+  // Discord's own client now sends a post with two or more pictures as a
+  // media gallery component and leaves `attachments` empty, so walking the
+  // attachments alone relayed those posts as nothing. Amnibro spotted this.
+  collectComponentMedia(msg.components, media);
   for (const sticker of msg.sticker_items || []) {
     media.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
   }
@@ -683,19 +710,33 @@ function buildHavenContent(msg) {
     if (authoredText && automod.checkText(authoredText, { surface: 'message' }).ok === false) return '';
   } catch { /* an automod fault must never take the bridge down */ }
 
-  return cleanOf([...authored, ...media].join('\n').slice(0, 4000));
+  // A picture referenced from both a component and an attachment goes once.
+  const uniqueMedia = [...new Set(media.filter(Boolean))];
+  return cleanOf([...authored, ...uniqueMedia].join('\n').slice(0, 4000));
 }
 
-/**
- * Discord writes custom emotes into message text as <:name:id> (or <a:name:id>
- * when animated). Relayed raw, a Haven reader sees "<:blue_heart:117883303624>"
- * in the middle of a sentence.
- *
- * They become :name: rather than the emote's CDN image, because Haven renders a
- * bare image URL at full chat-image size. As :name: it reads correctly as text
- * and, when the Haven server happens to have an emoji of the same name, renders
- * as that emoji.
- */
+function discordHttpUrl(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  const u = obj.url || obj.proxy_url || '';
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+
+// Walk a message's components (containers, sections, media galleries, file
+// blocks) and collect every picture or file URL in them.
+function collectComponentMedia(node, into, depth = 0) {
+  if (!node || depth > 8) return;
+  if (Array.isArray(node)) {
+    for (const child of node) collectComponentMedia(child, into, depth + 1);
+    return;
+  }
+  if (typeof node !== 'object') return;
+  const url = discordHttpUrl(node.media) || discordHttpUrl(node.file);
+  if (url) into.push(url);
+  collectComponentMedia(node.items, into, depth + 1);
+  collectComponentMedia(node.components, into, depth + 1);
+  collectComponentMedia(node.accessory, into, depth + 1);
+}
+
 /**
  * Discord writes mentions into message text as <@1178833036244652178>. The
  * names come from the message's own `mentions` array, so this is exact rather
@@ -712,8 +753,19 @@ function translateDiscordMentions(text, msg) {
   return out;
 }
 
-function translateDiscordEmotes(text) {
-  return String(text || '').replace(/<(a?):([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$2:');
+/**
+ * Turns a Haven :name: into the paired guild's own emote, <:name:id>, so it
+ * shows as a picture on the Discord side instead of a shortcode. Only names the
+ * guild actually has are touched. A token already in Discord's form is left
+ * alone, and so is anything glued to other text, like the colons in a time.
+ */
+function translateHavenEmotes(content, emojis) {
+  const text = String(content || '');
+  if (!emojis || !emojis.size) return text;
+  return text.replace(/(?<![<\w]):([A-Za-z0-9_]{2,32}):(?![\w>])/g, (full, name) => {
+    const e = emojis.get(name.toLowerCase());
+    return e ? `<${e.animated ? 'a' : ''}:${e.name}:${e.id}>` : full;
+  });
 }
 
 function discordAvatarUrl(author) {
@@ -890,7 +942,9 @@ async function ensureLinkWebhook(link) {
  * Relays one Haven message to one paired Discord channel, as the Haven author.
  */
 async function sendToDiscord(link, { username, avatar, content }) {
-  const body = absolutizeUploads(String(content || '')).slice(0, MAX_DISCORD_CONTENT);
+  const guild = guilds.get(String(link.guild_id || ''));
+  const body = translateHavenEmotes(absolutizeUploads(String(content || '')), guild && guild.emojis)
+    .slice(0, MAX_DISCORD_CONTENT);
   if (!body.trim()) return;
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
@@ -1226,6 +1280,7 @@ module.exports = {
   resolveFerryTarget,
   sanitizeWebhookUsername,
   buildHavenContent,
+  translateHavenEmotes,
   discordAvatarUrl,
   applySettings,
   reconnectFerry,

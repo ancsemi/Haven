@@ -162,7 +162,7 @@ Every conversation in Haven happens inside a **channel**. Channels are like room
 
 ### Forum Channels 🗂️
 
-Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic. Replies go in that message's thread, the topic shows its reply count, and a new reply bumps the topic back to the newest end of the channel, right above the composer, so old topics resurface instead of sinking. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
+Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic, and the feed runs newest first: the most recently active topic sits at the top. Replies go in that message's thread, the topic shows its reply count, and a new reply moves the topic back to the top, so old topics resurface instead of sinking. Inside a topic's thread, replies read top to bottom as usual. Every topic carries a **Reply to this topic** button, and the Reply action on a topic opens its thread rather than quoting it as a new topic. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
 
 ### Creating Sub-Channels
 
@@ -187,6 +187,8 @@ When creating a sub-channel, check the **🔒 Private** checkbox. Private sub-ch
 - Are invisible to non-members (they won't see it in their channel list)
 
 Use private sub-channels for admin-only discussions, sensitive topics, or small breakout groups within a larger channel.
+
+Any channel can be switched between private and public later from **Channel Functions → Private**. Going private keeps everyone who is already a member. Going public opens the channel to the whole server, history included.
 
 ---
 
@@ -405,6 +407,8 @@ https://YOUR_PUBLIC_IP:3000
 
 > ⚠️ **Certificate Warning:** Your friends' browsers will show a security warning because Haven uses a self-signed certificate. This is normal and expected. Tell them to click **"Advanced"** → **"Proceed to site"**. The connection is still encrypted.
 
+> **No OpenSSL? No problem.** If there is no certificate when Haven starts, it makes one itself, so HTTPS works on a clean Windows install. To run plain HTTP on purpose (behind a reverse proxy that handles TLS, or LAN only), set `FORCE_HTTP=true` in your `.env`. Voice, camera and the mobile app need HTTPS on any address other than localhost.
+
 ---
 
 ## 🔐 Tailscale / WireGuard (No Port Forwarding, No Exposed IP)
@@ -485,6 +489,7 @@ Click [here](https://console.tailscale.com/admin/machines) to access the admin p
 ### Step 5: Sharing the link
 - Once you provide a share link to your friend, he will need to make an account on Tailscale, download the client and connect on his machine. Please note, your friend **does not** need to share anything from his end. Only the person hosting Haven will have to share.
 - Once your friend accepts the link, his device will now be able to reach your shared device.
+- Sharing is one way. Your friend's device will not appear in your admin page, and it does not need to. If he can see your machine on his end, the share worked.
 
 ### Step 6: Usage
 - Once everything is wired up, go to your Tailscale admin page, find your device, and notice the **IP Address** listed next to your device. This is your Tailnet IP address. It is not your actual IP address.
@@ -655,7 +660,7 @@ The `Upgrade` / `Connection` headers are required for Socket.io WebSocket traffi
 
 | Problem | Solution |
 |---------|----------|
-| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or install OpenSSL and restart (see Troubleshooting below) |
+| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or unset `FORCE_HTTP` and restart (see Troubleshooting below) |
 | Friends get "took too long to respond" | Port forwarding not set up, or firewall blocking |
 | Friends get "connection refused" | Server isn't running — launch `Start Haven.bat` |
 | Can't connect with `https://` | Make sure you're using port 3000, not 443 |
@@ -885,7 +890,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 
 - **HTTPS is required.** Push notifications use Service Workers, which only work over `https://` or `localhost`. If you're accessing Haven via a LAN IP like `http://192.168.1.x:3000`, push will **not** work.
 - A modern browser (Chrome, Edge, Firefox, or Safari 16+)
-- Haven must be running with SSL certificates (the default if OpenSSL is installed)
+- Haven must be running with SSL certificates (the default; Haven makes its own)
 
 ### How to Enable
 
@@ -922,7 +927,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 | "Permission denied" | You blocked notifications. Reset in browser settings: Settings → Site Settings → Notifications → find Haven → Allow |
 | Toggle is grayed out | Your browser doesn't support push, or you're in incognito/private mode |
 | Notifications not appearing | Check your OS notification settings — Haven notifications may be muted at the system level |
-| Only works on localhost | For LAN/remote access, you need valid SSL. Haven auto-generates self-signed certs if OpenSSL is installed |
+| Only works on localhost | For LAN/remote access, you need valid SSL. Haven generates self-signed certs itself on first start |
 
 ---
 
@@ -1183,7 +1188,9 @@ it on their own clock. Useful when the group is spread across timezones: you say
 one time, nobody does the arithmetic, and nobody turns up an hour late.
 
 `/time 8pm` puts a token like `<t:1780853820:f>` in your message box. Type around
-it and send. Whoever reads it sees their own local time.
+it and send. Whoever reads it sees their own local time. The clock button next to
+the poll button, or `/time` on its own, opens a picker instead: pick the date and
+time, see every style previewed in your own locale, and insert the one you want.
 
 What `/time` accepts:
 
@@ -1225,6 +1232,15 @@ the timestamp generators people already use work here too.
 | `::` | Persona autocomplete (send as one of your personas) |
 | `Tab` | Accept the highlighted suggestion |
 
+### Mentioning a role
+
+`@Moderators` (or any role name) lights up for everyone who holds that role and
+pings them the way an @mention does. It shows up in the `@` picker for anyone
+with the **Mention everyone** permission, and the server quietly disarms it for
+anyone without, since a role ping reaches a crowd the same way `@everyone` does.
+Anyone who would rather not be pinged by their roles can turn **@Role mentions**
+off under Settings, Sounds.
+
 ---
 
 ## 🛡️ Admin & Moderation
@@ -1246,8 +1262,11 @@ be handed to others through the role system, one permission at a time.
   username, get a temporary account with no password, see only the channels you
   whitelist, cannot DM, and are deleted when they disconnect
 - **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
-  disk allows), max message length, per-member storage usage
-- **Auto-cleanup**: automatic deletion of messages past a chosen age
+  disk allows), attachments per message (10 by default), max message length,
+  per-member storage usage
+- **Auto-cleanup**: automatic deletion of messages past a chosen age, and how
+  long the files left behind by deleted messages and channels are kept before
+  they are removed for good (a week by default)
 - **Server updates**: check for a new Haven release and apply it in place. Haven
   takes a pre-update backup and restarts itself
 
@@ -1299,6 +1318,11 @@ The key is stored server-side, so only admins can see or change it, and every us
 can search GIFs once it is set. No payment is involved; GIPHY's free tier is far more
 than a private server will use. Tenor is no longer supported for new setup; a server
 that already has a Tenor key keeps working until a GIPHY key is set.
+
+KLIPY works as well. Get a key at [klipy.com/developers](https://klipy.com/developers)
+and set `KLIPY_API_KEY` in your `.env` (or Docker environment). If more than one key
+is set, `PREFERRED_GIF_SEARCH` (`klipy`, `giphy` or `tenor`) picks which provider the
+picker uses; without it the server tries GIPHY first, then KLIPY, then Tenor.
 
 ---
 
@@ -1470,14 +1494,12 @@ If your webhook has a `callback_url` and `callback_secret` configured, Haven wil
 ## 🆘 Troubleshooting
 
 **"SSL_ERROR_RX_RECORD_TOO_LONG" or "ERR_SSL_PROTOCOL_ERROR" in browser**
-→ Your browser is trying to connect via `https://` but the server is actually running in HTTP mode. This happens when SSL certificates weren't generated (usually because OpenSSL isn't installed).
+→ Your browser is trying to connect via `https://` but the server is actually running in HTTP mode. Haven makes its own self-signed certificate on first start (no OpenSSL needed), so this now only happens when `FORCE_HTTP=true` is set in your `.env`, or when the certificate files in your data directory are unreadable.
 **Quick fix:** Change the URL in your browser from `https://localhost:3000` to `http://localhost:3000`.
-**Permanent fix:** Install OpenSSL so Haven can generate certificates:
-1. Download from [slproweb.com/products/Win32OpenSSL.html](https://slproweb.com/products/Win32OpenSSL.html) (the "Light" version is fine)
-2. During install, choose **"Copy OpenSSL DLLs to the Windows system directory"**
-3. **Restart your PC** (so OpenSSL is added to PATH)
-4. Delete the `certs` folder in your data directory (`%APPDATA%\Haven\certs`)
-5. Re-launch `Start Haven.bat` — it will regenerate certificates and start in HTTPS mode
+**Permanent fix:**
+1. Open `.env` in your data directory (`%APPDATA%\Haven` on Windows, `~/.haven` elsewhere) and remove `FORCE_HTTP=true` unless a reverse proxy is terminating TLS for you
+2. If the startup log says the certificate could not be loaded, delete the `certs` folder in that data directory
+3. Re-launch `Start Haven.bat` — Haven regenerates the certificate and starts in HTTPS mode
 
 **How to tell if you're running HTTP or HTTPS:**
 Check the server's startup banner in the terminal. If it says `http://localhost:3000` — you're on HTTP. If it says `https://localhost:3000` — you're on HTTPS. The protocol in the URL you use must match.

@@ -280,9 +280,84 @@ module.exports = function createPermissions(db) {
     return out;
   }
 
+  // ── Role gate ───────────────────────────────────────────
+  // A channel's role_gate is JSON {mode:'any'|'all', roles:[ids]}. Empty or
+  // malformed means no gate. Roles held server-wide count, and so does a
+  // channel-scoped grant of the same role inside this very channel.
+  function parseRoleGate(raw) {
+    if (!raw) return null;
+    try {
+      const g = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const roles = Array.isArray(g && g.roles)
+        ? [...new Set(g.roles.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0))]
+        : [];
+      if (!roles.length) return null;
+      return { mode: g.mode === 'all' ? 'all' : 'any', roles };
+    } catch { return null; }
+  }
+
+  function roleGateAllows(userId, channel) {
+    const gate = parseRoleGate(channel && channel.role_gate);
+    if (!gate) return true;
+    const held = new Set(
+      db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND (channel_id IS NULL OR channel_id = ?)')
+        .all(userId, channel.id || 0).map(r => r.role_id)
+    );
+    return gate.mode === 'all' ? gate.roles.every(r => held.has(r)) : gate.roles.some(r => held.has(r));
+  }
+
+  // ── Required roles are membership (#5649) ───────────────
+  // Whoever passes a channel's gate is a member of it; a row the gate added
+  // goes away when they stop passing. Rows added by hand are left alone (the
+  // gate still hides the channel from them while they lack the roles).
+  // Returns the rows that changed, so the socket layer can move people in
+  // and out of the rooms. Pass channelId or userId to narrow it.
+  function syncRoleGateMemberships({ channelId = null, userId = null } = {}) {
+    const chans = channelId
+      ? db.prepare('SELECT id, code, role_gate FROM channels WHERE id = ? AND is_dm = 0').all(channelId)
+      : db.prepare('SELECT id, code, role_gate FROM channels WHERE role_gate IS NOT NULL AND is_dm = 0').all();
+    if (!chans.length) return [];
+    const users = userId
+      ? db.prepare('SELECT id, is_admin FROM users WHERE id = ?').all(userId)
+      : db.prepare('SELECT id, is_admin FROM users').all();
+    const ins = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id, via_role_gate) VALUES (?, ?, 1)');
+    const del = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ? AND via_role_gate = 1');
+    const changes = [];
+    const run = db.transaction(() => {
+      for (const ch of chans) {
+        const gate = parseRoleGate(ch.role_gate);
+        for (const u of users) {
+          if (u.is_admin) continue;
+          if (gate && roleGateAllows(u.id, ch)) {
+            if (ins.run(ch.id, u.id).changes) changes.push({ userId: u.id, channelId: ch.id, code: ch.code, joined: true });
+          } else if (del.run(ch.id, u.id).changes) {
+            changes.push({ userId: u.id, channelId: ch.id, code: ch.code, joined: false });
+          }
+        }
+      }
+    });
+    run();
+    return changes;
+  }
+
+  // ── Per-role upload cap ─────────────────────────────────
+  // The server-wide max_upload_mb is the floor for everyone; a role can raise
+  // it for its holders, and the highest cap among a user's roles wins.
+  function getUserUploadMb(userId) {
+    const base = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25;
+    const row = db.prepare(`
+      SELECT MAX(r.max_upload_mb) AS cap FROM roles r
+      JOIN user_roles ur ON ur.role_id = r.id
+      WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.max_upload_mb IS NOT NULL
+    `).get(userId);
+    const cap = row && row.cap ? parseInt(row.cap, 10) : 0;
+    return Math.max(base, cap || 0);
+  }
+
   return {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
     userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles,
-    getUserHighestRole, getUserAllRoles, getAdminRoleDisplay
+    getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
+    parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   };
 };

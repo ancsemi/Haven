@@ -8,6 +8,7 @@ const {
   sanitizeWebhookUsername,
   buildHavenContent,
   discordAvatarUrl,
+  translateHavenEmotes,
 } = require('../src/ferry');
 
 // Two pairings on one Haven channel, one of them sharing a channel name with
@@ -216,14 +217,34 @@ test('a stream announcement bot relays its link and thumbnail next to the text',
   );
 });
 
-test('Discord custom emotes become readable shortcodes', () => {
-  // Relayed raw these read as "<:blue_heart:1178833036244652178>" mid-sentence.
-  assert.equal(buildHavenContent({ content: 'hi <:wave:1178833036244652178> there' }), 'hi :wave: there');
-  assert.equal(buildHavenContent({ content: '<a:spin:1178833036244652178>' }), ':spin:');
+test('Discord custom emotes keep their id so clients can draw them', () => {
+  // Clients render <:name:id> as the emote through the server's emote cache.
+  // Folding it to :name: left a bare shortcode on any server without a
+  // same-named emoji.
+  assert.equal(buildHavenContent({ content: 'hi <:wave:1178833036244652178> there' }), 'hi <:wave:1178833036244652178> there');
+  assert.equal(buildHavenContent({ content: '<a:spin:1178833036244652178>' }), '<a:spin:1178833036244652178>');
   // A lone angle-bracket expression that is not an emote is left alone.
   assert.equal(buildHavenContent({ content: 'a < b and c > d' }), 'a < b and c > d');
   // No mentions array means nothing to resolve it against, so it stays put.
   assert.equal(buildHavenContent({ content: '<@1178833036244652178>' }), '<@1178833036244652178>');
+});
+
+test('a Haven :name: goes to Discord as the guild emote of that name', () => {
+  const emojis = new Map([
+    ['wave', { id: '1178833036244652178', name: 'wave', animated: false }],
+    ['spin', { id: '1178833036244652179', name: 'spin', animated: true }],
+  ]);
+  assert.equal(
+    translateHavenEmotes('hi :wave: :Spin: :wave::spin:', emojis),
+    'hi <:wave:1178833036244652178> <a:spin:1178833036244652179> <:wave:1178833036244652178><a:spin:1178833036244652179>'
+  );
+  // Unknown names, the colons in a time, and tokens already in Discord's
+  // form all stay put.
+  assert.equal(
+    translateHavenEmotes(':nope: at 10:30:45 <:wave:1178833036244652178>', emojis),
+    ':nope: at 10:30:45 <:wave:1178833036244652178>'
+  );
+  assert.equal(translateHavenEmotes(':wave:', null), ':wave:');
 });
 
 test('a custom trigger is honored and the default is not', () => {

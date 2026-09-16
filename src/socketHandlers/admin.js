@@ -39,14 +39,16 @@ module.exports = function register(socket, ctx) {
     // here. Reported so that isn't a silent surprise.
     { key: 'turn_secret',   env: 'TURN_SECRET',   secret: true },
     { key: 'giphy_api_key', env: 'GIPHY_API_KEY', secret: true },
-    { key: 'tenor_api_key', env: 'TENOR_API_KEY', secret: true }
+    { key: 'klipy_api_key', env: 'KLIPY_API_KEY', secret: true },
+    { key: 'tenor_api_key', env: 'TENOR_API_KEY', secret: true },
+    { key: 'preferred_gif_search', env: 'PREFERRED_GIF_SEARCH' }
   ];
 
   // ── Server settings ─────────────────────────────────────
   socket.on('get-server-settings', () => {
     const rows = db.prepare('SELECT key, value FROM server_settings').all();
     const settings = {};
-    const sensitiveKeys = ['giphy_api_key', 'tenor_api_key', 'server_code', 'registration_token', 'turn_password', 'turnstile_secret_key'];
+    const sensitiveKeys = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'server_code', 'registration_token', 'turn_password', 'turnstile_secret_key'];
     rows.forEach(r => {
       if (sensitiveKeys.includes(r.key) && !socket.user.isAdmin) return;
       settings[r.key] = r.value;
@@ -70,6 +72,12 @@ module.exports = function register(socket, ctx) {
     // setting that genuinely has no stored value. (#5489)
     settings.server_name_effective = settings.server_name || (process.env.SERVER_NAME || '').trim() || '';
 
+    // The cap this user's uploads are actually checked against: the server
+    // setting, or a higher one from a role they hold. Admins get the setting.
+    settings.max_upload_mb_effective = String(socket.user.isAdmin
+      ? (parseInt(settings.max_upload_mb, 10) || 25)
+      : ctx.getUserUploadMb(socket.user.id));
+
     // Only the people who can open the admin panel get told what the
     // environment holds, and secrets are reported as present without ever
     // sending the value.
@@ -84,6 +92,13 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // Whether the GIF picker has a provider behind it, said without the key
+    // itself, so a non-admin client can hide the button when there is none
+    // (#5654). Read from the rows, since the keys are stripped above.
+    const gifKeys = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
+    settings.gif_search_available = String(rows.some(r => gifKeys.includes(r.key) && !!r.value)
+      || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY));
+
     socket.emit('server-settings', settings, envInfo);
   });
 
@@ -94,15 +109,17 @@ module.exports = function register(socket, ctx) {
     }
 
     const key = typeof data.key === 'string' ? data.key.trim() : '';
-    const value = typeof data.value === 'string' ? data.value.trim() : '';
+    // `let`: the word groups are stored normalised (#5614).
+    let value = typeof data.value === 'string' ? data.value.trim() : '';
     let publishedThemeFiles = null;
     let clearDefaultTheme = false;
 
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
-      'giphy_api_key', 'tenor_api_key', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
-      'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_poll_options',
-      'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only',
+      'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
+      'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
+      'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
+      'max_sound_kb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'hide_disabled_channel_badges',
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
@@ -127,13 +144,19 @@ module.exports = function register(socket, ctx) {
       'automod_link_min_account_hours', 'automod_scan_edits', 'automod_scan_profile',
       'automod_scan_dms', 'automod_block_ip_urls', 'automod_block_punycode',
       'automod_block_obfuscated', 'automod_preview_allowlist_only', 'automod_escalation',
-      'automod_ban_ip', 'automod_log_channel',
+      'automod_ban_ip', 'automod_log_channel', 'automod_words',
+      'role_gate_notice', // TEMPORARY (#5649): one-time admin notice, remove after the 4.8.x cycle
       'voice_force_relay',
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
       'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
     ];
     if (!allowedKeys.includes(key)) return;
+
+    if (key === 'deleted_retention_days') {
+      const n = parseInt(value, 10);
+      if (!Number.isInteger(n) || n < 1 || n > 3650 || String(n) !== String(value).trim()) return;
+    }
 
     // ── Auto-mod validation (v3.42.0) ─────────────────────
     const automodBools = [
@@ -149,6 +172,24 @@ module.exports = function register(socket, ctx) {
     if (key === 'automod_link_exempt_level') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100) return; }
     if (key === 'automod_link_min_account_hours') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 8760) return; }
     if (key === 'automod_log_channel' && value && !/^[a-f0-9]{8}$/i.test(value)) return;
+    if (key === 'role_gate_notice' && !['0', '1'].includes(value)) return;
+    // Word groups (#5614): stored normalised, so a hand-edited or oversized
+    // payload never reaches the matcher.
+    if (key === 'automod_words') {
+      let groups;
+      try { groups = JSON.parse(value); } catch { return; }
+      if (!Array.isArray(groups) || groups.length > 50) return;
+      const clean = [];
+      for (const g of groups) {
+        if (!g || typeof g !== 'object') return;
+        const name = String(g.name || '').trim().slice(0, 40);
+        const strikes = Math.min(100, Math.max(1, parseInt(g.strikes, 10) || 1));
+        const words = [...new Set((Array.isArray(g.words) ? g.words : [])
+          .map(w => String(w || '').trim().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean))].slice(0, 300);
+        if (words.length) clean.push({ name: name || `group ${clean.length + 1}`, strikes, words });
+      }
+      value = JSON.stringify(clean);
+    }
     if (key === 'automod_escalation') {
       // Thresholds must be coherent or the escalation ladder misbehaves in
       // ways that are very hard to debug from the outside: a ban threshold
@@ -202,6 +243,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'cleanup_max_age_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 3650) return; }
     if (key === 'cleanup_max_size_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
     if (key === 'max_upload_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 102400) return; }
+    if (key === 'max_attachments') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; } // (#5561)
     if (key === 'max_poll_options') { const n = parseInt(value); if (isNaN(n) || n < 2 || n > 25) return; }
     if (key === 'max_message_chars') { const n = parseInt(value); if (isNaN(n) || n < 200 || n > 100000) return; }
     if (key === 'max_sound_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
@@ -217,7 +259,9 @@ module.exports = function register(socket, ctx) {
       if (!parts.every(p => valid.has(p))) return;
     }
     if (key === 'giphy_api_key') { if (value && (value.length < 10 || value.length > 100)) return; }
+    if (key === 'klipy_api_key') { if (value && (value.length < 10 || value.length > 100)) return; }
     if (key === 'tenor_api_key') { if (value && (value.length < 10 || value.length > 100)) return; }
+    if (key === 'preferred_gif_search') { if (value && !['klipy', 'giphy', 'tenor'].includes(value)) return; }
     if (key === 'server_name') { if (value.length > 32) return; }
     if (key === 'server_title') { if (value.length > 40) return; }
     if (key === 'server_icon') { if (value && !isValidUploadPath(value)) return; }
@@ -225,6 +269,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'tunnel_provider' && !['localtunnel', 'cloudflared'].includes(value)) return;
     if (key === 'setup_wizard_complete' && !['true', 'false'].includes(value)) return;
     if (key === 'update_banner_admin_only' && !['true', 'false'].includes(value)) return;
+    if (key === 'hide_disabled_channel_badges' && !['true', 'false'].includes(value)) return;
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
     // (#12) OIDC. The issuer must be an absolute https URL — anything else is
     // either a typo or an attempt to point discovery somewhere it shouldn't go.
@@ -544,11 +589,11 @@ module.exports = function register(socket, ctx) {
   // Normalise an admin-supplied channel list into a JSON string of positive
   // ints (capped). Returns '' for "all public", or null if the input is invalid.
   const _normaliseInviteChannels = (channels) => {
-    if (channels == null) return '';
+    if (channels == null) return '[]';
     if (!Array.isArray(channels)) return null;
     const ids = [...new Set(channels.map(n => parseInt(n)).filter(n => Number.isInteger(n) && n > 0))];
     if (ids.length > 500) return null;
-    return ids.length ? JSON.stringify(ids) : '';
+    return JSON.stringify(ids);
   };
 
   // hours <= 0 / falsy → never expires (null). Stored as a UTC string that
@@ -564,7 +609,7 @@ module.exports = function register(socket, ctx) {
     const mineOnly = !_canManageAllInvites();
     const rows = db.prepare(`
       SELECT ic.*,
-        (SELECT COUNT(*) FROM invite_code_uses u WHERE u.invite_code_id = ic.id) AS use_count,
+        ic.spent AS use_count,
         (ic.expires_at IS NOT NULL AND ic.expires_at <= CURRENT_TIMESTAMP) AS is_expired
       FROM invite_codes ic
       ${mineOnly ? 'WHERE ic.created_by = ?' : ''}

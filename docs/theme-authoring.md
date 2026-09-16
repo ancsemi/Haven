@@ -79,6 +79,28 @@ public tokens, page markers, and layout regions. It deliberately leaves message
 geometry to the user's Layout Density setting; structural compaction belongs in
 a plugin.
 
+## Previewing a theme without a server
+
+`public/theme-preview.html` is a static copy of the app with sample content:
+a conversation with every kind of markdown, a picture, a poll, reactions and
+a reply, the member list, an open profile card, the Settings modal, and a
+forum channel. It loads Haven's real stylesheet, so a theme file applied to
+it looks the way it will in the app.
+
+1. Open `public/theme-preview.html` from a checkout in a browser, or in a
+   live editor such as Phoenix Code that previews as you type.
+2. In the toolbar at the top right, type the path to your theme relative to
+   the file (`../themes/my.theme.css` for a file in the repository's
+   `themes/` folder) and press Apply, or open the page as
+   `theme-preview.html?theme=../themes/my.theme.css`.
+3. Chat and Forum switch the view; Settings modal and Profile card show or
+   hide those.
+
+The page is a snapshot, so a change to the app's markup reaches it the next
+time it is regenerated with `scripts/theme-preview-capture.js`; the file's
+header comment and the script say how. A running server also serves it at
+`/theme-preview.html`.
+
 ## Scoping a theme
 
 Both the login page and the main application expose the API version:

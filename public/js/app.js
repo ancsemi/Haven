@@ -4,19 +4,21 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=3.51.3';
-import UIBindMethods   from './modules/app-ui.js?v=3.51.4';
-import MediaMethods    from './modules/app-media.js?v=3.51.1';
-import ContextMethods  from './modules/app-context.js?v=3.44.5';
-import ChannelMethods  from './modules/app-channels.js?v=3.44.4';
-import MessageMethods  from './modules/app-messages.js?v=3.52.0';
-import UserMethods     from './modules/app-users.js?v=3.25.4';
-import VoiceMethods    from './modules/app-voice.js?v=3.34.2';
-import UtilityMethods  from './modules/app-utilities.js?v=4.3.0';
-import AdminMethods    from './modules/app-admin.js?v=4.1.2';
-import PlatformMethods from './modules/app-platform.js?v=3.16.13';
+import SocketMethods   from './modules/app-socket.js?v=4.8.3';
+import UIBindMethods   from './modules/app-ui.js?v=4.8.5';
+import MediaMethods    from './modules/app-media.js?v=4.8.1';
+import ContextMethods  from './modules/app-context.js?v=4.8.3';
+import ChannelMethods  from './modules/app-channels.js?v=4.8.2';
+import MessageMethods  from './modules/app-messages.js?v=4.8.2';
+import UserMethods     from './modules/app-users.js?v=4.8.2';
+import VoiceMethods    from './modules/app-voice.js?v=4.7.1';
+import UtilityMethods  from './modules/app-utilities.js?v=4.8.5';
+import AdminMethods    from './modules/app-admin.js?v=4.8.3';
+import PlatformMethods from './modules/app-platform.js?v=4.8.7';
 import SearchMethods   from './modules/app-search.js?v=3.49.0';
 import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
+import ForumMethods    from './modules/app-forum.js?v=4.8.4';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.7.1';
 
 class HavenApp {
   constructor() {
@@ -92,6 +94,7 @@ class HavenApp {
       { cmd: 'play',       args: t('commands.args.name_or_url'),       desc: t('commands.description.play') },
       { cmd: 'gif',        args: t('commands.args.query'),             desc: t('commands.description.gif') },
       { cmd: 'poll',       args: t('commands.args.optional_question'), desc: t('commands.description.poll') },
+      { cmd: 'schedule',   args: t('commands.args.optional_text'),     desc: t('commands.description.schedule') },
       { cmd: 'time',       args: t('commands.args.time'),              desc: t('commands.description.time') },
     ];
 
@@ -327,12 +330,14 @@ class HavenApp {
     this.modMode = typeof ModMode === 'function' ? new ModMode() : null;
     this.modMode?.init();
     this._setupDensityPicker();
+    this._setupChannelScrollPicker();
     this._setupToggleStylePicker();
     this._setupAnimatePfpPicker();
     this._setupAnimateChatPicker();
     this._setupZoomSlider();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
+    this._setupLazyMedia();
     this._setupEmbedSizePicker();
     this._setupRoleDisplayPicker();
     this._setupToolbarIconPicker();
@@ -396,20 +401,38 @@ class HavenApp {
       if (!res.ok) return;
       const data = await res.json();
       if (!data.commands || !data.commands.length) return;
-      const knownCmds = new Set(this.slashCommands.map(c => String(c.cmd || '').toLowerCase()));
+      const known = new Map(this.slashCommands.map(c => [String(c.cmd || '').toLowerCase(), c]));
       for (const bc of data.commands) {
         const cmd = String(bc.command || '').trim();
         if (!cmd) continue;
         const key = cmd.toLowerCase();
-        if (knownCmds.has(key)) continue;
-        knownCmds.add(key);
-        this.slashCommands.push({
+        const channelCode = bc.channel_code || null;
+        const desc = `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`;
+        const existing = known.get(key);
+        if (existing) {
+          // The same command registered by a second bot in another channel
+          // keeps the one menu entry and adds its channel to it, so the
+          // suggestions show in every channel that has a bot for it, each
+          // naming its own bot. A built-in command of the same name stays as
+          // it is (#5635).
+          if (channelCode && Array.isArray(existing.channelCodes) && !existing.channelCodes.includes(channelCode)) {
+            existing.channelCodes.push(channelCode);
+            existing.descByChannel[channelCode] = desc;
+          }
+          continue;
+        }
+        const entry = {
           cmd,
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`
-        });
+          desc,
+          // A bot lives in one channel, so its commands are only offered there (#5635).
+          channelCodes: channelCode ? [channelCode] : null,
+          descByChannel: channelCode ? { [channelCode]: desc } : {}
+        };
+        known.set(key, entry);
+        this.slashCommands.push(entry);
       }
     } catch { /* non-critical */ }
   }
@@ -431,6 +454,8 @@ Object.assign(HavenApp.prototype,
   PlatformMethods,
   SearchMethods,
   FerryMethods,
+  ForumMethods,
+  RoleToolMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

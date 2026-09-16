@@ -137,7 +137,7 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
     });
     if (canAddToChannel) addBtn(`➕ ${t('users.gear_menu.add_to_channel')}`, () => {
       this._hideUserContextMenu();
-      this._openGearMenuChannelPicker(targetUserId, targetName, addToChannelList);
+      this._openMemberChannelPicker(targetUserId, targetName, 'add', addToChannelList);
     });
   }
 
@@ -154,6 +154,10 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
     if (canMod) addBtn(`🔇 ${t('users.gear_menu.mute')}`, () => {
       this._hideUserContextMenu();
       this._showAdminActionModal('mute', targetUserId, targetName);
+    });
+    if (canMod) addBtn(`🔊 ${t('users.gear_menu.unmute')}`, () => {
+      this._hideUserContextMenu();
+      this.socket.emit('unmute-user', { userId: targetUserId });
     });
     if (canBan) addBtn(`⛔ ${t('users.gear_menu.ban')}`, () => {
       this._hideUserContextMenu();
@@ -326,15 +330,37 @@ _setupNotifications() {
     });
   }
   if (mentionsToggle) { mentionsToggle.checked = this.notifications.mentionsEnabled; mentionsToggle.addEventListener('change', () => { this.notifications.mentionsEnabled = mentionsToggle.checked; this.notifications._savePref('haven_notif_mentions_enabled', mentionsToggle.checked); }); }
+  const roleMentionsToggle = document.getElementById('notif-role-mentions-enabled');
+  if (roleMentionsToggle) { roleMentionsToggle.checked = this.notifications.roleMentionsEnabled !== false; roleMentionsToggle.addEventListener('change', () => { this.notifications.roleMentionsEnabled = roleMentionsToggle.checked; this.notifications._savePref('haven_notif_role_mentions_enabled', roleMentionsToggle.checked); }); }
   if (repliesToggle) { repliesToggle.checked = this.notifications.repliesEnabled; repliesToggle.addEventListener('change', () => { this.notifications.repliesEnabled = repliesToggle.checked; this.notifications._savePref('haven_notif_replies_enabled', repliesToggle.checked); }); }
   if (dmToggle) { dmToggle.checked = this.notifications.dmEnabled; dmToggle.addEventListener('change', () => { this.notifications.dmEnabled = dmToggle.checked; this.notifications._savePref('haven_notif_dm_enabled', dmToggle.checked); }); }
 
   const popupCooldownSel = document.getElementById('notif-popup-cooldown');
   if (popupCooldownSel) {
-    popupCooldownSel.value = String(this.notifications.popupCooldownMs || 0);
+    // Presets, Never, or a number of minutes typed in (#5619). A stored gap
+    // that matches no preset shows as Custom with its minutes filled in.
+    const customRow = document.getElementById('notif-popup-custom-row');
+    const customMin = document.getElementById('notif-popup-custom-minutes');
+    const current = this.notifications.popupCooldownMs || 0;
+    if ([...popupCooldownSel.options].some(o => o.value === String(current))) {
+      popupCooldownSel.value = String(current);
+    } else {
+      popupCooldownSel.value = 'custom';
+      if (customMin) customMin.value = String(Math.max(1, Math.round(current / 60000)));
+    }
+    const syncRow = () => { if (customRow) customRow.style.display = popupCooldownSel.value === 'custom' ? '' : 'none'; };
+    const applyCustom = () => {
+      const mins = Math.min(1440, Math.max(1, parseInt(customMin && customMin.value, 10) || 0));
+      if (customMin) customMin.value = String(mins);
+      this.notifications.setPopupCooldownMs(mins * 60000);
+    };
+    syncRow();
     popupCooldownSel.addEventListener('change', () => {
-      this.notifications.setPopupCooldownMs(popupCooldownSel.value);
+      syncRow();
+      if (popupCooldownSel.value !== 'custom') { this.notifications.setPopupCooldownMs(popupCooldownSel.value); return; }
+      if (customMin) { if (!customMin.value) customMin.value = '10'; applyCustom(); customMin.focus(); }
     });
+    if (customMin) customMin.addEventListener('change', applyCustom);
   }
 
   toggle.addEventListener('change', () => {
@@ -477,17 +503,15 @@ _setupNotifications() {
     });
   }
 
-  // Show status bar (opt-in — hidden by default, but the Desktop app always
-  // shows it: there it is the app's footer, not a debug extra.)
+  // Show status bar. Off by default in a browser, on by default in the
+  // Desktop app, where it is the window's footer; the toggle is honoured in
+  // both. It used to be ignored on Desktop, so the switch sat unticked while
+  // the bar stayed up (#5647).
   const showStatusBarToggle = document.getElementById('show-status-bar');
   const statusBarToggleTab = document.getElementById('status-bar-toggle');
-  const _isDesktopApp = !!(window.havenDesktop?.isDesktopApp ||
-                           navigator.userAgent.includes('Electron'));
   if (showStatusBarToggle) {
-    showStatusBarToggle.checked = localStorage.getItem('haven_show_statusbar') === 'true';
+    showStatusBarToggle.checked = this._statusBarWanted();
     const applyStatusBar = () => {
-      // Desktop keeps the bar on regardless — _startStatusBar pins it there.
-      if (_isDesktopApp) return;
       const show = showStatusBarToggle.checked;
       const sb = document.getElementById('status-bar');
       if (show) {
@@ -525,6 +549,33 @@ _setupNotifications() {
     });
   }
 
+  // Hide the Send button for people who only ever press Enter (#5654).
+  const hideSendToggle = document.getElementById('hide-send-btn');
+  if (hideSendToggle) {
+    const applyHideSend = () => document.documentElement.toggleAttribute('data-hide-send-btn', hideSendToggle.checked);
+    hideSendToggle.checked = localStorage.getItem('haven_hide_send_btn') === 'true';
+    hideSendToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_hide_send_btn', String(hideSendToggle.checked));
+      applyHideSend();
+    });
+    applyHideSend();
+  }
+
+  // Fold the toolbar into one + button (#5654).
+  const compactToggle = document.getElementById('compact-composer');
+  if (compactToggle) {
+    const applyCompact = () => {
+      document.documentElement.toggleAttribute('data-compact-composer', compactToggle.checked);
+      if (!compactToggle.checked) this._closeComposerMenu?.();
+    };
+    compactToggle.checked = localStorage.getItem('haven_compact_composer') === 'true';
+    compactToggle.addEventListener('change', () => {
+      localStorage.setItem('haven_compact_composer', String(compactToggle.checked));
+      applyCompact();
+    });
+    applyCompact();
+  }
+
   // ── Score badge visibility ──
   // "Hide other players' badges" is a per-device client-side filter.
   // "Hide my own badge" is a server-side preference so other clients also
@@ -537,6 +588,12 @@ _setupNotifications() {
       if (this._lastOnlineUsers) this._renderOnlineUsers(this._lastOnlineUsers);
     });
   }
+  const hideNsfwToggle = document.getElementById('hide-nsfw-channels');
+  if (hideNsfwToggle) {
+    hideNsfwToggle.checked = localStorage.getItem('haven_hide_nsfw') === 'true';
+    hideNsfwToggle.addEventListener('change', () => this._setHideNsfw?.(hideNsfwToggle.checked));
+  }
+  this._setupSettingsSearch?.();
   const hideOwnScoreToggle = document.getElementById('hide-own-score');
   if (hideOwnScoreToggle) {
     // Initial value comes from the server-synced preferences cache, falling
@@ -1241,9 +1298,20 @@ _setupThemes() {
 
 // ── Status Bar ────────────────────────────────────────
 
+// Whether the status bar should be on screen: the saved preference, or the
+// platform default when none is saved (on in the Desktop app, off in a
+// browser) (#5647).
+_statusBarWanted() {
+  const isDesktop = !!(window.havenDesktop?.isDesktopApp ||
+                       navigator.userAgent.includes('Electron'));
+  const saved = localStorage.getItem('haven_show_statusbar');
+  return saved === null ? isDesktop : saved === 'true';
+},
+
 _startStatusBar() {
-  // In the Electron desktop shell, always show the status bar regardless of
-  // CSS responsive breakpoints or DPI-scaled viewport width.
+  // In the Electron desktop shell, show the status bar regardless of CSS
+  // responsive breakpoints or DPI-scaled viewport width, unless the user
+  // switched it off in Settings (#5647).
   const isDesktop = !!(window.havenDesktop?.isDesktopApp ||
                        navigator.userAgent.includes('Electron'));
 
@@ -1274,8 +1342,10 @@ _startStatusBar() {
     // The status bar is the desktop app's only footer. Pre-v1.4.26 builds
     // inject one of their own from the preload, which used to make us stand
     // down here to avoid two stacked bars — but that legacy bar is now hidden
-    // in CSS, so standing down would leave no footer at all. Always show ours.
-    _forceWebStatusBar();
+    // in CSS, so standing down would leave no footer at all. Show ours unless
+    // the Settings toggle is off (#5647).
+    if (this._statusBarWanted()) _forceWebStatusBar();
+    else document.documentElement.setAttribute('data-hide-statusbar', '1');
   } else {
     // Browser / mobile: respect the user's opt-in preference (default hidden).
     // The settings toggle in _initSettings applies the attribute + display;
@@ -1291,11 +1361,22 @@ _startStatusBar() {
 },
 
 _updateClock() {
+  const el = document.getElementById('status-clock');
+  if (!el) return;
   const now = new Date();
+  // Honour a confirmed timezone / clock preference. With nothing confirmed the
+  // clock keeps its original device-local 24-hour HH:MM:SS look, so Skip and
+  // "Remind later" change nothing here.
+  if (this._userTimeZone?.() || this._userHour12?.() !== undefined) {
+    try {
+      el.textContent = this._fmtTime(now, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return;
+    } catch { /* fall through to the device-local default */ }
+  }
   const h = now.getHours().toString().padStart(2, '0');
   const m = now.getMinutes().toString().padStart(2, '0');
   const s = now.getSeconds().toString().padStart(2, '0');
-  document.getElementById('status-clock').textContent = `${h}:${m}:${s}`;
+  el.textContent = `${h}:${m}:${s}`;
 },
 
 /**

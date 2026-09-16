@@ -23,7 +23,9 @@ services:
       - HOST=0.0.0.0
       # - SERVER_NAME=My Haven           # Name shown in the UI
       # - ADMIN_USERNAME=admin            # First account to register becomes admin
-      # - GIPHY_API_KEY=                  # Optional: enable GIF search
+      # - GIPHY_API_KEY=                  # Optional: enable GIF search (GIPHY)
+      # - KLIPY_API_KEY=                  # Optional: enable GIF search (KLIPY)
+      # - PREFERRED_GIF_SEARCH=           # Optional: klipy, giphy, or tenor
       # - VAPID_EMAIL=mailto:you@example  # Optional: email for push notifications
       # - TURN_URL=turn:your-server:3478  # Optional: TURN relay for voice over internet
       # - TURN_SECRET=your-secret         # Shared secret (coturn --use-auth-secret)
