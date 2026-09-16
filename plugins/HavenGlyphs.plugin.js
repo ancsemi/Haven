@@ -65,11 +65,12 @@ class HavenGlyphs {
     if (direct) return direct;
 
     // Some static labels put the icon in a wrapper immediately before a
-    // translated child, such as "🔒 <span data-i18n>Private</span>".
-    let current = element.parentElement;
+    // translated child, such as "🔒 <span data-i18n>Private</span>". Check
+    // the current wrapper too: settings navigation uses a div, not a span.
+    let current = element;
     while (current && current !== document.body) {
-      if (current.tagName === 'SPAN'
-          && [...current.children].some(child => child.hasAttribute('data-i18n'))) {
+      if ([...current.children].some(child =>
+        child.hasAttribute('data-i18n') || child.hasAttribute('data-i18n-html'))) {
         return current;
       }
       current = current.parentElement;
@@ -163,7 +164,15 @@ HavenGlyphs.ICON_EXPLICIT_SELECTOR = [
   '.burn-reveal-btn', '.burn-countdown-pill', '.burn-complete-label',
   '.risky-download-icon', '.transfer-admin-warning-icon', '.dm-safety-icon',
   '.rac-channel-icon', '.rac-card-locked', '.badge-scope', '.aml-member-storage',
-  '#connectivity-test-result > div > span:first-child'
+  '.settings-nav-item', '.settings-group-label',
+  '#manage-servers-btn .server-icon-text', '#sync-servers-btn .server-icon-text',
+  '#webcam-label', '#screen-share-label',
+  '.voice-bar-icon', '.music-pip-label-icon', '.music-pip-vol-icon',
+  '.stream-audio-badge', '.stream-no-audio-badge', '.viewer-eye',
+  '.music-search-picker-thumb', '.organize-tag-icon', '.thread-mention-badge',
+  '.import-channel-type-icon', '.connectivity-test-icon',
+  '.webhook-avatar-icon', '.webhook-status-icon',
+  '.wizard-check', '.file-type-icon'
 ].join(',');
 
 HavenGlyphs.ICON_HOST_SELECTOR = [
@@ -239,7 +248,7 @@ HavenGlyphs.ICON_MAP = Object.freeze({
   '\ud83d\uddd1\ufe0f': ['fa-trash-can'], '\ud83d\udd27': ['fa-wrench'],
   '\ud83e\uddf0': ['fa-toolbox'], '\ud83e\uddf9': ['fa-broom'],
   '\ud83e\udded': ['fa-compass'], '\ud83e\ude7a': ['fa-droplet'],
-  '\ud83c\udfb5': ['fa-music'], '\u266a': ['fa-music'], '\ud83c\udfb6': ['fa-music'],
+  '\ud83c\udfb5': ['fa-music'], '\u266a': ['fa-music'], '\ud83c\udfb6': ['fa-headphones'],
   '\ud83c\udfa7': ['fa-headphones'], '\ud83c\udf9a\ufe0f': ['fa-sliders'],
   '\ud83c\udf9b\ufe0f': ['fa-icons'], '\ud83c\udf9e\ufe0f': ['fa-film'],
   '\ud83c\udfac': ['fa-clapperboard'], '\ud83d\udca1': ['fa-lightbulb'],
@@ -262,6 +271,16 @@ HavenGlyphs.ICON_MAP = Object.freeze({
   '\ud83d\ude00': ['fa-face-smile'], '\ud83c\udfae': ['fa-gamepad'], '\u26a1': ['fa-bolt'],
   '\u2744': ['fa-snowflake'], '\ud83d\udd25': ['fa-fire'], '\ud83d\udc8d': ['fa-ring'],
   '\ud83e\uddca': ['fa-icicles'], '\ud83c\udf0a': ['fa-water'],
+  '\ud83c\udf89': ['fa-champagne-glasses'], '\ud83c\udf0e': ['fa-globe'],
+  '\ud83d\udcf2': ['fa-mobile-screen'], '\ud83d\udccf': ['fa-ruler'],
+  '\u25aa\ufe0f': ['fa-square'], '\u25aa': ['fa-square'], '\u25fe': ['fa-square'], '\u2b1b': ['fa-square'],
+  '\u2709\ufe0f': ['fa-envelope'], '\u2709': ['fa-envelope'], '\u2728': ['fa-wand-magic-sparkles'],
+  '\u2611\ufe0f': ['fa-circle-check'], '\u2611': ['fa-circle-check'],
+  '\ud83d\udddd\ufe0f': ['fa-key'], '\ud83d\udddd': ['fa-key'],
+  '\ud83c\udf9f\ufe0f': ['fa-ticket'], '\ud83c\udf9f': ['fa-ticket'],
+  '\u23f0': ['fa-clock'], '\ud83d\udcc5': ['fa-calendar-days'], '\ud83d\udd50': ['fa-clock'],
+  '\u2139\ufe0f': ['fa-circle-info'], '\u2139': ['fa-circle-info'],
+  '\ud83e\ude78': ['fa-droplet'], '\ud83d\udc0d': ['fa-code'],
   '\u2694\ufe0f': ['fa-khanda'], '\u2622\ufe0f': ['fa-radiation'],
   '\u271d\ufe0f': ['fa-cross'], '\u26ea': ['fa-church'], '\ud83d\udd4a\ufe0f': ['fa-dove'],
   '\ud83d\udcfa': ['fa-tv'], '\ud83c\udfa8': ['fa-palette'], '\ud83c\udf08': ['fa-rainbow'],
@@ -297,11 +316,13 @@ HavenGlyphs.ICON_CODEPOINTS = Object.freeze({
   'fa-arrow-turn-up': 'f148', 'fa-arrow-up': 'f062', 'fa-arrows-rotate': 'f021',
   'fa-ban': 'f05e', 'fa-bars': 'f0c9', 'fa-bed': 'f236', 'fa-bell': 'f0f3',
   'fa-bell-slash': 'f1f6', 'fa-bolt': 'f0e7', 'fa-box': 'f466', 'fa-broom': 'f51a',
-  'fa-bug': 'f188', 'fa-bullhorn': 'f0a1', 'fa-camera': 'f030', 'fa-caret-down': 'f0d7',
+  'fa-bug': 'f188', 'fa-bullhorn': 'f0a1', 'fa-camera': 'f030', 'fa-calendar-days': 'f133',
+  'fa-caret-down': 'f0d7',
   'fa-caret-right': 'f0da', 'fa-champagne-glasses': 'f79f', 'fa-chart-column': 'e0e3',
   'fa-check': 'f00c', 'fa-church': 'f51d', 'fa-circle': 'f111', 'fa-circle-check': 'f058',
   'fa-circle-half-stroke': 'f042', 'fa-circle-nodes': 'e4e2', 'fa-circle-xmark': 'f057',
-  'fa-clapperboard': 'e131', 'fa-clipboard': 'f328', 'fa-clock': 'f017', 'fa-cloud': 'f0c2',
+  'fa-circle-info': 'f05a', 'fa-clapperboard': 'e131', 'fa-clipboard': 'f328', 'fa-clock': 'f017',
+  'fa-code': 'f121', 'fa-cloud': 'f0c2',
   'fa-comment': 'f075', 'fa-comments': 'f086', 'fa-compact-disc': 'f51f', 'fa-compass': 'f14e',
   'fa-compress': 'f066', 'fa-computer-mouse': 'f8cc', 'fa-crop': 'f125', 'fa-cross': 'f654',
   'fa-crown': 'f521', 'fa-cube': 'f1b2', 'fa-desktop': 'f390', 'fa-diamond': 'f219',
@@ -326,10 +347,12 @@ HavenGlyphs.ICON_CODEPOINTS = Object.freeze({
   'fa-reply': 'f3e5', 'fa-ring': 'f70b', 'fa-robot': 'f544', 'fa-rocket': 'f135', 'fa-ruler': 'f545',
   'fa-satellite-dish': 'f7c0', 'fa-scale-balanced': 'f24e', 'fa-scissors': 'f0c4',
   'fa-scroll': 'f70e', 'fa-shield': 'f132', 'fa-shield-halved': 'f3ed', 'fa-ship': 'f21a',
-  'fa-shoe-prints': 'f54b', 'fa-sliders': 'f1de', 'fa-snowflake': 'f2dc', 'fa-star': 'f005',
+  'fa-shoe-prints': 'f54b', 'fa-sliders': 'f1de', 'fa-snowflake': 'f2dc', 'fa-square': 'f0c8',
+  'fa-star': 'f005',
   'fa-stop': 'f04d', 'fa-stopwatch': 'f2f2', 'fa-sun': 'f185', 'fa-table-cells': 'f00a',
   'fa-table-cells-large': 'f009', 'fa-table-columns': 'f0db', 'fa-tag': 'f02b',
-  'fa-text-height': 'f034', 'fa-thumbtack': 'f08d', 'fa-toolbox': 'f552', 'fa-trash-can': 'f2ed',
+  'fa-text-height': 'f034', 'fa-thumbtack': 'f08d', 'fa-ticket': 'f145', 'fa-toolbox': 'f552',
+  'fa-trash-can': 'f2ed',
   'fa-triangle-exclamation': 'f071', 'fa-trophy': 'f091', 'fa-tv': 'f26c',
   'fa-up-down-left-right': 'f0b2', 'fa-up-right-and-down-left-from-center': 'f424',
   'fa-up-right-from-square': 'f35d', 'fa-unlock': 'f09c', 'fa-user': 'f007',

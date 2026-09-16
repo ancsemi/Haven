@@ -740,10 +740,10 @@ _renderWebhooksList(webhooks) {
   }
   // Simple preview list for server settings — full management is in the bot modal
   container.innerHTML = webhooks.map(wh => {
-    const statusDot = wh.is_active ? '🟢' : '🔴';
+    const statusDot = `<span class="webhook-status-icon" aria-hidden="true">${wh.is_active ? '🟢' : '🔴'}</span>`;
     const avatarHtml = wh.avatar_url
       ? `<img src="${this._escapeHtml(wh.avatar_url)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">`
-      : '🤖';
+      : '<span class="webhook-avatar-icon" aria-hidden="true">🤖</span>';
     return `<div class="role-preview-item">${avatarHtml} <span style="font-weight:600">${this._escapeHtml(wh.name)}</span> <span style="opacity:0.5;font-size:0.6875rem">#${this._escapeHtml(wh.channel_name)}</span> ${statusDot}</div>`;
   }).join('');
 },
@@ -2342,7 +2342,7 @@ async _runConnectivityTest() {
 
   const line = (icon, text, muted) =>
     `<div style="display:flex;gap:6px;align-items:flex-start;margin:3px 0${muted ? ';opacity:0.75' : ''}">` +
-    `<span style="flex:none">${icon}</span><span>${text}</span></div>`;
+    `<span class="connectivity-test-icon" style="flex:none">${icon}</span><span>${text}</span></div>`;
 
   btn.disabled = true;
   box.style.display = '';
@@ -3974,7 +3974,7 @@ async _importPickGuild(guild) {
       row.innerHTML = `
         <label>
           <input type="checkbox" checked>
-          <span class="import-ch-name">${icon} ${this._escapeHtml(ch.name)}${tagHint}</span>
+          <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">${icon}</span> ${this._escapeHtml(ch.name)}${tagHint}</span>
         </label>
         <span class="import-ch-count import-type-badge">${ch.type}</span>
       `;
@@ -3996,7 +3996,7 @@ async _importPickGuild(guild) {
           tRow.innerHTML = `
             <label>
               <input type="checkbox" checked>
-              <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${tagStr}</span>
+              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${tagStr}</span>
             </label>
             <span class="import-ch-count import-type-badge">${t('settings.admin.import_thread')}</span>
           `;
@@ -4024,7 +4024,7 @@ async _importPickGuild(guild) {
           tRow.innerHTML = `
             <label>
               <input type="checkbox" checked>
-              <span class="import-ch-name">🧵 ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:0.625rem">${window.t('settings.admin.import_in_channel', { name: this._escapeHtml(t.parentName) })}</span>` : ''}</span>
+              <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${t.parentName ? ` <span class="muted-text" style="font-size:0.625rem">${window.t('settings.admin.import_in_channel', { name: this._escapeHtml(t.parentName) })}</span>` : ''}</span>
             </label>
             <span class="import-ch-count import-type-badge">${window.t('settings.admin.import_thread')}</span>
           `;

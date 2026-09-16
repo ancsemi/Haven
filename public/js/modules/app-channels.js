@@ -1688,7 +1688,7 @@ _renderDmOrganizeList() {
   let html = '';
   for (const group of grouped) {
     if (group.tag) {
-      html += `<div class="organize-tag-header">🏷️ ${this._escapeHtml(group.tag)}</div>`;
+      html += `<div class="organize-tag-header"><span class="organize-tag-icon" aria-hidden="true">🏷️</span> ${this._escapeHtml(group.tag)}</div>`;
     } else if (hasTags) {
       html += `<div class="organize-tag-header" style="opacity:0.5">${t('channels.uncategorized')}</div>`;
     }

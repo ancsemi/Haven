@@ -28,10 +28,33 @@ test('every Haven Glyphs map entry has a local Font Awesome rule', () => {
   assert.doesNotMatch(HavenGlyphs.CSS, /https?:\/\//i);
 });
 
+test('soundboard and Listen Together use distinct interface glyphs', () => {
+  assert.equal(HavenGlyphs.ICON_MAP['🎵'][0], 'fa-music');
+  assert.equal(HavenGlyphs.ICON_MAP['🎶'][0], 'fa-headphones');
+  assert.notEqual(HavenGlyphs.ICON_MAP['🎵'][0], HavenGlyphs.ICON_MAP['🎶'][0]);
+});
+
+test('known settings, voice, admin, and file UI glyphs are mapped', () => {
+  const expected = {
+    '🎉': 'fa-champagne-glasses', '🌎': 'fa-globe', '📲': 'fa-mobile-screen',
+    '📏': 'fa-ruler', '▪️': 'fa-square', '◾': 'fa-square', '⬛': 'fa-square',
+    '✉️': 'fa-envelope', '✨': 'fa-wand-magic-sparkles', '☑️': 'fa-circle-check',
+    '🗝️': 'fa-key', '🎟️': 'fa-ticket', '⏰': 'fa-clock', '📅': 'fa-calendar-days',
+    '🕐': 'fa-clock', 'ℹ️': 'fa-circle-info', '🩸': 'fa-droplet', '🐍': 'fa-code'
+  };
+  for (const [emoji, name] of Object.entries(expected)) {
+    assert.equal(HavenGlyphs.ICON_MAP[emoji][0], name, `${emoji} mapping changed`);
+  }
+});
+
 test('Haven Glyphs scopes hosts and protects user content', () => {
   const expectedHosts = [
     '.channel-hash', '.voice-status-icon', '.pinned-tag', '.forum-tag-pinned',
-    '.file-icon', '.status-url-toggle', '.tb-icon-emoji', '.burn-complete-label'
+    '.file-icon', '.status-url-toggle', '.tb-icon-emoji', '.burn-complete-label',
+    '.settings-nav-item', '.settings-group-label', '.voice-bar-icon',
+    '.music-pip-label-icon', '.music-pip-vol-icon', '.viewer-eye',
+    '.organize-tag-icon', '.thread-mention-badge', '.import-channel-type-icon',
+    '.connectivity-test-icon', '.wizard-check', '.file-type-icon'
   ];
   const protectedContent = [
     '.message-content', '.reaction', '.emoji-only-msg', '.soundboard-btn',
@@ -54,6 +77,8 @@ test('Haven Glyphs scopes hosts and protects user content', () => {
   const ordinaryHost = { matches() { return false; } };
   assert.equal(plugin._iconExcluded(protectedElement, explicitHost), false);
   assert.equal(plugin._iconExcluded(protectedElement, ordinaryHost), true);
+  assert.match(pluginSource, /let current = element;/);
+  assert.match(pluginSource, /data-i18n-html/);
   assert.match(pluginSource, /const isLeading = at !== -1 && \/\^\\s\*\$\/\.test\(data\.slice\(0, at\)\);/);
   assert.doesNotMatch(pluginSource, /\/tmp\/opencode|https?:\/\//i);
 });
