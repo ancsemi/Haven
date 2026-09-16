@@ -1204,6 +1204,8 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
   } else {
     // Stream ended — remove this tile
     const tileId = `screen-tile-${userId || 'self'}`;
+    this._cancelScreenNoAudioTimer(userId);
+    this._removeScreenSharePiP(userId);
     this._stopStreamStallWatchdog(tileId);
     const tile = document.getElementById(tileId);
     if (tile) {
@@ -1833,20 +1835,90 @@ _applyShareAudioModeBadge(modeInfo) {
 
 _handleScreenNoAudio(userId) {
   const tileId = `screen-tile-${userId || 'self'}`;
+  this._cancelScreenNoAudioTimer(userId);
   const tile = document.getElementById(tileId);
   if (!tile) {
     // Tile may not exist yet — defer until it's created
     const checkInterval = setInterval(() => {
       const t = document.getElementById(tileId);
       if (t) {
-        clearInterval(checkInterval);
+        this._cancelScreenNoAudioTimer(userId);
         this._applyNoAudioBadge(t, userId);
       }
     }, 200);
-    setTimeout(() => clearInterval(checkInterval), 5000);
+    const timeout = setTimeout(() => this._cancelScreenNoAudioTimer(userId), 5000);
+    if (!this._screenNoAudioTimers) this._screenNoAudioTimers = new Map();
+    this._screenNoAudioTimers.set(String(userId ?? 'self'), { checkInterval, timeout });
     return;
   }
   this._applyNoAudioBadge(tile, userId);
+},
+
+_cancelScreenNoAudioTimer(userId) {
+  const key = String(userId ?? 'self');
+  const pending = this._screenNoAudioTimers?.get(key);
+  if (!pending) return;
+  clearInterval(pending.checkInterval);
+  clearTimeout(pending.timeout);
+  this._screenNoAudioTimers.delete(key);
+},
+
+_resetScreenShareUiState(userId) {
+  this._cancelScreenNoAudioTimer(userId);
+  this._removeScreenSharePiP(userId);
+  const tile = document.getElementById(`screen-tile-${userId || 'self'}`);
+  tile?.querySelector('.stream-no-audio-badge')?.remove();
+  tile?.querySelector('.stream-audio-badge')?.remove();
+  const controls = document.getElementById(`stream-controls-${userId || 'self'}`);
+  if (controls) controls.style.display = '';
+},
+
+_removeScreenSharePiP(userId) {
+  const key = userId || 'self';
+  if (!this._screenPipGenerations) this._screenPipGenerations = new Map();
+  this._screenPipGenerations.set(key, (this._screenPipGenerations.get(key) || 0) + 1);
+  this._screenPipNativeRequests?.delete(key);
+  this._screenPipNativeActive?.delete(key);
+  this._screenPipTrackCleanups?.get(key)?.();
+  const tile = document.getElementById(`screen-tile-${key}`);
+  const nativePipVideo = document.pictureInPictureElement;
+  if (nativePipVideo && tile?.contains(nativePipVideo)) {
+    document.exitPictureInPicture?.().catch(() => {});
+  }
+  const pip = document.getElementById(`stream-pip-${key}`);
+  const pipVideo = pip?.querySelector('video');
+  if (pipVideo) pipVideo.srcObject = null;
+  pip?.remove();
+  const popoutBtn = tile?.querySelector('.stream-popout-btn');
+  if (popoutBtn) {
+    popoutBtn.textContent = '⧉';
+    popoutBtn.title = t('media.pop_out_stream');
+  }
+  tile?.classList.remove('stream-popped-out');
+  this._updateStreamContainerCollapse();
+},
+
+_bindScreenPipTrack(userId, streamTrack, onEnded) {
+  const key = userId || 'self';
+  if (!this._screenPipTrackCleanups) this._screenPipTrackCleanups = new Map();
+  this._screenPipTrackCleanups.get(key)?.();
+  const previousOnEnded = streamTrack.onended;
+  let active = true;
+  const handleEnded = () => {
+    if (typeof previousOnEnded === 'function') previousOnEnded.call(streamTrack);
+    if (active) onEnded();
+  };
+  const cleanup = () => {
+    if (!active) return;
+    active = false;
+    if (streamTrack.onended === handleEnded) streamTrack.onended = previousOnEnded;
+    if (this._screenPipTrackCleanups.get(key) === cleanup) {
+      this._screenPipTrackCleanups.delete(key);
+    }
+  };
+  streamTrack.onended = handleEnded;
+  this._screenPipTrackCleanups.set(key, cleanup);
+  return cleanup;
 },
 
 _applyNoAudioBadge(tile, userId) {
@@ -1934,6 +2006,8 @@ _updateStreamContainerCollapse() {
 _popOutStream(tile, userId) {
   const video = tile.querySelector('video');
   if (!video || !video.srcObject) return;
+  const stream = video.srcObject;
+  const key = userId || 'self';
 
   // If already in Picture-in-Picture, exit it
   if (document.pictureInPictureElement === video) {
@@ -1944,22 +2018,59 @@ _popOutStream(tile, userId) {
   // If already popped out, don't open another
   if (tile.classList.contains('stream-popped-out')) return;
 
+  if (!this._screenPipGenerations) this._screenPipGenerations = new Map();
+  const generation = (this._screenPipGenerations.get(key) || 0) + 1;
+  this._screenPipGenerations.set(key, generation);
+  if (!this._screenPipNativeRequests) this._screenPipNativeRequests = new Map();
+  this._screenPipNativeRequests.set(key, generation);
+  const isCurrent = () => this._screenPipGenerations.get(key) === generation &&
+    document.getElementById(`screen-tile-${key}`) === tile &&
+    tile.querySelector('video') === video && video.srcObject === stream;
+  const activateNativePip = () => {
+    if (!isCurrent()) return false;
+    if (this._screenPipNativeRequests.get(key) === generation) {
+      this._screenPipNativeRequests.delete(key);
+    }
+    if (!this._screenPipNativeActive) this._screenPipNativeActive = new Map();
+    if (this._screenPipNativeActive.get(key) === generation) return true;
+    this._screenPipNativeActive.set(key, generation);
+    const popoutBtn = tile.querySelector('.stream-popout-btn');
+    if (popoutBtn) { popoutBtn.textContent = '\u29C8'; popoutBtn.title = t('media.pop_in_stream'); }
+    tile.classList.add('stream-popped-out');
+    this._updateStreamContainerCollapse();
+
+    video.addEventListener('leavepictureinpicture', () => {
+      if (!isCurrent()) return;
+      if (this._screenPipNativeActive?.get(key) === generation) {
+        this._screenPipNativeActive.delete(key);
+      }
+      if (popoutBtn) { popoutBtn.textContent = '\u29C9'; popoutBtn.title = t('media.pop_out_stream'); }
+      tile.classList.remove('stream-popped-out');
+      this._updateStreamContainerCollapse();
+    }, { once: true });
+    return true;
+  };
+
   // Try native Picture-in-Picture first (OS-level window, can be dragged to other screens)
   if (document.pictureInPictureEnabled && !video.disablePictureInPicture) {
     video.requestPictureInPicture().then(() => {
-      const popoutBtn = tile.querySelector('.stream-popout-btn');
-      if (popoutBtn) { popoutBtn.textContent = '\u29C8'; popoutBtn.title = t('media.pop_in_stream'); }
-      tile.classList.add('stream-popped-out');
-      this._updateStreamContainerCollapse();
-
-      video.addEventListener('leavepictureinpicture', () => {
-        if (popoutBtn) { popoutBtn.textContent = '\u29C9'; popoutBtn.title = t('media.pop_out_stream'); }
-        tile.classList.remove('stream-popped-out');
-        this._updateStreamContainerCollapse();
-      }, { once: true });
+      if (!isCurrent()) {
+        const newerRequest = this._screenPipNativeRequests?.get(key);
+        const newerActive = this._screenPipNativeActive?.get(key);
+        if (document.pictureInPictureElement === video &&
+            !newerRequest && !newerActive) {
+          document.exitPictureInPicture?.().catch(() => {});
+        }
+        return;
+      }
+      activateNativePip();
     }).catch(() => {
+      if (this._screenPipNativeRequests?.get(key) === generation) {
+        this._screenPipNativeRequests.delete(key);
+      }
+      if (document.pictureInPictureElement === video && activateNativePip()) return;
       // Fallback to in-page overlay if native PiP fails
-      this._popOutStreamWindow(tile, userId);
+      if (isCurrent()) this._popOutStreamWindow(tile, userId);
     });
   } else {
     this._popOutStreamWindow(tile, userId);
@@ -2016,8 +2127,12 @@ _popOutStreamWindow(tile, userId) {
   tile.classList.add('stream-popped-out');
   this._updateStreamContainerCollapse();
 
+  let cleanupTrack = null;
+
   // Pop-in handler (minimize — return to inline grid)
   const popIn = () => {
+    cleanupTrack?.();
+    pipVideo.srcObject = null;
     pip.remove();
     if (popoutBtn) { popoutBtn.textContent = '⧉'; popoutBtn.title = t('media.pop_out_stream'); }
     tile.classList.remove('stream-popped-out');
@@ -2026,6 +2141,8 @@ _popOutStreamWindow(tile, userId) {
 
   // Close handler (destroy PiP overlay AND hide the inline tile)
   const closePip = () => {
+    cleanupTrack?.();
+    pipVideo.srcObject = null;
     pip.remove();
     if (popoutBtn) { popoutBtn.textContent = '⧉'; popoutBtn.title = t('media.pop_out_stream'); }
     tile.classList.remove('stream-popped-out');
@@ -2071,11 +2188,7 @@ _popOutStreamWindow(tile, userId) {
   // Clean up if stream ends
   const streamTrack = stream.getVideoTracks()[0];
   if (streamTrack) {
-    const prevOnEnded = streamTrack.onended;
-    streamTrack.onended = () => {
-      if (prevOnEnded) prevOnEnded();
-      popIn();
-    };
+    cleanupTrack = this._bindScreenPipTrack(userId, streamTrack, popIn);
   }
 },
 

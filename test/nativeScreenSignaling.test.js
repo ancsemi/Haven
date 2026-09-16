@@ -81,6 +81,27 @@ test('relays native screen offers only from the active sharer', () => {
   assert.equal(rejected.emitted.length, 0);
 });
 
+test('rejects malformed native descriptions before relaying them', () => {
+  const harness = createHarness();
+  for (const offer of [
+    [],
+    { type: 'answer', sdp: 'v=0' },
+    { type: 'offer' },
+    { type: 'offer', sdp: { toString: () => 'v=0' } },
+  ]) {
+    harness.handlers.get('native-screen-offer')({ ...base, offer });
+  }
+  assert.equal(harness.emitted.length, 0);
+
+  const answerHarness = createHarness({ senderId: 2, sharerId: 1 });
+  answerHarness.handlers.get('native-screen-answer')({
+    ...base,
+    targetUserId: 1,
+    answer: { type: 'offer', sdp: 'v=0' },
+  });
+  assert.equal(answerHarness.emitted.length, 0);
+});
+
 test('native signal validation does not coerce hostile payload objects', () => {
   const malformed = {
     ...base,
@@ -224,6 +245,30 @@ test('relays ICE in either direction and rejects stale session identifiers', () 
   });
   assert.equal(viewer.emitted.length, 1);
 
+  viewer.handlers.get('native-screen-ice-candidate')({
+    ...base,
+    targetUserId: 1,
+    candidate: null,
+  });
+  assert.equal(viewer.emitted.length, 2);
+  assert.equal(viewer.emitted[1].payload.candidate, null);
+
+  viewer.handlers.get('native-screen-ice-candidate')({
+    ...base,
+    targetUserId: 1,
+    candidate: { candidate: 'candidate:2', sdpMid: 'video0' },
+  });
+  assert.equal(viewer.emitted.length, 3);
+  assert.equal(viewer.emitted[2].payload.candidate.sdpMLineIndex, null);
+
+  viewer.handlers.get('native-screen-ice-candidate')({
+    ...base,
+    targetUserId: 1,
+    candidate: { candidate: '', sdpMid: 'video0' },
+  });
+  assert.equal(viewer.emitted.length, 4);
+  assert.equal(viewer.emitted[3].payload.candidate, null);
+
   const stale = createHarness();
   stale.handlers.get('native-screen-ice-candidate')({
     ...base,
@@ -231,6 +276,37 @@ test('relays ICE in either direction and rejects stale session identifiers', () 
     candidate: null,
   });
   assert.equal(stale.emitted.length, 0);
+});
+
+test('relays maximum-sized ICE fields without accepting oversized candidates', () => {
+  const accepted = createHarness({ senderId: 2, sharerId: 1 });
+  accepted.handlers.get('native-screen-ice-candidate')({
+    ...base,
+    targetUserId: 1,
+    candidate: {
+      candidate: 'c'.repeat(2048),
+      sdpMid: 'm'.repeat(256),
+      sdpMLineIndex: 128,
+      usernameFragment: 'u'.repeat(256),
+      ignored: 'not relayed',
+    },
+  });
+
+  assert.equal(accepted.emitted.length, 1);
+  assert.equal(accepted.emitted[0].payload.candidate.candidate.length, 2048);
+  assert.equal(accepted.emitted[0].payload.candidate.ignored, undefined);
+
+  const rejected = createHarness({ senderId: 2, sharerId: 1 });
+  rejected.handlers.get('native-screen-ice-candidate')({
+    ...base,
+    targetUserId: 1,
+    candidate: {
+      candidate: 'c'.repeat(2049),
+      sdpMid: 'video',
+      sdpMLineIndex: 0,
+    },
+  });
+  assert.equal(rejected.emitted.length, 0);
 });
 
 function createLifecycleHarness({
