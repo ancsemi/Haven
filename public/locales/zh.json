@@ -659,7 +659,8 @@
       "import": "导入",
       "mod_mode": "管理模式",
       "automod": "自动审核",
-      "guests": "访客访问"
+      "guests": "访客访问",
+      "extension_updates": "扩展更新"
     },
     "language_section": {
       "title": "语言",
@@ -1048,6 +1049,32 @@
         "level_0_role_note": "0 级角色称为“群组”。群组不授予任何权限。用户无需拥有更高权限即可自由加入这些群组。可能的用途包括：频道授予、分组和角色扮演。",
         "delete": "删除"
       }
+    },
+    "extension_updates": {
+      "operation_failed": "扩展操作失败。",
+      "checking": "正在检查版本和安全阻止列表…",
+      "check_complete": "检查完成。更新将应用于此实例的所有用户。",
+      "no_sources": "已安装的扩展均未声明更新仓库。",
+      "rollback_title": "回滚扩展",
+      "update_title": "更新扩展",
+      "plugin_warning": "插件会在 Haven 中运行 JavaScript，并且可以访问消息或以你的身份执行操作。请仅安装你信任的代码。此操作将替换此实例上所有用户使用的文件。",
+      "theme_warning": "主题可以更改或隐藏控件，并加载外部资源。请仅安装你信任的主题。此操作将替换此实例上所有用户使用的文件。",
+      "no_notes": "未提供发行说明。",
+      "rollback": "回滚",
+      "update": "我已了解，更新",
+      "no_updates": "未找到更新且兼容、未被阻止的不可变版本。",
+      "installing": "正在验证并安装…",
+      "updated": "扩展已更新。请重新加载以应用更改。你的选择保持不变。",
+      "installed_flagged": "已安装版本被标记：{{reason}}",
+      "blocked_update": "已阻止的更新：{{reason}}",
+      "review_rollback": "查看回滚至 {{version}}",
+      "review_update": "查看更新至 {{version}}",
+      "title": "扩展更新",
+      "summary": "检查受支持的插件和主题在其声明的 GitHub 仓库中是否有新版本。",
+      "check": "检查更新",
+      "release_link": "查看 GitHub 版本",
+      "reload_notice": "扩展已更改。请重新加载以应用更改；你的选择保持不变。",
+      "reload": "重新加载"
     }
   },
   "modals": {

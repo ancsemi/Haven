@@ -673,6 +673,16 @@ const {
 if (!fs.existsSync(PLUGINS_DIR)) fs.mkdirSync(PLUGINS_DIR, { recursive: true });
 if (!fs.existsSync(THEMES_DIR))  fs.mkdirSync(THEMES_DIR, { recursive: true });
 
+// ── Plugin & theme updater ─────────────────────────────
+// File checks and replacement live in the helper; HTTP authorization stays
+// here alongside the other admin endpoints.
+const { createExtensionUpdater } = require('./src/extensionUpdates');
+const extensionUpdater = createExtensionUpdater({
+  dirs: { plugin: PLUGINS_DIR, theme: THEMES_DIR },
+  stateDir: path.join(DATA_DIR, 'extension-updates'),
+  havenVersion: require('./package.json').version,
+});
+
 app.use('/plugins', express.static(PLUGINS_DIR, { dotfiles: 'deny', maxAge: 0 }));
 app.use('/themes', createThemeFileMiddleware(THEMES_DIR));
 app.use('/themes',  express.static(THEMES_DIR,  { dotfiles: 'deny', maxAge: 0 }));
@@ -785,6 +795,43 @@ app.use('/api/auth', authRoutes);
 const activityRef = { engine: null };
 const { createConnectRoutes, baseUrl } = require('./src/connectRoutes');
 app.use('/connect', createConnectRoutes(() => activityRef.engine));
+
+// ── Plugin & theme update endpoints ────────────────────
+// Explicit admin actions only. Do not use JWT admin claims: permissions may
+// have changed since sign-in. Scoped account-linking tokens are not sessions.
+app.post('/api/admin/extensions/check', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || user.purpose) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    res.json(await extensionUpdater.check(user.id));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/extensions/apply', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  if (!user || user.purpose) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    // Downloading can take time. Recheck current admin status immediately
+    // before replacement, not just when the HTTP request arrives.
+    const result = await extensionUpdater.apply(req.body?.token, user.id, () => verifyAdminFromDb(user));
+    // io is initialized before the server accepts requests. Notify clients
+    // after replacement; they keep their running extensions until reload.
+    io.emit('extensions-updated');
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 // ── Push notification VAPID public key endpoint ──────────
 app.get('/api/push/vapid-key', (req, res) => {

@@ -1350,7 +1350,8 @@
       "group_advanced": "Avançado",
       "debug": "Depuração",
       "backup": "Backup",
-      "audit_log": "Registro de auditoria"
+      "audit_log": "Registro de auditoria",
+      "extension_updates": "Atualizações de extensões"
     },
     "language_section": {
       "title": "Idioma",
@@ -2381,6 +2382,32 @@
         "duplicate": "Duplicar",
         "delete": "Excluir"
       }
+    },
+    "extension_updates": {
+      "operation_failed": "A operação da extensão falhou.",
+      "checking": "Verificando versões e a lista de bloqueio de segurança…",
+      "check_complete": "Verificação concluída. As atualizações são aplicadas a todos nesta instância.",
+      "no_sources": "Nenhuma extensão instalada declara um repositório de atualização.",
+      "rollback_title": "Reverter extensão",
+      "update_title": "Atualizar extensão",
+      "plugin_warning": "Os plugins executam JavaScript dentro do Haven e podem acessar mensagens ou agir em seu nome. Instale apenas códigos confiáveis. Isso substitui o arquivo para todos nesta instância.",
+      "theme_warning": "Os temas podem alterar ou ocultar controles e carregar recursos externos. Instale apenas temas confiáveis. Isso substitui o arquivo para todos nesta instância.",
+      "no_notes": "Nenhuma nota de versão fornecida.",
+      "rollback": "Reverter",
+      "update": "Eu entendo, atualizar",
+      "no_updates": "Nenhuma versão mais recente, compatível, não bloqueada e imutável foi encontrada.",
+      "installing": "Verificando e instalando…",
+      "updated": "Extensão atualizada. Recarregue para aplicar a alteração. Suas seleções permanecem inalteradas.",
+      "installed_flagged": "Versão instalada sinalizada: {{reason}}",
+      "blocked_update": "Atualização bloqueada: {{reason}}",
+      "review_rollback": "Revisar reversão para {{version}}",
+      "review_update": "Revisar atualização para {{version}}",
+      "title": "Atualizações de extensões",
+      "summary": "Verifique se há novas versões de plugins e temas compatíveis nos repositórios do GitHub declarados por eles.",
+      "check": "Verificar atualizações",
+      "release_link": "Ver versão no GitHub",
+      "reload_notice": "As extensões foram alteradas. Recarregue para aplicá-las; suas seleções permanecem inalteradas.",
+      "reload": "Recarregar"
     }
   },
   "modals": {

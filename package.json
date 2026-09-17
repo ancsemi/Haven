@@ -27,6 +27,7 @@
     "music-metadata": "^11.15.0",
     "otpauth": "^9.5.0",
     "qrcode": "^1.5.4",
+    "semver": "^7.7.4",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7",
     "ws": "^8.18.3",

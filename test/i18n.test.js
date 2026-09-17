@@ -271,6 +271,29 @@ test('maintained locale catalogs do not contain duplicate object keys', () => {
   }
 });
 
+test('extension update controls are translated in every bundled locale', () => {
+  const localeDir = path.join(ROOT, 'public/locales');
+  const english = JSON.parse(fs.readFileSync(path.join(localeDir, 'en.json'), 'utf8'));
+  const expectedKeys = Object.keys(english.settings.extension_updates).sort();
+
+  for (const file of fs.readdirSync(localeDir).filter(name => name.endsWith('.json'))) {
+    const catalog = JSON.parse(fs.readFileSync(path.join(localeDir, file), 'utf8'));
+    assert.equal(typeof catalog.settings.nav.extension_updates, 'string', `${file} is missing the navigation label`);
+    assert.deepEqual(
+      Object.keys(catalog.settings.extension_updates || {}).sort(),
+      expectedKeys,
+      `${file} has incomplete extension update translations`,
+    );
+    for (const key of expectedKeys) {
+      assert.deepEqual(
+        placeholders(catalog.settings.extension_updates[key]),
+        placeholders(english.settings.extension_updates[key]),
+        `${file} has mismatched placeholders for settings.extension_updates.${key}`,
+      );
+    }
+  }
+});
+
 test('literal translation references exist in the English catalog', () => {
   const publicDir = path.join(ROOT, 'public');
   const localeDir = path.join(publicDir, 'locales');
