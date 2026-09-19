@@ -3325,21 +3325,29 @@ _persistThreadMentions() {
   try { localStorage.setItem('haven_thread_mentions', JSON.stringify(this._threadMentions || {})); } catch {}
 },
 _updateThreadMentionsPill() {
-  const pill = document.getElementById('thread-mentions-pill');
-  const cnt = document.getElementById('thread-mentions-pill-count');
-  if (!pill || !cnt) return;
   if (!this._threadMentions) {
     try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
     catch { this._threadMentions = {}; }
   }
-  const list = (this._threadMentions[this.currentChannel] || []);
-  if (list.length === 0) {
-    pill.style.display = 'none';
-    return;
+  const total = Object.values(this._threadMentions).reduce((n, list) => n + (Array.isArray(list) ? list.length : 0), 0);
+  const badge = document.getElementById('threads-toggle-badge');
+  const btn = document.getElementById('threads-toggle-btn');
+  if (badge) {
+    if (total > 0) {
+      badge.hidden = false;
+      badge.textContent = total > 99 ? '99+' : String(total);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
   }
-  pill.style.display = '';
-  cnt.textContent = String(list.length);
-  pill.title = t(list.length === 1 ? 'thread_runtime.mention_one' : 'thread_runtime.mention_other', { count: list.length });
+  if (btn) {
+    btn.title = total > 0
+      ? t(total === 1 ? 'thread_runtime.mention_one' : 'thread_runtime.mention_other', { count: total })
+      : t('header.thread_list');
+  }
+  const pill = document.getElementById('thread-mentions-pill');
+  if (pill) pill.style.display = 'none';
 },
 _openMostRecentThreadMention() {
   if (!this._threadMentions) return;

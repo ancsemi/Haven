@@ -14,6 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [Unreleased]
 
 ### Added
+- **Sidebar chrome, and Theme, Layout has Haven (original).** Channels has a + that opens Join, Create and Temporary channel as a sheet, so the two forms stop sitting under the list. Direct messages live behind a DMs chip in the footer, with People beside it to open the member panel. The home icon opens a menu with Add Server, Manage Servers, Sync, Server settings and App settings. Every channel row has a Join Voice button that turns into Leave while you are in that call, so the header button and the context menu entry are gone. Theme, Layout lists Haven (original), Braid and Compact and keeps them exclusive; a file theme can name its layout with `@haven-layout`, and picking Matrix over a Braid theme drops the Braid tokens instead of stacking them. Thread mentions count on the threads icon.
 - **Tags on pictures and files (#5599).** Put a few tags on an upload as
   you send it, or later from the message menu under Edit tags. A message
   shows its tags under it, and clicking one searches for it. Search has a

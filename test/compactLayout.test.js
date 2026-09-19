@@ -276,13 +276,19 @@ function withEnvironment(desktop, callback) {
   }
 }
 
-function withBraidEnvironment(callback) {
+function withBraidEnvironment(callback, opts = 'file:braid.theme.css') {
   const previous = {
     localStorage: global.localStorage,
     MutationObserver: global.MutationObserver,
     requestAnimationFrame: global.requestAnimationFrame
   };
+  const options = typeof opts === 'string' ? { theme: opts } : (opts || {});
+  const theme = options.theme !== undefined ? options.theme : 'file:braid.theme.css';
+  const braidEffect = options.braidEffect !== undefined
+    ? options.braidEffect
+    : (typeof theme === 'string' && /^file:braid/.test(theme));
   const storage = new Map();
+  if (theme) storage.set('haven_theme', theme);
   global.localStorage = {
     getItem(key) { return storage.get(key) ?? null; },
     setItem(key, value) { storage.set(key, String(value)); },
@@ -294,7 +300,10 @@ function withBraidEnvironment(callback) {
   };
   global.requestAnimationFrame = () => 1;
   try {
-    withEnvironment(true, environment => callback(environment));
+    withEnvironment(true, environment => {
+      global.window.isHavenEffectActive = (name) => name === 'braid' && braidEffect;
+      callback(environment);
+    });
   } finally {
     global.localStorage = previous.localStorage;
     global.MutationObserver = previous.MutationObserver;
@@ -323,7 +332,12 @@ test('Compact Layout uses only public regions and scoped CSS', () => {
   assert.equal((CompactLayout.CSS.match(/!important/g) || []).length, 2);
   assert.doesNotMatch(CompactLayout.CSS, /--msg-/);
   assert.doesNotMatch(CompactLayout.CSS, /(?:^|[\s,{>+~])[.#][a-z_-]/im);
+  assert.doesNotMatch(source, /compact-layout-control/);
   assert.match(CompactLayout.CSS, /data-compact-layout-desktop/);
+  assert.match(
+    fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8'),
+    /id="compact-layout-toggle"/
+  );
   for (const region of Object.values(CompactLayout.REGIONS)) {
     assert.ok(publicRegions.has(region), `Compact Layout uses non-public region ${region}`);
   }
@@ -349,8 +363,7 @@ test('Compact Layout moves desktop regions and restores their exact positions on
       nodes.sidebarActions
     ]);
     assert.ok(styles.has('CompactLayout'));
-    assert.equal(plugin._control.parentNode, nodes.sidebarActions);
-    assert.equal(plugin._control.getAttribute('aria-pressed'), 'true');
+    assert.equal(plugin._control, undefined);
     assert.equal(document.documentElement.getAttribute('data-haven-layout-owner'), 'CompactLayout');
 
     plugin.stop();
@@ -405,7 +418,7 @@ test('Compact Layout restores native layout for responsive and Mod Mode states',
 
     document.dispatchEvent({ type: 'haven:layout-editing', detail: { active: false } });
     assert.equal(document.documentElement.getAttribute('data-compact-layout-desktop'), '1');
-    plugin._control.dispatchEvent({ type: 'click' });
+    plugin._toggle();
     assert.equal(document.documentElement.hasAttribute('data-compact-layout'), false);
     assert.equal(data.get('CompactLayout:layoutOn'), '0');
 
@@ -433,7 +446,7 @@ test('Compact Layout waits for another structural layout owner and retries after
 
     assert.deepEqual(nodes.workspace.children, originalWorkspace);
     assert.equal(document.documentElement.hasAttribute('data-compact-layout-desktop'), false);
-    assert.equal(plugin._control.getAttribute('aria-label'), 'Compact layout waiting for another layout plugin');
+    assert.equal(plugin._blocked, true);
 
     HavenApi.Layout.release('BraidLayout');
     assert.equal(document.documentElement.getAttribute('data-haven-layout-owner'), 'CompactLayout');
@@ -451,9 +464,9 @@ test('Mod Mode restores the previous layout owner regardless of listener order',
     stubBraidVisuals(braid);
     braid.start();
 
-    compact._control.dispatchEvent({ type: 'click' });
+    compact._toggle();
     assert.equal(HavenApi.Layout.owner, 'BraidLayout');
-    compact._control.dispatchEvent({ type: 'click' });
+    compact._toggle();
     assert.equal(compact._blocked, true);
 
     document.documentElement.setAttribute('data-haven-layout-editing', '1');
@@ -555,7 +568,7 @@ test('Compact Layout rolls back ownership and DOM when persistence fails', () =>
     plugin.start();
     HavenApi.Data.save = () => { throw new Error('storage full'); };
 
-    assert.throws(() => plugin._control.dispatchEvent({ type: 'click' }), /storage full/);
+    assert.throws(() => plugin._toggle(), /storage full/);
     assert.equal(plugin._engaged, false);
     assert.equal(HavenApi.Layout.owner, null);
     assert.deepEqual(nodes.workspace.children, originalWorkspace);
@@ -576,7 +589,7 @@ test('Compact Layout cleans partial startup when persisted data cannot load', ()
 
     assert.throws(() => plugin.start(), /corrupt storage/);
     assert.equal(plugin._started, false);
-    assert.equal(plugin._control, null);
+    assert.equal(plugin._control, undefined);
     assert.deepEqual(plugin._listeners, []);
     assert.deepEqual(nodes.sidebarActions.children, originalActions);
     assert.equal(styles.has('CompactLayout'), false);
@@ -616,19 +629,66 @@ test('Braid releases ownership for Mod Mode and resumes after editing finishes',
   });
 });
 
+test('Braid follows the Braid layout effect overlay', () => {
+  withBraidEnvironment(({ document, HavenApi }) => {
+    const plugin = new BraidLayout();
+    stubBraidVisuals(plugin);
+    plugin.start();
+    assert.equal(HavenApi.Layout.owner, 'BraidLayout');
+
+    global.window.isHavenEffectActive = () => false;
+    document.dispatchEvent({ type: 'haven:layout-effect', detail: { braid: false } });
+    assert.equal(plugin._engaged, false);
+    assert.equal(HavenApi.Layout.owner, null);
+    assert.equal(document.documentElement.hasAttribute('data-braid-layout'), false);
+
+    global.window.isHavenEffectActive = (name) => name === 'braid';
+    document.dispatchEvent({ type: 'haven:layout-effect', detail: { braid: true } });
+    assert.equal(plugin._engaged, true);
+    assert.equal(HavenApi.Layout.owner, 'BraidLayout');
+    plugin.stop();
+  });
+});
+
+test('Braid stays dormant until the Braid layout effect is on', () => {
+  withBraidEnvironment(({ document, HavenApi }) => {
+    const plugin = new BraidLayout();
+    stubBraidVisuals(plugin);
+    plugin.start();
+    assert.equal(plugin._engaged, false);
+    assert.equal(HavenApi.Layout.owner, null);
+
+    global.window.isHavenEffectActive = (name) => name === 'braid';
+    document.dispatchEvent({ type: 'haven:layout-effect', detail: { braid: true } });
+    assert.equal(plugin._engaged, true);
+    plugin.stop();
+  }, { theme: 'discord', braidEffect: false });
+});
+
 test('Braid rolls back ownership when engagement persistence fails', () => {
   withBraidEnvironment(({ document, HavenApi }) => {
     const plugin = new BraidLayout();
     stubBraidVisuals(plugin);
-    const save = HavenApi.Data.save;
-    HavenApi.Data.save = () => { throw new Error('storage full'); };
+    const addStyle = HavenApi.DOM.addStyle;
+    HavenApi.DOM.addStyle = () => { throw new Error('storage full'); };
 
     assert.throws(() => plugin.start(), /storage full/);
     assert.equal(plugin._engaged, false);
     assert.equal(HavenApi.Layout.owner, null);
     assert.equal(document.documentElement.hasAttribute('data-haven-layout-owner'), false);
 
-    HavenApi.Data.save = save;
+    HavenApi.DOM.addStyle = addStyle;
+    plugin.stop();
+  });
+});
+
+test('Compact Layout stays off when Haven original layout is on', () => {
+  withEnvironment(true, ({ document }) => {
+    document.documentElement.setAttribute('data-haven-original-layout', '1');
+    const plugin = new CompactLayout();
+    plugin.start();
+    assert.equal(plugin._engaged, false);
+    assert.equal(document.documentElement.hasAttribute('data-compact-layout'), false);
     plugin.stop();
   });
 });

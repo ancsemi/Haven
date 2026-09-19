@@ -4,15 +4,15 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.9.1';
-import UIBindMethods   from './modules/app-ui.js?v=4.9.3';
+import SocketMethods   from './modules/app-socket.js?v=4.9.2';
+import UIBindMethods   from './modules/app-ui.js?v=4.9.4';
 import MediaMethods    from './modules/app-media.js?v=4.9.3';
 import ContextMethods  from './modules/app-context.js?v=4.9.1';
-import ChannelMethods  from './modules/app-channels.js?v=4.9.1';
-import MessageMethods  from './modules/app-messages.js?v=4.9.1';
+import ChannelMethods  from './modules/app-channels.js?v=4.9.2';
+import MessageMethods  from './modules/app-messages.js?v=4.9.2';
 import UserMethods     from './modules/app-users.js?v=4.8.2';
-import VoiceMethods    from './modules/app-voice.js?v=4.7.1';
-import UtilityMethods  from './modules/app-utilities.js?v=4.9.2';
+import VoiceMethods    from './modules/app-voice.js?v=4.9.2';
+import UtilityMethods  from './modules/app-utilities.js?v=4.9.3';
 import AdminMethods    from './modules/app-admin.js?v=4.9.1';
 import PlatformMethods from './modules/app-platform.js?v=4.9.2';
 import SearchMethods   from './modules/app-search.js?v=4.9.1';
@@ -380,9 +380,7 @@ class HavenApp {
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${this.user.username}`;
 
-    if (this.user.isAdmin || this._hasGlobalPerm('create_channel')) {
-      document.getElementById('admin-controls').style.display = 'block';
-    }
+    this._refreshChannelActions?.();
     if (this.user.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('manage_server')) {
       document.getElementById('admin-mod-panel').style.display = 'block';
     }

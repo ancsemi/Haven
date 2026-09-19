@@ -227,9 +227,12 @@ _reconcileVoiceUi() {
 
   const joinBtn = document.getElementById('voice-join-btn');
   const joinVisible = !!joinBtn && joinBtn.style.display !== 'none';
-  // Hidden on purpose (welcome screen, voice off, no permission) is not a
-  // desync, so compare against what the channel allows (#5598).
-  const joinExpected = this._voiceJoinAvailable();
+  // Hidden on purpose (welcome screen, voice off, no permission, compacted
+  // chrome) is not a desync, so compare against what this layout shows (#5598).
+  const original = typeof window.isHavenOriginalLayout === 'function'
+    ? window.isHavenOriginalLayout()
+    : document.documentElement.hasAttribute('data-haven-original-layout');
+  const joinExpected = !!(original && this._voiceJoinAvailable());
   const bar = document.getElementById('voice-bar');
   const barShowsVoice = !!bar && bar.style.display !== 'none' && bar.style.display !== '';
 
@@ -282,6 +285,9 @@ _startVoiceUiReconciler() {
   window.addEventListener('focus', runDebounced);
   window.addEventListener('resize', runDebounced);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) runDebounced(); });
+  document.addEventListener('haven:original-layout', () => {
+    try { this._updateVoiceButtons(!!(this.voice && this.voice.inVoice)); } catch {}
+  });
   this._voiceUiReconcilerTimer = setInterval(run, 5000);
 },
 
@@ -315,12 +321,41 @@ _voiceJoinAvailable() {
   return !!(this.user?.isAdmin || this.user?.isGuest || this._hasPerm('use_voice'));
 },
 
+_channelVoiceLeaveIcon() {
+  return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+},
+
+_syncChannelVoiceButtons() {
+  document.querySelectorAll('#channel-list [data-join-voice]').forEach((btn) => {
+    const live = !!(this.voice?.inVoice && this.voice.currentChannel === btn.dataset.joinVoice);
+    btn.classList.toggle('is-live', live);
+    btn.classList.toggle('is-leave', live);
+    if (live) {
+      btn.innerHTML = this._channelVoiceLeaveIcon();
+      const label = t('voice.disconnect');
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    } else {
+      btn.textContent = '🎤';
+      const label = t('voice.join_ctx');
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    }
+  });
+},
+
 _updateVoiceButtons(inVoice) {
-  const showJoin = !inVoice && this._voiceJoinAvailable();
-  document.getElementById('voice-join-btn').style.display = showJoin ? 'inline-flex' : 'none';
-  // Show/hide the header voice-active indicator (not a button, just a label)
+  const original = typeof window.isHavenOriginalLayout === 'function'
+    ? window.isHavenOriginalLayout()
+    : document.documentElement.hasAttribute('data-haven-original-layout');
+  const canJoin = !inVoice && this._voiceJoinAvailable();
+  const joinBtn = document.getElementById('voice-join-btn');
+  if (joinBtn) joinBtn.style.display = (original && canJoin) ? '' : 'none';
+  this._syncChannelVoiceButtons?.();
+  const leaveHdr = document.getElementById('voice-leave-header-btn');
+  if (leaveHdr) leaveHdr.style.display = 'none';
   const indicator = document.getElementById('voice-active-indicator');
-  if (indicator) indicator.style.display = inVoice ? 'inline-flex' : 'none';
+  if (indicator) indicator.style.display = (original && inVoice) ? '' : 'none';
 
   // Show/hide the sidebar voice controls panel (pinned at bottom)
   const voicePanel = document.getElementById('voice-panel');
@@ -346,7 +381,7 @@ _updateVoiceButtons(inVoice) {
   // keep the button visible while already in voice (#5387).
   const mobileJoin = document.getElementById('voice-join-mobile');
   if (mobileJoin) {
-    if (showJoin) mobileJoin.style.removeProperty('display');
+    if (original && canJoin) mobileJoin.style.removeProperty('display');
     else mobileJoin.style.setProperty('display', 'none', 'important');
   }
 

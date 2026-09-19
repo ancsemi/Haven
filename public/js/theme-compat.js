@@ -26,11 +26,15 @@
       const compatibility = typeof theme.compatibility === 'string'
         ? theme.compatibility
         : 'legacy';
+      const layout = typeof theme.layout === 'string' && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(theme.layout)
+        ? theme.layout
+        : '';
       entries[theme.file] = {
         compatible: theme.compatible !== false && !['invalid', 'unsupported'].includes(compatibility),
         compatibility,
         themeApi: Number.isInteger(theme.themeApi) ? theme.themeApi : null,
         themeApiDeclared: theme.themeApiDeclared == null ? null : String(theme.themeApiDeclared),
+        layout,
       };
     }
 
