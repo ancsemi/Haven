@@ -444,6 +444,27 @@ test('stored theme settings expose only compatible installed file themes', () =>
   assert.equal(validatedThemeDefault(themesDir, 'file:missing.theme.css', published), '');
 });
 
+test('a theme named without the file: prefix is normalised, not passed through', () => {
+  const themesDir = path.join(ROOT, 'themes');
+  const published = compatibleThemeFiles(themesDir, ['braid.theme.css']);
+
+  // A bare filename is the same intent as `file:` — it is what an admin writes by hand.
+  // Passing it through unchanged makes the client apply an unknown built-in theme, so
+  // the page loads no stylesheet and reports no error.
+  assert.equal(validatedThemeDefault(themesDir, 'braid.theme.css', published), 'file:braid.theme.css');
+
+  // A name that could only be a theme file, but is not one, must not reach the client.
+  assert.equal(validatedThemeDefault(themesDir, 'unpublished.theme.css', published), '');
+
+  // Built-in names are not files and stay exactly as they are.
+  assert.equal(validatedThemeDefault(themesDir, 'nord', published), 'nord');
+  assert.equal(validatedThemeDefault(themesDir, 'haven', published), 'haven');
+
+  // Nothing selected stays nothing selected.
+  assert.equal(validatedThemeDefault(themesDir, '', published), '');
+  assert.equal(validatedThemeDefault(themesDir, null, published), '');
+});
+
 test('safe mode persists for the tab and can be explicitly cleared', () => {
   const session = new MemoryStorage();
   assert.equal(ThemeCompat.isSafeMode({ search: '?haven-safe-mode=1' }, session), true);

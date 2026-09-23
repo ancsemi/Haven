@@ -30,6 +30,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
   a topic was hard to find.
 
 ### Fixed
+- **A custom theme set as the server default could load no theme at all.** A file
+  theme is stored as `file:<name>.theme.css`, and a name given without that prefix
+  was applied as an unknown built-in: the page loaded no stylesheet and nothing
+  anywhere reported a problem. A file theme is now served in the form the client
+  understands however it was named, and a name that no longer resolves to a
+  published theme no longer reaches a client at all.
 - **A video in a forum topic kept playing after leaving it (#5690).**
   Closing a thread or topic, or switching channels, now stops it.
 - **Clicking the forum you are in did nothing while a topic was open
