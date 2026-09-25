@@ -1527,6 +1527,7 @@ _setupUI() {
   // over from a previous stream.
   this.voice.onScreenShareRestart = (userId) => {
     if (this._renegBudget) delete this._renegBudget[userId];
+    this._resetScreenShareUiState(userId);
   };
 
   // Wire up AFK auto-move
