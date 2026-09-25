@@ -1742,6 +1742,9 @@ router.get('/SSO', (req, res) => {
   const safeAuthCode = authCode.replace(/[^a-fA-F0-9]/g, '');
   const safeOrigin = origin.replace(/[<>"'&]/g, '');
 
+  const nonce = crypto.randomBytes(16).toString('base64');
+  res.set('Content-Security-Policy',
+    `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
   // Serve a self-contained consent page that reads JWT from localStorage
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1781,7 +1784,7 @@ router.get('/SSO', (req, res) => {
     <div id="not-logged-in" style="display:none">
       <p class="not-logged-in">You are not logged in to this server.</p>
       <p style="font-size:13px;color:#888;margin-top:8px">Log in first, then try again.</p>
-      <button class="btn btn-primary" onclick="window.location.href='/'">Go to Login</button>
+      <button class="btn btn-primary" id="login-btn">Go to Login</button>
     </div>
     <div id="consent" style="display:none">
       <p>Another Haven server wants to use your identity to pre-fill registration.</p>
@@ -1793,12 +1796,14 @@ router.get('/SSO', (req, res) => {
       <p style="font-size:12px;color:#666">Your password is <strong>never</strong> shared. Only your username and profile picture.</p>
       <div id="buttons">
         <button class="btn btn-primary" id="approve-btn">Approve</button>
-        <button class="btn btn-cancel" onclick="window.close()">Cancel</button>
+        <button class="btn btn-cancel" id="cancel-btn">Cancel</button>
       </div>
       <p class="success" id="success-msg">✓ Approved! You can close this tab.</p>
     </div>
   </div>
-  <script>
+  <script nonce="${nonce}">
+    document.getElementById('login-btn').addEventListener('click', () => { window.location.href = '/'; });
+    document.getElementById('cancel-btn').addEventListener('click', () => window.close());
     const authCode = '${safeAuthCode}';
     const origin = '${safeOrigin}';
     let approvedProfile = null;
