@@ -699,6 +699,8 @@ Haven also ships optional extras that are **installed but switched off by defaul
 | `themes/compact.theme.css` | Compact, a dense graphite Theme API v1 theme |
 | `themes/braid.theme.css` | Braid, a dark mint theme |
 | `themes/braid-light.theme.css` | Braid Light |
+| `themes/amni-scient.theme.css` | Amni-Scient, gold on ink with the Archivo typeface |
+| `themes/amni-scient-light.theme.css` | Amni-Scient Light |
 | `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |

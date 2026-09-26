@@ -6,3 +6,10 @@ The included icons are licensed under CC BY 4.0.
 
 SIL Open Font License: https://scripts.sil.org/OFL
 Creative Commons Attribution 4.0: https://creativecommons.org/licenses/by/4.0/
+
+Archivo
+
+The archivo-var.woff2 file is the Archivo variable font by Omnibus-Type.
+The font is licensed under the SIL Open Font License 1.1.
+
+SIL Open Font License: https://scripts.sil.org/OFL
