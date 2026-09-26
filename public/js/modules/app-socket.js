@@ -1227,7 +1227,13 @@ _setupSocketListeners() {
       // Desktop, and for any tab the user has alt-tabbed away from. We
       // still want to append the message so it's there when they come
       // back, but we skip mark-read and bump the unread badge instead.
-      const isActivelyViewing = !document.hidden;
+      // Haven Desktop keeps pages "visible" even when minimised or behind
+      // other windows (background throttling is off), so there the window
+      // also has to have focus, or the open chat never notified (D#58).
+      // Only Desktop versions that hand focus back to the page on alt-tab say
+      // so; on older ones the page could lack focus while being looked at.
+      const isActivelyViewing = !document.hidden &&
+        (!window.havenDesktop?.pageFocusFollowsWindow || document.hasFocus());
 
       // If the user is scrolled into history and the DOM window has been
       // trimmed (doesn't include the latest messages), skip appending —
@@ -1296,7 +1302,7 @@ _setupSocketListeners() {
             this.notifications.play(_isAnnouncement ? 'announcement' : 'message');
           }
           // Fire native OS notification if tab is hidden (alt-tabbed, minimised, etc.)
-          if (document.hidden) {
+          if (!isActivelyViewing) {
             this._fireNativeNotification(data.message, data.channelCode, _notifOpts);
           }
         }
