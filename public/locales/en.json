@@ -1649,7 +1649,7 @@
       "popup_never": "Never (sounds and badges still work)",
       "popup_custom": "Custom…",
       "popup_custom_minutes": "Minutes between pop-ups",
-      "popup_limit_hint": "Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected.",
+      "popup_limit_hint": "Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected. Never also turns off push notifications on this device.",
       "join_vol": "Join Vol",
       "leave_vol": "Leave Vol"
     },

@@ -357,6 +357,14 @@ _setupNotifications() {
     syncRow();
     popupCooldownSel.addEventListener('change', () => {
       syncRow();
+      // A push from the server always shows as a pop-up, so Never has to turn
+      // push off on this device too, or DMs kept popping up anyway (#5693).
+      if (popupCooldownSel.value === '-1' && this._pushSubscription) {
+        this._unsubscribePush().then(() => {
+          const pushToggle = document.getElementById('push-notif-enabled');
+          if (pushToggle) pushToggle.checked = false;
+        });
+      }
       if (popupCooldownSel.value !== 'custom') { this.notifications.setPopupCooldownMs(popupCooldownSel.value); return; }
       if (customMin) { if (!customMin.value) customMin.value = '10'; applyCustom(); customMin.focus(); }
     });
