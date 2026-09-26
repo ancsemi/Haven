@@ -11,6 +11,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Amni-Scient and Amni-Scient Light themes**, gold on ink and warm paper
+  with the Archivo typeface. Like the other bundled themes they stay off
+  until an admin publishes them. By @Amnibro. (#5695)
+
+### Fixed
+- **Newer emoji showed as boxes on Windows 10.** Its emoji font stops at
+  older emoji, so a melting face reaction was an empty square. Haven now
+  carries Twemoji for exactly the emoji a system lacks, and only downloads
+  it when one is needed.
+- **Animated WebP custom emoji uploaded still (#5694).** Single uploads went
+  through the square cropper, which keeps only the first frame. Animated WebP
+  and PNG skip it now, the way GIFs always did. The cropper can also zoom out
+  until a wide picture fits whole inside the square.
+- **Pop-ups set to Never still let DMs pop up (#5693).** Push notifications
+  come straight from the server, so in a browser they ignored the setting.
+  Never now turns push off on that device too.
+- **The open chat never notified in Haven Desktop when the window was
+  minimised or behind other windows** (Haven-Desktop #58). Needs Desktop
+  1.4.38 or later.
+- **Linking a server through single sign-on hung on "Checking login
+  status".** The consent page's script was blocked by the security policy.
+  By @Amnibro. (#5696)
+
 ## [4.13.0] - 2026-09-24
 
 A second security release, following up the review in 4.12.0. DMs no longer
