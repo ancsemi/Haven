@@ -3333,15 +3333,17 @@ _setupEmojiManagement() {
   const nameInput = document.getElementById('emoji-name-input');
   if (!uploadBtn || !fileInput) return;
 
-  // When a file is chosen, open the cropper (skip for GIFs)
-  fileInput.addEventListener('change', () => {
+  // When a file is chosen, open the cropper. Anything animated skips it:
+  // the cropper redraws one frame, so an animated WebP or PNG came out
+  // still (#5694). GIFs always skipped it.
+  fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
     this._croppedEmojiBlob = null;
     this._cropSourceFile = file;
     const previewRow = document.getElementById('emoji-crop-preview-row');
     if (previewRow) previewRow.style.display = 'none';
-    if (file.type === 'image/gif') return; // GIFs skip cropper
+    if (file.type === 'image/gif' || await this._isAnimatedImage(file)) return;
     this._openEmojiCropper(file);
   });
 
@@ -3461,7 +3463,7 @@ _setupEmojiCropperEvents() {
     e.preventDefault();
     if (!this._cropState) return;
     const delta = e.deltaY < 0 ? 15 : -15;
-    const newVal = Math.min(500, Math.max(100, parseInt(zoomSlider.value) + delta));
+    const newVal = Math.min(parseInt(zoomSlider.max) || 500, Math.max(100, parseInt(zoomSlider.value) + delta));
     zoomSlider.value = newVal;
     zoomSlider.dispatchEvent(new Event('input'));
   }, { passive: false });
@@ -3522,11 +3524,8 @@ _setupEmojiCropperEvents() {
     outCanvas.width = 128;
     outCanvas.height = 128;
     const outCtx = outCanvas.getContext('2d');
-    const srcX = -s.ox / s.scale;
-    const srcY = -s.oy / s.scale;
-    const srcW = 256 / s.scale;
-    const srcH = 256 / s.scale;
-    outCtx.drawImage(s.img, srcX, srcY, srcW, srcH, 0, 0, 128, 128);
+    // The 256px frame at half size, clear wherever the picture does not reach.
+    outCtx.drawImage(s.img, s.ox / 2, s.oy / 2, s.img.width * s.scale / 2, s.img.height * s.scale / 2);
     outCanvas.toBlob((blob) => {
       this._croppedEmojiBlob = blob;
       document.getElementById('emoji-crop-modal').style.display = 'none';
@@ -3553,6 +3552,26 @@ _setupEmojiCropperEvents() {
   });
 },
 
+/** True for an animated WebP or PNG, read from the file's own header. */
+async _isAnimatedImage(file) {
+  try {
+    const b = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
+    const at = (i, str) => [...str].every((c, k) => b[i + k] === c.charCodeAt(0));
+    // WebP: an extended header (VP8X) with its animation flag set.
+    if (at(0, 'RIFF') && at(8, 'WEBP')) return at(12, 'VP8X') && (b[20] & 0x02) !== 0;
+    // PNG: an animation control chunk (acTL) before the image data.
+    if (b[0] === 0x89 && at(1, 'PNG')) {
+      for (let i = 8; i + 8 <= b.length;) {
+        const len = ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+        if (at(i + 4, 'acTL')) return true;
+        if (at(i + 4, 'IDAT')) return false;
+        i += 12 + len;
+      }
+    }
+  } catch { /* unreadable: treat as still */ }
+  return false;
+},
+
 _openEmojiCropper(file) {
   const modal = document.getElementById('emoji-crop-modal');
   const canvas = document.getElementById('emoji-crop-canvas');
@@ -3563,19 +3582,24 @@ _openEmojiCropper(file) {
   const url = URL.createObjectURL(file);
   img.onload = () => {
     URL.revokeObjectURL(url);
-    const minScale = Math.max(256 / img.width, 256 / img.height);
-    const initScale = minScale;
+    // It opens filling the square, as before, but zooms out until the whole
+    // picture fits, with clear space around it, so a wide emote can keep
+    // everything instead of losing its sides (#5694).
+    const fillScale = Math.max(256 / img.width, 256 / img.height);
+    const minScale = Math.min(256 / img.width, 256 / img.height);
     this._cropState = {
       img,
       minScale,
-      scale: initScale,
-      ox: (256 - img.width * initScale) / 2,
-      oy: (256 - img.height * initScale) / 2,
+      scale: fillScale,
+      ox: (256 - img.width * fillScale) / 2,
+      oy: (256 - img.height * fillScale) / 2,
       dragging: false,
       lastX: 0,
       lastY: 0
     };
-    zoomSlider.value = 100;
+    const fillValue = Math.round(100 * fillScale / minScale);
+    zoomSlider.max = String(fillValue * 5);
+    zoomSlider.value = String(fillValue);
     this._clampEmojiCrop();
     this._renderEmojiCropFrame();
     modal.style.display = 'flex';
@@ -3588,8 +3612,9 @@ _clampEmojiCrop() {
   if (!s) return;
   const w = s.img.width * s.scale;
   const h = s.img.height * s.scale;
-  s.ox = Math.min(0, Math.max(256 - w, s.ox));
-  s.oy = Math.min(0, Math.max(256 - h, s.oy));
+  // Narrower than the square: centred. Wider: the square stays covered.
+  s.ox = w <= 256 ? (256 - w) / 2 : Math.min(0, Math.max(256 - w, s.ox));
+  s.oy = h <= 256 ? (256 - h) / 2 : Math.min(0, Math.max(256 - h, s.oy));
 },
 
 _renderEmojiCropFrame() {
