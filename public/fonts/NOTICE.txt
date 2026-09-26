@@ -13,6 +13,7 @@ The archivo-var.woff2 file is the Archivo variable font by Omnibus-Type.
 The font is licensed under the SIL Open Font License 1.1.
 
 SIL Open Font License: https://scripts.sil.org/OFL
+
 Twemoji 15.0.3
 
 The twemoji-15.0.3.woff2 file is the Twemoji COLR font from the
