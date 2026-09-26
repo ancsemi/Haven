@@ -57,6 +57,7 @@ async switchChannel(code) {
   // Show the header actions box
   const actionsBox = document.getElementById('header-actions-box');
   if (actionsBox) actionsBox.style.display = 'flex';
+  this._labelCallButton?.();
   // Update voice button state — persist controls if in voice anywhere
   if (this.voice && this.voice.inVoice) {
     this._updateVoiceButtons(true);
@@ -3222,6 +3223,7 @@ _updateDmSectionBadge() {
 },
 
 _updateChannelVoiceIndicators() {
+  this._labelCallButton?.();
   document.querySelectorAll('.channel-item').forEach(el => {
     const code = el.dataset.code;
     let indicator = el.querySelector('.channel-voice-indicator');
@@ -3237,7 +3239,7 @@ _updateChannelVoiceIndicators() {
         if (moreBtn) el.insertBefore(indicator, moreBtn);
         else el.appendChild(indicator);
       }
-      indicator.innerHTML = `<span class="voice-icon">🔊</span>${count}`;
+      indicator.innerHTML = `<span class="voice-icon">${el.classList.contains('dm-item') ? '📞' : '🔊'}</span>${count}`;
 
       // Render voice user list below the channel item
       let userList = el.nextElementSibling;

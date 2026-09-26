@@ -578,6 +578,22 @@
       "settings": "Voice Settings"
     }
   },
+  "calls": {
+    "incoming": "Incoming call",
+    "incoming_group": "{{name}} is calling the group",
+    "group": "Group call",
+    "accept": "Answer",
+    "decline": "Decline",
+    "declined": "{{name}} declined the call",
+    "declined_all": "Nobody answered the call",
+    "no_answer": "No answer",
+    "missed": "Missed call from {{name}}",
+    "missed_title": "Missed call",
+    "call_back": "Call back",
+    "notify_body": "{{name}} is calling you",
+    "start": "📞 Call",
+    "join": "📞 Join call"
+  },
   "modmode": {
     "enabled": "Mod Mode ON — drag sections or panel handles to rearrange",
     "disabled": "Mod Mode OFF — layout saved",

@@ -20,6 +20,7 @@ import FerryMethods    from './modules/app-ferry.js?v=4.10.1';
 import ForumMethods    from './modules/app-forum.js?v=4.11.1';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.10.0';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.10.0';
+import CallMethods from './modules/app-calls.js?v=4.12.1';
 
 class HavenApp {
   constructor() {
@@ -463,6 +464,7 @@ Object.assign(HavenApp.prototype,
   ForumMethods,
   RoleToolMethods,
   PermMatrixMethods,
+  CallMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

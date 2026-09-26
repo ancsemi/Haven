@@ -120,6 +120,7 @@ module.exports = function register(socket, ctx) {
     socket.emit('channels-list', channels);
     // Now in every DM room: let partners know this user is here (#5574).
     if (emitDmPresence) emitDmPresence(socket.user.id);
+    ctx.dmCalls?.snapshotFor(socket);
   });
 
   // ── Create channel (permission-based) ─────────────────

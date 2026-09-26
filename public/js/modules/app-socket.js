@@ -163,6 +163,7 @@ _restoreRefusedDraft(msg) {
 
 _setupSocketListeners() {
   this._setupFerrySocket();
+  this._setupCallListeners?.();
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };

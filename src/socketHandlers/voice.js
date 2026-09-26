@@ -189,6 +189,11 @@ module.exports = function register(socket, ctx) {
     return null;
   }
 
+  socket.on('dm-call-decline', (data) => {
+    const code = typeof data?.code === 'string' ? data.code.trim() : '';
+    if (!/^[a-f0-9]{8}$/i.test(code)) return;
+    ctx.dmCalls?.decline(code, socket.user);
+  });
   socket.on('voice-join', (data) => {
     if (!data || typeof data !== 'object') return;
     const nativeClient = readNativeScreenClient(data);
@@ -327,6 +332,7 @@ module.exports = function register(socket, ctx) {
     });
 
     broadcastVoiceUsers(code);
+    ctx.dmCalls?.joined(code, socket.user);
     broadcastStreamInfo(code);
 
     // Send active music state to late joiner

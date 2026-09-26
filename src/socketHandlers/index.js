@@ -39,6 +39,7 @@ const {
 } = require('../botVoice');
 
 const { createActivity } = require('../activity');
+const createDmCalls = require('../dmCalls');
 const ferry = require('../ferry');
 
 const registerChannels   = require('./channels');
@@ -167,6 +168,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     slowModeTracker, pendingTempDelete, pendingVoiceLeave,
     botAudioManager
   };
+  const dmCalls = createDmCalls({ io, db, voiceUsers, sendPushNotifications });
 
   // ── Rich presence ───────────────────────────────────────
   // Owns the in-memory "what is this user doing" map and the Steam/Spotify
@@ -787,6 +789,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         isBot: !!u.isBot, isListening: !!u.isListening
       }))
     });
+    dmCalls.sync(code);
   }
 
   // A user agent is long, spoofable and full of history nobody wants to read.
@@ -1983,7 +1986,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     const PRESENCE_ACTIVE_EVENTS = new Set([
       'send-message', 'send-thread-message', 'edit-message',
       'add-reaction', 'remove-reaction',
-      'voice-join', 'voice-rejoin', 'set-status',
+      'voice-join', 'voice-rejoin', 'set-status', 'dm-call-decline',
       'start-dm', 'create-channel'
     ]);
 
@@ -2264,7 +2267,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
-      sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent,
+      sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
       // Ferry (Discord bridge)
       ferry, ferryLinksFor, parseFerryTarget, ferryRelay,
       // Slash commands
