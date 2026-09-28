@@ -92,8 +92,13 @@ class VoiceManager {
 
     // Screen share quality settings (populated from localStorage)
     const savedRes = localStorage.getItem('haven_screen_res');
-    this.screenResolution = savedRes !== null ? parseInt(savedRes, 10) : 1080;  // 0 = source
-    this.screenFrameRate = parseInt(localStorage.getItem('haven_screen_fps') || '30', 10) || 30;
+    this.screenResolution = savedRes !== null ? parseInt(savedRes, 10) : 0;  // 0 = source
+    this.screenFrameRate = parseInt(localStorage.getItem('haven_screen_fps') || '60', 10) || 60;
+    // User bitrate cap in kbps (0 = unlimited). Stepper in Settings moves in
+    // 100 kbps steps between 300 and 10000; anything above wraps to unlimited.
+    this.screenBitrate = this._normalizeScreenBitrate(
+      localStorage.getItem('haven_screen_bitrate')
+    );
 
     // Bitrate map: resolution → bits/sec  (per-resolution caps for screen-share encoding).
     // 3.18.1 (#5379): bumped 2-3x because the previous values (1.5 / 3 / 5 Mbps) were
@@ -1178,14 +1183,16 @@ class VoiceManager {
         const missing = screenTracks.filter(track => !senders.some(s => s.track === track));
         if (missing.length) {
           missing.forEach(track => conn.addTrack(track, this.screenStream));
-          const res = this.screenResolution;
-          const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+          const maxBitrate = this._screenBitrateFor(this.screenResolution);
           this._applyScreenBitrate(conn, maxBitrate, targetUserId);
         }
 
         // Renegotiate to include the video tracks (or refresh an existing
-        // screen-share m-section that the receiver lost frames on)
+        // screen-share m-section that the receiver lost frames on), then nudge
+        // the encoder for a fresh keyframe — same black-tile-on-GPU rationale
+        // as the initial share path below.
         await this._renegotiate(targetUserId, conn);
+        this._requestScreenKeyframe(targetUserId);
       };
       tryRenegotiate(6);
     });
@@ -1290,6 +1297,34 @@ class VoiceManager {
       (this._voiceSessionGeneration || 0) === voiceGeneration;
   }
 
+  // Ask the video sender(s) carrying our screen share for an immediate
+  // keyframe. Hardware encoders can otherwise sit on deltas for seconds after
+  // a (re)negotiation, leaving viewers with a black tile even though the
+  // track is live and unmuted — the exact "black until rejoin" shape, since a
+  // rejoin forces a fresh negotiation that eventually carries an IDR.
+  // generateKeyFrame exists on Chromium video senders; elsewhere it is a
+  // guarded no-op.
+  _requestScreenKeyframe(targetUserId = null) {
+    if (!this.isScreenSharing || !this.screenStream) return;
+    const videoTracks = new Set(this.screenStream.getVideoTracks());
+    if (!videoTracks.size) return;
+    const peers = targetUserId != null
+      ? [[targetUserId, this.peers.get(targetUserId)]]
+      : Array.from(this.peers);
+    for (const [, peer] of peers) {
+      const conn = peer?.connection;
+      if (!conn || typeof conn.getSenders !== 'function') continue;
+      try {
+        for (const sender of conn.getSenders()) {
+          if (sender?.track && videoTracks.has(sender.track) &&
+              typeof sender.generateKeyFrame === 'function') {
+            sender.generateKeyFrame().catch(() => {});
+          }
+        }
+      } catch { /* sender gone mid-iteration — ignore */ }
+    }
+  }
+
   // ── Public API ──────────────────────────────────────────
 
   // Ask the server to forward a renegotiate-screen to `sharerId` so they
@@ -1391,9 +1426,20 @@ class VoiceManager {
     this._screenWatchdogTimers.delete(sharerId);
   }
 
-  // True when we both marked the share delivered AND still have a live
-  // non-muted video receiver for it (or a live <video> tile).
+  // True when the viewer is actually seeing frames. A tile whose video element
+  // never decoded a frame (videoWidth === 0) is the GPU-encoder black-tile
+  // shape: the receiver reports live+unmuted because delta packets flow, but
+  // no IDR ever arrived to decode. That must NOT count as live, or the
+  // watchdog stops while the tile stays black until a rejoin.
   _screenStillLive(sharerId) {
+    try {
+      const tile = document.getElementById(`screen-tile-${sharerId}`);
+      const vid = tile && tile.querySelector('video');
+      if (vid) {
+        const track = vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
+        return !!track && track.readyState === 'live' && vid.videoWidth > 0;
+      }
+    } catch { /* ignore */ }
     try {
       const peer = this.peers.get(sharerId);
       if (peer && peer.connection) {
@@ -1405,12 +1451,6 @@ class VoiceManager {
         });
         if (live) return true;
       }
-    } catch { /* ignore */ }
-    try {
-      const tile = document.getElementById(`screen-tile-${sharerId}`);
-      const vid = tile && tile.querySelector('video');
-      const track = vid && vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
-      if (track && track.readyState === 'live' && vid.videoWidth > 0) return true;
     } catch { /* ignore */ }
     return false;
   }
@@ -2054,7 +2094,7 @@ class VoiceManager {
       }
 
       // Add screen tracks to all existing peer connections and cap bitrate
-      const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+      const maxBitrate = this._screenBitrateFor(this.screenResolution);
       // Renegotiate with every peer at once. Each peer is its own
       // RTCPeerConnection, so there is nothing to serialise, and awaiting
       // them one at a time meant the last viewer in a bigger call waited for
@@ -2072,9 +2112,17 @@ class VoiceManager {
       if (this._relay) {
         const v = this.screenStream.getVideoTracks()[0];
         const a = this.screenStream.getAudioTracks()[0];
-        if (v) await this._relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(e => console.warn('[Relay] Screen not sent:', e.message));
+        const screenOpts = { simulcast: true };
+        if (maxBitrate) screenOpts.maxBitrate = maxBitrate;
+        if (v) await this._relay.publish('screen', v, screenOpts).catch(e => console.warn('[Relay] Screen not sent:', e.message));
         if (a) await this._relay.publish('screen-audio', a).catch(e => console.warn('[Relay] Screen audio not sent:', e.message));
       }
+      // Hardware encoders (notably H.264 on GPU) can take a long time to emit
+      // the first keyframe, and the setParameters call above can restart the
+      // encoder mid-negotiation. Viewers whose decoder never got an IDR show a
+      // black tile until a rejoin forces a fresh negotiation — request one
+      // explicitly now that every peer has settled.
+      this._requestScreenKeyframe();
 
       if (!this._isScreenStartValid(operation, channelCode, voiceGeneration)) {
         await this.stopScreenShare();
@@ -2325,6 +2373,24 @@ class VoiceManager {
     if (this.isScreenSharing) this._applyLiveQualityChange();
   }
 
+  // Bitrate cap in kbps (0 = unlimited). Anything outside 300–10000 wraps:
+  // below clamps to 300, above wraps to unlimited (the + stepper's top stop).
+  _normalizeScreenBitrate(value) {
+    if (value === null || value === undefined || value === '') return 4000;
+    const n = parseInt(value, 10);
+    if (!Number.isSafeInteger(n) || n < 0) return 4000;
+    if (n === 0) return 0;
+    if (n < 300) return 300;
+    if (n > 10000) return 0;
+    return n;
+  }
+
+  setScreenBitrate(kbps) {
+    this.screenBitrate = this._normalizeScreenBitrate(kbps);
+    try { localStorage.setItem('haven_screen_bitrate', String(this.screenBitrate)); } catch {}
+    if (this.isScreenSharing) this.reapplyScreenBitrate();
+  }
+
   /**
    * Apply resolution / framerate / bitrate changes to an active screen share
    * without stopping and restarting the stream.
@@ -2353,7 +2419,7 @@ class VoiceManager {
     }
 
     // Update bitrate cap on all peer senders
-    const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+    const maxBitrate = this._screenBitrateFor(this.screenResolution);
     for (const [userId, peer] of this.peers) {
       this._applyScreenBitrate(peer.connection, maxBitrate, userId);
     }
@@ -2438,15 +2504,20 @@ class VoiceManager {
     if (was === relayed) return;
     if (relayed) console.log('[Voice] Peer', userId, 'is reached through a relay; the gentler screen share profile applies to that viewer');
     if (this.isScreenSharing) {
-      this._applyScreenBitrate(connection, this._screenBitrates[this.screenResolution] || this._screenBitrates[0], userId);
+      this._applyScreenBitrate(connection, this._screenBitrateFor(this.screenResolution), userId);
     }
   }
 
   _screenBitrateFor(res, relayProfile = this._screenRelayProfileEnabled()) {
-    const table = relayProfile
-      ? { 0: 3_000_000, 720: 1_500_000, 1080: 3_000_000, 1440: 5_000_000 }
-      : this._screenBitrates;
-    return table[res] || table[0];
+    if (relayProfile) {
+      return { 0: 3_000_000, 720: 1_500_000, 1080: 3_000_000, 1440: 5_000_000 }[res]
+        || 3_000_000;
+    }
+    // User cap wins over the old per-resolution table (kept on
+    // `this._screenBitrates` for older harnesses). 0 = unlimited → null,
+    // meaning "leave the sender uncapped".
+    const user = Number.isSafeInteger(this.screenBitrate) ? this.screenBitrate : 4000;
+    return user > 0 ? user * 1000 : null;
   }
 
   // Re-apply the current cap to every peer, for when the toggle changes while
@@ -2470,17 +2541,21 @@ class VoiceManager {
           if (!params.encodings || params.encodings.length === 0) {
             params.encodings = [{}];
           }
-          params.encodings[0].maxBitrate = relayProfile
-            ? this._screenBitrateFor(this.screenResolution, true)
-            : maxBitrate;
           // Per-encoding cap is the primary control; framerate hint also helps
           // browsers that respect it (Chromium-based ones do). Under the relay
           // profile the framerate stays unpinned on purpose, so the encoder can
-          // shed frames instead of filling a queue it cannot drain.
+          // shed frames instead of filling a queue it cannot drain. A null cap
+          // is the "unlimited" setting — remove any previous limit instead of
+          // writing zero, which some browsers read as "send nothing".
           if (relayProfile) {
+            params.encodings[0].maxBitrate = this._screenBitrateFor(this.screenResolution, true);
             delete params.encodings[0].maxFramerate;
-          } else if (this.screenFrameRate) {
-            params.encodings[0].maxFramerate = this.screenFrameRate;
+          } else {
+            if (maxBitrate) params.encodings[0].maxBitrate = maxBitrate;
+            else delete params.encodings[0].maxBitrate;
+            if (this.screenFrameRate) {
+              params.encodings[0].maxFramerate = this.screenFrameRate;
+            }
           }
           params.degradationPreference = relayProfile ? 'balanced' : 'maintain-framerate';
           sender.setParameters(params).catch(() => {});
@@ -2734,7 +2809,7 @@ class VoiceManager {
       });
       // Cap bitrate for this new peer
       const res = this.screenResolution;
-      const maxBitrate = this._screenBitrates[res] || this._screenBitrates[0];
+      const maxBitrate = this._screenBitrateFor(this.screenResolution);
       this._applyScreenBitrate(connection, maxBitrate, userId);
     }
 
@@ -3096,11 +3171,14 @@ class VoiceManager {
     const mic = this.localStream?.getAudioTracks()[0];
     if (mic && !this.isListenerOnly) await relay.publish('mic', mic).catch(err => console.warn('[Relay] Mic not sent:', err.message));
     if (this.isScreenSharing && this.screenStream) {
-      const res = this.screenResolution;
-      const maxBitrate = this._screenBitrates?.[res] || this._screenBitrates?.[0];
+      const maxBitrate = this._screenBitrateFor(this.screenResolution);
       const v = this.screenStream.getVideoTracks()[0];
       const a = this.screenStream.getAudioTracks()[0];
-      if (v) await relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(err => console.warn('[Relay] Screen not sent:', err.message));
+      // An uncapped (unlimited) share omits maxBitrate rather than sending
+      // zero/null, which the relay would read as "send nothing".
+      const screenOpts = { simulcast: true };
+      if (maxBitrate) screenOpts.maxBitrate = maxBitrate;
+      if (v) await relay.publish('screen', v, screenOpts).catch(err => console.warn('[Relay] Screen not sent:', err.message));
       if (a) await relay.publish('screen-audio', a).catch(err => console.warn('[Relay] Screen audio not sent:', err.message));
     }
     const cam = this.isWebcamActive && this.webcamStream?.getVideoTracks()[0];

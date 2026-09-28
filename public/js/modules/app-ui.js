@@ -1466,15 +1466,41 @@ _setupUI() {
   const screenFpsSelect = document.getElementById('screen-fps-select');
   if (screenResSelect) {
     // Restore saved value (0 = "source")
-    const savedRes = localStorage.getItem('haven_screen_res') || '1080';
+    const savedRes = localStorage.getItem('haven_screen_res') || '0';
     screenResSelect.value = savedRes === '0' ? 'source' : savedRes;
     screenResSelect.addEventListener('change', (e) => {
       const val = e.target.value === 'source' ? 0 : parseInt(e.target.value, 10);
       this.voice.setScreenResolution(val);
     });
   }
+  // ── Screen share bitrate stepper (300–10000 Kbps + unlimited) ──
+  const bitrateMinus = document.getElementById('screen-bitrate-minus');
+  const bitratePlus = document.getElementById('screen-bitrate-plus');
+  const bitrateValue = document.getElementById('screen-bitrate-value');
+  const renderBitrate = (kbps) => {
+    if (bitrateValue) {
+      bitrateValue.textContent = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+    }
+  };
+  if (bitrateMinus && bitratePlus) {
+    renderBitrate(this.voice.screenBitrate);
+    bitrateMinus.addEventListener('click', () => {
+      const cur = this.voice.screenBitrate || 0;
+      // From unlimited, step down into the top of the range.
+      const next = cur === 0 ? 10000 : cur - 100;
+      this.voice.setScreenBitrate(next);
+      renderBitrate(this.voice.screenBitrate);
+    });
+    bitratePlus.addEventListener('click', () => {
+      const cur = this.voice.screenBitrate || 0;
+      // Past the top of the range wraps to unlimited.
+      const next = cur === 0 ? 300 : cur + 100;
+      this.voice.setScreenBitrate(next);
+      renderBitrate(this.voice.screenBitrate);
+    });
+  }
   if (screenFpsSelect) {
-    const savedFps = localStorage.getItem('haven_screen_fps') || '30';
+    const savedFps = localStorage.getItem('haven_screen_fps') || '60';
     screenFpsSelect.value = savedFps;
     screenFpsSelect.addEventListener('change', (e) => {
       this.voice.setScreenFrameRate(parseInt(e.target.value, 10));

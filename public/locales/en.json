@@ -1274,6 +1274,8 @@
     "resolution": "Resolution",
     "resolution_source": "Source",
     "frame_rate": "Frame Rate",
+    "bitrate": "Bitrate",
+    "bitrate_unlimited": "Unlimited",
     "camera_fallback": "Camera {{n}}"
   },
   "notifications_runtime": {

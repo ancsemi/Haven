@@ -1198,6 +1198,8 @@
     "resolution": "Resolução",
     "resolution_source": "Fonte",
     "frame_rate": "Taxa de quadros",
+    "bitrate": "Taxa de bits",
+    "bitrate_unlimited": "Ilimitado",
     "camera_fallback": "Câmera {{n}}"
   },
   "notifications_runtime": {
