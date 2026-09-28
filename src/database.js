@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { DB_PATH } = require('./paths');
 const { ensureSearchIndex } = require('./searchIndex');
+const { seedDefaultRoles } = require('./roleDefaults');
 
 let db;
 
@@ -33,6 +34,10 @@ function initDatabase() {
   db.pragma('cache_size = -8000');          // 8 MB page cache (was 64 MB — overkill for a chat app)
   db.pragma('busy_timeout = 5000');         // wait up to 5 s on lock contention
   db.pragma('temp_store = MEMORY');         // keep temp tables in RAM
+  // Deleted rows are overwritten with zeros instead of lingering in the file
+  // until the space is reused, so deleted messages cannot be read back out of
+  // haven.db with a text editor (#5699).
+  db.pragma('secure_delete = ON');
   db.pragma('mmap_size = 33554432');        // 32 MB memory-mapped I/O (was 256 MB)
 
   // Hard-cap SQLite's own heap usage so it can never run away
@@ -247,6 +252,27 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_upload_ownership_user
       ON upload_ownership(user_id);
 
+    -- ── Attachment tagging (upload tags) ──────────────────
+    -- A GLOBAL tag vocabulary applied to file/image uploads. Separate from the
+    -- per-channel forum-topic tags (channels.forum_tags / messages.tags JSON).
+    -- upload_tags is the vocabulary; attachment_tags links a tag to the file a
+    -- message carries. name_norm is the case-folded uniqueness/lookup key.
+    CREATE TABLE IF NOT EXISTS upload_tags (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      name_norm  TEXT NOT NULL UNIQUE,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS attachment_tags (
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      rel_path   TEXT NOT NULL,
+      tag_id     INTEGER NOT NULL REFERENCES upload_tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (message_id, rel_path, tag_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_attachment_tags_tag ON attachment_tags(tag_id);
+    CREATE INDEX IF NOT EXISTS idx_attachment_tags_msg ON attachment_tags(message_id);
+
     CREATE INDEX IF NOT EXISTS idx_messages_channel
       ON messages(channel_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_channel_code
@@ -435,6 +461,8 @@ function initDatabase() {
   insertSetting.run('max_invite_uses', '0');            // the maximum uses each non-admin/manage-server invite link can accept
   insertSetting.run('max_upload_mb', '25');             // max file upload size in MB
   insertSetting.run('max_attachments', '10');           // files one message may queue, images and other files together (1-50) (#5561)
+  insertSetting.run('max_tags_per_attachment', '3');    // upload tags allowed on one attachment (1-10) (#tagging phase 4)
+  insertSetting.run('max_tag_len', '20');               // max characters in an upload tag name (1-50) (#tagging phase 4)
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
@@ -443,11 +471,13 @@ function initDatabase() {
   insertSetting.run('unicode_emoji_auto_update', 'false'); // monthly refresh of the built-in emoji set from unicode.org, opt-in, defaults off (UNICODE_EMOJI_AUTO_UPDATE env overrides)
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
+  insertSetting.run('allow_self_purge', 'false');         // (#5686) members may delete every message they wrote, in one go
   insertSetting.run('session_duration_days', '0');       // login token lifetime in days; 0 = never expire (default for new installs, #5391). Existing installs that were seeded with '7' keep that value until the admin changes it.
   insertSetting.run('published_themes', '[]');             // JSON array of *.theme.css filenames shown in the theme picker
   insertSetting.run('admin_password_reset_enabled', 'false'); // admin can reset user passwords (#5300), opt-in, defaults off
   insertSetting.run('guests_enabled', 'false');          // (#5381) allow Join-as-Guest on the login page
   insertSetting.run('guest_channels', '');               // (#5381) CSV of channel IDs guests are auto-joined to (empty = none)
+  insertSetting.run('guests_allow_voice', 'true');       // (#5687) guests may join voice and video; false keeps them to text
   // (#5399) Voice connectivity. Admin-configurable STUN/TURN, served by
   // /api/ice-servers. All empty by default = use the built-in STUN pool.
   insertSetting.run('stun_urls', '');                    // newline/comma separated stun: URIs (empty = built-in defaults)
@@ -886,40 +916,7 @@ function initDatabase() {
   // Seed default roles if none exist
   const roleCount = db.prepare('SELECT COUNT(*) as cnt FROM roles').get();
   if (roleCount.cnt === 0) {
-    const insertRole = db.prepare('INSERT INTO roles (name, level, scope, color) VALUES (?, ?, ?, ?)');
-    const insertPerm = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
-
-    // Server Mod — level 50 (below admin which is implied level 100)
-    const serverMod = insertRole.run('Server Mod', 50, 'server', '#3498db');
-    const serverModPerms = [
-      'kick_user', 'mute_user', 'delete_message', 'pin_message',
-      'set_channel_topic', 'manage_sub_channels', 'rename_channel',
-      'rename_sub_channel', 'delete_lower_messages', 'manage_webhooks',
-      'use_ferry',
-      'upload_files', 'use_voice', 'view_history', 'view_all_members',
-      'manage_music_queue',
-      'delete_own_messages', 'edit_own_messages'
-    ];
-    serverModPerms.forEach(p => insertPerm.run(serverMod.lastInsertRowid, p));
-
-    // Channel Mod — level 25 (channel-scoped)
-    const channelMod = insertRole.run('Channel Mod', 25, 'channel', '#2ecc71');
-    const channelModPerms = [
-      'kick_user', 'mute_user', 'delete_message', 'pin_message',
-      'manage_sub_channels', 'rename_sub_channel', 'delete_lower_messages',
-      'upload_files', 'use_voice', 'view_history', 'view_channel_members', 'manage_music_queue',
-      'delete_own_messages', 'edit_own_messages'
-    ];
-    channelModPerms.forEach(p => insertPerm.run(channelMod.lastInsertRowid, p));
-
-    // User — level 1 (default role for all new users, auto-assigned)
-    const userRole = insertRole.run('User', 1, 'server', '#95a5a6');
-    db.prepare('UPDATE roles SET auto_assign = 1 WHERE id = ?').run(userRole.lastInsertRowid);
-    const userPerms = [
-      'delete_own_messages', 'edit_own_messages', 'upload_files',
-      'use_voice', 'view_history', 'use_tts'
-    ];
-    userPerms.forEach(p => insertPerm.run(userRole.lastInsertRowid, p));
+    seedDefaultRoles(db);
   }
 
   // ── Migration: add auto_assign column to roles if missing ──
@@ -1127,6 +1124,7 @@ function initDatabase() {
     { name: 'voice_enabled',     sql: "ALTER TABLE channels ADD COLUMN voice_enabled INTEGER DEFAULT 1" },
     { name: 'text_enabled',      sql: "ALTER TABLE channels ADD COLUMN text_enabled INTEGER DEFAULT 1" },
     { name: 'soundboard_enabled', sql: "ALTER TABLE channels ADD COLUMN soundboard_enabled INTEGER DEFAULT 1" },
+    { name: 'reactions_enabled',  sql: "ALTER TABLE channels ADD COLUMN reactions_enabled INTEGER DEFAULT 1" },
     // Forum mode (#144): each top-level message is a topic, and the channel
     // lists topics by their latest thread activity instead of creation time.
     { name: 'is_forum',          sql: "ALTER TABLE channels ADD COLUMN is_forum INTEGER DEFAULT 0" },
@@ -1239,6 +1237,17 @@ function initDatabase() {
     db.prepare("SELECT e2e_secret FROM users LIMIT 0").get();
   } catch {
     db.exec("ALTER TABLE users ADD COLUMN e2e_secret TEXT DEFAULT NULL");
+  }
+
+  // ── Migration: separate encryption passphrase ──
+  // 1 when the E2E key backup is locked with a passphrase of the user's own
+  // instead of their login password, which the server receives at every
+  // sign-in. The client then asks for the passphrase rather than deriving
+  // the key from the password.
+  try {
+    db.prepare("SELECT e2e_passphrase FROM users LIMIT 0").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN e2e_passphrase INTEGER DEFAULT 0");
   }
 
   // ── Migration: OIDC / SSO federated identity (#12) ──
@@ -1707,10 +1716,31 @@ function initDatabase() {
     // NSFW topics blur their picture and preview until clicked, and stay out
     // of the list for anyone who hides NSFW channels (#5633).
     { name: 'nsfw', sql: "ALTER TABLE messages ADD COLUMN nsfw INTEGER DEFAULT 0" },
+    // Encrypted DM files (#5699): the server cannot read an E2E message to find
+    // the file it points at, so the sender lists it here (JSON array of paths).
+    { name: 'e2e_files', sql: "ALTER TABLE messages ADD COLUMN e2e_files TEXT DEFAULT NULL" },
   ]) {
     try { db.prepare(`SELECT ${col.name} FROM messages LIMIT 0`).get(); } catch { db.exec(col.sql); }
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL");
+
+  // Encrypted DM files (#5699). Deleting a message by any route (one message,
+  // a whole DM or channel, auto-cleanup, a purge) notes its files here, and a
+  // sweep in server.js moves them out with the other deleted attachments. A
+  // trigger catches every route without each of them having to know.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS released_uploads (
+      rel_path    TEXT PRIMARY KEY,
+      released_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TRIGGER IF NOT EXISTS messages_release_e2e_files
+    AFTER DELETE ON messages
+    WHEN OLD.e2e_files IS NOT NULL AND json_valid(OLD.e2e_files)
+    BEGIN
+      INSERT OR IGNORE INTO released_uploads (rel_path)
+        SELECT value FROM json_each(OLD.e2e_files) WHERE type = 'text';
+    END;
+  `);
 
   // ── Audit log ───────────────────────────────────────────
   // Tracks admin/moderator actions: channel CRUD, role changes,

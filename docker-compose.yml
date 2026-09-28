@@ -14,6 +14,11 @@ services:
     ports:
       - "${PORT:-3000}:${PORT:-3000}"    # Main HTTPS port
       - "${REDIRECT_PORT:-3001}:${REDIRECT_PORT:-3001}"  # HTTP → HTTPS redirect
+      # ── Voice relay (Settings → Large Server Setup) ──
+      # Uncomment both lines when you switch the relay on, and use the same
+      # port the setup page shows. It needs UDP and TCP.
+      # - "40000:40000/udp"
+      # - "40000:40000/tcp"
     volumes:
       - haven_data:/data
       # ── Or use a local folder instead (good for NAS / Synology): ──

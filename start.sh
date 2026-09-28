@@ -50,8 +50,15 @@ elif [ "$NODE_VER" -ge 24 ]; then
 fi
 
 # ── Install dependencies ───────────────────────────────────
+# Also after an update that changed them: npm records what it installed in
+# node_modules/.package-lock.json, so a newer package-lock.json means new or
+# changed dependencies to fetch.
 if [ ! -d "node_modules" ]; then
     echo "  [*] First run — installing dependencies..."
+    npm install
+    echo ""
+elif [ package-lock.json -nt node_modules/.package-lock.json ]; then
+    echo "  [*] Dependencies changed, updating..."
     npm install
     echo ""
 fi

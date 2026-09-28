@@ -31,6 +31,7 @@
 
 const WebSocket = require('ws');
 const automod = require('./automod');
+const { stripRoleMentions } = require('./socketHandlers/helpers');
 
 const API = 'https://discord.com/api/v10';
 const USER_AGENT = 'DiscordBot (https://github.com/ancsemi/Haven, 1.0)';
@@ -143,10 +144,38 @@ function getConfig() {
 // Discord REST
 // ══════════════════════════════════════════════════════════════
 
+// Discord answers a burst with a 429 and says how long to wait. A short wait
+// is honoured in place (the per-channel queue holds later messages behind
+// this one), up to three times; a long one is reported instead, with the
+// number of seconds, so the sender knows Discord is throttling the channel
+// and the bridge is not broken. Before this the bridge waited at most ten
+// seconds once and then showed Discord's own words, which read as a fault.
+const RATE_LIMIT_MAX_WAIT_MS = 30000;
+const RATE_LIMIT_ATTEMPTS = 3;
+
+async function rateLimitWaitMs(res) {
+  let seconds = 0;
+  try {
+    const info = await res.clone().json();
+    if (Number.isFinite(info?.retry_after)) seconds = info.retry_after;
+  } catch { /* header-only 429 */ }
+  if (!seconds) {
+    const header = Number(res.headers.get('retry-after'));
+    seconds = Number.isFinite(header) && header > 0 ? header : 1;
+  }
+  return Math.max(250, Math.ceil(seconds * 1000));
+}
+
+function rateLimitError(waitMs) {
+  const err = new Error(`Discord is rate limiting this channel; try again in about ${Math.ceil(waitMs / 1000)}s`);
+  err.status = 429;
+  return err;
+}
+
 /**
- * One REST call with bot auth. Retries once on a 429 using Discord's own
- * retry_after, and once on a 5xx. Everything else surfaces to the caller so the
- * admin UI can show the real reason a pairing is broken.
+ * One REST call with bot auth. Waits out short 429s using Discord's own
+ * retry_after, retries once on a 5xx. Everything else surfaces to the caller
+ * so the admin UI can show the real reason a pairing is broken.
  */
 async function discordRequest(method, path, body, attempt = 0) {
   const { token } = getConfig();
@@ -163,11 +192,14 @@ async function discordRequest(method, path, body, attempt = 0) {
     signal: AbortSignal.timeout(15000),
   });
 
-  if (res.status === 429 && attempt < 1) {
-    let wait = 1000;
-    try { wait = Math.min(10000, Math.ceil((await res.clone().json()).retry_after * 1000) || 1000); } catch { /* header-only 429 */ }
-    await sleep(wait);
-    return discordRequest(method, path, body, attempt + 1);
+  if (res.status === 429) {
+    const wait = await rateLimitWaitMs(res);
+    console.warn(`[ferry] Discord rate limit on ${method} ${path}: retry after ${Math.ceil(wait / 1000)}s`);
+    if (attempt < RATE_LIMIT_ATTEMPTS - 1 && wait <= RATE_LIMIT_MAX_WAIT_MS) {
+      await sleep(wait);
+      return discordRequest(method, path, body, attempt + 1);
+    }
+    throw rateLimitError(wait);
   }
   if (res.status >= 500 && attempt < 1) {
     await sleep(1500);
@@ -201,14 +233,14 @@ async function executeWebhook(webhookId, webhookToken, payload, attempt = 0) {
     signal: AbortSignal.timeout(15000),
   });
 
-  if (res.status === 429 && attempt < 2) {
-    let wait = 1000;
-    try {
-      const info = await res.clone().json();
-      wait = Math.min(10000, Math.ceil((info.retry_after || 1) * 1000));
-    } catch { /* header-only 429, fall back to the 1s default */ }
-    await sleep(wait);
-    return executeWebhook(webhookId, webhookToken, payload, attempt + 1);
+  if (res.status === 429) {
+    const wait = await rateLimitWaitMs(res);
+    console.warn(`[ferry] Discord rate limit on webhook ${webhookId}: retry after ${Math.ceil(wait / 1000)}s`);
+    if (attempt < RATE_LIMIT_ATTEMPTS - 1 && wait <= RATE_LIMIT_MAX_WAIT_MS) {
+      await sleep(wait);
+      return executeWebhook(webhookId, webhookToken, payload, attempt + 1);
+    }
+    throw rateLimitError(wait);
   }
 
   let data = null;
@@ -453,7 +485,24 @@ function handleDispatch(type, d) {
 
     case 'CHANNEL_DELETE': {
       const g = guilds.get(d.guild_id);
-      if (g) g.channels.delete(d.id);
+      if (g) { g.channels.delete(d.id); g.channelNames?.delete(d.id); }
+      break;
+    }
+
+    case 'GUILD_ROLE_CREATE':
+    case 'GUILD_ROLE_UPDATE': {
+      const g = guilds.get(d.guild_id);
+      const r = d.role;
+      if (g && r && r.id && r.name && r.id !== d.guild_id) {
+        if (!g.roles) g.roles = new Map();
+        g.roles.set(String(r.id), { id: String(r.id), name: String(r.name), mentionable: !!r.mentionable });
+      }
+      break;
+    }
+
+    case 'GUILD_ROLE_DELETE': {
+      const g = guilds.get(d.guild_id);
+      if (g && g.roles) g.roles.delete(String(d.role_id));
       break;
     }
 
@@ -473,6 +522,10 @@ const RELAYABLE_TYPES = new Set([0, 5, 11, 12]);
 function cacheGuild(g) {
   const channels = new Map();
   const byId = new Map((g.channels || []).map(c => [c.id, c]));
+  // Every channel's name, voice and categories included, for turning a
+  // <#id> in a message into a name people can read.
+  const channelNames = new Map();
+  for (const c of g.channels || []) if (c && c.id && c.name) channelNames.set(c.id, c.name);
   for (const c of g.channels || []) {
     if (!RELAYABLE_TYPES.has(c.type)) continue;
     channels.set(c.id, {
@@ -482,7 +535,19 @@ function cacheGuild(g) {
       category: c.parent_id ? (byId.get(c.parent_id)?.name || null) : null,
     });
   }
-  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels, emojis: emojiMap(g.emojis) });
+  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels, channelNames, emojis: emojiMap(g.emojis), roles: roleMap(g.roles, g.id) });
+}
+
+// Role id -> { id, name, mentionable }. GUILD_CREATE carries the full list and
+// the GUILD_ROLE_* events keep it current. @everyone is a role too, with the
+// guild's own id, and is left out: it never relays as a role.
+function roleMap(list, guildId) {
+  const map = new Map();
+  for (const r of list || []) {
+    if (!r || !r.id || !r.name || r.id === guildId || r.name === '@everyone') continue;
+    map.set(String(r.id), { id: String(r.id), name: String(r.name), mentionable: !!r.mentionable });
+  }
+  return map;
 }
 
 // Lowercased name -> { id, name, animated }, so a Haven :name: can go out as
@@ -501,6 +566,7 @@ function cacheChannel(c) {
   if (!c.guild_id) return;
   const g = guilds.get(c.guild_id);
   if (!g) return;
+  if (g.channelNames && c.id && c.name) g.channelNames.set(c.id, c.name);
   if (!RELAYABLE_TYPES.has(c.type)) { g.channels.delete(c.id); return; }
   g.channels.set(c.id, { id: c.id, name: c.name, type: c.type, category: g.channels.get(c.id)?.category || null });
 }
@@ -743,14 +809,147 @@ function collectComponentMedia(node, into, depth = 0) {
  * than a lookup, and an unresolved id is left as-is rather than guessed at.
  */
 function translateDiscordMentions(text, msg) {
-  let out = String(text || '');
+  // Anything typed as plain text that would ping a group on Haven is
+  // defused first: @everyone and @here unless Discord itself says the
+  // message pinged everyone (it only does when the author was allowed to),
+  // and a Haven role's name typed out. A real Discord role mention,
+  // translated below and only when pings are allowed, is the one way a
+  // Discord message pings a Haven role.
+  let out = neutralizeLiteralPings(String(text || ''), msg && msg.mention_everyone === true);
   for (const u of (msg && msg.mentions) || []) {
     if (!u || !u.id) continue;
     const name = u.global_name || u.username;
     if (!name) continue;
     out = out.split(`<@${u.id}>`).join(`@${name}`).split(`<@!${u.id}>`).join(`@${name}`);
   }
+  const guild = msg && msg.guild_id ? guilds.get(String(msg.guild_id)) : null;
+  return translateDiscordRefs(out, guild, {
+    pingRoles: deps ? boolSetting('ferry_allow_mentions', false) : false,
+    havenChannelFor: pairedHavenChannelName,
+  });
+}
+
+function neutralizeLiteralPings(text, discordPingedEveryone = false) {
+  let out = String(text || '');
+  if (!discordPingedEveryone) out = out.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
+  if (deps && deps.db) {
+    try { out = stripRoleMentions(out, deps.db.prepare('SELECT name FROM roles').all().map(r => r.name)); } catch { /* roles table optional in tests */ }
+  }
   return out;
+}
+
+/**
+ * Role and channel mentions from Discord, which arrive as <@&id> and <#id>.
+ *
+ * A role becomes @Name, so a Haven role of the same name lights up for the
+ * people who hold it: the two sides ping together. That only happens when the
+ * admin has pings on and the Discord role is one anybody there may mention;
+ * otherwise the name shows with a zero-width space after the @, which reads
+ * the same and pings nobody, the way Haven treats a role ping from someone
+ * not allowed to send one.
+ *
+ * A channel becomes #name: the Haven channel it is paired with when there is
+ * one, so it turns into a link people can click, and the Discord name when
+ * there is not. Unknown ids are left as they are rather than guessed at.
+ */
+function translateDiscordRefs(text, guild, { pingRoles = false, havenChannelFor = null } = {}) {
+  let out = String(text || '');
+  if (!guild) return out;
+  out = out.replace(/<@&([0-9]{15,25})>/g, (full, id) => {
+    const r = guild.roles && guild.roles.get(id);
+    if (!r) return full;
+    return (pingRoles && r.mentionable ? '@' : '@\u200B') + r.name;
+  });
+  out = out.replace(/<#([0-9]{15,25})>/g, (full, id) => {
+    const haven = havenChannelFor ? havenChannelFor(id) : null;
+    const name = haven || (guild.channelNames && guild.channelNames.get(id)) || (guild.channels && guild.channels.get(id)?.name);
+    return name ? '#' + String(name).replace(/\s+/g, '_') : full;
+  });
+  return out;
+}
+
+// The Haven channel a Discord channel is paired with, by name, if any.
+function pairedHavenChannelName(discordChannelId) {
+  if (!deps || !deps.db) return null;
+  try {
+    const row = deps.db.prepare(`
+      SELECT c.name FROM ferry_links f JOIN channels c ON f.channel_id = c.id
+      WHERE f.discord_channel_id = ? AND f.is_active = 1 ORDER BY f.id LIMIT 1
+    `).get(String(discordChannelId));
+    return row ? row.name : null;
+  } catch { return null; }
+}
+
+// The Discord channel a Haven channel is paired with in one guild, by the
+// Haven channel's name (a #name in a Haven message).
+function pairedDiscordChannelId(guildId, havenName) {
+  if (!deps || !deps.db) return null;
+  try {
+    const rows = deps.db.prepare(`
+      SELECT f.discord_channel_id, c.name FROM ferry_links f JOIN channels c ON f.channel_id = c.id
+      WHERE f.guild_id = ? AND f.is_active = 1
+    `).all(String(guildId));
+    const want = String(havenName).toLowerCase();
+    const hit = rows.filter(r => r.name && (r.name.toLowerCase() === want || r.name.toLowerCase().replace(/\s+/g, '_') === want));
+    return hit.length === 1 ? hit[0].discord_channel_id : null;
+  } catch { return null; }
+}
+
+/**
+ * The other way round: a Haven @Role and #channel go out as Discord's own
+ * <@&id> and <#id>. Returns the text and the role ids it may ping.
+ *
+ * A role is only turned into a ping when pings are on and the Discord role is
+ * one anybody there may mention, which is Discord's own rule for a member
+ * typing it. A Haven sender who may not ping roles here has had the ping
+ * broken with a zero-width space before this runs, so it never matches.
+ * Names are matched whole and case-insensitively; two roles sharing a name is
+ * ambiguous, and neither is pinged.
+ *
+ * A channel is the one its Haven channel is paired with in this guild, or
+ * failing that the one Discord channel with that name. Channel links ping
+ * nobody, so they are translated whether or not pings are on.
+ */
+function translateHavenRefs(content, guild, { pingRoles = false, discordChannelFor = null } = {}) {
+  let text = String(content || '');
+  const roleIds = [];
+  if (!guild) return { content: text, roleIds };
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  if (pingRoles && guild.roles && guild.roles.size && text.includes('@')) {
+    const byName = new Map();
+    for (const r of guild.roles.values()) {
+      const key = r.name.toLowerCase();
+      byName.set(key, byName.has(key) ? null : r);
+    }
+    const names = [...byName.keys()].filter(k => byName.get(k) && byName.get(k).mentionable)
+      .sort((a, b) => b.length - a.length);
+    if (names.length) {
+      const re = new RegExp(`(?<![\\w@<])@(${names.map(esc).join('|')})(?![\\w])`, 'gi');
+      text = text.replace(re, (full, name) => {
+        const r = byName.get(name.toLowerCase());
+        if (!r) return full;
+        if (!roleIds.includes(r.id)) roleIds.push(r.id);
+        return `<@&${r.id}>`;
+      });
+    }
+  }
+
+  if (text.includes('#')) {
+    const byName = new Map();
+    const names = guild.channelNames && guild.channelNames.size ? guild.channelNames : new Map([...(guild.channels || new Map()).values()].map(c => [c.id, c.name]));
+    for (const [id, name] of names) {
+      const key = String(name).toLowerCase();
+      byName.set(key, byName.has(key) ? null : id);
+    }
+    text = text.replace(/(?<![\w#&<\/])#([\p{L}\p{N}_-]{1,100})/gu, (full, name) => {
+      const lower = name.toLowerCase();
+      const id = (discordChannelFor && discordChannelFor(lower))
+        || byName.get(lower) || byName.get(lower.replace(/_/g, '-'));
+      return id ? `<#${id}>` : full;
+    });
+  }
+  return { content: text, roleIds };
 }
 
 /**
@@ -821,10 +1020,10 @@ function absolutizeUploads(content) {
  * @everyone someone else's Discord server through the bridge, and the server
  * owner would see it as coming from the bot they installed.
  */
-function mentionPolicy() {
-  return boolSetting('ferry_allow_mentions', false)
-    ? { parse: ['users'] }     // still never everyone or roles
-    : { parse: [] };
+function mentionPolicy(roleIds = []) {
+  if (!boolSetting('ferry_allow_mentions', false)) return { parse: [] };
+  // Never @everyone. Roles only by id, the ones translateHavenRefs checked.
+  return roleIds.length ? { parse: ['users'], roles: roleIds.slice(0, 100) } : { parse: ['users'] };
 }
 
 /**
@@ -953,11 +1152,17 @@ async function sendToDiscord(link, { username, avatar, content }) {
       // Resolved per destination: the same @name can be a different person in
       // a different Discord server.
       const withMentions = await resolveOutgoingMentions(link.guild_id, body);
+      // Roles and channels after people, so a person who shares a role's
+      // name is the one pinged, the same as in Haven.
+      const refs = translateHavenRefs(withMentions, guild, {
+        pingRoles: boolSetting('ferry_allow_mentions', false),
+        discordChannelFor: (name) => pairedDiscordChannelId(link.guild_id, name),
+      });
       await executeWebhook(hook.id, hook.token, {
-        content: withMentions,
+        content: refs.content.slice(0, MAX_DISCORD_CONTENT),
         username: sanitizeWebhookUsername(username),
         avatar_url: absoluteAvatarUrl(avatar) || undefined,
-        allowed_mentions: mentionPolicy(),
+        allowed_mentions: mentionPolicy(refs.roleIds),
       });
       touchLink(link.id, null);
     } catch (err) {
@@ -1266,6 +1471,17 @@ async function verifyToken(token) {
   return { id: user.id, username: user.username, avatar: discordAvatarUrl(user) };
 }
 
+/**
+ * Headers for reading Discord as the Ferry bot, for the Discord import. The
+ * token never leaves the server: the import routes call Discord with these
+ * and the client only says "use Ferry". Null when Ferry has no token.
+ */
+function importHeaders() {
+  const { token } = getConfig();
+  if (!token) return null;
+  return { 'Authorization': `Bot ${token}`, 'User-Agent': USER_AGENT };
+}
+
 /** The invite link an admin needs, with exactly the permissions Ferry uses. */
 function inviteUrl(applicationId) {
   // 536870912 Manage Webhooks + 2048 Send Messages + 1024 View Channel
@@ -1281,11 +1497,15 @@ module.exports = {
   sanitizeWebhookUsername,
   buildHavenContent,
   translateHavenEmotes,
+  translateDiscordRefs,
+  translateHavenRefs,
+  roleMap,
   discordAvatarUrl,
   applySettings,
   reconnectFerry,
   stopFerry: stop,
   getFerryState,
+  importHeaders,
   getDirectory,
   searchMembers,
   sendToDiscord,

@@ -277,7 +277,7 @@ _replaceBurnedMessage(el) {
   const content = el.querySelector('.message-content');
   if (!content) return;
   const doneText = t('messages.burn_done');
-  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
+  content.innerHTML = `<span class="muted-text burn-complete-label" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
   el.classList.remove('message-burn-pending');
   el.classList.add('message-burned');
 },
@@ -334,8 +334,21 @@ _getMessageAttachments(messageId) {
   if (hinted && hinted.length) return hinted.slice();
   const msgs = this._lastRenderedMessages || [];
   const msg = msgs.find(m => m && m.id === messageId);
-  if (!msg || typeof msg.content !== 'string') return [];
-  return this._extractUploadUrls(msg.content);
+  if (msg && typeof msg.content === 'string') {
+    const urls = this._extractUploadUrls(msg.content);
+    if (urls.length) return urls;
+  }
+  // A message just sent or received is appended live to the DOM and never lands
+  // in _lastRenderedMessages, so its attachments were invisible here until a
+  // full re-render (which is why the retroactive "Edit tags" entry only showed
+  // after a refresh or channel switch). Fall back to the rendered content in the
+  // DOM, scoped to .message-content so an author avatar is not counted.
+  const el = document.querySelector(`#messages [data-msg-id="${messageId}"]`);
+  if (el) {
+    const body = el.querySelector('.message-content') || el;
+    return this._extractUploadUrls(body.innerHTML);
+  }
+  return [];
 },
 
 _extractUploadUrls(content) {
@@ -816,6 +829,32 @@ _formatContent(str) {
     return `<span class="muted-text">${t('app.messages.e2e_file_parse_error')}</span>`;
   }
 
+  // A post can carry pictures and files on lines of their own between its
+  // text: a forum topic sent with a picture, or one written in New Post. Each
+  // of those lines shows as the picture or file, and the text around them
+  // formats as usual; the link used to print as plain text (#5690, #5689).
+  // Only this server's uploads, and never inside a code block.
+  if (typeof str === 'string' && str.includes('\n') && !str.includes('```')) {
+    const mediaLine = (l) => /^(?:spoiler-img:)?\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(l) ||
+      /^\[file:[^\]\n]+\]\(\/uploads\/[^\s|)]+\|[^)\n]+\)$/.test(l);
+    const lines = str.split('\n');
+    if (lines.some(l => mediaLine(l.trim()))) {
+      const parts = [];
+      let text = [];
+      const flush = () => {
+        const chunk = text.join('\n');
+        text = [];
+        if (chunk.trim()) parts.push(`<div class="content-text-part">${this._formatContent(chunk)}</div>`);
+      };
+      for (const l of lines) {
+        if (mediaLine(l.trim())) { flush(); parts.push(`<div class="content-media-part">${this._formatContent(l.trim())}</div>`); }
+        else text.push(l);
+      }
+      flush();
+      return parts.join('');
+    }
+  }
+
   // Decode legacy HTML entities from old server-side sanitization.
   // The server no longer entity-encodes, but older messages in the DB
   // may still contain entities like &#39; &amp; &lt; etc.
@@ -851,7 +890,7 @@ _formatContent(str) {
     const voiceDur = this._voiceMessageLength(fileName);
     if (voiceDur !== null) {
       return `<div class="file-attachment voice-message">
-        <div class="file-info">🎤 <span class="file-name">${t('app.messages.voice_message')}</span> <span class="file-size">(${voiceDur})</span></div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">🎤</span> <span class="file-name">${t('app.messages.voice_message')}</span> <span class="file-size">(${voiceDur})</span></div>
         <audio controls preload="metadata" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
@@ -862,13 +901,13 @@ _formatContent(str) {
     // if the element fires `error`, so listing a format here is safe.
     if (['mp3', 'ogg', 'oga', 'wav', 'm4a', 'aac', 'flac', 'opus', 'weba'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
         <audio controls preload="none" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
     if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
         <div class="file-video-wrap">
           <video controls preload="none" src="${fileUrl}" class="file-video"></video>
         </div>
@@ -1378,7 +1417,40 @@ _voiceMessageLength(name) {
   return m ? `${Number(m[1])}:${String(m[2]).padStart(2, '0')}` : '';
 },
 
+// "Today at 9 PM" is only true until midnight, and a label is written once.
+// An app left open overnight kept calling last night's messages Today, so
+// every label carries its timestamp (data-ftime) and is rewritten when the
+// calendar day changes.
+_timeAttr(dateStr) {
+  return ` data-ftime="${this._escapeHtml(String(dateStr ?? ''))}"`;
+},
+
+_refreshTimeLabels() {
+  document.querySelectorAll('[data-ftime]').forEach(el => {
+    const raw = el.dataset.ftime;
+    if (!raw) return;
+    const next = this._formatTime(raw);
+    if (next && el.textContent !== next) el.textContent = next;
+  });
+},
+
+_startDayRolloverWatch() {
+  if (this._dayRolloverTimer || typeof document === 'undefined') return;
+  const dayKey = () => this._fmtDate(new Date(), { year: 'numeric', month: '2-digit', day: '2-digit' });
+  this._dayRolloverKey = dayKey();
+  const check = () => {
+    const key = dayKey();
+    if (key === this._dayRolloverKey) return;
+    this._dayRolloverKey = key;
+    this._refreshTimeLabels();
+  };
+  this._dayRolloverTimer = setInterval(check, 60000);
+  // A sleeping laptop or a hidden tab can skip the timer; look again on return.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+},
+
 _formatTime(dateStr) {
+  this._startDayRolloverWatch();
   const date = new Date(dateStr);
   const now = new Date();
   const time = this._fmtTime(date);
@@ -2431,6 +2503,25 @@ _saveGifFavorites() {
 
 _sendGifMessage(url) {
   if (!this.currentChannel || !url) return;
+  // In a DM the GIF goes out through the composer's own send, the way a
+  // sticker does, so it is encrypted like any other DM message; sent
+  // straight to the server it stayed plain text. Whatever was typed in the
+  // box is put back afterwards.
+  const dmCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
+  const input = document.getElementById('message-input');
+  if (dmCh && dmCh.is_dm && input && typeof this._sendMessage === 'function') {
+    const draft = input.value;
+    input.value = url;
+    Promise.resolve(this._sendMessage()).catch(() => {}).then((sent) => {
+      // Backing out of an unencrypted send leaves the GIF's link in the box,
+      // and the draft is what belongs there.
+      if (sent === false || (draft && !input.value)) {
+        input.value = draft;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+    return;
+  }
   const payload = {
     code: this.currentChannel,
     content: url,
@@ -2469,9 +2560,16 @@ _sendStickerMessage(url) {
   // pre-processing apply uniformly.
   const input = document.getElementById('message-input');
   if (!input || !this.currentChannel) return;
+  const draft = input.value;
   input.value = url;
-  if (typeof this._sendMessage === 'function') this._sendMessage();
-  else this.socket.emit('send-message', { code: this.currentChannel, content: url });
+  if (typeof this._sendMessage === 'function') {
+    // Backing out of an unencrypted send brings back the draft, not the link.
+    Promise.resolve(this._sendMessage()).then((sent) => {
+      if (sent !== false) return;
+      input.value = draft;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }).catch(() => {});
+  } else this.socket.emit('send-message', { code: this.currentChannel, content: url });
 },
 
 // /gif slash command — inline GIF search results above the input
@@ -2634,12 +2732,12 @@ _renderReactions(msgId, reactions) {
     const usersJson = this._escapeHtml(JSON.stringify(g.users.map(u => u.username)));
     // Check if it's a custom emoji
     const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-    let emojiDisplay = g.emoji;
+    let emojiDisplay = this._escapeHtml(g.emoji);
     if (customMatch && this.customEmojis) {
       const ce = this._findNamedEmoji(customMatch[1]);
       if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;
     }
-    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${names}">${emojiDisplay} ${g.users.length}</button>`;
+    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${this._escapeHtml(names)}">${emojiDisplay} ${g.users.length}</button>`;
   }).join('');
 
   return `<div class="reactions-row">${badges}</div>`;
@@ -2885,6 +2983,13 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
 },
 
 _showReactionPicker(msgEl, msgId) {
+  const pickerRoot = msgEl?.closest('#dm-pip-messages, #messages, #thread-messages');
+  const pickerCode = pickerRoot?.id === 'dm-pip-messages' ? this._activeDMPip : this.currentChannel;
+  if (this._channelAllowsReactions && !this._channelAllowsReactions(pickerCode)) {
+    this._showToast?.(t('channel_functions.reactions_disabled'), 'info');
+    return;
+  }
+
   // Toggle: if this message already has a picker open, close it and bail
   const existingPicker = msgEl.querySelector('.reaction-picker');
   if (existingPicker) {
@@ -3713,12 +3818,15 @@ _quoteDMPiPMessage(msgEl) {
 _sendDMPiPMessage() {
   const input = document.getElementById('dm-pip-input');
   if (!input || !this._activeDMPip) return;
+  const typed = input.value;
   let content = (input.value || '').trim();
   const hasPiPImages = this._pipImageQueue && this._pipImageQueue.length > 0;
   if (!content && !hasPiPImages) return;
   const code = this._activeDMPip;
   const replyTo = this._dmPipReplyingTo ? this._dmPipReplyingTo.id : null;
 
+  // Kept for a moment so a refusal for length can put the text back (#5691).
+  if (content) this._lastSendDraft = { text: input.value, code, at: Date.now(), inputId: 'dm-pip-input' };
   // Clear the UI immediately so the input feels responsive.
   input.value = '';
   this._clearDMPiPReply();
@@ -3728,15 +3836,21 @@ _sendDMPiPMessage() {
   (async () => {
     const ch = this.channels.find(c => c.code === code);
     const isDm = ch && ch.is_dm && ch.dm_target;
-    let partner = isDm ? this._getE2EPartnerFor(code) : null;
-    if (isDm && !partner && this.e2e && this.e2e.ready) {
-      try {
-        const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-        if (jwk) {
-          this._dmPublicKeys[ch.dm_target.id] = jwk;
-          partner = this._getE2EPartnerFor(code);
-        }
-      } catch {}
+    // Not sent after all: the text and the reply go back in the box.
+    const putBack = () => {
+      if (this._activeDMPip !== code || input.value.trim()) return;
+      input.value = typed;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const replyEl = replyTo && document.querySelector(`#dm-pip-messages .message[data-msg-id="${replyTo}"], #dm-pip-messages .message-compact[data-msg-id="${replyTo}"]`);
+      if (replyEl) this._setDMPiPReply(replyEl, replyTo);
+      input.focus();
+    };
+    // Nothing goes out unencrypted, or to a changed key, without asking.
+    let partner = null;
+    if (isDm) {
+      const gate = await this._dmSendGate(code);
+      if (!gate) { putBack(); return; }
+      partner = gate.partner;
     }
 
     // Pre-process content-transforming slash commands client-side so they
@@ -3802,7 +3916,11 @@ _sendDMPiPMessage() {
           payload.content = encrypted;
           payload.encrypted = true;
         } catch (err) {
+          // This used to go out unencrypted without a word. It stays here now.
           console.warn('[E2E][PiP] Encryption failed:', err);
+          this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+          putBack();
+          return;
         }
       }
       this.socket.emit('send-message', payload);
@@ -3918,6 +4036,10 @@ _closeThread() {
     panel.style.display = 'none';
     panel.dataset.parentId = '';
   }
+  // Closed means stopped: a video or embed left in the hidden panel kept
+  // playing (#5690). Opening a thread fetches and redraws it anyway.
+  const threadMsgs = document.getElementById('thread-messages');
+  if (threadMsgs) threadMsgs.innerHTML = '';
   this._forumApplyThreadChrome?.(null);
 },
 
@@ -3933,6 +4055,8 @@ _sendThreadMessage() {
   const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
 
   if (content) {
+    // Kept so a reply refused as too long comes back to the box (#5691).
+    this._lastSendDraft = { text: input.value, code: parentId, at: Date.now(), inputId: 'thread-input' };
     this.socket.emit('send-thread-message', { parentId, content, replyTo }, (resp) => {
       if (resp && resp.error) {
         this._showToast(resp.error, 'error');
@@ -4000,6 +4124,8 @@ _appendThreadMessage(msg) {
     threadCompact = samePerson && within;
   }
 
+  // A reply's picture shows its tags like a chat message does (#5682).
+  const threadTagsHtml = this._renderAttachmentTags ? this._renderAttachmentTags(msg.attachmentTags) : '';
   const el = document.createElement('div');
   el.className = 'thread-message' + (threadCompact ? ' thread-compact' : '');
   el.dataset.msgId = msg.id;
@@ -4024,7 +4150,7 @@ _appendThreadMessage(msg) {
             ${threadOverflowHtml}
           </div>
           <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
+          ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
     `;
@@ -4035,7 +4161,7 @@ _appendThreadMessage(msg) {
         <div class="thread-msg-body">
           <div class="thread-msg-header">
             <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-            <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
+            <span class="thread-msg-time"${this._timeAttr(msg.created_at)}>${this._formatTime(msg.created_at)}</span>
             <span class="thread-msg-header-spacer"></span>
             <div class="thread-msg-toolbar">
               <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
@@ -4044,7 +4170,7 @@ _appendThreadMessage(msg) {
           </div>
           ${replyHtml}
           <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
+          ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
     `;
@@ -4092,7 +4218,7 @@ _promoteThreadCompactToFull(compactEl) {
       <div class="thread-msg-body">
         <div class="thread-msg-header">
           <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-          <span class="thread-msg-time">${this._formatTime(time)}</span>
+          <span class="thread-msg-time"${this._timeAttr(time)}>${this._formatTime(time)}</span>
           <span class="thread-msg-header-spacer"></span>
           ${toolbarHtml}
         </div>
@@ -4240,12 +4366,14 @@ _startEditMessage(msgEl, msgId) {
   textarea.rows = 1;
   textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
   // The same drag bar the composer has, so a long message can be pulled
-  // open while editing it (#5662).
+  // open while editing it. It sits under the box, and dragging it down makes
+  // the box taller, since the message above it may be at the very top of
+  // the chat with nowhere to drag up to (#5662).
   const grip = document.createElement('div');
   grip.className = 'pip-input-resizer edit-resizer';
   grip.setAttribute('aria-hidden', 'true');
-  contentEl.appendChild(grip);
   contentEl.appendChild(textarea);
+  contentEl.appendChild(grip);
   this._bindInputResizer?.(grip);
 
   // Track active edit textarea for emoji picker redirection
@@ -4508,6 +4636,10 @@ _enforceDmLinkPolicy(containerEl) {
     try {
       const u = new URL(rawUrl, location.href);
       if (u.origin === location.origin) return false;   // our own uploads / proxy
+      // A data: or blob: address has no host to judge. A picture that has not
+      // loaded yet carries a data: placeholder, and reading that as a host
+      // turned the server's own uploads into "blocked domain" notices.
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
       return !R.checkHost(u.hostname, policy).allowed;
     } catch { return false; }
   };
@@ -4533,7 +4665,7 @@ _enforceDmLinkPolicy(containerEl) {
   containerEl.querySelectorAll('.message-content img[data-mp-origin], .message-content img.chat-image').forEach(img => {
     if (img.dataset.policyChecked) return;
     img.dataset.policyChecked = '1';
-    const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.src;
+    const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.dataset.lazySrc || img.src;
     if (!hostBlocked(origin)) return;
     const ph = document.createElement('span');
     ph.className = 'hidden-image';
@@ -5101,6 +5233,40 @@ _showConfirmModal(title, message, opts = {}) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
     document.addEventListener('keydown', onKey);
     setTimeout(() => okBtn.focus(), 0);
+  });
+},
+
+// A question with several answers. Resolves the id of the button pressed, or
+// null for Escape or a click outside. Focus starts on the first button and
+// Enter only presses the focused one, so a stray Enter (someone still sending)
+// cannot pick a risky answer.
+_askChoice(title, message, buttons) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '100002';
+    overlay.innerHTML = `
+      <div class="modal modal-confirm">
+        <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
+        ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
+        <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap"></div>
+      </div>
+    `;
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    const close = (val) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const row = overlay.querySelector('.modal-actions');
+    for (const b of buttons) {
+      const el = document.createElement('button');
+      el.className = b.danger ? 'btn-sm btn-danger-fill' : (b.accent ? 'btn-sm btn-accent' : 'btn-sm');
+      el.textContent = b.label;
+      el.addEventListener('click', () => close(b.id));
+      row.appendChild(el);
+    }
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    setTimeout(() => row.querySelector('button')?.focus(), 0);
   });
 },
 

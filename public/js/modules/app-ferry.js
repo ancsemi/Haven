@@ -91,6 +91,7 @@ export default {
       this._ferryConfig = payload;
       this._renderFerryModal();
       this._renderFerrySummary();
+      this._renderImportFerry?.();
     });
 
     this.socket.on('ferry:token-ok', (data) => {
@@ -612,12 +613,14 @@ export default {
       const id = parseInt(row.dataset.ferryLink);
       row.querySelectorAll('[data-ferry-field]').forEach(field => {
         field.addEventListener('change', () => {
-          this.socket.emit('ferry:update-link', {
-            id,
-            direction: row.querySelector('[data-ferry-field="direction"]')?.value,
-            outMode: row.querySelector('[data-ferry-field="outMode"]')?.value,
-            isActive: row.querySelector('[data-ferry-field="isActive"]')?.checked,
-          });
+          // Only the control that changed is sent. Sending the whole row let a
+          // panel left open in another window, still showing old values, put
+          // "Mirror everything" back over "On command" when something else
+          // on the row was touched.
+          const key = field.dataset.ferryField;
+          const update = { id };
+          update[key] = key === 'isActive' ? field.checked : field.value;
+          this.socket.emit('ferry:update-link', update);
         });
       });
     });

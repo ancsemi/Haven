@@ -11,7 +11,7 @@ account, no telemetry, no paid tier. Free forever.
 One person runs the server. Everyone else joins with a code. Messages, files and
 voice never touch anybody else's infrastructure.
 
-<img width="1917" height="948" alt="Haven chat interface" src="https://github.com/user-attachments/assets/0c85ca6c-f811-43db-a26b-9b66c418830e" />
+<img width="1918" height="1010" alt="Haven's default look: channels and DMs on the left, the member list on the right" src="docs/img/haven-4-6-default.jpg" />
 
 ---
 
@@ -42,6 +42,7 @@ channel, share the code. The certificate warning on first load is expected, clic
 |---|---|
 | 🖥️ **[Haven Desktop](https://github.com/ancsemi/Haven-Desktop/releases/latest)** | Windows and Linux. Per-app audio sharing (send one app’s sound, nothing else), device switching mid-call, native notifications, tray. It can also **run the server itself**. |
 | 📱 **[Haven for Android](https://play.google.com/store/apps/details?id=com.havenapp.mobile&gl=US)** | On Google Play. Native, not a web wrapper. Full chat, voice and push notifications. Built by [Amnibro](https://github.com/Amnibro). |
+| 🍎 **[Haven for iOS](https://testflight.apple.com/join/ADeG5zRq)** | In testing through TestFlight. Native, by [Amnibro](https://github.com/Amnibro) as well. Until it is on the App Store, the browser works too: open your server in Safari and Add to Home Screen. |
 | 🌐 **Any browser** | Nothing to install. Send a link, they are in. Works on phones. |
 
 Apps and browser talk to the same server and see the same thing, so nobody has to
@@ -117,7 +118,7 @@ is open, no code needed, just sign up. Volunteer-hosted, thanks MutantRabbit.
 - Bcrypt passwords, JWT auth, HTTPS, MFA, rate-limited logins, and a disk reserve
   so a full drive never wedges the server.
 
-<img width="1917" height="911" alt="Haven with themes applied" src="https://github.com/user-attachments/assets/79b62980-0822-4e9d-b346-c5a93de95862" />
+<img width="1918" height="1009" alt="A community channel in the Braid theme" src="docs/img/haven-theme-braid.jpg" />
 
 ---
 
@@ -141,6 +142,14 @@ a bug, the version number from `https://your-server:3000/api/version` helps.
 
 AGPL-3.0. Free to use, modify and share. If you deploy a modified version as a
 network service, you have to publish its source. See [LICENSE](LICENSE).
+
+## Gallery
+
+<img width="1916" height="1006" alt="A DM window and profile card in the CRT theme" src="docs/img/haven-theme-crt.jpg" />
+
+<img width="1200" height="591" alt="Screen sharing with voice chat and more than one stream" src="docs/img/haven-screen-share.jpg" />
+
+<img width="1200" height="593" alt="The login screen with the theme picker" src="docs/img/haven-theme-chat.jpg" />
 
 ---
 

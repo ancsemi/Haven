@@ -8,6 +8,17 @@
 /* Self hosted fonts. Formerly pulled from Google Fonts, now bundled so Haven
    never contacts a third party to render text. Files live in /public/fonts and
    are served with a long immutable cache, so each client downloads them once. */
+
+/* Emoji newer than the system's own emoji font. Windows 10's stops around
+   Emoji 12, so a newer one (a melting face reaction, say) showed as a box.
+   Twemoji fills the gaps: --font-emoji puts it after the system emoji fonts,
+   so it only draws a glyph those lack, and is only downloaded then. */
+@font-face {
+  font-family: 'Haven Emoji';
+  font-display: swap;
+  src: url('/fonts/twemoji-15.0.3.woff2') format('woff2');
+  unicode-range: U+200D, U+2194-21AA, U+231A-23FF, U+25AA-27BF, U+2934-2935, U+2B05-2B55, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+1F000-1FAFF, U+E0020-E007F;
+}
 @font-face {
   font-family: 'Share Tech Mono';
   font-style: normal;
@@ -98,6 +109,7 @@
   --font-main:     'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono:     'Consolas', 'Courier New', monospace;
   --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-emoji:    'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Haven Emoji';
 
   --radius:        8px;
   --radius-sm:     4px;
@@ -1702,7 +1714,7 @@
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
-  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
   margin: 0;
   padding: 0;
   background: none;
@@ -1730,7 +1742,7 @@
   background: #bfbfbf !important;
   color: #000 !important;
   border: 3px outset #fff;
-  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
   font-size: 0.75rem;
 }
 [data-theme="win95"] .btn-admin-save:hover { background: #dfdfdf !important; }
@@ -1743,7 +1755,7 @@
   border: 2px inset #808080 !important;
   border-radius: 0 !important;
   color: #000;
-  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
 }
 
 /* Win95 text inputs in settings */
@@ -1760,7 +1772,7 @@
   border: 2px inset #808080 !important;
   border-radius: 0 !important;
   color: #000;
-  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
 }
 
 /* Win95 settings section titles — black text */
@@ -1782,7 +1794,7 @@
   color: #000;
   border-radius: 0;
   padding: 0.25rem 0.75rem;
-  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
   font-size: 0.75rem;
 }
 [data-theme="win95"] .channel-ctx-item:hover {
@@ -1957,7 +1969,7 @@ html {
 }
 
 body {
-  font-family: var(--font-main);
+  font-family: var(--font-main), var(--font-emoji);
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.5;
@@ -2186,8 +2198,8 @@ html.rgb-cycling *::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.625rem;
+  height: 2.625rem;
   flex-shrink: 0;
   border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 0.5rem;
@@ -3219,7 +3231,7 @@ html.rgb-cycling *::after {
   letter-spacing: 6px;
   color: var(--text-primary);
   margin: 0.375rem 0 0;
-  font-family: var(--font-heading);
+  font-family: var(--font-heading), var(--font-emoji);
 }
 
 .auth-header .tagline { color: var(--text-secondary); font-size: 0.75rem; margin: 0.0625rem 0 0; }
@@ -3230,7 +3242,7 @@ html.rgb-cycling *::after {
   font-weight: 600;
   letter-spacing: 1px;
   margin: 0.375rem 0 0;
-  font-family: var(--font-heading);
+  font-family: var(--font-heading), var(--font-emoji);
   word-break: break-word;
 }
 .auth-header .server-title:empty { display: none; }
@@ -3435,7 +3447,7 @@ html.rgb-cycling *::after {
   font-weight: 700;
   letter-spacing: 4px;
   color: var(--text-primary);
-  font-family: var(--font-heading);
+  font-family: var(--font-heading), var(--font-emoji);
 }
 
 .user-bar {
@@ -4005,6 +4017,12 @@ html.rgb-cycling *::after {
   align-items: center;
   justify-content: center;
   z-index: 2;
+}
+/* The edit box's bar sits under the box, in the flow, so dragging down grows it (#5662) */
+.pip-input-resizer.edit-resizer {
+  position: static;
+  height: 0.875rem;
+  margin: 0.1rem 0 0.15rem;
 }
 .pip-input-resizer::before {
   content: '';
@@ -4858,7 +4876,7 @@ select.cfn-select.cfn-input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: var(--font-heading);
+  font-family: var(--font-heading), var(--font-emoji);
 }
 
 .channel-code-tag {
@@ -4885,7 +4903,7 @@ select.cfn-select.cfn-input {
   font-size: 1.5rem;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
-  font-family: var(--font-heading);
+  font-family: var(--font-heading), var(--font-emoji);
 }
 
 .welcome-content p { font-size: 0.875rem; line-height: 1.6; }
@@ -6083,7 +6101,7 @@ details.sound-section:not([open]) .sound-section-label::before {
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 0.8125rem;
-  font-family: var(--font-main);
+  font-family: var(--font-main), var(--font-emoji);
   resize: vertical;
 }
 .edit-profile-textarea:focus {
@@ -6676,7 +6694,7 @@ details.sound-section:not([open]) .sound-section-label::before {
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 0.25rem;
-  font-family: var(--font-heading);
+  font-family: var(--font-heading), var(--font-emoji);
 }
 
 .modal .modal-desc {
@@ -7334,7 +7352,8 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 
 .btn-upload:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
-.message-area.drag-over {
+.message-area.drag-over,
+.thread-panel.drag-over {
   outline: 2px dashed var(--accent);
   outline-offset: -4px;
   background: rgba(124, 92, 252, 0.04);
@@ -8178,6 +8197,11 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
   background: rgba(124, 92, 252, 0.2);
   border-color: var(--accent);
   color: var(--text-primary);
+}
+
+.reactions-locked .reaction-badge {
+  cursor: default;
+  pointer-events: none;
 }
 
 /* ── Reaction popout (who reacted) ────────────────────── */
@@ -9162,6 +9186,357 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-top: 1px solid var(--border);
   overflow-x: auto;
   flex-wrap: nowrap;
+}
+
+/* ── Attachment tagging (composer) — (#tagging) ─────── */
+/* The active attachment (the one the tag bar edits) gets an accent ring; any
+   attachment carrying tags gets a subtle accent underline. */
+.image-queue-thumb.is-active,
+.file-queue-chip.is-active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.image-queue-thumb.has-tags::after,
+.file-queue-chip.has-tags::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.file-queue-chip { position: relative; }
+
+.tag-queue-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tag-queue-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.tag-queue-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  max-width: 12rem;
+}
+.tag-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+.tag-chip-remove:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.tag-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 1rem;
+  border: 1px dashed var(--border);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.tag-add-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.tag-add-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Frequent tags: a quick-pick row under the Tags row (browser-storage only). */
+.tag-frequent-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tag-frequent-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.tag-frequent-chip {
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.tag-frequent-chip:hover { color: var(--accent); border-color: var(--accent); }
+
+.tag-popup {
+  position: absolute;
+  left: 0.75rem;
+  bottom: calc(100% + 0.25rem);
+  z-index: 40;
+  width: 27rem;
+  max-width: calc(100% - 1.5rem);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.3);
+  padding: 0.375rem;
+}
+.tag-popup-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  outline: none;
+}
+.tag-popup-input:focus { border-color: var(--accent); }
+/* Columns, so a long tag list is a short scroll instead of a tall narrow
+   one. Rows keep their own height: as flex children with overflow hidden they
+   were being squeezed once the list overflowed, which cut the text (#5682). */
+.tag-popup-list {
+  margin-top: 0.375rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  align-content: start;
+  gap: 1px 0.25rem;
+}
+.tag-popup-list > .tag-popup-create,
+.tag-popup-list > .tag-popup-empty { grid-column: 1 / -1; }
+.tag-popup-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  min-height: 1.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-popup-item:hover { background: var(--bg-tertiary); }
+.tag-popup-create { color: var(--accent); font-weight: 600; }
+.tag-popup-empty {
+  padding: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* ── Tags footer on messages carrying tagged attachments (#tagging) ─── */
+.message-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+.message-tags-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.message-tags-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 0.125rem;
+}
+.message-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: var(--text-secondary, var(--text-primary));
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.message-tag:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ── Retroactive tag editor popup (#tagging phase 3) ─── */
+.tag-editor-popup {
+  position: fixed;
+  z-index: 1000;
+  width: 27rem;
+  max-width: calc(100vw - 1.5rem);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.3);
+  padding: 0.5rem;
+}
+.tag-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+}
+.tag-editor-title {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.tag-editor-close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+.tag-editor-close:hover { color: var(--text-primary); }
+.tag-editor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+}
+.tag-editor-chips:empty { display: none; }
+.tag-editor-popup .tag-popup-list { margin-top: 0.375rem; }
+
+/* ── Media gallery tag filter + bulk management (#tagging phase 3b) ─── */
+/* These popups live at body level but must sit ABOVE the gallery modal-overlay
+   (z-index 100001), unlike the message-list tag editor that shares the class.
+   Kept below the confirm dialog (100002, appended later) so replace-empty's
+   warning still stacks on top. */
+#media-tag-filter-popup,
+#media-tag-manage-popup { z-index: 100002; }
+.media-gallery-tagfilter { display: inline-flex; align-items: center; gap: 0.375rem; }
+.media-gallery-tagfilter-count,
+.media-gallery-tagmanage { display: inline-flex; align-items: center; }
+.media-gallery-tagfilter-count {
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 0.75rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  justify-content: center;
+}
+/* Toolbar buttons share the Sort/Size select controls' height so the whole row
+   sits on one line. Default .btn-sm padding is taller and left the buttons
+   (Tags, Select, etc.) bulging above the dropdowns. */
+.media-gallery-toolbar .btn-sm { padding: 0.25rem 0.625rem; font-size: 0.8rem; }
+#media-gallery-tagfilter-btn.is-active { border-color: var(--accent); color: var(--accent); }
+.tag-popup-item.is-active { color: var(--accent); font-weight: 600; }
+
+/* Manage-tags dropdown menu */
+.media-gallery-tagmanage { position: relative; }
+.media-tagmanage-menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 50;
+  min-width: 10rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.3);
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.media-tagmanage-opt {
+  text-align: left;
+  padding: 0.4375rem 0.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8125rem;
+}
+.media-tagmanage-opt:hover { background: var(--bg-tertiary); }
+
+/* Confirm row inside the bulk tag picker */
+.tag-manage-actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
+
+/* Read-only tag chips on gallery tiles/rows */
+.media-tile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+.media-grid-item .media-grid-meta .media-tile-tags { margin: 0; padding: 0; }
+.media-tile-tag {
+  display: inline-block;
+  max-width: 8rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  font-size: 0.6875rem;
+  color: var(--text-secondary, var(--text-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Upload progress bar ────────────────────────────── */
@@ -10152,6 +10527,18 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-size: 0.8125rem;
 }
 
+/* "Search removed tags" fallback in the tag: picker (#tagging phase 2). */
+.sfp-search-removed {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .search-result-item {
   padding: 0.625rem 0.875rem;
   border-bottom: 1px solid var(--border-light);
@@ -10447,6 +10834,12 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 /* ── E2E Lock Menu Dropdown ─── */
 .e2e-menu-wrapper {
   position: relative;
+}
+/* The lock stands out when a DM is not encrypted or the partner's key changed. */
+#e2e-menu-btn.e2e-off,
+#e2e-menu-btn.e2e-changed {
+  background: rgba(231, 76, 60, 0.15);
+  border-radius: var(--radius-sm, 4px);
 }
 .e2e-dropdown {
   position: absolute;
@@ -11091,7 +11484,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-primary);
-  font-family: var(--font-heading);
+  font-family: var(--font-heading), var(--font-emoji);
   margin: 0;
 }
 
@@ -11339,11 +11732,11 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 /* Win95 overrides for activities */
 [data-theme="win95"] .modal-activities { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; }
 [data-theme="win95"] .activities-header { background: linear-gradient(90deg, #000080, #1084d0); padding: 0.25rem 0.5rem; border-bottom: none; }
-[data-theme="win95"] .activities-header h3 { color: #fff; font-size: 0.75rem; font-weight: 700; margin: 0; background: none; font-family: "MS Sans Serif","Microsoft Sans Serif",Tahoma,Arial,sans-serif; }
+[data-theme="win95"] .activities-header h3 { color: #fff; font-size: 0.75rem; font-weight: 700; margin: 0; background: none; font-family: "MS Sans Serif","Microsoft Sans Serif",Tahoma,Arial,sans-serif, var(--font-emoji); }
 [data-theme="win95"] .activity-card { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; }
 [data-theme="win95"] .activity-card:hover { border: 3px inset #808080; transform: none; box-shadow: none; }
 [data-theme="win95"] .game-iframe-header { background: linear-gradient(90deg, #000080, #1084d0); border-bottom: 2px solid #808080; }
-[data-theme="win95"] .game-iframe-title { color: #fff; font-family: "MS Sans Serif","Microsoft Sans Serif",Tahoma,Arial,sans-serif; font-size: 0.75rem; }
+[data-theme="win95"] .game-iframe-title { color: #fff; font-family: "MS Sans Serif","Microsoft Sans Serif",Tahoma,Arial,sans-serif, var(--font-emoji); font-size: 0.75rem; }
 
 .settings-section {
   padding: 1rem 1.5rem;
@@ -14050,6 +14443,24 @@ video:-webkit-full-screen {
   border-color: var(--accent);
 }
 
+/* Admin Tags panel (#tagging phase 4) */
+.tag-admin-add { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.tag-admin-add .settings-text-input { flex: 1; min-width: 0; }
+.tag-admin-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.tag-admin-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tag-admin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-admin-uses { font-size: 0.72rem; color: var(--text-muted); }
+.tag-admin-row-actions { margin-left: auto; display: flex; gap: 0.375rem; flex-shrink: 0; }
+.tag-admin-edit-input { flex: 1; min-width: 0; }
+
 .whitelist-list {
   max-height: 12.5rem;
   overflow-y: auto;
@@ -15070,6 +15481,8 @@ ul.chat-list { list-style-type: disc; }
   margin: 0.25rem 0 0.5rem;
 }
 
+.profile-activity-link { color: inherit; text-decoration: none; cursor: pointer; }
+.profile-activity-link:hover .profile-activity-name { text-decoration: underline; }
 .profile-activity-row {
   display: flex;
   align-items: center;
@@ -17125,7 +17538,10 @@ ul.chat-list { list-style-type: disc; }
    screen instead of one tall scroll (#5648) */
 .poll-options.poll-grid { display: grid; grid-template-columns: repeat(var(--poll-cols, 2), minmax(0, 1fr)); gap: 0.4rem; }
 .poll-grid .poll-option { flex-direction: column; align-items: stretch; }
-.poll-grid .poll-option-img { aspect-ratio: 1 / 1; height: auto; max-height: none; }
+/* A picture of any shape fits inside its square instead of being cropped to
+   it, and a grid gets more room on a wide screen (#5648) */
+.poll-grid .poll-option-img { aspect-ratio: 1 / 1; height: auto; max-height: none; object-fit: contain; background: var(--bg-input, rgba(0,0,0,0.25)); }
+.poll-widget:has(.poll-grid) { max-width: min(100%, 42rem); }
 .poll-grid .poll-option-text { white-space: normal; }
 .poll-grid .poll-option-count { margin-left: 0; }
 .poll-option.poll-voted {
@@ -18252,6 +18668,75 @@ ul.chat-list { list-style-type: disc; }
   color: var(--text-primary);
   font-family: monospace;
 }
+/* ── Large Server Setup ── */
+.large-server-card {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+}
+.large-server-card-title { font-weight: 600; margin-bottom: 4px; }
+.large-server-choices { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.large-server-choice {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 0.375rem; cursor: pointer;
+}
+.large-server-choice input { margin-top: 3px; flex-shrink: 0; }
+.large-server-choice > span { display: flex; flex-direction: column; gap: 2px; }
+.large-server-choice small { color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.large-server-choice:has(input:checked) { border-color: var(--accent-color, #5865f2); }
+.large-server-choice-disabled { opacity: 0.55; cursor: default; }
+.large-server-status { margin: 4px 0 8px; font-size: 0.78rem; color: var(--text-muted); }
+.large-server-status.is-running { color: var(--success, #3ba55d); }
+.large-server-status.is-error { color: var(--danger, #ed4245); }
+.large-server-install { margin-top: 4px; }
+#voice-relay-install-log { font-size: 0.72rem; overflow-wrap: anywhere; }
+#voice-relay-install-log.is-error { color: var(--danger, #ed4245); }
+.large-server-checklist { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.large-server-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.large-server-item > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.large-server-item small { color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.large-server-item .btn-sm { flex-shrink: 0; }
+
+.import-ferry-box {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--accent-color, #5865f2);
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.import-ferry-box p { margin: 0.375rem 0 0.625rem; }
+.import-ferry-box #import-ferry-missing { margin: 0.625rem 0 0; }
+.import-personal-login { margin-top: 0.75rem; font-size: 0.75rem; }
+.import-personal-login > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+}
+.import-personal-login > summary:hover { color: var(--text-primary); }
+.import-token-risk {
+  margin: 0.5rem 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--warning, #faa61a);
+  border-left-width: 4px;
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.import-token-risk p { margin: 0.375rem 0 0; }
+.import-token-risk-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.import-token-risk-ack input { margin-top: 0.2rem; flex-shrink: 0; }
 .import-token-help { margin-top: 0.5rem; font-size: 0.75rem; }
 .import-token-help summary {
   cursor: pointer;
@@ -19379,16 +19864,25 @@ ul.chat-list { list-style-type: disc; }
   object-fit: cover;
   display: block;
 }
-.media-grid-item .media-grid-date {
+/* Bottom overlay holding the tags (top) and the date/size line (bottom). A
+   grid tile is a fixed aspect-ratio box with overflow:hidden and a 100%-height
+   image, so normal-flow children get clipped off the tile -- the meta must be
+   an absolute overlay to show over the image (#tagging phase 3b). */
+.media-grid-item .media-grid-meta {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(to top, rgba(0,0,0,.75), transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 0.375rem 0.3125rem;
+  background: linear-gradient(to top, rgba(0,0,0,.78), transparent);
+  pointer-events: none;
+}
+.media-grid-item .media-grid-date {
   color: #fff;
   font-size: 0.68rem;
-  padding: 0.875rem 0.375rem 0.3125rem;
-  pointer-events: none;
   text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
 .media-grid-item .media-grid-play {
@@ -19469,13 +19963,17 @@ ul.chat-list { list-style-type: disc; }
 .media-gallery-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
   padding: 0.5rem 0.875rem;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
+/* Group the filter controls (Sort, Tags) on the left; push the view controls
+   (Size, Select) to the right. space-between used to spread all four edge-to-
+   edge, orphaning the Tags button in the empty middle of the row. */
+.media-gallery-toolbar > .media-gallery-tile-label,
+.media-gallery-toolbar > #media-gallery-tile-wrap { margin-left: auto; }
 .media-gallery-sort-label {
   display: inline-flex;
   align-items: center;
@@ -19954,6 +20452,14 @@ ul.chat-list { list-style-type: disc; }
 .forum-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
 .forum-field input, .forum-field textarea { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem; font: inherit; }
 .forum-tag-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+/* Pictures and files in a post's body (#5689, #5690) */
+.forum-attach-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin: -0.35rem 0 0.75rem; }
+.forum-attach-row .settings-hint { margin: 0; }
+.forum-post-modal.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.forum-post-modal .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 0.4rem; }
+.forum-post-modal .modal-footer .forum-post-delete { margin-right: auto; font-size: 0.85rem; }
+.content-media-part { margin: 0.3rem 0; }
+.content-media-part:first-child { margin-top: 0; }
 /* Settings search */
 .settings-search-wrap { padding: 0.5rem 0.75rem 0.25rem; }
 .settings-search { width: 100%; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 0.6rem; font-size: 0.82rem; }
@@ -19981,3 +20487,228 @@ ul.chat-list { list-style-type: disc; }
 .role-menu-btn.held { background: var(--role-c, var(--accent)); color: #fff; }
 .role-menu-btn .rm-state { opacity: 0.8; font-weight: 700; }
 .role-menu-btn:disabled { opacity: 0.6; cursor: wait; }
+
+/* ── Permissions matrix ─────────────────────────────────── */
+.perm-matrix-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(96vw, 62rem);
+  max-width: 96vw;
+  height: min(88vh, 46rem);
+  min-height: 24rem;
+}
+.perm-matrix-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.perm-matrix-header h3 { margin: 0; flex: 0 0 auto; }
+.perm-matrix-header .perm-view-toggle { flex: 0 0 auto; }
+.perm-matrix-header > .perm-view-toggle + .modal-expand-btn-inline { margin-left: auto; }
+.perm-matrix-lead { margin: 6px 0 10px; font-size: 0.8rem; }
+.perm-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.perm-view-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 0;
+  padding: 5px 14px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.perm-view-btn.is-active {
+  background: var(--accent, #6b4fdb);
+  color: var(--accent-text, #fff);
+}
+#perm-roles-pane,
+#perm-users-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+#perm-roles-pane[hidden],
+#perm-users-pane[hidden] { display: none; }
+.perm-matrix-toolbar { margin-bottom: 8px; flex-shrink: 0; }
+.perm-matrix-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.perm-matrix-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.78rem;
+}
+.perm-matrix-table th,
+.perm-matrix-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+.perm-matrix-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-secondary, var(--bg-input));
+  vertical-align: top;
+}
+.perm-matrix-table th.perm-matrix-perm,
+.perm-matrix-table tbody th {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg-primary, var(--bg));
+  font-weight: 500;
+}
+.perm-matrix-table thead th.perm-matrix-perm { z-index: 3; }
+.perm-matrix-group td {
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--accent, #6b4fdb) 8%, transparent);
+}
+.perm-matrix-role-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.perm-matrix-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.perm-matrix-remove {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+}
+.perm-matrix-remove:hover { color: #e74c3c; border-color: #e74c3c; }
+.perm-matrix-auto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.perm-users-layout {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+.perm-users-side {
+  width: 14rem;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.perm-user-list {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex: 1;
+}
+.perm-user-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+.perm-user-row:hover { background: rgba(255,255,255,0.05); }
+.perm-user-row.is-active { background: color-mix(in srgb, var(--accent, #6b4fdb) 22%, transparent); }
+.perm-user-badge { font-size: 0.7rem; opacity: 0.7; }
+.perm-user-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.perm-user-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.perm-user-chip {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.perm-user-chip.is-on { background: var(--accent, #6b4fdb); color: var(--accent-text, #fff); border-color: transparent; }
+.perm-user-chip:disabled { opacity: 0.55; cursor: default; }
+.perm-user-group {
+  margin: 10px 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.perm-user-perm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.82rem;
+}
+#perm-roles-pane, #perm-users-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+#perm-roles-pane[hidden], #perm-users-pane[hidden] { display: none; }
+#call-ring-stack { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 2147483000; display: flex; flex-direction: column; gap: 10px; width: min(440px, calc(100vw - 24px)); pointer-events: none; }
+.call-ring { pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-md, 12px); box-shadow: 0 12px 32px rgba(0, 0, 0, .45); animation: call-ring-in .18s ease-out; }
+.call-ring-pulse { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; background: #23a55a; color: #fff; animation: call-ring-pulse 1.3s ease-in-out infinite; }
+.call-ring-text { flex: 1; min-width: 0; }
+.call-ring-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-ring-sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-ring button { flex: none; border: none; border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+.call-ring-accept { background: #23a55a; color: #fff; }
+.call-ring-decline { background: #e5484d; color: #fff; }
+.call-ring button:hover { filter: brightness(1.1); }
+@keyframes call-ring-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(35, 165, 90, .55); } 50% { box-shadow: 0 0 0 10px transparent; } }
+@keyframes call-ring-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .call-ring, .call-ring-pulse { animation: none; } }

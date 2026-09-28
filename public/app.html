@@ -341,6 +341,7 @@
                   <button type="button" class="sfp-chip" data-sfp-filter="from">from:</button>
                   <button type="button" class="sfp-chip" data-sfp-filter="in">in:</button>
                   <button type="button" class="sfp-chip" data-sfp-filter="has">has:</button>
+                  <button type="button" class="sfp-chip" data-sfp-filter="tag">tag:</button>
                   <button type="button" class="sfp-chip" data-sfp-filter="before">before:</button>
                   <button type="button" class="sfp-chip" data-sfp-filter="after">after:</button>
                   <button type="button" class="sfp-chip" data-sfp-filter="during">during:</button>
@@ -485,7 +486,7 @@
               <div class="music-panel-header-left">
                 <button id="music-popout-btn" class="icon-btn small" data-i18n-title="media.music_popout" title="Pop out player">⧉</button>
                 <div class="music-panel-copy">
-                  <span id="music-panel-label">🎵 <span data-i18n="media.listening_together">Listening Together</span></span>
+                  <span id="music-panel-label">🎶 <span data-i18n="media.listening_together">Listening Together</span></span>
                   <span id="music-up-next" class="music-up-next" data-i18n="media.music_up_next_empty">Up next: Nothing queued</span>
                 </div>
               </div>
@@ -531,6 +532,19 @@
             <button class="reply-bar-close" id="reply-close-btn" data-i18n-title="header.cancel_reply" title="Cancel reply">&times;</button>
           </div>
           <div id="image-queue-bar" class="image-queue-bar" style="display:none"></div>
+          <div id="tag-queue-bar" class="tag-queue-bar" style="display:none">
+            <span class="tag-queue-label" id="tag-queue-label" data-i18n="tags.attachment_tags">Tags</span>
+            <div id="tag-queue-chips" class="tag-queue-chips"></div>
+            <button id="tag-add-btn" class="tag-add-btn" type="button" data-i18n-title="tags.add_tag" title="Add tag">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <span data-i18n="tags.add_tag">Add tag</span>
+            </button>
+            <div id="tag-popup" class="tag-popup" style="display:none">
+              <input id="tag-popup-input" class="tag-popup-input" type="text" maxlength="20" autocomplete="off" spellcheck="false" data-i18n-placeholder="tags.search_placeholder" placeholder="Search tags…">
+              <div id="tag-popup-list" class="tag-popup-list"></div>
+            </div>
+          </div>
+          <div id="tag-frequent-bar" class="tag-frequent-bar" style="display:none"></div>
           <div id="upload-progress-bar" class="upload-progress-bar" style="display:none">
             <div class="upload-progress-track"><div class="upload-progress-fill" id="upload-progress-fill"></div></div>
             <span class="upload-progress-text" id="upload-progress-text" data-i18n="header.uploading">Uploading...</span>
@@ -927,6 +941,8 @@
     <div id="dm-pip-image-queue-bar" class="image-queue-bar" style="display:none"></div>
     <div class="dm-pip-input-area">
       <div class="pip-input-resizer" aria-hidden="true"></div>
+      <button id="dm-pip-upload-btn" class="pip-input-emoji-btn" data-i18n-title="media.upload_file_title" title="Upload File"><span class="tb-icon tb-icon-emoji" aria-hidden="true">📎</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span></button>
+      <input type="file" id="dm-pip-file-input" multiple style="display:none">
       <button id="dm-pip-emoji-btn" class="pip-input-emoji-btn" data-i18n-title="dm_runtime.emoji" title="Emoji"><span class="tb-icon tb-icon-emoji" aria-hidden="true">😀</span><span class="tb-icon tb-icon-mono" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg></span></button>
       <textarea id="dm-pip-input" class="dm-pip-input" data-i18n-placeholder="dm_runtime.reply_placeholder" placeholder="Reply…" rows="1"></textarea>
       <button id="dm-pip-send" class="dm-pip-send" data-i18n-title="dm_runtime.send" title="Send">
@@ -1401,7 +1417,7 @@
           <div class="settings-nav-item" data-target="section-zoom">🔍 <span data-i18n="settings.nav.zoom">Zoom</span></div>
           <div class="settings-nav-item" data-target="section-reaction-size">😀 <span data-i18n="settings.nav.reaction_size">Reaction Size</span></div>
           <div class="settings-nav-item" data-target="section-role-display">🎨 <span data-i18n="settings.nav.role_display">Role Display</span></div>
-          <div class="settings-nav-item" data-target="section-toolbar-icons">🧰 <span data-i18n="settings.nav.toolbar_icons">Toolbar Icons</span></div>
+          <div class="settings-nav-item" data-target="section-toolbar-icons">🧰 <span data-i18n="settings.nav.toolbar_icons">Interface Icons</span></div>
           <div class="settings-nav-item" data-target="section-image-display">🖼️ <span data-i18n="settings.nav.image_display">Image Display</span></div>
           <div class="settings-nav-item" data-target="section-embed-size">📺 <span data-i18n="settings.nav.embeds_media">Embeds &amp; Media</span></div>
           <div class="settings-nav-item" data-target="section-banner-display">🏞️ <span data-i18n="settings.nav.banner_display">Banner Display</span></div>
@@ -1420,6 +1436,7 @@
 
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_account_security">Account &amp; Security</div>
           <div class="settings-nav-item" data-target="section-password">🔒 <span data-i18n="settings.nav.password">Password</span></div>
+          <div class="settings-nav-item" data-target="section-e2e-passphrase">🗝️ <span data-i18n="settings.nav.e2e_passphrase">Encryption</span></div>
           <div class="settings-nav-item" data-target="section-sessions">💻 <span data-i18n="settings.nav.sessions">Sessions</span></div>
           <div class="settings-nav-item" data-target="section-2fa">🔐 <span data-i18n="settings.nav.two_factor">Two-Factor</span></div>
           <div class="settings-nav-item" data-target="section-recovery">🔑 <span data-i18n="settings.nav.recovery">Recovery</span></div>
@@ -1437,6 +1454,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-custom-tos" style="display:none">⚖️ <span data-i18n="settings.nav.tos">Terms of Service</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-large-server" style="display:none">🏟️ <span data-i18n="settings.nav.large_server">Large Server Setup</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-tunnel" style="display:none">🧭 <span data-i18n="settings.nav.tunnel">Tunnel</span></div>
 
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_people">People &amp; Access</div>
@@ -1454,6 +1472,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-stickers" style="display:none">🖼️ <span data-i18n="settings.nav.stickers">Stickers</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-sounds-admin" style="display:none">🔊 <span data-i18n="settings.nav.admin_sounds">Sounds</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-uploads" style="display:none">📁 <span data-i18n="settings.nav.limits">Limits</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-tags-admin" style="display:none">🏷️ <span data-i18n="settings.nav.tags">Tags</span></div>
 
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_integrations">Integrations</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🤖 <span data-i18n="settings.nav.bots">Bots</span></div>
@@ -1598,7 +1617,7 @@
 
       <!-- Toolbar Icon Style -->
       <div class="settings-section" id="section-toolbar-icons" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
-        <h5 class="settings-section-title">🧰 <span data-i18n="settings.toolbar_icons.title">Toolbar Icons</span></h5>
+        <h5 class="settings-section-title">🧰 <span data-i18n="settings.toolbar_icons.title">Interface Icons</span></h5>
         <div class="density-picker" id="toolbar-icon-picker">
           <button type="button" class="density-btn active" data-toolbaricons="mono" title="Use sleek monochrome icons in message toolbars" data-i18n-title="settings.toolbar_icons.monochrome_hint">
             <span class="density-icon" aria-hidden="true">
@@ -1615,7 +1634,16 @@
             <span class="density-icon">😀</span>
             <span class="density-label" data-i18n="settings.toolbar_icons.colorful">Colorful Emoji</span>
           </button>
+          <button type="button" class="density-btn" data-toolbaricons="glyphs" title="Draw the whole interface's icons with the Haven Glyphs font instead of emoji" data-i18n-title="settings.toolbar_icons.glyphs_hint">
+            <span class="density-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <path d="M12 2l2.9 6.2 6.8.8-5 4.7 1.3 6.7L12 17.1 5.9 20.4l1.3-6.7-5-4.7 6.8-.8z"/>
+              </svg>
+            </span>
+            <span class="density-label" data-i18n="settings.toolbar_icons.glyphs">Glyphs</span>
+          </button>
         </div>
+        <small class="settings-hint" style="display:block" data-i18n="settings.toolbar_icons.glyphs_note">Monochrome and Colorful Emoji change the message toolbars. Glyphs redraws icons across the whole interface with the bundled Haven Glyphs plugin; message text, reactions and pickers are left alone.</small>
         <label class="toolbar-slots-row" for="toolbar-visible-slots">
           <span data-i18n="settings.toolbar_icons.visible_slots">Visible toolbar slots before overflow</span>
           <input type="range" id="toolbar-visible-slots" min="1" max="7" step="1" value="3">
@@ -1848,7 +1876,7 @@
             <span data-i18n="settings.sounds_section.popup_custom_minutes">Minutes between pop-ups</span>
             <input type="number" id="notif-popup-custom-minutes" min="1" max="1440" step="1" class="settings-number-input" style="width:5.5rem">
           </label>
-          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.popup_limit_hint">Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected.</small>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.sounds_section.popup_limit_hint">Throttle how often desktop/browser notification pop-ups appear, so a burst of messages or a flaky connection can't keep popping the app up. Notification sounds and unread badges are unaffected. Never also turns off push notifications on this device.</small>
           <label class="toggle-row">
             <span data-i18n="settings.sounds_section.auto_accept_streams">Auto-accept Streams</span>
             <input type="checkbox" id="auto-accept-streams" checked>
@@ -2046,6 +2074,11 @@
           <input type="checkbox" id="hide-nsfw-channels">
         </label>
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.nsfw.hide_hint">Channels an admin marked 🔞 leave your sidebar until you turn this off. Handy on a phone in public.</small>
+        <label class="toggle-row">
+          <span data-i18n="settings.nsfw.blur">Blur NSFW topics until clicked</span>
+          <input type="checkbox" id="blur-nsfw-topics" checked>
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.nsfw.blur_hint">The picture and preview of a topic marked 🔞 sit behind a blur, like a spoiler. Turn this off to see them plainly.</small>
       </div>
 
       <!-- Password Change Section -->
@@ -2063,6 +2096,29 @@
           </div>
           <button class="btn-sm btn-full" id="change-password-btn" data-i18n="settings.password_section.change_btn">Change Password</button>
           <small class="settings-hint" id="password-status"></small>
+        </div>
+      </div>
+
+      <!-- Encryption Passphrase Section -->
+      <div class="settings-section" id="section-e2e-passphrase">
+        <h5 class="settings-section-title">🗝️ <span data-i18n="settings.e2e_passphrase.title">Encryption Passphrase</span></h5>
+        <small class="settings-hint" data-i18n="settings.e2e_passphrase.hint">Your encrypted DMs use a key that is backed up on the server, so your other devices can use it too. Normally that backup is locked with your login password, which the server receives every time you sign in. Lock it with a separate passphrase instead and the server can never open it. You type the passphrase once on each new device, and nobody can reset it for you, including the server admin.</small>
+        <p class="settings-hint" id="e2e-pp-state" style="font-weight:600"></p>
+        <div class="password-change-form">
+          <div class="form-group compact">
+            <input type="password" id="e2e-pp-new" data-i18n-placeholder="settings.e2e_passphrase.new_placeholder" placeholder="New passphrase (8+ characters)" maxlength="256" autocomplete="new-password">
+          </div>
+          <div class="form-group compact">
+            <input type="password" id="e2e-pp-confirm" data-i18n-placeholder="settings.e2e_passphrase.confirm_placeholder" placeholder="Confirm passphrase" maxlength="256" autocomplete="new-password">
+          </div>
+          <button class="btn-sm btn-full" id="e2e-pp-save-btn" data-i18n="settings.e2e_passphrase.save_btn">Use This Passphrase</button>
+          <div id="e2e-pp-revert-area" style="display:none;margin-top:10px">
+            <div class="form-group compact">
+              <input type="password" id="e2e-pp-password" data-i18n-placeholder="settings.e2e_passphrase.password_placeholder" placeholder="Your login password" maxlength="128" autocomplete="current-password">
+            </div>
+            <button class="btn-sm btn-full" id="e2e-pp-revert-btn" data-i18n="settings.e2e_passphrase.revert_btn">Go Back to My Login Password</button>
+          </div>
+          <small class="settings-hint" id="e2e-pp-status"></small>
         </div>
       </div>
 
@@ -2164,6 +2220,11 @@
         <h5 class="settings-section-title">⚠️ <span data-i18n="settings.delete_account_section.title">Delete Account</span></h5>
         <p class="settings-hint" style="margin-bottom:8px;" data-i18n="settings.delete_account_section.desc">Permanently delete your account. This cannot be undone.</p>
         <button class="btn-sm btn-danger-fill" id="delete-account-btn" data-i18n="settings.delete_account_section.btn">Delete My Account</button>
+        <div id="self-purge-block" style="display:none;margin-top:14px">
+          <h5 class="settings-section-title">🧹 <span data-i18n="settings.self_purge.title">Delete All My Messages</span></h5>
+          <p class="settings-hint" style="margin-bottom:8px;" data-i18n="settings.self_purge.desc">Remove every message and file you ever posted here, in one go, and keep your account. Messages a moderator has protected stay. This cannot be undone.</p>
+          <button class="btn-sm btn-danger-fill" id="self-purge-btn" data-i18n="settings.self_purge.btn">Delete All My Messages</button>
+        </div>
       </div>
 
       <!-- Plugins & Themes Section -->
@@ -2538,6 +2599,111 @@
           </div>
         </div>
 
+        <!-- Large Server Setup (Admin only) -->
+        <div class="admin-settings" id="section-large-server" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🏟️ <span data-i18n="settings.admin.large_server.title">Large Server Setup</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.large_server.hint">What a big community needs, in one place. A server for friends and family can skip this page.</small>
+
+          <div class="large-server-card">
+            <div class="large-server-card-title">🔊 <span data-i18n="settings.admin.large_server.relay_title">Voice relay</span></div>
+            <small class="settings-hint" data-i18n="settings.admin.large_server.relay_hint">Normally everyone in a call sends their voice and video straight to everyone else. That works for a handful of people, but past about ten each person's upload runs out. With a relay, each person sends once, to this server, and the server passes it on, so calls can hold many more people. It uses this server's internet connection instead of theirs. One thing changes: direct calls go person to person, but relayed calls pass through this server, so whoever runs it could in principle listen in, as with any voice server.</small>
+
+            <div class="large-server-choices" role="radiogroup">
+              <label class="large-server-choice">
+                <input type="radio" name="voice-relay-mode" value="off">
+                <span><strong data-i18n="settings.admin.large_server.mode_off">Off</strong>
+                <small data-i18n="settings.admin.large_server.mode_off_hint">Direct connections, as always. Best for small groups.</small></span>
+              </label>
+              <label class="large-server-choice">
+                <input type="radio" name="voice-relay-mode" value="builtin">
+                <span><strong data-i18n="settings.admin.large_server.mode_builtin">Built-in relay</strong>
+                <small data-i18n="settings.admin.large_server.mode_builtin_hint">Runs inside Haven. Nothing else to install: open one port and switch it on. Recommended.</small></span>
+              </label>
+              <label class="large-server-choice large-server-choice-disabled">
+                <input type="radio" name="voice-relay-mode" value="livekit" disabled>
+                <span><strong data-i18n="settings.admin.large_server.mode_livekit">LiveKit</strong>
+                <small data-i18n="settings.admin.large_server.mode_livekit_hint">Use a LiveKit server you run yourself, for more control. Coming in a later update.</small></span>
+              </label>
+            </div>
+
+            <div id="voice-relay-builtin-options" style="display:none">
+              <p class="large-server-status" id="voice-relay-status"></p>
+              <label class="select-row">
+                <span data-i18n="settings.admin.large_server.port">Port</span>
+                <input type="number" id="voice-relay-port" class="settings-text-input" min="1024" max="65527" placeholder="40000" style="width:110px">
+              </label>
+              <small class="settings-hint" id="voice-relay-port-hint"></small>
+              <label class="select-row" style="margin-top:8px">
+                <span data-i18n="settings.admin.large_server.address">Public address</span>
+                <input type="text" id="voice-relay-address" class="settings-text-input" data-i18n-placeholder="settings.admin.large_server.address_placeholder" placeholder="Found automatically" style="flex:1">
+                <button type="button" class="btn-sm" id="voice-relay-detect" data-i18n="settings.admin.large_server.detect">Detect</button>
+              </label>
+              <small class="settings-hint" data-i18n="settings.admin.large_server.address_hint">Where people connect to reach the relay: this server's public IP address or domain name. Leave it empty and Haven works it out when the relay starts. Everyone in a relayed call can see this address (and, so people on your own network connect directly, the server's local address), as with any voice server; a server hidden behind a proxy is not hidden from them.</small>
+              <label class="select-row" style="margin-top:8px">
+                <span data-i18n="settings.admin.large_server.workers">CPU cores</span>
+                <select id="voice-relay-workers">
+                  <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                  <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+                </select>
+              </label>
+              <small class="settings-hint" data-i18n="settings.admin.large_server.workers_hint">One core carries many calls. Add more when calls get very large or numerous; each extra core uses the next port up.</small>
+            </div>
+            <div class="large-server-install" id="voice-relay-install" style="display:none">
+              <small class="settings-hint" data-i18n="settings.admin.large_server.install_hint">The relay is not installed on this server yet. Installing it downloads about 10 MB, once; Haven updates keep it. It works on Windows, Linux (including Raspberry Pi and Docker) and Apple Silicon Macs.</small>
+              <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                <button type="button" class="btn-sm btn-accent" id="voice-relay-install-btn" data-i18n="settings.admin.large_server.install_btn">Install the relay</button>
+                <small class="muted-text" id="voice-relay-install-log"></small>
+              </div>
+            </div>
+
+            <div style="margin-top:10px; display:flex; align-items:center; gap:8px">
+              <button type="button" class="btn-sm btn-accent" id="voice-relay-save" data-i18n="settings.admin.large_server.save">Save relay settings</button>
+              <small class="muted-text" id="voice-relay-save-note" data-i18n="settings.admin.large_server.save_note">Takes effect straight away. Calls in progress reconnect by themselves.</small>
+            </div>
+          </div>
+
+          <div class="large-server-card">
+            <div class="large-server-card-title">✅ <span data-i18n="settings.admin.large_server.more_title">Also worth setting for a big server</span></div>
+            <div class="large-server-checklist">
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_members">Member list</strong>
+                <small data-i18n="settings.admin.large_server.item_members_hint">Show online members only, so a server with thousands of accounts does not list every one of them.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-members" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_signups">Sign-ups</strong>
+                <small data-i18n="settings.admin.large_server.item_signups_hint">A captcha and a limit on new accounts per hour stop floods of spam accounts.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-whitelist" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_automod">Auto-moderation</strong>
+                <small data-i18n="settings.admin.large_server.item_automod_hint">Block links from brand-new accounts and step up to bans automatically when moderators cannot watch every channel.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-automod" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_guests">Guest access</strong>
+                <small data-i18n="settings.admin.large_server.item_guests_hint">Decide whether people can drop in without an account, and whether guests may use voice.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-guests" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_limits">Limits</strong>
+                <small data-i18n="settings.admin.large_server.item_limits_hint">Message length, upload size and attachments per message keep storage and bandwidth in check.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-uploads" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_backup">Backups and cleanup</strong>
+                <small data-i18n="settings.admin.large_server.item_backup_hint">Automatic backups, and clearing out old files so the disk does not fill up.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-backup" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+              <div class="large-server-item">
+                <div><strong data-i18n="settings.admin.large_server.item_turn">TURN server</strong>
+                <small data-i18n="settings.admin.large_server.item_turn_hint">Lets people on very strict networks (some offices, schools, mobile carriers) connect to voice at all.</small></div>
+                <button type="button" class="btn-sm" data-large-server-open="section-connectivity" data-i18n="settings.admin.large_server.open">Open</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Tunnel settings (Admin only) -->
         <div class="admin-settings" id="section-tunnel" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🧭 <span data-i18n="settings.admin.tunnel_title">Tunnel</span></h5>
@@ -2577,6 +2743,11 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.update_banner_hint">When enabled, the "update available" banner is only shown to admins</small>
           <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.allow_self_purge_label">Members can delete all their own messages</span>
+            <input type="checkbox" id="allow-self-purge">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.allow_self_purge_hint">Puts a Delete All My Messages button in everyone's Settings, next to Delete Account, for people who want to leave nothing behind. It works whether or not their role may delete messages one by one; messages a moderator has protected are kept.</small>
+          <label class="toggle-row" style="margin-top:8px">
             <span data-i18n="settings.admin.hide_disabled_badges_label">Hide the crossed-out icons in the channel list</span>
             <input type="checkbox" id="hide-disabled-badges">
           </label>
@@ -2593,7 +2764,7 @@
           <h5 class="settings-section-subtitle">👑 <span data-i18n="settings.admin.roles_title">Role Management</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.roles_hint">Create and manage roles. Assign roles to users from the user list context menu.</small>
           <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Manage Roles</span></button>
+            <button class="btn-sm btn-accent" id="open-role-editor-btn">⚙️ <span data-i18n="settings.admin.manage_roles_btn">Permissions</span></button>
             <button class="btn-sm" id="post-role-menu-btn" data-i18n-title="settings.admin.role_menu.hint" title="Post a message people react to, or click, to give themselves a role">🎭 <span data-i18n="settings.admin.role_menu.post">Post a role menu</span></button>
             <button class="btn-sm" id="reset-roles-btn" data-i18n-title="settings.admin.reset_roles_title" title="Reset all roles to deployment defaults">🔄 <span data-i18n="settings.admin.reset_roles_btn">Reset to Default</span></button>
           </div>
@@ -2940,6 +3111,11 @@
             <span data-i18n="settings.admin.guests_allow">Allow guests</span>
             <input type="checkbox" id="guests-enabled">
           </label>
+          <label class="toggle-row" style="margin-top:6px">
+            <span data-i18n="settings.admin.guests_allow_voice">Guests can join voice and video</span>
+            <input type="checkbox" id="guests-allow-voice" checked>
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.guests_allow_voice_hint">Off, guests can read and type in the channels below but cannot join a call, share a screen or turn on a camera.</small>
           <div style="margin-top:10px;">
             <h6 style="margin:0 0 4px;font-size:0.85rem;font-weight:600" data-i18n="settings.admin.guests_channels_title">📋 Channels guests can access</h6>
             <small class="settings-hint" data-i18n="settings.admin.guests_channels_hint">Pick which channels guests can see and post in. Pick none and the Guest button won't be very useful. DMs are never available to guests.</small>
@@ -3003,6 +3179,16 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_attachments_hint">How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.</small>
           <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_tags_per_attachment">Max Tags per Attachment</span>
+            <input type="number" id="max-tags-per-attachment" min="1" max="10" value="3" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_tags_per_attachment_hint">How many upload tags a user can put on one attachment (1 to 10, default 3).</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_tag_len">Max Tag Length (characters)</span>
+            <input type="number" id="max-tag-len" min="1" max="50" value="20" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_tag_len_hint">Maximum characters in an upload tag name (1 to 50, default 20).</small>
+          <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_message_chars">Max Message Length (characters)</span>
             <input type="number" id="max-message-chars" min="200" max="100000" value="2000" class="settings-number-input">
           </label>
@@ -3039,6 +3225,19 @@
             </select>
           </label>
           <small class="settings-hint" data-i18n="settings.admin.session_duration_hint">How long a login token stays valid before users must sign in again. "Never expire" keeps users logged in until they hit Logout or change their password. Applies to new logins only; existing tokens keep their original expiry until they expire or rotate.</small>
+        </div>
+
+        <!-- Tags (Admin / manage_tags) — manage the upload-tag vocabulary -->
+        <div class="admin-settings" id="section-tags-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🏷️ <span data-i18n="settings.admin.tags_title">Tags</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.tags_hint">Manage the upload-tag vocabulary. Renaming or deleting a tag applies to every attachment that uses it and cannot be undone.</small>
+          <div class="tag-admin-add">
+            <input type="text" id="tag-admin-new" class="settings-text-input" maxlength="50" data-i18n-placeholder="settings.admin.tags_add_placeholder" placeholder="New tag name" autocomplete="off">
+            <button class="btn-sm btn-accent" id="tag-admin-add-btn" data-i18n="settings.admin.tags_add_btn">Add tag</button>
+          </div>
+          <div id="tag-admin-list" class="tag-admin-list">
+            <p class="muted-text" data-i18n="settings.admin.tags_loading">Loading…</p>
+          </div>
         </div>
 
         <!-- Webhooks / Bots (Admin only) -->
@@ -3240,8 +3439,27 @@
         <div id="import-tab-connect" style="display:none">
           <div id="import-connect-step-token">
             <p class="settings-hint" style="margin-bottom:8px" data-i18n="modals.discord_import.connect_hint">
-              Connect directly to Discord and pull your messages — no external tools needed.
+              Pull a Discord server's history straight into Haven.
             </p>
+            <div class="import-ferry-box">
+              <strong data-i18n="modals.discord_import.ferry_title">🛶 Use your Ferry bot (recommended)</strong>
+              <p data-i18n="modals.discord_import.ferry_desc">Your Ferry bot reads the history for you. Nothing to paste, and it's within Discord's rules. It can import every channel it can see on Discord.</p>
+              <button class="btn-sm btn-accent" id="import-ferry-connect-btn" data-i18n="modals.discord_import.ferry_btn">Use my Ferry bot</button>
+              <p class="muted-text" id="import-ferry-missing" style="display:none"><span data-i18n="modals.discord_import.ferry_missing">Ferry isn't set up on this server yet. It takes about two minutes, and you only do it once.</span> <a href="#" id="import-open-ferry" data-i18n="modals.discord_import.ferry_setup_link">Set up Ferry</a></p>
+            </div>
+            <details class="import-personal-login">
+              <summary data-i18n="modals.discord_import.personal_summary">Or use your personal Discord login (not recommended)</summary>
+            <div class="import-token-risk">
+              <strong data-i18n="modals.discord_import.risk_title">⚠️ Read this first</strong>
+              <p data-i18n="modals.discord_import.risk_rules">This uses your personal Discord login token. Discord's rules don't allow apps to use a personal account this way, so Discord could lock or ban the account you use.</p>
+              <p data-i18n="modals.discord_import.risk_takeover">Anyone who gets your token can take over your Discord account. Only paste it into a Haven server you run yourself, and never because someone asked you to.</p>
+              <p data-i18n="modals.discord_import.risk_safer">Your Ferry bot, above, does the same import within Discord's rules.</p>
+              <label class="import-token-risk-ack">
+                <input type="checkbox" id="import-token-risk-ack">
+                <span data-i18n="modals.discord_import.risk_ack">I understand the risks, and this is my own Haven server</span>
+              </label>
+            </div>
+            <div id="import-connect-gated" style="display:none">
             <details class="import-token-help">
               <summary data-i18n="modals.discord_import.token_help_summary">How do I get my Discord token?</summary>
               <div class="import-token-steps">
@@ -3264,6 +3482,8 @@
               <input type="password" id="import-discord-token" class="import-token-input" data-i18n-placeholder="modals.discord_import.token_placeholder" placeholder="Paste your Discord token here">
               <button class="btn-sm btn-accent" id="import-connect-btn" data-i18n="modals.discord_import.connect_btn">Connect</button>
             </div>
+            </div>
+            </details>
             <p class="muted-text" id="import-connect-status" style="margin-top:6px;display:none"></p>
           </div>
 
@@ -3323,6 +3543,43 @@
       </div>
     </div>
   </div>
+
+
+  <!-- Permissions matrix -->
+  <div class="modal-overlay" id="perm-matrix-overlay" style="display:none">
+    <div class="modal modal-wide perm-matrix-modal">
+      <div class="perm-matrix-header">
+        <h3>👑 <span data-i18n="settings.admin.perm_matrix.title">Permissions</span></h3>
+        <div class="perm-view-toggle" role="tablist">
+          <button type="button" class="perm-view-btn is-active" id="perm-view-roles" data-i18n="settings.admin.perm_matrix.view_roles">Roles</button>
+          <button type="button" class="perm-view-btn" id="perm-view-users" data-i18n="settings.admin.perm_matrix.view_users">Users</button>
+        </div>
+      </div>
+      <p class="muted-text perm-matrix-lead" data-i18n="settings.admin.perm_matrix.lead">New servers start with Member, Mod, and Admin (you). Members can use every public channel. Mods can kick, ban, and run channels. Admin can do everything.</p>
+      <div id="perm-roles-pane">
+        <div class="perm-matrix-toolbar">
+          <button type="button" class="btn-sm btn-accent" id="perm-add-role-btn">+ <span data-i18n="settings.admin.perm_matrix.add_role">Add role</span></button>
+        </div>
+        <div class="perm-matrix-scroll">
+          <table class="perm-matrix-table" id="perm-matrix-table"></table>
+        </div>
+      </div>
+      <div id="perm-users-pane" hidden>
+        <div class="perm-users-layout">
+          <div class="perm-users-side">
+            <input type="search" id="perm-user-search" class="settings-text-input" data-i18n-placeholder="settings.admin.perm_matrix.search_users" placeholder="Search members…">
+            <div id="perm-user-list" class="perm-user-list"></div>
+          </div>
+          <div id="perm-user-detail" class="perm-user-detail"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-sm" id="perm-open-classic-btn" data-i18n="settings.admin.perm_matrix.classic">More options</button>
+        <button type="button" class="btn-sm" id="close-perm-matrix-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Role Management Modal -->
   <div class="modal-overlay" id="role-modal" style="display:none">
@@ -3771,7 +4028,7 @@
   <!-- Music Share Modal -->
   <div class="modal-overlay" id="music-modal" style="display:none">
     <div class="modal">
-      <h3>🎵 <span data-i18n="modals.listen_together.title">Listen Together</span></h3>
+      <h3>🎶 <span data-i18n="modals.listen_together.title">Listen Together</span></h3>
       <p class="modal-desc" data-i18n="modals.listen_together.desc">Paste a link from Spotify, YouTube, or SoundCloud to share with everyone in voice</p>
       <div class="form-group">
         <label data-i18n="modals.listen_together.link_label">Music Link</label>
@@ -3836,6 +4093,7 @@
   <!-- Channel context menu (appears on "..." hover button) -->
   <div id="channel-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="mark-read">✅ <span data-i18n="context_menu.channel.mark_read">Mark as Read</span></button>
+    <button class="channel-ctx-item" data-action="mark-all-read">☑️ <span data-i18n="context_menu.channel.mark_all_read">Mark everything as read</span></button>
     <button class="channel-ctx-item" data-action="mute">🔔 <span data-i18n="context_menu.channel.mute">Mute Channel</span></button>
     <button class="channel-ctx-item" data-action="copy-channel-link">🔗 <span data-i18n="context_menu.channel.copy_link">Copy Channel Link</span></button>
     <button class="channel-ctx-item" data-action="join-voice">🎙️ <span data-i18n="voice.join_ctx">Join Voice</span></button>
@@ -3874,6 +4132,10 @@
       </div>
       <div class="cfn-row" data-fn="media" data-i18n-title="channel_functions.media_hint" title="Allow image, video, and file uploads in this channel">
         <span class="cfn-label">🖼️ <span data-i18n="channel_functions.media">Media</span></span>
+        <span class="cfn-badge cfn-on" data-i18n="channel_functions.on">ON</span>
+      </div>
+      <div class="cfn-row" data-fn="reactions" data-i18n-title="channel_functions.reactions_hint" title="Allow emoji reactions on messages in this channel">
+        <span class="cfn-label">😀 <span data-i18n="channel_functions.reactions">Reactions</span></span>
         <span class="cfn-badge cfn-on" data-i18n="channel_functions.on">ON</span>
       </div>
       <div class="cfn-row" data-fn="read-only" data-i18n-title="channel_functions.read_only_hint" title="Make this channel read-only — only users with the Read-Only Override permission can post">
@@ -3957,6 +4219,7 @@
   <!-- DM context menu -->
   <div id="dm-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="dm-mark-read">✅ <span data-i18n="context_menu.dm.mark_read">Mark as Read</span></button>
+    <button class="channel-ctx-item" data-action="mark-all-read">☑️ <span data-i18n="context_menu.channel.mark_all_read">Mark everything as read</span></button>
     <button class="channel-ctx-item" data-action="dm-mute">🔔 <span data-i18n="context_menu.dm.mute">Mute DM</span></button>
     <hr class="channel-ctx-sep">
     <button class="channel-ctx-item danger" data-action="dm-delete">🗑️ <span data-i18n="context_menu.dm.delete">Delete DM</span></button>
@@ -4548,6 +4811,17 @@
             <option value="name-desc" data-i18n="media_gallery.sort_name_za">Name Z→A</option>
           </select>
         </label>
+        <div class="media-gallery-tagfilter" id="media-gallery-tagfilter-wrap">
+          <button class="btn-sm" id="media-gallery-tagfilter-btn" data-i18n="media_gallery.filter_tags">Tags</button>
+          <span class="media-gallery-tagfilter-count" id="media-gallery-tagfilter-count" style="display:none"></span>
+        </div>
+        <div class="media-gallery-tagmanage" id="media-gallery-tagmanage" style="display:none">
+          <button class="btn-sm" id="media-gallery-tagmanage-btn" data-i18n="media_gallery.manage_tags">Manage tags</button>
+          <div class="media-tagmanage-menu" id="media-tagmanage-menu" style="display:none">
+            <button type="button" class="media-tagmanage-opt" data-mode="append" data-i18n="media_gallery.append_tags">Append tags</button>
+            <button type="button" class="media-tagmanage-opt" data-mode="replace" data-i18n="media_gallery.replace_tags">Replace all tags</button>
+          </div>
+        </div>
         <label class="media-gallery-tile-label" id="media-gallery-tile-wrap">
           <span data-i18n="media_gallery.tile_size">Size</span>
           <input type="range" id="media-gallery-tile" min="72" max="360" step="8" value="150" data-i18n-aria-label="media_gallery.tile_size" aria-label="Size">
@@ -4585,13 +4859,14 @@
   <script src="/js/theme.js?v=4.6.10"></script>
   <script src="/js/notifications.js?v=4.6.2"></script>
   <script src="/js/servers.js?v=3.16.15"></script>
-  <script src="/js/voice.js?v=4.8.1"></script>
+  <script src="/js/voice-relay.js?v=4.14.2"></script>
+  <script src="/js/voice.js?v=4.14.2"></script>
   <script src="/js/modmode.js?v=3.16.16"></script>
   <script src="/js/e2e.js?v=3.16.15"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.8.10"></script>
+  <script type="module" src="/js/app.js?v=4.12.1"></script>
   <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

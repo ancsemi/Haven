@@ -185,6 +185,10 @@ module.exports = function register(socket, ctx) {
       target_type: 'user', target_id: data.userId, target_name: targetName,
       details: { channelCode: code, reason: data.reason || null,
         scrubMessages: !!data.scrubMessages, scrubScope: data.scrubScope || null } });
+    // Last, since everything above still addresses the channel by its old
+    // code: a kicked person must not be able to walk back into a private
+    // channel with the code they already know.
+    if (kickCh && typeof ctx.rotatePrivateCodesAfterRemoval === 'function') ctx.rotatePrivateCodesAfterRemoval(kickCh.id);
   });
 
   // ── Ban user ────────────────────────────────────────────
@@ -746,8 +750,11 @@ module.exports = function register(socket, ctx) {
   socket.on('mute-user', (data) => {
     if (!data || typeof data !== 'object') return;
     const muteCode = socket.currentChannel;
-    const muteCh = muteCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(muteCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user', muteCh ? muteCh.id : null)) {
+    // A mute silences someone in every channel, so it takes mute_user held
+    // server-wide and rank compared server-wide. A channel role (every
+    // channel's creator gets Channel Mod there) used to be enough to mute
+    // anyone ranked below for up to 30 days, everywhere.
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user')) {
       return socket.emit('error-msg', 'You don\'t have permission to mute users');
     }
     if (!isInt(data.userId)) return;
@@ -756,8 +763,8 @@ module.exports = function register(socket, ctx) {
     }
 
     if (!socket.user.isAdmin) {
-      const myLevel = getUserEffectiveLevel(socket.user.id, muteCh ? muteCh.id : null);
-      const targetLevel = getUserEffectiveLevel(data.userId, muteCh ? muteCh.id : null);
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      const targetLevel = getUserEffectiveLevel(data.userId);
       if (targetLevel >= myLevel) {
         return socket.emit('error-msg', 'You can\'t mute a user with equal or higher rank');
       }
@@ -796,12 +803,23 @@ module.exports = function register(socket, ctx) {
   // sent this event at all, so every mute ran its full timer (#5640).
   socket.on('unmute-user', (data) => {
     if (!data || typeof data !== 'object') return;
-    const unmuteCode = socket.currentChannel;
-    const unmuteCh = unmuteCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unmuteCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user', unmuteCh ? unmuteCh.id : null)) {
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user')) {
       return socket.emit('error-msg', 'You don\'t have permission to unmute users');
     }
     if (!isInt(data.userId)) return;
+    // The same rule as lifting a ban: not your own mute, not an admin's, and
+    // not one placed by someone of equal or higher rank.
+    if (!socket.user.isAdmin) {
+      if (data.userId === socket.user.id) return socket.emit('error-msg', 'You can\'t unmute yourself');
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      const placers = db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(data.userId);
+      for (const { muted_by: by } of placers) {
+        if (!by || by === socket.user.id) continue;
+        const placer = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(by);
+        if (placer && placer.is_admin) return socket.emit('error-msg', 'You can\'t undo a mute placed by an admin');
+        if (getUserEffectiveLevel(by) >= myLevel) return socket.emit('error-msg', 'You can\'t undo a mute placed by someone of equal or higher rank');
+      }
+    }
 
     const targetUser = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
     if (!targetUser) return socket.emit('error-msg', 'User not found');

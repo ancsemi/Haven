@@ -357,6 +357,14 @@ _setupNotifications() {
     syncRow();
     popupCooldownSel.addEventListener('change', () => {
       syncRow();
+      // A push from the server always shows as a pop-up, so Never has to turn
+      // push off on this device too, or DMs kept popping up anyway (#5693).
+      if (popupCooldownSel.value === '-1' && this._pushSubscription) {
+        this._unsubscribePush().then(() => {
+          const pushToggle = document.getElementById('push-notif-enabled');
+          if (pushToggle) pushToggle.checked = false;
+        });
+      }
       if (popupCooldownSel.value !== 'custom') { this.notifications.setPopupCooldownMs(popupCooldownSel.value); return; }
       if (customMin) { if (!customMin.value) customMin.value = '10'; applyCustom(); customMin.focus(); }
     });
@@ -592,6 +600,15 @@ _setupNotifications() {
   if (hideNsfwToggle) {
     hideNsfwToggle.checked = localStorage.getItem('haven_hide_nsfw') === 'true';
     hideNsfwToggle.addEventListener('change', () => this._setHideNsfw?.(hideNsfwToggle.checked));
+  }
+  // The blur on an NSFW topic is on unless switched off (#5633).
+  const blurNsfwToggle = document.getElementById('blur-nsfw-topics');
+  if (blurNsfwToggle) {
+    blurNsfwToggle.checked = localStorage.getItem('haven_blur_nsfw') !== 'false';
+    blurNsfwToggle.addEventListener('change', () => {
+      try { localStorage.setItem('haven_blur_nsfw', blurNsfwToggle.checked ? 'true' : 'false'); } catch {}
+      if (this._forumActive && this._forumReload) this._forumReload();
+    });
   }
   this._setupSettingsSearch?.();
   const hideOwnScoreToggle = document.getElementById('hide-own-score');

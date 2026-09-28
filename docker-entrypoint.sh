@@ -29,4 +29,4 @@ if [ "$OWNER" != "1000" ]; then
   chown -R node:node "$DATA" 2>/dev/null || true
 fi
 
-exec su-exec node "$@"
+exec gosu node "$@"

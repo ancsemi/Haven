@@ -540,6 +540,11 @@ _setupUI() {
       const newVal = ch && ch.soundboard_enabled === 0 ? 1 : 0;
       optimistic({ soundboard_enabled: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'soundboard' });
+    } else if (fn === 'reactions') {
+      const newVal = ch && ch.reactions_enabled === 0 ? 1 : 0;
+      optimistic({ reactions_enabled: newVal });
+      if (code === this.currentChannel) this._applyReactionLock?.();
+      this.socket.emit('toggle-channel-permission', { code, permission: 'reactions' });
     } else if (fn === 'read-only') {
       const newVal = ch && ch.read_only ? 0 : 1;
       optimistic({ read_only: newVal });
@@ -1838,7 +1843,9 @@ _setupUI() {
     if (!this._mediaGalleryData || !this._mediaGallerySelectMode) return;
     const tab = this._mediaGalleryActiveTab || 'photos';
     if (tab === 'links') return; // not deletable
-    const items = this._mediaGalleryData[tab] || [];
+    // Only the items currently visible under the active tag filter, so Select
+    // all never reaches attachments hidden by the filter.
+    const items = this._filterMediaItemsByTags(this._mediaGalleryData[tab] || [], tab);
     const selected = this._mediaGallerySelected || (this._mediaGallerySelected = new Map());
     // Toggle: if everything in this tab is already selected, clear; else add all
     const allSelected = items.length > 0 && items.every(it => selected.has(this._mediaItemKey(it)));
@@ -1889,6 +1896,38 @@ _setupUI() {
       this.socket.emit('get-channel-media', { code: this.currentChannel });
     });
   });
+
+  // ── Tag filter (#tagging phase 3b) ──
+  // Opens a body-level picker; selecting one or more tags filters the current
+  // tab to attachments carrying ALL of them (exact match), respecting the sort.
+  const tagFilterBtn = document.getElementById('media-gallery-tagfilter-btn');
+  if (tagFilterBtn) tagFilterBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (document.getElementById('media-tag-filter-popup')) this._closeMediaTagFilter();
+    else this._openMediaTagFilter(tagFilterBtn);
+  });
+
+  // ── Bulk tag management (#tagging phase 3b) ──
+  // In select mode, manage_tags holders get a dropdown to Append or Replace
+  // tags across the selected attachments, confirmed in a tag picker.
+  const tagManageBtn = document.getElementById('media-gallery-tagmanage-btn');
+  const tagManageMenu = document.getElementById('media-tagmanage-menu');
+  if (tagManageBtn && tagManageMenu) {
+    tagManageBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tagManageMenu.style.display = tagManageMenu.style.display !== 'none' ? 'none' : '';
+    });
+    tagManageMenu.querySelectorAll('.media-tagmanage-opt').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        tagManageMenu.style.display = 'none';
+        this._openMediaTagManage(opt.dataset.mode);
+      });
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#media-gallery-tagmanage')) tagManageMenu.style.display = 'none';
+    });
+  }
 
   // Right sidebar collapse toggle (persisted to localStorage)
   const sidebarToggle = document.getElementById('sidebar-toggle-btn');
@@ -2191,19 +2230,22 @@ _setupUI() {
           this._showImageContextMenu(e, this._lazyRealSrc ? this._lazyRealSrc(e.target) : e.target.src, { sourceImg: e.target });
         }
       });
-      // Middle click on a picture opens it in a new tab, like a link (#5663).
-      el.addEventListener('auxclick', (e) => {
-        if (e.button !== 1) return;
-        const img = e.target.closest('img.chat-image');
-        if (!img) return;
-        e.preventDefault();
-        this._openImageInNewTab(img);
-      });
     }
   }
-  document.getElementById('messages').addEventListener('auxclick', (e) => {
-    if (e.button !== 1) return;
+  // Middle click on a picture opens it in a new tab, like a link (#5663).
+  // One handler for every message list: the pop-out DM and the thread panel
+  // had ended up with two each, so one click asked for two tabs. The
+  // mousedown half stops Windows from starting its middle-button autoscroll
+  // on the picture, which swallows the click before it gets here.
+  const MIDCLICK_LISTS = '#messages, #thread-messages, #dm-pip-messages, #search-panel-list';
+  const midClickImage = (e) => {
+    if (e.button !== 1 || !e.target || !e.target.closest) return null;
     const img = e.target.closest('img.chat-image');
+    return img && img.closest(MIDCLICK_LISTS) ? img : null;
+  };
+  document.addEventListener('mousedown', (e) => { if (midClickImage(e)) e.preventDefault(); });
+  document.addEventListener('auxclick', (e) => {
+    const img = midClickImage(e);
     if (!img) return;
     e.preventDefault();
     this._openImageInNewTab(img);
@@ -2275,6 +2317,17 @@ _setupUI() {
     const replyMsgId = banner.dataset.replyMsgId;
     if (!replyMsgId) return;
     this._jumpToMessage(parseInt(replyMsgId, 10));
+  });
+
+  // Tag chip click (message footer / search result) — run a search for exactly
+  // that tag. Delegated on document so it works in every surface that renders a
+  // Tags footer without per-container wiring. (#tagging phase 2)
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('.message-tag[data-tag]');
+    if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this._searchByTag?.(chip.dataset.tag);
   });
 
   // #channel-name link click — switch to the referenced channel.
@@ -2376,6 +2429,40 @@ _setupUI() {
       e.preventDefault();
     }
   });
+
+  // A paperclip and drag-and-drop in the pop-out DM, since paste was the
+  // only way to send a picture from it, and middle-click opens a picture
+  // there and in a thread like it does in chat (#5663).
+  const dmPipUploadBtn = document.getElementById('dm-pip-upload-btn');
+  const dmPipFileInput = document.getElementById('dm-pip-file-input');
+  const dmPipTakeFiles = (files) => {
+    const targetCode = this._activeDMPip;
+    if (!files || !files.length || !targetCode) return false;
+    for (const file of files) {
+      if (file.type.startsWith('image/')) this._queueImageForPiP(file, targetCode);
+      else this._uploadGeneralFile(file, targetCode);
+    }
+    return true;
+  };
+  if (dmPipUploadBtn && dmPipFileInput) {
+    dmPipUploadBtn.addEventListener('click', (e) => { e.stopPropagation(); dmPipFileInput.click(); });
+    dmPipFileInput.addEventListener('change', () => {
+      dmPipTakeFiles(dmPipFileInput.files);
+      dmPipFileInput.value = '';
+    });
+  }
+  const dmPipPanel = document.getElementById('dm-pip-panel');
+  if (dmPipPanel) {
+    dmPipPanel.addEventListener('dragover', (e) => {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+    });
+    dmPipPanel.addEventListener('drop', (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dmPipTakeFiles(e.dataTransfer.files);
+    });
+  }
 
   // PiP emoji button — positions the picker above the button and targets the PiP input
   const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');
@@ -2544,10 +2631,15 @@ _setupUI() {
     });
 
     // Drag & drop parity with the other composers — queue, never insta-post.
-    const threadArea = threadInput.closest('.thread-input-area') || threadInput;
-    threadArea.addEventListener('dragover', (e) => { e.preventDefault(); threadArea.classList.add('drag-over'); });
-    threadArea.addEventListener('dragleave', () => threadArea.classList.remove('drag-over'));
+    // The whole panel takes the drop, not only the reply box: in a forum topic
+    // people drop pictures onto the replies the way they would onto a chat
+    // (#5684).
+    const threadArea = threadInput.closest('.thread-panel') || threadInput.closest('.thread-input-area') || threadInput;
+    const hasFiles = (e) => !!e.dataTransfer?.types?.includes('Files');
+    threadArea.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); threadArea.classList.add('drag-over'); });
+    threadArea.addEventListener('dragleave', (e) => { if (!threadArea.contains(e.relatedTarget)) threadArea.classList.remove('drag-over'); });
     threadArea.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
       e.preventDefault();
       threadArea.classList.remove('drag-over');
       if (!this._activeThreadParent) return;
@@ -3648,8 +3740,9 @@ _setupUI() {
       this.socket.auth.token = data.token;
 
       // Re-wrap E2E private key with a key derived from the NEW password
-      // so the server backup can be unlocked with the new credentials
-      if (this.e2e && this.e2e.ready && typeof HavenE2E !== 'undefined') {
+      // so the server backup can be unlocked with the new credentials. A
+      // backup locked with a separate passphrase stays as it is.
+      if (this.e2e && this.e2e.ready && typeof HavenE2E !== 'undefined' && !this.user?.e2ePassphrase) {
         try {
           const newWrap = await HavenE2E.deriveWrappingKey(np);
           await this.e2e.reWrapKey(this.socket, newWrap);
@@ -3674,6 +3767,12 @@ _setupUI() {
       hint.classList.add('error');
     }
   });
+
+  // ── Encryption passphrase ────────────────────────────
+  // The E2E key backup is normally locked with the login password, which the
+  // server receives at every sign-in. A passphrase of the user's own keeps the
+  // server from ever being able to open it.
+  this._setupE2EPassphraseSection();
 
   // ── Two-Factor Authentication settings ─────────────
   const totpStatusText     = document.getElementById('totp-status-text');
@@ -3725,6 +3824,7 @@ _setupUI() {
     settingsNav.addEventListener('click', (e) => {
       const item = e.target.closest('.settings-nav-item');
       if (item && item.dataset.target === 'section-2fa') loadTotpStatus();
+      if (item && item.dataset.target === 'section-tags-admin') this._loadAdminTags();
       if (item && item.dataset.target === 'section-sessions') this._refreshSessions();
       if (item && item.dataset.target === 'section-desktop-shortcuts') this._setupDesktopShortcuts();
       if (item && item.dataset.target === 'section-desktop-app') this._setupDesktopAppPrefs();
@@ -4051,6 +4151,51 @@ _setupUI() {
         localStorage.removeItem('haven_e2e_privkey');
         localStorage.removeItem('haven_sync_key');
         window.location.reload();
+      });
+    });
+  });
+
+  // Delete every message you wrote (#5686). Same shape as Delete Account:
+  // password, a second confirm, then the server does it and says how many.
+  document.getElementById('self-purge-btn')?.addEventListener('click', () => {
+    document.querySelector('.self-purge-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay self-purge-overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:380px">
+        <h3>🧹 ${t('settings.self_purge.title')}</h3>
+        <p class="modal-desc">${t('settings.self_purge.confirm_desc')}</p>
+        <div class="form-group compact">
+          <input type="password" id="self-purge-pw" placeholder="${t('settings.delete_account_section.password_placeholder')}" maxlength="128" autocomplete="current-password">
+        </div>
+        <small class="settings-hint self-purge-status" style="display:block;margin-bottom:8px"></small>
+        <div class="modal-actions">
+          <button class="btn-sm self-purge-cancel">${t('modals.common.cancel')}</button>
+          <button class="btn-sm btn-danger-fill self-purge-confirm">${t('settings.self_purge.btn')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('.self-purge-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('.self-purge-confirm').addEventListener('click', async () => {
+      const pw = document.getElementById('self-purge-pw').value;
+      const status = overlay.querySelector('.self-purge-status');
+      if (!pw) { status.textContent = t('settings.delete_account_section.password_required'); return; }
+      const ok = await this._showConfirmModal(t('settings.self_purge.confirm_title'), t('settings.self_purge.confirm_body'), { danger: true, confirmLabel: t('settings.self_purge.btn') });
+      if (!ok) return;
+      status.textContent = t('settings.delete_account_section.deleting');
+      overlay.querySelector('.self-purge-confirm').disabled = true;
+      this.socket.emit('self-purge-messages', { password: pw }, (res) => {
+        if (!res || res.error) {
+          status.textContent = res?.error || t('settings.self_purge.failed');
+          overlay.querySelector('.self-purge-confirm').disabled = false;
+          return;
+        }
+        overlay.remove();
+        this._showToast(res.kept
+          ? t('settings.self_purge.done_kept', { n: res.deleted, kept: res.kept })
+          : t('settings.self_purge.done', { n: res.deleted }), 'success');
       });
     });
   });
@@ -4722,11 +4867,17 @@ _setupUI() {
     host.innerHTML = html;
     const toggle = document.getElementById('guests-enabled');
     if (toggle) toggle.checked = (this.serverSettings?.guests_enabled === 'true');
+    const voiceToggle = document.getElementById('guests-allow-voice');
+    if (voiceToggle) voiceToggle.checked = (this.serverSettings?.guests_allow_voice !== 'false');
   };
   this._renderGuestChannels = _renderGuestChannels;
   document.getElementById('guests-enabled')?.addEventListener('change', (e) => {
     this.socket.emit('update-server-setting', { key: 'guests_enabled', value: e.target.checked ? 'true' : 'false' });
     this._showToast?.(t(e.target.checked ? 'settings.admin.guest_access.enabled' : 'settings.admin.guest_access.disabled'), 'success');
+  });
+  document.getElementById('guests-allow-voice')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', { key: 'guests_allow_voice', value: e.target.checked ? 'true' : 'false' });
+    this._showToast?.(t(e.target.checked ? 'settings.admin.guest_access.voice_on' : 'settings.admin.guest_access.voice_off'), 'success');
   });
   document.getElementById('guest-channels-all-btn')?.addEventListener('click', () => {
     document.querySelectorAll('.guest-channel-cb').forEach(cb => { cb.checked = true; });
@@ -6767,6 +6918,9 @@ _finishVoiceMessage(rec) {
 _bindInputResizer(handle) {
   if (!handle || handle._resizerBound) return;
   handle._resizerBound = true;
+  // The composer's bar sits above its box, so up means taller; the edit
+  // box's bar sits below it, so there down means taller (#5662).
+  const below = handle.classList.contains('edit-resizer');
   let startY = 0;
   let startHeight = 0;
   let ta = null;
@@ -6774,7 +6928,7 @@ _bindInputResizer(handle) {
 
   const onMove = (e) => {
     if (!ta) return;
-    const delta = startY - e.clientY; // positive when dragging up
+    const delta = below ? (e.clientY - startY) : (startY - e.clientY); // positive when growing
     const newHeight = Math.max(34, Math.min(cap, startHeight + delta));
     ta.style.height = `${newHeight}px`;
     ta.style.minHeight = `${newHeight}px`;
@@ -7485,6 +7639,107 @@ _maybeRevealConcealed(e) {
   return false;
 },
 
+// Settings > Encryption: lock the E2E key backup with a passphrase of the
+// user's own instead of the login password, or go back. SSO accounts already
+// use a passphrase and guests have no password, so neither sees it.
+_setupE2EPassphraseSection() {
+  const section = document.getElementById('section-e2e-passphrase');
+  if (!section) return;
+  const navItem = document.querySelector('.settings-nav-item[data-target="section-e2e-passphrase"]');
+  const stateEl = document.getElementById('e2e-pp-state');
+  const statusEl = document.getElementById('e2e-pp-status');
+  const newEl = document.getElementById('e2e-pp-new');
+  const confirmEl = document.getElementById('e2e-pp-confirm');
+  const saveBtn = document.getElementById('e2e-pp-save-btn');
+  const revertArea = document.getElementById('e2e-pp-revert-area');
+  const pwEl = document.getElementById('e2e-pp-password');
+  const revertBtn = document.getElementById('e2e-pp-revert-btn');
+
+  const say = (msg, kind) => {
+    statusEl.textContent = msg || '';
+    statusEl.className = 'settings-hint' + (kind ? ` ${kind}` : '');
+  };
+  const render = () => {
+    const hidden = !!(this.user?.isSso || this.user?.isGuest);
+    section.style.display = hidden ? 'none' : '';
+    if (navItem) navItem.style.display = hidden ? 'none' : '';
+    const own = !!this.user?.e2ePassphrase;
+    stateEl.textContent = t(own ? 'settings.e2e_passphrase.state_own' : 'settings.e2e_passphrase.state_password');
+    saveBtn.textContent = t(own ? 'settings.e2e_passphrase.change_btn' : 'settings.e2e_passphrase.save_btn');
+    revertArea.style.display = own ? '' : 'none';
+  };
+  // session-info fills in the flags after this runs, so it re-renders too.
+  this._renderE2EPassphraseSection = render;
+  render();
+
+  // Either change re-locks the backup, so the key has to be unlocked first.
+  const whenUnlocked = (fn) => {
+    if (this.e2e?.ready) return fn();
+    say(t('settings.e2e_passphrase.unlock_first'), 'error');
+    this._requireE2E(fn);
+  };
+
+  // The backup is locked with wrapKey from now on, and the server list sync
+  // (which shares the key) follows it.
+  const adopt = async (wrapKey, own) => {
+    await this.e2e.reWrapKey(this.socket, wrapKey, { separatePassphrase: own });
+    this.user.e2ePassphrase = own;
+    try { localStorage.setItem('haven_user', JSON.stringify(this.user)); } catch { /* private mode */ }
+    this._e2eWrappingKey = wrapKey;
+    try { localStorage.setItem('haven_sync_key', wrapKey); } catch { /* private mode */ }
+    this._pushServerListToServer?.();
+    render();
+  };
+
+  saveBtn.addEventListener('click', () => {
+    const pass = newEl.value;
+    if (!pass || pass.length < 8) return say(t('settings.e2e_passphrase.too_short'), 'error');
+    if (pass !== confirmEl.value) return say(t('settings.e2e_passphrase.mismatch'), 'error');
+    whenUnlocked(async () => {
+      saveBtn.disabled = true;
+      say(t('settings.e2e_passphrase.saving'));
+      try {
+        await adopt(await HavenE2E.deriveWrappingKey(pass), true);
+        newEl.value = '';
+        confirmEl.value = '';
+        say('✅ ' + t('settings.e2e_passphrase.saved'), 'success');
+      } catch (err) {
+        console.warn('[E2E] Could not lock the backup with the passphrase:', err);
+        say(t('settings.e2e_passphrase.failed'), 'error');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  });
+
+  revertBtn.addEventListener('click', () => {
+    const password = pwEl.value;
+    if (!password) return say(t('settings.e2e_passphrase.enter_password'), 'error');
+    whenUnlocked(async () => {
+      revertBtn.disabled = true;
+      try {
+        // Checked first: a mistyped password would lock the backup with a
+        // key nobody can reproduce.
+        const res = await fetch('/api/auth/verify-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: this.user.username, password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!data.valid) return say(t('settings.e2e_passphrase.wrong_password'), 'error');
+        await adopt(await HavenE2E.deriveWrappingKey(password), false);
+        pwEl.value = '';
+        say('✅ ' + t('settings.e2e_passphrase.reverted'), 'success');
+      } catch (err) {
+        console.warn('[E2E] Could not lock the backup with the password:', err);
+        say(t('settings.e2e_passphrase.failed'), 'error');
+      } finally {
+        revertBtn.disabled = false;
+      }
+    });
+  });
+},
+
 async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoiler = false, opts = {}) {
   if (!this.currentChannel && !targetCode) return;
   // The queue stores the per-image spoiler choice on the File object itself.
@@ -7498,13 +7753,12 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   }
 
   // Detect E2E DM — encrypt file bytes before uploading
+  // A DM picture that can't be encrypted goes up only if the sender agrees.
   const ch = this.channels.find(c => c.code === targetChannel);
   const isDm = ch && ch.is_dm && ch.dm_target;
-  let partner = isDm ? this._getE2EPartnerFor(targetChannel) : null;
-  if (isDm && !partner && this.e2e && this.e2e.ready) {
-    const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-    if (jwk) { this._dmPublicKeys[ch.dm_target.id] = jwk; partner = this._getE2EPartnerFor(targetChannel); }
-  }
+  const gate = isDm ? await this._dmSendGate(targetChannel) : { partner: null };
+  if (!gate) { this._uploadsCancelled = true; return; }
+  const partner = gate.partner;
 
   if (partner) {
     // E2E path: encrypt file → upload as opaque blob → send encrypted text marker
@@ -7523,6 +7777,8 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
         code: targetChannel,
         content: encryptedText,
         encrypted: true,
+        // So deleting the message removes the file too (#5699).
+        files: [data.url],
         ...(bundled && { bundled: true })
       });
       this.notifications.play('sent');
@@ -7561,8 +7817,10 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       code: targetChannel,
       content: line,
       isImage: true,
-      ...(bundled && { bundled: true })
+      ...(bundled && { bundled: true }),
+      ...(file && file._tags && file._tags.length ? { attachmentTags: file._tags } : {})
     });
+    if (file && file._tags && file._tags.length) this._recordFrequentTags(file._tags);
     this.notifications.play('sent');
   } catch (err) {
     if (err?.aborted) return;
@@ -7628,6 +7886,11 @@ _renderMediaGallery(data) {
   // Reset selection whenever fresh data comes in so stale picks don't linger
   this._mediaGallerySelected = new Map();
   this._mediaGallerySelectMode = false;
+  // Reset the tag filter and tear down any open tag popups on fresh data.
+  this._mediaTagFilter = [];
+  this._closeMediaTagFilter?.();
+  this._closeMediaTagManage?.();
+  this._updateTagFilterBadge?.();
   this._refreshMediaGalleryToolbar();
   this._applyMediaTileSize();
   this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
@@ -7713,9 +7976,16 @@ _refreshMediaGalleryToolbar() {
   const selAll  = document.getElementById('media-gallery-select-all');
   const delBtn  = document.getElementById('media-gallery-delete');
   const info    = document.getElementById('media-gallery-selection-info');
+  const manage  = document.getElementById('media-gallery-tagmanage');
   if (!actions || !toggle || !selAll || !delBtn || !info) return;
-  if (!this._canBulkDeleteMedia()) {
+  const canDelete = this._canBulkDeleteMedia();
+  const canTag    = this._canManageTags();
+  // Select mode is available to bulk-deleters and to tag managers; each
+  // capability lights up its own action, so a manager without delete rights
+  // can select-and-tag without ever seeing a Delete button.
+  if (!canDelete && !canTag) {
     actions.style.display = 'none';
+    if (manage) manage.style.display = 'none';
     return;
   }
   actions.style.display = '';
@@ -7723,17 +7993,24 @@ _refreshMediaGalleryToolbar() {
   const count = this._mediaGallerySelected ? this._mediaGallerySelected.size : 0;
   toggle.textContent = t(selectMode ? 'media_gallery.cancel_select' : 'media_gallery.select');
   selAll.style.display = selectMode ? '' : 'none';
-  delBtn.style.display = selectMode ? '' : 'none';
+  delBtn.style.display = (selectMode && canDelete) ? '' : 'none';
   delBtn.disabled = count === 0;
   info.style.display = selectMode ? '' : 'none';
   info.textContent = selectMode ? t('media_gallery.selected', { count }) : '';
+  if (manage) {
+    manage.style.display = (selectMode && canTag && count > 0) ? '' : 'none';
+    if (manage.style.display === 'none') {
+      const menu = document.getElementById('media-tagmanage-menu');
+      if (menu) menu.style.display = 'none';
+    }
+  }
 },
 
 _renderMediaGalleryTab(tab) {
   const body = document.getElementById('media-gallery-body');
   if (!body || !this._mediaGalleryData) return;
-  const rawItems = this._mediaGalleryData[tab] || [];
-  if (rawItems.length === 0) {
+  const allItems = this._mediaGalleryData[tab] || [];
+  if (allItems.length === 0) {
     const labels = {
       photos: t('media_gallery.empty_photos'),
       videos: t('media_gallery.empty_videos'),
@@ -7742,6 +8019,13 @@ _renderMediaGalleryTab(tab) {
       links:  t('media_gallery.empty_links'),
     };
     body.innerHTML = `<div class="media-gallery-empty muted-text">${labels[tab] || t('media_gallery.empty')}</div>`;
+    return;
+  }
+  // Tag filter: keep only items carrying EVERY selected tag (exact match, no
+  // partials). Links have no backing upload so they are never tag-filtered.
+  const rawItems = this._filterMediaItemsByTags(allItems, tab);
+  if (rawItems.length === 0) {
+    body.innerHTML = `<div class="media-gallery-empty muted-text">${t('media_gallery.filter_no_match')}</div>`;
     return;
   }
   const items = this._sortMediaItems(rawItems);
@@ -7770,6 +8054,12 @@ _renderMediaGalleryTab(tab) {
     const s = this._formatMediaSize(it.size);
     return s ? `<span class="media-size-badge">${esc(s)}</span>` : '';
   };
+  // Read-only tag chips shown on each tile/row (#tagging phase 3b).
+  const tileTags = (it) => {
+    const tags = Array.isArray(it.tags) ? it.tags : [];
+    if (!tags.length) return '';
+    return `<div class="media-tile-tags">${tags.map(tg => `<span class="media-tile-tag">${esc(tg)}</span>`).join('')}</div>`;
+  };
 
   if (tab === 'photos') {
     body.innerHTML = `<div class="media-gallery-grid${selectMode ? ' select-mode' : ''}">${items.map(it => `
@@ -7777,7 +8067,7 @@ _renderMediaGalleryTab(tab) {
         ${selBox(it)}
         <img src="${esc(it.url)}" loading="lazy" alt="">
         <button class="media-grid-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
-        <div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div>
+        <div class="media-grid-meta">${tileTags(it)}<div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div></div>
       </div>`).join('')}</div>`;
   } else if (tab === 'videos') {
     body.innerHTML = `<div class="media-gallery-grid${selectMode ? ' select-mode' : ''}">${items.map(it => `
@@ -7786,7 +8076,7 @@ _renderMediaGalleryTab(tab) {
         <video src="${esc(it.url)}" preload="metadata" muted></video>
         <div class="media-grid-play">▶</div>
         <button class="media-grid-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
-        <div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div>
+        <div class="media-grid-meta">${tileTags(it)}<div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div></div>
       </div>`).join('')}</div>`;
   } else if (tab === 'audios') {
     body.innerHTML = `<div class="media-list${selectMode ? ' select-mode' : ''}">${items.map(it => `
@@ -7797,6 +8087,7 @@ _renderMediaGalleryTab(tab) {
           <span class="media-list-name">${esc(it.name || it.url.split('/').pop())} ${sizeBadge(it)}</span>
           <span class="media-list-meta">${esc(it.username || '')} • ${esc(fmt(it.created_at))}</span>
           <audio class="media-list-audio" src="${esc(it.url)}" controls preload="none"></audio>
+          ${tileTags(it)}
         </div>
         <button class="media-list-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
       </div>`).join('')}</div>`;
@@ -7814,6 +8105,7 @@ _renderMediaGalleryTab(tab) {
         <div class="media-list-info">
           <span class="media-list-name">${esc(it.name || it.url.split('/').pop())} ${sizeBadge(it)}</span>
           <span class="media-list-meta">${esc(it.username || '')} • ${esc(fmt(it.created_at))}</span>
+          ${tileTags(it)}
         </div>
         <button class="media-list-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
       </${tag}>`;
@@ -7894,6 +8186,344 @@ _renderMediaGalleryTab(tab) {
       if (this._jumpToMessage) this._jumpToMessage(id);
     });
   });
+},
+
+// ── Media gallery tag filter + bulk management (#tagging phase 3b) ──────
+
+// True when the user may curate tags (admin or manage_tags). Gates the bulk
+// "Manage tags" dropdown and lets such users enter select mode for tagging
+// even without delete rights.
+_canManageTags() {
+  if (!this.user) return false;
+  if (this.user.isAdmin) return true;
+  return !!(this._hasPerm && this._hasPerm('manage_tags'));
+},
+
+// Keep only items carrying every selected filter tag (case-folded exact
+// match). Links are never tag-filtered (no backing upload).
+_filterMediaItemsByTags(items, tab) {
+  const filter = this._mediaTagFilter || [];
+  if (!filter.length || tab === 'links') return items;
+  const want = filter.map(n => String(n).toLocaleLowerCase());
+  return items.filter(it => {
+    const have = new Set((it.tags || []).map(x => String(x).toLocaleLowerCase()));
+    return want.every(w => have.has(w));
+  });
+},
+
+_updateTagFilterBadge() {
+  const badge = document.getElementById('media-gallery-tagfilter-count');
+  const btn = document.getElementById('media-gallery-tagfilter-btn');
+  const n = (this._mediaTagFilter || []).length;
+  if (badge) { badge.style.display = n ? '' : 'none'; badge.textContent = String(n); }
+  if (btn) btn.classList.toggle('is-active', n > 0);
+},
+
+_afterTagFilterChange() {
+  this._updateTagFilterBadge();
+  if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+},
+
+_toggleMediaTagFilter(name) {
+  const filter = this._mediaTagFilter || (this._mediaTagFilter = []);
+  const norm = String(name).toLocaleLowerCase();
+  const idx = filter.findIndex(x => String(x).toLocaleLowerCase() === norm);
+  if (idx >= 0) filter.splice(idx, 1); else filter.push(name);
+  this._afterTagFilterChange();
+},
+
+_closeMediaTagFilter() {
+  clearTimeout(this._mtfTimer);
+  document.getElementById('media-tag-filter-popup')?.remove();
+  if (this._mtfCloser) { document.removeEventListener('click', this._mtfCloser, true); this._mtfCloser = null; }
+},
+
+_openMediaTagFilter(anchor) {
+  this._closeMediaTagFilter();
+  if (!this._mediaTagFilter) this._mediaTagFilter = [];
+  const pop = document.createElement('div');
+  pop.id = 'media-tag-filter-popup';
+  pop.className = 'tag-editor-popup';
+  pop.innerHTML = `
+    <div class="tag-editor-head">
+      <span class="tag-editor-title">${t('media_gallery.filter_by_tag')}</span>
+      <button type="button" class="tag-editor-close" aria-label="${this._escapeHtml(t('modals.common.close'))}">×</button>
+    </div>
+    <input id="mtf-input" class="tag-popup-input" type="text" autocomplete="off" spellcheck="false"
+           maxlength="${this._maxTagLen()}" placeholder="${this._escapeHtml(t('tags.search_placeholder'))}">
+    <div id="mtf-list" class="tag-popup-list"></div>`;
+  document.body.appendChild(pop);
+  const rect = (anchor || document.body).getBoundingClientRect();
+  pop.style.left = Math.min(rect.left, window.innerWidth - pop.offsetWidth - 12) + 'px';
+  pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - pop.offsetHeight - 12) + 'px';
+  pop.querySelector('.tag-editor-close').addEventListener('click', () => this._closeMediaTagFilter());
+  const input = pop.querySelector('#mtf-input');
+  input.addEventListener('input', () => {
+    clearTimeout(this._mtfTimer);
+    const q = input.value;
+    this._mtfTimer = setTimeout(() => this._mediaTagFilterSearch(q), 250);
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); this._closeMediaTagFilter(); } });
+  this._mtfCloser = (ev) => {
+    if (!pop.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) this._closeMediaTagFilter();
+  };
+  setTimeout(() => document.addEventListener('click', this._mtfCloser, true), 0);
+  this._mediaTagFilterSearch('');
+  input.focus();
+},
+
+_mediaTagFilterSearch(query) {
+  const input = document.getElementById('mtf-input');
+  if (!input || !this.socket) return;
+  const q = query;
+  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+    if (input.value !== q) return;
+    if (res && res.error === 'rate_limited') return;
+    this._mediaTagFilterRenderList((res && res.tags) || []);
+  });
+},
+
+_mediaTagFilterRenderList(results) {
+  const list = document.getElementById('mtf-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const filter = this._mediaTagFilter || (this._mediaTagFilter = []);
+  const active = new Set(filter.map(x => String(x).toLocaleLowerCase()));
+  if (filter.length) {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'tag-popup-item tag-popup-create';
+    clear.textContent = t('media_gallery.filter_clear');
+    clear.addEventListener('click', () => {
+      this._mediaTagFilter = [];
+      this._afterTagFilterChange();
+      this._mediaTagFilterRenderList(results);
+    });
+    list.appendChild(clear);
+  }
+  (results || []).forEach(tg => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tag-popup-item';
+    const on = active.has(String(tg.name).toLocaleLowerCase());
+    if (on) item.classList.add('is-active');
+    item.textContent = (on ? '✓ ' : '') + tg.name;
+    item.addEventListener('click', () => {
+      this._toggleMediaTagFilter(tg.name);
+      this._mediaTagFilterRenderList(results);
+    });
+    list.appendChild(item);
+  });
+  if (!list.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tag-popup-empty';
+    empty.textContent = t('tags.none_yet');
+    list.appendChild(empty);
+  }
+},
+
+// Distinct message ids among the current selection (one edit per message).
+_mediaSelectedMessageIds() {
+  const ids = [];
+  if (!this._mediaGallerySelected) return ids;
+  for (const { message_id } of this._mediaGallerySelected.values()) {
+    if (!ids.includes(message_id)) ids.push(message_id);
+  }
+  return ids;
+},
+
+// Confirm-gated bulk tag picker: nothing is applied until Confirm (clicking
+// away discards). `mode` is 'append' or 'replace'.
+_openMediaTagManage(mode) {
+  this._closeMediaTagManage();
+  const ids = this._mediaSelectedMessageIds();
+  if (!ids.length) return;
+  this._mediaTagManage = { mode, tags: [] };
+  const titleKey = mode === 'replace' ? 'media_gallery.tag_apply_replace' : 'media_gallery.tag_apply_append';
+  const pop = document.createElement('div');
+  pop.id = 'media-tag-manage-popup';
+  pop.className = 'tag-editor-popup';
+  pop.innerHTML = `
+    <div class="tag-editor-head">
+      <span class="tag-editor-title">${this._escapeHtml(t(titleKey, { count: ids.length }))}</span>
+      <button type="button" class="tag-editor-close" aria-label="${this._escapeHtml(t('modals.common.close'))}">×</button>
+    </div>
+    <div class="tag-editor-chips" id="mtm-chips"></div>
+    <input id="mtm-input" class="tag-popup-input" type="text" autocomplete="off" spellcheck="false"
+           maxlength="${this._maxTagLen()}" placeholder="${this._escapeHtml(t('tags.search_placeholder'))}">
+    <div id="mtm-list" class="tag-popup-list"></div>
+    <div class="tag-manage-actions">
+      <button type="button" class="btn-sm btn-accent" id="mtm-confirm">${this._escapeHtml(t('media_gallery.tag_apply_confirm'))}</button>
+    </div>`;
+  document.body.appendChild(pop);
+  const anchor = document.getElementById('media-gallery-tagmanage-btn') || document.body;
+  const rect = anchor.getBoundingClientRect();
+  pop.style.left = Math.min(rect.left, window.innerWidth - pop.offsetWidth - 12) + 'px';
+  pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - pop.offsetHeight - 12) + 'px';
+  pop.querySelector('.tag-editor-close').addEventListener('click', () => this._closeMediaTagManage());
+  const input = pop.querySelector('#mtm-input');
+  input.addEventListener('input', () => {
+    clearTimeout(this._mtmTimer);
+    const q = input.value;
+    this._mtmTimer = setTimeout(() => this._mediaTagManageSearch(q), 250);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); this._closeMediaTagManage(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = pop.querySelector('#mtm-list .tag-popup-item');
+      if (first) first.click();
+    }
+  });
+  pop.querySelector('#mtm-confirm').addEventListener('click', () => this._mediaTagManageApply());
+  // Clicking away discards (except the confirm modal overlay it may spawn).
+  this._mtmCloser = (ev) => {
+    if (ev.target.closest('.modal-overlay')) return;
+    if (!pop.contains(ev.target) && !ev.target.closest('#media-gallery-tagmanage')) this._closeMediaTagManage();
+  };
+  setTimeout(() => document.addEventListener('click', this._mtmCloser, true), 0);
+  this._mediaTagManageRenderChips();
+  this._mediaTagManageSearch('');
+  input.focus();
+},
+
+_closeMediaTagManage() {
+  clearTimeout(this._mtmTimer);
+  document.getElementById('media-tag-manage-popup')?.remove();
+  if (this._mtmCloser) { document.removeEventListener('click', this._mtmCloser, true); this._mtmCloser = null; }
+  this._mediaTagManage = null;
+},
+
+_mediaTagManageRenderChips() {
+  const wrap = document.getElementById('mtm-chips');
+  if (!wrap || !this._mediaTagManage) return;
+  wrap.innerHTML = '';
+  this._mediaTagManage.tags.forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    const label = document.createElement('span');
+    label.className = 'tag-chip-label';
+    label.textContent = name;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'tag-chip-remove';
+    rm.textContent = '×';
+    rm.addEventListener('click', () => this._mediaTagManageRemove(name));
+    chip.appendChild(label);
+    chip.appendChild(rm);
+    wrap.appendChild(chip);
+  });
+},
+
+_mediaTagManageSearch(query) {
+  const input = document.getElementById('mtm-input');
+  if (!input || !this.socket || !this._mediaTagManage) return;
+  const q = query;
+  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+    if (!this._mediaTagManage || input.value !== q) return;
+    if (res && res.error === 'rate_limited') return;
+    this._mediaTagManageRenderList(q, (res && res.tags) || []);
+  });
+},
+
+_mediaTagManageRenderList(query, results) {
+  const list = document.getElementById('mtm-list');
+  if (!list || !this._mediaTagManage) return;
+  list.innerHTML = '';
+  const applied = new Set(this._mediaTagManage.tags.map(x => x.toLocaleLowerCase()));
+  const norm = this._normalizeTag(query);
+  (results || []).filter(tg => !applied.has(String(tg.name).toLocaleLowerCase())).forEach(tg => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tag-popup-item';
+    item.textContent = tg.name;
+    item.addEventListener('click', () => this._mediaTagManageAdd(tg.name));
+    list.appendChild(item);
+  });
+  const exact = norm && (applied.has(norm.norm) || (results || []).some(tg => String(tg.name).toLocaleLowerCase() === norm.norm));
+  if (norm && !exact && this._canManageTags()) {
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'tag-popup-item tag-popup-create';
+    create.textContent = t('tags.add_new', { name: norm.name });
+    create.addEventListener('click', () => this._mediaTagManageAdd(norm.name));
+    list.appendChild(create);
+  }
+  if (!list.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tag-popup-empty';
+    empty.textContent = norm ? t('tags.none_found') : t('tags.none_yet');
+    list.appendChild(empty);
+  }
+},
+
+_mediaTagManageAdd(rawName) {
+  if (!this._mediaTagManage) return;
+  const norm = this._normalizeTag(rawName);
+  if (!norm) return this._showToast?.(t('tags.invalid'), 'error');
+  const tags = this._mediaTagManage.tags;
+  if (tags.some(x => x.toLocaleLowerCase() === norm.norm)) return;
+  if (tags.length >= this._maxTagsPerAttachment()) {
+    return this._showToast?.(t('tags.limit_reached', { n: this._maxTagsPerAttachment() }), 'error');
+  }
+  tags.push(norm.name);
+  const input = document.getElementById('mtm-input');
+  if (input) input.value = '';
+  this._mediaTagManageRenderChips();
+  this._mediaTagManageSearch('');
+},
+
+_mediaTagManageRemove(name) {
+  if (!this._mediaTagManage) return;
+  this._mediaTagManage.tags = this._mediaTagManage.tags.filter(x => x !== name);
+  this._mediaTagManageRenderChips();
+  this._mediaTagManageSearch(document.getElementById('mtm-input')?.value || '');
+},
+
+// Apply the working set to every selected message. Replace with an empty set
+// wipes all tags, so it gets a second explicit confirmation.
+_mediaTagManageApply() {
+  const st = this._mediaTagManage;
+  if (!st || !this.currentChannel || !this.socket) return;
+  const ids = this._mediaSelectedMessageIds();
+  if (!ids.length) { this._closeMediaTagManage(); return; }
+  const mode = st.mode;
+  const tags = st.tags.slice();
+
+  const doEmit = () => {
+    this.socket.emit('bulk-tag-messages', { code: this.currentChannel, messageIds: ids, mode, tags }, (res) => {
+      if (!res || res.error) {
+        this._showToast?.(res && res.error ? res.error : t('media_gallery.tags_update_failed'), 'error');
+        return;
+      }
+      // Optimistically reflect each message's new set in the gallery data so
+      // chips update without a full refetch (keeps the current selection).
+      const byId = new Map((res.results || []).map(r => [r.messageId, r.tags || []]));
+      if (this._mediaGalleryData) {
+        ['photos', 'videos', 'audios', 'files'].forEach(k => {
+          (this._mediaGalleryData[k] || []).forEach(it => {
+            if (byId.has(it.message_id)) {
+              const tg = byId.get(it.message_id);
+              if (tg.length) it.tags = tg; else delete it.tags;
+            }
+          });
+        });
+      }
+      this._showToast?.(t('media_gallery.tags_updated', { count: res.updated || 0 }), 'info');
+      this._closeMediaTagManage();
+      this._renderMediaGalleryTab(this._mediaGalleryActiveTab || 'photos');
+    });
+  };
+
+  if (mode === 'replace' && tags.length === 0) {
+    this._showConfirmModal(
+      t('media_gallery.confirm_clear_title'),
+      t('media_gallery.confirm_clear_body', { count: ids.length }),
+      { danger: true, confirmLabel: t('media_gallery.confirm_clear_ok') }
+    ).then(ok => { if (ok) doEmit(); });
+    return;
+  }
+  doEmit();
 },
 
 // Lightbox-style overlay that plays a video (used by the media gallery

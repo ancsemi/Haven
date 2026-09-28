@@ -29,6 +29,12 @@ class VoiceManager {
     this.isScreenSharing = false;
     this.isWebcamActive = false;
     this.peers = new Map();         // userId → { connection, stream, username }
+    // Voice relay (Large Server Setup). In a relayed call `_relay` carries our
+    // tracks to the server and everyone else's back; direct peers remain only
+    // for people who cannot use the relay (bots, older apps).
+    this._relay = null;
+    this._callTransport = 'direct';  // 'direct' | 'relay', as the server says
+    this._voiceUserInfo = new Map(); // userId → { username, relayCapable, isBot }
     this._relayPeers = new Set();   // userIds whose selected ICE pair runs through a TURN relay (#5426)
     this.currentChannel = null;
     this.isMuted = false;
@@ -487,6 +493,7 @@ class VoiceManager {
       // genuinely left.
       if (cs === 'connected') n++;
     }
+    if (this._relay?.isLive()) n++;
     return n;
   }
 
@@ -599,7 +606,31 @@ class VoiceManager {
     return {
       nativeScreenVersion: 2,
       nativeScreenCodecs: this._nativeScreenCodecs(),
+      // Sent with every join and rejoin: this client can use the voice relay.
+      relay: typeof window !== 'undefined' && typeof window.HavenRelaySession === 'function' ? 1 : 0,
     };
+  }
+
+  /** A person's display name, whether they are reached directly or through the relay. */
+  peerName(userId) {
+    return this.peers.get(userId)?.username || this._voiceUserInfo?.get(userId)?.username || null;
+  }
+
+  _rememberVoiceUser(user) {
+    if (!user || user.id == null) return;
+    if (!this._voiceUserInfo) this._voiceUserInfo = new Map();
+    this._voiceUserInfo.set(user.id, {
+      username: user.username,
+      relayCapable: !!user.relayCapable,
+      isBot: !!user.isBot,
+    });
+  }
+
+  /** In a relayed call, this person is reached through the relay, not directly. */
+  _isRelayedPeer(userId) {
+    if (this._callTransport !== 'relay') return false;
+    const info = this._voiceUserInfo?.get(userId);
+    return !!info && info.relayCapable && !info.isBot;
   }
 
   _nativeScreenEnabled() {
@@ -687,6 +718,19 @@ class VoiceManager {
       if (!channelCode || !stillCurrent()) return;
       this._flushPendingScreenStop(channelCode);
       for (const user of data.users || []) this._rememberNativeScreenPeer(user);
+      for (const user of data.users || []) this._rememberVoiceUser(user);
+      // A relayed call: our tracks go through the relay, and only people who
+      // cannot use it get a direct connection. (Large Server Setup)
+      // A client without the relay (its script failed to load) treats the call
+      // as direct and connects to everyone itself, like an older app would.
+      const canRelay = typeof window !== 'undefined' && typeof window.HavenRelaySession === 'function';
+      this._callTransport = data.transport === 'relay' && canRelay ? 'relay' : 'direct';
+      if (this._callTransport === 'relay') {
+        this._ensureRelay(channelCode, { resync: !!data.rejoin });
+      } else if (this._relay) {
+        this._closeRelay();
+      }
+      const directUsers = (data.users || []).filter(u => u && !this._isRelayedPeer(u.id));
       // Apply audio bitrate cap from channel settings
       this.audioBitrate = data.voiceBitrate || 0;
       if (data.rejoin && !data.skipRenegotiate) {
@@ -714,7 +758,7 @@ class VoiceManager {
       // live peer (killing the stream tile while audio sometimes limped on
       // a half-closed path). Only build peers we don't already have.
       if (this.inVoice && this.peers.size > 0) {
-        const missing = (data.users || []).filter(u => u && !this.peers.has(u.id));
+        const missing = directUsers.filter(u => !this.peers.has(u.id));
         console.warn('[Voice] voice-existing-users during live session — keeping peers, adding missing only', {
           existing: this.peers.size,
           missing: missing.length
@@ -726,9 +770,26 @@ class VoiceManager {
         this._rearmScreenWatchdogs();
         return;
       }
-      for (const user of data.users) {
+      for (const user of directUsers) {
         if (!stillCurrent()) return;
         await this._createPeer(user.id, user.username, true);
+      }
+    });
+
+    // The admin turned the relay off mid-call: carry on with direct
+    // connections. Of each pair, only the side with the higher user id makes
+    // the offer, so the two never offer to each other at once.
+    this.socket.on('relay:ended', async (data) => {
+      const code = data?.channelCode;
+      if (!code || code !== this.currentChannel || this._callTransport !== 'relay') return;
+      console.warn('[Relay] The relay was turned off; switching this call to direct connections.');
+      this._callTransport = 'direct';
+      this._closeRelay();
+      const me = this.localUserId;
+      for (const [userId, info] of this._voiceUserInfo) {
+        if (userId === me || this.peers.has(userId) || !(me > userId)) continue;
+        if (!this.inVoice || this.currentChannel !== code) return;
+        await this._createPeer(userId, info.username, true);
       }
     });
 
@@ -738,6 +799,7 @@ class VoiceManager {
       // so we just wait for their offer via 'voice-offer'.
       if (data?.user) {
         this._rememberNativeScreenPeer(data.user);
+        this._rememberVoiceUser(data.user);
         if (this.onVoiceJoin) this.onVoiceJoin(data.user.id, data.user.username);
       }
     });
@@ -995,6 +1057,7 @@ class VoiceManager {
       }
       this._stopAnalyser(data.user.id);
       this._removePeer(data.user.id);
+      this._voiceUserInfo?.delete(data.user.id);
       this._closeNativeScreenPeer(data.user.id);
       this._nativeScreenAnnouncements.delete(data.user.id);
       this._nativeScreenPeerCapabilities.delete(data.user.id);
@@ -1211,6 +1274,7 @@ class VoiceManager {
       if (!this.isScreenSharing || data?.channelCode !== this.currentChannel) return;
       const targetUserId = data && data.targetUserId;
       if (targetUserId == null) return;
+      if (!this._nativeScreenSharing && this._isRelayedPeer(targetUserId)) return;
 
       if (this._nativeScreenSharing) {
         const sessionId = this._nativeScreenSessionId;
@@ -2332,6 +2396,10 @@ class VoiceManager {
     }
 
     // Close all peer connections
+    // The relay session first: closing it stops everyone's relayed audio.
+    this._closeRelay();
+    this._callTransport = 'direct';
+    this._voiceUserInfo?.clear();
     for (const [id] of this.peers) {
       this._removePeer(id);
     }
@@ -2428,6 +2496,10 @@ class VoiceManager {
     this._stopLocalTalkDetection();
     for (const [id] of this.analysers) this._stopAnalyser(id);
 
+    // The relay session first: closing it stops everyone's relayed audio.
+    this._closeRelay();
+    this._callTransport = 'direct';
+    this._voiceUserInfo?.clear();
     for (const [id] of this.peers) {
       this._removePeer(id);
     }
@@ -2745,6 +2817,12 @@ class VoiceManager {
         renegotiations.push(this._renegotiate(userId, peer.connection));
       }
       await Promise.all(renegotiations);
+      if (this._relay) {
+        const v = this.screenStream.getVideoTracks()[0];
+        const a = this.screenStream.getAudioTracks()[0];
+        if (v) await this._relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(e => console.warn('[Relay] Screen not sent:', e.message));
+        if (a) await this._relay.publish('screen-audio', a).catch(e => console.warn('[Relay] Screen audio not sent:', e.message));
+      }
 
       if (!this._isScreenStartValid(operation, channelCode, voiceGeneration)) {
         await this.stopScreenShare();
@@ -2771,6 +2849,10 @@ class VoiceManager {
   async stopScreenShare({ teardown = false } = {}) {
     if (!this.isScreenSharing) return;
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
+    if (this._relay) {
+      await this._relay.unpublish('screen').catch(() => {});
+      await this._relay.unpublish('screen-audio').catch(() => {});
+    }
     this._screenStartInFlight = false;
 
     if (this._nativeScreenSharing) {
@@ -2904,8 +2986,9 @@ class VoiceManager {
       }
       await Promise.all(renegotiations);
 
-      // Tell the server
+      // Tell the server. A relayed call checks this before taking the camera.
       this.socket.emit('webcam-started', { code: this.currentChannel });
+      if (this._relay) await this._relay.publish('webcam', camTrack).catch(e => console.warn('[Relay] Camera not sent:', e.message));
       return true;
     } catch (err) {
       console.error('Webcam access failed:', err);
@@ -2917,6 +3000,7 @@ class VoiceManager {
 
   async stopWebcam({ teardown = false } = {}) {
     if (!this.isWebcamActive || !this.webcamStream) return;
+    if (this._relay) await this._relay.unpublish('webcam').catch(() => {});
 
     const tracks = this.webcamStream.getTracks();
 
@@ -2993,6 +3077,7 @@ class VoiceManager {
       }
     }
     await Promise.all(swaps);
+    if (this._relay) await this._relay.replace('webcam', newTrack).catch(e => console.warn('[Relay] Camera swap failed:', e.message));
 
     // Stop old tracks and update stream reference
     this.webcamStream.getTracks().forEach(t => t.stop());
@@ -3707,6 +3792,133 @@ class VoiceManager {
       // and return early, making voice-activity indicators permanently dead for
       // that peer without this cleanup.
       this._stopAnalyser(userId);
+    } else if (this._relay || this._callTransport === 'relay') {
+      // Reached through the relay: no connection to close, just their audio.
+      this._clearRemoteVoice(userId);
+      this._clearRemoteScreenAudio(userId);
+      this._screenDelivered.delete(userId);
+    }
+  }
+
+  _clearRemoteVoice(userId) {
+    document.getElementById(`voice-audio-${userId}`)?.remove();
+    this.gainNodes.delete(userId);
+    this._stopAnalyser(userId);
+  }
+
+  _clearRemoteScreenAudio(userId) {
+    document.getElementById(`voice-audio-screen-${userId}`)?.remove();
+    this.screenGainNodes.delete(userId);
+    this._pendingScreenAudio?.delete(userId);
+  }
+
+  // ── Voice relay (Large Server Setup) ───────────────────
+
+  /** Starts (or re-syncs) this call's relay session. */
+  async _ensureRelay(code, { resync = false } = {}) {
+    if (typeof window === 'undefined' || typeof window.HavenRelaySession !== 'function') {
+      console.warn('[Relay] This client cannot use the relay; only direct connections will work.');
+      return;
+    }
+    const current = this._relay;
+    if (current && current.code === code && current.isLive()) {
+      if (!resync) return;
+      try {
+        await current.resync();
+        return;
+      } catch (err) {
+        // The server no longer knows this session (it restarted, or the relay
+        // did): start a fresh one now instead of waiting for it to time out.
+        console.warn('[Relay] Resync failed, starting a new session:', err.message);
+      }
+    }
+    this._closeRelay();
+    const generation = this._voiceSessionGeneration || 0;
+    const session = new window.HavenRelaySession(this.socket, code, {
+      iceServers: this.rtcConfig.iceServers,
+      iceTransportPolicy: this.rtcConfig.iceTransportPolicy,
+      onTrack: (t) => this._onRelayTrack(t),
+      onTrackEnded: (t) => this._onRelayTrackEnded(t),
+      onLost: (why) => {
+        console.warn('[Relay] Session lost:', why);
+        if (this._relay === session) this._restartRelaySoon(code, generation);
+      },
+    });
+    this._relay = session;
+    try {
+      await session.start();
+      if (this._relay !== session || !this.inVoice || this.currentChannel !== code) { session.close(); return; }
+      this._relayRetry = 0;
+      await this._publishRelayTracks();
+    } catch (err) {
+      console.warn('[Relay] Could not start:', err.message);
+      if (this._relay === session) this._restartRelaySoon(code, generation);
+    }
+  }
+
+  _restartRelaySoon(code, generation) {
+    clearTimeout(this._relayRetryTimer);
+    const attempt = (this._relayRetry = (this._relayRetry || 0) + 1);
+    const delay = Math.min(15000, 1000 * 2 ** Math.min(attempt, 4));
+    this._relayRetryTimer = setTimeout(() => {
+      if (!this.inVoice || this.currentChannel !== code || this._callTransport !== 'relay') return;
+      if ((this._voiceSessionGeneration || 0) !== generation) return;
+      this._closeRelay();
+      this._ensureRelay(code);
+    }, delay);
+  }
+
+  _closeRelay() {
+    clearTimeout(this._relayRetryTimer);
+    const session = this._relay;
+    this._relay = null;
+    if (session) session.close();
+  }
+
+  /** Sends whatever we are currently sending into a fresh relay session. */
+  async _publishRelayTracks() {
+    const relay = this._relay;
+    if (!relay) return;
+    const mic = this.localStream?.getAudioTracks()[0];
+    if (mic && !this.isListenerOnly) await relay.publish('mic', mic).catch(err => console.warn('[Relay] Mic not sent:', err.message));
+    if (this.isScreenSharing && this.screenStream && !this._nativeScreenSharing) {
+      const res = this.screenResolution;
+      const maxBitrate = this._screenBitrates?.[res] || this._screenBitrates?.[0];
+      const v = this.screenStream.getVideoTracks()[0];
+      const a = this.screenStream.getAudioTracks()[0];
+      if (v) await relay.publish('screen', v, { maxBitrate, simulcast: true }).catch(err => console.warn('[Relay] Screen not sent:', err.message));
+      if (a) await relay.publish('screen-audio', a).catch(err => console.warn('[Relay] Screen audio not sent:', err.message));
+    }
+    const cam = this.isWebcamActive && this.webcamStream?.getVideoTracks()[0];
+    if (cam) await relay.publish('webcam', cam).catch(err => console.warn('[Relay] Camera not sent:', err.message));
+  }
+
+  _onRelayTrack({ userId, source, track }) {
+    if (userId == null) return;
+    const stream = new MediaStream([track]);
+    if (source === 'mic') {
+      this._playAudio(userId, stream);
+    } else if (source === 'screen-audio') {
+      this._playScreenAudio(userId, stream);
+    } else if (source === 'screen') {
+      this._screenDelivered.add(userId);
+      if (this.onScreenStream) this.onScreenStream(userId, stream);
+    } else if (source === 'webcam') {
+      if (this.onWebcamStream) this.onWebcamStream(userId, stream);
+    }
+  }
+
+  _onRelayTrackEnded({ userId, source }) {
+    if (userId == null) return;
+    if (source === 'mic') {
+      this._clearRemoteVoice(userId);
+    } else if (source === 'screen-audio') {
+      this._clearRemoteScreenAudio(userId);
+    } else if (source === 'screen') {
+      this._screenDelivered.delete(userId);
+      if (!this.screenSharers.has(userId) && this.onScreenStream) this.onScreenStream(userId, null);
+    } else if (source === 'webcam') {
+      if (!this.webcamUsers.has(userId) && this.onWebcamStream) this.onWebcamStream(userId, null);
     }
   }
 
@@ -3780,16 +3992,33 @@ class VoiceManager {
     // restores voice audio often leaves screen video undelivered because
     // ontrack doesn't re-fire for an already-negotiated transceiver.
     setTimeout(() => { try { this._rearmScreenWatchdogs(); } catch {} }, 2500);
+    // Only a path that is actually broken gets restarted. This sweep used to
+    // restart every peer, healthy or not, and the other person's client ran
+    // the same sweep at the same moment: after a server restart or a channel
+    // code rotation both sides offered an ICE restart on a perfectly good
+    // connection, the two offers collided, and the call came out one-way
+    // (one person heard, the other sent nothing) until someone reloaded.
+    // A live peer-to-peer path does not care that signaling blinked.
+    const isBroken = (conn) => {
+      const cs = conn.connectionState, ics = conn.iceConnectionState;
+      return cs === 'failed' || cs === 'disconnected' || ics === 'failed' || ics === 'disconnected';
+    };
     let i = 0;
     for (const [userId, peer] of this.peers) {
       const conn = peer && peer.connection;
       if (!conn || conn.connectionState === 'closed') continue;
-      const delay = (i++) * 200;
+      if (!isBroken(conn)) continue;
+      // Both ends see the same broken path, so both would restart it at once
+      // and collide again. The side whose offer wins a collision goes first;
+      // the side that would yield gives it a few seconds and only steps in
+      // if the path is still down.
+      const delay = (i++) * 200 + (this._isPolite(userId) ? 4000 : 0);
       setTimeout(() => {
         const current = this.peers.get(userId);
         // Bail if the peer was torn down/replaced while we were waiting.
         if (!this.inVoice || !current || current.connection !== conn) return;
-        if (conn.connectionState === 'closed') return;
+        if (conn.connectionState === 'closed' || !isBroken(conn)) return;
+        if (current._makingOffer || current._awaitingAnswer || conn.signalingState !== 'stable') return;
         console.warn('[Voice] post-reconnect heal: ICE-restarting peer', userId,
           `(conn=${conn.connectionState}, ice=${conn.iceConnectionState})`);
         this._restartIce(userId, conn);
@@ -3992,6 +4221,9 @@ class VoiceManager {
       }
     }
     await Promise.all(swaps);
+    if (this._relay && newTrack && !this.isListenerOnly) {
+      await this._relay.publish('mic', newTrack).catch(e => console.warn('[Relay] Mic swap failed:', e.message));
+    }
 
     // Re-apply mute state
     if (this.isMuted) {

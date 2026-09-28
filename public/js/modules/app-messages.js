@@ -10,6 +10,9 @@ async _sendMessage() {
   // `let` (not `const`) — DM slash commands like /me, /shrug rewrite this
   // before E2E encryption further down. (#5297)
   let content = input.value.trim();
+  const typed = input.value;
+  // Kept for a moment so a refusal for length can put the text back (#5691).
+  if (content) this._lastSendDraft = { text: input.value, code: this.currentChannel, at: Date.now() };
   const hasImages = this._imageQueue && this._imageQueue.length > 0;
   const hasFiles  = this._fileQueue  && this._fileQueue.length  > 0; // (#5425)
   if (!content && !hasImages && !hasFiles) return;
@@ -41,7 +44,9 @@ async _sendMessage() {
       if (line) lines.push(line);
       if (this._uploadsCancelled) break;
     }
-    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n') });
+    const topicTags = [...new Set(files.flatMap(f => (f && Array.isArray(f._tags)) ? f._tags : []))];
+    this.socket.emit('send-message', { code, content: [content, ...lines].join('\n'), ...(topicTags.length ? { attachmentTags: topicTags } : {}) });
+    if (topicTags.length) this._recordFrequentTags?.(topicTags);
     this.notifications.play('sent');
     if (hasFiles) this._flushFileQueue?.();
     return;
@@ -208,7 +213,17 @@ async _sendMessage() {
     // E2E: encrypt DM messages
     const ch = this.channels.find(c => c.code === this.currentChannel);
     const isDm = ch && ch.is_dm && ch.dm_target;
-    let partner = this._getE2EPartner();
+    let partner = null;
+    // A DM that is not sent after all goes back in the box, with its reply.
+    const replyId = payload.replyTo;
+    const putBack = () => {
+      if (this.currentChannel !== payload.code || input.value.trim()) return;
+      input.value = typed;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const replyEl = replyId && document.querySelector(`#messages .message[data-msg-id="${replyId}"], #messages .message-compact[data-msg-id="${replyId}"]`);
+      if (replyEl) this._setReply(replyEl, replyId);
+      input.focus();
+    };
 
     // Pre-process content-transforming slash commands client-side so they
     // survive E2E encryption (server can't parse encrypted slash commands)
@@ -259,16 +274,11 @@ async _sendMessage() {
       }
     }
 
-    // If DM but partner key not yet cached, request it via promise
-    if (isDm && !partner && this.e2e && this.e2e.ready) {
-      const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-      if (jwk) {
-        this._dmPublicKeys[ch.dm_target.id] = jwk;
-        partner = this._getE2EPartner();
-      }
-      if (!partner) {
-        this._showToast(t('toasts.encryption_key_unavailable'), 'warning');
-      }
+    // Nothing goes out unencrypted, or to a changed key, without asking.
+    if (isDm) {
+      const gate = await this._dmSendGate(payload.code);
+      if (!gate) { putBack(); return false; }
+      partner = gate.partner;
     }
 
     // Warn before encrypting: once this is ciphertext the server cannot judge
@@ -299,8 +309,11 @@ async _sendMessage() {
         payload.content = encrypted;
         payload.encrypted = true;
       } catch (err) {
+        // It used to go out unencrypted after a warning. It stays here now.
         console.warn('[E2E] Encryption failed:', err);
-        this._showToast(t('toasts.encryption_failed'), 'warning');
+        this._showToast(t('toasts.encryption_failed_not_sent'), 'error');
+        putBack();
+        return false;
       }
     }
     this.socket.emit('send-message', payload);
@@ -486,6 +499,12 @@ _renderMessages(messages, lastReadMessageId) {
   if (this._isDmContainer((container))) {
     this._enforceDmLinkPolicy((container));
     this._maybeShowDmSafetyNotice?.(container);
+    // A partner's changed key stays noted in their DM for the session. It is
+    // added here because anything appended after a render is lost to the
+    // next one, and a DM can render several times while it opens.
+    const keyCh = this.channels?.find(c => c.code === this.currentChannel);
+    const keyNote = keyCh?.dm_target && this._e2eKeyNotices.get(keyCh.dm_target.id);
+    if (keyNote) this._appendE2ENotice(keyNote);
   }
   // Wire burn-after-read placeholders + countdowns (#5280)
   this._wireBurnMessages?.(container);
@@ -868,6 +887,21 @@ _appendMessage(message, forceScroll = false) {
   }
 },
 
+// Footer listing every tag across a message's tagged attachments, folded into
+// one row with the tag icon and a "Tags" label (#tagging). The server already
+// dedupes the list; empty/absent = no footer.
+_renderAttachmentTags(tags) {
+  if (!Array.isArray(tags) || !tags.length) return '';
+  const icon = '<svg class="message-tags-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
+  // Each chip is a button: clicking it runs a search for exactly that tag
+  // (wired via delegation in app-ui.js). data-tag carries the raw name.
+  const chips = tags.map(name => {
+    const esc = this._escapeHtml(name);
+    return `<button type="button" class="message-tag" data-tag="${esc}" title="${this._escapeHtml(t('tags.search_for', { name }))}">${esc}</button>`;
+  }).join('');
+  return `<div class="message-tags">${icon}<span class="message-tags-label">${t('tags.attachment_tags')}</span>${chips}</div>`;
+},
+
 _createMessageEl(msg, prevMsg) {
   // Persisted welcome message (new-member greeting). Rendered as a simple,
   // non-interactive system line reusing the .welcome-message styling — no
@@ -914,6 +948,7 @@ _createMessageEl(msg, prevMsg) {
     (new Date(msg.created_at) - new Date(prevMsg.created_at)) < 5 * 60 * 1000;
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
+  const tagsHtml = this._renderAttachmentTags(msg.attachmentTags);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
   const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
   const threadHtml = isDmContext ? ''
@@ -940,8 +975,9 @@ _createMessageEl(msg, prevMsg) {
   const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
   const canShareLink = !isDmContext && this._canShareChannelLink?.(this.currentChannel);
 
+  const reactionsAllowed = isDmContext || this._channelAllowsReactions?.(this.currentChannel) !== false;
   const toolbarActions = [
-    { key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` },
+    ...(reactionsAllowed ? [{ key: 'react', html: `<button data-action="react" title="${t('msg_toolbar.react')}">${iReact}</button>` }] : []),
     { key: 'reply', html: `<button data-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button>` },
     { key: 'quote', html: `<button data-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>` },
     // Threads are not available in DMs - omit the button entirely so there is
@@ -1058,6 +1094,7 @@ _createMessageEl(msg, prevMsg) {
         <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(msg.content)}${editedHtml}${statusSlotHtml}</div>
         ${pollHtml}${roleMenuHtml}
         ${reactionsHtml}
+        ${tagsHtml}
         ${threadHtml}
       </div>
       ${toolbarHtml}
@@ -1185,7 +1222,7 @@ _createMessageEl(msg, prevMsg) {
           ${ferryBadge}
           ${guestBadge}
           ${msgRoleBadge}
-          <span class="message-time">${this._formatTime(msg.created_at)}</span>
+          <span class="message-time"${this._timeAttr(msg.created_at)}>${this._formatTime(msg.created_at)}</span>
           ${pinnedTag}
           ${archivedTag}
           ${ephemeralTag}
@@ -1195,6 +1232,7 @@ _createMessageEl(msg, prevMsg) {
         <div class="message-content">${this._formatContent(msg.content)}${editedHtml}</div>
         ${pollHtml}${roleMenuHtml}
         ${reactionsHtml}
+        ${tagsHtml}
         ${threadHtml}
       </div>
       ${toolbarHtml}
@@ -1222,6 +1260,8 @@ _promoteCompactToFull(compactEl) {
   const toolbarHtml = toolbarEl ? toolbarEl.outerHTML : '';
   const reactionsEl = compactEl.querySelector('.reactions-row');
   const reactionsHtml = reactionsEl ? reactionsEl.outerHTML : '';
+  const tagsEl = compactEl.querySelector('.message-tags');
+  const tagsHtml = tagsEl ? tagsEl.outerHTML : '';
   const pinnedTag = isPinned ? `<span class="pinned-tag" title="${t('app.messages.pinned')}">📌</span>` : '';
   const e2eTag = compactEl.dataset.e2e === '1' ? `<span class="e2e-tag" title="${t('app.messages.e2e_encrypted')}">🔒</span>` : '';
   const needsStatusSlot = !!e2eTag || compactEl.classList.contains('message-burn-pending');
@@ -1282,13 +1322,14 @@ _promoteCompactToFull(compactEl) {
           <span class="message-author" style="color:${color}"${this._nicknames[userId] ? ` title="${this._escapeHtml(username)}"` : ''}>${this._escapeHtml(this._getNickname(userId, username))}</span>
           ${msgRoleIconAfter2}
           ${msgRoleBadge}
-          <span class="message-time">${this._formatTime(time)}</span>
+          <span class="message-time"${this._timeAttr(time)}>${this._formatTime(time)}</span>
           ${pinnedTag}
           ${statusSlotHtml}
           <span class="message-header-spacer"></span>
         </div>
         <div class="message-content">${contentHtml}</div>
         ${reactionsHtml}
+        ${tagsHtml}
       </div>
       ${toolbarHtml}
       <button class="msg-dots-btn" aria-label="${t('app.actions.message_actions')}">⋯</button>
@@ -2231,6 +2272,11 @@ _showMessageContextMenu(e, msgEl) {
   // Same level-vs-permission gap as the toolbar above (#5461).
   const canDelete    = isOwn || this.user?.isAdmin || this._canModerate() ||
                        this._hasPerm('delete_message');
+  // Retroactive tag editing (#tagging phase 3): only on non-DM messages that
+  // carry an upload. Your own always; anyone else's needs manage_tags.
+  const hasAttachment = (this._getMessageAttachments?.(msgId) || []).length > 0;
+  const canEditTags  = !isDm && hasAttachment &&
+                       (isOwn || this.user?.isAdmin || this._hasPerm('manage_tags'));
 
   // Layout: the actions defined first (Edit, Reply, Quote, Pin) — separator —
   // the remaining hover-toolbar actions (React, Thread, Copy Link, Protect) —
@@ -2261,6 +2307,7 @@ _showMessageContextMenu(e, msgEl) {
   const canEditRoleMenu = !!msgEl.querySelector('.role-menu-widget') &&
                           !!(this.user?.isAdmin || this._hasPerm('manage_roles') || this._hasPerm('promote_user'));
   if (canEditRoleMenu) items.push(`<button class="channel-ctx-item" data-action="edit-role-menu">🎭 <span>${t('settings.admin.role_menu.edit')}</span></button>`);
+  if (canEditTags) items.push(`<button class="channel-ctx-item" data-action="edit-tags">🏷️ <span>${t('tags.edit')}</span></button>`);
   // Separator right above Delete
   if (canDelete) {
     items.push('<hr class="channel-ctx-sep">');
@@ -2314,6 +2361,8 @@ _showMessageContextMenu(e, msgEl) {
       this.socket.emit('unarchive-message', { messageId: msgId });
     } else if (action === 'edit-role-menu') {
       this._openRoleMenuBuilder?.({ messageId: msgId });
+    } else if (action === 'edit-tags') {
+      this._openMessageTagEditor(msgId, msgEl);
     } else if (action === 'delete') {
       if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
         this.socket.emit('delete-message', { messageId: msgId, attachments: this._getMessageAttachments?.(msgId) });
@@ -2344,6 +2393,220 @@ _hideMessageContextMenu() {
     document.getElementById('messages')?.removeEventListener('scroll', this._msgCtxCloser, true);
     this._msgCtxCloser = null;
   }
+},
+
+// ── Retroactive tag editor (#tagging phase 3) ───────────────────────────────
+// A small popup, opened from the message context menu, that edits the tag set
+// on a message's attachment. Reuses the composer's tag primitives (server
+// lookup, normalize, limits) and the shared .tag-* styles. Each change emits
+// set-message-tags with the full set; the server replaces + broadcasts, and the
+// message-tags-updated handler repaints every footer, including this one.
+_openMessageTagEditor(msgId, msgEl, knownTags = null) {
+  this._closeMessageTagEditor();
+  if (!msgId) return;
+  // Seed the working set from the message's current footer chips, or from the
+  // list the caller already has (a forum card has no footer, #5682).
+  const current = Array.isArray(knownTags) ? [...knownTags] : Array.from(msgEl?.querySelectorAll('.message-tags .message-tag') || [])
+    .map(el => el.dataset.tag).filter(Boolean);
+  this._msgTagEditor = { msgId, tags: current };
+
+  const pop = document.createElement('div');
+  pop.id = 'message-tag-editor';
+  pop.className = 'tag-editor-popup';
+  pop.innerHTML = `
+    <div class="tag-editor-head">
+      <span class="tag-editor-title">${t('tags.edit')}</span>
+      <button type="button" class="tag-editor-close" aria-label="${t('media.remove')}">×</button>
+    </div>
+    <div class="tag-editor-chips" id="mte-chips"></div>
+    <input id="mte-input" class="tag-popup-input" type="text" autocomplete="off" spellcheck="false"
+           maxlength="${this._maxTagLen()}" placeholder="${this._escapeHtml(t('tags.search_placeholder'))}">
+    <div id="mte-list" class="tag-popup-list"></div>`;
+  document.body.appendChild(pop);
+
+  // Anchor near the message; positioned (and flipped above when there is no
+  // room below) once laid out, then re-clamped as async content changes height.
+  this._msgTagEditorAnchor = msgEl || null;
+  this._positionMessageTagEditor();
+
+  pop.querySelector('.tag-editor-close').addEventListener('click', () => this._closeMessageTagEditor());
+  const input = pop.querySelector('#mte-input');
+  input.addEventListener('input', () => {
+    clearTimeout(this._mteTimer);
+    const q = input.value;
+    this._mteTimer = setTimeout(() => this._msgTagEditorSearch(q), 250);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); this._closeMessageTagEditor(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = pop.querySelector('#mte-list .tag-popup-item');
+      if (first) first.click();
+    }
+  });
+  // Outside-click closer (deferred so the opening click doesn't instantly close).
+  this._mteCloser = (ev) => { if (!pop.contains(ev.target)) this._closeMessageTagEditor(); };
+  setTimeout(() => document.addEventListener('click', this._mteCloser, true), 0);
+
+  this._msgTagEditorRenderChips();
+  this._msgTagEditorSearch('');
+  input.focus();
+},
+
+_closeMessageTagEditor() {
+  clearTimeout(this._mteTimer);
+  document.getElementById('message-tag-editor')?.remove();
+  if (this._mteCloser) { document.removeEventListener('click', this._mteCloser, true); this._mteCloser = null; }
+  this._msgTagEditor = null;
+  this._msgTagEditorAnchor = null;
+},
+
+// Place the editor below its anchor message, flipping above when the popup
+// would overflow the viewport bottom (messages near the bottom of the list),
+// and clamping horizontally. Re-run whenever the popup's height changes.
+_positionMessageTagEditor() {
+  const pop = document.getElementById('message-tag-editor');
+  if (!pop) return;
+  const anchor = this._msgTagEditorAnchor;
+  const rect = (anchor || document.body).getBoundingClientRect();
+  const margin = 8;
+  const h = pop.offsetHeight;
+  const w = pop.offsetWidth;
+  let top = rect.bottom + 4;
+  if (top + h > window.innerHeight - margin) {
+    const above = rect.top - h - 4;
+    top = above >= margin ? above : Math.max(margin, window.innerHeight - h - margin);
+  }
+  let left = Math.min(rect.left + 8, window.innerWidth - w - 12);
+  left = Math.max(margin, left);
+  pop.style.top = top + 'px';
+  pop.style.left = left + 'px';
+},
+
+_msgTagEditorRenderChips() {
+  const wrap = document.getElementById('mte-chips');
+  if (!wrap || !this._msgTagEditor) return;
+  wrap.innerHTML = '';
+  this._msgTagEditor.tags.forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    const label = document.createElement('span');
+    label.className = 'tag-chip-label';
+    label.textContent = name;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'tag-chip-remove';
+    rm.textContent = '×';
+    rm.addEventListener('click', () => this._msgTagEditorRemove(name));
+    chip.appendChild(label);
+    chip.appendChild(rm);
+    wrap.appendChild(chip);
+  });
+},
+
+_msgTagEditorSearch(query) {
+  const input = document.getElementById('mte-input');
+  if (!input || !this.socket || !this._msgTagEditor) return;
+  const q = query;
+  this.socket.emit('search-upload-tags', { query: q }, (res) => {
+    if (!this._msgTagEditor || input.value !== q) return;
+    if (res && res.error === 'rate_limited') return;
+    this._msgTagEditorRenderList(q, (res && res.tags) || []);
+  });
+},
+
+_msgTagEditorRenderList(query, results) {
+  const list = document.getElementById('mte-list');
+  if (!list || !this._msgTagEditor) return;
+  list.innerHTML = '';
+  const applied = new Set(this._msgTagEditor.tags.map(x => x.toLocaleLowerCase()));
+  const norm = this._normalizeTag(query);
+  (results || []).filter(tg => !applied.has(String(tg.name).toLocaleLowerCase())).forEach(tg => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tag-popup-item';
+    item.textContent = tg.name;
+    item.addEventListener('click', () => this._msgTagEditorAdd(tg.name));
+    list.appendChild(item);
+  });
+  const exact = norm && (applied.has(norm.norm) || (results || []).some(tg => String(tg.name).toLocaleLowerCase() === norm.norm));
+  if (norm && !exact && this._hasPerm && this._hasPerm('manage_tags')) {
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'tag-popup-item tag-popup-create';
+    create.textContent = t('tags.add_new', { name: norm.name });
+    create.addEventListener('click', () => this._msgTagEditorAdd(norm.name));
+    list.appendChild(create);
+  }
+  if (!list.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tag-popup-empty';
+    empty.textContent = norm ? t('tags.none_found') : t('tags.none_yet');
+    list.appendChild(empty);
+  }
+  // The list height just changed; re-anchor so a bottom message stays flipped.
+  this._positionMessageTagEditor();
+},
+
+_msgTagEditorAdd(rawName) {
+  if (!this._msgTagEditor) return;
+  const norm = this._normalizeTag(rawName);
+  if (!norm) return this._showToast(t('tags.invalid'), 'error');
+  const tags = this._msgTagEditor.tags;
+  if (tags.some(x => x.toLocaleLowerCase() === norm.norm)) return;
+  if (tags.length >= this._maxTagsPerAttachment()) {
+    return this._showToast(t('tags.limit_reached', { n: this._maxTagsPerAttachment() }), 'error');
+  }
+  tags.push(norm.name);
+  const input = document.getElementById('mte-input');
+  if (input) input.value = '';
+  this._msgTagEditorRenderChips();
+  this._msgTagEditorSearch('');
+  this._msgTagEditorSave();
+},
+
+_msgTagEditorRemove(name) {
+  if (!this._msgTagEditor) return;
+  this._msgTagEditor.tags = this._msgTagEditor.tags.filter(x => x !== name);
+  this._msgTagEditorRenderChips();
+  this._msgTagEditorSearch(document.getElementById('mte-input')?.value || '');
+  this._msgTagEditorSave();
+},
+
+// Push the full working set to the server. It replaces the message's tags and
+// broadcasts message-tags-updated, which repaints every footer for this id.
+_msgTagEditorSave() {
+  if (!this._msgTagEditor || !this.socket) return;
+  this.socket.emit('set-message-tags', { messageId: this._msgTagEditor.msgId, tags: this._msgTagEditor.tags });
+},
+
+// Repaint the Tags footer for every rendered copy of a message (main list,
+// search results, thread, PiP) after a live tag change. (#tagging phase 3)
+_updateMessageTagsFooter(msgId, tags) {
+  const list = Array.isArray(tags) ? tags : [];
+  const topic = this._forumTopics && this._forumTopics.get(msgId);
+  if (topic) {
+    topic.attachmentTags = list.length ? list : undefined;
+    if (this._activeThreadParent === msgId) this._forumThreadRenderTopic?.();
+  }
+  document.querySelectorAll(`[data-msg-id="${msgId}"]`).forEach(el => {
+    if (el.classList.contains('forum-topic')) return;
+    const existing = el.querySelector('.message-tags');
+    if (existing) existing.remove();
+    if (!list.length) return;
+    const html = this._renderAttachmentTags(list);
+    if (!html) return;
+    const tmp = document.createElement('template');
+    tmp.innerHTML = html.trim();
+    const node = tmp.content.firstChild;
+    const anchor = el.querySelector('.reactions-row')
+      || el.querySelector('.message-content, .search-result-content, .thread-msg-content');
+    if (anchor && anchor.parentNode) anchor.insertAdjacentElement('afterend', node);
+    else (el.querySelector('.message-body') || el).appendChild(node);
+  });
+  // Keep the render cache in sync so a scroll/re-render doesn't drop the change.
+  const cached = (this._lastRenderedMessages || []).find(m => m && m.id === msgId);
+  if (cached) cached.attachmentTags = list.length ? list : undefined;
 },
 
 };

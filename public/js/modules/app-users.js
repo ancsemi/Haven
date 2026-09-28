@@ -591,6 +591,15 @@ _activityMeta(act) {
   };
 },
 
+// A Steam game's art address carries its app id, which is all the store page
+// needs, so the game on a profile card can link there (#5679).
+_activityLink(act) {
+  const m = act && act.type === 'playing' && typeof act.image === 'string'
+    ? act.image.match(/^https:\/\/[a-z0-9.-]*steamstatic\.com\/steam\/apps\/(\d+)\//)
+    : null;
+  return m ? `https://store.steampowered.com/app/${m[1]}/` : '';
+},
+
 /** Milliseconds → "m:ss". */
 _formatClock(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -735,8 +744,12 @@ _profileActivityHtml(activity) {
       const details = act.details
         ? `<span class="profile-activity-details">${this._scrollText(act.details)}</span>`
         : '';
+      const link = this._activityLink(act);
+      const open = link
+        ? `<a class="profile-activity-row profile-activity-link" href="${this._escapeHtml(link)}" target="_blank" rel="noopener noreferrer" title="${this._escapeHtml(t('users.activity_open_steam'))}">`
+        : '<div class="profile-activity-row">';
       return `
-        <div class="profile-activity-row">
+        ${open}
           ${art}
           <span class="profile-activity-text">
             <span class="profile-activity-verb">${act.type === 'listening' && act.paused ? `⏸ ${t('users.activity_paused')}` : meta.verb}</span>
@@ -744,7 +757,7 @@ _profileActivityHtml(activity) {
             ${details}
             ${this._activityProgressHtml(act)}
           </span>
-        </div>`;
+        ${link ? '</a>' : '</div>'}`;
     })
     .filter(Boolean);
 

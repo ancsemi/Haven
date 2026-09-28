@@ -40,6 +40,7 @@ export default {
     const own = ['edit_own_messages', 'delete_own_messages'];
     const member = [...own, 'upload_files', 'use_voice', 'use_tts', 'view_history', 'view_channel_members'];
     return [
+      { key: 'member', emoji: '👤', level: 1, color: '#95a5a6', perms: member },
       { key: 'blank', emoji: '📄', level: 25, color: '#aaaaaa', perms: [] },
       { key: 'moderator', emoji: '🛡️', level: 50, color: '#3498db',
         perms: [...member, 'delete_message', 'delete_lower_messages', 'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user',

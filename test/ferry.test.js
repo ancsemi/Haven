@@ -9,6 +9,9 @@ const {
   buildHavenContent,
   discordAvatarUrl,
   translateHavenEmotes,
+  translateDiscordRefs,
+  translateHavenRefs,
+  roleMap,
 } = require('../src/ferry');
 
 // Two pairings on one Haven channel, one of them sharing a channel name with
@@ -173,6 +176,8 @@ test('a stream announcement bot relays its link and thumbnail next to the text',
   // Reading the embed only for empty bodies relayed the ping line alone.
   const live = {
     content: '@everyone Streamer is now live!',
+    // Discord sets this when the ping really went out (the bot may ping everyone).
+    mention_everyone: true,
     embeds: [{
       type: 'rich',
       title: 'Streamer is playing Spira Speedruns',
@@ -305,4 +310,59 @@ test('avatar URLs cover custom, animated, and both default schemes', () => {
   assert.match(discordAvatarUrl({ id: '80351110224678912', discriminator: '0' }), /embed\/avatars\/[0-5]\.png/);
   assert.match(discordAvatarUrl({ id: '80351110224678912', discriminator: '1234' }), /embed\/avatars\/[0-4]\.png/);
   assert.equal(discordAvatarUrl(null), null);
+});
+
+// Roles and channels between the two sides. "hunters" is a role anybody on
+// Discord may mention; "Mods" is not, so it never pings from either side.
+const GUILD = {
+  roles: roleMap([
+    { id: '111111111111111111', name: '@everyone', mentionable: true },
+    { id: '222222222222222222', name: 'hunters', mentionable: true },
+    { id: '333333333333333333', name: 'Mods', mentionable: false },
+    { id: '444444444444444444', name: 'Game Night', mentionable: true },
+  ], '111111111111111111'),
+  channelNames: new Map([['555555555555555555', 'general-chat'], ['666666666666666666', 'clips']]),
+  channels: new Map(),
+};
+
+test('@everyone from Discord pings only when Discord says it did', () => {
+  const typed = buildHavenContent({ content: 'hey @everyone and @here', attachments: [], embeds: [] });
+  assert.equal(typed, 'hey @\u200Beveryone and @\u200Bhere');
+  const real = buildHavenContent({ content: '@everyone meeting now', mention_everyone: true, attachments: [], embeds: [] });
+  assert.equal(real, '@everyone meeting now');
+});
+
+test('Discord role and channel mentions arrive as names', () => {
+  const out = translateDiscordRefs('<@&222222222222222222> <@&333333333333333333> <#555555555555555555> <#666666666666666666> <#999999999999999999>', GUILD, {
+    pingRoles: true,
+    havenChannelFor: (id) => (id === '666666666666666666' ? 'video clips' : null),
+  });
+  // The mentionable role pings its Haven namesake; the other only shows its name.
+  // A paired channel reads as its Haven channel, an unknown one is left alone.
+  assert.equal(out, '@hunters @​Mods #general-chat #video_clips <#999999999999999999>');
+  // With pings off nothing pings, but the names still read.
+  assert.equal(translateDiscordRefs('<@&222222222222222222>', GUILD, { pingRoles: false }), '@​hunters');
+  assert.equal(roleMap([{ id: '111111111111111111', name: '@everyone' }], '111111111111111111').size, 0);
+});
+
+test('a Haven @Role and #channel go to Discord as its own tokens', () => {
+  const r = translateHavenRefs('@hunters @game night @Mods @​hunters a@hunters.com #general_chat #clips #nope https://x.io/#clips', GUILD, { pingRoles: true });
+  assert.equal(r.content, '<@&222222222222222222> <@&444444444444444444> @Mods @​hunters a@hunters.com <#555555555555555555> <#666666666666666666> #nope https://x.io/#clips');
+  assert.deepEqual(r.roleIds, ['222222222222222222', '444444444444444444']);
+  // Pings off: roles stay text, channels still link since they ping nobody.
+  const off = translateHavenRefs('@hunters #clips', GUILD, { pingRoles: false });
+  assert.equal(off.content, '@hunters <#666666666666666666>');
+  assert.deepEqual(off.roleIds, []);
+  // A paired channel wins over a Discord channel that happens to share the name.
+  assert.equal(translateHavenRefs('#clips', GUILD, { discordChannelFor: () => '777777777777777777' }).content, '<#777777777777777777>');
+});
+
+test('two Discord roles with one name are ambiguous and neither is pinged', () => {
+  const g = { roles: roleMap([
+    { id: '222222222222222222', name: 'hunters', mentionable: true },
+    { id: '888888888888888888', name: 'Hunters', mentionable: true },
+  ], '1'), channelNames: new Map() };
+  const r = translateHavenRefs('@hunters go', g, { pingRoles: true });
+  assert.equal(r.content, '@hunters go');
+  assert.deepEqual(r.roleIds, []);
 });

@@ -194,40 +194,39 @@ Any channel can be switched between private and public later from **Channel Func
 
 ## 📥 Importing from Discord
 
-Haven can import your entire Discord server's message history — directly from the app. No external tools required.
+Haven can copy a Discord server's message history into Haven channels. The easiest way uses your Ferry bot: nothing to download, nothing to paste.
 
-### Method 1: Direct Connect (Recommended)
+### Method 1: Your Ferry bot (recommended)
 
-1. Open **Settings** (⚙️ in the sidebar) → scroll to **Import Discord History**
-2. Click the **🔗 Connect to Discord** tab
-3. Get your Discord token:
-   - Open Discord in your browser (or desktop app with dev tools enabled)
-   - Press **F12** → go to the **Application** tab
-   - In the left sidebar: **Local Storage** → **https://discord.com**
-   - Find the key called **`token`** and copy its value (without quotes)
-4. Paste the token and click **Connect**
-5. Pick a server from the grid, then select which channels and threads to import
-6. Click **Fetch Messages** — Haven downloads everything
-7. In the preview, rename channels if you want, then click **Import**
+1. Set up Ferry if you haven't yet. The [Ferry section](#-ferry-discord-bridge) walks you through it and takes about two minutes. For importing you only need its first two parts: create the bot, then connect it to Haven and add it to your Discord server. You don't have to turn Ferry on or pair any channels.
+2. In Haven, open **Settings** (⚙️ in the sidebar) → **Import Discord History**, then click the **🔗 Connect to Discord** tab
+3. Click **Use my Ferry bot**
+4. Pick your Discord server, then tick the channels and threads you want
+5. Click **Fetch Messages** and wait while Haven copies them. A big server can take a few minutes
+6. In the preview, rename channels if you want, then click **Import Selected**
 
-**What gets imported:** messages, replies, embeds, attachments, reactions, pins, forum tags, and original Discord avatars.
+The bot can only import channels it can see on Discord. If a channel is private there, give the bot's role access to it first. Otherwise Haven skips that channel and tells you which ones it skipped.
 
-**Channel types supported:** text, announcement, forum, media, plus active and archived threads.
+**What gets imported:** messages, replies, embeds, reactions, pins, links to attachments, and the original Discord names and avatars.
 
-### Method 2: File Upload
+**Channel types supported:** text, announcement, forum, media, plus active and archived public threads.
 
-If you prefer, export your Discord data with [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter) (JSON format), then:
+### Method 2: Upload an export file
 
-1. Open **Settings** → **Import Discord History**
-2. Click the **📁 Upload File** tab
-3. Drag/drop or browse for the `.json` or `.zip` file
-4. Preview, rename channels, and import
+If you'd rather not set up a bot, Discord can give you a download of your own messages (only yours, not everyone's):
+
+1. In Discord, go to **User Settings → Data & Privacy → Request all of my Data**. Discord emails you a ZIP when it's ready, which can take a few days
+2. In Haven, open **Settings** → **Import Discord History**. The **📁 Upload File** tab is already open
+3. Drop the ZIP in, or click **browse** to find it
+4. In the preview, rename channels if you want, then click **Import Selected**
+
+Export files from DiscordChatExporter (JSON) work here too.
 
 ### Important Notes
 
 - Imported messages appear as the original Discord usernames, but they're all stored under the admin account. They're clearly marked as imported from Discord.
-- The import is **history only** — Discord roles, permissions, bots, and webhooks are not imported.
-- Your Discord token is never stored by Haven. It's used only during the import session and discarded.
+- The import is **history only**: Discord roles, permissions, bots, and webhooks are not imported.
+- To keep chatting with people who stay on Discord, use [Ferry](#-ferry-discord-bridge) to bridge channels between the two.
 
 ---
 
@@ -692,16 +691,20 @@ Your theme choice is saved per browser.
 
 ### Bundled optional themes and plugins
 
-Haven also ships a couple of extras that are **installed but switched off by default**, so you will not see them until an admin turns them on. They are already on your server, including in the Docker image. There is nothing to download.
+Haven also ships optional extras that are **installed but switched off by default**, so you will not see them until an admin turns them on. They are already on your server, including in the Docker image. There is nothing to download.
 
 | File | What it is |
 |------|-----------|
 | `themes/compact.theme.css` | Compact, a dense graphite Theme API v1 theme |
 | `themes/braid.theme.css` | Braid, a dark mint theme |
 | `themes/braid-light.theme.css` | Braid Light |
+| `themes/amni-scient.theme.css` | Amni-Scient, gold on ink with the Archivo typeface |
+| `themes/amni-scient-light.theme.css` | Amni-Scient Light |
 | `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |
+| `plugins/HavenGlyphs.plugin.js` | Reversible contextual interface icons using the bundled local Font Awesome font |
+| `public/fonts/fa-solid-900.woff2` | Local Font Awesome Solid font used by Haven Glyphs |
 
 To make a bundled theme available to everyone, go to **Settings → Admin → 🏠 Branding → Custom Themes** and publish it. Publishing is what adds its button to the theme picker in the sidebar. Until then it stays hidden even though the file is present, which is the usual reason a theme "looks missing" after an update.
 
@@ -715,6 +718,11 @@ Compact and classic layout without disabling the plugin.
 Only one structural layout plugin can be active at a time. If Braid Layout is
 already engaged, Compact waits until Braid restores the native layout, and vice
 versa.
+
+Haven Glyphs is optional per browser under **Settings → Plugins & Themes**. It
+uses the bundled local Font Awesome font for interface affordances. Message
+bodies, reactions, emoji/GIF pickers, soundboard names, user content, and form
+fields stay unchanged. It can be disabled from the same settings screen.
 
 Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
 
@@ -1064,6 +1072,8 @@ Click the **🔐** button in the DM header to view your **safety number** — a 
 
 Ferry relays messages between your Haven channels and Discord channels. Haven users
 appear on Discord under their own names, and Discord messages show up in Haven.
+
+The same bot can also copy your Discord server's history into Haven: see [Importing from Discord](#-importing-from-discord).
 
 **Every Haven server needs its own Discord bot.** Haven cannot ship a shared one:
 Discord caps unverified applications at 100 servers and verification requires a company

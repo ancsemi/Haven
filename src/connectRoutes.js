@@ -88,7 +88,7 @@ function baseUrl(req) {
 function connectUserId(token, provider) {
   if (!token || typeof token !== 'string') return null;
   const { verifyToken } = require('./auth');
-  const decoded = verifyToken(token);
+  const decoded = verifyToken(token, { allowScoped: true });
   if (!decoded || decoded.scope !== 'connect') return null;
   if (provider && decoded.provider !== provider) return null;
   return typeof decoded.id === 'number' ? decoded.id : null;

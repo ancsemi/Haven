@@ -266,7 +266,11 @@ class BraidLayout {
 
   _hide(el) {
     if (!el) return;
-    if (!this._hidden.has(el)) this._hidden.set(el, { display: el.style.display === 'none' ? '' : el.style.display, hadHidden: el.hasAttribute('hidden') });
+    // Record the display exactly as found. A banner the user had already
+    // closed is hidden with display:none, and treating that as "visible"
+    // brought every dismissed banner back when the layout was switched off
+    // (#5671).
+    if (!this._hidden.has(el)) this._hidden.set(el, { display: el.style.display, hadHidden: el.hasAttribute('hidden') });
     if (el.style.display !== 'none') el.style.display = 'none';
     if (!el.hasAttribute('hidden')) el.setAttribute('hidden', '');
   }

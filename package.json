@@ -1,6 +1,6 @@
-﻿{
+{
   "name": "haven",
-  "version": "4.9.0",
+  "version": "4.14.0",
   "description": "Haven - self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",
@@ -13,6 +13,7 @@
     "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
+    "@ruffle-rs/ruffle": "0.6.0",
     "adm-zip": "^0.6.0",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
@@ -37,7 +38,9 @@
     "axios": ">=1.8.2"
   },
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "innosetup-compiler": "^6.3.1",
+    "mediasoup-client": "^3.24.1",
     "socket.io-client": "^4.8.1"
   }
 }

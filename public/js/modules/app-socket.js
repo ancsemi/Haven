@@ -142,8 +142,28 @@ _clearChannelCodeMap() {
 
 // ── Socket Event Listeners ────────────────────────────
 
+// A message refused for being too long used to vanish: the box clears on
+// send. Put the text back so it can be trimmed, unless something new has
+// been typed since or the channel changed (#5691).
+_restoreRefusedDraft(msg) {
+  const d = this._lastSendDraft;
+  if (!d || typeof msg !== 'string' || !/^Message too long/.test(msg)) return;
+  this._lastSendDraft = null;
+  const inputId = d.inputId || 'message-input';
+  const open = inputId === 'dm-pip-input' ? this._activeDMPip
+    : inputId === 'thread-input' ? this._activeThreadParent
+    : this.currentChannel;
+  if (Date.now() - d.at > 15000 || d.code !== open) return;
+  const input = document.getElementById(inputId);
+  if (!input || input.value.trim()) return;
+  input.value = d.text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+},
+
 _setupSocketListeners() {
   this._setupFerrySocket();
+  this._setupCallListeners?.();
   // Authoritative user info pushed by server on every connect
   this.socket.on('session-info', (data) => {
     this.user = { ...this.user, ...data };
@@ -151,6 +171,7 @@ _setupSocketListeners() {
     this.user.effectiveLevel = data.effectiveLevel || 0;
     this.user.permissions = data.permissions || [];
     this.user.globalPermissions = data.globalPermissions || [];
+    this._renderE2EPassphraseSection?.();
     if (this.voice && data.id) this.voice.localUserId = data.id;
     if (data.status) {
       this.userStatus = data.status;
@@ -919,6 +940,7 @@ _setupSocketListeners() {
         // Per-channel, same reasoning as the composer gate in app-channels.js (#5468)
         const _isReadOnly = curCh.read_only === 1 && !this.user?.isAdmin && !curCh.canOverrideReadOnly;
         if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+        this._applyReactionLock?.();
       }
     }
 
@@ -1206,7 +1228,13 @@ _setupSocketListeners() {
       // Desktop, and for any tab the user has alt-tabbed away from. We
       // still want to append the message so it's there when they come
       // back, but we skip mark-read and bump the unread badge instead.
-      const isActivelyViewing = !document.hidden;
+      // Haven Desktop keeps pages "visible" even when minimised or behind
+      // other windows (background throttling is off), so there the window
+      // also has to have focus, or the open chat never notified (D#58).
+      // Only Desktop versions that hand focus back to the page on alt-tab say
+      // so; on older ones the page could lack focus while being looked at.
+      const isActivelyViewing = !document.hidden &&
+        (!window.havenDesktop?.pageFocusFollowsWindow || document.hasFocus());
 
       // If the user is scrolled into history and the DOM window has been
       // trimmed (doesn't include the latest messages), skip appending —
@@ -1275,7 +1303,7 @@ _setupSocketListeners() {
             this.notifications.play(_isAnnouncement ? 'announcement' : 'message');
           }
           // Fire native OS notification if tab is hidden (alt-tabbed, minimised, etc.)
-          if (document.hidden) {
+          if (!isActivelyViewing) {
             this._fireNativeNotification(data.message, data.channelCode, _notifOpts);
           }
         }
@@ -1358,7 +1386,36 @@ _setupSocketListeners() {
     }
   });
 
+  // Member entries arrive without the fields that hold their usual value;
+  // put them back so everything reading a member sees the full shape.
+  const fillMember = (u) => ({
+    highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
+    borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null,
+    ...u,
+  });
+
+  // Only the members that changed, merged into the list kept for that
+  // channel. The server sends the whole list first, so a channel with no
+  // list here yet is skipped until it does.
+  this.socket.on('online-users-delta', (data) => {
+    const list = this._onlineByChannel?.get(data?.channelCode);
+    if (!list) return;
+    const upsert = Array.isArray(data.upsert) ? data.upsert.map(fillMember) : [];
+    const drop = new Set([...(Array.isArray(data.remove) ? data.remove : []), ...upsert.map(u => u.id)]);
+    const users = list.filter(u => !drop.has(u.id)).concat(upsert);
+    users.sort((a, b) => {
+      if (a.online !== b.online) return a.online ? -1 : 1;
+      return (a.username || '').toLowerCase().localeCompare((b.username || '').toLowerCase());
+    });
+    applyOnlineUsers({ channelCode: data.channelCode, users, visibilityMode: data.visibilityMode });
+  });
+
   this.socket.on('online-users', (data) => {
+    if (data?.slim && Array.isArray(data.users)) data = { ...data, users: data.users.map(fillMember) };
+    applyOnlineUsers(data);
+  });
+
+  const applyOnlineUsers = (data) => {
     // Every list is kept by channel (the socket sits in every room it
     // belongs to), so a DM PiP can read its own partner's presence instead
     // of the list for whatever channel is on screen (#5574).
@@ -1379,7 +1436,7 @@ _setupSocketListeners() {
         this._renderOnlineOverlay();
       }
     }
-  });
+  };
 
   this.socket.on('voice-users-update', (data) => {
     // Right-side VOICE panel shows who's in voice for the channel you are
@@ -1617,6 +1674,7 @@ _setupSocketListeners() {
     // A refused channel-functions toggle arrives here and nowhere else, so
     // this is the only chance to put the row back where it was.
     this._revertPendingChannelToggle();
+    this._restoreRefusedDraft(msg);
     this._showToast(msg, 'error');
   });
 
@@ -2131,6 +2189,41 @@ _setupSocketListeners() {
     // open — results are cross-channel and this only fires on a confirmed
     // delete, so removal stays truthful. (search-overhaul phase 3)
     this._searchRemoveResult?.(data.channelCode, data.messageId);
+  });
+
+  // Someone deleted every message they wrote (#5686): one event per channel.
+  // Their rows go from whatever is on screen, and the open channel is loaded
+  // again so the compact chains and the history cursor come out right.
+  this.socket.on('messages-purged', (data) => {
+    if (!data || !data.channelCode || !data.userId) return;
+    const uid = String(data.userId);
+    const views = [
+      ['messages', this.currentChannel], ['thread-messages', this.currentChannel],
+      ['dm-pip-messages', this._activeDMPip],
+    ];
+    for (const [id, code] of views) {
+      if (code !== data.channelCode) continue;
+      document.getElementById(id)?.querySelectorAll(`[data-msg-id][data-user-id="${uid}"]`).forEach(el => el.remove());
+    }
+    if (data.channelCode === this.currentChannel) {
+      this._oldestMsgId = null;
+      this._noMoreHistory = false;
+      this._loadingHistory = false;
+      this._historyBefore = null;
+      this._newestMsgId = null;
+      this._noMoreFuture = true;
+      this._loadingFuture = false;
+      this._historyAfter = null;
+      this.socket.emit('get-messages', { code: this.currentChannel });
+    }
+  });
+
+  // Attachment tags edited (#tagging phase 3). Repaint the Tags footer on every
+  // rendered copy of the message. Fires cross-channel (users are joined to all
+  // their channel rooms), so search results update too, wherever they're shown.
+  this.socket.on('message-tags-updated', (data) => {
+    if (!data || !data.messageId) return;
+    this._updateMessageTagsFooter?.(data.messageId, data.tags || []);
   });
 
   // ── Low disk warning (admins only, #5505) ────────

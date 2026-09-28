@@ -138,6 +138,28 @@ _searchRun(query, page = 1) {
 // clobber the panel with stale results.
 _searchNextToken() { this._searchSeq = (this._searchSeq || 0) + 1; return this._searchSeq; },
 
+// Build a tag: token, quoting multi-word tags since the server captures a bare
+// value with \S+ (tags may contain spaces). (#tagging phase 2)
+_tagSearchToken(name) {
+  const n = String(name || '').trim();
+  if (!n) return '';
+  return /\s/.test(n) ? `tag:"${n}"` : `tag:${n}`;
+},
+
+// Clicking a tag chip (on a message or a result) opens search and runs exactly
+// that tag, nothing else. Tagged messages only exist in non-DM channels, so this
+// always lands on the server (global) search path.
+_searchByTag(name) {
+  const token = this._tagSearchToken(name);
+  if (!token) return;
+  const sc = document.getElementById('search-container');
+  if (sc) sc.style.display = 'flex';
+  const input = document.getElementById('search-input');
+  if (input) input.value = token;
+  this._searchRun(token);
+  this._sfpSync?.();
+},
+
 // Toggle the "Searching…" indicator. Shown when a server request is in flight,
 // hidden once its (matching) response lands. Also makes sure the panel is on
 // screen so the indicator is visible for a first search.
@@ -468,6 +490,9 @@ _sfpRenderRecent() {
 _sfpRenderList(type, term) {
   const list = document.getElementById('sfp-list');
   if (!list) return;
+  // tag: options come from the server vocabulary, not client state, so they take
+  // a debounced async path of their own.
+  if (type === 'tag') return this._sfpRenderTagList(term);
   const p = (term || '').toLowerCase();
   let entries = [];
 
@@ -499,6 +524,41 @@ _sfpRenderList(type, term) {
   list.querySelectorAll('.sfp-item').forEach(item => {
     item.addEventListener('click', () => this._sfpAppend(item.dataset.token));
   });
+},
+
+// Tag picker list: debounced lookup against the server vocabulary (reusing the
+// composer's search-upload-tags handler, so it shares the tagSearch rate limit).
+// Picking one appends a correctly-quoted tag: token. (#tagging phase 2)
+_sfpRenderTagList(term) {
+  const list = document.getElementById('sfp-list');
+  if (!list) return;
+  clearTimeout(this._sfpTagTimer);
+  const q = (term || '').trim();
+  this._sfpTagTimer = setTimeout(() => {
+    if (this._sfpActive !== 'tag') return;   // picker changed while waiting
+    this.socket.emit('search-upload-tags', { query: q }, (res) => {
+      if (this._sfpActive !== 'tag') return;
+      if (res && res.error === 'rate_limited') return;
+      const tags = (res && res.tags) || [];
+      if (!tags.length) {
+        // No tag starts with what they typed. Offer to run the search anyway.
+        if (q) {
+          list.innerHTML = `<button type="button" class="sfp-item sfp-search-removed" data-token="${this._escapeHtml(this._tagSearchToken(q))}">${this._escapeHtml(t('tags.search_removed'))}</button>`;
+          list.querySelector('.sfp-search-removed')?.addEventListener('click', (e) => this._sfpAppend(e.currentTarget.dataset.token));
+        } else {
+          list.innerHTML = `<div class="sfp-empty">${t('header.filter_no_matches')}</div>`;
+        }
+        return;
+      }
+      list.innerHTML = tags.slice(0, 100).map(tg =>
+        `<div class="sfp-item" data-token="${this._escapeHtml(this._tagSearchToken(tg.name))}">
+           <span>${this._escapeHtml(tg.name)}</span>
+         </div>`).join('');
+      list.querySelectorAll('.sfp-item').forEach(item => {
+        item.addEventListener('click', () => this._sfpAppend(item.dataset.token));
+      });
+    });
+  }, 250);
 },
 
 // Append a filter token to the search input and re-run the search.
@@ -557,13 +617,17 @@ _searchRenderPanel() {
     if (st.filters.after)  tags.push(`<span class="search-filter-tag">after:${this._escapeHtml(st.filters.after)}</span>`);
     if (st.filters.before) tags.push(`<span class="search-filter-tag">before:${this._escapeHtml(st.filters.before)}</span>`);
     if (st.filters.during) tags.push(`<span class="search-filter-tag">during:${this._escapeHtml(st.filters.during)}</span>`);
+    if (st.filters.tag)    tags.push(`<span class="search-filter-tag">tag:${this._escapeHtml(st.filters.tag)}</span>`);
     if (tags.length) filterInfo = `<div class="search-filter-tags">${tags.join(' ')}</div>`;
   }
   const localTag = st.isDM ? ` <span class="search-filter-tag">${t('header.search_dm_local_tag')}</span>` : '';
   count.innerHTML = `${t(total === 1 ? 'header.search_results_one' : 'header.search_results_other', { count: total, query: qHtml })}${localTag}${filterInfo}`;
 
   // Highlight the plain text (all filter tokens stripped).
-  const highlightQuery = (st.query || '').replace(/\b(?:from|in|has|pinned|before|after|during):\S+/gi, '').trim();
+  const highlightQuery = (st.query || '')
+    .replace(/\btag:"[^"]*"/gi, '')
+    .replace(/\b(?:from|in|has|pinned|before|after|during|tag):\S+/gi, '')
+    .trim();
 
   list.innerHTML = total === 0
     ? `<p class="muted-text" style="padding:12px">${t('header.search_no_results')}</p>`
@@ -588,9 +652,10 @@ _searchRenderPanel() {
         <div class="search-result-item" data-msg-id="${r.id}" data-user-id="${this._escapeHtml(String(r.user_id ?? ''))}" data-channel-code="${this._escapeHtml(r.channel_code || '')}">
           ${chan}
           <span class="search-result-author" style="color:${this._getUserColor(r.username)}">${this._escapeHtml(this._getNickname(r.user_id, r.username))}</span>
-          <span class="search-result-time">${this._formatTime(r.created_at)}</span>
+          <span class="search-result-time"${this._timeAttr(r.created_at)}>${this._formatTime(r.created_at)}</span>
           ${thread}
           <div class="message-content search-result-content">${this._formatContent(r.content)}</div>
+          ${this._renderAttachmentTags ? this._renderAttachmentTags(r.attachmentTags) : ''}
         </div>`;
       }).join('');
 
@@ -604,7 +669,7 @@ _searchRenderPanel() {
     // interactive content (media, links, the Load button, or the thread badge)
     // — those have their own behaviour and must not trigger a jump.
     item.addEventListener('click', (e) => {
-      if (e.target.closest('a, img, video, audio, .chat-image, .file-video, .file-audio, .link-preview, .search-load-embed, .search-result-thread, .spoiler')) return;
+      if (e.target.closest('a, img, video, audio, .chat-image, .file-video, .file-audio, .link-preview, .search-load-embed, .search-result-thread, .spoiler, .message-tag')) return;
       this._searchJumpTo(item.dataset.channelCode, parseInt(item.dataset.msgId, 10));
     });
   });

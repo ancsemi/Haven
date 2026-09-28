@@ -102,6 +102,7 @@ test('an allowed domain the user typed still passes', () => {
 test('a promoted stream link is kept when the allowlist permits it', () => {
   const out = buildHavenContent({
     content: '@everyone Streamer is live!',
+    mention_everyone: true,
     embeds: [{
       type: 'rich',
       title: 'Streamer on Twitch',
@@ -120,6 +121,7 @@ test('a promoted link off the allowlist drops just the link, not the announcemen
   // link through with the text and lost the whole message.
   const out = buildHavenContent({
     content: '@everyone Streamer is live on Kick!',
+    mention_everyone: true,
     embeds: [{
       type: 'rich',
       title: 'Streamer on Kick',

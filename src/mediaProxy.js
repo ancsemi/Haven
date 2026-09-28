@@ -29,6 +29,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
+const { safeGet } = require('./safeFetch');
 
 const CACHE_DIR = path.join(DATA_DIR, 'media-cache');
 try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch { /* created lazily below */ }
@@ -190,10 +191,11 @@ function get(url) {
   return { path: file, type: meta.type, size: meta.size };
 }
 
-// Fetch and cache. `validateUrlSafe` is injected from server.js so the proxy
-// reuses the exact SSRF guard the link-preview scraper already uses (protocol
-// check, private-range check, and a DNS resolve that defeats DNS rebinding).
-async function fetchAndCache(url, validateUrlSafe) {
+// Fetch and cache. The fetch goes through safeFetch, which checks every hop
+// of the redirect chain and connects to the exact address it checked, so a
+// member cannot point the proxy (or a redirect from it) at the server's own
+// network. `options.allowPrivate` mirrors ALLOW_PRIVATE_PREVIEWS.
+async function fetchAndCache(url, options = {}) {
   const key = _keyFor(url);
 
   const hit = get(url);
@@ -202,30 +204,28 @@ async function fetchAndCache(url, validateUrlSafe) {
   if (inFlight.has(key)) return inFlight.get(key);
 
   const job = (async () => {
-    await validateUrlSafe(url);
-
     const headers = { 'User-Agent': UA, 'Accept': 'image/*,*/*;q=0.8' };
     try {
       const host = new URL(url).hostname;
       if (_isDiscordMediaHost(host)) headers.Referer = 'https://discord.com/';
-    } catch { /* malformed URL — validateUrlSafe already ran */ }
+    } catch { throw new Error('Invalid URL'); }
 
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    const res = await safeGet(url, {
+      allowPrivate: options.allowPrivate === true,
+      timeoutMs: FETCH_TIMEOUT_MS,
+      maxBytes: MAX_BYTES,
+      maxRedirects: 5,
       headers,
-      redirect: 'follow'
+      resolve: options.resolve,
     });
-    if (!res.ok) throw new Error(`upstream ${res.status}`);
+    if (res.status < 200 || res.status >= 300) throw new Error(`upstream ${res.status}`);
 
-    const declared = parseInt(res.headers.get('content-length') || '0', 10);
-    if (Number.isFinite(declared) && declared > MAX_BYTES) throw new Error('too large');
-
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_BYTES) throw new Error('too large');
+    const buf = res.body;
     if (buf.length === 0) throw new Error('empty response');
 
-    const rawType = _typeForBuffer(res.headers.get('content-type'), buf);
-    if (!rawType) throw new Error(`unsupported content-type: ${(res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() || 'none'}`);
+    const contentType = String(res.headers['content-type'] || '');
+    const rawType = _typeForBuffer(contentType, buf);
+    if (!rawType) throw new Error(`unsupported content-type: ${contentType.split(';')[0].trim().toLowerCase() || 'none'}`);
 
     const file = `${key}.${EXT_FOR_TYPE[rawType] || 'bin'}`;
     const meta = { file, size: buf.length, type: rawType, ts: Date.now(), url };
