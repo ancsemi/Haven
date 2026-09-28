@@ -1396,8 +1396,15 @@ class VoiceManager {
         this._screenDelivered.delete(sharerId);
       }
       // Media may already be flowing into an unrendered receiver — adopt it
-      // rather than paying for a round of signalling we don't need.
-      if (this._deliverScreenFromReceivers(sharerId)) {
+      // rather than paying for a round of signalling we don't need. But when
+      // the UI already has a tile, re-adopting the same receiver changes
+      // nothing: the tile is already rendering (or black on) that track, so
+      // adoption would mark it delivered and stall recovery. That is the
+      // GPU black-tile shape — live receiver, zero decoded frames — and it
+      // needs a renegotiation (which now forces a keyframe), not a re-adopt.
+      let tileExists = false;
+      try { tileExists = !!document.getElementById(`screen-tile-${sharerId}`); } catch {}
+      if (!tileExists && this._deliverScreenFromReceivers(sharerId)) {
         console.warn('[Voice] Adopted screen stream from existing receiver for', sharerId,
           '— no track event fired for this share');
         return;
