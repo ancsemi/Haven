@@ -11,7 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.15.0] - 2026-09-27
+
+Haven gets ready for big communities. A new Large Server Setup page in admin
+settings holds a built-in voice relay: install it with one button, switch it
+on, and calls (screen shares especially) are no longer limited by everyone's
+upload. Member lists, channel lists and notifications now cope with thousands
+of people. Also: import a Discord server's history with your Ferry bot, and
+files from encrypted DMs are cleaned up when the DM is deleted.
 
 ### Added
 - Large Server Setup, a new page in admin settings for servers meant to grow big. Its centrepiece is the voice relay: switched on, each person in a call sends their voice and video once, to the server, which passes it on, so calls are no longer limited by everyone's upload (direct calls start struggling past about ten people). It runs inside Haven: one Install button downloads it (about 10 MB, once), it needs one port opened, and it finds the server's public address by itself. Microphone, camera and screen share all go through it. A screen share's video only goes to people who have it open, in full or half size depending on each viewer's connection; bots and apps that don't support it yet still connect directly in the same call, and calls recover on their own after a server restart. Relayed calls pass through the server, so unlike direct calls the person running it could in principle listen in; the page says so. Off by default. The page also points to the other settings a big server should look at. A LiveKit option for people who run their own LiveKit server is planned.
@@ -19,6 +26,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - Files sent in encrypted DMs are removed when the message or the DM is deleted, instead of staying on the server's disk (#5699). Deleted messages are also blanked out in the database file straight away.
+- Push notifications: a push service that stops answering no longer holds up everyone else's notifications, each account keeps up to 10 registered devices, and signing up for notifications from the web checks the address the same way the app always has.
+- Discord import: a reaction whose emoji has no name shows a question mark instead of garbled text.
 
 ### Changed
 - The Docker image is now based on Debian slim instead of Alpine, so the voice relay can be installed in Docker too. Nothing to do when updating; to use the relay, uncomment its port lines in docker-compose.yml.
