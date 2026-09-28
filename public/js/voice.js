@@ -2131,8 +2131,8 @@ class VoiceManager {
       if (this._relay) {
         const v = this.screenStream.getVideoTracks()[0];
         const a = this.screenStream.getAudioTracks()[0];
-        const screenOpts = { simulcast: true };
-        if (maxBitrate) screenOpts.maxBitrate = maxBitrate;
+        const { opts: screenOpts, key: relayKey } = this._relayScreenOpts(maxBitrate);
+        this._lastRelayScreenBitrateKey = relayKey;
         if (v) await this._relay.publish('screen', v, screenOpts).catch(e => console.warn('[Relay] Screen not sent:', e.message));
         if (a) await this._relay.publish('screen-audio', a).catch(e => console.warn('[Relay] Screen audio not sent:', e.message));
       }
@@ -2172,6 +2172,7 @@ class VoiceManager {
       await this._relay.unpublish('screen').catch(() => {});
       await this._relay.unpublish('screen-audio').catch(() => {});
     }
+    this._lastRelayScreenBitrateKey = undefined;
     this._screenStartInFlight = false;
 
     if (!this.screenStream) return;
@@ -2546,6 +2547,34 @@ class VoiceManager {
     for (const [userId, peer] of this.peers) {
       this._applyScreenBitrate(peer.connection, maxBitrate, userId);
     }
+    // Relayed viewers don't read sender caps: the relay's producer was fixed
+    // at publish time (publish() only replaceTracks an existing producer),
+    // so re-produce the screen source with the new cap. Fire-and-forget —
+    // viewers see a sub-second freeze instead of a permanently stale cap.
+    this._republishRelayScreenBitrate(maxBitrate).catch(() => {});
+  }
+
+  // Options for the relayed screen producer, shared by the initial publish
+  // and live bitrate updates so both agree on what "current" means. The key
+  // lets updates skip a disruptive re-produce when nothing changed.
+  _relayScreenOpts(maxBitrate = this._screenBitrateFor(this.screenResolution)) {
+    const opts = { simulcast: true };
+    if (maxBitrate) opts.maxBitrate = maxBitrate;
+    return { opts, key: maxBitrate || 0 };
+  }
+
+  async _republishRelayScreenBitrate(maxBitrate) {
+    const relay = this._relay;
+    if (!relay || !this.isScreenSharing || !this.screenStream) return;
+    if (!relay.hasPublished?.('screen')) return;
+    const v = this.screenStream.getVideoTracks()[0];
+    if (!v || v.readyState !== 'live') return;
+    const { opts, key } = this._relayScreenOpts(maxBitrate);
+    if (key === this._lastRelayScreenBitrateKey) return;
+    this._lastRelayScreenBitrateKey = key;
+    await relay.unpublish('screen');
+    if (!this.isScreenSharing || this.screenStream?.getVideoTracks()[0] !== v) return;
+    await relay.publish('screen', v, opts);
   }
 
   _applyScreenBitrate(connection, maxBitrate, userId = this._peerIdForConnection(connection)) {
@@ -3193,13 +3222,12 @@ class VoiceManager {
     const mic = this.localStream?.getAudioTracks()[0];
     if (mic && !this.isListenerOnly) await relay.publish('mic', mic).catch(err => console.warn('[Relay] Mic not sent:', err.message));
     if (this.isScreenSharing && this.screenStream) {
-      const maxBitrate = this._screenBitrateFor(this.screenResolution);
       const v = this.screenStream.getVideoTracks()[0];
       const a = this.screenStream.getAudioTracks()[0];
       // An uncapped (unlimited) share omits maxBitrate rather than sending
       // zero/null, which the relay would read as "send nothing".
-      const screenOpts = { simulcast: true };
-      if (maxBitrate) screenOpts.maxBitrate = maxBitrate;
+      const { opts: screenOpts, key: relayKey } = this._relayScreenOpts();
+      this._lastRelayScreenBitrateKey = relayKey;
       if (v) await relay.publish('screen', v, screenOpts).catch(err => console.warn('[Relay] Screen not sent:', err.message));
       if (a) await relay.publish('screen-audio', a).catch(err => console.warn('[Relay] Screen audio not sent:', err.message));
     }

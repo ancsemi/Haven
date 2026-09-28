@@ -115,6 +115,45 @@ test('unlimited removes the sender cap instead of writing zero', () => {
   assert.equal(sender.applied.degradationPreference, 'maintain-framerate');
 });
 
+test('bitrate changes re-produce the relayed screen source live', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 4000;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  const calls = [];
+  voice._relay = {
+    hasPublished: (source) => source === 'screen',
+    unpublish: async (source) => { calls.push(['unpublish', source]); },
+    publish: async (source, t, opts) => { calls.push(['publish', source, opts]); }
+  };
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 4_000_000; // as recorded by the initial publish
+  voice.setScreenBitrate(4000); // same as current → direct peers only, no relay churn
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(calls, [], 'unchanged cap must not re-produce the relay source');
+  voice.setScreenBitrate(6000);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  // Cross-realm objects from the vm harness: compare structurally via JSON.
+  assert.equal(JSON.stringify(calls), JSON.stringify([
+    ['unpublish', 'screen'],
+    ['publish', 'screen', { simulcast: true, maxBitrate: 6_000_000 }]
+  ]));
+  voice.setScreenBitrate(0); // unlimited omits the cap
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(JSON.stringify(calls.slice(2)), JSON.stringify([
+    ['unpublish', 'screen'],
+    ['publish', 'screen', { simulcast: true }]
+  ]));
+});
+
 test('keyframe requests only touch screen video senders', () => {
   const { VoiceManager } = loadVoiceManager();
   const { voice, connection } = makeSharer(VoiceManager, { bitrate: 4000 });

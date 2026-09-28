@@ -1474,29 +1474,118 @@ _setupUI() {
     });
   }
   // ── Screen share bitrate stepper (300–10000 Kbps + unlimited) ──
+  // The value is an editable input: type a number and confirm with Enter or
+  // by leaving the field; out-of-range input clamps to the nearest bound.
+  // Holding a step button auto-repeats with acceleration.
   const bitrateMinus = document.getElementById('screen-bitrate-minus');
   const bitratePlus = document.getElementById('screen-bitrate-plus');
   const bitrateValue = document.getElementById('screen-bitrate-value');
   const renderBitrate = (kbps) => {
-    if (bitrateValue) {
+    if (!bitrateValue) return;
+    if (document.activeElement === bitrateValue) return; // don't fight typing
+    if ('value' in bitrateValue) {
+      bitrateValue.value = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+    } else {
       bitrateValue.textContent = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
     }
   };
-  if (bitrateMinus && bitratePlus) {
+  const parseBitrateInput = () => {
+    const raw = String(bitrateValue?.value ?? bitrateValue?.textContent ?? '').toLowerCase();
+    // "unlimited"/"ilimitado" (or empty unit text) means uncapped.
+    if (/unlimited|ilimitado|inf/.test(raw)) return 0;
+    const digits = raw.replace(/[^0-9]/g, '');
+    if (!digits) return null;
+    const n = parseInt(digits, 10);
+    if (!Number.isSafeInteger(n)) return null;
+    if (n <= 0) return 0;
+    if (n < 300) return 300;
+    if (n > 10000) return 0; // above the range wraps to unlimited
+    return n;
+  };
+  const commitBitrateInput = () => {
+    const parsed = parseBitrateInput();
+    if (parsed === null) {
+      renderBitrate(this.voice.screenBitrate);
+      return;
+    }
+    this.voice.setScreenBitrate(parsed);
+    if (bitrateValue && 'value' in bitrateValue) bitrateValue.blur?.();
     renderBitrate(this.voice.screenBitrate);
-    bitrateMinus.addEventListener('click', () => {
-      const cur = this.voice.screenBitrate || 0;
+  };
+  const stepBitrate = (dir) => {
+    const cur = this.voice.screenBitrate || 0;
+    let next;
+    if (dir < 0) {
       // From unlimited, step down into the top of the range.
-      const next = cur === 0 ? 10000 : cur - 100;
-      this.voice.setScreenBitrate(next);
-      renderBitrate(this.voice.screenBitrate);
-    });
-    bitratePlus.addEventListener('click', () => {
-      const cur = this.voice.screenBitrate || 0;
+      next = cur === 0 ? 10000 : cur - 100;
+    } else {
       // Past the top of the range wraps to unlimited.
-      const next = cur === 0 ? 300 : cur + 100;
+      next = cur === 0 ? 300 : cur + 100;
+    }
+    this.voice.setScreenBitrate(next);
+    renderBitrate(this.voice.screenBitrate);
+  };
+  // Press-and-hold auto-repeat: first repeat after 400 ms, then every 80 ms
+  // with the step doubling every ~10 repeats so long holds move fast.
+  const holdRepeat = (button, dir) => {
+    if (!button) return;
+    let timer = null;
+    let interval = null;
+    let repeats = 0;
+    const stop = () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      timer = interval = null;
+      repeats = 0;
+    };
+    const tick = () => {
+      repeats++;
+      const magnitude = repeats > 20 ? 400 : repeats > 10 ? 200 : 100;
+      const cur = this.voice.screenBitrate || 0;
+      let next;
+      if (dir < 0) {
+        next = cur === 0 ? 10000 : cur - magnitude;
+      } else {
+        next = cur === 0 ? 300 : cur + magnitude;
+      }
       this.voice.setScreenBitrate(next);
       renderBitrate(this.voice.screenBitrate);
+    };
+    let pressed = false;
+    button.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      pressed = true;
+      stepBitrate(dir); // immediate single step on press
+      timer = setTimeout(() => {
+        interval = setInterval(tick, 80);
+      }, 400);
+    });
+    // Keyboard activation (Enter/Space) fires click without pointerdown.
+    button.addEventListener('click', () => {
+      if (pressed) { pressed = false; return; }
+      stepBitrate(dir);
+    });
+    for (const event of ['pointerup', 'pointerleave', 'pointercancel']) {
+      button.addEventListener(event, stop);
+    }
+  };
+  if (bitrateMinus && bitratePlus && bitrateValue) {
+    renderBitrate(this.voice.screenBitrate);
+    holdRepeat(bitrateMinus, -1);
+    holdRepeat(bitratePlus, +1);
+    bitrateValue.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitBitrateInput();
+      } else if (e.key === 'Escape') {
+        renderBitrate(this.voice.screenBitrate);
+        bitrateValue.blur?.();
+      }
+      e.stopPropagation();
+    });
+    bitrateValue.addEventListener('blur', commitBitrateInput);
+    bitrateValue.addEventListener('focus', () => {
+      try { bitrateValue.select?.(); } catch {}
     });
   }
   if (screenFpsSelect) {
