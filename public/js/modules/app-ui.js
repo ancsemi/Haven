@@ -1480,19 +1480,6 @@ _setupUI() {
       this.voice.setScreenFrameRate(parseInt(e.target.value, 10));
     });
   }
-  const nativeScreenRow = document.getElementById('native-screen-share-row');
-  const nativeScreenHint = document.getElementById('native-screen-share-hint');
-  const nativeScreenToggle = document.getElementById('native-screen-share-enabled');
-  if (window.havenDesktop?.nativeScreen && nativeScreenToggle) {
-    nativeScreenRow.hidden = false;
-    nativeScreenHint.hidden = false;
-    nativeScreenToggle.checked = localStorage.getItem('haven_native_screen_share') === '1';
-    nativeScreenToggle.addEventListener('change', () => {
-      if (nativeScreenToggle.checked) localStorage.setItem('haven_native_screen_share', '1');
-      else localStorage.removeItem('haven_native_screen_share');
-    });
-  }
-
   // Wire up the voice manager's video callback
   this.voice.onScreenStream = (userId, stream) => this._handleScreenStream(userId, stream);
   // Wire up webcam video callback

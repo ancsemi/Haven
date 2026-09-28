@@ -356,8 +356,6 @@ test('an async voice join uses a rotated code and does not emit while disconnect
     event: 'voice-join',
     data: {
       code: '22222222',
-      nativeScreenVersion: 2,
-      nativeScreenCodecs: ['H264'],
       relay: 0   // no voice relay script loaded in this test
     }
   });

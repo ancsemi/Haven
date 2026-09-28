@@ -55,12 +55,6 @@ const registerAdmin      = require('./admin');
 const registerFerry      = require('./ferry');
 const registerGroupE2E   = require('./groupE2E');
 const registerTags       = require('./tags');
-const {
-  NATIVE_SCREEN_SIGNAL_EVENTS,
-  clearNativeScreenOfferWindows,
-  nativeScreenSignalFloodScope,
-} = require('./nativeScreen');
-
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // ══════════════════════════════════════════════════════════════
@@ -114,7 +108,6 @@ function setupSocketHandlers(io, db, opts = {}) {
   const activeScreenSharers = new Map(); // code → Set<userId>
   const activeScreenSessions = new Map(); // code → Map<userId, { transport, sessionId }>
   const activeWebcamUsers   = new Map(); // code → Set<userId>
-  const nativeScreenOfferWindows = new Map(); // `${sharerId}:${viewerId}` → timestamps
   const userFloodBuckets    = new Map(); // `${userId}:${bucket}` → number[] (send timestamps)
   // Presence timing for the "idle but online" flag. onlineSince is set when a
   // user goes from having zero live sockets to one; lastActiveAt advances only
@@ -166,7 +159,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     channelUsers, voiceUsers, voiceLastActivity,
     activeMusic, musicQueues,
     activeScreenSharers, activeScreenSessions, activeWebcamUsers,
-    nativeScreenOfferWindows, streamViewers,
+    streamViewers,
     slowModeTracker, pendingTempDelete, pendingVoiceLeave,
     botAudioManager
   };
@@ -786,7 +779,6 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (!sock || !sock.connected) {
         if (entry.isBot) botAudioManager?.stopWebhook(-Number(userId));
         room.delete(userId);
-        clearNativeScreenOfferWindows(nativeScreenOfferWindows, code, userId);
         const sharers = activeScreenSharers.get(code);
         if (sharers) {
           sharers.delete(userId);
@@ -1215,7 +1207,6 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (socket.user.isBot) botAudioManager?.stopWebhook(socket.user.webhookId);
     voiceRoom.delete(socket.user.id);
     dropRelayUser(code, socket.user.id);
-    clearNativeScreenOfferWindows(nativeScreenOfferWindows, code, socket.user.id);
     socket.leave(`voice:${code}`);
 
     const sharers = activeScreenSharers.get(code);
@@ -1797,7 +1788,6 @@ function setupSocketHandlers(io, db, opts = {}) {
             if (!sock || !sock.connected) {
               if (entry.isBot) botAudioManager?.stopWebhook(-Number(userId));
               room.delete(userId);
-              clearNativeScreenOfferWindows(nativeScreenOfferWindows, ch.code, userId);
               const sharers = activeScreenSharers.get(ch.code);
               if (sharers) {
                 sharers.delete(userId);
@@ -2284,16 +2274,6 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
       if (eventName === 'request-screen-renegotiate') {
         if (floodCheck('screenRecovery')) return;
-        return next();
-      }
-      if (NATIVE_SCREEN_SIGNAL_EVENTS.has(eventName)) {
-        if (floodCheck('nativeSignalGlobal')) return;
-        const scope = nativeScreenSignalFloodScope(eventName, packet[1], {
-          socket,
-          voiceUsers,
-          activeScreenSessions,
-        });
-        if (floodCheck('nativeSignal', scope)) return;
         return next();
       }
       if (FLOOD_EXEMPT.has(eventName)) return next();
