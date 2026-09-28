@@ -95,6 +95,48 @@ test('a tile with decoded frames counts as live and stops recovery', () => {
   assert.equal(voice._screenDelivered.has(7), true);
 });
 
+test('a reshare with a new track is adopted even though a tile exists', () => {
+  const oldTrack = { kind: 'video', readyState: 'ended', muted: true, id: 'old-track' };
+  const newTrack = { kind: 'video', readyState: 'live', muted: false, id: 'new-track' };
+  const tileVideo = { srcObject: { getVideoTracks: () => [oldTrack] }, videoWidth: 0 };
+  const { VoiceManager, fireTimer } = loadVoiceManager(tileDoc(tileVideo));
+  const voice = Object.create(VoiceManager.prototype);
+  voice.peers = new Map([[7, {
+    connection: { getReceivers: () => [{ track: oldTrack }, { track: newTrack }] },
+    username: 'sharer'
+  }]]);
+  voice.screenSharers = new Set([7]);
+  voice._screenDelivered = new Set();
+  voice._screenWatchdogTimers = new Map();
+  voice.inVoice = true;
+  voice.currentChannel = '22222222';
+  voice.emitted = [];
+  voice.socket = { connected: true, emit: (event, payload) => voice.emitted.push({ event, payload }) };
+  voice.delivered = [];
+  voice.onScreenStream = (userId, stream) => voice.delivered.push({ userId, stream });
+  voice._watchForScreenStream(7, 1);
+  fireTimer();
+  assert.equal(voice.delivered.length, 1, 'new track adopted despite the old tile');
+  assert.equal(voice.delivered[0].stream.tracks[0].id, 'new-track');
+  assert.equal(voice.emitted.length, 0, 'no signalling needed');
+});
+
+test('rearm does not re-adopt the same black receiver — it arms recovery', () => {
+  const blackVideo = { srcObject: null, videoWidth: 0 };
+  const { VoiceManager, fireTimer } = loadVoiceManager(tileDoc(blackVideo));
+  const voice = makeViewer(VoiceManager, blackVideo);
+  blackVideo.srcObject = { getVideoTracks: () => [voice._tileTrack] };
+  voice._rearmScreenWatchdogs();
+  assert.equal(voice.delivered.length, 0, 'same receiver must not be re-adopted');
+  assert.equal(voice._screenDelivered.has(7), false);
+  assert.ok(voice._screenWatchdogTimers.has(7), 'watchdog armed for the black tile');
+  fireTimer();
+  assert.ok(
+    voice.emitted.some(e => e.event === 'request-screen-renegotiate'),
+    'armed watchdog requests renegotiation'
+  );
+});
+
 test('without a tile, a live receiver is still adopted', () => {
   const { VoiceManager, fireTimer } = loadVoiceManager(tileDoc(null));
   const voice = makeViewer(VoiceManager, null);

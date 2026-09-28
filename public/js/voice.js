@@ -552,7 +552,11 @@ class VoiceManager {
     for (const sharerId of this.screenSharers) {
       if (sharerId === this.localUserId) continue;
       this._screenDelivered.delete(sharerId);
-      if (this._deliverScreenFromReceivers(sharerId)) restored++;
+      // Exclude the tile's own track so a surviving black tile isn't
+      // "restored" without frames; it falls into renegotiate + watch below.
+      if (this._deliverScreenFromReceivers(sharerId, {
+        skipTrackId: this._screenTileTrackId(sharerId),
+      })) restored++;
       else {
         this.requestScreenStream(sharerId);
         this._watchForScreenStream(sharerId);
@@ -1341,19 +1345,33 @@ class VoiceManager {
   // changed, so no track event fires. Video packets arrive and decode into a
   // receiver nobody is rendering: the sharer shows LIVE, the viewer gets
   // nothing, and there is no error anywhere to notice.
-  _deliverScreenFromReceivers(sharerId) {
+  // Track id currently rendered in the UI tile, if any. Lets recovery tell
+  // "same black receiver" (needs renegotiation + keyframe) apart from "a new
+  // track arrived without ontrack" (needs adoption).
+  _screenTileTrackId(sharerId) {
+    try {
+      const tile = document.getElementById(`screen-tile-${sharerId}`);
+      const vid = tile && tile.querySelector('video');
+      const track = vid && vid.srcObject && vid.srcObject.getVideoTracks?.()[0];
+      return track ? track.id : null;
+    } catch { return null; }
+  }
+
+  _deliverScreenFromReceivers(sharerId, { skipTrackId = null } = {}) {
     // A video receiver on the voice connection is a webcam or a stale
     // browser-share transceiver.
     const peer = this.peers.get(sharerId);
     if (!peer || !this.screenSharers.has(sharerId)) return false;
     // A peer can be sending webcam and screen at once. We can't tell the two
     // apart from the receiver alone, so exclude whichever track ontrack
-    // previously classified as their webcam.
+    // previously classified as their webcam — and, when given, the track the
+    // UI tile is already rendering, so recovery doesn't "adopt" the same
+    // black receiver and stall.
     const camTrackId = peer._webcamTrackId || null;
     const candidates = peer.connection.getReceivers()
       .map(r => r.track)
       .filter(t => t && t.kind === 'video' && t.readyState === 'live' &&
-                   !t.muted && t.id !== camTrackId);
+                   !t.muted && t.id !== camTrackId && t.id !== skipTrackId);
     if (!candidates.length) return false;
     // Prefer the track we already believe is their screen; otherwise the most
     // recently negotiated one.
@@ -1396,15 +1414,14 @@ class VoiceManager {
         this._screenDelivered.delete(sharerId);
       }
       // Media may already be flowing into an unrendered receiver — adopt it
-      // rather than paying for a round of signalling we don't need. But when
-      // the UI already has a tile, re-adopting the same receiver changes
-      // nothing: the tile is already rendering (or black on) that track, so
-      // adoption would mark it delivered and stall recovery. That is the
-      // GPU black-tile shape — live receiver, zero decoded frames — and it
-      // needs a renegotiation (which now forces a keyframe), not a re-adopt.
-      let tileExists = false;
-      try { tileExists = !!document.getElementById(`screen-tile-${sharerId}`); } catch {}
-      if (!tileExists && this._deliverScreenFromReceivers(sharerId)) {
+      // rather than paying for a round of signalling we don't need. The
+      // tile's own track is excluded: re-adopting the same receiver the tile
+      // already renders changes nothing and would mark it delivered, stalling
+      // recovery on the GPU black-tile shape (live receiver, zero decoded
+      // frames — needs renegotiation + keyframe, not a re-adopt). A genuinely
+      // new track (reshare without ontrack) is still adopted.
+      const tileTrackId = this._screenTileTrackId(sharerId);
+      if (this._deliverScreenFromReceivers(sharerId, { skipTrackId: tileTrackId })) {
         console.warn('[Voice] Adopted screen stream from existing receiver for', sharerId,
           '— no track event fired for this share');
         return;
@@ -1460,7 +1477,12 @@ class VoiceManager {
       if (sharerId === this.localUserId) continue;
       if (this._screenDelivered.has(sharerId) && this._screenStillLive(sharerId)) continue;
       this._screenDelivered.delete(sharerId);
-      if (this._deliverScreenFromReceivers(sharerId)) continue;
+      // Same rule as the watchdog: only a track the tile isn't already
+      // rendering counts as a recovery adoption, otherwise arm the timer so
+      // a black tile gets its renegotiation + keyframe.
+      if (this._deliverScreenFromReceivers(sharerId, {
+        skipTrackId: this._screenTileTrackId(sharerId),
+      })) continue;
       this._watchForScreenStream(sharerId);
     }
   }
@@ -3012,9 +3034,13 @@ class VoiceManager {
         // the video m-line may need a fresh delivery into the UI — ontrack
         // does not always re-fire after an ICE restart, so the tile that
         // was live before the blip can stay black/missing until we adopt
-        // the receiver track ourselves.
+        // the receiver track ourselves. Same tile-track exclusion as the
+        // watchdog: only a track the tile isn't already on counts, or a
+        // black tile would be marked delivered with no recovery armed.
         if (this.screenSharers.has(userId)) {
-          if (!this._deliverScreenFromReceivers(userId)) {
+          if (!this._deliverScreenFromReceivers(userId, {
+            skipTrackId: this._screenTileTrackId(userId),
+          })) {
             this._screenDelivered.delete(userId);
             this._watchForScreenStream(userId);
           }
