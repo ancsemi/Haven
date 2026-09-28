@@ -28,7 +28,7 @@ function createClassList() {
   };
 }
 
-test('a reset invalidates a pending native screen PiP continuation', async () => {
+test('a reset invalidates a pending screen PiP continuation', async () => {
   let resolvePictureInPicture;
   let exitCalls = 0;
   const button = { textContent: '', title: '' };

@@ -68,7 +68,7 @@ class VoiceManager {
     this.onScreenShareStarted = null; // callback(userId, username) — someone started streaming
     this.onWebcamStatusChange = null; // callback() — webcam started/stopped, re-render user list
     this.onConnectivityWarning = null; // (#5399) callback(message) — fired when no STUN server responds
-    this.onScreenShareWarning = null; // callback() — screen share stopped unexpectedly
+    this.onScreenShareWarning = null; // callback() — reserved for screen share interruptions
     this._connectivityWarned = false;  // only warn once per session to avoid toast spam
     this.deafenedUsers = new Set();   // userIds we've muted our audio towards
     this._localTalkInterval = null;
@@ -100,19 +100,9 @@ class VoiceManager {
       localStorage.getItem('haven_screen_bitrate')
     );
 
-    // Bitrate map: resolution → bits/sec  (per-resolution caps for screen-share encoding).
-    // 3.18.1 (#5379): bumped 2-3x because the previous values (1.5 / 3 / 5 Mbps) were
-    // well below what modern home internet can comfortably push, and WebRTC was dropping
-    // framerate to fit inside the cap instead of using the headroom users actually have.
-    // Reference points: YouTube live recommends 4.5-9 Mbps for 1080p60; OBS default for
-    // 1080p60 is 8 Mbps. We sit between "good" and "high" so two-person sessions on
-    // typical broadband stop being framerate-starved.
-    this._screenBitrates = {
-      0:    8_000_000,   // 8 Mbps fallback for unconstrained (source)
-      720:  4_000_000,   // 4 Mbps  (was 1.5)
-      1080: 8_000_000,   // 8 Mbps  (was 3)
-      1440: 14_000_000,  // 14 Mbps (was 5)
-    };
+    // The old per-resolution bitrate table was replaced by the user bitrate
+    // setting (screenBitrate, 300–10000 Kbps + unlimited). Relayed peers still
+    // get the gentler fixed profile inside _screenBitrateFor.
 
     // Default STUN pool — non-Google by preference. Each entry is tried
     // simultaneously by the browser during ICE gathering, so listing several
@@ -2513,9 +2503,8 @@ class VoiceManager {
       return { 0: 3_000_000, 720: 1_500_000, 1080: 3_000_000, 1440: 5_000_000 }[res]
         || 3_000_000;
     }
-    // User cap wins over the old per-resolution table (kept on
-    // `this._screenBitrates` for older harnesses). 0 = unlimited → null,
-    // meaning "leave the sender uncapped".
+    // The user cap is the only ceiling on direct paths. 0 = unlimited →
+    // null, meaning "leave the sender uncapped".
     const user = Number.isSafeInteger(this.screenBitrate) ? this.screenBitrate : 4000;
     return user > 0 ? user * 1000 : null;
   }
