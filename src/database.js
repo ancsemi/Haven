@@ -481,6 +481,7 @@ function initDatabase() {
   // (#5399) Voice connectivity. Admin-configurable STUN/TURN, served by
   // /api/ice-servers. All empty by default = use the built-in STUN pool.
   insertSetting.run('stun_urls', '');                    // newline/comma separated stun: URIs (empty = built-in defaults)
+  insertSetting.run('voice_ice_disabled', 'false');     // omit STUN/TURN so peers use direct host candidates only
   insertSetting.run('turn_url', '');                     // optional turn: URI for relaying through hard NAT
   insertSetting.run('turn_username', '');                // static TURN username (used when turn_url is set)
   insertSetting.run('turn_password', '');                // static TURN credential

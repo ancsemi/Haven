@@ -186,7 +186,7 @@ class VoiceManager {
       }
       if (res && res.ok) {
         const data = await res.json();
-        if (data.iceServers && data.iceServers.length) {
+        if (Array.isArray(data.iceServers)) {
           this.rtcConfig.iceServers = data.iceServers;
           this._adminIceServersLoaded = true;
           console.log(`🧊 ICE servers loaded (${data.iceServers.length} servers${data.iceServers.some(s => String(s.urls).includes('turn:')) ? ', TURN enabled' : ''})`);
@@ -224,6 +224,7 @@ class VoiceManager {
   _ensureStunProbed() {
     if (this._stunProbeStarted) return;
     this._stunProbeStarted = true;
+    if (this._adminIceServersLoaded && !(this.rtcConfig.iceServers || []).length) return;
     try { this._probeDefaultStun(); } catch { /* fire and forget */ }
     if (this._pendingConfiguredStun) {
       const list = this._pendingConfiguredStun;

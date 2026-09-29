@@ -2407,6 +2407,8 @@
       },
       "connectivity_title": "Voice & Connectivity",
       "connectivity_hint": "STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on \"ICE: Connecting...\", set your own servers here.",
+      "ice_disabled": "Disable STUN/TURN (direct connections only)",
+      "ice_disabled_hint": "Use this for LAN-only servers. Voice and screen sharing will use direct local network connections; users on different networks may not connect.",
       "stun_urls": "STUN servers",
       "stun_urls_hint": "One stun: URI per line (or comma separated). Blank = built-in defaults.",
       "turn_url": "TURN server (optional)",

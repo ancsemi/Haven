@@ -1014,10 +1014,14 @@ app.get('/api/ice-servers', (req, res) => {
   try {
     const { getDb } = require('./src/database');
     const rows = getDb().prepare(
-      "SELECT key, value FROM server_settings WHERE key IN ('stun_urls','turn_url','turn_username','turn_password','voice_force_relay')"
+      "SELECT key, value FROM server_settings WHERE key IN ('stun_urls','turn_url','turn_username','turn_password','voice_force_relay','voice_ice_disabled')"
     ).all();
     rows.forEach(r => { dbSettings[r.key] = r.value; });
   } catch { /* DB not ready — fall back to env/defaults below */ }
+
+  // An explicit admin disable takes precedence over env and built-in servers.
+  // Empty iceServers tells WebRTC to use direct host candidates only.
+  if (dbSettings.voice_ice_disabled === 'true') return res.json({ iceServers: [] });
 
   // STUN precedence: admin setting → STUN_URLS env → built-in defaults.
   // 3.20.2 (#5399): old defaults (stun.stunprotocol.org + stun.nextcloud.com)

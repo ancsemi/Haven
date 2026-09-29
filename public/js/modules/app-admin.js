@@ -535,6 +535,8 @@ _applyServerSettings() {
     // ── Voice & Connectivity (STUN/TURN) — #5399 ───
     const stunUrls = document.getElementById('stun-urls-input');
     if (stunUrls) stunUrls.value = this.serverSettings.stun_urls || '';
+    const iceDisabled = document.getElementById('voice-ice-disabled');
+    if (iceDisabled) iceDisabled.checked = this.serverSettings.voice_ice_disabled === 'true';
     const turnUrl = document.getElementById('turn-url-input');
     if (turnUrl) turnUrl.value = this.serverSettings.turn_url || '';
     const turnUser = document.getElementById('turn-username-input');
@@ -968,6 +970,7 @@ _snapshotAdminSettings() {
     role_icon_chat: this.serverSettings.role_icon_chat || 'false',
     role_icon_after_name: this.serverSettings.role_icon_after_name || 'false',
     stun_urls: this.serverSettings.stun_urls || '',
+    voice_ice_disabled: this.serverSettings.voice_ice_disabled || 'false',
     turn_url: this.serverSettings.turn_url || '',
     turn_username: this.serverSettings.turn_username || '',
     turn_password: this.serverSettings.turn_password || '',
@@ -1256,6 +1259,11 @@ _saveAdminSettings() {
   }
 
   // ── Voice & Connectivity (STUN/TURN) — #5399 ───
+  const iceDisabledVal = document.getElementById('voice-ice-disabled')?.checked ? 'true' : 'false';
+  if (iceDisabledVal !== (snap.voice_ice_disabled || 'false')) {
+    this.socket.emit('update-server-setting', { key: 'voice_ice_disabled', value: iceDisabledVal });
+    changed = true;
+  }
   const stunUrlsVal = document.getElementById('stun-urls-input')?.value.trim() || '';
   if (stunUrlsVal !== (snap.stun_urls || '')) {
     this.socket.emit('update-server-setting', { key: 'stun_urls', value: stunUrlsVal });

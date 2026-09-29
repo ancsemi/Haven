@@ -2162,6 +2162,8 @@
       "max_invite_uses_hint": "O número máximo de utilizações que pode ser definido para um link de convite. Administradores e utilizadores com permissão para gerir o servidor ignoram este limite. (0 = ilimitado)",
       "connectivity_title": "Voz e conectividade",
       "connectivity_hint": "Os servidores STUN/TURN permitem que chamadas de voz e compartilhamentos de tela conectem usuários em redes diferentes. Deixe em branco para usar o pool STUN integrado do Haven. Se usuários fora da sua rede local ficarem presos em “ICE: Connecting...”, configure seus próprios servidores aqui.",
+      "ice_disabled": "Desativar STUN/TURN (somente conexões diretas)",
+      "ice_disabled_hint": "Use esta opção em servidores apenas para LAN. Voz e compartilhamento de tela usarão conexões diretas na rede local; usuários em outras redes talvez não consigam se conectar.",
       "stun_urls": "Servidores STUN",
       "stun_urls_hint": "Uma URI stun: por linha (ou separadas por vírgula). Em branco = padrões integrados.",
       "turn_url": "Servidor TURN (opcional)",

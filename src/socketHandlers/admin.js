@@ -150,7 +150,7 @@ module.exports = function register(socket, ctx) {
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
       'guests_allow_voice', // (#5687) whether guests may join voice and video
-      'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
+      'stun_urls', 'turn_url', 'turn_username', 'turn_password', 'voice_ice_disabled', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
       'max_invite_uses', // invite uses limiter for non-admin/mannage-server invite-links
@@ -433,6 +433,7 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'turn_username') { if (value.length > 200) return; }
     if (key === 'turn_password') { if (value.length > 200) return; }
+    if (key === 'voice_ice_disabled' && !['true', 'false'].includes(value)) return;
     if (key === 'default_join_channels') {
       // (#5345) JSON array of channel IDs (integers). Empty string = "all public".
       if (value !== '') {
