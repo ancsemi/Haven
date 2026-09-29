@@ -519,6 +519,12 @@ _applyServerSettings() {
     if (maxMsgChars) {
       maxMsgChars.value = this.serverSettings.max_message_chars || '2000';
     }
+    const autoAwayVisible = document.getElementById('auto-away-visible-minutes');
+    if (autoAwayVisible) autoAwayVisible.value = this.serverSettings.auto_away_visible_minutes || '5';
+    const autoAwayHidden = document.getElementById('auto-away-hidden-minutes');
+    if (autoAwayHidden) autoAwayHidden.value = this.serverSettings.auto_away_hidden_minutes || '2';
+    const autoAwayEnabled = document.getElementById('auto-away-enabled');
+    if (autoAwayEnabled) autoAwayEnabled.checked = this.serverSettings.auto_away_enabled !== 'false';
     const whitelistToggle = document.getElementById('whitelist-enabled');
     if (whitelistToggle) {
       whitelistToggle.checked = this.serverSettings.whitelist_enabled === 'true';
@@ -778,6 +784,7 @@ _syncSettingsNav() {
   const settingsSectionsAccess = {
     'section-update':       [],
     'section-branding':     ['manage_server'],
+    'section-presence':     [],
     'section-members':      ['manage_server'],
     // Idle-online oversight (v3.46.0): moderators who can act on it see it too,
     // the same bar the server enforces. Keep this list in step with
@@ -949,6 +956,9 @@ _snapshotAdminSettings() {
     max_poll_options: this.serverSettings.max_poll_options || '10',
     session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
+    auto_away_visible_minutes: this.serverSettings.auto_away_visible_minutes || '5',
+    auto_away_hidden_minutes: this.serverSettings.auto_away_hidden_minutes || '2',
+    auto_away_enabled: this.serverSettings.auto_away_enabled || 'true',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
     allow_self_purge: this.serverSettings.allow_self_purge || 'false',
     hide_disabled_channel_badges: this.serverSettings.hide_disabled_channel_badges || 'false',
@@ -1142,6 +1152,22 @@ _saveAdminSettings() {
   const maxMsgChars = String(Math.max(200, Math.min(100000, parseInt(document.getElementById('max-message-chars')?.value) || 2000)));
   if (maxMsgChars !== (snap.max_message_chars || '2000')) {
     this.socket.emit('update-server-setting', { key: 'max_message_chars', value: maxMsgChars });
+    changed = true;
+  }
+
+  for (const [key, id, fallback] of [
+    ['auto_away_visible_minutes', 'auto-away-visible-minutes', '5'],
+    ['auto_away_hidden_minutes', 'auto-away-hidden-minutes', '2']
+  ]) {
+    const value = String(Math.max(1, Math.min(60, parseInt(document.getElementById(id)?.value, 10) || Number(fallback))));
+    if (value !== (snap[key] || fallback)) {
+      this.socket.emit('update-server-setting', { key, value });
+      changed = true;
+    }
+  }
+  const autoAwayEnabled = document.getElementById('auto-away-enabled')?.checked ? 'true' : 'false';
+  if (autoAwayEnabled !== (snap.auto_away_enabled || 'true')) {
+    this.socket.emit('update-server-setting', { key: 'auto_away_enabled', value: autoAwayEnabled });
     changed = true;
   }
 
@@ -3324,17 +3350,30 @@ _updateStatusPickerUI() {
 },
 
 // ═══════════════════════════════════════════════════════
-// ── Idle Detection (auto-away after 10 min) ───────────
+// ── Idle Detection (server-configured auto-away) ───────
 // ═══════════════════════════════════════════════════════
 
 _setupIdleDetection() {
-  const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes of no activity
-  const HIDDEN_TIMEOUT = 2 * 60 * 1000; // 2 minutes when tab is hidden
+  const autoAwayEnabled = () => this.serverSettings.auto_away_enabled !== 'false';
+  const idleTimeout = () => (Number(this.serverSettings.auto_away_visible_minutes) || 5) * 60 * 1000;
+  const hiddenTimeout = () => (Number(this.serverSettings.auto_away_hidden_minutes) || 2) * 60 * 1000;
   let lastActivity = Date.now();
   let idleEmitPending = false;
 
+  const scheduleIdle = () => {
+    clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+    if (!autoAwayEnabled()) {
+      return;
+    }
+    const scheduledDelay = document.hidden ? hiddenTimeout() : idleTimeout();
+    this.idleTimer = setTimeout(() => {
+      goIdle();
+    }, scheduledDelay);
+  };
+
   const goIdle = () => {
-    if (this.userStatus === 'online' && !this._manualStatusOverride) {
+    if (autoAwayEnabled() && this.userStatus === 'online' && !this._manualStatusOverride) {
       this.userStatus = 'away';  // optimistic local update (server confirms via status-updated)
       this._updateStatusPickerUI();
       this.socket.emit('set-status', { status: 'away', statusText: this.userStatusText });
@@ -3361,9 +3400,9 @@ _setupIdleDetection() {
       this._lastVoiceActivityPing = Date.now();
       this.socket.emit('voice-activity');
     }
-    clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(goIdle, document.hidden ? HIDDEN_TIMEOUT : IDLE_TIMEOUT);
+    scheduleIdle();
   };
+  this._refreshIdleTimeout = scheduleIdle;
   // Expose so voice speech detection can reset idle & presence
   this._resetIdle = resetIdle;
 
@@ -3375,8 +3414,7 @@ _setupIdleDetection() {
   // Tab visibility: go idle faster when tab is hidden, come back when visible
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = setTimeout(goIdle, HIDDEN_TIMEOUT);
+      scheduleIdle('tab hidden');
     } else {
       resetIdle();
     }

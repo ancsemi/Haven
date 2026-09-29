@@ -145,7 +145,7 @@ module.exports = function register(socket, ctx) {
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
-      'session_duration_days', 'max_message_chars',
+      'session_duration_days', 'max_message_chars', 'auto_away_visible_minutes', 'auto_away_hidden_minutes', 'auto_away_enabled',
       'default_join_channels', 'registration_token_enabled', 'invites_bypass_registration_token', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
@@ -181,6 +181,11 @@ module.exports = function register(socket, ctx) {
       const n = parseInt(value, 10);
       if (!Number.isInteger(n) || n < 1 || n > 3650 || String(n) !== String(value).trim()) return;
     }
+    if (key === 'auto_away_visible_minutes' || key === 'auto_away_hidden_minutes') {
+      const n = parseInt(value, 10);
+      if (!Number.isInteger(n) || n < 1 || n > 60 || String(n) !== String(value).trim()) return;
+    }
+    if (key === 'auto_away_enabled' && !['true', 'false'].includes(value)) return;
 
     // ── Auto-mod validation (v3.42.0) ─────────────────────
     const automodBools = [

@@ -1452,6 +1452,7 @@
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_server">Server</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-update" style="display:none">⬆️ <span data-i18n="settings.nav.server_updates">Server Updates</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-presence" style="display:none">🟢 <span data-i18n="settings.nav.presence">Presence &amp; Activity</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-custom-tos" style="display:none">⚖️ <span data-i18n="settings.nav.tos">Terms of Service</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-large-server" style="display:none">🏟️ <span data-i18n="settings.nav.large_server">Large Server Setup</span></div>
@@ -2561,6 +2562,26 @@
               <span style="font-size:0.75rem;color:var(--text-muted)" data-i18n-html="settings.admin.no_themes">No themes found. Add <code>.theme.css</code> files to the <code>themes/</code> folder and refresh.</span>
             </div>
           </div>
+        </div>
+
+        <!-- Presence & Activity -->
+        <div class="admin-settings" id="section-presence" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🟢 <span data-i18n="settings.admin.presence_title">Presence &amp; Activity</span></h5>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.auto_away_enabled">Enable automatic Away status</span>
+            <input type="checkbox" id="auto-away-enabled" checked>
+          </label>
+          <small class="settings-hint" style="display:block;margin-top:6px;margin-bottom:8px" data-i18n="settings.admin.auto_away_enabled_hint">Turn this off to keep users Online until they change their status themselves.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.auto_away_visible">Visible tab (minutes)</span>
+            <input type="number" id="auto-away-visible-minutes" min="1" max="60" step="1" value="5" class="settings-number-input">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.admin.auto_away_visible_hint">Time without input before an active tab changes the status to Away.</small>
+          <label class="select-row">
+            <span data-i18n="settings.admin.auto_away_hidden">Hidden tab (minutes)</span>
+            <input type="number" id="auto-away-hidden-minutes" min="1" max="60" step="1" value="2" class="settings-number-input">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.admin.auto_away_hidden_hint">Time without input before a hidden tab changes the status to Away.</small>
         </div>
 
         <!-- Custom Terms of Service (Admin only) -->

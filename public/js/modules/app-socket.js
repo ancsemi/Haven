@@ -2497,6 +2497,9 @@ _setupSocketListeners() {
   // ── Server settings ────────────────────────────────
   this.socket.on('server-settings', (settings, envInfo) => {
     this.serverSettings = settings;
+    // Idle detection starts during app initialization, before this async
+    // settings payload arrives. Re-plan its initial timer with server values.
+    this._refreshIdleTimeout?.();
     // Which of these settings also have a value waiting in the environment,
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
@@ -2524,6 +2527,7 @@ _setupSocketListeners() {
 
   this.socket.on('server-setting-changed', (data) => {
     this.serverSettings[data.key] = data.value;
+    if (data.key.startsWith('auto_away_')) this._refreshIdleTimeout?.();
     this._applyServerSettings();
     if (data.key === 'channel_templates') this._renderChannelTemplates();
     if (data.key === 'hide_disabled_channel_badges') this._renderChannels?.();
