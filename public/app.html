@@ -384,7 +384,7 @@
                download page instead of dismissing. Same trap as the Android
                banner below, which hit it with nested <button>s. -->
           <span id="desktop-app-banner" class="desktop-app-banner" style="display:none">
-            <a class="desktop-app-link" href="https://ancsemi.github.io/Haven/#download" target="_blank" rel="noopener">
+            <a class="desktop-app-link" href="https://haven-app.com/#download" target="_blank" rel="noopener">
               <span class="desktop-app-icon">🖥️</span>
               <span class="desktop-app-text" data-i18n="header.get_desktop_app">Get the Desktop App</span>
             </a>
@@ -3284,7 +3284,7 @@
             <small class="settings-group-label" data-i18n="settings.admin.backup_download_label">Download Backup</small>
             <div class="backup-checkboxes" style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="channels" checked> <span data-i18n="settings.admin.backup_inc_channels">Channels &amp; roles</span></label>
-              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="users" checked> <span data-i18n="settings.admin.backup_inc_users">Users (no passwords / 2FA / emails)</span></label>
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="users" checked> <span data-i18n="settings.admin.backup_inc_users">Users (account list)</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="settings" checked> <span data-i18n="settings.admin.backup_inc_settings">Server settings</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="messages"> <span data-i18n="settings.admin.backup_inc_messages">Messages (chat history)</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="dms"> <span data-i18n="settings.admin.backup_inc_dms">Direct messages</span> <small class="settings-hint" style="margin-left:6px;opacity:.75" data-i18n="settings.admin.backup_inc_dms_hint">(E2E ciphertext; only original key holders can read)</small></label>
@@ -3295,7 +3295,7 @@
               <button class="btn-sm" id="backup-select-all-btn" type="button" data-i18n="settings.admin.backup_select_all">Select All</button>
               <button class="btn-sm" id="backup-select-none-btn" type="button" data-i18n="settings.admin.backup_select_none">Clear</button>
             </div>
-            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_modes_hint">Pick what to include. Messages and uploaded files can make the backup very large; channels / users / settings alone are usually small. User passwords, 2FA secrets, and emails are never exported.</small>
+            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_modes_hint">Pick what to include. Messages and uploaded files can make the backup very large; channels, users and settings alone are usually small. To restore or move a server, tick Messages: that carries the whole database, so everyone keeps their account and password. It also means the file holds everyone's login details (passwords stored scrambled, never readable), 2FA secrets and emails, so keep it somewhere safe.</small>
           </div>
           <div class="settings-group" style="margin-top:14px">
             <small class="settings-group-label" data-i18n="settings.admin.backup_restore_label">Restore From Backup</small>
@@ -4734,7 +4734,7 @@
       </ul>
       <p class="desktop-promo-meta" id="desktop-promo-meta">Windows Installer • v1.0.0</p>
       <div class="desktop-promo-actions">
-        <a id="desktop-promo-install" class="btn btn-accent desktop-promo-install" href="https://ancsemi.github.io/Haven/#download" target="_blank" rel="noopener">⬇ <span data-i18n="modals.desktop_promo.install_btn">Install Haven</span></a>
+        <a id="desktop-promo-install" class="btn btn-accent desktop-promo-install" href="https://haven-app.com/#download" target="_blank" rel="noopener">⬇ <span data-i18n="modals.desktop_promo.install_btn">Install Haven</span></a>
         <button id="desktop-promo-later" class="btn desktop-promo-later" data-i18n="modals.desktop_promo.later_btn">Maybe later</button>
       </div>
       <label class="desktop-promo-dismiss-label">
