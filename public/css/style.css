@@ -4736,7 +4736,8 @@ html.rgb-cycling *::after {
   cursor: pointer;
   padding: 0.125rem 0.3125rem;
   border-radius: var(--radius-sm);
-  opacity: 0;
+  opacity: 1;
+  display: none;
   pointer-events: none;
   transition: opacity .15s;
   line-height: 1;
@@ -4746,9 +4747,14 @@ html.rgb-cycling *::after {
 .channel-item:hover .channel-more-btn,
 .channel-item .channel-more-btn:focus {
   opacity: 1;
+  display: block;
   pointer-events: auto;
 }
-.channel-more-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.channel-more-btn:hover { 
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  display: block; 
+}
 
 .channel-ctx-menu {
   position: fixed;
