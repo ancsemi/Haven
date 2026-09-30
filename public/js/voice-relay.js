@@ -190,6 +190,19 @@
       await this._request('relay:close-producer', { producerId, source }).catch(() => {});
     }
 
+    /**
+     * Stops sending `source`, but only if the live producer is still exactly
+     * `producer` (identity check). Lets a stale bitrate republish clean up
+     * precisely the producer it removed/created without touching a new
+     * share's producer after a stop/start race (#5672 review).
+     */
+    async unpublishIf(source, producer) {
+      if (!producer) return false;
+      if (this.producers.get(source) !== producer) return false;
+      await this.unpublish(source);
+      return true;
+    }
+
     hasPublished(source) {
       const p = this.producers.get(source);
       return !!p && !p.closed;

@@ -57,12 +57,12 @@ function makeSharer(VoiceManager, { bitrate, resolution = 0 } = {}) {
   return { voice, connection, sender };
 }
 
-test('bitrate normalizes to 300–10000 Kbps, 0 for unlimited, 4000 default', () => {
+test('bitrate normalizes to 300–10000 Kbps, 0 for unlimited, 8000 default', () => {
   const { VoiceManager } = loadVoiceManager();
   const voice = Object.create(VoiceManager.prototype);
-  assert.equal(voice._normalizeScreenBitrate(null), 4000);
-  assert.equal(voice._normalizeScreenBitrate(''), 4000);
-  assert.equal(voice._normalizeScreenBitrate('abc'), 4000);
+  assert.equal(voice._normalizeScreenBitrate(null), 8000);
+  assert.equal(voice._normalizeScreenBitrate(''), 8000);
+  assert.equal(voice._normalizeScreenBitrate('abc'), 8000);
   assert.equal(voice._normalizeScreenBitrate('0'), 0);
   assert.equal(voice._normalizeScreenBitrate(0), 0);
   assert.equal(voice._normalizeScreenBitrate(299), 300);
@@ -75,13 +75,13 @@ test('bitrate normalizes to 300–10000 Kbps, 0 for unlimited, 4000 default', ()
 test('user cap overrides the resolution table; unlimited returns null', () => {
   const { VoiceManager } = loadVoiceManager();
   const voice = Object.create(VoiceManager.prototype);
-  voice.screenBitrate = 4000;
-  assert.equal(voice._screenBitrateFor(1080), 4_000_000);
-  assert.equal(voice._screenBitrateFor(0), 4_000_000);
+  voice.screenBitrate = 8000;
+  assert.equal(voice._screenBitrateFor(1080), 8_000_000);
+  assert.equal(voice._screenBitrateFor(0), 8_000_000);
   voice.screenBitrate = 0;
   assert.equal(voice._screenBitrateFor(1080), null);
   voice.screenBitrate = undefined;
-  assert.equal(voice._screenBitrateFor(1080), 4_000_000);
+  assert.equal(voice._screenBitrateFor(1080), 8_000_000);
 });
 
 test('relay profile still wins on relayed paths', () => {
@@ -124,7 +124,8 @@ test('bitrate changes re-produce the relayed screen source live', async () => {
   voice.isScreenSharing = true;
   voice.screenResolution = 0;
   voice.screenFrameRate = 60;
-  voice.screenBitrate = 4000;
+  voice.screenBitrate = 8000;
+  voice._relayBitrateDebounceMs = 0; // immediate for deterministic tests
   voice._screenRelayProfileEnabled = () => false;
   voice._screenRelayAutoEnabled = () => false;
   voice._relayPeers = new Set();
@@ -135,8 +136,8 @@ test('bitrate changes re-produce the relayed screen source live', async () => {
     publish: async (source, t, opts) => { calls.push(['publish', source, opts]); }
   };
   voice._prioritiseAudioSenders = () => {};
-  voice._lastRelayScreenBitrateKey = 4_000_000; // as recorded by the initial publish
-  voice.setScreenBitrate(4000); // same as current → direct peers only, no relay churn
+  voice._lastRelayScreenBitrateKey = 8_000_000; // as recorded by the initial publish
+  voice.setScreenBitrate(8000); // same as current → direct peers only, no relay churn
   await new Promise(resolve => setTimeout(resolve, 10));
   assert.deepEqual(calls, [], 'unchanged cap must not re-produce the relay source');
   voice.setScreenBitrate(6000);
@@ -146,12 +147,569 @@ test('bitrate changes re-produce the relayed screen source live', async () => {
     ['unpublish', 'screen'],
     ['publish', 'screen', { simulcast: true, maxBitrate: 6_000_000 }]
   ]));
-  voice.setScreenBitrate(0); // unlimited omits the cap
+  voice.setScreenBitrate(0); // unlimited carries an explicit high cap (never 2.5 Mbps)
   await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal(JSON.stringify(calls.slice(2)), JSON.stringify([
     ['unpublish', 'screen'],
-    ['publish', 'screen', { simulcast: true }]
+    ['publish', 'screen', { simulcast: true, maxBitrate: 14_000_000 }]
   ]));
+});
+
+test('relay republish is debounced: rapid stepper holds collapse to one re-produce', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._relayBitrateDebounceMs = 50;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  const calls = [];
+  voice._relay = {
+    hasPublished: () => true,
+    unpublish: async (source) => { calls.push(['unpublish', source, voice.screenBitrate]); },
+    publish: async (source, t, opts) => { calls.push(['publish', source, opts]); }
+  };
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  // Simulate holding the + stepper: a change every 80 ms used to tear down
+  // the relay producer every time. With the 50 ms debounce only the last
+  // value may re-produce.
+  voice.setScreenBitrate(8100);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  voice.setScreenBitrate(8200);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  voice.setScreenBitrate(8300);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.equal(calls.filter(c => c[0] === 'unpublish').length, 1, 'one teardown for the whole hold');
+  assert.equal(JSON.stringify(calls[calls.length - 1][2]), JSON.stringify({ simulcast: true, maxBitrate: 8_300_000 }));
+});
+
+test('a change landing mid-republish is not dropped (latest wins)', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._relayBitrateDebounceMs = 0;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  let unpublished = false;
+  const publishedCaps = [];
+  voice._relay = {
+    hasPublished: () => !unpublished,
+    unpublish: async () => {
+      unpublished = true;
+      // Change arrives while the first republish is mid-flight (after
+      // unpublish, before publish). The old code dropped it via the
+      // hasPublished early-return and left the relay on the middle value.
+      voice.screenBitrate = 9000;
+      voice._republishRelayScreenBitrate().catch(() => {});
+      await new Promise(resolve => setTimeout(resolve, 10));
+    },
+    publish: async (source, t, opts) => {
+      unpublished = false;
+      publishedCaps.push(opts.maxBitrate);
+    }
+  };
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  voice.screenBitrate = 8500;
+  await voice._republishRelayScreenBitrate();
+  // The republish re-reads the cap after unpublish, so the single publish
+  // already carries the 9 Mbps latest — never the 8.5 Mbps in-between value,
+  // and the overlapping change is not dropped.
+  assert.deepEqual(publishedCaps, [9_000_000]);
+  assert.equal(voice._lastRelayScreenBitrateKey, 9_000_000);
+});
+
+test('a failed publish recovers on retry instead of stranding the share', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 6000;
+  voice._relayBitrateDebounceMs = 0;
+  voice._relayPublishRetryBaseMs = 5;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  let live = true;
+  let publishes = 0;
+  const publishedCaps = [];
+  voice._relay = {
+    hasPublished: () => live,
+    unpublish: async () => { live = false; },
+    publish: async (source, t, opts) => {
+      publishes += 1;
+      if (publishes === 1) throw new Error('transport restarting');
+      live = true;
+      publishedCaps.push(opts.maxBitrate);
+      return { id: 'p2' };
+    }
+  };
+  await voice._republishRelayScreenBitrate();
+  assert.equal(publishes, 2, 'one failed attempt plus one retry');
+  assert.deepEqual(publishedCaps, [6_000_000]);
+  assert.equal(voice._lastRelayScreenBitrateKey, 6_000_000);
+  assert.equal(live, true);
+});
+
+test('a persistently failing publish gives up after 3 retries', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 6000;
+  voice._relayBitrateDebounceMs = 0;
+  voice._relayPublishRetryBaseMs = 5;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  let publishes = 0;
+  voice._relay = {
+    hasPublished: () => false,
+    unpublish: async () => {},
+    publish: async () => { publishes += 1; throw new Error('down'); }
+  };
+  await voice._republishRelayScreenBitrate();
+  assert.equal(publishes, 4, 'initial attempt plus 3 bounded retries');
+  assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000, 'key untouched so a later change recovers');
+});
+
+test('stopping mid-publish removes the orphan instead of leaving it live', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8500;
+  voice._screenStartOperation = 0;
+  voice._relayBitrateDebounceMs = 0;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  const oldProducer = { id: 'old', closed: false, close() {} };
+  const producers = new Map([['screen', oldProducer]]);
+  const calls = [];
+  let resolveProduce;
+  voice._relay = {
+    producers,
+    hasPublished: (s) => { const p = producers.get(s); return !!p && !p.closed; },
+    unpublish: async (s) => { producers.delete(s); calls.push(['unpublish', s]); },
+    unpublishIf: async (s, producer) => {
+      if (!producer || producers.get(s) !== producer) return false;
+      producers.delete(s);
+      calls.push(['unpublishIf', s, producer.id]);
+      return true;
+    },
+    publish: (s, t, opts) => new Promise((resolve) => {
+      calls.push(['publish-start', s, opts.maxBitrate]);
+      resolveProduce = () => {
+        const p = { id: 'new', closed: false, close() {} };
+        producers.set(s, p);
+        calls.push(['publish-resolve', s]);
+        resolve(p);
+      };
+    })
+  };
+  const republish = voice._republishRelayScreenBitrate();
+  const deadline = Date.now() + 1000;
+  while (typeof resolveProduce !== 'function' && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+  assert.equal(typeof resolveProduce, 'function', 'republish reached the publish await');
+  // Simulate stopScreenShare's synchronous prefix while produce is pending.
+  voice._screenStartOperation = 1;
+  voice.isScreenSharing = false;
+  resolveProduce();
+  await republish;
+  assert.deepEqual([...producers.keys()], [], 'orphan producer removed');
+  assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000, 'stale key not committed');
+  assert.ok(calls.some(c => c[0] === 'unpublishIf' && c[2] === 'new'), 'exactly our producer removed');
+});
+
+test('the initial relay publish reads the latest cap, not the pre-renegotiation one', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = {
+    getVideoTracks: () => [track],
+    getTracks: () => [track],
+    getAudioTracks: () => []
+  };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 9000; // moved while renegotiations were in flight
+  voice._relayBitrateDebounceMs = 50;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  const calls = [];
+  voice._relay = {
+    hasPublished: (s) => calls.some(c => c[0] === 'publish' && c[1] === s),
+    unpublish: async (s) => { calls.push(['unpublish', s]); },
+    publish: async (s, t, opts) => { calls.push(['publish', s, opts.maxBitrate]); return { id: 'p' }; }
+  };
+  // A change during renegotiations arms the debounce timer...
+  voice._scheduleRelayScreenRepublish();
+  // ...but the initial publish (which runs after renegotiations settle)
+  // already carries latest, and drops the now-pointless timer.
+  await voice._publishInitialRelayScreen();
+  assert.deepEqual(calls, [['publish', 'screen', 9_000_000]], 'single fresh publish, no churn');
+  assert.equal(voice._lastRelayScreenBitrateKey, 9_000_000);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.deepEqual(calls, [['publish', 'screen', 9_000_000]], 'cancelled timer never re-produces');
+});
+
+test('relay unpublishIf only removes the exact producer', async () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public/js/voice-relay.js'), 'utf8');
+  const sandbox = {
+    window: {},
+    document: { createElement: () => ({}), head: { appendChild() {} } },
+    console: { log() {}, warn() {}, error() {} },
+    setTimeout,
+    clearTimeout
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox, { filename: 'voice-relay.js' });
+  const Session = sandbox.window.HavenRelaySession;
+  const emitted = [];
+  const socket = { on() {}, off() {}, emit(e, d, cb) { emitted.push(e); cb({}); } };
+  const session = new Session(socket, 'CODE', {});
+  const p1 = { id: 'p1', closed: false, close() {} };
+  session.producers.set('screen', p1);
+  assert.equal(await session.unpublishIf('screen', { id: 'p1' }), false, 'different identity is not removed');
+  assert.equal(session.producers.get('screen'), p1);
+  assert.deepEqual(emitted, []);
+  assert.equal(await session.unpublishIf('screen', p1), true);
+  assert.equal(session.producers.has('screen'), false);
+  assert.deepEqual(emitted, ['relay:close-producer']);
+});
+
+test('a failed initial publish recovers on the next change', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = {
+    getVideoTracks: () => [track],
+    getTracks: () => [track],
+    getAudioTracks: () => []
+  };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._relayBitrateDebounceMs = 0;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = undefined;
+  let live = false;
+  let publishes = 0;
+  voice._relay = {
+    hasPublished: () => live,
+    unpublish: async () => { live = false; },
+    publish: async (source, t, opts) => {
+      publishes += 1;
+      if (publishes === 1) throw new Error('no transport yet');
+      live = true;
+      return { id: 'p2' };
+    }
+  };
+  await voice._publishInitialRelayScreen();
+  assert.equal(publishes, 1);
+  assert.equal(voice._lastRelayScreenBitrateKey, undefined, 'failed start records no key');
+  assert.equal(voice._relayScreenNeedsPublish, true, 'failed start flags recovery');
+  voice.screenBitrate = 6000;
+  await voice._republishRelayScreenBitrate();
+  assert.equal(publishes, 2, 'the next change recovers the missing producer');
+  assert.equal(voice._lastRelayScreenBitrateKey, 6_000_000);
+  assert.equal(voice._relayScreenNeedsPublish, false);
+  assert.equal(live, true);
+});
+
+test('stopping during the initial publish leaves no orphan', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = {
+    getVideoTracks: () => [track],
+    getTracks: () => [track],
+    getAudioTracks: () => []
+  };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._screenStartOperation = 0;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  const producers = new Map();
+  let resolveProduce;
+  voice._relay = {
+    producers,
+    hasPublished: (s) => { const p = producers.get(s); return !!p && !p.closed; },
+    unpublish: async (s) => { producers.delete(s); },
+    unpublishIf: async (s, producer) => {
+      if (!producer || producers.get(s) !== producer) return false;
+      producers.delete(s);
+      return true;
+    },
+    publish: (s, t, opts) => new Promise((resolve) => {
+      resolveProduce = () => {
+        const p = { id: 'p1', closed: false, close() {} };
+        producers.set(s, p);
+        resolve(p);
+      };
+    })
+  };
+  const initial = voice._publishInitialRelayScreen();
+  const deadline = Date.now() + 1000;
+  while (typeof resolveProduce !== 'function' && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+  assert.equal(typeof resolveProduce, 'function', 'initial publish reached produce');
+  // Simulate stopScreenShare's synchronous prefix while produce is pending.
+  voice._screenStartOperation = 1;
+  voice.isScreenSharing = false;
+  resolveProduce();
+  await initial;
+  assert.deepEqual([...producers.keys()], [], 'late producer cleaned up by identity');
+  assert.equal(voice._lastRelayScreenBitrateKey, undefined, 'stale key not committed');
+});
+
+test('a change during the initial produce is applied after, never lost', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = {
+    getVideoTracks: () => [track],
+    getTracks: () => [track],
+    getAudioTracks: () => []
+  };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._screenStartOperation = 0;
+  voice._relayBitrateDebounceMs = 0;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = undefined;
+  const producers = new Map();
+  const publishedCaps = [];
+  let resolveProduce;
+  let n = 0;
+  voice._relay = {
+    producers,
+    hasPublished: (s) => { const p = producers.get(s); return !!p && !p.closed; },
+    unpublish: async (s) => { producers.delete(s); },
+    unpublishIf: async (s, producer) => {
+      if (!producer || producers.get(s) !== producer) return false;
+      producers.delete(s);
+      return true;
+    },
+    publish: (s, t, opts) => {
+      publishedCaps.push(opts.maxBitrate);
+      if (resolveProduce === undefined && s === 'screen' && publishedCaps.length === 1) {
+        return new Promise((resolve) => {
+          resolveProduce = () => {
+            n += 1;
+            const p = { id: `p${n}`, closed: false, close() {} };
+            producers.set(s, p);
+            resolve(p);
+          };
+        });
+      }
+      n += 1;
+      const p = { id: `p${n}`, closed: false, close() {} };
+      producers.set(s, p);
+      return Promise.resolve(p);
+    }
+  };
+  // Serialized: the initial publish runs first...
+  const initial = voice._relayScreenEnqueue(() => voice._publishInitialRelayScreen());
+  const deadline = Date.now() + 1000;
+  while (typeof resolveProduce !== 'function' && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+  assert.equal(typeof resolveProduce, 'function', 'initial publish reached produce');
+  // ...a change lands while produce is pending: its republish queues behind
+  // the initial instead of racing it and getting dropped.
+  voice.screenBitrate = 9000;
+  voice.reapplyScreenBitrate();
+  resolveProduce();
+  await initial;
+  const doneBy = Date.now() + 1000;
+  while (voice._lastRelayScreenBitrateKey !== 9_000_000 && Date.now() < doneBy) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.deepEqual(publishedCaps, [8_000_000, 9_000_000], 'initial cap then the newer one, nothing lost');
+  assert.equal(voice._lastRelayScreenBitrateKey, 9_000_000);
+  assert.equal(producers.size, 1, 'exactly one live producer');
+});
+
+test('relay screen mutations never interleave', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const order = [];
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const first = voice._relayScreenEnqueue(async () => { order.push('first-start'); await gate; order.push('first-end'); return 'a'; });
+  const second = voice._relayScreenEnqueue(async () => { order.push('second'); return 'b'; });
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepEqual(order, ['first-start'], 'second waits for first');
+  release();
+  assert.deepEqual(await Promise.all([first, second]), ['a', 'b']);
+  assert.deepEqual(order, ['first-start', 'first-end', 'second']);
+});
+
+test('a failed relay-restart publish recovers on the next change', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = {
+    getVideoTracks: () => [track],
+    getTracks: () => [track],
+    getAudioTracks: () => []
+  };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = undefined;
+  let live = false;
+  let publishes = 0;
+  voice._relay = {
+    hasPublished: () => live,
+    unpublish: async () => { live = false; },
+    publish: async (source, t, opts) => {
+      publishes += 1;
+      if (publishes === 1) throw new Error('restart racing');
+      live = true;
+      return { id: 'p2' };
+    }
+  };
+  await voice._publishRelayTracks();
+  assert.equal(publishes, 1);
+  assert.equal(voice._lastRelayScreenBitrateKey, undefined, 'failed restart records no key');
+  assert.equal(voice._relayScreenNeedsPublish, true, 'failed restart flags recovery');
+  voice.screenBitrate = 6000;
+  await voice._republishRelayScreenBitrate();
+  assert.equal(publishes, 2, 'the next change recovers the missing producer');
+  assert.equal(voice._lastRelayScreenBitrateKey, 6_000_000);
+  assert.equal(voice._relayScreenNeedsPublish, false);
+  assert.equal(live, true);
+});
+
+test('stopping during the initial audio publish leaves no audio orphan', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const videoTrack = { kind: 'video', readyState: 'live' };
+  const audioTrack = { kind: 'audio', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = {
+    getVideoTracks: () => [videoTrack],
+    getTracks: () => [videoTrack, audioTrack],
+    getAudioTracks: () => [audioTrack]
+  };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._screenStartOperation = 0;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  const producers = new Map();
+  let n = 0;
+  let resolveAudio;
+  voice._relay = {
+    producers,
+    hasPublished: (s) => { const p = producers.get(s); return !!p && !p.closed; },
+    unpublish: async (s) => { producers.delete(s); },
+    unpublishIf: async (s, producer) => {
+      if (!producer || producers.get(s) !== producer) return false;
+      producers.delete(s);
+      return true;
+    },
+    publish: (s, t, opts) => {
+      if (s === 'screen-audio' && typeof resolveAudio !== 'function') {
+        return new Promise((resolve) => {
+          resolveAudio = () => {
+            n += 1;
+            const p = { id: `pa${n}`, closed: false, close() {} };
+            producers.set(s, p);
+            resolve(p);
+          };
+        });
+      }
+      n += 1;
+      const p = { id: `p${n}`, closed: false, close() {} };
+      producers.set(s, p);
+      return Promise.resolve(p);
+    }
+  };
+  const initial = voice._publishInitialRelayScreen();
+  const deadline = Date.now() + 1000;
+  while (typeof resolveAudio !== 'function' && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+  assert.equal(typeof resolveAudio, 'function', 'initial publish reached audio produce');
+  // Simulate stopScreenShare's synchronous prefix while audio produce pends.
+  // (The video producer stays: removing it is stop's own unpublish job.)
+  voice._screenStartOperation = 1;
+  voice.isScreenSharing = false;
+  resolveAudio();
+  await initial;
+  assert.equal(producers.has('screen-audio'), false, 'late audio producer cleaned up');
+  assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000, 'video key committed while valid');
 });
 
 test('keyframe requests only touch screen video senders', () => {

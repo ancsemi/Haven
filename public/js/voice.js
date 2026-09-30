@@ -68,7 +68,6 @@ class VoiceManager {
     this.onScreenShareStarted = null; // callback(userId, username) — someone started streaming
     this.onWebcamStatusChange = null; // callback() — webcam started/stopped, re-render user list
     this.onConnectivityWarning = null; // (#5399) callback(message) — fired when no STUN server responds
-    this.onScreenShareWarning = null; // callback() — reserved for screen share interruptions
     this._connectivityWarned = false;  // only warn once per session to avoid toast spam
     this.deafenedUsers = new Set();   // userIds we've muted our audio towards
     this._localTalkInterval = null;
@@ -96,9 +95,28 @@ class VoiceManager {
     this.screenFrameRate = parseInt(localStorage.getItem('haven_screen_fps') || '60', 10) || 60;
     // User bitrate cap in kbps (0 = unlimited). Stepper in Settings moves in
     // 100 kbps steps between 300 and 10000; anything above wraps to unlimited.
+    // Default 8000 restores the #5379 1080p ceiling for people who never
+    // touched the setting (Source/60 needs at least that on 1440p/4K).
     this.screenBitrate = this._normalizeScreenBitrate(
       localStorage.getItem('haven_screen_bitrate')
     );
+    // Relay republish debounce (maintainer review on #5672): direct peers get
+    // setParameters immediately, but the relay producer teardown/re-create is
+    // debounced until 750 ms after the last change, with latest-wins.
+    this._relayBitrateTimer = null;
+    this._relayRepublishInFlight = false;
+    this._pendingRelayRepublish = false;
+    this._relayBitrateDebounceMs = 750;
+    // Base delay (ms) for the bounded republish retry after a failed relay
+    // publish; multiplied by the attempt number (linear backoff).
+    this._relayPublishRetryBaseMs = 500;
+    // Serializes relay screen-producer mutations (initial publish vs bitrate
+    // re-produce) so two produce() calls can never interleave and hijack each
+    // other's producer entry (#5672 review, round 2). Promise chain tail.
+    this._relayScreenQueue = null;
+    // Set when the initial screen publish failed: the recovery path in
+    // _republishRelayScreenBitrate may then publish even with no key recorded.
+    this._relayScreenNeedsPublish = false;
 
     // The old per-resolution bitrate table was replaced by the user bitrate
     // setting (screenBitrate, 300–10000 Kbps + unlimited). Relayed peers still
@@ -2001,6 +2019,79 @@ class VoiceManager {
 
   // ── Screen Sharing ──────────────────────────────────────
 
+  // Serial executor for relay screen-producer mutations. The initial publish
+  // and bitrate re-produces must never run concurrently: with two produce()
+  // calls in flight the late one overwrites the early one's map entry (or
+  // replaceTracks onto its producer), and the stale side's cleanup then kills
+  // the new share's producer (#5672 review, round 2). Every operation still
+  // re-reads the latest cap/track when it runs, so serialization alone
+  // converges on the newest state. The stored tail never rejects, so one
+  // failure cannot stall later operations.
+  _relayScreenEnqueue(fn) {
+    const prev = this._relayScreenQueue || Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+    this._relayScreenQueue = next.catch(() => {});
+    return next;
+  }
+
+  // Initial relay publish for a new share. Reads the bitrate cap fresh instead
+  // of reusing the value captured before renegotiations: the user may have
+  // moved the stepper while they were in flight, and the debounced update
+  // scheduled by that change returns early (no producer yet), so publishing
+  // with the stale value would stick until the next change (#5672 review).
+  // Any timer armed mid-startup is dropped — this publish already carries the
+  // latest cap, so a re-produce would be pure churn; later changes re-arm it.
+  // The key is recorded only after a successful publish so a failed start
+  // leaves truthful state for the recovery path in _republishRelayScreenBitrate.
+  // A stop (or new share) mid-publish is detected via the operation guard and
+  // cleans up exactly the producer created here, never the new share's.
+  async _publishInitialRelayScreen() {
+    const relay = this._relay;
+    if (!relay || !this.isScreenSharing || !this.screenStream) return;
+    const op = this._screenStartOperation;
+    this._cancelRelayScreenRepublish?.();
+    const v = this.screenStream.getVideoTracks()[0];
+    const a = this.screenStream.getAudioTracks()[0];
+    const stale = () => relay !== this._relay || op !== this._screenStartOperation ||
+      !this.isScreenSharing || this.screenStream?.getVideoTracks()[0] !== v;
+    const dropIfStale = async (producer, source) => {
+      if (!stale()) return false;
+      try {
+        if (producer && relay.producers?.get?.(source) === producer &&
+            typeof relay.unpublishIf === 'function') {
+          await relay.unpublishIf(source, producer).catch(() => {});
+        } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
+          await relay.unpublish(source).catch(() => {});
+        }
+      } catch {}
+      return true;
+    };
+    const { opts: screenOpts, key: relayKey } = this._relayScreenOpts();
+    if (v) {
+      let producer = null;
+      try {
+        producer = await relay.publish('screen', v, screenOpts);
+      } catch (e) {
+        console.warn('[Relay] Screen not sent:', e?.message || e);
+        if (!stale()) this._relayScreenNeedsPublish = true;
+      }
+      if (producer) {
+        if (await dropIfStale(producer, 'screen')) return;
+        this._lastRelayScreenBitrateKey = relayKey;
+        this._relayScreenNeedsPublish = false;
+      }
+    }
+    if (a && !stale()) {
+      let audioProducer = null;
+      try {
+        audioProducer = await relay.publish('screen-audio', a);
+      } catch (err) { console.warn('[Relay] Screen audio not sent:', err.message); }
+      // Same orphan race as the video above: a stop resolving while produce()
+      // was pending must not leave a late audio producer live.
+      await dropIfStale(audioProducer, 'screen-audio');
+    }
+  }
+
   async shareScreen() {
     if (!this.inVoice || this.socket?.connected === false || this.isScreenSharing ||
         this._screenStartInFlight || this._pendingScreenStop) return false;
@@ -2128,14 +2219,11 @@ class VoiceManager {
         renegotiations.push(this._renegotiate(userId, peer.connection));
       }
       await Promise.all(renegotiations);
-      if (this._relay) {
-        const v = this.screenStream.getVideoTracks()[0];
-        const a = this.screenStream.getAudioTracks()[0];
-        const { opts: screenOpts, key: relayKey } = this._relayScreenOpts(maxBitrate);
-        this._lastRelayScreenBitrateKey = relayKey;
-        if (v) await this._relay.publish('screen', v, screenOpts).catch(e => console.warn('[Relay] Screen not sent:', e.message));
-        if (a) await this._relay.publish('screen-audio', a).catch(e => console.warn('[Relay] Screen audio not sent:', e.message));
-      }
+      // Publish the screen to the relay with a freshly-read cap (see
+      // _publishInitialRelayScreen for why the pre-renegotiation value is
+      // not reused here). Enqueued so it can never interleave with a
+      // concurrent bitrate re-produce and hijack its producer entry.
+      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen());
       // Hardware encoders (notably H.264 on GPU) can take a long time to emit
       // the first keyframe, and the setParameters call above can restart the
       // encoder mid-negotiation. Viewers whose decoder never got an IDR show a
@@ -2168,11 +2256,19 @@ class VoiceManager {
   async stopScreenShare({ teardown = false } = {}) {
     if (!this.isScreenSharing) return;
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
+    this._cancelRelayScreenRepublish?.();
     if (this._relay) {
       await this._relay.unpublish('screen').catch(() => {});
       await this._relay.unpublish('screen-audio').catch(() => {});
     }
     this._lastRelayScreenBitrateKey = undefined;
+    this._relayScreenNeedsPublish = false;
+    // NOTE: _relayRepublishInFlight is deliberately left alone here. An
+    // in-flight republish finishes under its own guards (operation check +
+    // producer-identity cleanup) instead of being unblocked into a concurrent
+    // publish; _pendingRelayRepublish is dropped because it belonged to the
+    // dying share.
+    this._pendingRelayRepublish = false;
     this._screenStartInFlight = false;
 
     if (!this.screenStream) return;
@@ -2395,10 +2491,11 @@ class VoiceManager {
 
   // Bitrate cap in kbps (0 = unlimited). Anything outside 300–10000 wraps:
   // below clamps to 300, above wraps to unlimited (the + stepper's top stop).
+  // Default 8000 keeps the #5379 1080p ceiling for fresh profiles.
   _normalizeScreenBitrate(value) {
-    if (value === null || value === undefined || value === '') return 4000;
+    if (value === null || value === undefined || value === '') return 8000;
     const n = parseInt(value, 10);
-    if (!Number.isSafeInteger(n) || n < 0) return 4000;
+    if (!Number.isSafeInteger(n) || n < 0) return 8000;
     if (n === 0) return 0;
     if (n < 300) return 300;
     if (n > 10000) return 0;
@@ -2535,46 +2632,170 @@ class VoiceManager {
     }
     // The user cap is the only ceiling on direct paths. 0 = unlimited →
     // null, meaning "leave the sender uncapped".
-    const user = Number.isSafeInteger(this.screenBitrate) ? this.screenBitrate : 4000;
+    const user = Number.isSafeInteger(this.screenBitrate) ? this.screenBitrate : 8000;
     return user > 0 ? user * 1000 : null;
   }
 
   // Re-apply the current cap to every peer, for when the toggle changes while
-  // a share is already running.
+  // a share is already running. Direct peers get setParameters immediately
+  // (cheap); the relay producer re-create is debounced (see below).
   reapplyScreenBitrate() {
     if (!this.isScreenSharing) return;
     const maxBitrate = this._screenBitrateFor(this.screenResolution);
     for (const [userId, peer] of this.peers) {
       this._applyScreenBitrate(peer.connection, maxBitrate, userId);
     }
-    // Relayed viewers don't read sender caps: the relay's producer was fixed
-    // at publish time (publish() only replaceTracks an existing producer),
-    // so re-produce the screen source with the new cap. Fire-and-forget —
-    // viewers see a sub-second freeze instead of a permanently stale cap.
-    this._republishRelayScreenBitrate(maxBitrate).catch(() => {});
+    this._scheduleRelayScreenRepublish();
+  }
+
+  // Debounced relay republish (#5672 review): holding the stepper fires
+  // setScreenBitrate every 80 ms, and each relay re-produce tears the
+  // producer down. Wait until 750 ms after the last change so a hold turns
+  // into a single re-produce with the final value.
+  _scheduleRelayScreenRepublish() {
+    if (!this.isScreenSharing || !this._relay) return;
+    try { clearTimeout(this._relayBitrateTimer); } catch {}
+    this._relayBitrateTimer = null;
+    const delay = Number.isSafeInteger(this._relayBitrateDebounceMs)
+      ? this._relayBitrateDebounceMs
+      : 750;
+    if (delay <= 0) {
+      this._republishRelayScreenBitrate().catch(() => {});
+      return;
+    }
+    this._relayBitrateTimer = setTimeout(() => {
+      this._relayBitrateTimer = null;
+      this._republishRelayScreenBitrate().catch(() => {});
+    }, delay);
+  }
+
+  _cancelRelayScreenRepublish() {
+    try { clearTimeout(this._relayBitrateTimer); } catch {}
+    this._relayBitrateTimer = null;
+    this._pendingRelayRepublish = false;
   }
 
   // Options for the relayed screen producer, shared by the initial publish
   // and live bitrate updates so both agree on what "current" means. The key
   // lets updates skip a disruptive re-produce when nothing changed.
+  //
+  // "Unlimited" (null/0) gets an explicit high cap instead of omitting
+  // maxBitrate: voice-relay.js falls back to `maxBitrate || 2500000`, so an
+  // omitted cap would pin an unlimited share to 2.5 Mbps — below the default.
+  // 14 Mbps matches the old #5379 1440p ceiling (the highest pre-stepper cap)
+  // and sits above the stepper's 10 Mbps top stop.
   _relayScreenOpts(maxBitrate = this._screenBitrateFor(this.screenResolution)) {
-    const opts = { simulcast: true };
-    if (maxBitrate) opts.maxBitrate = maxBitrate;
-    return { opts, key: maxBitrate || 0 };
+    const UNLIMITED_RELAY_CAP = 14_000_000;
+    const effective = maxBitrate || UNLIMITED_RELAY_CAP;
+    return { opts: { simulcast: true, maxBitrate: effective }, key: effective };
   }
 
-  async _republishRelayScreenBitrate(maxBitrate) {
-    const relay = this._relay;
-    if (!relay || !this.isScreenSharing || !this.screenStream) return;
-    if (!relay.hasPublished?.('screen')) return;
-    const v = this.screenStream.getVideoTracks()[0];
-    if (!v || v.readyState !== 'live') return;
-    const { opts, key } = this._relayScreenOpts(maxBitrate);
-    if (key === this._lastRelayScreenBitrateKey) return;
-    this._lastRelayScreenBitrateKey = key;
-    await relay.unpublish('screen');
-    if (!this.isScreenSharing || this.screenStream?.getVideoTracks()[0] !== v) return;
-    await relay.publish('screen', v, opts);
+  // Latest-wins republish (#5672 review): the pre-debounce version did
+  // `await unpublish()` with hasPublished checked only before it, so a
+  // bitrate change landing mid-republish hit the hasPublished early-return
+  // and was dropped, leaving the relay on the in-between value. Now an
+  // overlapping request only sets _pendingRelayRepublish and the loop
+  // re-reads the current settings after each await, so the final publish
+  // always carries the newest cap.
+  //
+  // Recovery: if a previous publish failed after the unpublish (producer
+  // missing but a key recorded), this publishes instead of returning early —
+  // otherwise one transient failure strands the share unpublished until the
+  // next user change. Publish failures retry bounded (3x, linear backoff)
+  // while the same share is live. The key is committed only after a
+  // successful publish so a failed attempt retries instead of looking done.
+  //
+  // Stale successes (stop, relay restart, or a new share mid-publish) remove
+  // exactly the producer created here (identity check via unpublishIf) so no
+  // orphan stays live and a new share's producer is never touched. The whole
+  // body runs inside _relayScreenEnqueue so it can never interleave with the
+  // initial publish and hijack its producer entry.
+  async _republishRelayScreenBitrate() {
+    if (this._relayRepublishInFlight) {
+      this._pendingRelayRepublish = true;
+      return;
+    }
+    this._relayRepublishInFlight = true;
+    try {
+      await this._relayScreenEnqueue(() => this._republishRelayScreenInner());
+    } finally {
+      this._relayRepublishInFlight = false;
+      // A change that landed while the last attempt was finishing (e.g. a new
+      // share whose update found us in-flight) must not be lost with no timer
+      // left to fire: run once more while the share is live.
+      if (this._pendingRelayRepublish && this.isScreenSharing && this._relay) {
+        this._pendingRelayRepublish = false;
+        this._republishRelayScreenBitrate().catch(() => {});
+      }
+    }
+  }
+
+  async _republishRelayScreenInner() {
+    let failures = 0;
+    for (;;) {
+        this._pendingRelayRepublish = false;
+        const op = this._screenStartOperation;
+        const relay = this._relay;
+        if (!relay || !this.isScreenSharing || !this.screenStream) return;
+        const v = this.screenStream.getVideoTracks()[0];
+        if (!v || v.readyState !== 'live') return;
+        // Freshness of this attempt: same relay session, same share, same track.
+        const alive = () => relay === this._relay && op === this._screenStartOperation &&
+          this.isScreenSharing && this.screenStream?.getVideoTracks()[0] === v;
+        const published = !!relay.hasPublished?.('screen');
+        const { opts, key } = this._relayScreenOpts(this._screenBitrateFor(this.screenResolution));
+        // No await has run since _pendingRelayRepublish was cleared, so it is
+        // still false here: an unchanged cap simply has nothing to do.
+        if (published && key === this._lastRelayScreenBitrateKey) return;
+        if (published) {
+          // Conditional teardown: never remove a producer we did not intend
+          // to replace (e.g. a new share published concurrently).
+          const prev = relay.producers?.get?.('screen');
+          if (prev && typeof relay.unpublishIf === 'function') {
+            const removed = await relay.unpublishIf('screen', prev).catch(() => false);
+            if (!removed) return;
+          } else {
+            await relay.unpublish('screen');
+          }
+          // Stop, relay restart, or a new share started mid-flight: don't
+          // re-publish stale state.
+          if (!alive()) return;
+        } else if (this._lastRelayScreenBitrateKey == null && !this._relayScreenNeedsPublish) {
+          return; // never published: the initial-publish path owns it
+        }
+        // Re-read before publishing: a change that arrived during the
+        // unpublish await wins over the value captured above.
+        const fresh = this._relayScreenOpts(this._screenBitrateFor(this.screenResolution));
+        let producer = null;
+        try {
+          producer = await relay.publish('screen', v, fresh.opts);
+        } catch (err) {
+          try { console.warn('[Relay] Screen bitrate update failed:', err?.message || err); } catch {}
+          failures += 1;
+          if (failures > 3) return;
+          if (!alive()) return;
+          const base = this._relayPublishRetryBaseMs ?? 500;
+          await new Promise(r => setTimeout(r, base * failures));
+          continue;
+        }
+        failures = 0;
+        if (!alive()) {
+          try {
+            if (producer && relay.producers?.get?.('screen') === producer &&
+                typeof relay.unpublishIf === 'function') {
+              await relay.unpublishIf('screen', producer).catch(() => {});
+            } else if (producer && !relay.producers && typeof relay.unpublish === 'function') {
+              // Sessions without a visible producer map (test mocks): fall
+              // back to a plain unpublish. Real sessions expose producers.
+              await relay.unpublish('screen').catch(() => {});
+            }
+          } catch {}
+          return;
+        }
+        this._lastRelayScreenBitrateKey = fresh.key;
+        this._relayScreenNeedsPublish = false;
+        if (!this._pendingRelayRepublish) return;
+      }
   }
 
   _applyScreenBitrate(connection, maxBitrate, userId = this._peerIdForConnection(connection)) {
@@ -3210,6 +3431,7 @@ class VoiceManager {
 
   _closeRelay() {
     clearTimeout(this._relayRetryTimer);
+    this._cancelRelayScreenRepublish?.();
     const session = this._relay;
     this._relay = null;
     if (session) session.close();
@@ -3222,14 +3444,10 @@ class VoiceManager {
     const mic = this.localStream?.getAudioTracks()[0];
     if (mic && !this.isListenerOnly) await relay.publish('mic', mic).catch(err => console.warn('[Relay] Mic not sent:', err.message));
     if (this.isScreenSharing && this.screenStream) {
-      const v = this.screenStream.getVideoTracks()[0];
-      const a = this.screenStream.getAudioTracks()[0];
-      // An uncapped (unlimited) share omits maxBitrate rather than sending
-      // zero/null, which the relay would read as "send nothing".
-      const { opts: screenOpts, key: relayKey } = this._relayScreenOpts();
-      this._lastRelayScreenBitrateKey = relayKey;
-      if (v) await relay.publish('screen', v, screenOpts).catch(err => console.warn('[Relay] Screen not sent:', err.message));
-      if (a) await relay.publish('screen-audio', a).catch(err => console.warn('[Relay] Screen audio not sent:', err.message));
+      // Same guarded, serialized, fresh-cap publish as a new share: a relay
+      // (re)start can race a stop or a bitrate change exactly like shareScreen
+      // can, so it must not publish inline (#5672 review, round 3).
+      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen());
     }
     const cam = this.isWebcamActive && this.webcamStream?.getVideoTracks()[0];
     if (cam) await relay.publish('webcam', cam).catch(err => console.warn('[Relay] Camera not sent:', err.message));

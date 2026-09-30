@@ -1509,7 +1509,13 @@ _setupUI() {
       return;
     }
     this.voice.setScreenBitrate(parsed);
-    if (bitrateValue && 'value' in bitrateValue) bitrateValue.blur?.();
+    // The programmatic blur below re-fires the blur listener: suppress that
+    // second commit (Enter confirmed once already). The flag wraps a
+    // synchronous blur() dispatch.
+    if (bitrateValue && 'value' in bitrateValue) {
+      bitrateBlurSuppressed = true;
+      try { bitrateValue.blur?.(); } finally { bitrateBlurSuppressed = false; }
+    }
     renderBitrate(this.voice.screenBitrate);
   };
   const stepBitrate = (dir) => {
@@ -1573,17 +1579,39 @@ _setupUI() {
     renderBitrate(this.voice.screenBitrate);
     holdRepeat(bitrateMinus, -1);
     holdRepeat(bitratePlus, +1);
+    // Escape discards the typed text instead of confirming it: without this
+    // flag the blur() below would run commitBitrateInput() and apply the
+    // very value the user was cancelling (renderBitrate skips focused inputs).
+    let bitrateEscapePressed = false;
+    let bitrateBlurSuppressed = false;
+    const restoreBitrateDisplay = () => {
+      const kbps = this.voice.screenBitrate;
+      if ('value' in bitrateValue) {
+        bitrateValue.value = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+      } else {
+        bitrateValue.textContent = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
+      }
+    };
     bitrateValue.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         commitBitrateInput();
       } else if (e.key === 'Escape') {
-        renderBitrate(this.voice.screenBitrate);
+        bitrateEscapePressed = true;
+        restoreBitrateDisplay();
         bitrateValue.blur?.();
       }
       e.stopPropagation();
     });
-    bitrateValue.addEventListener('blur', commitBitrateInput);
+    bitrateValue.addEventListener('blur', () => {
+      if (bitrateEscapePressed) {
+        bitrateEscapePressed = false;
+        restoreBitrateDisplay();
+        return;
+      }
+      if (bitrateBlurSuppressed) return; // Enter already committed
+      commitBitrateInput();
+    });
     bitrateValue.addEventListener('focus', () => {
       try { bitrateValue.select?.(); } catch {}
     });
@@ -1659,15 +1687,6 @@ _setupUI() {
   // staring at "ICE: Connecting..." with no clue why (#5399).
   this.voice.onConnectivityWarning = (msg) => {
     this._showToast(msg, 'error', null, 12000);
-  };
-  this.voice.onScreenShareWarning = () => {
-    const button = document.getElementById('screen-share-btn');
-    if (button) {
-      button.textContent = '🖥️';
-      button.title = t('voice.screen_share');
-      button.classList.remove('sharing');
-    }
-    this._showToast(t('voice.screen_share_cancelled'), 'error', null, 12000);
   };
 
   // Wire up talking indicator
