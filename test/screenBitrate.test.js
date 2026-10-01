@@ -301,6 +301,65 @@ test('a persistently failing publish gives up after 3 retries', async () => {
   assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000, 'key untouched so a later change recovers');
 });
 
+test('a stop during retry backoff aborts instead of publishing into teardown', async () => {
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track], getAudioTracks: () => [] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 6000;
+  voice._screenStartOperation = 0;
+  voice._relayBitrateDebounceMs = 0;
+  voice._relayPublishRetryBaseMs = 30;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  voice._relayScreenNeedsPublish = true; // recovery path: publish despite no live producer
+  let publishes = 0;
+  const actions = [];
+  voice._relay = {
+    hasPublished: () => false,
+    unpublish: async () => {},
+    publish: async (source, t, opts) => {
+      publishes += 1;
+      actions.push(['publish', source, opts.maxBitrate]);
+      if (publishes === 1) throw new Error('transport restarting');
+      return { id: `p${publishes}`, closed: false, close() {} };
+    }
+  };
+  try {
+    const republish = voice._republishRelayScreenBitrate();
+    // Let the first attempt fail so the retry is sleeping in backoff, then
+    // simulate stopScreenShare's synchronous prefix (op bumps while
+    // isScreenSharing is still true — stop awaits its unpublish first).
+    await new Promise(resolve => setTimeout(resolve, 10));
+    voice._screenStartOperation = 1;
+    await republish;
+    assert.equal(publishes, 1, 'retry woke up under the teardown generation and aborted');
+    assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000, 'stale key not committed');
+    // The next share starts clean: its initial publish produces instead of
+    // landing on a producer the aborted retry created mid-teardown.
+    const track2 = { kind: 'video', readyState: 'live' };
+    voice.screenStream = { getVideoTracks: () => [track2], getTracks: () => [track2], getAudioTracks: () => [] };
+    voice.isScreenSharing = true;
+    voice._screenStartOperation = 2;
+    voice._relayScreenNeedsPublish = false;
+    voice._lastRelayScreenBitrateKey = undefined;
+    voice.screenBitrate = 8000;
+    await voice._publishInitialRelayScreen();
+    assert.equal(publishes, 2, 'new share publishes once');
+    assert.deepEqual(actions[1], ['publish', 'screen', 8_000_000]);
+    assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000);
+  } finally {
+    try { clearTimeout(voice._relayBitrateTimer); } catch {}
+  }
+});
+
 test('stopping mid-publish removes the orphan instead of leaving it live', async () => {
   const { VoiceManager } = loadVoiceManager();
   const voice = Object.create(VoiceManager.prototype);

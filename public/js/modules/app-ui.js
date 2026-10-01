@@ -1555,7 +1555,12 @@ _setupUI() {
       const cur = this.voice.screenBitrate || 0;
       let next;
       if (dir < 0) {
-        next = cur === 0 ? 10000 : cur - magnitude;
+        // From unlimited, step down into the top of the range; from a capped
+        // value, saturate at the 300 floor. A raw `cur - magnitude` can land
+        // exactly on 0 (e.g. 400 − 400), which means unlimited — a hold
+        // sliding down must never jump to uncapped.
+        if (cur === 0) next = 10000;
+        else next = Math.max(300, cur - magnitude);
       } else {
         next = cur === 0 ? 300 : cur + magnitude;
       }
@@ -1563,31 +1568,67 @@ _setupUI() {
       renderBitrate(this.voice.screenBitrate);
     };
     let pressed = false;
+    // Active pointer for the current press: a second finger's pointerdown is
+    // ignored instead of overwriting `timer` and leaking the first press's
+    // timeout (which would arm an interval after both fingers lifted).
+    let activePointerId = null;
     button.addEventListener('pointerdown', (e) => {
+      if (activePointerId !== null) return; // multitouch: keep the first press
       e.preventDefault();
+      activePointerId = e.pointerId ?? 'mouse';
       pressed = true;
       stepBitrate(dir); // immediate single step on press
       timer = setTimeout(() => {
         interval = setInterval(tick, 80);
       }, 400);
     });
-    // Keyboard activation (Enter/Space) fires click without pointerdown.
-    button.addEventListener('click', () => {
+    // Keyboard activation (Enter/Space) fires click with detail === 0 and no
+    // pointerdown. Pointer clicks carry detail >= 1. Checking detail (not just
+    // `pressed`) means a stale `pressed` from a drag-off release can never
+    // swallow the next keyboard activation, while a pointer click following
+    // its own pointerdown is still consumed exactly once — including the
+    // touch sequence pointerup → pointerleave → click.
+    button.addEventListener('click', (e) => {
+      if (e && e.detail === 0) {
+        pressed = false;
+        activePointerId = null;
+        stepBitrate(dir);
+        return;
+      }
       if (pressed) { pressed = false; return; }
       stepBitrate(dir);
     });
-    // pointerup is followed by click, which consumes `pressed` below — so it
-    // must not clear the flag, or every mouse click would step twice (the
-    // pointerdown step plus the click step). pointerleave/pointercancel are
-    // not followed by click, so a stale `pressed` would swallow the next
-    // keyboard activation: clear it there.
-    button.addEventListener('pointerup', stop);
-    for (const event of ['pointerleave', 'pointercancel']) {
-      button.addEventListener(event, () => {
-        pressed = false;
-        stop();
-      });
-    }
+    const clearPress = (e) => {
+      // Only the press's own pointer may end it; another pointer's leave must
+      // not disarm the active hold.
+      if (e && e.pointerId !== undefined && activePointerId !== null &&
+          e.pointerId !== activePointerId) return;
+      activePointerId = null;
+      stop();
+    };
+    // pointerup is followed by click, which consumes `pressed` above — the
+    // flag itself is left for click, but the timers stop here. pointerleave
+    // must NOT clear `pressed`: on touch the sequence is pointerup →
+    // pointerleave → click, so clearing on leave would double-step.
+    // pointercancel is never followed by click, so it clears both.
+    button.addEventListener('pointerup', clearPress);
+    button.addEventListener('pointerleave', (e) => {
+      // End the hold timers and release the pointer guard so the next press
+      // works even after a drag-off release outside the button (which sends
+      // no pointerup/click here). `pressed` is deliberately kept for the
+      // trailing click: on touch the sequence is pointerup → pointerleave →
+      // click, so clearing it here would double-step. A stale `pressed` with
+      // no click coming is harmless — the next keyboard click (detail === 0)
+      // steps regardless.
+      if (e && e.pointerId !== undefined && activePointerId !== null &&
+          e.pointerId !== activePointerId) return;
+      activePointerId = null;
+      stop();
+    });
+    button.addEventListener('pointercancel', (e) => {
+      pressed = false;
+      clearPress(e);
+    });
   };
   if (bitrateMinus && bitratePlus && bitrateValue) {
     renderBitrate(this.voice.screenBitrate);

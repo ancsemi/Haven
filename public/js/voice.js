@@ -2743,14 +2743,27 @@ class VoiceManager {
   }
 
   async _republishRelayScreenInner() {
+    // Generation captured once: a stop/new-share/relay-restart that lands
+    // during the backoff await must abort instead of being adopted. Re-reading
+    // _screenStartOperation each iteration let a retry wake up under the new
+    // generation while stop was still awaiting its unpublish (isScreenSharing
+    // still true) and publish into the teardown, poisoning the next share's
+    // producer entry (replaceTrack instead of produce).
+    const entryOp = this._screenStartOperation;
+    const entryRelay = this._relay;
+    const entryTrack = this.screenStream?.getVideoTracks?.()[0];
     let failures = 0;
     for (;;) {
         this._pendingRelayRepublish = false;
-        const op = this._screenStartOperation;
+        // Stop, new share, or relay restart since entry: never publish stale.
+        if (this._screenStartOperation !== entryOp || this._relay !== entryRelay) return;
+        const op = entryOp;
         const relay = this._relay;
         if (!relay || !this.isScreenSharing || !this.screenStream) return;
         const v = this.screenStream.getVideoTracks()[0];
         if (!v || v.readyState !== 'live') return;
+        // Same share AND same generation as entry (track swap = new capture).
+        if (v !== entryTrack) return;
         // Freshness of this attempt: same relay session, same share, same track.
         const alive = () => relay === this._relay && op === this._screenStartOperation &&
           this.isScreenSharing && this.screenStream?.getVideoTracks()[0] === v;
@@ -2776,7 +2789,9 @@ class VoiceManager {
           return; // never published: the initial-publish path owns it
         }
         // Re-read before publishing: a change that arrived during the
-        // unpublish await wins over the value captured above.
+        // unpublish await wins over the value captured above. A share that
+        // ended mid-flight must not re-publish (alive covers stop/new share).
+        if (!alive()) return;
         const fresh = this._relayScreenOpts(this._screenBitrateFor(this.screenResolution));
         let producer = null;
         try {
@@ -2790,6 +2805,9 @@ class VoiceManager {
           await new Promise(r => setTimeout(r, base * failures));
           continue;
         }
+        // NOTE: a falsy resolve is treated as success (key commit) — the real
+        // adapter only returns null when track is null, which callers exclude
+        // (v is checked live above); produce failures throw and retry above.
         failures = 0;
         if (!alive()) {
           try {
