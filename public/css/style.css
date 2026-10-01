@@ -17125,7 +17125,7 @@ ul.chat-list { list-style-type: disc; }
   flex: 1;
 }
 /* Expand scroll area to include scrolling join/create channel sections when screen height is short*/
-@media (max-height: 400px) {
+@media (max-height: 500px) {
   .sidebar-mod-container {
     overflow: auto;
     display: block;
@@ -17325,6 +17325,7 @@ ul.chat-list { list-style-type: disc; }
   flex: 1;
   min-height: 0;
   flex-direction: column;
+  overflow: auto;
 }
 
 /* Channels pane (top) */
