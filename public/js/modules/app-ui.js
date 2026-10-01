@@ -2135,6 +2135,33 @@ _setupUI() {
     window.location.href = '/';
   });
 
+  // channel tabs
+  function setChannelTab(tab) {
+    localStorage.setItem("activeChannelTab", tab);
+
+    document.querySelectorAll("[data-channel-tab]").forEach(function(button) {
+      button.classList.toggle(
+        "active",
+        button.dataset.channelTab === tab
+      );
+    });
+
+    if (tab === "channels") {
+      channelsPane.classList.remove("pane-hidden");
+      dmPane.classList.add("pane-hidden");
+    } else if (tab === "DMs") {
+      channelsPane.classList.add("pane-hidden");
+      dmPane.classList.remove("pane-hidden");
+    }
+  }
+  setChannelTab(localStorage.getItem("activeChannelTab") || "channels");
+
+  document.querySelectorAll("[data-channel-tab]").forEach(function(button) {
+    button.addEventListener("click", function() {
+      setChannelTab(this.dataset.channelTab);
+    });
+  });
+
   // ── Games / Activities system ─────────────────────────────
   // Registry of available games — add new games here
   this._gamesRegistry = [
@@ -5472,8 +5499,6 @@ _applyGuestMode() {
   if (!this.user || !this.user.isGuest) return;
   const dmPane = document.getElementById('dm-pane');
   if (dmPane) dmPane.style.display = 'none';
-  const split = document.getElementById('sidebar-split-handle');
-  if (split) split.style.display = 'none';
   const dmPip = document.getElementById('dm-pip-panel');
   if (dmPip) dmPip.style.display = 'none';
   document.body.classList.add('is-guest');

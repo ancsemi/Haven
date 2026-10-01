@@ -213,7 +213,12 @@
         "text_only": "Text only",
         "delete_title": "Delete template",
         "delete_prompt": "Delete the saved template \"{{name}}\"?"
-      }
+      },
+      "tab": {
+        "channels": "Channels",
+        "dms": "DMs"
+      },
+      "join-create": "Join or create channels"
     },
     "theme": {
       "title": "Theme",
