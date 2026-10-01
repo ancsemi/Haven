@@ -360,6 +360,70 @@ test('a stop during retry backoff aborts instead of publishing into teardown', a
   }
 });
 
+test('a republish queued behind a slow start aborts if stop lands first', async () => {
+  // The identity token is bound at schedule time, not when the queued inner
+  // starts: a stop landing in the serialization queue must invalidate the
+  // wait, otherwise the inner adopts the teardown generation (isScreenSharing
+  // still true while stop awaits its unpublish) and re-produces mid-teardown.
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track], getAudioTracks: () => [] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._screenStartOperation = 0;
+  voice._relayBitrateDebounceMs = 0;
+  voice._relayPublishRetryBaseMs = 5;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  const liveProducer = { id: 'p1', closed: false, close() {} };
+  const producers = new Map([['screen', liveProducer]]);
+  const actions = [];
+  voice._relay = {
+    producers,
+    hasPublished: (s) => { const p = producers.get(s); return !!p && !p.closed; },
+    unpublish: async (s) => { producers.delete(s); actions.push(['unpublish', s]); },
+    unpublishIf: async (s, producer) => {
+      if (!producer || producers.get(s) !== producer) return false;
+      producers.delete(s);
+      actions.push(['unpublishIf', s, producer.id]);
+      return true;
+    },
+    publish: async (s, t, opts) => {
+      actions.push(['publish', s, opts.maxBitrate]);
+      const p = { id: `p${actions.length}`, closed: false, close() {} };
+      producers.set(s, p);
+      return p;
+    }
+  };
+  voice._lastRelayScreenBitrateKey = 8_000_000;
+  try {
+    // Block the serialization queue behind a slow op, then schedule the
+    // republish for the live share (token bound to generation 0)...
+    let releaseQueue;
+    const gate = new Promise(r => { releaseQueue = r; });
+    voice._relayScreenEnqueue(() => gate);
+    voice.screenBitrate = 7500; // genuine pending change: key mismatch is real
+    voice._scheduleRelayScreenRepublish(); // debounce 0 → enqueues behind the gate
+    // ...then stop starts while the republish is still queued (stuck before
+    // its unpublish: op bumped, everything else intact, producer live).
+    voice._screenStartOperation = 1;
+    releaseQueue();
+    await voice._relayScreenEnqueue(() => {});
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(actions, [], 'queued republish adopted nothing, published nothing');
+    assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000, 'stale key not committed');
+    assert.equal(producers.get('screen'), liveProducer, 'live producer untouched');
+  } finally {
+    try { clearTimeout(voice._relayBitrateTimer); } catch {}
+  }
+});
+
 test('stopping mid-publish removes the orphan instead of leaving it live', async () => {
   const { VoiceManager } = loadVoiceManager();
   const voice = Object.create(VoiceManager.prototype);

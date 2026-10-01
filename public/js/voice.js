@@ -106,6 +106,11 @@ class VoiceManager {
     this._relayBitrateTimer = null;
     this._relayRepublishInFlight = false;
     this._pendingRelayRepublish = false;
+    // Share-identity token of the latest deferred republish (see
+    // _scheduleRelayScreenRepublish): revalidated before the re-run so a
+    // request queued under an older generation can never publish under a
+    // newer one.
+    this._pendingRelayToken = null;
     this._relayBitrateDebounceMs = 750;
     // Base delay (ms) for the bounded republish retry after a failed relay
     // publish; multiplied by the attempt number (linear backoff).
@@ -2663,21 +2668,35 @@ class VoiceManager {
   // Debounced relay republish (#5672 review): holding the stepper fires
   // setScreenBitrate every 80 ms, and each relay re-produce tears the
   // producer down. Wait until 750 ms after the last change so a hold turns
-  // into a single re-produce with the final value.
+  // into a single re-produce with the final value. The share identity token
+  // is bound HERE, at schedule time: the republish may wait in the debounce
+  // timer and then in _relayScreenEnqueue behind a slow initial publish, and
+  // a stop landing in either wait must invalidate it. Binding at execution
+  // time would adopt the teardown's generation (isScreenSharing is still
+  // true while stop awaits its unpublish) and publish into the teardown.
+  _relayScreenToken() {
+    return {
+      op: this._screenStartOperation,
+      relay: this._relay,
+      track: this.screenStream?.getVideoTracks?.()[0],
+    };
+  }
+
   _scheduleRelayScreenRepublish() {
     if (!this.isScreenSharing || !this._relay) return;
     try { clearTimeout(this._relayBitrateTimer); } catch {}
     this._relayBitrateTimer = null;
+    const token = this._relayScreenToken();
     const delay = Number.isSafeInteger(this._relayBitrateDebounceMs)
       ? this._relayBitrateDebounceMs
       : 750;
     if (delay <= 0) {
-      this._republishRelayScreenBitrate().catch(() => {});
+      this._republishRelayScreenBitrate(token).catch(() => {});
       return;
     }
     this._relayBitrateTimer = setTimeout(() => {
       this._relayBitrateTimer = null;
-      this._republishRelayScreenBitrate().catch(() => {});
+      this._republishRelayScreenBitrate(token).catch(() => {});
     }, delay);
   }
 
@@ -2685,6 +2704,7 @@ class VoiceManager {
     try { clearTimeout(this._relayBitrateTimer); } catch {}
     this._relayBitrateTimer = null;
     this._pendingRelayRepublish = false;
+    this._pendingRelayToken = null;
   }
 
   // Options for the relayed screen producer, shared by the initial publish
@@ -2722,36 +2742,49 @@ class VoiceManager {
   // orphan stays live and a new share's producer is never touched. The whole
   // body runs inside _relayScreenEnqueue so it can never interleave with the
   // initial publish and hijack its producer entry.
-  async _republishRelayScreenBitrate() {
+  async _republishRelayScreenBitrate(boundToken) {
+    // The token carries the scheduling share's identity (see
+    // _scheduleRelayScreenRepublish): an overlapping request only records
+    // the latest token, and the re-run below revalidates it instead of
+    // adopting whatever generation happens to be live by then.
+    const token = boundToken || this._relayScreenToken();
     if (this._relayRepublishInFlight) {
       this._pendingRelayRepublish = true;
+      this._pendingRelayToken = token;
       return;
     }
     this._relayRepublishInFlight = true;
     try {
-      await this._relayScreenEnqueue(() => this._republishRelayScreenInner());
+      await this._relayScreenEnqueue(() => this._republishRelayScreenInner(token));
     } finally {
       this._relayRepublishInFlight = false;
       // A change that landed while the last attempt was finishing (e.g. a new
       // share whose update found us in-flight) must not be lost with no timer
-      // left to fire: run once more while the share is live.
+      // left to fire: run once more while the share is live. The stashed
+      // token is revalidated inside, so a stale request aborts instead of
+      // publishing under a newer generation.
+      const pendingToken = this._pendingRelayToken;
+      this._pendingRelayToken = null;
       if (this._pendingRelayRepublish && this.isScreenSharing && this._relay) {
         this._pendingRelayRepublish = false;
-        this._republishRelayScreenBitrate().catch(() => {});
+        this._republishRelayScreenBitrate(pendingToken).catch(() => {});
       }
     }
   }
 
-  async _republishRelayScreenInner() {
-    // Generation captured once: a stop/new-share/relay-restart that lands
-    // during the backoff await must abort instead of being adopted. Re-reading
-    // _screenStartOperation each iteration let a retry wake up under the new
-    // generation while stop was still awaiting its unpublish (isScreenSharing
-    // still true) and publish into the teardown, poisoning the next share's
-    // producer entry (replaceTrack instead of produce).
-    const entryOp = this._screenStartOperation;
-    const entryRelay = this._relay;
-    const entryTrack = this.screenStream?.getVideoTracks?.()[0];
+  async _republishRelayScreenInner(boundToken) {
+    // Generation bound at schedule/enqueue time (see above): a stop/new-share
+    // /relay-restart landing in the debounce wait, in the serialization queue,
+    // or during the backoff await aborts instead of being adopted. Re-reading
+    // _screenStartOperation here at execution time let a retry wake up under
+    // the teardown generation while stop was still awaiting its unpublish
+    // (isScreenSharing still true) and publish into the teardown, poisoning
+    // the next share's producer entry (replaceTrack instead of produce).
+    const entry = boundToken || this._relayScreenToken();
+    if (this._screenStartOperation !== entry.op || this._relay !== entry.relay) return;
+    const entryOp = entry.op;
+    const entryRelay = entry.relay;
+    const entryTrack = entry.track;
     let failures = 0;
     for (;;) {
         this._pendingRelayRepublish = false;

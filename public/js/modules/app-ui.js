@@ -1587,11 +1587,12 @@ _setupUI() {
     // `pressed`) means a stale `pressed` from a drag-off release can never
     // swallow the next keyboard activation, while a pointer click following
     // its own pointerdown is still consumed exactly once — including the
-    // touch sequence pointerup → pointerleave → click.
+    // touch sequence pointerup → pointerleave → click. A keyboard step never
+    // touches the active pointer's state: its timers and trailing click still
+    // belong to that press, so a second finger stays ignored instead of
+    // overwriting `timer` and leaking an interval.
     button.addEventListener('click', (e) => {
       if (e && e.detail === 0) {
-        pressed = false;
-        activePointerId = null;
         stepBitrate(dir);
         return;
       }
@@ -1625,9 +1626,17 @@ _setupUI() {
       activePointerId = null;
       stop();
     });
+    // pointercancel is never followed by click, so it clears both — but only
+    // when it belongs to the active press. Clearing `pressed` before the
+    // identity check (as a previous version did) let a second, ignored
+    // pointer's cancel disarm the first press, and the trailing click then
+    // double-stepped.
     button.addEventListener('pointercancel', (e) => {
+      if (e && e.pointerId !== undefined && activePointerId !== null &&
+          e.pointerId !== activePointerId) return;
       pressed = false;
-      clearPress(e);
+      activePointerId = null;
+      stop();
     });
   };
   if (bitrateMinus && bitratePlus && bitrateValue) {
