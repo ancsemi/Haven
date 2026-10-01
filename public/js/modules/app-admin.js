@@ -3649,6 +3649,47 @@ _setupResizableSidebars() {
       window._updateSbToggleRight?.();
     });
   }
+
+  // Sidebar split handle (channels/DM divider)
+  const splitHandle = document.getElementById('sidebar-split-handle');
+  const splitContainer = document.getElementById('sidebar-split');
+  const channelsPane = document.getElementById('channels-pane');
+  const dmPane = document.getElementById('dm-pane');
+  if (splitHandle && splitContainer && channelsPane && dmPane) {
+    const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
+    if (savedRatio) {
+      channelsPane.style.flex = `${savedRatio} 1 0`;
+      dmPane.style.flex = `${1 - parseFloat(savedRatio)} 1 0`;
+    }
+
+    let dragging = false;
+    splitHandle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      splitHandle.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = splitContainer.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const total = rect.height;
+      let ratio = y / total;
+      ratio = Math.max(0.05, Math.min(0.95, ratio));
+      channelsPane.style.flex = `${ratio} 1 0`;
+      dmPane.style.flex = `${1 - ratio} 1 0`;
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      splitHandle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      const chFlex = parseFloat(channelsPane.style.flex) || 0.6;
+      localStorage.setItem('haven_sidebar_split_ratio', chFlex);
+    });
+  }
 },
 
 // ═══════════════════════════════════════════════════════

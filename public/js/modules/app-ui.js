@@ -2146,12 +2146,15 @@ _setupUI() {
       );
     });
 
+    const channelsPane = document.getElementById("channels-pane");
+    const dmPane = document.getElementById("dm-pane");
+
     if (tab === "channels") {
-      channelsPane.classList.remove("pane-hidden");
-      dmPane.classList.add("pane-hidden");
+      if (channelsPane) channelsPane.classList.remove("pane-hidden");
+      if (dmPane) dmPane.classList.add("pane-hidden");
     } else if (tab === "DMs") {
-      channelsPane.classList.add("pane-hidden");
-      dmPane.classList.remove("pane-hidden");
+      if (channelsPane) channelsPane.classList.add("pane-hidden");
+      if (dmPane)dmPane.classList.remove("pane-hidden");
     }
   }
   setChannelTab(localStorage.getItem("activeChannelTab") || "channels");
