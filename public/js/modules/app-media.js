@@ -4434,19 +4434,6 @@ _setupDensityPicker() {
   this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange, buttonDataKey);
 },
 
-// ── Channel Scrolling Picker ──
-// Sets data-channel-scroll on <html>; CSS handles the layout. Persists the
-// viewer's choice and applies it live without a reload.
-_setupChannelScrollPicker() {
-  const pickerId = 'channel-scroll-picker';
-  const storageKey = 'haven-channel-scroll';
-  const allowedValues = ['separate', 'combined'];
-  const defaultValue = 'separate';
-  const dataKey = 'channelScroll';
-
-  this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey);
-},
-
 // ── Toggle Style Picker (sliders vs checkboxes) ──
 // Sets data-toggle-style on <html>; the CSS does the rest. theme-init.js
 // applies the same value pre-paint, so this only has to keep the buttons in

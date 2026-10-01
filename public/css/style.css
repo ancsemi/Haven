@@ -16864,8 +16864,7 @@ ul.chat-list { list-style-type: disc; }
    LAYOUT DENSITY PICKER
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-.density-picker,
-.channel-scroll-picker {
+.density-picker {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
@@ -17126,7 +17125,7 @@ ul.chat-list { list-style-type: disc; }
   flex: 1;
 }
 /* Expand scroll area to include scrolling join/create channel sections when screen height is short*/
-@media (max-height: 550px) {
+@media (max-height: 400px) {
   .sidebar-mod-container {
     overflow: auto;
     display: block;
@@ -17326,21 +17325,6 @@ ul.chat-list { list-style-type: disc; }
   flex: 1;
   min-height: 0;
   flex-direction: column;
-}
-[data-channel-scroll="separate"] .sidebar-split {
-  display: flex;
-  overflow: hidden;
-}
-[data-channel-scroll="combined"] .sidebar-split {
-  display: block;
-  overflow: auto;
-}
-/* Short screen: use the expanded scrolling behavior regardless of mode */
-@media (max-height: 550px) {
-  [data-channel-scroll="separate"] .sidebar-split {
-    display: block;
-    overflow: auto;
-  }
 }
 
 /* Channels pane (top) */

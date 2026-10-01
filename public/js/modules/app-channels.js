@@ -2511,9 +2511,7 @@ _renderChannels() {
 // Chromium's native drag-and-drop only auto-scrolls the document, never a
 // nested overflow container, so a channel dragged to the top or bottom edge
 // of a long sidebar just stopped there. This drives the scroll ourselves from
-// dragover. The element that actually scrolls depends on the channel-scroll
-// mode (#channel-list in "separate", .sidebar-split in "combined" and on
-// short screens), so it is resolved on each call.
+// dragover.
 _makeEdgeScroller(listEl, edge = 48, maxSpeed = 18) {
   let raf = null, vel = 0;
   const scroller = () => {
