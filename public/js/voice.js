@@ -2053,10 +2053,20 @@ class VoiceManager {
   // the next user change (#5672 review).
   // A stop (or new share) mid-publish is detected via the operation guard and
   // cleans up exactly the producer created here, never the new share's.
-  async _publishInitialRelayScreen() {
-    const relay = this._relay;
+  // The share identity token is bound by the caller BEFORE the enqueue (same
+  // pattern as the republish path): this publish may wait behind a slow
+  // producer, and a stop landing in that wait must invalidate it. Binding at
+  // execution time would adopt the teardown's generation (isScreenSharing and
+  // screenStream are still present while stop awaits its unpublish) and leave
+  // a late producer live, so the next share hits replaceTrack instead of
+  // produce. Callers without a token (tests, legacy) fall back to current.
+  async _publishInitialRelayScreen(boundToken) {
+    const entry = boundToken || this._relayScreenToken();
+    if (this._screenStartOperation !== entry.op || this._relay !== entry.relay) return;
+    const relay = entry.relay;
     if (!relay || !this.isScreenSharing || !this.screenStream) return;
-    const op = this._screenStartOperation;
+    const op = entry.op;
+    if (this.screenStream?.getVideoTracks?.()[0] !== entry.track) return;
     this._cancelRelayScreenRepublish?.();
     const v = this.screenStream.getVideoTracks()[0];
     const a = this.screenStream.getAudioTracks()[0];
@@ -2239,8 +2249,11 @@ class VoiceManager {
       // Publish the screen to the relay with a freshly-read cap (see
       // _publishInitialRelayScreen for why the pre-renegotiation value is
       // not reused here). Enqueued so it can never interleave with a
-      // concurrent bitrate re-produce and hijack its producer entry.
-      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen());
+      // concurrent bitrate re-produce and hijack its producer entry; the
+      // token is bound before the enqueue so a stop waiting in line
+      // invalidates it instead of being adopted at execution time.
+      const initialToken = this._relayScreenToken();
+      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen(initialToken));
       // Hardware encoders (notably H.264 on GPU) can take a long time to emit
       // the first keyframe, and the setParameters call above can restart the
       // encoder mid-negotiation. Viewers whose decoder never got an IDR show a
@@ -3509,8 +3522,10 @@ class VoiceManager {
     if (this.isScreenSharing && this.screenStream) {
       // Same guarded, serialized, fresh-cap publish as a new share: a relay
       // (re)start can race a stop or a bitrate change exactly like shareScreen
-      // can, so it must not publish inline (#5672 review, round 3).
-      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen());
+      // can, so it must not publish inline (#5672 review, round 3). Token
+      // bound before the enqueue for the same reason.
+      const restartToken = this._relayScreenToken();
+      await this._relayScreenEnqueue(() => this._publishInitialRelayScreen(restartToken));
     }
     const cam = this.isWebcamActive && this.webcamStream?.getVideoTracks()[0];
     if (cam) await relay.publish('webcam', cam).catch(err => console.warn('[Relay] Camera not sent:', err.message));

@@ -424,6 +424,72 @@ test('a republish queued behind a slow start aborts if stop lands first', async 
   }
 });
 
+test('a queued initial publish aborts if stop lands first', async () => {
+  // Same binding rule as the republish path, for the initial publish: the
+  // token is bound before the enqueue, so a stop landing while the publish
+  // waits behind a slow producer invalidates it instead of being adopted at
+  // execution time (isScreenSharing and screenStream are still present while
+  // stop awaits its unpublish).
+  const { VoiceManager } = loadVoiceManager();
+  const voice = Object.create(VoiceManager.prototype);
+  const track = { kind: 'video', readyState: 'live' };
+  voice.peers = new Map();
+  voice.screenStream = { getVideoTracks: () => [track], getTracks: () => [track], getAudioTracks: () => [] };
+  voice.isScreenSharing = true;
+  voice.screenResolution = 0;
+  voice.screenFrameRate = 60;
+  voice.screenBitrate = 8000;
+  voice._screenStartOperation = 0;
+  voice._screenRelayProfileEnabled = () => false;
+  voice._screenRelayAutoEnabled = () => false;
+  voice._relayPeers = new Set();
+  voice._prioritiseAudioSenders = () => {};
+  voice._lastRelayScreenBitrateKey = undefined;
+  const producers = new Map();
+  const actions = [];
+  voice._relay = {
+    producers,
+    hasPublished: (s) => { const p = producers.get(s); return !!p && !p.closed; },
+    unpublish: async (s) => { producers.delete(s); actions.push(['unpublish', s]); },
+    unpublishIf: async (s, producer) => {
+      if (!producer || producers.get(s) !== producer) return false;
+      producers.delete(s);
+      actions.push(['unpublishIf', s, producer.id]);
+      return true;
+    },
+    publish: async (s, t, opts) => {
+      actions.push(['publish', s, opts.maxBitrate]);
+      const p = { id: `p${actions.length}`, closed: false, close() {} };
+      producers.set(s, p);
+      return p;
+    }
+  };
+  try {
+    // Block the queue, then enqueue the initial publish exactly like
+    // shareScreen does (token bound before the enqueue)...
+    let releaseQueue;
+    const gate = new Promise(r => { releaseQueue = r; });
+    voice._relayScreenEnqueue(() => gate);
+    const token = voice._relayScreenToken();
+    let innerRan = false;
+    const queued = voice._relayScreenEnqueue(() => {
+      innerRan = true;
+      return voice._publishInitialRelayScreen(token);
+    });
+    // ...then stop starts while the publish is still queued.
+    voice._screenStartOperation = 1;
+    releaseQueue();
+    await queued;
+    await voice._relayScreenEnqueue(() => {});
+    assert.equal(innerRan, true, 'queued publish ran and decided');
+    assert.deepEqual(actions, [], 'stopped share published nothing');
+    assert.equal(voice._lastRelayScreenBitrateKey, undefined, 'no key committed');
+    assert.equal(producers.size, 0, 'no late producer left live');
+  } finally {
+    try { clearTimeout(voice._relayBitrateTimer); } catch {}
+  }
+});
+
 test('stopping mid-publish removes the orphan instead of leaving it live', async () => {
   const { VoiceManager } = loadVoiceManager();
   const voice = Object.create(VoiceManager.prototype);

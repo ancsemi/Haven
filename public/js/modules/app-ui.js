@@ -1485,14 +1485,24 @@ _setupUI() {
   // "bitrateBlurSuppressed is not defined" on every typed commit (#5672).
   let bitrateEscapePressed = false;
   let bitrateBlurSuppressed = false;
-  const renderBitrate = (kbps) => {
+  // Unconditional field write. Stepper presses are explicit user intent to
+  // change the value, so they must sync the field even while it is focused:
+  // button pointerdown is preventDefaulted (focus stays in the field) and
+  // renderBitrate skips focused inputs — without this, the field keeps the
+  // stale text and the next blur re-commits it, silently reverting the step
+  // (and re-applying the old cap to a live share).
+  const writeBitrateField = (kbps) => {
     if (!bitrateValue) return;
-    if (document.activeElement === bitrateValue) return; // don't fight typing
     if ('value' in bitrateValue) {
       bitrateValue.value = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
     } else {
       bitrateValue.textContent = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
     }
+  };
+  const renderBitrate = (kbps) => {
+    if (!bitrateValue) return;
+    if (document.activeElement === bitrateValue) return; // don't fight typing
+    writeBitrateField(kbps);
   };
   const parseBitrateInput = () => {
     const raw = String(bitrateValue?.value ?? bitrateValue?.textContent ?? '').toLowerCase();
@@ -1534,7 +1544,7 @@ _setupUI() {
       next = cur === 0 ? 300 : cur + 100;
     }
     this.voice.setScreenBitrate(next);
-    renderBitrate(this.voice.screenBitrate);
+    writeBitrateField(this.voice.screenBitrate);
   };
   // Press-and-hold auto-repeat: first repeat after 400 ms, then every 80 ms
   // with the step doubling every ~10 repeats so long holds move fast.
@@ -1565,7 +1575,7 @@ _setupUI() {
         next = cur === 0 ? 300 : cur + magnitude;
       }
       this.voice.setScreenBitrate(next);
-      renderBitrate(this.voice.screenBitrate);
+      writeBitrateField(this.voice.screenBitrate);
     };
     let pressed = false;
     // Active pointer for the current press: a second finger's pointerdown is
