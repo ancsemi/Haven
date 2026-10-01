@@ -15420,16 +15420,6 @@ ul.chat-list { list-style-type: disc; }
   color: var(--text-secondary);
 }
 
-.dm-toggle-arrow {
-  display: inline-block;
-  transition: transform 0.2s ease;
-  font-size: 0.625rem;
-}
-
-.dm-toggle-arrow.collapsed {
-  transform: rotate(-90deg);
-}
-
 .dm-unread-count {
   font-size: 0.5625rem;
   font-weight: 700;
@@ -17383,14 +17373,6 @@ ul.chat-list { list-style-type: disc; }
 .dm-toggle #organize-dms-btn:hover {
   opacity: 1 !important;
   background: var(--bg-hover);
-}
-.channels-toggle-arrow {
-  display: inline-block;
-  transition: transform 0.2s ease;
-  font-size: 0.625rem;
-}
-.channels-toggle-arrow.collapsed {
-  transform: rotate(-90deg);
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

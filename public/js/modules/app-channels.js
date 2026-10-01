@@ -2099,57 +2099,6 @@ _renderChannels() {
     return el;
   };
 
-  // ── Channels toggle (collapsible) ──
-  const channelsCollapsed = localStorage.getItem('haven_channels_collapsed') === 'true';
-  const channelsArrow = document.getElementById('channels-toggle-arrow');
-  if (channelsArrow) {
-    channelsArrow.classList.toggle('collapsed', channelsCollapsed);
-  }
-
-  // Set up channels toggle click (only once)
-  if (!this._channelsToggleBound) {
-    this._channelsToggleBound = true;
-    document.getElementById('channels-toggle')?.addEventListener('click', (e) => {
-      // Ignore clicks on the organize button or sub-panel button inside the header
-      if (e.target.closest('#organize-channels-btn')) return;
-      if (e.target.closest('#sub-channel-panel-btn')) return;
-      const nowCollapsed = list.style.display !== 'none';
-      list.style.display = nowCollapsed ? 'none' : '';
-      const arrow = document.getElementById('channels-toggle-arrow');
-      if (arrow) arrow.classList.toggle('collapsed', nowCollapsed);
-      localStorage.setItem('haven_channels_collapsed', nowCollapsed);
-      // Adjust pane flex so DMs fill when channels collapsed
-      const channelsPane = document.getElementById('channels-pane');
-      const dmPane = document.getElementById('dm-pane');
-      if (nowCollapsed) {
-        channelsPane.style.flex = '0 0 auto';
-        dmPane.style.flex = '1 1 0';
-      } else {
-        const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
-        const ratio = savedRatio ? parseFloat(savedRatio) : 0.6;
-        channelsPane.style.flex = `${ratio} 1 0`;
-        dmPane.style.flex = `${1 - ratio} 1 0`;
-      }
-    });
-    // Organize Channels button (admin only)
-    document.getElementById('organize-channels-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._openOrganizeModal(null, true); // server-level mode
-    });
-    // Sub-channel subscriptions panel button
-    document.getElementById('sub-channel-panel-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._openSubChannelPanel();
-    });
-  }
-  if (channelsCollapsed) {
-    list.style.display = 'none';
-    const cp = document.getElementById('channels-pane');
-    const dp = document.getElementById('dm-pane');
-    if (cp) cp.style.flex = '0 0 auto';
-    if (dp) dp.style.flex = '1 1 0';
-  }
-
   // ── Render channels grouped by category (case-insensitive) ──
   const categories = new Map();
   const _catCanonical = new Map(); // lowercase -> first-seen casing
@@ -2379,41 +2328,6 @@ _renderChannels() {
   const dmList = document.getElementById('dm-list');
   if (dmList) {
     dmList.innerHTML = '';
-    const dmCollapsed = localStorage.getItem('haven_dm_collapsed') === 'true';
-    const dmArrow = document.getElementById('dm-toggle-arrow');
-
-    // Set up DM toggle click (only once)
-    if (!this._dmToggleBound) {
-      this._dmToggleBound = true;
-      document.getElementById('dm-toggle-header')?.addEventListener('click', (e) => {
-        if (e.target.closest('#organize-dms-btn')) return;
-        const nowCollapsed = dmList.style.display !== 'none';
-        dmList.style.display = nowCollapsed ? 'none' : '';
-        const arrow = document.getElementById('dm-toggle-arrow');
-        if (arrow) arrow.classList.toggle('collapsed', nowCollapsed);
-        localStorage.setItem('haven_dm_collapsed', nowCollapsed);
-        // Shrink/restore the DM pane so channels get the freed space
-        const dp = document.getElementById('dm-pane');
-        const cp = document.getElementById('channels-pane');
-        if (nowCollapsed) {
-          if (dp) dp.style.flex = '0 0 auto';
-          if (cp) cp.style.flex = '1 1 0';
-        } else {
-          const r = parseFloat(localStorage.getItem('haven_sidebar_split_ratio')) || 0.6;
-          if (dp) dp.style.flex = `${1 - r} 1 0`;
-          if (cp) cp.style.flex = `${r} 1 0`;
-        }
-      });
-    }
-
-    if (dmArrow) dmArrow.classList.toggle('collapsed', dmCollapsed);
-    if (dmCollapsed) {
-      dmList.style.display = 'none';
-      const dp = document.getElementById('dm-pane');
-      const cp = document.getElementById('channels-pane');
-      if (dp) dp.style.flex = '0 0 auto';
-      if (cp) cp.style.flex = '1 1 0';
-    }
 
     // Update unread badge
     const totalUnread = dmChannels.reduce((sum, ch) => sum + ((ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0)), 0);
@@ -2426,10 +2340,6 @@ _renderChannels() {
         badge.style.display = 'none';
       }
     }
-
-    // Show/hide DM pane
-    const dmPane = document.getElementById('dm-pane');
-    if (dmPane) dmPane.style.display = dmChannels.length ? '' : 'none';
 
     // ── DM categorization (client-side localStorage) ──
     const dmAssignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
