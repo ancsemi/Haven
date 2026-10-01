@@ -418,7 +418,7 @@ test('relay unpublishIf only removes the exact producer', async () => {
   assert.deepEqual(emitted, ['relay:close-producer']);
 });
 
-test('a failed initial publish recovers on the next change', async () => {
+test('a failed initial publish retries automatically', async () => {
   const { VoiceManager } = loadVoiceManager();
   const voice = Object.create(VoiceManager.prototype);
   const track = { kind: 'video', readyState: 'live' };
@@ -450,16 +450,29 @@ test('a failed initial publish recovers on the next change', async () => {
       return { id: 'p2' };
     }
   };
-  await voice._publishInitialRelayScreen();
-  assert.equal(publishes, 1);
-  assert.equal(voice._lastRelayScreenBitrateKey, undefined, 'failed start records no key');
-  assert.equal(voice._relayScreenNeedsPublish, true, 'failed start flags recovery');
-  voice.screenBitrate = 6000;
-  await voice._republishRelayScreenBitrate();
-  assert.equal(publishes, 2, 'the next change recovers the missing producer');
-  assert.equal(voice._lastRelayScreenBitrateKey, 6_000_000);
-  assert.equal(voice._relayScreenNeedsPublish, false);
-  assert.equal(live, true);
+  try {
+    await voice._publishInitialRelayScreen();
+    // The failed start flags recovery AND schedules it: no next bitrate
+    // change is needed (#5672 review). Wait for the debounced republish to
+    // finish (publishes first, key commit lands just after).
+    const deadline = Date.now() + 1000;
+    while ((voice._lastRelayScreenBitrateKey !== 8_000_000 || voice._relayScreenNeedsPublish) && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.equal(publishes, 2, 'failed start retries without waiting for the next change');
+    assert.equal(voice._lastRelayScreenBitrateKey, 8_000_000);
+    assert.equal(voice._relayScreenNeedsPublish, false);
+    assert.equal(live, true);
+    // A later change still re-produces with the new cap.
+    voice.screenBitrate = 6000;
+    await voice._republishRelayScreenBitrate();
+    assert.equal(publishes, 3, 'a later change re-produces with the new cap');
+    assert.equal(voice._lastRelayScreenBitrateKey, 6_000_000);
+    assert.equal(voice._relayScreenNeedsPublish, false);
+    assert.equal(live, true);
+  } finally {
+    try { clearTimeout(voice._relayBitrateTimer); } catch {}
+  }
 });
 
 test('stopping during the initial publish leaves no orphan', async () => {
@@ -635,16 +648,20 @@ test('a failed relay-restart publish recovers on the next change', async () => {
       return { id: 'p2' };
     }
   };
-  await voice._publishRelayTracks();
-  assert.equal(publishes, 1);
-  assert.equal(voice._lastRelayScreenBitrateKey, undefined, 'failed restart records no key');
-  assert.equal(voice._relayScreenNeedsPublish, true, 'failed restart flags recovery');
-  voice.screenBitrate = 6000;
-  await voice._republishRelayScreenBitrate();
-  assert.equal(publishes, 2, 'the next change recovers the missing producer');
-  assert.equal(voice._lastRelayScreenBitrateKey, 6_000_000);
-  assert.equal(voice._relayScreenNeedsPublish, false);
-  assert.equal(live, true);
+  try {
+    await voice._publishRelayTracks();
+    assert.equal(publishes, 1);
+    assert.equal(voice._lastRelayScreenBitrateKey, undefined, 'failed restart records no key');
+    assert.equal(voice._relayScreenNeedsPublish, true, 'failed restart flags recovery');
+    voice.screenBitrate = 6000;
+    await voice._republishRelayScreenBitrate();
+    assert.equal(publishes, 2, 'the next change recovers the missing producer');
+    assert.equal(voice._lastRelayScreenBitrateKey, 6_000_000);
+    assert.equal(voice._relayScreenNeedsPublish, false);
+    assert.equal(live, true);
+  } finally {
+    try { clearTimeout(voice._relayBitrateTimer); } catch {}
+  }
 });
 
 test('stopping during the initial audio publish leaves no audio orphan', async () => {

@@ -2043,6 +2043,9 @@ class VoiceManager {
   // latest cap, so a re-produce would be pure churn; later changes re-arm it.
   // The key is recorded only after a successful publish so a failed start
   // leaves truthful state for the recovery path in _republishRelayScreenBitrate.
+  // A failed start also schedules that recovery (same debounced republish a
+  // bitrate change would arm) so the share self-heals instead of waiting for
+  // the next user change (#5672 review).
   // A stop (or new share) mid-publish is detected via the operation guard and
   // cleans up exactly the producer created here, never the new share's.
   async _publishInitialRelayScreen() {
@@ -2073,12 +2076,21 @@ class VoiceManager {
         producer = await relay.publish('screen', v, screenOpts);
       } catch (e) {
         console.warn('[Relay] Screen not sent:', e?.message || e);
-        if (!stale()) this._relayScreenNeedsPublish = true;
+        if (!stale()) {
+          this._relayScreenNeedsPublish = true;
+          try { this._scheduleRelayScreenRepublish?.(); } catch {}
+        }
       }
       if (producer) {
         if (await dropIfStale(producer, 'screen')) return;
         this._lastRelayScreenBitrateKey = relayKey;
         this._relayScreenNeedsPublish = false;
+      } else if (!stale() && v.readyState === 'live' &&
+          this._lastRelayScreenBitrateKey == null && !this._relayScreenNeedsPublish) {
+        // publish() resolved falsy without throwing (no live producer): flag
+        // the same recovery instead of stranding the share unpublished.
+        this._relayScreenNeedsPublish = true;
+        try { this._scheduleRelayScreenRepublish?.(); } catch {}
       }
     }
     if (a && !stale()) {

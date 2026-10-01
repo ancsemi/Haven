@@ -1480,6 +1480,11 @@ _setupUI() {
   const bitrateMinus = document.getElementById('screen-bitrate-minus');
   const bitratePlus = document.getElementById('screen-bitrate-plus');
   const bitrateValue = document.getElementById('screen-bitrate-value');
+  // Commit guards: declared up here, above commitBitrateInput. ES modules run
+  // in strict mode, so assigning before the `let` executes throws
+  // "bitrateBlurSuppressed is not defined" on every typed commit (#5672).
+  let bitrateEscapePressed = false;
+  let bitrateBlurSuppressed = false;
   const renderBitrate = (kbps) => {
     if (!bitrateValue) return;
     if (document.activeElement === bitrateValue) return; // don't fight typing
@@ -1579,11 +1584,10 @@ _setupUI() {
     renderBitrate(this.voice.screenBitrate);
     holdRepeat(bitrateMinus, -1);
     holdRepeat(bitratePlus, +1);
-    // Escape discards the typed text instead of confirming it: without this
+    // Escape discards the typed text instead of confirming it: without the
     // flag the blur() below would run commitBitrateInput() and apply the
     // very value the user was cancelling (renderBitrate skips focused inputs).
-    let bitrateEscapePressed = false;
-    let bitrateBlurSuppressed = false;
+    // (Flags declared above, next to the other bitrate state.)
     const restoreBitrateDisplay = () => {
       const kbps = this.voice.screenBitrate;
       if ('value' in bitrateValue) {
