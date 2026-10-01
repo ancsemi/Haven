@@ -289,52 +289,6 @@ _setupUI() {
     }
   });
 
-  // Join channel
-  const joinBtn = document.getElementById('join-channel-btn');
-  const codeInput = document.getElementById('channel-code-input');
-  joinBtn.addEventListener('click', () => {
-    const code = codeInput.value.trim();
-    if (code) { this.socket.emit('join-channel', { code }); codeInput.value = ''; }
-  });
-  codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
-
-  // Create channel (admin)
-  const createBtn = document.getElementById('create-channel-btn');
-  const nameInput = document.getElementById('new-channel-name');
-  if (createBtn) {
-    createBtn.addEventListener('click', () => {
-      const name = nameInput.value.trim();
-      const isPrivate = document.getElementById('new-channel-private')?.checked || false;
-      const temporary = document.getElementById('new-channel-temporary')?.checked || false;
-      const duration = parseInt(document.getElementById('new-channel-duration')?.value, 10) || 24;
-      const addAllMembers = document.getElementById('new-channel-add-all')?.checked || false;
-      const isForum = document.getElementById('new-channel-forum')?.checked || false;
-      if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, ...this._channelTemplateExtras() });
-        this._resetChannelTemplate();
-        nameInput.value = '';
-        const pvt = document.getElementById('new-channel-private');
-        if (pvt) pvt.checked = false;
-        const tmp = document.getElementById('new-channel-temporary');
-        if (tmp) tmp.checked = false;
-        const all = document.getElementById('new-channel-add-all');
-        if (all) all.checked = false;
-        const durRow = document.getElementById('temp-channel-duration-row');
-        if (durRow) durRow.style.display = 'none';
-      }
-    });
-    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') createBtn.click(); });
-  }
-
-  // Toggle temporary channel duration row
-  const tempCheckbox = document.getElementById('new-channel-temporary');
-  if (tempCheckbox) {
-    tempCheckbox.addEventListener('change', () => {
-      const durRow = document.getElementById('temp-channel-duration-row');
-      if (durRow) durRow.style.display = tempCheckbox.checked ? '' : 'none';
-    });
-  }
-
   // Copy code
   document.getElementById('copy-code-btn').addEventListener('click', () => {
     if (this.currentChannel) {
