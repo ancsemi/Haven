@@ -2113,9 +2113,10 @@ _setupUI() {
 
   // channel tabs
   this._setChannelTab(localStorage.getItem("activeChannelTab") || "channels");
-  document.querySelectorAll("[data-channel-tab]").forEach(function(button) {
-    button.addEventListener("click", function() {
-      this._setChannelTab(this.dataset.channelTab);
+
+  document.querySelectorAll("[data-channel-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      this._setChannelTab(button.dataset.channelTab);
     });
   });
 

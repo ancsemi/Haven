@@ -235,7 +235,6 @@ _setupSocketListeners() {
     // Show admin/mod controls based on role level
     const canModerate = this.user.isAdmin || this.user.effectiveLevel >= 25;
     const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
-    document.getElementById('admin-controls').style.display = canCreateChannel ? 'block' : 'none';
     document.getElementById('admin-mod-panel').style.display = (canModerate || this._hasAnyAdminSettingsAccess()) ? 'block' : 'none';
     document.getElementById('sidebar-members-btn').style.display = (this.user.isAdmin || canModerate || this._hasPerm('view_all_members') || this._hasPerm('view_channel_members')) ? '' : 'none';
   });
