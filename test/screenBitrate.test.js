@@ -70,6 +70,8 @@ test('bitrate normalizes to 300–10000 Kbps, 0 for unlimited, 8000 default', ()
   assert.equal(voice._normalizeScreenBitrate(4700), 4700);
   assert.equal(voice._normalizeScreenBitrate(10000), 10000);
   assert.equal(voice._normalizeScreenBitrate(10001), 0);
+  assert.equal(voice._normalizeScreenBitrate(-1), 300, 'hold-repeat below range clamps to 300, never 8000');
+  assert.equal(voice._normalizeScreenBitrate(-100), 300);
 });
 
 test('user cap overrides the resolution table; unlimited returns null', () => {

@@ -2507,7 +2507,7 @@ class VoiceManager {
   _normalizeScreenBitrate(value) {
     if (value === null || value === undefined || value === '') return 8000;
     const n = parseInt(value, 10);
-    if (!Number.isSafeInteger(n) || n < 0) return 8000;
+    if (!Number.isSafeInteger(n)) return 8000;
     if (n === 0) return 0;
     if (n < 300) return 300;
     if (n > 10000) return 0;

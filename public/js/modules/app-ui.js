@@ -1576,8 +1576,17 @@ _setupUI() {
       if (pressed) { pressed = false; return; }
       stepBitrate(dir);
     });
-    for (const event of ['pointerup', 'pointerleave', 'pointercancel']) {
-      button.addEventListener(event, stop);
+    // pointerup is followed by click, which consumes `pressed` below — so it
+    // must not clear the flag, or every mouse click would step twice (the
+    // pointerdown step plus the click step). pointerleave/pointercancel are
+    // not followed by click, so a stale `pressed` would swallow the next
+    // keyboard activation: clear it there.
+    button.addEventListener('pointerup', stop);
+    for (const event of ['pointerleave', 'pointercancel']) {
+      button.addEventListener(event, () => {
+        pressed = false;
+        stop();
+      });
     }
   };
   if (bitrateMinus && bitratePlus && bitrateValue) {
