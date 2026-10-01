@@ -11489,9 +11489,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 
 .channel-tab-notify-dot {
   position: absolute;
-  top: 3px;
-  right: 3px;
-
+  top: 2px;
+  right: 2px;
   width: 8px;
   height: 8px;
   background-color: var(--danger);
@@ -17125,7 +17124,7 @@ ul.chat-list { list-style-type: disc; }
   flex: 1;
 }
 /* Expand scroll area to include scrolling join/create channel sections when screen height is short*/
-@media (max-height: 500px) {
+@media (max-height: 400px) {
   .sidebar-mod-container {
     overflow: auto;
     display: block;
