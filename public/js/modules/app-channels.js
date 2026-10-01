@@ -282,6 +282,32 @@ async switchChannel(code) {
   if (e2eDropdown) e2eDropdown.style.display = 'none';
 },
 
+_updateChannelTabNotificationDots() {
+	const channelDot = document.getElementById('channels-channel-tab-notify-dot');
+	const dmDot = document.getElementById('DMs-channel-tab-notify-dot');
+
+	if (!channelDot && !dmDot) return;
+
+	let hasChannelUnread = false;
+	let hasDmUnread = false;
+
+	for (const ch of this.channels || []) {
+		const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
+		if (count <= 0) continue;
+
+		if (ch.is_dm) {
+			hasDmUnread = true;
+		} else {
+			hasChannelUnread = true;
+		}
+
+		if (hasChannelUnread && hasDmUnread) break;
+	}
+
+	if (channelDot) { channelDot.style.display = hasChannelUnread ? '' : 'none'; }
+	if (dmDot)      { dmDot.style.display      = hasDmUnread      ? '' : 'none'; }
+},
+
 _updateDmCleanupNotice(channel) {
   // Build / locate the notice element. Sits just below the topic bar (or the
   // header if no topic bar) so the layout is identical for everyone — the
@@ -2504,6 +2530,7 @@ _renderChannels() {
   this._setupChannelDragDrop();
   this._setupDmDragDrop();
   this._updateNestedIndicators();
+  this._updateChannelTabNotificationDots();
 },
 
 // ── Drag-and-drop channel reordering ────────────────────
@@ -2840,6 +2867,7 @@ _updateBadge(code) {
   // Always update DM section badge, tab title, and desktop badge
   // even if the individual channel item isn't in the DOM
   this._updateDmSectionBadge();
+  this._updateChannelTabNotificationDots();
   this._updateTabTitle();
   this._updateDesktopBadge();
   this._updateNestedIndicators();
