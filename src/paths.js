@@ -63,7 +63,10 @@ function migrateFile(oldRel, newAbs) {
       fs.copyFileSync(oldAbs, newAbs);
       fs.unlinkSync(oldAbs);
       console.log(`📦 Migrated ${oldRel} → ${newAbs}`);
-    } catch { /* silent — might lack permissions */ }
+    } catch (err) {
+      // Left behind, the server would start on an empty file in the new location.
+      console.warn(`⚠️  Could not migrate ${oldRel} to ${newAbs}:`, err.message);
+    }
   }
 }
 
@@ -82,7 +85,9 @@ function migrateDir(oldRel, newDir) {
           console.log(`📦 Migrated ${oldRel}/${entry} → ${dst}`);
         }
       }
-    } catch { /* silent */ }
+    } catch (err) {
+      console.warn(`⚠️  Could not migrate ${oldRel} to ${newDir}:`, err.message);
+    }
   }
 }
 

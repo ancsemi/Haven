@@ -16,6 +16,7 @@ const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
 const { diskStatus } = require('../diskGuard');
+const { grantAdminRole } = require('../roleDefaults');
 const {
   UnsafeCallbackError,
   postWebhookCallback,
@@ -57,6 +58,17 @@ const registerGroupE2E   = require('./groupE2E');
 const registerTags       = require('./tags');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
+// Some failures would repeat on every timer tick, connection or message.
+// Report each kind at most once every ten minutes, so a broken table shows up
+// in the log without flooding it.
+const _throttledWarnAt = new Map();
+function throttledWarn(tag, err) {
+  const now = Date.now();
+  if (now - (_throttledWarnAt.get(tag) || 0) < 10 * 60 * 1000) return;
+  _throttledWarnAt.set(tag, now);
+  console.warn(`${tag}:`, err && err.message);
+}
+
 // ══════════════════════════════════════════════════════════════
 // setupSocketHandlers — called once from server.js
 // ══════════════════════════════════════════════════════════════
@@ -91,7 +103,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   // ── Permission helpers (shared across all connections) ───
   const {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
-    userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
+    userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles,
     parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   } = createPermissions(db);
 
@@ -228,7 +240,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             break;
           }
         }
-      } catch { /* presence is best-effort */ }
+      } catch { /* presence is best-effort; the next presence update carries the change */ }
     },
     // Linked accounts changed. Push to EVERY socket this user has open, not
     // just the one that started the flow — the OAuth callback frequently
@@ -253,7 +265,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         for (const [, s] of io.of('/').sockets) {
           if (s.user && s.user.id === userId) s.emit('connections', payload);
         }
-      } catch { /* best-effort */ }
+      } catch { /* best-effort push; the link itself is saved and shows on the next load */ }
     },
   });
   activity.start();
@@ -809,7 +821,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (ch && ch.is_temp_voice && !pendingTempDelete.has(code)) {
           createTempChannelDeleteCallback({ db, io, state, channelId: ch.id })();
         }
-      } catch { /* column may not exist yet */ }
+      } catch { /* the 60s empty temp-voice sweep below retries this cleanup */ }
     }
     // Tell any remaining peers (and watchers of the text channel) that the
     // pruned users are gone so they tear down dead RTCPeerConnections and
@@ -849,6 +861,10 @@ function setupSocketHandlers(io, db, opts = {}) {
           return {
             id: u.id, username: u.username,
             roleColor: role ? role.color : null,
+            // Gradient end and shimmer for the same role (null and false
+            // for a plain color). New fields, so older apps keep working.
+            roleColor2: (role && role.color2) || null,
+            roleShimmer: !!(role && role.color2 && role.color_shimmer),
             roleName: role ? role.name : null,
             roles,
             isMuted: u.isMuted || false, isDeafened: u.isDeafened || false,
@@ -908,7 +924,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         WHERE c.is_dm = 1 AND cm.user_id = ?
       `).all(userId);
       for (const r of rows) emitOnlineUsers(r.code);
-    } catch { /* presence is best-effort */ }
+    } catch { /* presence is best-effort; the next presence change refreshes these DMs */ }
   }
 
   // ── emitOnlineUsers ─────────────────────────────────────
@@ -988,7 +1004,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           )
       `).all('flappy');
       scoreRows.forEach(r => { scores[r.user_id] = r.score; });
-    } catch { /* table may not exist yet */ }
+    } catch { /* score badges are decoration; the list still goes out without them */ }
 
     const statusMap = {};
     try {
@@ -1003,18 +1019,24 @@ function setupSocketHandlers(io, db, opts = {}) {
         WHERE c.code = ?
       `).all(code);
       statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', border: r.border || null, borderTransform: parseBorderTransform(r.border_transform), animateProfile: r.animate_profile || 'trigger', isGuest: !!r.is_guest }; });
-    } catch { /* columns may not exist yet */ }
+    } catch { /* runs on every presence change; members then show default status and avatar */ }
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate, is_dm FROM channels WHERE code = ?').get(code);
     const roles = new Map();
     const roleOf = (id) => {
       if (!roles.has(id)) roles.set(id, getUserHighestRole(id, channel ? channel.id : null));
       return roles.get(id);
     };
+    // A channel's required roles (#5703): someone added by hand keeps their
+    // membership when they lack the roles, but the channel is hidden from
+    // them, so they are not listed in it either. Admins always pass.
+    const gated = !!(channel && !channel.is_dm && parseRoleGate(channel.role_gate));
+    const adminIds = gated ? new Set(db.prepare('SELECT id FROM users WHERE is_admin = 1').all().map(r => r.id)) : null;
+    const passesGate = (id) => !gated || adminIds.has(id) || roleGateAllows(id, channel);
     const memberIds = new Set();
     if (channel) {
       const rows = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id);
-      rows.forEach(r => memberIds.add(r.user_id));
+      rows.forEach(r => { if (passesGate(r.user_id)) memberIds.add(r.user_id); });
     }
 
     let users;
@@ -1029,7 +1051,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         LEFT JOIN bans b ON u.id = b.user_id
         WHERE c.code = ? AND b.id IS NULL
         ORDER BY COALESCE(u.display_name, u.username)
-      `).all(code);
+      `).all(code).filter(m => memberIds.has(m.id));
       const globalOnlineIds = new Set();
       for (const [, s] of io.of('/').sockets) {
         if (s.user) globalOnlineIds.add(s.user.id);
@@ -1240,7 +1262,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       let tempChannel = null;
       try {
         tempChannel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_temp_voice = 1').get(code);
-      } catch { /* column may not exist yet */ }
+      } catch { /* the 60s empty temp-voice sweep retries this cleanup */ }
       if (tempChannel) {
         const doDeleteTempChannel = createTempChannelDeleteCallback({
           db,
@@ -1344,7 +1366,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         }
         sending.catch((err) => {
           if (err.statusCode === 410 || err.statusCode === 404) {
-            try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(job.sub.endpoint); } catch { /* non-critical */ }
+            try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(job.sub.endpoint); } catch { /* the next push to this dead endpoint tries the cleanup again */ }
           }
         }).finally(() => {
           pushActive--;
@@ -1382,7 +1404,11 @@ function setupSocketHandlers(io, db, opts = {}) {
           'SELECT user_id FROM user_channel_prefs WHERE channel_code = ? AND muted = 1'
         ).all(channelCode);
         mutedUserIds = new Set(mutedRows.map(r => r.user_id));
-      } catch { /* table may not exist on a brand-new fresh schema race; skip */ }
+      } catch (err) {
+        // Runs per message. Pushes still go out, but people who muted this
+        // channel get them too, so say so (throttled).
+        throttledWarn('push mute lookup failed', err);
+      }
 
       // Detect E2E encrypted envelope — don't leak ciphertext in notifications
       let displayContent = messageContent;
@@ -1426,7 +1452,7 @@ function setupSocketHandlers(io, db, opts = {}) {
               .then(res => {
                 if (res.failedTokens && res.failedTokens.length) {
                   const ph = res.failedTokens.map(() => '?').join(',');
-                  try { db.prepare(`DELETE FROM fcm_tokens WHERE token IN (${ph})`).run(...res.failedTokens); } catch {}
+                  try { db.prepare(`DELETE FROM fcm_tokens WHERE token IN (${ph})`).run(...res.failedTokens); } catch { /* the next send to these dead tokens tries the cleanup again */ }
                 }
               })
               .catch(err => console.error('FCM push error:', err.message));
@@ -1480,7 +1506,10 @@ function setupSocketHandlers(io, db, opts = {}) {
              failure_count = CASE WHEN ? THEN 0 ELSE COALESCE(failure_count, 0) + 1 END
          WHERE id = ?`
       ).run(status || 0, isOk ? null : (errorMsg || null), isOk ? 1 : 0, botId);
-    } catch { /* best-effort */ }
+    } catch (err) {
+      // Delivery itself is unaffected, but the admin panel's bot status goes stale.
+      throttledWarn('webhook delivery status update failed', err);
+    }
   }
 
   // POSTs the event to the bot's callback. Single retry after 5s on 5xx /
@@ -1496,7 +1525,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         return;
       }
       if (resp.status >= 500 && attempt < 1) {
-        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
+        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch((err) => console.error('Webhook delivery error:', err.message)), 5000);
         return;
       }
       _recordWebhookDelivery(bot.id, resp.status, `HTTP ${resp.status}`);
@@ -1508,7 +1537,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         return;
       }
       if (attempt < 1) {
-        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch(() => {}), 5000);
+        setTimeout(() => _deliverWebhook(bot, payload, headers, attempt + 1).catch((err) => console.error('Webhook delivery error:', err.message)), 5000);
         return;
       }
       _recordWebhookDelivery(bot.id, 0, msg.slice(0, 200));
@@ -1547,7 +1576,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             'sha256=' + crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
         }
 
-        _deliverWebhook(bot, payload, headers).catch(() => {});
+        _deliverWebhook(bot, payload, headers).catch((err) => console.error('Webhook delivery error:', err.message));
       }
     } catch (err) {
       console.error('Webhook event dispatch error:', err.message);
@@ -1566,7 +1595,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     try {
       return db.prepare(`
         SELECT id, channel_id, guild_id, guild_name, discord_channel_id, discord_channel_name,
-               direction, out_mode, webhook_id, webhook_token
+               direction, out_mode, webhook_id, webhook_token, discord_channel_type
         FROM ferry_links
         WHERE channel_id = ? AND is_active = 1 AND direction IN ('both', 'to_discord')
       `).all(channelId);
@@ -1596,7 +1625,7 @@ function setupSocketHandlers(io, db, opts = {}) {
    * so failures land on the pairing's health row and in a toast to the
    * author, never as a thrown error in the message path.
    */
-  function ferryRelay({ channelId, user, body, target, personaUsername, personaAvatar, notify }) {
+  function ferryRelay({ channelId, user, body, target, personaUsername, personaAvatar, notify, topic = null }) {
     const cfg = ferry.getConfig();
     if (!cfg.enabled || !cfg.token) return;
 
@@ -1648,7 +1677,35 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (!body.trim()) return;
 
     for (const link of destinations) {
-      ferry.sendToDiscord(link, { ...identity, content: body })
+      // A topic in a Haven forum becomes a new post in a Discord forum. The
+      // send functions refuse a pairing of mismatched kinds and say so on it.
+      const send = topic
+        ? ferry.sendTopicToDiscord(link, { ...identity, content: body, title: topic.title, tags: topic.tags, topicId: topic.id })
+        : ferry.sendToDiscord(link, { ...identity, content: body });
+      Promise.resolve(send).catch(err => notify(`Discord relay failed: ${err.message}`));
+    }
+  }
+
+  /**
+   * Relays one just-sent reply in a Haven forum topic into the Discord forum
+   * post that topic is linked to. Same rules as ferryRelay: Ferry on, the
+   * sender holds use_ferry, and only the channel's own pairings. A topic with
+   * no Discord post keeps its replies in Haven (see sendReplyToDiscord).
+   */
+  function ferryRelayReply({ channelId, parentId, user, body, notify }) {
+    const cfg = ferry.getConfig();
+    if (!cfg.enabled || !cfg.token) return;
+    const links = ferryLinksFor(channelId).filter(l => ferry.isForumType(l.discord_channel_type));
+    if (!links.length || !String(body || '').trim()) return;
+    const ch = db.prepare('SELECT is_forum FROM channels WHERE id = ?').get(channelId);
+    if (!ch || !ch.is_forum) return;
+    // Silent, like an untargeted message in a mirrored channel.
+    if (!user.isAdmin && !userHasPermission(user.id, 'use_ferry', channelId)) return;
+
+    // Thread replies have no persona prefix, so the real name always goes.
+    const identity = { username: user.displayName, avatar: user.avatar || null };
+    for (const link of links) {
+      ferry.sendReplyToDiscord(link, { ...identity, content: body, topicId: parentId })
         .catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }
@@ -1711,7 +1768,10 @@ function setupSocketHandlers(io, db, opts = {}) {
           }
         }
       }
-    } catch { /* columns may not exist yet */ }
+    } catch (err) {
+      // An uncaught throw here would crash the server; the next tick retries.
+      throttledWarn('AFK voice sweep failed', err);
+    }
   }, 30 * 1000);
 
   // Temporary channel cleanup (every 60s)
@@ -1741,7 +1801,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           }
           io.to(`channel:${ch.code}`).emit('channel-messages-cleared', { code: ch.code, reason: 'auto-clear' });
           // Refresh channel lists so the new expires_at propagates to clients.
-          try { broadcastChannelLists(); } catch {}
+          broadcastChannelLists();
           console.log(`[Temporary] Channel "${ch.code}" messages cleared (auto-clear mode)`);
         } else {
           db.transaction(() => {
@@ -1825,7 +1885,10 @@ function setupSocketHandlers(io, db, opts = {}) {
           musicQueues.delete(ch.code);
         }
       }
-    } catch { /* column may not exist yet */ }
+    } catch (err) {
+      // Empty temp voice channels linger until this works again or they expire.
+      throttledWarn('Empty temp voice channel sweep failed', err);
+    }
   }, 60 * 1000);
 
   // Someone removed from a private channel still knows its code, and a code
@@ -1918,7 +1981,14 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (ip && isIpBanned(ip)) {
         return next(new Error('Your IP has been banned from this server'));
       }
-    } catch { /* table may not exist on very old DBs — fail open */ }
+    } catch (err) {
+      // The ban list itself does not throw here: when it cannot be read, the
+      // cached list in server.js keeps the last known bans. What can still
+      // fail is reading the client's address, and that lets the connection
+      // through rather than locking everyone out; login still applies, and
+      // the log says so (throttled, since this runs per connection).
+      throttledWarn('IP ban check failed, connection allowed', err);
+    }
     next();
   });
 
@@ -1985,6 +2055,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
       if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
         db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+        grantAdminRole(db, user.id);
         uRow.is_admin = 1;
       }
       socket.user.isAdmin = !!uRow.is_admin;
@@ -2006,7 +2077,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           socket.user.statusText = statusRow.status_text || '';
         }
       }
-    } catch { /* columns may not exist on old db */ }
+    } catch { /* status is cosmetic; the user just starts with the default status */ }
 
     try {
       socket.user.roles = getUserRoles(user.id);
@@ -2030,7 +2101,11 @@ function setupSocketHandlers(io, db, opts = {}) {
                       SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5
                     )`).run(user.id, user.id);
       }
-    } catch { /* table may not exist on very old DBs */ }
+    } catch (err) {
+      // Never block the connection, but "also ban IP" will not know this
+      // address (throttled, since this runs per connection).
+      throttledWarn('user IP record failed', err);
+    }
 
     next();
   });
@@ -2059,7 +2134,11 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (status.low === _diskWasLow) return;
       _diskWasLow = status.low;
       io.to('admins').emit('disk-status', status);
-    } catch { /* never let a health check take the server down */ }
+    } catch (err) {
+      // Never let a health check take the server down, but say admins are
+      // not getting low disk warnings.
+      throttledWarn('disk status check failed', err);
+    }
   }, 60 * 1000);
 
   // ══════════════════════════════════════════════════════════
@@ -2140,7 +2219,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     try {
       const rows = db.prepare('SELECT target_id, nickname FROM user_nicknames WHERE owner_id = ?').all(socket.user.id);
       for (const r of rows) nicknames[r.target_id] = r.nickname;
-    } catch { /* non-critical — table may not exist yet on old installs before migration runs */ }
+    } catch { /* non-critical: nicknames are saved, they just do not sync to this connection */ }
 
     socket.emit('session-info', {
       id: socket.user.id, username: socket.user.username,
@@ -2196,6 +2275,9 @@ function setupSocketHandlers(io, db, opts = {}) {
     const FLOOD_LIMITS = {
       message: { max: 10, windowMs: 10000 },
       event:   { max: 60, windowMs: 10000 },
+      // Opening a channel sends about seven cheap reads at once, so clicking
+      // quickly through a server ran out of the general allowance (#5701).
+      browse:  { max: 400, windowMs: 10000 },
       nativeSignal: { max: 120, windowMs: 10000 },
       nativeSignalGlobal: { max: 12000, windowMs: 10000 },
       screenLifecycle: { max: 12, windowMs: 10000 },
@@ -2248,6 +2330,13 @@ function setupSocketHandlers(io, db, opts = {}) {
       'visibility-change'
     ]);
 
+    // What opening a channel sends: reads that cost the server little, limited
+    // by the 'browse' bucket instead of the general one (#5701).
+    const BROWSE_EVENTS = new Set([
+      'enter-channel', 'get-messages', 'mark-read', 'get-channel-members',
+      'request-voice-users', 'get-voice-counts', 'get-channels',
+    ]);
+
     // Events that mark a real, engaged human for the idle-online flag. Kept
     // deliberately narrow: passive traffic (typing, visibility, presence
     // pings) and the client's automatic away transition are NOT here, because
@@ -2277,8 +2366,14 @@ function setupSocketHandlers(io, db, opts = {}) {
         return next();
       }
       if (FLOOD_EXEMPT.has(eventName)) return next();
-      if (floodCheck('event')) {
-        socket.emit('error-msg', 'Slow down — too many requests');
+      const bucket = BROWSE_EVENTS.has(eventName) ? 'browse' : 'event';
+      if (floodCheck(bucket)) {
+        // One warning every few seconds, not one per blocked request (#5701).
+        const now = Date.now();
+        if (now - (socket._lastSlowDown || 0) > 3000) {
+          socket._lastSlowDown = now;
+          socket.emit('error-msg', 'Slow down — too many requests');
+        }
         return;
       }
       next();
@@ -2303,7 +2398,8 @@ function setupSocketHandlers(io, db, opts = {}) {
           isAdmin: socket.user.isAdmin,
           effectiveLevel: getUserEffectiveLevel(socket.user.id, opts.channelId || null),
           createdAt: opts.createdAt || socket.user.createdAt,
-          surface: opts.surface || 'message'
+          surface: opts.surface || 'message',
+          markdown: !!opts.markdown
         });
       } catch (err) {
         // Never let an automod fault take chat down with it.
@@ -2520,7 +2616,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       io, db, state,
       // Permissions
       getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
-      userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
+      userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles,
       parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence, resetPresenceSync,
@@ -2530,7 +2626,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
       // Ferry (Discord bridge)
-      ferry, ferryLinksFor, parseFerryTarget, ferryRelay,
+      ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply,
       // Slash commands
       processSlashCommand,
       // Music helpers

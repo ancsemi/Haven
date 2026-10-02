@@ -33,7 +33,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'GET' && req.url === '/api/check') {
     let nodeVersion = '';
-    try { nodeVersion = process.version; } catch {}
+    nodeVersion = process.version;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       platform: process.platform,
@@ -94,7 +94,7 @@ server.listen(0, '127.0.0.1', () => {
 
 // ── SSE helper ────────────────────────────────────────────
 function send(res, data) {
-  try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
+  try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { /* the browser closed the progress page: nothing left to tell */ }
 }
 
 // ── Run a command and return a promise ────────────────────
@@ -206,7 +206,7 @@ if (!existing) {
       try {
         await run('node', [tmpScript], { cwd: HAVEN_DIR });
         send(res, { step: 'config', state: 'done', label: 'Server configured', progress: 80 });
-        try { fs.unlinkSync(tmpScript); } catch {}
+        try { fs.unlinkSync(tmpScript); } catch { /* a leftover temp script is harmless; the next run overwrites it */ }
       } catch (runErr) {
         throw new Error(runErr.message || 'Run failed');
       }
@@ -218,7 +218,7 @@ if (!existing) {
     // Mark tunnel as configured
     try {
       fs.writeFileSync(path.join(DATA_DIR, '.tunnel_configured'), 'configured');
-    } catch {}
+    } catch (err) { console.warn('[Installer] could not mark the tunnel as configured:', err.message); }
 
     // ── Step 5: Create shortcuts (Windows only) ──
     send(res, { step: 'shortcuts', state: 'active', label: 'Creating shortcuts\u2026', progress: 85 });
@@ -269,7 +269,7 @@ if (!existing) {
         if (fs.existsSync(desktopDir)) {
           const dFile = path.join(desktopDir, 'Haven.desktop');
           fs.writeFileSync(dFile, desktopEntry);
-          try { fs.chmodSync(dFile, 0o755); } catch {}
+          try { fs.chmodSync(dFile, 0o755); } catch (err) { console.warn('[Installer] could not make the desktop shortcut runnable:', err.message); }
         }
         fs.mkdirSync(appsDir, { recursive: true });
         fs.writeFileSync(path.join(appsDir, 'Haven.desktop'), desktopEntry);

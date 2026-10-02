@@ -162,5 +162,24 @@ test('replying to a webhook bot keeps [BOT] name in replyContext', async () => {
   assert.ok(bot, 'bot message in history');
   assert.equal(bot.username, '[BOT] LOLbot');
 
+  // A bot can reply inside a thread (#5706).
+  const threadMsg = next(sock, 'new-thread-message', (d) => d && d.parentId === botId);
+  const threadUpd = next(sock, 'thread-updated', (d) => d && d.parentId === botId);
+  const inThread = await post(`/api/webhooks/${webhook.token}`, { content: 'thread reply', thread_id: botId });
+  assert.equal(inThread.status, 200, `thread post failed: ${JSON.stringify(inThread.body)}`);
+  assert.equal(inThread.body.thread_id, botId);
+  const tm = await threadMsg;
+  assert.ok(tm, 'the thread got the reply live');
+  assert.equal(tm.message.content, 'thread reply');
+  assert.equal(tm.message.thread_id, botId);
+  const tu = await threadUpd;
+  assert.ok(tu && tu.thread.count >= 1, 'the parent shows the thread count');
+  assert.ok(!(await history(sock, code)).messages.some((m) => m.id === inThread.body.message_id), 'a thread reply stays out of the channel scroll');
+
+  const notTop = await post(`/api/webhooks/${webhook.token}`, { content: 'x', thread_id: inThread.body.message_id });
+  assert.equal(notTop.status, 400, 'a thread reply cannot start a thread of its own');
+  const withEphemeral = await post(`/api/webhooks/${webhook.token}`, { content: 'x', thread_id: botId, ephemeral: true, recipient_id: 1 });
+  assert.equal(withEphemeral.status, 400, 'thread_id does not mix with ephemeral');
+
   sock.close();
 });

@@ -3,17 +3,21 @@
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
 const { isString, isInt, VALID_ROLE_PERMS } = require('./helpers');
-const { seedDefaultRoles } = require('../roleDefaults');
+const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDefaults');
 
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
     getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole,
     emitOnlineUsers, broadcastChannelLists, getEnrichedChannels,
-    transferAdminRef, HAVEN_VERSION, logAudit, getAdminRoleDisplay
+    transferAdminRef, HAVEN_VERSION, logAudit
   } = ctx;
   const { channelUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
+
+  // A role color is a short hex code (#abc or #aabbcc); anything else is
+  // stored as no color.
+  const safeRoleColor = (c) => (isString(c, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(c)) ? c : null;
 
   // ── Helper: apply role-linked channel access ────────────
   function applyRoleChannelAccess(roleId, userId, direction) {
@@ -157,10 +161,10 @@ module.exports = function register(socket, ctx) {
       const entries = Array.isArray(data.roles) ? data.roles : [];
       if (!entries.length) return [];
       const ph = entries.map(() => '?').join(',');
-      const roles = db.prepare(`SELECT id, name, color, icon, level FROM roles WHERE id IN (${ph})`).all(...entries.map(e => e.roleId));
+      const roles = db.prepare(`SELECT id, name, color, color2, color_shimmer, icon, level FROM roles WHERE id IN (${ph})`).all(...entries.map(e => e.roleId));
       return entries.map(e => {
         const r = roles.find(x => x.id === e.roleId);
-        return r ? { id: r.id, name: r.name, color: r.color, icon: r.icon, emoji: e.emoji } : null;
+        return r ? { id: r.id, name: r.name, color: r.color, color2: r.color2, color_shimmer: r.color_shimmer, icon: r.icon, emoji: e.emoji } : null;
       }).filter(Boolean);
     } catch { return []; }
   }
@@ -450,7 +454,7 @@ module.exports = function register(socket, ctx) {
     if (memberIds.length > 0) {
       const placeholders = memberIds.map(() => '?').join(',');
       const roleRows = db.prepare(`
-        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color, r.icon, ur.channel_id
+        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color, r.color2, r.color_shimmer, r.icon, ur.channel_id
         FROM user_roles ur
         JOIN roles r ON ur.role_id = r.id
         WHERE ur.user_id IN (${placeholders})
@@ -461,7 +465,8 @@ module.exports = function register(socket, ctx) {
         if (!userRolesMap[row.user_id]) userRolesMap[row.user_id] = [];
         userRolesMap[row.user_id].push({
           roleId: row.role_id, name: row.name, level: row.level,
-          color: row.color, icon: row.icon, scope: row.channel_id ? 'channel' : 'server'
+          color: row.color, color2: row.color2, color_shimmer: row.color_shimmer,
+          icon: row.icon, scope: row.channel_id ? 'channel' : 'server'
         });
       });
     }
@@ -473,42 +478,6 @@ module.exports = function register(socket, ctx) {
     }));
 
     cb({ channelId: channel.id, channelName: channel.name, members: result });
-  });
-
-  // ── Admin role cosmetic display (admin only) ────────────
-  // The admin role is synthetic (there is no row for it in `roles`). These
-  // handlers persist a purely cosmetic override in server_settings under
-  // 'admin_role_display'. Nothing here affects is_admin, level or permissions.
-  socket.on('get-admin-role-display', (data, callback) => {
-    const cb = typeof callback === 'function' ? callback : () => {};
-    if (!socket.user.isAdmin) return cb({ error: 'Only the admin can view this' });
-    cb({ display: getAdminRoleDisplay() });
-  });
-
-  socket.on('update-admin-role-display', (data, callback) => {
-    const cb = typeof callback === 'function' ? callback : () => {};
-    if (!socket.user.isAdmin) return cb({ error: 'Only the admin can edit this' });
-    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
-
-    // Validated like create/update-role; invalid fields fall back to the safe
-    // default rather than being rejected, since this is cosmetic only.
-    const name = isString(data.name, 1, 30) ? data.name.trim() : 'Admin';
-    const color = (isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color)) ? data.color : '#e74c3c';
-    const icon = (isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon)) ? data.icon : null;
-    const visible = data.visible !== false;
-
-    db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_display', ?)")
-      .run(JSON.stringify({ name, color, icon, visible }));
-
-    // Refresh every live display: member lists re-read getUserHighestRole and
-    // clients re-fetch role-driven UI on roles-updated.
-    for (const [code] of channelUsers) { emitOnlineUsers(code); }
-    io.except('bot-sockets').emit('roles-updated');
-
-    cb({ success: true, display: { name, color, icon, visible } });
-    _audit({ actor: socket.user, action: 'admin_role_display_update',
-      target_type: 'server', target_id: null, target_name: 'admin_role_display',
-      details: { name, color, icon, visible } });
   });
 
   // ── Create role ─────────────────────────────────────────
@@ -524,8 +493,13 @@ module.exports = function register(socket, ctx) {
 
     const level = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : 25;
     const scope = data.scope === 'channel' ? 'channel' : 'server';
-    const color = isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color) ? data.color : null;
+    const color = safeRoleColor(data.color);
+    // Gradient: color is the start, color2 the end. Shimmer only means
+    // something when there is a gradient to move.
+    const color2 = safeRoleColor(data.color2);
+    const shimmer = color2 && data.shimmer ? 1 : 0;
     const autoAssign = data.autoAssign ? 1 : 0;
+    const transparent = data.transparent ? 1 : 0;
     const icon = isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon) ? data.icon : null;
     const maxUploadMb = isInt(data.maxUploadMb) && data.maxUploadMb >= 1 && data.maxUploadMb <= 102400 ? data.maxUploadMb : null;
 
@@ -543,8 +517,8 @@ module.exports = function register(socket, ctx) {
         db.prepare('UPDATE roles SET auto_assign = 0').run();
       }
       const result = db.prepare(
-        'INSERT INTO roles (name, level, scope, color, auto_assign, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(name, level, scope, color, autoAssign, icon, maxUploadMb);
+        'INSERT INTO roles (name, level, scope, color, color2, color_shimmer, transparent, auto_assign, icon, max_upload_mb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(name, level, scope, color, color2, shimmer, transparent, autoAssign, icon, maxUploadMb);
 
       const perms = level > 0 && Array.isArray(data.permissions) ? data.permissions : [];
       const adminOnlyPerms = ['transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'view_all_channels'];
@@ -558,7 +532,7 @@ module.exports = function register(socket, ctx) {
       cb({ success: true, roleId: result.lastInsertRowid });
       _audit({ actor: socket.user, action: 'role_create',
         target_type: 'role', target_id: result.lastInsertRowid, target_name: name,
-        details: { level, scope, color, autoAssign: !!autoAssign, permissions: perms } });
+        details: { level, scope, color, color2, shimmer: !!shimmer, autoAssign: !!autoAssign, permissions: perms } });
     } catch (err) {
       console.error('Create role error:', err);
       cb({ error: 'Failed to create role' });
@@ -604,8 +578,20 @@ module.exports = function register(socket, ctx) {
       if (isString(data.name, 1, 30)) { updates.push('name = ?'); values.push(data.name.trim()); }
       if (isInt(data.level) && data.level >= 0 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
       if (data.color !== undefined) {
-        const safeColor = (isString(data.color, 4, 7) && /^#[0-9a-fA-F]{3,6}$/.test(data.color)) ? data.color : null;
-        updates.push('color = ?'); values.push(safeColor);
+        updates.push('color = ?'); values.push(safeRoleColor(data.color));
+      }
+      // Clearing the end color turns the gradient off, and its shimmer with it.
+      const color2 = data.color2 !== undefined ? safeRoleColor(data.color2) : undefined;
+      if (color2 !== undefined) {
+        updates.push('color2 = ?'); values.push(color2);
+      }
+      if (color2 === null) {
+        updates.push('color_shimmer = 0');
+      } else if (data.shimmer !== undefined) {
+        updates.push('color_shimmer = ?'); values.push(data.shimmer ? 1 : 0);
+      }
+      if (data.transparent !== undefined) {
+        updates.push('transparent = ?'); values.push(data.transparent ? 1 : 0);
       }
       if (data.icon !== undefined) {
         const safeIcon = (isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon)) ? data.icon : null;
@@ -897,7 +883,10 @@ module.exports = function register(socket, ctx) {
         _audit({ actor: socket.user, action: 'user_perms_update',
           target_type: 'user', target_id: userId, target_name: tgt ? tgt.u : null,
           details: { roleId: role.id, roleName: role.name, granted, denied } });
-      } catch {}
+      } catch (err) {
+        // The change is saved and answered; only its audit entry is missing.
+        console.warn('[audit] user_perms_update entry failed:', err.message);
+      }
     } catch (err) {
       console.error('set-user-server-perms error:', err);
       cb({ error: 'Failed to update permissions' });
@@ -917,6 +906,13 @@ module.exports = function register(socket, ctx) {
       db.exec('DELETE FROM roles');
 
       seedDefaultRoles(db);
+      // The Admin role is part of the defaults a new server starts with, so a
+      // reset makes it again and gives it to the admin, rather than leaving
+      // admin_role_id pointing at the role that was just deleted.
+      const adminRoleId = createAdminRole(db);
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_id', ?)").run(String(adminRoleId));
+      const currentAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+      if (currentAdmin) grantAdminRole(db, currentAdmin.id);
 
       const autoRoles = db.prepare('SELECT id FROM roles WHERE auto_assign = 1 AND scope = ?').all('server');
       for (const ar of autoRoles) {
@@ -979,12 +975,14 @@ module.exports = function register(socket, ctx) {
         WHERE cm.channel_id IN (${callerChannels.map(() => '?').join(',')})
           AND u.id != ?
         ORDER BY COALESCE(u.display_name, u.username)
-      `).all(...callerChannels.map(c => c.id), callerId);
+      `).all(...callerChannels.map(c => c.id), callerIsAdmin ? -1 : callerId);
 
       const users = [];
       const userChannelMap = {};
       for (const m of allMembers) {
-        if (m.is_admin) continue;
+        // The admin is listed so they can manage their own roles; nobody
+        // else sees themselves or any admin here.
+        if (m.is_admin && m.id !== callerId) continue;
         const userServerLevel = getUserEffectiveLevel(m.id);
         if (!callerIsAdmin && userServerLevel >= callerServerLevel) continue;
 
@@ -1004,7 +1002,7 @@ module.exports = function register(socket, ctx) {
         if (sharedChannels.length === 0 && !callerIsAdmin) continue;
 
         const currentRoles = db.prepare(`
-          SELECT ur.role_id, ur.channel_id, r.name, r.level, r.color
+          SELECT ur.role_id, ur.channel_id, r.name, r.level, r.color, r.color2, r.color_shimmer
           FROM user_roles ur
           JOIN roles r ON ur.role_id = r.id
           WHERE ur.user_id = ?
@@ -1014,12 +1012,12 @@ module.exports = function register(socket, ctx) {
         // Compute effective permissions per (role, channel) so the RAC can
         // re-display the user's actual saved customisations on reopen
         // instead of always falling back to the role's defaults.
-        let userOverrides = [];
-        try {
-          userOverrides = db.prepare(
-            'SELECT role_id, channel_id, permission, allowed FROM user_role_perms WHERE user_id = ?'
-          ).all(m.id);
-        } catch { /* table may not exist yet */ }
+        // Not caught here: showing role defaults in place of this person's
+        // saved customisations would overwrite them on save, so a failed read
+        // fails the whole request (the catch below logs it and tells the user).
+        const userOverrides = db.prepare(
+          'SELECT role_id, channel_id, permission, allowed FROM user_role_perms WHERE user_id = ?'
+        ).all(m.id);
 
         for (const cr of currentRoles) {
           const basePerms = db.prepare(
@@ -1080,7 +1078,9 @@ module.exports = function register(socket, ctx) {
     const roleId = isInt(data.roleId) ? data.roleId : null;
     if (!userId || !roleId) return cb({ error: 'Missing userId or roleId' });
 
-    if (userId === socket.user.id) {
+    // Only the admin may change their own roles. Their powers come from
+    // is_admin, not roles, so this can't raise them; for anyone else it could.
+    if (userId === socket.user.id && !socket.user.isAdmin) {
       return cb({ error: 'You cannot modify your own roles' });
     }
 
@@ -1177,7 +1177,10 @@ module.exports = function register(socket, ctx) {
         _audit({ actor: socket.user, action: 'role_assign',
           target_type: 'user', target_id: userId, target_name: tgt ? tgt.u : null,
           details: { roleId, roleName: role.name, channelId, customLevel: assignLevel !== role.level ? assignLevel : null } });
-      } catch {}
+      } catch (err) {
+        // The role is assigned and answered; only its audit entry is missing.
+        console.warn('[audit] role_assign entry failed:', err.message);
+      }
     } catch (err) {
       console.error('Assign role error:', err);
       cb({ error: 'Failed to assign role' });
@@ -1196,7 +1199,9 @@ module.exports = function register(socket, ctx) {
     const roleId = isInt(data.roleId) ? data.roleId : null;
     if (!userId || !roleId) return cb({ error: 'Missing userId or roleId' });
 
-    if (userId === socket.user.id) {
+    // Only the admin may change their own roles. Their powers come from
+    // is_admin, not roles, so this can't raise them; for anyone else it could.
+    if (userId === socket.user.id && !socket.user.isAdmin) {
       return cb({ error: 'You cannot modify your own roles' });
     }
 
@@ -1235,7 +1240,10 @@ module.exports = function register(socket, ctx) {
       _audit({ actor: socket.user, action: 'role_revoke',
         target_type: 'user', target_id: userId, target_name: target ? target.username : null,
         details: { roleId, roleName: r ? r.name : null, channelId } });
-    } catch {}
+    } catch (err) {
+      // The role is revoked; only its audit entry is missing.
+      console.warn('[audit] role_revoke entry failed:', err.message);
+    }
 
     refreshUserRoles(userId);
     syncSeeAllMemberships(userId);
@@ -1600,10 +1608,15 @@ module.exports = function register(socket, ctx) {
             const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
             allPerms.forEach(p => insertPerm.run(formerAdminRole.id, p));
           }
-          db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').run(socket.user.id, formerAdminRole.id);
+          // A former admin is not a current one: their server roles, an Admin
+          // role among them, give way to Former Admin alone. It already holds
+          // every role permission, so nothing they could do is lost.
+          db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id IS NULL').run(socket.user.id);
+          db.prepare('DELETE FROM user_role_perms WHERE user_id = ? AND channel_id IS NULL').run(socket.user.id);
           db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, ?)').run(
             socket.user.id, formerAdminRole.id, socket.user.id
           );
+          grantAdminRole(db, userId);
         });
         transferTxn();
 

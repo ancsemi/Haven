@@ -32,7 +32,10 @@ const { DATA_DIR } = require('./paths');
 const { safeGet } = require('./safeFetch');
 
 const CACHE_DIR = path.join(DATA_DIR, 'media-cache');
-try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch { /* created lazily below */ }
+try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch (err) {
+  // Nothing creates it later, so proxied media will fail to cache until this is fixed.
+  console.warn('[media-proxy] Could not create cache folder:', err.message);
+}
 
 // ── Limits ──────────────────────────────────────────────────────────
 const MAX_BYTES        = 20 * 1024 * 1024;        // per item
@@ -151,7 +154,7 @@ function loadIndex() {
       if (!fs.existsSync(path.join(CACHE_DIR, meta.file))) continue;
       index.set(f.slice(0, -5), meta);
       totalBytes += meta.size;
-    } catch { /* skip unreadable entry */ }
+    } catch { /* skip unreadable entry; a cache miss just fetches the media again */ }
   }
   if (index.size) {
     console.log(`🖼️  Media cache: ${index.size} item(s), ${(totalBytes / 1048576).toFixed(1)} MB`);
@@ -161,8 +164,9 @@ function loadIndex() {
 function _remove(key) {
   const meta = index.get(key);
   if (!meta) return;
-  try { fs.unlinkSync(path.join(CACHE_DIR, meta.file)); } catch {}
-  try { fs.unlinkSync(_metaPath(key)); } catch {}
+  // Cache files may already be gone; the entry is dropped from the index either way.
+  try { fs.unlinkSync(path.join(CACHE_DIR, meta.file)); } catch { /* already gone */ }
+  try { fs.unlinkSync(_metaPath(key)); } catch { /* already gone */ }
   totalBytes -= meta.size;
   index.delete(key);
 }

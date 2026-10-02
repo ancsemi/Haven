@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or help setting up
+    url: https://github.com/ancsemi/Haven/discussions
+    about: Ask in Discussions. Other people can answer there too.
+  - name: Setup guide
+    url: https://github.com/ancsemi/Haven/blob/main/GUIDE.md
+    about: Hosting, port forwarding, tunnels, bots and every setting.

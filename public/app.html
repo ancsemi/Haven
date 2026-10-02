@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.8.1">
+  <link rel="stylesheet" href="/css/style.css?v=4.16.3">
   <script src="/js/theme-compat.js?v=4.1.1"></script>
   <script src="/js/theme-init.js?v=4.1.3"></script>
 </head>
@@ -384,7 +384,7 @@
                download page instead of dismissing. Same trap as the Android
                banner below, which hit it with nested <button>s. -->
           <span id="desktop-app-banner" class="desktop-app-banner" style="display:none">
-            <a class="desktop-app-link" href="https://ancsemi.github.io/Haven/#download" target="_blank" rel="noopener">
+            <a class="desktop-app-link" href="https://haven-app.com/#download" target="_blank" rel="noopener">
               <span class="desktop-app-icon">🖥️</span>
               <span class="desktop-app-text" data-i18n="header.get_desktop_app">Get the Desktop App</span>
             </a>
@@ -1197,16 +1197,31 @@
     <div class="modal">
       <h3 data-i18n="modals.edit_profile.title">Edit Profile</h3>
 
+      <!-- Display Name -->
+      <p class="modal-desc" data-i18n="modals.edit_profile.display_name_desc">Letters, numbers, underscores, and spaces (2–20 chars)</p>
+      <div class="form-group">
+        <label data-i18n="modals.edit_profile.display_name_label">Display Name</label>
+        <input type="text" id="rename-input" data-i18n-placeholder="modals.edit_profile.display_name_placeholder" placeholder="New display name..." maxlength="20">
+      </div>
+
+      <!-- Bio -->
+      <div class="form-group" style="margin-top:8px">
+        <label data-i18n="modals.edit_profile.bio_label">Bio</label> <span class="muted-text" data-i18n="modals.edit_profile.bio_max">(max 190 chars)</span>
+        <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" data-i18n-placeholder="modals.edit_profile.bio_placeholder" placeholder="Tell people about yourself…" rows="2"></textarea>
+      </div>
+
       <!-- Avatar Customizer -->
       <div class="avatar-settings" style="margin-bottom: 16px;">
-        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.avatar_title">Avatar</h5>
+        <h5 class="settings-section-subtitle" style="margin-top:0" data-i18n="modals.edit_profile.avatar_title">Avatar</h5>
         <div class="avatar-upload-row" style="margin-bottom: 10px;">
           <div class="avatar-upload-preview" id="avatar-upload-preview"></div>
           <button type="button" class="btn-sm" id="avatar-upload-btn" data-i18n="modals.edit_profile.upload_btn">Upload</button>
+          <button type="button" class="btn-sm" id="avatar-crop-btn" data-i18n="modals.edit_profile.edit_btn" disabled>Edit</button>
           <button type="button" class="btn-sm" id="avatar-remove-btn" data-i18n="modals.edit_profile.clear_btn">Clear</button>
           <input type="file" id="avatar-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
         </div>
         <small class="muted-text" style="display:block;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.avatar_hint">JPG, PNG, GIF (animated!), WebP · Max 2 MB</small>
+        <small class="muted-text" id="avatar-edit-note" style="display:none;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.avatar_edit_animated">Animated images can't be edited.</small>
         <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.border_title">Border</h5>
         <div class="avatar-upload-row" style="margin-bottom: 10px;">
           <div class="avatar-upload-preview" id="border-upload-preview"></div>
@@ -1221,9 +1236,15 @@
           <option value="trigger" data-i18n="modals.edit_profile.animate_trigger">Trigger</option>
           <option value="disabled" data-i18n="modals.edit_profile.animate_disabled">Disabled</option>
         </select>
-        <small class="muted-text" style="display:block;margin-bottom:6px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_intro">Controls how animations on your profile will appear for every user on Haven. This applies to both your avatar and border, assuming you upload an animated image such as a GIF or APNG.</small>
-        <small class="muted-text" style="display:block;margin-bottom:4px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_trigger">Trigger — Animations on your profile will loop when a user puts their cursor over your message, or opens your profile card.</small>
-        <small class="muted-text" style="display:block;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_disabled">Disabled — Animations will be completely disabled for your profile. Existing animated images uploaded to your profile will remain untouched, however, only the first frame of the image will be displayed on your profile.</small>
+        <button type="button" class="learn-more-toggle" id="animate-learn-more-toggle" aria-expanded="false" aria-controls="animate-learn-more-body">
+          <span class="collapse-toggle-arrow collapsed" id="animate-learn-more-arrow" aria-hidden="true">▾</span>
+          <span data-i18n="modals.edit_profile.animate_learn_more">Learn more</span>
+        </button>
+        <div class="collapsible-section-body collapsed" id="animate-learn-more-body">
+          <small class="muted-text" style="display:block;margin-bottom:6px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_intro">Controls how animations on your profile will appear for every user on Haven. This applies to both your avatar and border, assuming you upload an animated image such as a GIF or APNG.</small>
+          <small class="muted-text" style="display:block;margin-bottom:4px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_trigger">Trigger — Animations on your profile will loop when a user puts their cursor over your message, or opens your profile card.</small>
+          <small class="muted-text" style="display:block;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.animate_note_disabled">Disabled — Animations will be completely disabled for your profile. Existing animated images uploaded to your profile will remain untouched, however, only the first frame of the image will be displayed on your profile.</small>
+        </div>
         <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.shape_title">Shape</h5>
         <div class="avatar-shape-picker" id="avatar-shape-picker">
           <button type="button" class="avatar-shape-btn active" data-shape="circle" data-i18n-title="modals.edit_profile.shape_circle" title="Circle"><div class="shape-preview shape-circle"></div></button>
@@ -1232,19 +1253,6 @@
           <button type="button" class="avatar-shape-btn" data-shape="hex" data-i18n-title="modals.edit_profile.shape_hexagon" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
           <button type="button" class="avatar-shape-btn" data-shape="diamond" data-i18n-title="modals.edit_profile.shape_diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
         </div>
-      </div>
-
-      <!-- Display Name -->
-      <p class="modal-desc" data-i18n="modals.edit_profile.display_name_desc">Letters, numbers, underscores, and spaces (2–20 chars)</p>
-      <div class="form-group">
-        <label data-i18n="modals.edit_profile.display_name_label">Display Name</label>
-        <input type="text" id="rename-input" data-i18n-placeholder="modals.edit_profile.display_name_placeholder" placeholder="New display name..." maxlength="20">
-      </div>
-
-      <!-- Bio -->
-      <div class="form-group" style="margin-top:8px">
-        <label data-i18n="modals.edit_profile.bio_label">Bio</label> <span class="muted-text" data-i18n="modals.edit_profile.bio_max">(max 190 chars)</span>
-        <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" data-i18n-placeholder="modals.edit_profile.bio_placeholder" placeholder="Tell people about yourself…" rows="2"></textarea>
       </div>
 
       <!-- Groups -->
@@ -1284,7 +1292,9 @@
   <!-- Border Edit Modal. An append-only op log is the source of truth: each tool
        appends one fraction-based op (crop / move / resize / rotate / distort),
        folded in order as nested CSS wrappers. The right-side list shows the log
-       with per-entry undo. Nothing is baked; the same fold drives real rendering. -->
+       with per-entry undo. Nothing is baked; the same fold drives real rendering.
+       The avatar reuses this editor with only Crop; its result is drawn
+       to a canvas and uploaded as the new avatar image. -->
   <div class="modal-overlay" id="border-crop-modal" style="display:none">
     <div class="modal">
       <h3 data-i18n="modals.border_crop.title">Edit</h3>
@@ -1299,6 +1309,7 @@
             <button type="button" class="border-crop-mode-btn" data-mode="opacity" data-i18n="modals.border_crop.mode_opacity">Opacity</button>
           </div>
           <button type="button" class="border-crop-autocrop-btn" id="border-crop-autocrop-btn" data-i18n="modals.border_crop.autocrop">Crop out invisible pixels</button>
+          <button type="button" class="border-crop-autocrop-btn border-crop-lock-btn" id="border-crop-lock-btn" aria-pressed="false" data-i18n="modals.border_crop.lock_sides" data-i18n-title="modals.border_crop.lock_sides_hint" title="Crop all sides evenly">Lock sides</button>
           <div class="border-crop-rotate-actions" id="border-crop-rotate-actions">
             <button type="button" class="btn-sm" id="border-rotate-ccw">-90°</button>
             <button type="button" class="btn-sm" id="border-rotate-cw">+90°</button>
@@ -1456,6 +1467,7 @@
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_server">Server</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-update" style="display:none">⬆️ <span data-i18n="settings.nav.server_updates">Server Updates</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-branding" style="display:none">🏠 <span data-i18n="settings.nav.branding">Branding</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-presence" style="display:none">🟢 <span data-i18n="settings.nav.presence">Presence &amp; Activity</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-custom-tos" style="display:none">⚖️ <span data-i18n="settings.nav.tos">Terms of Service</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-connectivity" style="display:none">📡 <span data-i18n="settings.nav.connectivity">Voice &amp; Connectivity</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-large-server" style="display:none">🏟️ <span data-i18n="settings.nav.large_server">Large Server Setup</span></div>
@@ -1467,7 +1479,7 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-moderation" style="display:none">🛡️ <span data-i18n="settings.nav.moderation">Moderation</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-security" style="display:none">🔒 <span data-i18n="settings.nav.security">Security</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-automod" style="display:none">🛡️ <span data-i18n="settings.nav.automod">Moderation</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🛡️ <span data-i18n="settings.nav.whitelist">Whitelist</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🚪 <span data-i18n="settings.nav.whitelist">Sign-ups</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-invite" style="display:none">🌐 <span data-i18n="settings.nav.invite">Invite Code</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-guests" style="display:none">👤 <span data-i18n="settings.nav.guests">Guest Access</span></div>
 
@@ -2567,6 +2579,26 @@
           </div>
         </div>
 
+        <!-- Presence & Activity -->
+        <div class="admin-settings" id="section-presence" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🟢 <span data-i18n="settings.admin.presence_title">Presence &amp; Activity</span></h5>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.auto_away_enabled">Enable automatic Away status</span>
+            <input type="checkbox" id="auto-away-enabled" checked>
+          </label>
+          <small class="settings-hint" style="display:block;margin-top:6px;margin-bottom:8px" data-i18n="settings.admin.auto_away_enabled_hint">Turn this off to keep users Online until they change their status themselves.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.auto_away_visible">Visible tab (minutes)</span>
+            <input type="number" id="auto-away-visible-minutes" min="1" max="60" step="1" value="5" class="settings-number-input">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.admin.auto_away_visible_hint">Time without input before an active tab changes the status to Away.</small>
+          <label class="select-row">
+            <span data-i18n="settings.admin.auto_away_hidden">Hidden tab (minutes)</span>
+            <input type="number" id="auto-away-hidden-minutes" min="1" max="60" step="1" value="2" class="settings-number-input">
+          </label>
+          <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.admin.auto_away_hidden_hint">Time without input before a hidden tab changes the status to Away.</small>
+        </div>
+
         <!-- Custom Terms of Service (Admin only) -->
         <div class="admin-settings" id="section-custom-tos" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">⚖️ <span data-i18n="settings.admin.custom_tos_title">Custom Terms of Service</span></h5>
@@ -2578,6 +2610,11 @@
         <div class="admin-settings" id="section-connectivity" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">📡 <span data-i18n="settings.admin.connectivity_title">Voice &amp; Connectivity</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.connectivity_hint">STUN/TURN servers let voice and screen share connect between users on different networks. Leave blank to use Haven's built-in STUN pool. If users outside your local network get stuck on "ICE: Connecting...", set your own servers here.</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.ice_disabled">Disable STUN/TURN (direct connections only)</span>
+            <input type="checkbox" id="voice-ice-disabled">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.ice_disabled_hint">Use this for LAN-only servers. Voice and screen sharing will use direct local network connections; users on different networks may not connect.</small>
           <label class="select-row" style="margin-top:8px; align-items:flex-start">
             <span data-i18n="settings.admin.stun_urls">STUN servers</span>
             <textarea id="stun-urls-input" rows="3" class="settings-text-input" placeholder="stun:stun.cloudflare.com:3478&#10;stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:monospace; font-size:0.75rem"></textarea>
@@ -2985,7 +3022,7 @@
 
         <!-- Whitelist -->
         <div class="admin-settings" id="section-whitelist" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.whitelist_title">Whitelist</span></h5>
+          <h5 class="settings-section-subtitle">🚪 <span data-i18n="settings.admin.whitelist_title">Who can sign up</span></h5>
           <label class="toggle-row">
             <span data-i18n="settings.admin.whitelist_enabled">Enabled</span>
             <input type="checkbox" id="whitelist-enabled">
@@ -3283,7 +3320,7 @@
             <small class="settings-group-label" data-i18n="settings.admin.backup_download_label">Download Backup</small>
             <div class="backup-checkboxes" style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="channels" checked> <span data-i18n="settings.admin.backup_inc_channels">Channels &amp; roles</span></label>
-              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="users" checked> <span data-i18n="settings.admin.backup_inc_users">Users (no passwords / 2FA / emails)</span></label>
+              <label class="checkbox-row"><input type="checkbox" class="backup-include" value="users" checked> <span data-i18n="settings.admin.backup_inc_users">Users (account list)</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="settings" checked> <span data-i18n="settings.admin.backup_inc_settings">Server settings</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="messages"> <span data-i18n="settings.admin.backup_inc_messages">Messages (chat history)</span></label>
               <label class="checkbox-row"><input type="checkbox" class="backup-include" value="dms"> <span data-i18n="settings.admin.backup_inc_dms">Direct messages</span> <small class="settings-hint" style="margin-left:6px;opacity:.75" data-i18n="settings.admin.backup_inc_dms_hint">(E2E ciphertext; only original key holders can read)</small></label>
@@ -3294,7 +3331,7 @@
               <button class="btn-sm" id="backup-select-all-btn" type="button" data-i18n="settings.admin.backup_select_all">Select All</button>
               <button class="btn-sm" id="backup-select-none-btn" type="button" data-i18n="settings.admin.backup_select_none">Clear</button>
             </div>
-            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_modes_hint">Pick what to include. Messages and uploaded files can make the backup very large; channels / users / settings alone are usually small. User passwords, 2FA secrets, and emails are never exported.</small>
+            <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_modes_hint">Pick what to include. Messages and uploaded files can make the backup very large; channels, users and settings alone are usually small. To restore or move a server, tick Messages: that carries the whole database, so everyone keeps their account and password. It also means the file holds everyone's login details (passwords stored scrambled, never readable), 2FA secrets and emails, so keep it somewhere safe.</small>
           </div>
           <div class="settings-group" style="margin-top:14px">
             <small class="settings-group-label" data-i18n="settings.admin.backup_restore_label">Restore From Backup</small>
@@ -3365,6 +3402,11 @@
             <input type="number" id="cleanup-max-size" min="0" max="100000" value="0" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.cleanup_size_hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
+          <label class="select-row">
+            <span data-i18n="settings.admin.cleanup_max_uploads">Max Uploads Size (MB)</span>
+            <input type="number" id="cleanup-max-uploads" min="0" max="10000000" value="0" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.cleanup_uploads_hint">When the uploads folder passes N MB, remove the oldest messages with files until it is back under (0 = off). Avatars, emoji and stickers count toward it but are never removed.</small>
           <label class="select-row">
             <span data-i18n="settings.admin.deleted_retention">Keep deleted files for (days)</span>
             <input type="number" id="deleted-retention-days" min="1" max="3650" value="7" class="settings-number-input">
@@ -4733,7 +4775,7 @@
       </ul>
       <p class="desktop-promo-meta" id="desktop-promo-meta">Windows Installer • v1.0.0</p>
       <div class="desktop-promo-actions">
-        <a id="desktop-promo-install" class="btn btn-accent desktop-promo-install" href="https://ancsemi.github.io/Haven/#download" target="_blank" rel="noopener">⬇ <span data-i18n="modals.desktop_promo.install_btn">Install Haven</span></a>
+        <a id="desktop-promo-install" class="btn btn-accent desktop-promo-install" href="https://haven-app.com/#download" target="_blank" rel="noopener">⬇ <span data-i18n="modals.desktop_promo.install_btn">Install Haven</span></a>
         <button id="desktop-promo-later" class="btn desktop-promo-later" data-i18n="modals.desktop_promo.later_btn">Maybe later</button>
       </div>
       <label class="desktop-promo-dismiss-label">
@@ -4870,7 +4912,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.12.1"></script>
+  <script type="module" src="/js/app.js?v=4.16.3"></script>
   <script src="/js/plugin-loader.js?v=4.6.10"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

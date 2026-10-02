@@ -19,10 +19,10 @@ _markRead(messageId) {
     // don't bounce back to "1" on the next channels-list snapshot.
     if (this.unreadCounts && this.unreadCounts[code]) {
       this.unreadCounts[code] = 0;
-      try { this._updateBadge?.(code); } catch {}
-      try { this._updateDmSectionBadge?.(); } catch {}
-      try { this._updateTabTitle?.(); } catch {}
-      try { this._updateDesktopBadge?.(); } catch {}
+      try { this._updateBadge?.(code); } catch (err) { console.warn('[Unread] _updateBadge failed', err); }
+      try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Unread] _updateDmSectionBadge failed', err); }
+      try { this._updateTabTitle?.(); } catch (err) { console.warn('[Unread] _updateTabTitle failed', err); }
+      try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[Unread] _updateDesktopBadge failed', err); }
     }
   }, 500);
 },
@@ -393,11 +393,11 @@ _runWelcomePromoQueue() {
     // to display going from flex back to none/empty and advance.
     modal.style.display = 'flex';
 
-    if (activeObserver) { try { activeObserver.disconnect(); } catch {} activeObserver = null; }
+    if (activeObserver) { activeObserver.disconnect(); activeObserver = null; }
     activeObserver = new MutationObserver(() => {
       const d = modal.style.display;
       if (d === 'none' || d === '') {
-        try { activeObserver.disconnect(); } catch {}
+        activeObserver.disconnect();
         activeObserver = null;
         // Persist a dismissal only when the user ticked this modal's "Don't
         // show again" box. A plain close (Next / Done / Maybe Later / overlay)
@@ -640,7 +640,7 @@ async _setupDesktopShortcuts() {
   };
 
   let config = {};
-  try { config = await window.havenDesktop.shortcuts.getConfig(); } catch (e) {}
+  try { config = await window.havenDesktop.shortcuts.getConfig(); } catch (e) { console.warn('[Desktop] could not read the shortcut config', e); }
 
   const actions = ['mute', 'deafen', 'ptt'];
 
@@ -659,7 +659,7 @@ async _setupDesktopShortcuts() {
         recordBtn.textContent = t('platform.shortcuts.record');
         keyEl.classList.remove('recording-label');
         // Re-register shortcuts after cancelling recording
-        window.havenDesktop.shortcuts.setConfig({}).catch(() => {});
+        window.havenDesktop.shortcuts.setConfig({}).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
         return;
       }
       recordBtn.classList.add('recording');
@@ -669,7 +669,7 @@ async _setupDesktopShortcuts() {
 
       // Temporarily clear the shortcut being recorded so its global hotkey
       // doesn't swallow the keystroke before the BrowserView sees it
-      window.havenDesktop.shortcuts.setConfig({ [action]: '' }).catch(() => {});
+      window.havenDesktop.shortcuts.setConfig({ [action]: '' }).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
 
       // (#5255) Three things the previous recorder couldn't do:
       // 1. Lone modifiers (just Alt / Ctrl / Shift) — useful while gaming so
@@ -706,7 +706,7 @@ async _setupDesktopShortcuts() {
             ? !!outcome.ok
             : (outcome !== false);                // boolean (old shape) or undefined → trust it
           if (!ok) {
-            await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch(() => {});
+            await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
             keyEl.textContent = formatAccel(config[action] || '');
             const reason = (typeof outcome === 'object' && outcome.reason) || '';
             let msg;
@@ -723,7 +723,7 @@ async _setupDesktopShortcuts() {
           config[action] = accel;
           keyEl.textContent = formatAccel(accel);
         } catch (err) {
-          await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch(() => {});
+          await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
           keyEl.textContent = formatAccel(config[action] || '');
           this._showToast?.(t('platform.shortcuts.register_failed'), 'error');
         }
@@ -782,7 +782,7 @@ async _setupDesktopShortcuts() {
         await window.havenDesktop.shortcuts.setConfig({ [action]: '' });
         config[action] = '';
         keyEl.textContent = '—';
-      } catch (err) {}
+      } catch (err) { console.warn('[Desktop] could not clear the shortcut', err); }
     });
   });
 
@@ -811,7 +811,7 @@ async _setupDesktopAppPrefs() {
   this._desktopPrefsReady = true;
 
   let prefs = {};
-  try { prefs = await window.havenDesktop.prefs.get(); } catch {}
+  try { prefs = await window.havenDesktop.prefs.get(); } catch (err) { console.warn('[Desktop] could not read desktop preferences', err); }
 
   const startEl   = document.getElementById('pref-start-on-login');
   const hiddenEl  = document.getElementById('pref-start-hidden');
@@ -837,7 +837,7 @@ async _setupDesktopAppPrefs() {
     try {
       const v = await window.havenDesktop.getVersion();
       versionEl.textContent = `Haven Desktop v${v}`;
-    } catch {}
+    } catch (err) { console.warn('[Desktop] could not read the app version', err); }
   }
 
   startEl?.addEventListener('change', async () => {
@@ -915,7 +915,7 @@ async _initE2E() {
       try {
         const savedKey = localStorage.getItem('haven_sync_key');
         if (savedKey) this._e2eWrappingKey = savedKey;
-      } catch { /* ignore */ }
+      } catch { /* storage blocked (private mode): keep the default */ }
     }
     if (ok) {
       await this._e2eSetupListeners();
@@ -954,7 +954,7 @@ async _initE2E() {
               await this.serverManager.syncWithServer(this.token, key);
               this._renderServerBar();
               this._pushServersToDesktopHistory();
-            } catch { /* silent — best-effort background sync */ }
+            } catch (err) { console.warn('[Sync] server list sync failed', err); }
           }
         }, 5 * 60 * 1000);
       }
@@ -970,7 +970,7 @@ async _initE2E() {
               await this.serverManager.syncWithServer(this.token, key);
               this._renderServerBar();
               this._pushServersToDesktopHistory();
-            } catch { /* silent */ }
+            } catch (err) { console.warn('[Sync] server list sync failed', err); }
           }
         });
       }
@@ -1960,7 +1960,7 @@ _decryptE2EImages(root) {
         // Revoking in the load handler blanks the picture on some Tauri
         // webviews (the bitmap is still tied to the blob URL). Keep it
         // a minute, same as decrypted file attachments.
-        setTimeout(() => { try { URL.revokeObjectURL(objectUrl); } catch {} }, 60_000);
+        setTimeout(() => { try { URL.revokeObjectURL(objectUrl); } catch { /* already revoked */ } }, 60_000);
         img.classList.remove('e2e-img-loading');
       })
       .catch(() => {

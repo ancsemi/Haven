@@ -43,16 +43,16 @@ class HavenGlyphs {
 
   stop() {
     if (!this._started) return;
-    try { this._iconObs?.disconnect(); } catch {}
+    this._iconObs?.disconnect();
     this._iconObs = null;
     for (const [icon, emoji] of this._iconSwapped) {
       try {
         if (icon.isConnected) icon.replaceWith(document.createTextNode(emoji));
-      } catch {}
+      } catch { /* the icon was removed mid-loop: nothing to put back */ }
     }
     this._iconSwapped = [];
     for (const parent of this._iconParents) {
-      try { if (parent.isConnected) parent.normalize(); } catch {}
+      if (parent.isConnected) parent.normalize();
     }
     this._iconParents = [];
     HavenApi.DOM.removeStyle('HavenGlyphs');

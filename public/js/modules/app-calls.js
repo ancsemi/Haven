@@ -20,12 +20,12 @@ _callNotify(title, body, code) {
   try {
     window.havenDesktop?.notify ? window.havenDesktop.notify(title, body, { channelCode: code, silent: true })
       : (window.Notification?.permission === 'granted' && new Notification(title, { body, tag: `haven-call-${code}` }));
-  } catch {}
+  } catch (err) { console.warn('[Calls] could not show the call notification', err); }
 },
 _ringIncomingCall(c) {
   if (!c?.code || this._callRings.has(c.code) || (this.voice?.inVoice && this.voice.currentChannel === c.code)) return;
   let muted = localStorage.getItem('haven_server_muted') === '1';
-  try { muted = muted || JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(c.code); } catch {}
+  try { muted = muted || JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(c.code); } catch { /* corrupt mute list: only the server-wide mute counts */ }
   const caller = this._getNickname(c.callerId, c.callerName);
   const el = document.createElement('div');
   el.className = 'call-ring';

@@ -187,7 +187,7 @@
       this.producers.delete(source);
       const producerId = producer.id;
       try { producer.close(); } catch { /* already closed */ }
-      await this._request('relay:close-producer', { producerId, source }).catch(() => {});
+      await this._request('relay:close-producer', { producerId, source }).catch((err) => { console.warn('[Relay] close-producer request failed', err); });
     }
 
     /**

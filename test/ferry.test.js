@@ -12,6 +12,10 @@ const {
   translateDiscordRefs,
   translateHavenRefs,
   roleMap,
+  isForumType,
+  matchForumTags,
+  discordTagIdsFor,
+  forumThreadName,
 } = require('../src/ferry');
 
 // Two pairings on one Haven channel, one of them sharing a channel name with
@@ -365,4 +369,45 @@ test('two Discord roles with one name are ambiguous and neither is pinged', () =
   const r = translateHavenRefs('@hunters go', g, { pingRoles: true });
   assert.equal(r.content, '@hunters go');
   assert.deepEqual(r.roleIds, []);
+});
+
+// ── Forums ──────────────────────────────────────────────────
+// The full Discord <-> Haven forum flow runs against a stand-in Discord in
+// test/ferryForums.test.js. These are the pure pieces it relies on.
+
+test('only forum and media channels count as forums', () => {
+  assert.equal(isForumType(15), true);
+  assert.equal(isForumType(16), true);
+  for (const t of [0, 5, 11, 12, null, undefined, '0']) assert.equal(isForumType(t), false, `type ${t}`);
+});
+
+test('Discord tags map onto the Haven forum tags by name, ignoring case', () => {
+  const haven = JSON.stringify([{ name: 'Bug' }, { name: 'idea', emoji: '💡' }]);
+  assert.deepEqual(matchForumTags(['bug', 'IDEA', 'Unknown'], haven), ['Bug', 'idea']);
+  // No Haven tags, bad JSON, or no Discord tags all give nothing.
+  assert.deepEqual(matchForumTags(['bug'], null), []);
+  assert.deepEqual(matchForumTags(['bug'], 'not json'), []);
+  assert.deepEqual(matchForumTags([], haven), []);
+  // Discord allows five on a post and so does Haven.
+  const many = JSON.stringify('abcdefg'.split('').map(name => ({ name })));
+  assert.equal(matchForumTags('abcdefg'.split(''), many).length, 5);
+});
+
+test('Haven tags become Discord tag ids, never a moderated one', () => {
+  const discord = [
+    { id: '111111111111111111', name: 'Bug' },
+    { id: '222222222222222222', name: 'Staff pick', moderated: true },
+  ];
+  assert.deepEqual(discordTagIdsFor(['bug', 'staff pick', 'nope'], discord), ['111111111111111111']);
+  assert.deepEqual(discordTagIdsFor(['bug'], undefined), []);
+  assert.deepEqual(discordTagIdsFor(null, discord), []);
+});
+
+test('a Discord post name is 1 to 100 characters and never empty', () => {
+  assert.equal(forumThreadName('  Hello   world ', 'body'), 'Hello world');
+  // An untitled topic is named after its first line.
+  assert.equal(forumThreadName('', 'first line\nsecond line'), 'first line');
+  assert.equal(forumThreadName(null, '   '), 'Haven topic');
+  const long = forumThreadName('x'.repeat(300), '');
+  assert.equal(long.length, 100);
 });

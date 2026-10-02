@@ -1,0 +1,1333 @@
+﻿/* Haven core styles, part 1 of 16: self-hosted fonts and the built-in themes, Haven to CRT. Loaded in order by style.css; the order matters. */
+
+/* Self hosted fonts. Formerly pulled from Google Fonts, now bundled so Haven
+   never contacts a third party to render text. Files live in /public/fonts and
+   are served with a long immutable cache, so each client downloads them once. */
+
+/* Emoji newer than the system's own emoji font. Windows 10's stops around
+   Emoji 12, so a newer one (a melting face reaction, say) showed as a box.
+   Twemoji fills the gaps: --font-emoji puts it after the system emoji fonts,
+   so it only draws a glyph those lack, and is only downloaded then. */
+@font-face {
+  font-family: 'Haven Emoji';
+  font-display: swap;
+  src: url('/fonts/twemoji-15.0.3.woff2') format('woff2');
+  unicode-range: U+200D, U+2194-21AA, U+231A-23FF, U+25AA-27BF, U+2934-2935, U+2B05-2B55, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+1F000-1FAFF, U+E0020-E007F;
+}
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/share-tech-mono-latin.woff2?v=1') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
+  src: url('/fonts/vt323-latin.woff2?v=1') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
+  src: url('/fonts/vt323-latin-ext.woff2?v=1') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  /* VT323's glyphs sit small in the em box, so CRT read a size smaller than
+     every other theme. Scale the face up; layout boxes stay put because
+     font-size is unchanged. 120% still read small in sub-channel names and
+     other fine print, so it is 130% now (#5606). */
+  size-adjust: 130%;
+  src: url('/fonts/vt323-vietnamese.woff2?v=1') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+/* ─── THEME: Haven (Default) ───────────────────────────── */
+:root, [data-theme="haven"] {
+  --bg-primary:    #191b28;
+  --bg-secondary:  #1e2035;
+  --bg-tertiary:   #252840;
+  --bg-hover:      #2c2f4a;
+  --bg-active:     #333660;
+  --bg-input:      #15172a;
+  --bg-card:       #1c1e33;
+
+  --accent:        #7c5cfc;
+  --accent-hover:  #9478ff;
+  --accent-dim:    #5a3fd4;
+  --accent-glow:   rgba(124, 92, 252, 0.25);
+  /* Text drawn on top of an --accent background (buttons, active tabs).
+     White by default; themes with a light accent override it so the label
+     stays readable instead of white-on-near-white. Custom themes can set
+     it too. */
+  --accent-text:   #fff;
+
+  --text-primary:  #e2e4f0;
+  --text-secondary:#9498b3;
+  --text-muted:    #5d6180;
+  --text-link:     #82aaff;
+
+  --border:        #2d3050;
+  --border-light:  #383b5e;
+
+  --success:       #43b581;
+  --success-text:  #fff;
+  --danger:        #f04747;
+  --danger-text:   #fff;
+  --warning:       #faa61a;
+  --warning-text:  #1a1a2e;
+
+  --led-on:        #43b581;
+  --led-off:       #555;
+  --led-glow:      rgba(67, 181, 129, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono:     'Consolas', 'Courier New', monospace;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-emoji:    'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Haven Emoji';
+
+  --radius:        8px;
+  --radius-sm:     4px;
+  --transition:    0.15s ease;
+  --sidebar-width: 16.875rem; /* 270px — in rem so the sidebar scales with the zoom */
+  --right-width:   16.25rem;  /* 260px */
+
+  --theme-logo:    "⬡";
+  --msg-glow:      none;
+  --scanline:      none;
+}
+
+/* ─── THEME: Discord ───────────────────────────────────── */
+[data-theme="discord"] {
+  --bg-primary:    #313338;
+  --bg-secondary:  #2b2d31;
+  --bg-tertiary:   #383a40;
+  --bg-hover:      #3a3c42;
+  --bg-active:     #43454d;
+  --bg-input:      #1e1f22;
+  --bg-card:       #2b2d31;
+
+  --accent:        #5865f2;
+  --accent-hover:  #6d78f5;
+  --accent-dim:    #4752c4;
+  --accent-glow:   rgba(88, 101, 242, 0.25);
+
+  --text-primary:  #f2f3f5;
+  --text-secondary:#b5bac1;
+  --text-muted:    #6d6f78;
+  --text-link:     #00a8fc;
+
+  --border:        #3f4147;
+  --border-light:  #4e5058;
+
+  --success:       #23a55a;
+  --danger:        #f23f43;
+  --warning:       #f0b232;
+
+  --led-on:        #23a55a;
+  --led-glow:      rgba(35, 165, 90, 0.5);
+
+  --theme-logo:    "🎮";
+}
+
+/* ─── THEME: Matrix ────────────────────────────────────── */
+[data-theme="matrix"] {
+  --bg-primary:    #0a0a0a;
+  --bg-secondary:  #0d0d0d;
+  --bg-tertiary:   #141414;
+  --bg-hover:      #1a1a1a;
+  --bg-active:     #002200;
+  --bg-input:      #050505;
+  --bg-card:       #0d0d0d;
+
+  --accent:        #00ff41;
+  --accent-hover:  #33ff66;
+  --accent-dim:    #00cc33;
+  --accent-glow:   rgba(0, 255, 65, 0.3);
+
+  --text-primary:  #00ff41;
+  --text-secondary:#00bb30;
+  --text-muted:    #006618;
+  --text-link:     #00ff99;
+
+  --border:        #003300;
+  --border-light:  #004400;
+
+  --success:       #00ff41;
+  --danger:        #ff0040;
+  --warning:       #ccff00;
+
+  --led-on:        #00ff41;
+  --led-glow:      rgba(0, 255, 65, 0.6);
+
+  --font-main:     'Courier New', 'Consolas', monospace;
+  --font-heading:  'Courier New', monospace;
+  --font-mono:     'Courier New', monospace;
+
+  --theme-logo:    "Ⅿ";
+  --msg-glow:      0 0 4px rgba(0, 255, 65, 0.15);
+  --scanline:      repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 65, 0.015) 2px,
+    rgba(0, 255, 65, 0.015) 4px
+  );
+}
+
+/* Matrix accent overrides — glitch aesthetic */
+[data-theme="matrix"] .brand-text { text-shadow: 0 0 8px rgba(0, 255, 65, 0.4); }
+[data-theme="matrix"] .channel-badge { background: #00ff41; color: #000; }
+[data-theme="matrix"] .message-avatar, [data-theme="matrix"] .message-avatar-img { border: 1px solid rgba(0, 255, 65, 0.3); }
+/* Matrix lacked a ::selection override, so it fell through to the global
+   rule (white text on the accent). Matrix's accent #00ff41 is light enough
+   that white-on-green is near-invisible — a fully-selected field (e.g. the
+   edit-message box, which mobile browsers auto-select on focus) reads as a
+   blank solid-green block. Match Fallout's terminal convention: keep the
+   neon highlight but use dark, high-contrast text so the text stays legible. */
+[data-theme="matrix"] ::selection { background: #00ff41; color: #001a06; }
+/* Terminal-style button override: all accent-background elements become
+   dark-bg + green-text + green-border for consistent legibility */
+[data-theme="matrix"] .btn-primary,
+[data-theme="matrix"] .btn-sm.btn-accent,
+[data-theme="matrix"] .btn-accent,
+[data-theme="matrix"] .btn-admin-save,
+[data-theme="matrix"] .btn-send,
+[data-theme="matrix"] .thread-send-btn,
+[data-theme="matrix"] .settings-tab.active,
+[data-theme="matrix"] .settings-nav-item.active,
+[data-theme="matrix"] .auth-tab.active,
+[data-theme="matrix"] .sound-tab.active,
+[data-theme="matrix"] .profile-dm-btn {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 1px solid var(--accent) !important;
+  text-shadow: 0 0 4px rgba(0, 255, 65, 0.4);
+}
+[data-theme="matrix"] .btn-primary:hover,
+[data-theme="matrix"] .btn-sm.btn-accent:hover,
+[data-theme="matrix"] .btn-accent:hover,
+[data-theme="matrix"] .btn-admin-save:hover,
+[data-theme="matrix"] .btn-send:hover,
+[data-theme="matrix"] .thread-send-btn:hover,
+[data-theme="matrix"] .profile-dm-btn:hover {
+  background: var(--bg-active);
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.35);
+  filter: none;
+}
+
+/* ─── THEME: Tron ──────────────────────────────────────── */
+[data-theme="tron"] {
+  --bg-primary:    #0c141f;
+  --bg-secondary:  #0a1018;
+  --bg-tertiary:   #111d2b;
+  --bg-hover:      #162536;
+  --bg-active:     #0d3a5c;
+  --bg-input:      #060d16;
+  --bg-card:       #0a1018;
+
+  --accent:        #6fecff;
+  --accent-hover:  #9df3ff;
+  --accent-dim:    #3ec6df;
+  --accent-text:   #0c141f;
+  --accent-glow:   rgba(111, 236, 255, 0.3);
+
+  --text-primary:  #d4f6ff;
+  --text-secondary:#7ab8cc;
+  --text-muted:    #3a6a7a;
+  --text-link:     #6fecff;
+
+  --border:        #1a3344;
+  --border-light:  #244455;
+
+  --success:       #6fecff;
+  --danger:        #ff6f3f;
+  --warning:       #ffe76f;
+
+  --led-on:        #6fecff;
+  --led-glow:      rgba(111, 236, 255, 0.6);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+
+  --theme-logo:    "◈";
+  --msg-glow:      0 0 4px rgba(111, 236, 255, 0.08);
+}
+
+/* Tron accent overrides — identity disc glow */
+[data-theme="tron"] .brand-text { text-shadow: 0 0 10px rgba(111, 236, 255, 0.4); color: #6fecff; }
+[data-theme="tron"] .server-icon.home { background: transparent; border: 2px solid #6fecff; box-shadow: 0 0 8px rgba(111, 236, 255, 0.4); }
+[data-theme="tron"] .channel-item.active::before { background: #6fecff; box-shadow: 0 0 6px rgba(111, 236, 255, 0.5); }
+[data-theme="tron"] .btn-send { box-shadow: 0 0 8px rgba(111, 236, 255, 0.3); }
+[data-theme="tron"] .message-avatar, [data-theme="tron"] .message-avatar-img { border: 1px solid rgba(111, 236, 255, 0.25); }
+
+/* ─── THEME: HALO ──────────────────────────────────────── */
+[data-theme="halo"] {
+  --bg-primary:    #0d1a0d;
+  --bg-secondary:  #0a150a;
+  --bg-tertiary:   #142214;
+  --bg-hover:      #1a2e1a;
+  --bg-active:     #1f3a1f;
+  --bg-input:      #070e07;
+  --bg-card:       #0c170c;
+
+  --accent:        #d4a020;
+  --accent-hover:  #e8b832;
+  --accent-dim:    #b08818;
+  --accent-text:   #0d1a0d;
+  --accent-glow:   rgba(212, 160, 32, 0.35);
+
+  --text-primary:  #d4e0c8;
+  --text-secondary:#8aaa78;
+  --text-muted:    #4a6a3a;
+  --text-link:     #4fc3f7;
+
+  --border:        #1a3318;
+  --border-light:  #264a22;
+
+  --success:       #4ca64c;
+  --danger:        #cc3333;
+  --warning:       #d4a020;
+
+  --led-on:        #d4a020;
+  --led-glow:      rgba(212, 160, 32, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "⌁";
+  --msg-glow:      0 0 4px rgba(212, 160, 32, 0.06);
+}
+
+/* HALO accent overrides — energy sword blue highlights */
+[data-theme="halo"] .channel-item.active::before { background: #4fc3f7; }
+[data-theme="halo"] .btn-send { background: #4fc3f7; }
+[data-theme="halo"] .btn-send:hover { background: #6fd4ff; }
+[data-theme="halo"] .mention { background: rgba(79, 195, 247, 0.15); color: #4fc3f7; }
+[data-theme="halo"] .reaction-badge.own { background: rgba(79, 195, 247, 0.2); border-color: #4fc3f7; }
+[data-theme="halo"] .reaction-badge:hover { background: rgba(79, 195, 247, 0.15); border-color: #4fc3f7; }
+[data-theme="halo"] .channel-badge { background: #4fc3f7; }
+[data-theme="halo"] .server-icon.home { background: linear-gradient(135deg, #4ca64c, #d4a020); }
+[data-theme="halo"] .server-icon:hover { background: #4fc3f7; }
+[data-theme="halo"] .brand-text { background: linear-gradient(90deg, #4ca64c, #d4a020, #4fc3f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+[data-theme="halo"] .inline-code { color: #4fc3f7; }
+
+/* ─── THEME: LoTR ──────────────────────────────────────── */
+[data-theme="lotr"] {
+  --bg-primary:    #1a1510;
+  --bg-secondary:  #1e1812;
+  --bg-tertiary:   #2a221a;
+  --bg-hover:      #342a20;
+  --bg-active:     #3e3225;
+  --bg-input:      #140f0a;
+  --bg-card:       #1e1812;
+
+  --accent:        #d4a844;
+  --accent-hover:  #e0be66;
+  --accent-dim:    #b08830;
+  --accent-text:   #1a1510;
+  --accent-glow:   rgba(212, 168, 68, 0.3);
+
+  --text-primary:  #e8dcc8;
+  --text-secondary:#b0a088;
+  --text-muted:    #6e6050;
+  --text-link:     #e0c070;
+
+  --border:        #3a3028;
+  --border-light:  #4a3e32;
+
+  --success:       #6e9e3a;
+  --danger:        #b03030;
+  --warning:       #d4a844;
+
+  --led-on:        #d4a844;
+  --led-glow:      rgba(212, 168, 68, 0.5);
+
+  --font-main:     'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  --font-heading:  'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "⚜";
+
+  /* Worn parchment scanlines */
+  --scanline:      repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(212, 168, 68, 0.008) 3px,
+    rgba(212, 168, 68, 0.008) 6px
+  );
+}
+
+/* LoTR accent overrides — elvish warmth */
+[data-theme="lotr"] .brand-text { font-style: italic; }
+[data-theme="lotr"] .welcome-icon { color: #d4a844; }
+[data-theme="lotr"] .server-icon.home { background: linear-gradient(135deg, #8a6a20, #d4a844); }
+
+/* ─── THEME: Cyberpunk ─────────────────────────────────── */
+[data-theme="cyberpunk"] {
+  --bg-primary:    #0a0a12;
+  --bg-secondary:  #0e0e1a;
+  --bg-tertiary:   #151525;
+  --bg-hover:      #1c1c32;
+  --bg-active:     #2a1a3a;
+  --bg-input:      #06060e;
+  --bg-card:       #0e0e1a;
+
+  --accent:        #ff2d6f;
+  --accent-hover:  #ff5a90;
+  --accent-dim:    #cc1a55;
+  --accent-glow:   rgba(255, 45, 111, 0.3);
+
+  --text-primary:  #f0e6ff;
+  --text-secondary:#b090d0;
+  --text-muted:    #5a4080;
+  --text-link:     #00f0ff;
+
+  --border:        #2a1a40;
+  --border-light:  #3a2a55;
+
+  --success:       #00ff88;
+  --danger:        #ff2d6f;
+  --warning:       #ffe14d;
+
+  --led-on:        #00ff88;
+  --led-glow:      rgba(0, 255, 136, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "⚡";
+  --msg-glow:      0 0 4px rgba(255, 45, 111, 0.08);
+}
+
+/* Cyberpunk accent splashes — neon contrasts */
+[data-theme="cyberpunk"] .channel-item.active::before { background: #00f0ff; }
+[data-theme="cyberpunk"] .inline-code { color: #00f0ff; }
+[data-theme="cyberpunk"] .brand-text { background: linear-gradient(90deg, #ff2d6f, #00f0ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+[data-theme="cyberpunk"] .server-icon.home { background: linear-gradient(135deg, #ff2d6f, #00f0ff); }
+
+/* ─── THEME: Nord ──────────────────────────────────────── */
+[data-theme="nord"] {
+  --bg-primary:    #2e3440;
+  --bg-secondary:  #3b4252;
+  --bg-tertiary:   #434c5e;
+  --bg-hover:      #4c566a;
+  --bg-active:     #5e6a82;
+  --bg-input:      #2a2f3b;
+  --bg-card:       #3b4252;
+
+  --accent:        #88c0d0;
+  --accent-hover:  #8fbcbb;
+  --accent-dim:    #5e81ac;
+  --accent-text:   #2e3440;
+  --accent-glow:   rgba(136, 192, 208, 0.25);
+
+  --text-primary:  #eceff4;
+  --text-secondary:#d8dee9;
+  --text-muted:    #7b88a1;
+  --text-link:     #88c0d0;
+
+  --border:        #4c566a;
+  --border-light:  #5e6a82;
+
+  --success:       #a3be8c;
+  --danger:        #bf616a;
+  --warning:       #ebcb8b;
+
+  --led-on:        #a3be8c;
+  --led-glow:      rgba(163, 190, 140, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "❄";
+}
+
+/* Nord accent splashes — aurora colors */
+[data-theme="nord"] .mention { background: rgba(180, 142, 173, 0.2); color: #b48ead; }
+[data-theme="nord"] .brand-text { color: #88c0d0; }
+
+/* ─── THEME: Dracula ───────────────────────────────────── */
+[data-theme="dracula"] {
+  --bg-primary:    #1a1b26;
+  --bg-secondary:  #16171f;
+  --bg-tertiary:   #22232e;
+  --bg-hover:      #2a2c3a;
+  --bg-active:     #32344a;
+  --bg-input:      #12131a;
+  --bg-card:       #16171f;
+
+  --accent:        #bd93f9;
+  --accent-hover:  #caa6fc;
+  --accent-dim:    #9d73d9;
+  --accent-text:   #1a1b26;
+  --accent-glow:   rgba(189, 147, 249, 0.3);
+
+  --text-primary:  #f8f8f2;
+  --text-secondary:#b0b0c0;
+  --text-muted:    #565a7a;
+  --text-link:     #8be9fd;
+
+  --border:        #2a2c40;
+  --border-light:  #383a52;
+
+  --success:       #50fa7b;
+  --danger:        #ff5555;
+  --warning:       #f1fa8c;
+
+  --led-on:        #50fa7b;
+  --led-glow:      rgba(80, 250, 123, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "🧛";
+  --msg-glow:      0 0 4px rgba(189, 147, 249, 0.06);
+}
+
+/* Dracula accent splashes */
+[data-theme="dracula"] .inline-code { color: #50fa7b; }
+[data-theme="dracula"] .mention { background: rgba(255, 121, 198, 0.15); color: #ff79c6; }
+[data-theme="dracula"] .brand-text { background: linear-gradient(90deg, #bd93f9, #ff79c6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+/* ─── THEME: Bloodborne (Red & Black) ──────────────────── */
+[data-theme="bloodborne"] {
+  --bg-primary:    #0a0000;
+  --bg-secondary:  #110808;
+  --bg-tertiary:   #1a0c0c;
+  --bg-hover:      #2a1010;
+  --bg-active:     #3a1515;
+  --bg-input:      #060000;
+  --bg-card:       #110808;
+
+  --accent:        #cc0020;
+  --accent-hover:  #ff1a3a;
+  --accent-dim:    #990018;
+  --accent-glow:   rgba(204, 0, 32, 0.4);
+
+  --text-primary:  #f0d0d0;
+  --text-secondary:#b08080;
+  --text-muted:    #6a3a3a;
+  --text-link:     #ff4060;
+
+  --border:        #2a1515;
+  --border-light:  #3a2020;
+
+  --success:       #cc0020;
+  --danger:        #ff0030;
+  --warning:       #ff6600;
+
+  --led-on:        #ff0030;
+  --led-off:       #330000;
+  --led-glow:      rgba(255, 0, 48, 0.6);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "🩸";
+  --msg-glow:      0 0 6px rgba(204, 0, 32, 0.12);
+}
+
+/* Bloodborne accent overrides — blood and darkness */
+[data-theme="bloodborne"] .brand-text { color: #cc0020; text-shadow: 0 0 12px rgba(204, 0, 32, 0.5); }
+[data-theme="bloodborne"] .server-icon.home { background: linear-gradient(135deg, #660010, #cc0020); box-shadow: 0 0 10px rgba(204, 0, 32, 0.4); }
+[data-theme="bloodborne"] .channel-item.active::before { background: #ff0030; box-shadow: 0 0 8px rgba(255, 0, 48, 0.6); }
+[data-theme="bloodborne"] .btn-send { box-shadow: 0 0 8px rgba(204, 0, 32, 0.4); }
+[data-theme="bloodborne"] .message-avatar, [data-theme="bloodborne"] .message-avatar-img { border: 1px solid rgba(204, 0, 32, 0.3); }
+[data-theme="bloodborne"] .channel-badge { background: #cc0020; color: #fff; }
+[data-theme="bloodborne"] .inline-code { color: #ff4060; }
+
+/* ─── THEME: Ice (Ice Blue) ────────────────────────────── */
+[data-theme="ice"] {
+  --bg-primary:    #0a1520;
+  --bg-secondary:  #0c1a28;
+  --bg-tertiary:   #102030;
+  --bg-hover:      #142838;
+  --bg-active:     #183040;
+  --bg-input:      #060e18;
+  --bg-card:       #0c1a28;
+
+  --accent:        #00d4ff;
+  --accent-hover:  #40e0ff;
+  --accent-dim:    #00a8cc;
+  --accent-text:   #0a1520;
+  --accent-glow:   rgba(0, 212, 255, 0.35);
+
+  --text-primary:  #d8f0ff;
+  --text-secondary:#80b8d8;
+  --text-muted:    #3a6a88;
+  --text-link:     #00d4ff;
+
+  --border:        #1a3048;
+  --border-light:  #224058;
+
+  --success:       #00d4ff;
+  --danger:        #ff3060;
+  --warning:       #ffcc00;
+
+  --led-on:        #00d4ff;
+  --led-off:       #0a1a2a;
+  --led-glow:      rgba(0, 212, 255, 0.6);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "🧊";
+  --msg-glow:      0 0 4px rgba(0, 212, 255, 0.08);
+}
+
+/* Ice accent overrides — frozen glow */
+[data-theme="ice"] .brand-text { color: #00d4ff; text-shadow: 0 0 12px rgba(0, 212, 255, 0.5); }
+[data-theme="ice"] .server-icon.home { background: linear-gradient(135deg, #005580, #00d4ff); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
+[data-theme="ice"] .channel-item.active::before { background: #00d4ff; box-shadow: 0 0 8px rgba(0, 212, 255, 0.5); }
+[data-theme="ice"] .btn-send { box-shadow: 0 0 8px rgba(0, 212, 255, 0.3); }
+[data-theme="ice"] .message-avatar, [data-theme="ice"] .message-avatar-img { border: 1px solid rgba(0, 212, 255, 0.25); }
+[data-theme="ice"] .channel-badge { background: #00d4ff; color: #0a1520; }
+[data-theme="ice"] .inline-code { color: #40e0ff; }
+
+/* ─── THEME: Abyss (Deep Ocean / Navy Blue) ────────────── */
+[data-theme="abyss"] {
+  --bg-primary:    #040810;
+  --bg-secondary:  #060c18;
+  --bg-tertiary:   #0a1220;
+  --bg-hover:      #0e1830;
+  --bg-active:     #122040;
+  --bg-input:      #020610;
+  --bg-card:       #060c18;
+
+  --accent:        #1a5aff;
+  --accent-hover:  #3a70ff;
+  --accent-dim:    #0040cc;
+  --accent-glow:   rgba(26, 90, 255, 0.35);
+
+  --text-primary:  #c8d8f0;
+  --text-secondary:#7088b0;
+  --text-muted:    #384868;
+  --text-link:     #4488ff;
+
+  --border:        #101830;
+  --border-light:  #182240;
+
+  --success:       #00cc88;
+  --danger:        #ff2050;
+  --warning:       #ff8800;
+
+  --led-on:        #1a5aff;
+  --led-off:       #0a0e1a;
+  --led-glow:      rgba(26, 90, 255, 0.6);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "🌊";
+  --msg-glow:      0 0 4px rgba(26, 90, 255, 0.08);
+}
+
+/* Abyss accent overrides — deep ocean pressure */
+[data-theme="abyss"] .brand-text { color: #4488ff; text-shadow: 0 0 12px rgba(26, 90, 255, 0.5); }
+[data-theme="abyss"] .server-icon.home { background: linear-gradient(135deg, #0a2060, #1a5aff); box-shadow: 0 0 10px rgba(26, 90, 255, 0.3); }
+[data-theme="abyss"] .channel-item.active::before { background: #1a5aff; box-shadow: 0 0 8px rgba(26, 90, 255, 0.5); }
+[data-theme="abyss"] .btn-send { box-shadow: 0 0 8px rgba(26, 90, 255, 0.3); }
+[data-theme="abyss"] .message-avatar, [data-theme="abyss"] .message-avatar-img { border: 1px solid rgba(26, 90, 255, 0.25); }
+[data-theme="abyss"] .channel-badge { background: #1a5aff; color: #fff; }
+[data-theme="abyss"] .inline-code { color: #4488ff; }
+
+/* ─── THEME: Dark Souls ────────────────────────────────── */
+[data-theme="darksouls"] {
+  --bg-primary:    #0c0a08;
+  --bg-secondary:  #110e0b;
+  --bg-tertiary:   #1a1510;
+  --bg-hover:      #241e16;
+  --bg-active:     #2e261c;
+  --bg-input:      #080604;
+  --bg-card:       #110e0b;
+
+  --accent:        #c8a84e;
+  --accent-hover:  #dcc06a;
+  --accent-dim:    #a08030;
+  --accent-text:   #0c0a08;
+  --accent-glow:   rgba(200, 168, 78, 0.35);
+
+  --text-primary:  #d8ccb0;
+  --text-secondary:#9a8a70;
+  --text-muted:    #5a4e3a;
+  --text-link:     #d4a844;
+
+  --border:        #2a2218;
+  --border-light:  #3a3020;
+
+  --success:       #b0a030;
+  --danger:        #a03020;
+  --warning:       #c8a84e;
+
+  --led-on:        #c8a84e;
+  --led-off:       #1a1208;
+  --led-glow:      rgba(200, 168, 78, 0.5);
+
+  --font-main:     'Palatino Linotype', Georgia, serif;
+  --font-heading:  'Palatino Linotype', Georgia, serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "🔥";
+  --msg-glow:      0 0 6px rgba(200, 168, 78, 0.08);
+}
+
+[data-theme="darksouls"] .brand-text { color: #c8a84e; text-shadow: 0 0 10px rgba(200, 168, 78, 0.4); }
+[data-theme="darksouls"] .server-icon.home { background: linear-gradient(135deg, #5a4420, #c8a84e); box-shadow: 0 0 8px rgba(200, 168, 78, 0.3); }
+[data-theme="darksouls"] .channel-item.active::before { background: #c8a84e; box-shadow: 0 0 6px rgba(200, 168, 78, 0.5); }
+[data-theme="darksouls"] .inline-code { color: #dcc06a; }
+[data-theme="darksouls"] .message-avatar, [data-theme="darksouls"] .message-avatar-img { border: 1px solid rgba(200, 168, 78, 0.2); }
+
+/* ─── THEME: Elden Ring ────────────────────────────────── */
+[data-theme="eldenring"] {
+  --bg-primary:    #08080e;
+  --bg-secondary:  #0c0c16;
+  --bg-tertiary:   #14141e;
+  --bg-hover:      #1c1c2a;
+  --bg-active:     #242438;
+  --bg-input:      #060608;
+  --bg-card:       #0c0c16;
+
+  --accent:        #d4a832;
+  --accent-hover:  #e8c050;
+  --accent-dim:    #b08820;
+  --accent-text:   #08080e;
+  --accent-glow:   rgba(212, 168, 50, 0.35);
+
+  --text-primary:  #e0d8c8;
+  --text-secondary:#a098a0;
+  --text-muted:    #584860;
+  --text-link:     #80a0d0;
+
+  --border:        #1e1e30;
+  --border-light:  #2a2a40;
+
+  --success:       #60b060;
+  --danger:        #c03020;
+  --warning:       #d4a832;
+
+  --led-on:        #d4a832;
+  --led-off:       #0a0a10;
+  --led-glow:      rgba(212, 168, 50, 0.5);
+
+  --font-main:     'Palatino Linotype', Georgia, serif;
+  --font-heading:  'Palatino Linotype', Georgia, serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "💍";
+  --msg-glow:      0 0 4px rgba(212, 168, 50, 0.06);
+}
+
+[data-theme="eldenring"] .brand-text { background: linear-gradient(90deg, #d4a832, #8080c0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+[data-theme="eldenring"] .server-icon.home { background: linear-gradient(135deg, #3a3060, #d4a832); box-shadow: 0 0 10px rgba(212, 168, 50, 0.3); }
+[data-theme="eldenring"] .channel-item.active::before { background: #d4a832; box-shadow: 0 0 8px rgba(212, 168, 50, 0.5); }
+[data-theme="eldenring"] .inline-code { color: #80a0d0; }
+[data-theme="eldenring"] .message-avatar, [data-theme="eldenring"] .message-avatar-img { border: 1px solid rgba(212, 168, 50, 0.2); }
+
+/* ─── THEME: Minecraft ─────────────────────────────────── */
+[data-theme="minecraft"] {
+  --bg-primary:    #1a1a1a;
+  --bg-secondary:  #222222;
+  --bg-tertiary:   #2e2e2e;
+  --bg-hover:      #3a3a3a;
+  --bg-active:     #444444;
+  --bg-input:      #141414;
+  --bg-card:       #222222;
+
+  --accent:        #55bb55;
+  --accent-hover:  #70d070;
+  --accent-dim:    #3a8a3a;
+  --accent-text:   #1a1a1a;
+  --accent-glow:   rgba(85, 187, 85, 0.3);
+
+  --text-primary:  #e8e8e8;
+  --text-secondary:#aaaaaa;
+  --text-muted:    #666666;
+  --text-link:     #55bbff;
+
+  --border:        #3a3a3a;
+  --border-light:  #4a4a4a;
+
+  --success:       #55bb55;
+  --danger:        #cc3333;
+  --warning:       #ffaa00;
+
+  --led-on:        #55bb55;
+  --led-off:       #1a1a1a;
+  --led-glow:      rgba(85, 187, 85, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "⛏️";
+}
+
+[data-theme="minecraft"] .brand-text { color: #55bb55; text-shadow: 2px 2px 0 #2a5a2a; }
+[data-theme="minecraft"] .server-icon.home { background: #55bb55; box-shadow: 2px 2px 0 #2a5a2a; border-radius: 0.25rem; }
+[data-theme="minecraft"] .server-icon:hover { border-radius: 0.25rem; }
+[data-theme="minecraft"] .channel-item.active::before { background: #55bb55; }
+[data-theme="minecraft"] .inline-code { color: #55bbff; }
+[data-theme="minecraft"] .message-avatar, [data-theme="minecraft"] .message-avatar-img { border: 2px solid #3a3a3a; border-radius: 0.25rem; }
+[data-theme="minecraft"] .channel-badge { background: #55bb55; color: #1a1a1a; }
+
+/* ─── THEME: Final Fantasy X ───────────────────────────── */
+[data-theme="ffx"] {
+  --bg-primary:    #080e1a;
+  --bg-secondary:  #0b1325;
+  --bg-tertiary:   #101a30;
+  --bg-hover:      #16223e;
+  --bg-active:     #1c2a4a;
+  --bg-input:      #060a14;
+  --bg-card:       #0b1325;
+
+  --accent:        #40a8e0;
+  --accent-hover:  #60c0f0;
+  --accent-dim:    #2080b0;
+  --accent-text:   #080e1a;
+  --accent-glow:   rgba(64, 168, 224, 0.3);
+
+  --text-primary:  #d0e4f0;
+  --text-secondary:#80a0c0;
+  --text-muted:    #3a5a78;
+  --text-link:     #60c0f0;
+
+  --border:        #1a2a40;
+  --border-light:  #223450;
+
+  --success:       #40c8a0;
+  --danger:        #e0504a;
+  --warning:       #f0c040;
+
+  --led-on:        #40a8e0;
+  --led-off:       #0a1020;
+  --led-glow:      rgba(64, 168, 224, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "⚔️";
+  --msg-glow:      0 0 4px rgba(64, 168, 224, 0.06);
+}
+
+[data-theme="ffx"] .brand-text { background: linear-gradient(90deg, #40a8e0, #c0a040); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+[data-theme="ffx"] .server-icon.home { background: linear-gradient(135deg, #1a4070, #40a8e0); box-shadow: 0 0 10px rgba(64, 168, 224, 0.3); }
+[data-theme="ffx"] .channel-item.active::before { background: #40a8e0; box-shadow: 0 0 8px rgba(64, 168, 224, 0.4); }
+[data-theme="ffx"] .inline-code { color: #60c0f0; }
+[data-theme="ffx"] .message-avatar, [data-theme="ffx"] .message-avatar-img { border: 1px solid rgba(64, 168, 224, 0.25); }
+
+/* ─── THEME: Legend of Zelda ───────────────────────────── */
+[data-theme="zelda"] {
+  --bg-primary:    #0a120a;
+  --bg-secondary:  #0e180e;
+  --bg-tertiary:   #142014;
+  --bg-hover:      #1c2c1c;
+  --bg-active:     #243424;
+  --bg-input:      #060e06;
+  --bg-card:       #0e180e;
+
+  --accent:        #44bb44;
+  --accent-hover:  #60d060;
+  --accent-dim:    #2a8a2a;
+  --accent-text:   #0a120a;
+  --accent-glow:   rgba(68, 187, 68, 0.3);
+
+  --text-primary:  #d8e8d0;
+  --text-secondary:#90b088;
+  --text-muted:    #4a6a42;
+  --text-link:     #70c870;
+
+  --border:        #1c2e1c;
+  --border-light:  #283a28;
+
+  --success:       #44bb44;
+  --danger:        #cc3030;
+  --warning:       #e8c030;
+
+  --led-on:        #44bb44;
+  --led-off:       #0a140a;
+  --led-glow:      rgba(68, 187, 68, 0.5);
+
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-heading:  'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "🗡️";
+}
+
+[data-theme="zelda"] .brand-text { background: linear-gradient(90deg, #44bb44, #e8c030); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+[data-theme="zelda"] .server-icon.home { background: linear-gradient(135deg, #1a6a1a, #e8c030); box-shadow: 0 0 8px rgba(68, 187, 68, 0.3); }
+[data-theme="zelda"] .channel-item.active::before { background: #44bb44; box-shadow: 0 0 6px rgba(68, 187, 68, 0.5); }
+[data-theme="zelda"] .inline-code { color: #70c870; }
+[data-theme="zelda"] .mention { background: rgba(68, 187, 68, 0.15); color: #60d060; }
+[data-theme="zelda"] .message-avatar, [data-theme="zelda"] .message-avatar-img { border: 1px solid rgba(68, 187, 68, 0.25); }
+[data-theme="zelda"] .channel-badge { background: #44bb44; color: #0a120a; }
+
+/* ─── THEME: Fallout / PIP-Boy ─────────────────────────── */
+[data-theme="fallout"] {
+  --bg-primary:    #0a0e08;
+  --bg-secondary:  #0e1410;
+  --bg-tertiary:   #141c14;
+  --bg-hover:      #1a2818;
+  --bg-active:     #1e3020;
+  --bg-input:      #060a04;
+  --bg-card:       #0c1208;
+
+  --accent:        #14fe17;
+  --accent-hover:  #44ff44;
+  --accent-dim:    #0abc0e;
+  --accent-glow:   rgba(20, 254, 23, 0.25);
+
+  --text-primary:  #14fe17;
+  --text-secondary:#0ecc12;
+  --text-muted:    #0a6e0c;
+  --text-link:     #44ff44;
+
+  --border:        #0f5e10;
+  --border-light:  #148014;
+
+  --success:       #14fe17;
+  --danger:        #ff4444;
+  --warning:       #cccc00;
+
+  --led-on:        #14fe17;
+  --led-off:       #0a1408;
+  --led-glow:      rgba(20, 254, 23, 0.6);
+
+  --font-main:     'Share Tech Mono', 'Courier New', monospace;
+  --font-heading:  'Share Tech Mono', 'Courier New', monospace;
+  --font-mono:     'Share Tech Mono', 'Courier New', monospace;
+
+  --theme-logo:    "☢️";
+  --scanline:      repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(20, 254, 23, 0.03) 2px,
+    rgba(20, 254, 23, 0.03) 4px
+  );
+}
+[data-theme="fallout"] .brand-text { color: #14fe17; text-shadow: 0 0 8px rgba(20, 254, 23, 0.6); letter-spacing: 2px; text-transform: uppercase; }
+[data-theme="fallout"] .server-icon.home { background: #0a1a08; border: 1px solid #14fe17; box-shadow: 0 0 8px rgba(20, 254, 23, 0.3); color: #14fe17; }
+[data-theme="fallout"] .channel-item.active::before { background: #14fe17; box-shadow: 0 0 8px rgba(20, 254, 23, 0.6); }
+[data-theme="fallout"] .message-avatar, [data-theme="fallout"] .message-avatar-img { border: 1px solid #14fe17; border-radius: 0.125rem; }
+[data-theme="fallout"] .inline-code { color: #14fe17; background: rgba(20, 254, 23, 0.08); border: 1px solid rgba(20, 254, 23, 0.2); }
+[data-theme="fallout"] .channel-badge { background: #14fe17; color: #0a0e08; }
+[data-theme="fallout"] .sidebar { border-right: 1px solid rgba(20, 254, 23, 0.2); }
+[data-theme="fallout"] .channel-header { border-bottom: 1px solid rgba(20, 254, 23, 0.2); }
+[data-theme="fallout"] .message-row { text-shadow: 0 0 2px rgba(20, 254, 23, 0.15); }
+[data-theme="fallout"] .modal { border: 1px solid rgba(20, 254, 23, 0.3); box-shadow: 0 0 20px rgba(20, 254, 23, 0.15); }
+[data-theme="fallout"] input, [data-theme="fallout"] textarea { border: 1px solid rgba(20, 254, 23, 0.15) !important; }
+[data-theme="fallout"] .message-input-container { border: 1px solid rgba(20, 254, 23, 0.2); border-radius: 0.125rem; }
+[data-theme="fallout"] ::selection { background: #14fe17; color: #0a0e08; }
+/* Terminal-style button override: all accent-background elements become
+   dark-bg + green-text + green-border for consistent legibility */
+[data-theme="fallout"] .btn-primary,
+[data-theme="fallout"] .btn-sm.btn-accent,
+[data-theme="fallout"] .btn-accent,
+[data-theme="fallout"] .btn-admin-save,
+[data-theme="fallout"] .btn-send,
+[data-theme="fallout"] .thread-send-btn,
+[data-theme="fallout"] .settings-tab.active,
+[data-theme="fallout"] .settings-nav-item.active,
+[data-theme="fallout"] .auth-tab.active,
+[data-theme="fallout"] .sound-tab.active,
+[data-theme="fallout"] .profile-dm-btn {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 1px solid var(--accent) !important;
+  text-shadow: 0 0 4px rgba(20, 254, 23, 0.4);
+}
+[data-theme="fallout"] .btn-primary:hover,
+[data-theme="fallout"] .btn-sm.btn-accent:hover,
+[data-theme="fallout"] .btn-accent:hover,
+[data-theme="fallout"] .btn-admin-save:hover,
+[data-theme="fallout"] .btn-send:hover,
+[data-theme="fallout"] .thread-send-btn:hover,
+[data-theme="fallout"] .profile-dm-btn:hover {
+  background: var(--bg-active);
+  box-shadow: 0 0 10px rgba(20, 254, 23, 0.35);
+  filter: none;
+}
+
+/* ─── THEME: Scripture (Parchment & Gold) ──────────────── */
+[data-theme="scripture"] {
+  --bg-primary:    #1a1610;
+  --bg-secondary:  #201c14;
+  --bg-tertiary:   #2a2418;
+  --bg-hover:      #342c20;
+  --bg-active:     #3e3428;
+  --bg-input:      #14120c;
+  --bg-card:       #1e1a12;
+
+  --accent:        #c8a84c;
+  --accent-hover:  #dcc06a;
+  --accent-dim:    #a08030;
+  --accent-text:   #1a1610;
+  --accent-glow:   rgba(200, 168, 76, 0.25);
+
+  --text-primary:  #e8dcc8;
+  --text-secondary:#b8a888;
+  --text-muted:    #6e6048;
+  --text-link:     #dcc06a;
+
+  --border:        #302818;
+  --border-light:  #3e3422;
+
+  --success:       #6aaa4a;
+  --danger:        #b84030;
+  --warning:       #d4a030;
+
+  --led-on:        #c8a84c;
+  --led-off:       #1a1408;
+  --led-glow:      rgba(200, 168, 76, 0.5);
+
+  --font-main:     'Georgia', 'Times New Roman', serif;
+  --font-heading:  'Georgia', 'Times New Roman', serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "✝️";
+}
+[data-theme="scripture"] .brand-text { color: #c8a84c; text-shadow: 0 0 10px rgba(200, 168, 76, 0.3); font-style: italic; }
+[data-theme="scripture"] .server-icon.home { background: linear-gradient(135deg, #2a2010, #c8a84c); box-shadow: 0 0 8px rgba(200, 168, 76, 0.2); }
+[data-theme="scripture"] .channel-item.active::before { background: #c8a84c; box-shadow: 0 0 6px rgba(200, 168, 76, 0.4); }
+[data-theme="scripture"] .inline-code { color: #dcc06a; background: rgba(200, 168, 76, 0.08); }
+[data-theme="scripture"] .mention { background: rgba(200, 168, 76, 0.12); color: #dcc06a; }
+[data-theme="scripture"] .message-avatar, [data-theme="scripture"] .message-avatar-img { border: 1px solid rgba(200, 168, 76, 0.2); }
+[data-theme="scripture"] .channel-badge { background: #c8a84c; color: #1a1610; }
+[data-theme="scripture"] .modal { border: 1px solid rgba(200, 168, 76, 0.2); box-shadow: 0 0 20px rgba(200, 168, 76, 0.08); }
+[data-theme="scripture"] ::selection { background: #c8a84c; color: #1a1610; }
+
+/* Scripture ambient: sunlight through a crucifix window */
+@keyframes scripture-cross-pulse {
+  0%, 100% { opacity: 0.03; }
+  50%      { opacity: 0.07; }
+}
+[data-theme="scripture"] .main {
+  position: relative;
+}
+[data-theme="scripture"] .main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* vertical beam */
+    linear-gradient(to bottom,
+      transparent 10%,
+      rgba(200, 168, 76, 0.08) 25%,
+      rgba(200, 168, 76, 0.14) 40%,
+      rgba(200, 168, 76, 0.08) 55%,
+      transparent 75%)
+    center / 6% 100% no-repeat,
+    /* horizontal beam */
+    linear-gradient(to right,
+      transparent 25%,
+      rgba(200, 168, 76, 0.08) 38%,
+      rgba(200, 168, 76, 0.12) 46%,
+      rgba(200, 168, 76, 0.12) 54%,
+      rgba(200, 168, 76, 0.08) 62%,
+      transparent 75%)
+    center 30% / 100% 5% no-repeat,
+    /* warm radial glow behind the cross */
+    radial-gradient(ellipse 30% 50% at 50% 38%,
+      rgba(200, 168, 76, 0.06) 0%,
+      transparent 70%);
+  animation: scripture-cross-pulse 8s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+/* ─── THEME: Chapel (Stained Glass) ────────────────────── */
+[data-theme="chapel"] {
+  --bg-primary:    #0e0c18;
+  --bg-secondary:  #12101e;
+  --bg-tertiary:   #1a1628;
+  --bg-hover:      #221e32;
+  --bg-active:     #2a263c;
+  --bg-input:      #0a0814;
+  --bg-card:       #12101e;
+
+  --accent:        #8a5cf0;
+  --accent-hover:  #a07af8;
+  --accent-dim:    #6a3cc8;
+  --accent-glow:   rgba(138, 92, 240, 0.25);
+
+  --text-primary:  #e0d8f0;
+  --text-secondary:#a898c8;
+  --text-muted:    #5e5078;
+  --text-link:     #70b8ff;
+
+  --border:        #201a30;
+  --border-light:  #2c2640;
+
+  --success:       #4acc70;
+  --danger:        #cc4040;
+  --warning:       #e8b840;
+
+  --led-on:        #8a5cf0;
+  --led-off:       #0e0a18;
+  --led-glow:      rgba(138, 92, 240, 0.5);
+
+  --font-main:     'Georgia', 'Times New Roman', serif;
+  --font-heading:  'Georgia', 'Times New Roman', serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "⛪";
+}
+[data-theme="chapel"] .brand-text { background: linear-gradient(90deg, #8a5cf0, #70b8ff, #e8b840); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+[data-theme="chapel"] .server-icon.home { background: linear-gradient(135deg, #4a2ca0, #8a5cf0); box-shadow: 0 0 10px rgba(138, 92, 240, 0.3); }
+[data-theme="chapel"] .channel-item.active::before { background: #8a5cf0; box-shadow: 0 0 6px rgba(138, 92, 240, 0.5); }
+[data-theme="chapel"] .inline-code { color: #a07af8; background: rgba(138, 92, 240, 0.08); }
+[data-theme="chapel"] .mention { background: rgba(138, 92, 240, 0.12); color: #a07af8; }
+[data-theme="chapel"] .message-avatar, [data-theme="chapel"] .message-avatar-img { border: 1px solid rgba(138, 92, 240, 0.2); }
+[data-theme="chapel"] .channel-badge { background: #8a5cf0; color: #0e0c18; }
+[data-theme="chapel"] .modal { border: 1px solid rgba(138, 92, 240, 0.2); box-shadow: 0 0 20px rgba(138, 92, 240, 0.1); }
+[data-theme="chapel"] ::selection { background: #8a5cf0; color: #0e0c18; }
+
+/* Chapel ambient: prismatic stained glass light beams */
+@keyframes chapel-glass-shift {
+  0%   { opacity: 0.04; filter: hue-rotate(0deg); }
+  33%  { opacity: 0.07; filter: hue-rotate(15deg); }
+  66%  { opacity: 0.05; filter: hue-rotate(-10deg); }
+  100% { opacity: 0.04; filter: hue-rotate(0deg); }
+}
+[data-theme="chapel"] .main {
+  position: relative;
+}
+[data-theme="chapel"] .main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* left violet beam */
+    linear-gradient(155deg,
+      transparent 15%,
+      rgba(138, 92, 240, 0.06) 25%,
+      rgba(102, 51, 204, 0.09) 35%,
+      transparent 50%)
+    no-repeat,
+    /* center rose beam */
+    linear-gradient(175deg,
+      transparent 20%,
+      rgba(200, 80, 140, 0.05) 35%,
+      rgba(220, 100, 160, 0.08) 45%,
+      transparent 60%)
+    no-repeat,
+    /* right gold beam */
+    linear-gradient(195deg,
+      transparent 30%,
+      rgba(200, 168, 76, 0.04) 45%,
+      rgba(220, 190, 100, 0.07) 55%,
+      transparent 70%)
+    no-repeat,
+    /* warm highlight core */
+    radial-gradient(ellipse 40% 35% at 50% 25%,
+      rgba(138, 92, 240, 0.04) 0%,
+      transparent 70%);
+  animation: chapel-glass-shift 12s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+/* ─── THEME: Gospel (Light Cream & Ruby) ───────────────── */
+[data-theme="gospel"] {
+  --bg-primary:    #f5f0e8;
+  --bg-secondary:  #ebe4d8;
+  --bg-tertiary:   #ddd5c8;
+  --bg-hover:      #d0c8b8;
+  --bg-active:     #c5bca8;
+  --bg-input:      #faf7f0;
+  --bg-card:       #eee8dc;
+
+  --accent:        #8b2032;
+  --accent-hover:  #a83040;
+  --accent-dim:    #6e1828;
+  --accent-glow:   rgba(139, 32, 50, 0.2);
+
+  --text-primary:  #2a2018;
+  --text-secondary:#5a4e40;
+  --text-muted:    #8a7e70;
+  --text-link:     #8b2032;
+
+  --border:        #d0c4b0;
+  --border-light:  #c0b4a0;
+
+  --success:       #3a7a30;
+  --danger:        #b83030;
+  --warning:       #c08a20;
+
+  --led-on:        #3a7a30;
+  --led-off:       #c0b4a0;
+  --led-glow:      rgba(58, 122, 48, 0.5);
+
+  --font-main:     'Georgia', 'Times New Roman', serif;
+  --font-heading:  'Georgia', 'Times New Roman', serif;
+  --font-mono:     'Consolas', monospace;
+
+  --theme-logo:    "🕊️";
+}
+[data-theme="gospel"] .brand-text { color: #8b2032; font-style: italic; }
+[data-theme="gospel"] .server-icon.home { background: linear-gradient(135deg, #8b2032, #c8a84c); color: #fff; }
+[data-theme="gospel"] .channel-item.active::before { background: #8b2032; box-shadow: 0 0 4px rgba(139, 32, 50, 0.3); }
+[data-theme="gospel"] .inline-code { color: #8b2032; background: rgba(139, 32, 50, 0.06); border: 1px solid rgba(139, 32, 50, 0.12); }
+[data-theme="gospel"] .mention { background: rgba(139, 32, 50, 0.08); color: #8b2032; }
+[data-theme="gospel"] .message-avatar, [data-theme="gospel"] .message-avatar-img { border: 1px solid rgba(139, 32, 50, 0.15); }
+[data-theme="gospel"] .channel-badge { background: #8b2032; color: #f5f0e8; }
+[data-theme="gospel"] .sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border); }
+[data-theme="gospel"] .modal { border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
+[data-theme="gospel"] ::selection { background: #8b2032; color: #f5f0e8; }
+
+/* Gospel ambient: soft divine radiance descending */
+@keyframes gospel-radiance {
+  0%, 100% { opacity: 0.04; transform: scale(1); }
+  50%      { opacity: 0.08; transform: scale(1.03); }
+}
+[data-theme="gospel"] .main {
+  position: relative;
+}
+[data-theme="gospel"] .main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* warm descending ray from top center */
+    linear-gradient(180deg,
+      rgba(200, 168, 76, 0.06) 0%,
+      rgba(220, 195, 120, 0.04) 15%,
+      transparent 45%)
+    no-repeat,
+    /* ruby tinted glow */
+    radial-gradient(ellipse 50% 40% at 50% 20%,
+      rgba(139, 32, 50, 0.04) 0%,
+      rgba(200, 168, 76, 0.02) 40%,
+      transparent 70%),
+    /* soft dove-like light spread */
+    radial-gradient(circle at 50% 10%,
+      rgba(255, 250, 240, 0.05) 0%,
+      transparent 50%);
+  animation: gospel-radiance 10s ease-in-out infinite;
+}
+
+/* ─── THEME: Midnight Purple ────────────────────────────── */
+[data-theme="midnightpurple"] {
+  --bg-primary:    #0d0a1a;
+  --bg-secondary:  #140f29;
+  --bg-tertiary:   #1a1433;
+  --bg-card:       #1e1840;
+  --bg-input:      #1a1433;
+  --bg-hover:      rgba(138, 92, 246, 0.12);
+  --text-primary:  #e8e0f0;
+  --text-secondary:#a899c4;
+  --text-muted:    #6b5a8a;
+  --accent:        #8a5cf6;
+  --accent-hover:  #7c4deb;
+  --border:        rgba(138, 92, 246, 0.15);
+  --success:       #4ade80;
+  --danger:        #f43f5e;
+  --warning:       #fbbf24;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+}
+[data-theme="midnightpurple"] .brand-text { color: #8a5cf6; text-shadow: 0 0 12px rgba(138, 92, 246, 0.4); }
+[data-theme="midnightpurple"] .server-icon.home { background: linear-gradient(135deg, #4c1d95, #8a5cf6); box-shadow: 0 0 10px rgba(138, 92, 246, 0.3); }
+[data-theme="midnightpurple"] .channel-item.active::before { background: #8a5cf6; box-shadow: 0 0 6px rgba(138, 92, 246, 0.5); }
+[data-theme="midnightpurple"] .btn-send { box-shadow: 0 0 8px rgba(138, 92, 246, 0.3); }
+[data-theme="midnightpurple"] .message-avatar, [data-theme="midnightpurple"] .message-avatar-img { border: 1px solid rgba(138, 92, 246, 0.25); }
+[data-theme="midnightpurple"] .channel-badge { background: #8a5cf6; color: #fff; }
+[data-theme="midnightpurple"] .inline-code { color: #a78bfa; background: rgba(138, 92, 246, 0.1); }
+[data-theme="midnightpurple"] .mention { background: rgba(138, 92, 246, 0.15); color: #a78bfa; }
+[data-theme="midnightpurple"] .reaction-badge.own { background: rgba(138, 92, 246, 0.2); border-color: #8a5cf6; }
+[data-theme="midnightpurple"] .reaction-badge:hover { background: rgba(138, 92, 246, 0.15); border-color: #8a5cf6; }
+[data-theme="midnightpurple"] ::selection { background: rgba(138, 92, 246, 0.3); }
+[data-theme="midnightpurple"] ::-webkit-scrollbar-thumb { background: rgba(138, 92, 246, 0.3) !important; }
+[data-theme="midnightpurple"] ::-webkit-scrollbar-thumb:hover { background: rgba(138, 92, 246, 0.5) !important; }
+
+/* ─── THEME: CRT ───────────────────────────────────────── */
+[data-theme="crt"] {
+  --bg-primary:    #080808;
+  --bg-secondary:  #0a0a0a;
+  --bg-tertiary:   #111111;
+  --bg-hover:      #1a1a1a;
+  --bg-active:     #222222;
+  --bg-input:      #050505;
+  --bg-card:       #0a0a0a;
+
+  --accent:        #ffb000;
+  --accent-hover:  #ffc844;
+  --accent-dim:    #cc8800;
+  --accent-text:   #080808;
+  --accent-glow:   rgba(255, 176, 0, 0.3);
+
+  --text-primary:  #ffb000;
+  --text-secondary:#cc8800;
+  --text-muted:    #664400;
+  --text-link:     #ffc844;
+
+  --border:        #332800;
+  --border-light:  #4a3a10;
+
+  --success:       #00cc00;
+  --danger:        #ff2222;
+  --warning:       #ffcc00;
+
+  --led-on:        #ffb000;
+  --led-off:       #221800;
+  --led-glow:      rgba(255, 176, 0, 0.5);
+
+  /* Share Tech Mono, the clean terminal face, instead of the pixel VT323:
+     the pixel font stayed cramped in sub-channel names and other fine print
+     even scaled up, and this reads at normal size (#5606). */
+  --font-main:     'Share Tech Mono', 'Courier New', monospace;
+  --font-heading:  'Share Tech Mono', 'Courier New', monospace;
+  --font-mono:     'Share Tech Mono', 'Courier New', monospace;
+
+  --theme-logo:    "📺";
+}
+[data-theme="crt"] .brand-text { color: #ffb000; text-shadow: 0 0 6px rgba(255, 176, 0, 0.5); letter-spacing: 3px; text-transform: uppercase; }
+[data-theme="crt"] .server-icon.home { background: #111; border: 2px solid #ffb000; box-shadow: 0 0 10px rgba(255, 176, 0, 0.2); color: #ffb000; }
+[data-theme="crt"] .channel-item.active::before { background: #ffb000; box-shadow: 0 0 6px rgba(255, 176, 0, 0.5); }
+[data-theme="crt"] .message-avatar, [data-theme="crt"] .message-avatar-img { border: 1px solid rgba(255, 176, 0, 0.3); border-radius: 0; }
+[data-theme="crt"] .inline-code { color: #ffb000; background: rgba(255, 176, 0, 0.08); }
+[data-theme="crt"] .channel-badge { background: #ffb000; color: #080808; }
+[data-theme="crt"] .sidebar { border-right: 1px solid rgba(255, 176, 0, 0.15); }
+[data-theme="crt"] .channel-header { border-bottom: 1px solid rgba(255, 176, 0, 0.15); }
+[data-theme="crt"] .message-row { text-shadow: 0 0 1px rgba(255, 176, 0, 0.3); }
+[data-theme="crt"] .modal { border: 2px solid #ffb000; box-shadow: 0 0 30px rgba(255, 176, 0, 0.15), inset 0 0 60px rgba(255, 176, 0, 0.03); border-radius: 0; }
+[data-theme="crt"] input, [data-theme="crt"] textarea { border: 1px solid rgba(255, 176, 0, 0.2) !important; border-radius: 0 !important; }
+[data-theme="crt"] .btn-sm { border-radius: 0; }
+[data-theme="crt"] .message-input-container { border: 1px solid rgba(255, 176, 0, 0.2); border-radius: 0; }
+[data-theme="crt"] ::selection { background: #ffb000; color: #080808; }
+

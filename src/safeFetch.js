@@ -52,8 +52,9 @@ function requestOnce(destination, headers, deadlineAt, maxBytes, truncate) {
       settled = true;
       clearTimeout(timer);
       if (error) {
-        try { response?.destroy(); } catch {}
-        try { request?.destroy(); } catch {}
+        // Tearing down a stream that may already be closed; the caller gets the real error below.
+        try { response?.destroy(); } catch { /* already closed */ }
+        try { request?.destroy(); } catch { /* already closed */ }
         reject(error);
       } else {
         resolve(result);

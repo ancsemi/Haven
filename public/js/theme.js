@@ -267,7 +267,7 @@ function initEffectSpeedEditor() {
   try {
     const perEffect = JSON.parse(localStorage.getItem('haven_fx_speeds') || '{}');
     Object.assign(_fxSpeedMap, perEffect);
-  } catch {}
+  } catch { /* corrupt saved speeds: keep the defaults */ }
 
   editor._show = () => { editor.style.display = 'block'; };
   editor._hide = () => { editor.style.display = 'none'; };
@@ -1249,7 +1249,7 @@ function _getStoredEffectMode() {
   try {
     const parsed = JSON.parse(stored);
     if (Array.isArray(parsed)) return parsed;
-  } catch(e) {}
+  } catch(e) { /* not JSON: handled as the legacy single-effect value below */ }
   // Legacy: single effect string from old system → convert to array
   if (typeof stored === 'string' && stored.length > 0 && stored !== 'auto' && stored !== 'none') {
     const arr = [stored];
@@ -1302,7 +1302,7 @@ function _persistEffects(raw) {
 // so the theme pass picks the restored effects up in the same go.
 function syncEffectsFromServer(raw) {
   if (typeof raw !== 'string' || !raw) return;
-  try { localStorage.setItem('haven_effects', raw); } catch (e) {}
+  try { localStorage.setItem('haven_effects', raw); } catch (e) { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   const container = document.getElementById('effect-selector');
   if (container) _updateEffectButtons(container, _getStoredEffectMode());
 }
@@ -1324,7 +1324,7 @@ function _syncCompactToggle() {
 function _setLayoutPlugin(file, on, dataKey) {
   try {
     window.HavenApi?.Data?.save(dataKey, 'layoutOn', on ? '1' : '0');
-  } catch {}
+  } catch (err) { console.warn('[Theme] could not save the layout toggle', err); }
   if (on) window.HavenPluginLoader?.enablePlugin?.(file);
   const inst = _layoutPlugin(file);
   if (on) inst?._engage?.();
@@ -1734,7 +1734,7 @@ function applyPublishedThemeBase(file, persist = true, meta = null) {
   document.documentElement.setAttribute('data-theme', 'haven');
 
   if (persist) {
-    try { localStorage.setItem('haven_theme', `file:${file}`); } catch {}
+    try { localStorage.setItem('haven_theme', `file:${file}`); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   }
 
   document.querySelectorAll('.theme-btn').forEach(b => {

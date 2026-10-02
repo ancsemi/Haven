@@ -115,7 +115,7 @@ export default {
         </div>
         <div class="rg-roles">${roles.length ? roles.map(r => `
           <label class="toggle-row">
-            <span><span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span>
+            <span><span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span>
             <input type="checkbox" class="rg-role" value="${r.id}" ${chosen.has(r.id) ? 'checked' : ''}>
           </label>`).join('') : `<p class="muted-text">${t('settings.admin.roles_no_custom')}</p>`}</div>
         <small class="settings-hint">${t('channel_functions.role_gate_clear_hint')}</small>`;
@@ -287,7 +287,7 @@ export default {
         ${head}
         <div class="rm-roles">${roles.map((r, i) => `
           <div class="rm-row">
-            <label class="toggle-row"><span><span class="role-color-dot" style="background:${this._safeColor(r.color, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span><input type="checkbox" class="rm-role" value="${r.id}"${saved.has(r.id) ? ' checked' : ''}></label>
+            <label class="toggle-row"><span><span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span><input type="checkbox" class="rm-role" value="${r.id}"${saved.has(r.id) ? ' checked' : ''}></label>
             <input class="rm-emoji settings-text-input" maxlength="8" value="${this._escapeHtml(saved.get(r.id) || defaults[i % defaults.length])}" title="${this._escapeHtml(t('settings.admin.role_menu.emoji'))}">
           </div>`).join('')}</div>`;
       this._openToolModal({
@@ -326,7 +326,7 @@ export default {
     if (!menu || !Array.isArray(menu.roles) || !menu.roles.length) return '';
     const held = new Set((menu.held || []).map(Number));
     return `<div class="role-menu-widget" data-msg-id="${msgId}">${menu.roles.map(r => `
-      <button class="role-menu-btn${held.has(r.id) ? ' held' : ''}" type="button" data-msg-id="${msgId}" data-role-id="${r.id}" style="--role-c:${this._safeColor(r.color, '#aaa')}" title="${this._escapeHtml(t(held.has(r.id) ? 'role_menu.leave' : 'role_menu.join', { name: r.name }))}">
+      <button class="role-menu-btn${held.has(r.id) ? ' held' : ''}" type="button" data-msg-id="${msgId}" data-role-id="${r.id}" style="--role-c:${this._safeColor(r.color, '#aaa')};--role-fill:${this._roleFill(r, this._safeColor(r.color, '#aaa'))}" title="${this._escapeHtml(t(held.has(r.id) ? 'role_menu.leave' : 'role_menu.join', { name: r.name }))}">
         <span class="rm-emoji">${this._escapeHtml(r.emoji)}</span><span class="rm-name">${this._escapeHtml(r.name)}</span><span class="rm-state">${held.has(r.id) ? '✓' : '+'}</span>
       </button>`).join('')}</div>`;
   },

@@ -29,7 +29,7 @@ function contentCap(maxChars, channel, content) {
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
-          touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay,
+          touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
           logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
   const { slowModeTracker } = state;
 
@@ -82,7 +82,7 @@ module.exports = function register(socket, ctx) {
     try {
       fs.mkdirSync(path.dirname(dst), { recursive: true });
       fs.renameSync(src, dst);
-    } catch { /* file locked or already moved */ }
+    } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
   }
 
   // Reply banners must match message rendering: bots live in webhook_* with
@@ -416,7 +416,7 @@ module.exports = function register(socket, ctx) {
             obj.poll.votes[v.option_index].push({ user_id: v.user_id, username: v.username });
           });
           obj.poll.totalVotes = votes.length;
-        } catch (e) { /* invalid poll_data */ }
+        } catch (e) { /* invalid poll_data: send the message without its poll rather than drop it */ }
       }
       if (m.is_webhook) {
         obj.is_webhook = true;
@@ -736,7 +736,7 @@ module.exports = function register(socket, ctx) {
         const full = path.join(UPLOADS_DIR, name);
         const st = fs.statSync(full);
         if (st && st.isFile()) s = st.size;
-      } catch { /* missing or permission denied */ }
+      } catch { /* missing or permission denied: counts as 0 bytes */ }
       sizeCache.set(url, s);
       return s;
     };
@@ -932,7 +932,11 @@ module.exports = function register(socket, ctx) {
           `SELECT allowed FROM user_role_perms WHERE user_id = ? AND permission = 'delete_own_messages' AND (channel_id IS NULL OR channel_id IN (${ph})) ORDER BY allowed ASC LIMIT 1`
         ).get(socket.user.id, ...chain);
         if (deny && deny.allowed === 0) allowOwnDelete = false;
-      } catch { /* table may not exist */ }
+      } catch (err) {
+        // Could not rule out a deny override, so fail closed.
+        allowOwnDelete = false;
+        console.error('bulk delete: delete_own_messages check failed:', err.message);
+      }
     }
 
     const placeholders = ids.map(() => '?').join(',');
@@ -1164,7 +1168,7 @@ module.exports = function register(socket, ctx) {
     // Runs before the message is persisted or broadcast. A blocked message
     // never reaches another client, which is the only way to stop the passive
     // IP leak from inline images and link-preview og:image fetches.
-    if (enforceAutomod(content, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id })) return;
+    if (enforceAutomod(content, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id, markdown: true })) return;
 
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
       return socket.emit('error-msg', 'This channel is read-only');
@@ -1285,7 +1289,7 @@ module.exports = function register(socket, ctx) {
             VALUES (?, ?, ?)
             ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
           `).run(socket.user.id, channel.id, result.lastInsertRowid);
-        } catch (e) { /* non-critical */ }
+        } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
         return;
       }
     }
@@ -1405,7 +1409,11 @@ module.exports = function register(socket, ctx) {
             maxTags,
             maxLen,
           }) || [];
-        } catch (e) { /* tags are best-effort */ }
+        } catch (e) {
+          // Tags are best-effort and never sink the message, but the tags the
+          // uploader picked were dropped.
+          console.warn('send-message attachment tagging failed:', e.message);
+        }
       }
 
       const message = {
@@ -1461,6 +1469,11 @@ module.exports = function register(socket, ctx) {
           target: ferryTarget,
           personaUsername, personaAvatar,
           notify: (msg) => socket.emit('error-msg', msg),
+          // Every top-level message in a forum is a topic, and goes to a
+          // paired Discord forum as a new post.
+          topic: channel.is_forum
+            ? { id: result.lastInsertRowid, title: topicTitle, tags: topicTags ? JSON.parse(topicTags) : [], nsfw: !!topicNsfw }
+            : null,
         });
       }
 
@@ -1470,7 +1483,7 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?)
           ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
         `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* non-critical */ }
+      } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
     } catch (err) {
       console.error('send-message error:', err.message);
       socket.emit('error-msg', 'Failed to send message — please try again');
@@ -1689,7 +1702,7 @@ module.exports = function register(socket, ctx) {
     const content = sanitizeText(pingSafe(data.content.trim(), socket.user.id, channel.id));
     if (!content) return cb({ error: 'Nothing to send' });
     // The same checks a live send gets, at the moment it is queued.
-    if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return cb({ error: 'That message was blocked' });
+    if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return cb({ error: 'That message was blocked' });
     const pending = db.prepare('SELECT COUNT(*) AS c FROM scheduled_messages WHERE user_id = ?').get(socket.user.id).c;
     if (pending >= SCHEDULE_MAX_PENDING) return cb({ error: `You already have ${SCHEDULE_MAX_PENDING} messages waiting to send` });
     try {
@@ -1716,7 +1729,7 @@ module.exports = function register(socket, ctx) {
     if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
     const content = sanitizeText(data.content.trim());
     if (!content) return cb({ error: 'Nothing to send' });
-    if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id })) return cb({ error: 'That message was blocked' });
+    if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id, markdown: true })) return cb({ error: 'That message was blocked' });
     db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
     cb({ success: true, items: scheduledList(socket.user.id) });
   });
@@ -1888,7 +1901,7 @@ module.exports = function register(socket, ctx) {
 
     // Edits get the same link policy as sends. Without this the filter is
     // trivially bypassed: post something harmless, then edit the payload in.
-    if (enforceAutomod(newContent, { surface: 'edit', channelId: channel.id })) return;
+    if (enforceAutomod(newContent, { surface: 'edit', channelId: channel.id, markdown: true })) return;
 
     if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(newContent)) {
       const origMsg = db.prepare('SELECT original_name FROM messages WHERE id = ?').get(data.messageId);
@@ -1951,7 +1964,11 @@ module.exports = function register(socket, ctx) {
           if (deny && deny.allowed === 0) {
             return socket.emit('error-msg', 'You don\'t have permission to delete messages');
           }
-        } catch { /* table may not exist */ }
+        } catch (err) {
+          // Could not rule out a deny override, so fail closed.
+          console.error('delete-message: delete_own_messages check failed:', err.message);
+          return socket.emit('error-msg', 'Failed to delete message');
+        }
       }
     } else {
       const canDeleteAny = socket.user.isAdmin || userHasPermission(socket.user.id, 'delete_message', channel.id);
@@ -2321,7 +2338,7 @@ module.exports = function register(socket, ctx) {
           emoji: data.emoji,
           author: { id: socket.user.id, username: socket.user.displayName }
         });
-      } catch { /* best-effort */ }
+      } catch { /* fireWebhookEvent catches and logs its own errors; this only guards the call */ }
     } catch (err) {
       console.error('add-reaction error:', err.message);
     }
@@ -2457,7 +2474,7 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?)
           ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
         `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* non-critical */ }
+      } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
     } catch (err) {
       console.error('create-poll error:', err.message);
       socket.emit('error-msg', 'Failed to create poll');
@@ -2708,12 +2725,18 @@ module.exports = function register(socket, ctx) {
     // switches, and a stale currentChannel would silently empty the thread
     // (issue: web users seeing 28 replies but no messages, mobile fine).
     const parentRow = db.prepare(
-      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code, c.is_dm as is_dm,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
+      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, c.code as channel_code, c.is_dm as is_dm, m.is_webhook, m.webhook_username, m.imported_from,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
     ).get(parentId);
     if (!parentRow) return;
     if (parentRow.is_dm) return; // Threads are not available in DMs
     const channel = { id: parentRow.channel_id };
     const parent = parentRow;
+    // A relayed or bot author is marked the same way channel history marks
+    // it, so a Discord nickname cannot pass for a Haven member's name.
+    if (parent.is_webhook && !parent.imported_from) {
+      parent.username = `[BOT] ${parent.webhook_username || 'Bot'}`;
+      parent.avatar_shape = 'square';
+    }
 
     // Verify the user is a member of the channel (admins exempt).
     const member = db.prepare(
@@ -2740,7 +2763,7 @@ module.exports = function register(socket, ctx) {
 
     const messages = db.prepare(`
       SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
+             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
       WHERE m.thread_id = ?
       ORDER BY m.created_at ASC, m.id ASC
@@ -2801,6 +2824,16 @@ module.exports = function register(socket, ctx) {
       if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
       obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
       obj.reactions = reactionMap.get(m.id) || [];
+      // Same marking as channel history: a relayed or bot author gets the
+      // [BOT] prefix, so a Discord nickname cannot pass for a Haven member.
+      // webhook_username stays the bare name, so the prefix is added once.
+      // Imported history keeps its original author's name, as it does there.
+      if (m.is_webhook && !m.imported_from) {
+        obj.is_webhook = true;
+        obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
+        obj.avatar_shape = 'square';
+        obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger';
+      }
       return obj;
     });
 
@@ -2869,7 +2902,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'This channel is read-only');
     }
 
-    if (enforceAutomod(content, { surface: 'message', channelId: channel.id })) return;
+    if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return;
 
     const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));
     if (!safeContent) return;
@@ -2947,6 +2980,16 @@ module.exports = function register(socket, ctx) {
           senderId: socket.user.id,
           participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
         }
+      });
+
+      // A reply in a forum topic follows the topic to its Discord post, after
+      // the broadcast so Discord never holds up the Haven side.
+      ferryRelayReply?.({
+        channelId: channel.id,
+        parentId,
+        user: socket.user,
+        body: safeContent,
+        notify: (msg) => socket.emit('error-msg', msg),
       });
 
       if (typeof callback === 'function') callback({ success: true });

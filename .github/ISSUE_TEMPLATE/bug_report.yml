@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in Haven isn't working the way it should.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! A screenshot usually helps more than anything else.
+
+        Found a security problem? Please don't post it here. Email ancsemi@haven-app.com instead.
+
+        Using Haven Desktop and the problem is only in the app? The [Haven Desktop issues](https://github.com/ancsemi/Haven-Desktop/issues) page is the better place.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen?
+      description: The steps that lead to the problem, if you know them.
+      placeholder: |
+        1. Open a channel
+        2. Click ...
+        3. See ...
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where are you using Haven?
+      multiple: true
+      options:
+        - Browser on a computer
+        - Browser on a phone
+        - Haven Desktop
+        - Android app
+        - iOS app
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Browser and system
+      placeholder: "Chrome on Windows 11, Safari on iPhone, ..."
+  - type: dropdown
+    id: host
+    attributes:
+      label: Whose server is it?
+      options:
+        - I run the server
+        - I joined someone else's server
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Haven server version
+      description: It shows at the bottom right once the status bar is on (Settings, Status Bar), and in the window that opens when the server starts. "Not sure" is fine.
+      placeholder: "4.15.0"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: Drag images in here. If you run the server, anything odd in its window helps too.

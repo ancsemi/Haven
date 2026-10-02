@@ -54,7 +54,7 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
     const ring = describe(code, call);
     for (const userId of call.ringing) emitToUser(userId, 'dm-call-ring', ring);
     call.timer = setTimeout(() => ringTimeout(code), RING_MS);
-    try { sendPushNotifications?.(ch.id, code, call.isGroup ? ch.name : call.callerName, user.id, call.callerName, 'Incoming call'); } catch {}
+    try { sendPushNotifications?.(ch.id, code, call.isGroup ? ch.name : call.callerName, user.id, call.callerName, 'Incoming call'); } catch { /* push logs its own failures; it must never stop the in-app ring */ }
   }
   function sync(code) {
     const call = calls.get(code);

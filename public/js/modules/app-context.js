@@ -45,6 +45,17 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
     this.socket.emit('get-user-profile', { userId: targetUserId });
   });
 
+  // Only the admin can open this menu on themselves, and all it offers them
+  // besides their profile is their own roles. The rest targets other people.
+  if (targetUserId === this.user?.id) {
+    addBtn(`👑 ${t('users.gear_menu.role_management')}`, () => {
+      this._hideUserContextMenu();
+      this._openRoleAssignCenter(targetUserId);
+    });
+    this._placeUserContextMenu(menu, e);
+    return;
+  }
+
   // Direct Message
   addBtn(`💬 ${t('users.direct_message')}`, () => {
     this._hideUserContextMenu();
@@ -177,6 +188,10 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
     }, true);
   }
 
+  this._placeUserContextMenu(menu, e);
+},
+
+_placeUserContextMenu(menu, e) {
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
   document.body.appendChild(menu);
@@ -272,15 +287,19 @@ _renderOnlineOverlay() {
 
 _renderOverlayUserItem(u) {
   const initial = (u.username || '?')[0].toUpperCase();
-  const color = this._safeColor(u.roleColor || u.avatarColor, '#7c5cfc');
+  // Member list entries carry their role as `role`; roleColor is the flat
+  // shape some older callers used.
+  const role = u.role || (u.roleColor ? u : null);
+  const roleColor = role ? (role.color !== undefined ? role.color : role.roleColor) : null;
+  const color = this._safeColor(roleColor || u.avatarColor, '#7c5cfc');
   const statusClass = u.online !== false ? 'online' : 'offline';
   const avatar = u.avatarUrl
     ? `<img src="${this._escapeHtml(u.avatarUrl)}" class="online-overlay-avatar-img" alt="">`
     : `<div class="online-overlay-avatar" style="background:${color}">${initial}</div>`;
-  const nameColor = u.roleColor ? ` style="color:${this._safeColor(u.roleColor)}"` : '';
+  const nameColor = this._safeColor(roleColor) ? ` style="color:${this._safeColor(roleColor)}"` : '';
   return `<div class="online-overlay-user ${statusClass}">
     ${avatar}
-    <span class="online-overlay-username"${nameColor}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
+    <span class="online-overlay-username"${nameColor}>${this._roleNameHtml(role, this._getNickname(u.id, u.username))}</span>
     <span class="online-overlay-status-dot ${statusClass}"></span>
   </div>`;
 },
@@ -606,7 +625,7 @@ _setupNotifications() {
   if (blurNsfwToggle) {
     blurNsfwToggle.checked = localStorage.getItem('haven_blur_nsfw') !== 'false';
     blurNsfwToggle.addEventListener('change', () => {
-      try { localStorage.setItem('haven_blur_nsfw', blurNsfwToggle.checked ? 'true' : 'false'); } catch {}
+      try { localStorage.setItem('haven_blur_nsfw', blurNsfwToggle.checked ? 'true' : 'false'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
       if (this._forumActive && this._forumReload) this._forumReload();
     });
   }
@@ -769,7 +788,7 @@ _setupNotifications() {
         document.execCommand('copy');
         ta.remove();
         _flashCopied();
-      } catch {}
+      } catch { /* could not copy: the Copied flash simply does not show */ }
     };
     statusUrlEl.addEventListener('click', () => {
       if (navigator.clipboard?.writeText) {
@@ -941,7 +960,7 @@ async _openActivitiesModal() {
       for (const rom of data.roms) flashStatus[rom.file] = rom.installed;
       this._flashAllInstalled = data.allInstalled;
     }
-  } catch {}
+  } catch (err) { console.warn('[Games] could not read the Flash ROM status', err); }
 
   // If any flash games are not installed, show a download banner at top
   const hasFlashGames = this._gamesRegistry.some(g => g.type === 'flash');

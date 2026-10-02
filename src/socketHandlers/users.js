@@ -9,7 +9,7 @@ const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, emitDmPresence, broadcastVoiceUsers, generateToken,
-          touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit, getAdminRoleDisplay } = ctx;
+          touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
@@ -267,7 +267,7 @@ module.exports = function register(socket, ctx) {
       if (!row) return;
 
       const roles = db.prepare(
-        `SELECT DISTINCT r.id, r.name, r.level, r.color
+        `SELECT DISTINCT r.id, r.name, r.level, r.color, r.color2, r.color_shimmer
          FROM roles r
          JOIN user_roles ur ON r.id = ur.role_id
          WHERE ur.user_id = ? AND ur.channel_id IS NULL
@@ -283,7 +283,7 @@ module.exports = function register(socket, ctx) {
           if (chain.length > 0) {
             const placeholders = chain.map(() => '?').join(',');
             const channelRoles = db.prepare(
-              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color
+              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color, r.color2, r.color_shimmer
                FROM roles r
                JOIN user_roles ur ON r.id = ur.role_id
                WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
@@ -302,12 +302,7 @@ module.exports = function register(socket, ctx) {
         }
       }
 
-      const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(data.userId);
-      if (isAdmin && isAdmin.is_admin) {
-        roles.length = 0;
-        const d = getAdminRoleDisplay();
-        if (d.visible) roles.push({ id: -1, name: d.name, level: 100, color: d.color, icon: d.icon });
-      } else if (roles.length > 1) {
+      if (roles.length > 1) {
         const userRoleIdx = roles.findIndex(r => r.name === 'User' && r.level <= 1);
         if (userRoleIdx !== -1) roles.splice(userRoleIdx, 1);
       }
@@ -558,7 +553,7 @@ module.exports = function register(socket, ctx) {
         try {
           const parsed = typeof row.public_key === 'string' ? JSON.parse(row.public_key) : row.public_key;
           if (parsed && parsed.x && parsed.y) publicKey = { kty: parsed.kty, crv: parsed.crv, x: parsed.x, y: parsed.y };
-        } catch { /* stored pub key not JSON — skip */ }
+        } catch { /* stored pub key not JSON: send none, the client copes with that */ }
       }
       socket.emit('encrypted-key-result', {
         encryptedKey: row?.encrypted_private_key || null,
@@ -774,7 +769,7 @@ module.exports = function register(socket, ctx) {
     // it now rather than waiting up to STEAM_POLL_MS for the next tick to pick
     // up the rotated key. Non-fatal: a failure here just means the old cadence.
     if (key === 'STEAM_API_KEY') {
-      try { activity.pollSteam().catch(() => {}); } catch { /* ignore */ }
+      try { activity.pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message)); } catch { /* the regular poll picks up the new key anyway */ }
     }
 
     _audit({
@@ -823,7 +818,7 @@ module.exports = function register(socket, ctx) {
     });
 
     // Populate straight away rather than waiting up to 30s for the next tick.
-    activity.pollLastfmUser(socket.user.id).catch(() => {});
+    activity.pollLastfmUser(socket.user.id).catch((err) => console.warn('[Haven activity] Last.fm poll failed:', err.message));
     if (socket.currentChannel) emitOnlineUsers(socket.currentChannel);
   });
 
@@ -936,7 +931,12 @@ module.exports = function register(socket, ctx) {
     try {
       const filePath = path.join(DATA_DIR, 'beta-signups.json');
       let signups = [];
-      try { signups = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { /* first signup */ }
+      try { signups = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (err) {
+        // No file yet means this is the first signup. Anything else (an
+        // unreadable or corrupt file) must not be treated as empty, or the
+        // write below would wipe every earlier signup.
+        if (err.code !== 'ENOENT') throw err;
+      }
 
       if (signups.some(s => s.email === email)) {
         return callback({ ok: true });

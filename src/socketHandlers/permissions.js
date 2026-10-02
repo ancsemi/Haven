@@ -1,5 +1,16 @@
 // ── Permission system helpers (factory — closes over db) ──
 
+// A failed read of the per-user overrides (user_role_perms) means an explicit
+// deny cannot be ruled out, so callers fail closed. The read runs on every
+// permission check, so the log line is limited to once a minute.
+let _overrideReadWarnedAt = 0;
+function warnOverrideRead(where, err) {
+  const now = Date.now();
+  if (now - _overrideReadWarnedAt < 60 * 1000) return;
+  _overrideReadWarnedAt = now;
+  console.error(`[permissions] ${where}: override read failed, denying:`, err && err.message);
+}
+
 module.exports = function createPermissions(db) {
 
   // ── Role inheritance: get the channel hierarchy chain for role cascading ──
@@ -74,7 +85,11 @@ module.exports = function createPermissions(db) {
         if (override.allowed === 0) return false;
         if (override.allowed === 1) return true;
       }
-    } catch { /* table may not exist yet */ }
+    } catch (err) {
+      // Fail closed: carrying on to the role checks would ignore a deny.
+      warnOverrideRead('userHasPermission', err);
+      return false;
+    }
 
     // Check level-based permission thresholds
     const thresholds = getPermissionThresholds();
@@ -134,7 +149,12 @@ module.exports = function createPermissions(db) {
           if (idx !== -1) perms.splice(idx, 1);
         }
       }
-    } catch { /* user_role_perms table may not exist yet */ }
+    } catch (err) {
+      // Fail closed: role perms without their deny overrides could over-grant,
+      // and callers use this list to decide what someone may hand out.
+      warnOverrideRead('permission list', err);
+      return [];
+    }
 
     const thresholds = getPermissionThresholds();
     const level = getUserEffectiveLevel(userId);
@@ -177,7 +197,12 @@ module.exports = function createPermissions(db) {
           if (idx !== -1) perms.splice(idx, 1);
         }
       }
-    } catch { /* user_role_perms table may not exist yet */ }
+    } catch (err) {
+      // Fail closed: role perms without their deny overrides could over-grant,
+      // and callers use this list to decide what someone may hand out.
+      warnOverrideRead('permission list', err);
+      return [];
+    }
 
     // getUserEffectiveLevel(userId) with no channelId arg already only
     // considers server-scoped roles, so threshold-derived perms are
@@ -192,7 +217,7 @@ module.exports = function createPermissions(db) {
 
   function getUserRoles(userId) {
     return db.prepare(`
-      SELECT r.id, r.name, r.level, r.scope, r.color, ur.channel_id
+      SELECT r.id, r.name, r.level, r.scope, r.color, r.color2, r.color_shimmer, ur.channel_id
       FROM roles r
       JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = ?
@@ -201,28 +226,9 @@ module.exports = function createPermissions(db) {
     `).all(userId);
   }
 
-  // Cosmetic display for the synthetic admin role, backed by the
-  // 'admin_role_display' server setting (falls back to sensible defaults).
-  // This is purely cosmetic: is_admin, the effective level (100) and the
-  // permission set (['*']) are computed independently and never look at this.
-  function getAdminRoleDisplay() {
-    const defaults = { name: 'Admin', color: '#e74c3c', icon: null, visible: true };
-    try {
-      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_display'").get();
-      if (!row) return defaults;
-      const p = JSON.parse(row.value);
-      return {
-        name: (typeof p.name === 'string' && p.name.trim()) ? p.name : defaults.name,
-        color: (typeof p.color === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(p.color)) ? p.color : defaults.color,
-        icon: (typeof p.icon === 'string' && p.icon) ? p.icon : null,
-        visible: p.visible !== false
-      };
-    } catch { return defaults; }
-  }
-
+  // The role that styles the user: the highest one that is not transparent.
   function getUserHighestRole(userId, channelId = null) {
-    const all = getUserAllRoles(userId, channelId);
-    return all.length > 0 ? all[0] : null;
+    return getUserAllRoles(userId, channelId).find(r => !r.transparent) || null;
   }
 
   // Returns every role that applies to `userId` in `channelId`'s context:
@@ -231,14 +237,6 @@ module.exports = function createPermissions(db) {
   // { id, name, level, color, icon, scope, channel_id }. Used for multi-role
   // display so the member tooltip / chat hover can list all roles a user holds.
   function getUserAllRoles(userId, channelId = null) {
-    const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
-    if (user && user.is_admin) {
-      const d = getAdminRoleDisplay();
-      // Visibility off hides the admin badge/colour everywhere, for everyone.
-      if (!d.visible) return [];
-      return [{ id: 0, name: d.name, level: 100, color: d.color, icon: d.icon, scope: 'server', channel_id: null }];
-    }
-
     // Dedupe by role.id for display purposes — if a user holds the same
     // role in multiple channels (or both server-wide and a channel), we
     // surface it once with the highest effective level. Channel scope is
@@ -255,7 +253,7 @@ module.exports = function createPermissions(db) {
 
     const serverRows = db.prepare(`
       SELECT r.id, r.name, COALESCE(ur.custom_level, r.level) as level,
-             r.color, r.icon, r.scope, ur.channel_id
+             r.color, r.color2, r.color_shimmer, r.icon, r.transparent, r.scope, ur.channel_id
       FROM roles r JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = ? AND ur.channel_id IS NULL
     `).all(userId);
@@ -267,7 +265,7 @@ module.exports = function createPermissions(db) {
         const placeholders = chain.map(() => '?').join(',');
         const chRows = db.prepare(`
           SELECT r.id, r.name, COALESCE(ur.custom_level, r.level) as level,
-                 r.color, r.icon, r.scope, ur.channel_id
+                 r.color, r.color2, r.color_shimmer, r.icon, r.transparent, r.scope, ur.channel_id
           FROM roles r JOIN user_roles ur ON r.id = ur.role_id
           WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
         `).all(userId, ...chain);
@@ -276,6 +274,11 @@ module.exports = function createPermissions(db) {
     }
 
     const out = Array.from(byId.values());
+    // These rows ride on every member list entry, so a role without a
+    // gradient leaves the gradient fields out instead of sending empty ones.
+    for (const r of out) {
+      if (!r.color2) { delete r.color2; delete r.color_shimmer; }
+    }
     out.sort((a, b) => (b.level || 0) - (a.level || 0));
     return out;
   }
@@ -357,7 +360,7 @@ module.exports = function createPermissions(db) {
   return {
     getChannelRoleChain, getUserEffectiveLevel, getPermissionThresholds,
     userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles,
-    getUserHighestRole, getUserAllRoles, getAdminRoleDisplay,
+    getUserHighestRole, getUserAllRoles,
     parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   };
 };

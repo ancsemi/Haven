@@ -202,7 +202,7 @@ window.HavenPluginLoader = (function () {
   function detectSafeMode() {
     if (ThemeCompat?.isSafeMode?.(window.location) === true) return true;
     let requested = null;
-    try { requested = new URLSearchParams(window.location.search).get('haven-safe-mode'); } catch {}
+    try { requested = new URLSearchParams(window.location.search).get('haven-safe-mode'); } catch { /* unreadable address: not in safe mode through the URL */ }
     try {
       if (requested === '1') sessionStorage.setItem('haven_safe_mode', '1');
       if (requested === '0') sessionStorage.removeItem('haven_safe_mode');
@@ -223,12 +223,12 @@ window.HavenPluginLoader = (function () {
 
   function clearSafeMode() {
     ThemeCompat?.clearSafeMode?.();
-    try { sessionStorage.removeItem('haven_safe_mode'); } catch {}
+    try { sessionStorage.removeItem('haven_safe_mode'); } catch { /* storage blocked: nothing to clear */ }
   }
 
   function clearResetPending() {
     ThemeCompat?.clearResetPending?.();
-    try { sessionStorage.removeItem('haven_customizations_reset_pending'); } catch {}
+    try { sessionStorage.removeItem('haven_customizations_reset_pending'); } catch { /* storage blocked: nothing to clear */ }
   }
 
   function resetLocalCustomizations() {
@@ -237,7 +237,7 @@ window.HavenPluginLoader = (function () {
       localStorage.setItem('haven_enabled_themes', '[]');
       localStorage.setItem('haven_enabled_plugins', '[]');
       sessionStorage.setItem('haven_customizations_reset_pending', '1');
-    } catch {}
+    } catch (err) { console.warn('[Safe mode] could not reset local customizations', err); }
   }
 
   function urlWithoutSafeMode() {

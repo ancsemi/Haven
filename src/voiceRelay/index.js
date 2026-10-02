@@ -66,7 +66,7 @@ function createVoiceRelay({ getSetting, onRoomLost, onRelayEnded = () => {} }) {
 
     /** Called when the admin saves relay settings: start, stop or restart. */
     apply() {
-      applying = applying.catch(() => {}).then(async () => {
+      applying = applying.catch(() => { /* the caller of the previous apply already reported it */ }).then(async () => {
         await builtin.stop();
         const running = mode() === 'builtin' && await builtin.start();
         if (!running) {

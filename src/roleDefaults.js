@@ -46,4 +46,34 @@ function seedDefaultRoles(db) {
   return { memberId: member.lastInsertRowid, modId: mod.lastInsertRowid, channelModId: channelMod.lastInsertRowid };
 }
 
-module.exports = { MEMBER_PERMS, MOD_PERMS, CHANNEL_MOD_PERMS, seedDefaultRoles };
+// The Admin role (#5707): a real role at the top that whoever holds admin
+// wears, so they look the part. It adds no power (that comes from is_admin).
+// Its id is kept in server_settings so renaming it changes nothing, and an
+// admin who deletes it is never handed a new one.
+function getAdminRoleId(db) {
+  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_role_id'").get();
+  const id = row ? parseInt(row.value, 10) : NaN;
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return db.prepare('SELECT id FROM roles WHERE id = ?').get(id) ? id : null;
+}
+
+function createAdminRole(db, { name = 'Admin', color = '#e74c3c', icon = null } = {}) {
+  const { VALID_ROLE_PERMS } = require('./socketHandlers/helpers');
+  const id = db.prepare("INSERT INTO roles (name, level, scope, color, icon) VALUES (?, 99, 'server', ?, ?)")
+    .run(name, color, icon).lastInsertRowid;
+  const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
+  VALID_ROLE_PERMS.forEach(p => insertPerm.run(id, p));
+  return id;
+}
+
+/** Give the Admin role to someone who has just become admin. */
+function grantAdminRole(db, userId) {
+  const id = getAdminRoleId(db);
+  if (!id || !userId) return;
+  const has = db.prepare('SELECT 1 FROM user_roles WHERE user_id = ? AND role_id = ? AND channel_id IS NULL').get(userId, id);
+  if (!has) {
+    db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, NULL, ?)').run(userId, id, userId);
+  }
+}
+
+module.exports = { MEMBER_PERMS, MOD_PERMS, CHANNEL_MOD_PERMS, seedDefaultRoles, getAdminRoleId, createAdminRole, grantAdminRole };

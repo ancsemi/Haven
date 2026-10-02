@@ -50,7 +50,7 @@ function ask({ host, port }, timeoutMs) {
     req.writeUInt16BE(0, 2);
     req.writeUInt32BE(MAGIC, 4);
     txId.copy(req, 8);
-    const done = (ip) => { clearTimeout(timer); try { sock.close(); } catch { /* closed */ } resolve(ip); };
+    const done = (ip) => { clearTimeout(timer); try { sock.close(); } catch { /* socket already closed after an error */ } resolve(ip); };
     const timer = setTimeout(() => done(null), timeoutMs);
     sock.on('error', () => done(null));
     sock.on('message', (msg) => { const ip = parseResponse(msg, txId); if (ip) done(ip); });

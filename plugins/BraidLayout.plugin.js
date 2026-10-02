@@ -187,7 +187,7 @@ class BraidLayout {
       this._collapsedAdded = [];
       // Restore localStorage keys we introduced
       for (const [key, prev] of this._lsPrev) {
-        try { prev === null ? localStorage.removeItem(key) : localStorage.setItem(key, prev); } catch {}
+        try { prev === null ? localStorage.removeItem(key) : localStorage.setItem(key, prev); } catch { /* storage blocked: nothing was saved to restore */ }
       }
       this._lsPrev.clear();
       for (const [t, type, fn, opts] of this._listeners) t.removeEventListener(type, fn, opts);
@@ -261,7 +261,7 @@ class BraidLayout {
     try {
       if (!this._lsPrev.has(key)) this._lsPrev.set(key, localStorage.getItem(key));
       localStorage.setItem(key, value);
-    } catch {}
+    } catch { /* storage blocked (private mode): the layout still applies, it is just not remembered */ }
   }
 
   _hide(el) {
@@ -349,7 +349,7 @@ class BraidLayout {
   _unfoldVoiceDock() {
     document.getElementById('braid-voice-people-btn')?.remove();
     for (const [el, parent, next] of [...(this._moved || [])].reverse()) {
-      try { parent.insertBefore(el, next && next.parentNode === parent ? next : null); } catch {}
+      try { parent.insertBefore(el, next && next.parentNode === parent ? next : null); } catch { /* the old spot is gone: the next render rebuilds it */ }
     }
     this._moved = [];
     document.getElementById('braid-voice-dock')?.remove();
@@ -945,7 +945,7 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
   // Own messages get an accent-tinted card, like mobile.
   _paintOwn() {
     let id = null;
-    try { id = (JSON.parse(localStorage.getItem('haven_user') || 'null') || {}).id; } catch {}
+    try { id = (JSON.parse(localStorage.getItem('haven_user') || 'null') || {}).id; } catch { /* corrupt or blocked storage: nothing to highlight */ }
     if (!id) { HavenApi.DOM.removeStyle('BraidFormOwn'); return; }
     const sel = `html[data-braid-form="1"] .message[data-user-id="${id}"]>.message-row>.message-body,` +
       `html[data-braid-form="1"] .message-compact[data-user-id="${id}"]>.message-body`;

@@ -1,0 +1,1559 @@
+﻿/* Haven core styles, part 6 of 16: profile editing, the server bar, modals, pictures, the lightbox and context menus. Loaded in order by style.css; the order matters. */
+/* ── Edit Profile Modal ──────────────────────────── */
+.edit-profile-textarea {
+  width: 100%;
+  min-height: 5rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: var(--font-main), var(--font-emoji);
+  resize: vertical;
+}
+.edit-profile-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.learn-more-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0.25rem;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.learn-more-toggle:hover { color: var(--text-secondary); }
+.learn-more-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* Clickable message author and sidebar user items for profile popup */
+.message-author { cursor: pointer; }
+.message-author:hover { text-decoration: underline; }
+.message-avatar, .message-avatar-img { cursor: pointer; }
+.user-item { cursor: pointer; }
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   TOASTS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+#toast-container {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 0.625rem 1.125rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  animation: toastIn 0.25s ease, toastOut 0.3s ease 3.5s forwards;
+  pointer-events: auto;
+  max-width: 22.5rem;
+  word-break: break-word;
+  /* Force opaque background even when a translucent theme variable is in use
+     so toasts remain readable against the busy chat backdrop. */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.toast.error {
+  border-color: var(--danger);
+  background: rgba(60, 18, 18, 0.96);
+  color: #ffd9d9;
+}
+.toast.success {
+  border-color: var(--success);
+  background: rgba(20, 50, 32, 0.96);
+  color: #d4ffe1;
+}
+.toast.info {
+  border-color: var(--accent);
+  background: rgba(20, 28, 44, 0.96);
+  color: #e6efff;
+}
+
+.toast-action-btn {
+  flex-shrink: 0;
+  padding: 0.125rem 0.625rem;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 0.25rem;
+  color: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.toast-action-btn:hover { background: rgba(255,255,255,0.28); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SERVER BAR (far left, Discord-style)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.server-bar {
+  width: 3.5rem;
+  min-width: 3.5rem;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 0;
+  gap: 0.25rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.server-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-tertiary);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.server-icon:hover { border-radius: 0.75rem; background: var(--accent); }
+.server-icon.home { border-radius: 0.75rem; background: var(--accent); }
+
+.server-icon.home.bounce {
+  animation: serverBounce 0.4s ease;
+}
+
+@keyframes serverBounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+  60% { transform: translateY(-3px); }
+}
+
+.server-icon-text {
+  font-size: 1.125rem;
+  color: var(--text-primary);
+  pointer-events: none;
+  font-weight: 700;
+}
+
+.server-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* The admin-set server icon is injected into #home-server as a bare <img>
+   (no class) — without sizing it renders at natural size and sprawls
+   behind the neighboring server tiles. Constrain any direct img child. */
+.server-icon > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.server-icon.add-server {
+  background: transparent;
+  border: 2px dashed var(--border-light);
+}
+
+.server-icon.add-server:hover {
+  border-color: var(--accent);
+  background: transparent;
+  border-radius: 0.75rem;
+}
+
+.server-icon.add-server .server-icon-text {
+  font-size: 1.375rem;
+  color: var(--accent);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.server-status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  border: 2px solid var(--bg-secondary);
+}
+
+.server-status-dot.online  { background: var(--success); }
+.server-status-dot.offline { background: var(--text-muted); }
+.server-status-dot.unknown { background: var(--warning); }
+
+.server-separator {
+  width: 1.5rem;
+  height: 0.125rem;
+  background: var(--border);
+  border-radius: 0.0625rem;
+  margin: 0.25rem 0;
+  flex-shrink: 0;
+}
+
+.server-remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--danger-text);
+  font-size: 0.75rem;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid var(--bg-secondary);
+  padding: 0;
+}
+
+.server-icon.remote:hover .server-remove { display: flex; }
+
+/* Server bar drag-and-drop reordering */
+.server-icon.remote[draggable="true"] { cursor: grab; }
+.server-icon.remote[draggable="true"]:active { cursor: grabbing; }
+.server-icon.server-dragging { opacity: 0.4; }
+.server-drop-indicator {
+  height: 0.125rem;
+  background: var(--accent, #7c5cfc);
+  margin: 0.125rem 0.5rem;
+  border-radius: 0.125rem;
+  pointer-events: none;
+}
+
+/* Manage Servers gear button */
+.server-icon.manage-servers {
+  background: transparent;
+  border: 2px dashed var(--border-light);
+  margin-top: 0.125rem;
+}
+.server-icon.manage-servers:hover {
+  border-color: var(--accent);
+  background: transparent;
+  border-radius: 0.75rem;
+}
+.server-icon.manage-servers .server-icon-text {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+.server-icon.manage-servers:hover .server-icon-text {
+  color: var(--accent);
+}
+
+/* Manage Servers modal list */
+.manage-servers-modal-inner {
+  width: 30rem;
+  max-width: 90vw;
+  /* Make the inner modal a column flex container so the list can grow
+     to fill the available vertical space when the user resizes the
+     modal taller. Without this the list was capped at max-height:360px
+     and any extra height left a giant empty band below the buttons. */
+  display: flex;
+  flex-direction: column;
+}
+.manage-servers-list {
+  flex: 1 1 auto;
+  min-height: 7.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0.75rem 0;
+}
+.manage-servers-list:empty::before {
+  content: 'No servers added yet. Click "+ Add Server" below.';
+  color: var(--text-muted);
+  text-align: center;
+  padding: 1.5rem 0;
+  font-size: 0.8125rem;
+}
+.manage-server-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.manage-server-row:hover {
+  background: var(--bg-hover);
+}
+.manage-server-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+}
+.manage-server-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.manage-server-info {
+  flex: 1;
+  min-width: 0;
+}
+.manage-server-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.manage-server-url {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+.manage-server-status {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.5625rem;
+  flex-shrink: 0;
+}
+.manage-server-status.online {
+  background: rgba(67, 181, 129, 0.15);
+  color: var(--success);
+}
+.manage-server-status.offline {
+  background: rgba(240, 71, 71, 0.12);
+  color: var(--text-muted);
+}
+.manage-server-status.unknown {
+  background: rgba(250, 166, 26, 0.12);
+  color: var(--warning);
+}
+.manage-server-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+.manage-server-actions button {
+  background: none;
+  border: none;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.25rem 0.375rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+.manage-server-actions button:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+.manage-server-actions button.danger-action:hover {
+  background: #3a1515;
+  color: var(--danger);
+}
+
+/* Sync Servers button in server bar */
+.server-icon.sync-servers {
+  background: transparent;
+  border: 2px dashed var(--border-light);
+  margin-top: 0.125rem;
+}
+.server-icon.sync-servers:hover {
+  border-color: var(--accent);
+  background: transparent;
+  border-radius: 0.75rem;
+}
+.server-icon.sync-servers .server-icon-text {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+.server-icon.sync-servers:hover .server-icon-text {
+  color: var(--accent);
+}
+.server-icon.sync-servers.spinning .server-icon-text {
+  animation: syncSpin 0.8s linear infinite;
+  color: var(--accent);
+}
+@keyframes syncSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Drag handle in Manage Servers list */
+.manage-server-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+  padding: 0 0.125rem;
+  letter-spacing: 1px;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s;
+}
+.manage-server-drag-handle:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+.manage-server-row.dragging {
+  opacity: 0.4;
+}
+.manage-server-row.drag-over-above {
+  box-shadow: 0 -2px 0 0 var(--accent);
+}
+.manage-server-row.drag-over-below {
+  box-shadow: 0 2px 0 0 var(--accent);
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MODAL
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+  backdrop-filter: blur(4px);
+}
+
+/* Hidden modal overlays: use content-visibility so Chromium can skip
+   style computation / layout on the entire subtree (~30 modals × 20+
+   children each) during the RGB cycling tick.  Only visible overlays
+   get recalculated. */
+.modal-overlay[style*="display:none"],
+.modal-overlay[style*="display: none"] {
+  content-visibility: hidden;
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  padding: 1.75rem;
+  width: min(90%, 25rem);   /* 400px at Normal; scales with the font setting */
+  max-width: 90vw;
+  max-height: 85vh;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+  resize: both;
+  overflow: auto;
+  min-width: 17.5rem;
+  min-height: 11.25rem;
+  position: relative;
+}
+
+/* Auto-injected expand/close button group — absolutely positioned in
+   the top-right of every modal so it works regardless of inner header
+   structure (back button, wrapper divs, etc). */
+.modal-controls {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  z-index: 5;
+}
+
+/* Modals containing an .organize-list, .audit-log-list, or other primary
+   scroll region need flex layout so the body fills available space when
+   the modal is vertically resized. Without this, dragging the bottom-right
+   resize handle leaves wasted blank space below the list. */
+.modal:has(> .modal-flex-body),
+.modal.modal-flex {
+  display: flex;
+  flex-direction: column;
+}
+.modal-flex-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.modal-flex-body > .organize-list,
+.modal-flex-body > .audit-log-list,
+.modal-flex-body > .modal-grow {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* When a modal uses .modal-flex directly (no .modal-flex-body wrapper),
+   designated child lists should still fill the available vertical space. */
+.modal.modal-flex > .manage-servers-list,
+.modal.modal-flex > .organize-list,
+.modal.modal-flex > .audit-log-list,
+.modal.modal-flex > .modal-grow {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* Maximized modal fills the viewport */
+.modal.modal-maximized {
+  width: 96vw !important;
+  height: 92vh !important;
+  max-width: 96vw !important;
+  max-height: 92vh !important;
+  border-radius: 0.5rem;
+  transition: none;
+}
+
+/* Disable resize handle on confirmation dialogs and other small modals */
+.modal.modal-confirm {
+  resize: none;
+  min-height: unset;
+  max-width: 23.75rem;
+  width: min(90%, 23.75rem);
+  padding: 1.375rem 1.5rem 1.25rem;
+}
+
+/* Expand/restore toggle button in modal headers */
+.modal-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  font-size: 0.875rem;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-muted);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  padding: 0;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.modal-expand-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* When the expand button is slotted directly inside a settings-style
+   header (next to .settings-close-btn) it needs to match the close
+   button's box and lose the floating-group margin so the two stay
+   aligned across viewport sizes — including narrow mobile widths
+   where the absolute .modal-controls wrap was misaligning with the
+   close × in the header. */
+.modal-expand-btn.modal-expand-btn-inline {
+  width: 2rem;
+  height: 2rem;
+  margin-left: 0;
+  margin-right: 0.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+}
+
+.modal h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+  font-family: var(--font-heading), var(--font-emoji);
+}
+
+.modal .modal-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+}
+
+.modal .form-group { margin-bottom: 0.875rem; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SETUP WIZARD
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.modal-wizard {
+  max-width: 35rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+.wizard-header {
+  text-align: center;
+  padding: 2rem 1.75rem 1.25rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.wizard-hex {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  filter: drop-shadow(0 0 12px var(--accent-glow, rgba(124,92,252,0.3)));
+}
+
+.wizard-header h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.wizard-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.wizard-steps {
+  padding: 1.5rem 1.75rem;
+  min-height: 17.5rem;
+}
+
+.wizard-step-indicators {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+}
+
+.wizard-indicator {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--bg-hover, #2c2f4a);
+  border: 2px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.wizard-indicator.active {
+  background: var(--accent, #7c5cfc);
+  border-color: var(--accent, #7c5cfc);
+  color: var(--accent-text);
+  box-shadow: 0 0 12px var(--accent-glow, rgba(124,92,252,0.4));
+}
+
+.wizard-indicator.done {
+  background: var(--green, #43b581);
+  border-color: var(--green, #43b581);
+  color: #fff;
+}
+
+.wizard-indicator-line {
+  width: 2rem;
+  height: 0.125rem;
+  background: var(--border-light);
+  margin: 0 0.25rem;
+}
+
+.wizard-step h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.wizard-step > p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.wizard-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.wizard-check {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-hover, rgba(255,255,255,0.03));
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-light);
+}
+
+.wizard-info-box {
+  background: var(--bg-hover, rgba(255,255,255,0.03));
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  padding: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.wizard-info-box strong {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.wizard-input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  background: var(--bg-input, #15172a);
+  border: 1px solid var(--border-light);
+  border-radius: 0.375rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.wizard-input:focus {
+  border-color: var(--accent, #7c5cfc);
+  box-shadow: 0 0 0 2px var(--accent-glow, rgba(124,92,252,0.2));
+}
+
+.wizard-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-dim, #5d6180);
+  margin-top: 0.375rem;
+  line-height: 1.5;
+}
+
+.wizard-code-display {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--bg-input, #15172a);
+  border: 1px solid var(--border-light);
+  border-radius: 0.375rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.wizard-code-display span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.wizard-code-display code {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent, #7c5cfc);
+  letter-spacing: 0.1em;
+  flex: 1;
+}
+
+.wizard-btn-small {
+  background: var(--bg-hover, #2c2f4a);
+  border: 1px solid var(--border-light);
+  border-radius: 0.25rem;
+  color: var(--text-primary);
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wizard-btn-small:hover {
+  background: var(--accent, #7c5cfc);
+  color: var(--accent-text);
+}
+
+.wizard-steps-list {
+  margin: 0.5rem 0 0 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  line-height: 1.8;
+}
+
+.wizard-steps-list code {
+  background: var(--bg-input, #15172a);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.1875rem;
+  font-size: 0.75rem;
+}
+
+.wizard-footer {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.75rem;
+  border-top: 1px solid var(--border-light);
+  gap: 0.5rem;
+}
+
+.wizard-btn-primary {
+  background: var(--accent, #7c5cfc);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.wizard-btn-primary:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.wizard-btn-secondary {
+  background: var(--bg-hover, #2c2f4a);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 0.375rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.wizard-btn-secondary:hover {
+  background: var(--bg-active, #333660);
+}
+
+.wizard-btn-text {
+  background: none;
+  border: none;
+  color: var(--text-dim, #5d6180);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  transition: color 0.15s ease;
+  font-family: inherit;
+}
+
+.wizard-btn-text:hover {
+  color: var(--text-primary);
+}
+
+.wizard-spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--accent, #7c5cfc);
+  border-radius: 50%;
+  animation: wizard-spin 0.7s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+}
+
+@keyframes wizard-spin {
+  to { transform: rotate(360deg); }
+}
+
+.wizard-port-success {
+  padding: 0.75rem;
+  background: rgba(67, 181, 129, 0.1);
+  border: 1px solid rgba(67, 181, 129, 0.3);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.wizard-port-fail {
+  padding: 0.75rem;
+  background: rgba(240, 71, 71, 0.08);
+  border: 1px solid rgba(240, 71, 71, 0.25);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.wizard-port-fail ol {
+  margin: 0.5rem 0 0 1.25rem;
+  line-height: 1.8;
+}
+
+.wizard-port-fail code {
+  background: var(--bg-input, #15172a);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.1875rem;
+  font-size: 0.75rem;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   CHAT IMAGES
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* Default: thumbnail mode */
+.chat-image {
+  max-width: 11.25rem;
+  max-height: 11.25rem;
+  /* Reserve minimum space before the image loads so the layout doesn't jump
+     from 0×0 to full-size. Without this, each image load causes a large
+     reflow that the scroll-to-bottom handlers react to individually, making
+     the chat jump repeatedly. */
+  min-width: 60px;
+  min-height: 3.75rem;
+  border-radius: var(--radius);
+  margin-top: 0.25rem;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  display: block;
+  object-fit: contain;
+}
+
+.chat-image:hover { opacity: 0.85; }
+
+/* Lazy media queue: a quiet block while an inline image waits for its turn. */
+img[data-lazy="pending"],
+img[data-lazy="loading"] { background: var(--bg-tertiary); }
+img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
+@keyframes lazy-media-in { from { opacity: 0.4; } to { opacity: 1; } }
+
+/* E2E encrypted image loading states */
+.e2e-img-pending,
+.e2e-img-loading {
+  width: 11.25rem;
+  height: 7.5rem;
+  background: var(--bg-tertiary, rgba(255,255,255,0.05));
+  border: 1px dashed var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.e2e-img-loading { animation: e2eImgPulse 1.2s ease-in-out infinite; }
+@keyframes e2eImgPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+.e2e-img-failed { opacity: 0.4; border-color: var(--danger, #e74c3c); }
+
+/* Full inline mode (toggled via client setting). The largest setting lets an
+   image use the whole message width; the height cap keeps a tall screenshot
+   from taking over the screen, and scales with the window so a wide image can
+   still fill the row on a big display. Both caps together preserve the aspect
+   ratio, so nothing is letterboxed. */
+.image-mode-full .chat-image {
+  max-width: 100%;
+  max-height: min(50rem, 75vh);
+  object-fit: contain;
+}
+
+/* Embed / link preview size modes (shared by Settings picker + per-embed ⤢) */
+.embed-size-off .link-preview { display: none !important; }
+
+.embed-size-full .link-preview--rich .lp-image,
+.embed-size-full .link-preview--rich .lp-video { max-height: 32.5rem; }
+.embed-size-full .link-preview--rich .lp-text { -webkit-line-clamp: 14; }
+.embed-size-full .link-preview--yt .link-preview-yt { max-width: 30rem; }
+
+.embed-size-medium .link-preview--rich .lp-media,
+.embed-size-medium .link-preview--rich .lp-video,
+.embed-size-medium .link-preview--rich .link-preview-gallery { max-width: 21.25rem; }
+.embed-size-medium .link-preview--rich .lp-image,
+.embed-size-medium .link-preview--rich .lp-video { max-height: 18.75rem; }
+.embed-size-medium .link-preview--rich .lp-text { -webkit-line-clamp: 8; }
+.embed-size-medium .link-preview--yt .link-preview-yt { max-width: 23.75rem; }
+
+.embed-size-small .link-preview { max-width: 22.5rem; }
+.embed-size-small .link-preview--rich .lp-media,
+.embed-size-small .link-preview--rich .lp-video,
+.embed-size-small .link-preview--rich .link-preview-gallery { max-width: 13.75rem; }
+.embed-size-small .link-preview--rich .lp-image,
+.embed-size-small .link-preview--rich .lp-video { max-height: 10rem; }
+.embed-size-small .link-preview--rich .lp-text { -webkit-line-clamp: 4; }
+.embed-size-small .link-preview--yt .link-preview-yt { max-width: 17.5rem; }
+
+/* Image lightbox overlay */
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  /* Sit above modal overlays (100001) and the profile card (100010) so opening
+     a lightbox from the media gallery or a profile avatar appears in front. */
+  z-index: 100020;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  animation: lightbox-fade-in 0.15s ease;
+}
+.lightbox-img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 0.375rem;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+  object-fit: contain;
+  cursor: default;
+}
+@keyframes lightbox-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Lightbox navigation arrows */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10001;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, opacity 0.15s ease;
+  opacity: 0.7;
+}
+.lightbox-nav:hover {
+  background: rgba(0, 0, 0, 0.75);
+  opacity: 1;
+}
+.lightbox-nav:disabled {
+  opacity: 0.2;
+  cursor: default;
+  pointer-events: none;
+}
+.lightbox-prev { left: 16px; }
+.lightbox-next { right: 16px; }
+
+/* Image context menu (right-click Save/Copy/Open) */
+.image-context-menu {
+  position: fixed;
+  /* 3.20.2: must sit above the image lightbox (100010) and the
+     PiP DM panel (99999) so right-clicking an enlarged image OR an
+     image inside a PiP DM shows the menu on top, not buried behind
+     the overlay. Was 10001 which lost to both. */
+  z-index: 100020;
+  background: var(--bg-secondary, #23263a);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 0.5rem;
+  padding: 0.25rem 0;
+  min-width: 10rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  animation: lightbox-fade-in 0.1s ease;
+}
+.image-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.875rem;
+  background: none;
+  border: none;
+  color: var(--text-primary, #e2e4f0);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.image-context-menu button:hover {
+  background: var(--bg-hover, rgba(124,92,252,0.15));
+}
+
+/* ── User Context Menu (right-click options) ── */
+.user-context-menu {
+  position: fixed;
+  /* Same reasoning as .image-context-menu — needs to clear the PiP
+     DM (99999) and image lightbox (100010). */
+  z-index: 100020;
+  background: var(--bg-secondary, #23263a);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 0.5rem;
+  padding: 0.25rem 0;
+  min-width: 12.5rem;
+  overflow: visible;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  animation: lightbox-fade-in 0.1s ease;
+}
+.user-ctx-header {
+  padding: 0.5rem 0.875rem 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  margin-bottom: 0.125rem;
+}
+.user-context-menu > button,
+.user-ctx-submenu-trigger {
+  display: block;
+  width: 100%;
+  padding: 0.4375rem 0.875rem;
+  background: none;
+  border: none;
+  color: var(--text-primary, #e2e4f0);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-context-menu > button:hover,
+.user-ctx-submenu-trigger:hover {
+  background: var(--bg-hover, rgba(124,92,252,0.15));
+}
+.user-ctx-arrow {
+  float: right;
+  opacity: 0.5;
+  font-size: 0.6875rem;
+}
+
+/* Submenu wrapper for invite-to-channel */
+.user-ctx-submenu-wrapper {
+  position: relative;
+}
+.user-ctx-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 11.25rem;
+  max-height: 17.5rem;
+  overflow-y: auto;
+  background: var(--bg-secondary, #23263a);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 0.5rem;
+  padding: 0.25rem 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 10002;
+}
+.user-ctx-submenu-wrapper:hover .user-ctx-submenu {
+  display: block;
+}
+.user-ctx-submenu button {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.875rem;
+  background: none;
+  border: none;
+  color: var(--text-primary, #e2e4f0);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-ctx-submenu button:hover {
+  background: var(--bg-hover, rgba(124,92,252,0.15));
+}
+/* Section divider + destructive (danger) items, folded in from the old gear menu */
+.user-ctx-divider {
+  height: 0.0625rem;
+  background: var(--border, rgba(255,255,255,0.12));
+  margin: 0.25rem 0.5rem;
+}
+.user-context-menu > button.user-ctx-danger { color: var(--danger); }
+.user-context-menu > button.user-ctx-danger:hover { background: rgba(233,69,96,0.12); color: var(--danger); }
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   UPLOAD BUTTON + DRAG-DROP
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* ── Input actions box (upload | emoji | gif) ── */
+.input-actions-box {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.1875rem 0.375rem;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 0.5rem;
+  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1001;
+}
+/* The toolbar glyphs are inline SVGs with hard-coded width/height attributes,
+   so they ignore font size. Size them in rem here so they scale with it and
+   stay proportional to the buttons around them. */
+.input-actions-box button svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.input-actions-divider {
+  width: 0.0625rem;
+  height: 1.25rem;
+  background: var(--border, rgba(255,255,255,0.12));
+  flex-shrink: 0;
+  margin: 0 0.0625rem;
+}
+
+/* Clippy icon hidden by default, shown only on Win95 */
+.upload-icon-clippy { display: none; }
+[data-theme="win95"] .upload-icon-default { display: none; }
+[data-theme="win95"] .upload-icon-clippy { display: inline; font-size: 1.125rem; }
+
+.btn-upload {
+  width: 2.125rem;
+  height: 2.125rem;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.btn-upload:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+
+.message-area.drag-over,
+.thread-panel.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  background: rgba(124, 92, 252, 0.04);
+}
+
+
+.volume-slider {
+  width: 100%;
+  height: 0.875rem;
+  margin-top: 0.25rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border-radius: 0.125rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  background: rgba(255,255,255,0.3);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.volume-slider::-moz-range-track {
+  background: rgba(255,255,255,0.3);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -0.25rem;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   NOTIFICATION SETTINGS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.notif-settings { display: flex; flex-direction: column; gap: 0.625rem; }
+
+.toggle-row, .volume-row, .select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  gap: 0.5rem;
+}
+
+.toggle-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+/* Admin-only permission callout in the role editors. The note and the
+   highlighted permission labels share the same theme-aware colour so the
+   connection reads at a glance. */
+.perm-admin-note {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--warning);
+}
+.toggle-row.perm-admin-only > span,
+.cr-perm-toggle.perm-admin-only > span {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.user-profile-groups-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.group-channel-info-popup {
+  position: fixed;
+  z-index: 100010;
+  min-width: 12rem;
+  max-width: min(20rem, calc(100vw - 1rem));
+  max-height: calc(100vh - 1rem);
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 0.4rem;
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  font-size: 0.8rem;
+}
+
+.group-channel-info-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.group-channel-info-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.group-channel-info-close:hover {
+  color: var(--text-primary);
+}
+
+.group-channel-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.group-channel-info-row {
+  color: var(--text-secondary);
+}
+
+.group-channel-info-row.sub {
+  padding-left: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Read-only banner shown when a non-admin opens a role at or above their own
+   level — they can view it but not edit it. */
+.role-readonly-note {
+  margin: 0 0 0.625rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  border-radius: 0.375rem;
+}
+
+.slider-sm {
+  width: 5rem;
+  height: 0.875rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border-radius: 0.125rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.slider-sm::-webkit-slider-runnable-track {
+  background: rgba(255,255,255,0.25);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.slider-sm::-moz-range-track {
+  background: rgba(255,255,255,0.25);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.slider-sm::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -0.25rem;
+  box-shadow: 0 0 4px var(--accent-glow, rgba(124,92,252,0.3));
+}
+
+.slider-sm::-moz-range-thumb {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px var(--accent-glow, rgba(124,92,252,0.3));
+}
+
+.select-row select {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.1875rem 0.375rem;
+  font-size: 0.6875rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.select-row select:focus { border-color: var(--accent); }
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   EMOJI PICKER
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.btn-emoji {
+  width: 2.125rem;
+  height: 2.125rem;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  font-size: 1.125rem;
+}
+
+.btn-emoji:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+
+.emoji-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  width: 21.25rem;
+  max-height: 22.5rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 1050;
+}
+
+.emoji-search-row {
+  padding: 0 0.125rem 0.375rem;
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  position: relative; /* anchor for the skin-tone dropdown */
+}
+
+.emoji-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  outline: none;
+}
+.emoji-search-input:focus {
+  border-color: var(--accent);
+}
+

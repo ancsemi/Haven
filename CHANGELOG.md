@@ -11,6 +11,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.17.0] - 2026-10-02
+
+Roles can have gradient colors, Ferry can bridge Discord forums, backup restore
+works on Windows, and a big cleanup under the hood: error handling was gone
+through across the whole codebase and the largest files were split up.
+
+### Added
+- Gradient role colors: a role can draw names as a gradient between two colors, with an optional slow shimmer (off for anyone with reduced motion turned on). It shows in the member list, chat, threads, profile cards, mentions, voice and the role editor's live preview. Plain roles and the mobile apps look the same as before.
+- Ferry bridges forums: a Discord forum pairs with a Haven forum. New posts on either side appear on the other with their title, tags and author, replies cross both ways, and Haven remembers which post is which across restarts. Replies from Discord show as "[BOT] name" in threads, an edit on Discord only carries over what actually changed there (so a Haven moderator's retitle or retag is not undone by an unrelated edit), and topics marked NSFW are held back unless the Discord forum is NSFW too.
+
+### Changed
+- A forum only pairs with a forum in Ferry now. **If you had a Haven forum paired with a Discord text channel, that pairing stops working after this update**; pair the forum with a Discord forum instead.
+- Uploads and the other server routes use the same permission rules as the app. A permission granted by level or set on one person now counts there, and a person's own deny now beats a role. Before, uploads only looked at roles, so someone shown as allowed could still be refused a picture upload, and someone denied could still upload.
+- Settings: the Whitelist page is now called Sign-ups ("Who can sign up"), since it holds the whitelist, sign-up token, captcha and sign-up limit.
+- Role Management: the Members, Duplicate and Delete buttons stay in view below the role's settings instead of scrolling away with the permissions.
+- The donors list: past sponsors move to the donors list, and someone who donated more than once is listed once.
+- Auto-mod and code: in a chat message, a bare address inside a code block or `inline code` (like `ghcr.io/owner/image` in a pasted command) no longer counts as a link, so pasting setup commands no longer gets messages deleted or earns strikes. Haven never makes a bare address clickable. Full `http(s)://` links are still checked everywhere, including inside code. Profiles, topics and titles are checked as before.
+- Auto-mod's starter allowlist includes haven-app.com, so links to Haven's own guide are not blocked. Existing servers get it once; an entry you already have for it, allowed or blocked, is left alone.
+- Opening a channel: older messages get their authors' role colors and badges once the member list arrives, instead of staying plain.
+- Under the hood: every place that quietly ignored an error now either reports it in the log or says why it is safe to ignore, on the server, in the app, in the bundled plugins and in the installer. The largest files were split into smaller ones by area (the app's interface code went from four files of 5,000 to 9,000 lines each to files of about 1,500 lines or less, server.js lost almost half its length, and the 20,790-line stylesheet became sixteen files loaded in the same order). Nothing about how Haven works changed from the split; it only makes the code easier to read and safer to change.
+
+### Fixed
+- Backup restore works on Windows. Windows will not replace a file that is in use, so a restore never took effect there and the server came back on the old data. A restore that cannot go ahead now cleans up after itself.
+- Sign-up settings: turning on the sign-up token (or its invite bypass) no longer resets an unsaved sign-up limit, captcha or max invite uses, and closing Settings without saving puts those back.
+- The Admin role: Reset to Default makes it again, and an Admin role you deleted stays deleted.
+- Picking a command from the formatting guide keeps what you had typed instead of wiping it.
+- A code block written on one line keeps its first word: ```` ```sudo ls``` ```` used to show only "ls", because the first word was taken as the language name. Now that only happens when the line ends right after it, as in Discord.
+- Docker and Podman: the container fixes the owner of the database and certificate files, not only the data folder, so data copied in from another machine (or used once outside the container) no longer leaves Haven unable to open its database and restarting in a loop. When it still cannot open the database, the log says which folder and how to fix it, and the guide has a short Podman section. (#5714)
+- Link previews show nothing when the auto-mod link rules cannot be read, instead of previewing sites the admin has not allowed.
+- The role assignment editor shows an error if a person's custom permissions cannot be read, instead of showing role defaults that would overwrite them on save.
+- Messages draw faster in busy channels: each author's details are looked up once instead of searching every member for every message.
+
+### Security
+- Several checks used to let things through when reading a setting failed. They now refuse instead: a person's own permission deny, a deny on deleting your own messages, a banned account asking for voice relay credentials, the FCM privacy switch, activity sharing and invisible mode, and the IP ban list (a failed read used to clear every IP ban for 30 seconds). A login whose session length cannot be read now lasts 7 days instead of never expiring.
+- engine.io (under socket.io) is updated to 6.6.11: a crafted connection could tie up the server (a denial of service anyone who can reach the server could try). brace-expansion is updated to 2.1.7 for similar bugs in pattern matching.
+
+## [4.16.0] - 2026-10-01
+
+Profile pictures can be cropped, the admin's badge is now a real role you can
+edit like any other, and Auto-Cleanup can keep the uploads folder under a size
+you choose. Bots can post into threads, automatic Away can be tuned, and a
+handful of fixes from the issue tracker.
+
+### Added
+- Avatar cropping: an Edit button next to your profile picture opens a crop editor, and picking a new still image opens it straight away. The Edit Profile window is tidied up too. (#5700, thanks Bo0sted)
+- Transparent roles: a role can be set to not color the people who hold it, so their next role down sets their color instead. Handy for letting mods pick their own color through a group role. (#5707, thanks Bo0sted)
+- Auto-Cleanup has a "Max Uploads Size (MB)" setting. Once the uploads folder passes it, the oldest messages with files are removed until it is back under. Pinned and archived messages and cleanup-exempt channels are left alone, and avatars, emoji and stickers count toward the total but are never removed. The files go through deleted-attachments like any other delete. Off by default.
+- Automatic Away can be tuned or switched off in Admin, Presence & Activity, with separate wait times for a visible and a hidden tab. The defaults stay at 5 and 2 minutes. (#5705, thanks michues)
+- An option to turn off STUN and TURN (Admin, Connectivity), for servers used only on one home or office network, where those lookups fail and show misleading connection warnings. (#5704, thanks michues)
+- Bots can post into threads: the webhook API takes a `thread_id` (a top-level message in the bot's channel), and the reply shows in the thread the same way a person's does. The bot guide covers it. (#5706)
+
+### Changed
+- The admin's badge is a real role now. It used to be a made-up label that also hid every other role the admin held. On updating, it becomes a real role at the top with the same name, color and icon, which you can rename, recolor or delete like any other role. The admin's powers don't come from it and don't change. New servers get it too, and it moves to the new admin when admin is transferred. (#5707)
+- Transferring admin: the former admin's server roles are replaced by the Former Admin role, which already holds every role permission. (#5707)
+- The backup screen says plainly what a backup holds: with Messages ticked it carries the whole database, so people keep their accounts and passwords after a restore, and the file holds login details and needs keeping safe.
+- The website moved to haven-app.com, and the app's download links point there.
+
+### Fixed
+- A channel's member list leaves out people its required roles keep out, and updates as soon as the requirement changes. (#5703)
+- Clicking quickly through channels no longer trips the "Slow down" limit, and a limited client gets one warning every few seconds instead of one per request. (#5701)
+- Self Destruct in Channel Functions: clicking away with nothing entered, or pressing Escape, puts it back as it was, and its drop-down no longer lingers in every other channel's panel. (#5702)
+- Channel names in the sidebar get the full width: the options button takes no room until you hover or tab to the channel. (#5709, thanks birdcrazy)
+
+### Security
+- The upload library (multer) is updated to 2.4.0: an upload aborted partway no longer leaves its partial file behind on disk.
+
 ## [4.15.0] - 2026-09-27
 
 Haven gets ready for big communities. A new Large Server Setup page in admin

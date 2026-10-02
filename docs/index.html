@@ -6,14 +6,14 @@
 <meta property="og:title" content="Haven, a chat server you run yourself">
 <meta property="og:description" content="Haven is a free, open source alternative to Discord that you host on your own computer. Channels, voice, screen sharing, threads and encrypted DMs. Friends join with a link, the desktop app or the Android app.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://ancsemi.github.io/Haven/">
-<meta property="og:image" content="https://ancsemi.github.io/Haven/img/haven-4-6-default.jpg">
+<meta property="og:url" content="https://haven-app.com/">
+<meta property="og:image" content="https://haven-app.com/img/haven-4-6-default.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Haven, a chat server you run yourself">
 <meta name="twitter:description" content="Haven is a free, open source alternative to Discord that you host on your own computer. Channels, voice, screen sharing, threads and encrypted DMs. Friends join with a link, the desktop app or the Android app.">
-<meta name="twitter:image" content="https://ancsemi.github.io/Haven/img/haven-4-6-default.jpg">
+<meta name="twitter:image" content="https://haven-app.com/img/haven-4-6-default.jpg">
 <meta name="twitter:site" content="@ancsemi">
-<link rel="canonical" href="https://ancsemi.github.io/Haven/">
+<link rel="canonical" href="https://haven-app.com/">
 <meta name="theme-color" content="#F6F5F9">
 <title>Haven, a chat server you run yourself</title>
 <meta name="description" content="Haven is a free, open source alternative to Discord that you host on your own computer. Channels, voice, screen sharing, threads and encrypted DMs. Friends join with a link, the desktop app or the Android app.">
@@ -472,6 +472,8 @@
             <tr><td>Spotify, Last.fm, Steam</td><td>Only for people who link an account</td><td>To show what they're playing or listening to</td><td>Per person</td></tr>
             <tr><td>unicode.org</td><td>Monthly, only if you turn on emoji updates</td><td>New emoji</td><td>Off by default</td></tr>
             <tr><td>ipify.org, portchecker.io</td><td>When you run the connectivity test or use dynamic DNS</td><td>To find your public address</td><td>Only when used</td></tr>
+            <tr><td>registry.npmjs.org</td><td>When an admin installs the voice relay in Large Server Setup</td><td>To download the relay</td><td>Only when used</td></tr>
+            <tr><td>stun.l.google.com, stun.cloudflare.com</td><td>When the voice relay starts without a public address filled in, or an admin clicks Detect</td><td>To find the address callers reach the relay on</td><td>Fill in the address yourself</td></tr>
           </tbody>
         </table>
       </div>
@@ -482,14 +484,14 @@
     <div class="wrap">
       <div class="section-head">
         <h2>By the numbers</h2>
-        <p id="stats-caption">As of 9 September 2026.</p>
+        <p id="stats-caption">As of 29 September 2026.</p>
       </div>
       <dl class="facts">
         <div><dt>Started</dt><dd data-stat="started">Feb 2026</dd></div>
-        <div><dt>Releases</dt><dd class="num" data-stat="releases">156</dd></div>
-        <div><dt>Commits</dt><dd class="num" data-stat="commits">1,228</dd></div>
-        <div><dt>Contributors</dt><dd class="num" data-stat="contributors">20</dd></div>
-        <div><dt>GitHub stars</dt><dd class="num" data-stat="stars">542</dd></div>
+        <div><dt>Releases</dt><dd class="num" data-stat="releases">166</dd></div>
+        <div><dt>Commits</dt><dd class="num" data-stat="commits">1,479</dd></div>
+        <div><dt>Contributors</dt><dd class="num" data-stat="contributors">21</dd></div>
+        <div><dt>GitHub stars</dt><dd class="num" data-stat="stars">557</dd></div>
         <div><dt>License</dt><dd>AGPL-3.0</dd></div>
       </dl>
     </div>
@@ -504,13 +506,14 @@
       <div class="dl">
         <div class="dl-row">
           <div>
-            <h3>Haven Desktop <span class="ver">1.4.39</span></h3>
+            <h3>Haven Desktop <span class="ver">1.4.40</span></h3>
             <p>The app for joining a server. Adds per-app audio sharing, mid-call device switching and a system tray. It can run a server too.</p>
+            <p class="muted small">The installer isn't code-signed yet, so Windows may say "Windows protected your PC" the first time. Click <b>More info</b>, then <b>Run anyway</b>.</p>
           </div>
           <div class="dl-links">
-            <a class="btn btn-primary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.39/Haven-Setup-1.4.39.exe">Windows installer</a>
-            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.39/Haven-1.4.39.AppImage">Linux AppImage</a>
-            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.39/haven-desktop_1.4.39_amd64.deb">Linux .deb</a>
+            <a class="btn btn-primary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.40/Haven-Setup-1.4.40.exe">Windows installer</a>
+            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.40/Haven-1.4.40.AppImage">Linux AppImage</a>
+            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven-Desktop/releases/download/v1.4.40/haven-desktop_1.4.40_amd64.deb">Linux .deb</a>
           </div>
         </div>
         <div class="dl-row">
@@ -533,11 +536,12 @@
         </div>
         <div class="dl-row">
           <div>
-            <h3>Haven Server <span class="ver">4.15.0</span></h3>
+            <h3>Haven Server <span class="ver">4.17.0</span></h3>
             <p>Only for hosting your own server. Windows, macOS and Linux. Needs Node.js. About 5 MB.</p>
+            <p class="muted small">On Windows, the same "Windows protected your PC" message can show up for Start Haven.bat. More info, then Run anyway.</p>
           </div>
           <div class="dl-links">
-            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.15.0.zip">Download .zip</a>
+            <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven/archive/refs/tags/v4.17.0.zip">Download .zip</a>
             <a class="btn btn-secondary" href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md">Setup guide</a>
           </div>
         </div>
@@ -675,7 +679,7 @@
       <a href="https://github.com/ancsemi/Haven-Desktop">Desktop on GitHub</a>
       <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md">Setup guide</a>
       <a href="https://github.com/ancsemi/Haven/blob/main/CHANGELOG.md">Changelog</a>
-      <a href="https://ancsemi.github.io/Haven/support.html">Help and support</a>
+      <a href="https://haven-app.com/support.html">Help and support</a>
       <a href="https://github.com/ancsemi/Haven/issues">Report a bug</a>
       <a href="https://github.com/ancsemi/Haven/blob/main/LICENSE">AGPL-3.0</a>
     </nav>

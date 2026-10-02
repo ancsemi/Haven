@@ -60,7 +60,7 @@ test('the real URL wins over the placeholder for the lightbox', () => {
 });
 
 test('chat images and stickers are emitted through the lazy wrapper', () => {
-  const utils = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'modules', 'app-utilities.js'), 'utf8');
+  const utils = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'modules', 'app-message-content.js'), 'utf8');
   assert.match(utils, /_lazySrcAttr\(`src="\$\{this\._escapeHtml\(u\)\}"`\)\} class="chat-image"/);
   assert.match(utils, /_lazySrcAttr\(this\._imgSrcAttr\(u\)\)\} class="chat-image"/);
   assert.match(utils, /_lazySrcAttr\(`src="\$\{this\._escapeHtml\(str\.trim\(\)\)\}"`\)\} class="sticker-img"/);

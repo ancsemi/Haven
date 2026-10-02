@@ -85,7 +85,7 @@ async function downloadCloudflared({ binDir = BIN_DIR, fetch = fetchToFile } = {
     fs.renameSync(tmp, dest);
     if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
   } catch (err) {
-    try { fs.unlinkSync(tmp); } catch { /* nothing to clean */ }
+    try { fs.unlinkSync(tmp); } catch { /* partial download may not exist; the real error is thrown below */ }
     throw new Error(`could not download cloudflared (${err.message}). Download ${asset} from github.com/cloudflare/cloudflared/releases and save it as ${dest}`);
   }
   console.log(`[tunnel] cloudflared ready at ${dest}`);
@@ -125,7 +125,10 @@ async function stopTunnel() {
   try {
     if (current.type === 'localtunnel' && current.ref?.close) await current.ref.close();
     if (current.type === 'cloudflared' && current.ref && !current.ref.killed) current.ref.kill();
-  } catch { /* cleanup errors are non-critical */ }
+  } catch (err) {
+    // The tunnel may still be up even though it is now reported as stopped.
+    console.warn('[tunnel] Error while stopping tunnel:', err.message);
+  }
   status = { ...status, active: false, url: null };
   return true;
 }
@@ -238,7 +241,8 @@ let hooked = false;
 function registerProcessCleanup() {
   if (hooked) return;
   hooked = true;
-  const cleanup = () => { try { stopTunnel(); } catch { /* exit cleanup */ } };
+  // stopTunnel is async and catches its own errors, so nothing can throw here.
+  const cleanup = () => { stopTunnel(); };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
   process.on('exit', cleanup);

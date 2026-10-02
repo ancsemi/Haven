@@ -35,7 +35,7 @@ _forumLayoutOf(code) {
 _forumPrefs(code) {
   const key = `haven_forum_prefs:${code || this.currentChannel}`;
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch {}
+  try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { /* corrupt or blocked storage: the channel defaults apply */ }
   // The channel's default layout applies unless this reader picked their
   // own after it was set; an admin setting a new default starts everyone
   // from it again (#5656).
@@ -98,7 +98,7 @@ _forumAvatarHtml(msg) {
 },
 _setForumPrefs(code, patch) {
   const next = { ...this._forumPrefs(code), ...patch, at: Date.now() };
-  try { localStorage.setItem(`haven_forum_prefs:${code || this.currentChannel}`, JSON.stringify(next)); } catch {}
+  try { localStorage.setItem(`haven_forum_prefs:${code || this.currentChannel}`, JSON.stringify(next)); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   return next;
 },
 
@@ -862,7 +862,7 @@ _forumTopicHidden(msg) {
 
 _setHideNsfw(v) {
   const val = v ? 'true' : 'false';
-  try { localStorage.setItem('haven_hide_nsfw', val); } catch {}
+  try { localStorage.setItem('haven_hide_nsfw', val); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   if (this._userPrefs) this._userPrefs.hide_nsfw = val;
   this.socket?.emit('set-preference', { key: 'hide_nsfw', value: val });
   const toggle = document.getElementById('hide-nsfw-channels');

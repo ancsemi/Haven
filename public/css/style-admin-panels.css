@@ -1,0 +1,1508 @@
+﻿/* Haven core styles, part 15 of 16: the audit log, channel roles, server icon and banner, Discord import and role assignment. Loaded in order by style.css; the order matters. */
+/* ── Audit Log ────────────────────────────────────────── */
+.audit-log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  flex-wrap: wrap;
+}
+.audit-log-toolbar select,
+.audit-log-toolbar input {
+  height: 1.875rem;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: var(--bg-input, rgba(255,255,255,0.06));
+  color: var(--text-primary, #eee);
+  outline: none;
+}
+.audit-log-list {
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 0.5rem;
+  max-height: 26.25rem;
+  overflow-y: auto;
+  margin: 0.375rem 0;
+  background: var(--bg-secondary, rgba(0,0,0,0.18));
+}
+.audit-log-row {
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.85rem;
+  align-items: flex-start;
+}
+.audit-log-row:last-child { border-bottom: none; }
+.audit-log-row .audit-icon {
+  flex-shrink: 0;
+  width: 1.375rem;
+  text-align: center;
+  opacity: 0.85;
+}
+.audit-log-row .audit-body {
+  flex: 1;
+  min-width: 0;
+}
+.audit-log-row .audit-actor {
+  font-weight: 600;
+  color: var(--text-primary, #eee);
+}
+.audit-log-row .audit-action {
+  color: var(--text-secondary, #bbb);
+}
+.audit-log-row .audit-target {
+  color: var(--accent, #7c5cfc);
+  font-weight: 500;
+}
+.audit-log-row .audit-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted, #888);
+  margin-top: 0.125rem;
+  white-space: nowrap;
+}
+.audit-log-row .audit-details {
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+  margin-top: 0.1875rem;
+  font-family: var(--font-mono, monospace);
+  word-break: break-word;
+}
+.audit-log-empty {
+  padding: 1.5rem;
+  text-align: center;
+  opacity: 0.5;
+  font-size: 0.9rem;
+}
+.audit-log-load-more {
+  display: block;
+  margin: 0.5rem auto;
+}
+
+.audit-detail-pair {
+  margin-right: 0.5em;
+}
+
+/* ── Channel Roles Modal ─────────────────────── */
+.channel-roles-layout {
+  display: flex;
+  gap: 1rem;
+  max-height: 62vh;
+  min-height: 17.5rem;
+}
+.channel-roles-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+.channel-roles-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  min-height: 0;
+  border-left: 1px solid var(--border, rgba(255,255,255,0.1));
+  padding-left: 1rem;
+}
+.channel-roles-section-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted, #888);
+  margin: 0 0 0.375rem;
+  font-weight: 600;
+}
+.channel-roles-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0.125rem 0;
+}
+.channel-roles-member {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+}
+.channel-roles-member:hover { background: rgba(255,255,255,0.06); }
+.channel-roles-member.selected { background: rgba(var(--accent-rgb, 88,101,242), 0.18); outline: 1px solid var(--accent); }
+.channel-roles-member-avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-floating, #333);
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+.channel-roles-member-avatar.square { border-radius: 0.375rem; }
+.channel-roles-member-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.channel-roles-member-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-primary, #eee);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.channel-roles-member-login {
+  font-size: 0.72rem;
+  color: var(--text-muted, #888);
+}
+.channel-roles-no-role {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.channel-roles-member-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.1875rem;
+}
+.channel-roles-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.5625rem;
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary, #eee);
+  white-space: nowrap;
+  position: relative;
+}
+.channel-roles-badge.badge-admin {
+  background: rgba(231,76,60,0.2);
+  color: #e74c3c;
+}
+.channel-roles-badge .badge-dot {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.channel-roles-badge .badge-scope {
+  font-size: 0.6rem;
+  opacity: 0.6;
+  margin-left: 0.125rem;
+}
+.channel-roles-badge .revoke-btn {
+  cursor: pointer;
+  opacity: 0;
+  margin-left: 0.25rem;
+  font-size: 0.7rem;
+  transition: opacity 0.15s;
+}
+.channel-roles-badge:hover .revoke-btn { opacity: 0.6; }
+.channel-roles-badge .revoke-btn:hover { opacity: 1; color: var(--danger, #ff4444); }
+.channel-roles-actions {
+  border-top: 1px solid var(--border, rgba(255,255,255,0.1));
+  padding-top: 0.625rem;
+}
+.channel-roles-selected-name {
+  font-size: 0.88rem;
+  margin: 0 0 0.375rem;
+  color: var(--text-primary, #eee);
+}
+.channel-roles-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  min-height: 1.375rem;
+}
+.channel-roles-assign-row {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.channel-roles-assign-row .organize-select { flex: 1; min-width: 7.5rem; }
+.channel-roles-no-members {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-muted, #888);
+  font-size: 0.88rem;
+}
+
+/* ── Channel Roles: Right panel (role config) ─── */
+.channel-roles-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  overflow-y: auto;
+  max-height: 9.375rem;
+  flex-shrink: 0;
+  padding: 0.125rem 0;
+}
+.channel-roles-role-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+  font-size: 0.84rem;
+  color: var(--text-primary, #eee);
+}
+.channel-roles-role-item:hover { background: rgba(255,255,255,0.06); }
+.channel-roles-role-item.active {
+  background: rgba(var(--accent-rgb, 88,101,242), 0.18);
+  outline: 1px solid var(--accent);
+}
+.channel-roles-role-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.channel-roles-role-level {
+  font-size: 0.7rem;
+  color: var(--text-muted, #888);
+  flex-shrink: 0;
+}
+.channel-roles-role-detail {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.1));
+  padding-top: 0.5rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.cr-role-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.cr-role-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #888);
+  font-weight: 600;
+  margin-bottom: 0.125rem;
+}
+.cr-role-inline {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+.cr-role-inline > div { display: flex; flex-direction: column; gap: 0.125rem; }
+.cr-role-perms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  max-height: 11.25rem;
+  overflow-y: auto;
+  padding: 0.125rem 0;
+}
+.cr-perm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.25rem;
+  font-size: 0.78rem;
+  color: var(--text-primary, #eee);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 0.25rem);
+  transition: background 0.1s;
+}
+.cr-perm-toggle:hover { background: rgba(255,255,255,0.05); }
+.cr-perm-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 0.875rem;
+  height: 0.875rem;
+  cursor: pointer;
+}
+.cr-role-btns {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+}
+
+/* ── Channel Roles responsive ─────────────────── */
+@media (max-width: 640px) {
+  .channel-roles-layout {
+    flex-direction: column;
+    max-height: 70vh;
+  }
+  .channel-roles-right {
+    border-left: none;
+    border-top: 1px solid var(--border, rgba(255,255,255,0.1));
+    padding-left: 0;
+    padding-top: 0.75rem;
+  }
+}
+
+/* ── Assign Role Modal ───────────────────────────── */
+.assign-role-field-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #888);
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.assign-role-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+  margin: 0 0 0.375rem;
+  opacity: 0.7;
+  line-height: 1.3;
+}
+.assign-role-select {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.88rem;
+}
+.assign-role-select option {
+  padding: 0.25rem 0.5rem;
+}
+
+/* Multi-role checkbox list inside the basic Assign Role modal. */
+.assign-role-checkboxes {
+  max-height: 13.75rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.25rem;
+  background: var(--bg-secondary);
+}
+.assign-role-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3125rem 0.5rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+}
+.assign-role-checkbox-row:hover {
+  background: var(--bg-tertiary);
+}
+.assign-role-checkbox-row .role-color-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.assign-role-checkbox-name {
+  flex: 1;
+  font-size: 0.88rem;
+}
+.assign-role-checkbox-level {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+/* ── Settings Group Card ─────────────────────────── */
+.settings-group {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+}
+.settings-group-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Server Icon Upload (admin settings) ─────────── */
+.server-icon-upload-area {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.server-icon-preview {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.75rem;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid var(--border);
+}
+.server-icon-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.server-icon-preview .server-icon-text {
+  font-size: 1.375rem;
+  color: var(--accent);
+}
+.server-icon-upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.server-bar .server-icon.home img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+/* ── Server Banner Upload (admin settings) ─────────── */
+.server-banner-upload-area {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.server-banner-preview {
+  width: 12.5rem;
+  max-width: 100%;
+  height: 3.75rem;
+  border-radius: 0.5rem;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid var(--border);
+}
+.server-banner-upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* ── Server Banner Display (always behind all content) ─── */
+.server-banner-display {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 11.25rem;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.server-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 0%;
+  display: block;
+  opacity: 0.8;
+}
+/* Gradient fade at the bottom */
+.server-banner-display::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 5rem;
+  background: linear-gradient(to bottom, transparent, var(--bg-primary));
+  pointer-events: none;
+}
+
+/* Banner visible — base: header & topic above banner */
+.main.has-banner .channel-topic-bar,
+/* The banner is absolutely positioned at z-index 0, so it paints over any
+   sibling that is not itself positioned. The header and topic bar were lifted
+   above it; the welcome screen never was, so "Welcome to Haven" rendered
+   underneath the banner image on the no-channel-selected view. .message-area
+   already carries its own position:relative and is unaffected. */
+.main.has-banner .welcome-screen {
+  position: relative;
+  z-index: 1;
+}
+/* The header keeps the z-index:2 it has without a banner. This selector
+   outranks .channel-header, so listing it above at 1 put the encryption menu
+   back under the DM safety notice whenever a banner was up (#5639). */
+.main.has-banner .channel-header {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Full Header (default): opaque backgrounds ─── */
+.main.has-banner .channel-header {
+  background: var(--bg-primary);
+}
+.main.has-banner .channel-topic-bar {
+  background: var(--bg-secondary);
+}
+
+/* ── Shaded Header: translucent dark tint ─── */
+.main.banner-mode-shaded .channel-header {
+  background: rgba(0,0,0,0.45) !important;
+  border-bottom-color: transparent !important;
+}
+.main.banner-mode-shaded .channel-topic-bar {
+  background: rgba(0,0,0,0.35) !important;
+  border-bottom-color: transparent !important;
+}
+.main.banner-mode-shaded .channel-header,
+.main.banner-mode-shaded .channel-topic-bar {
+  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+}
+.main.banner-mode-shaded .header-actions-box {
+  background: rgba(0,0,0,0.35);
+  border-color: rgba(255,255,255,0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ── Minimal Header: transparent bar, pill backgrounds on elements ─── */
+.main.banner-mode-minimal .channel-header {
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+}
+.main.banner-mode-minimal .channel-topic-bar {
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+}
+.main.banner-mode-minimal .channel-header,
+.main.banner-mode-minimal .channel-topic-bar {
+  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+}
+.main.banner-mode-minimal .channel-info {
+  background: rgba(0,0,0,0.35);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.main.banner-mode-minimal .header-actions-box {
+  background: rgba(0,0,0,0.35);
+  border-color: rgba(255,255,255,0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.main.banner-mode-minimal .btn-voice,
+.main.banner-mode-minimal .voice-active-indicator {
+  background: rgba(0,0,0,0.35);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-shadow: none;
+}
+.main.banner-mode-minimal .channel-topic-bar {
+  margin: 0 0.75rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  padding: 0.1875rem 0.75rem;
+  background: rgba(0,0,0,0.3) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: inline-block;
+  width: auto;
+}
+
+/* ── Transparent Header: fully clear, no shading ─── */
+.main.banner-mode-transparent .channel-header {
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+}
+.main.banner-mode-transparent .channel-topic-bar {
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+}
+.main.banner-mode-transparent .channel-header,
+.main.banner-mode-transparent .channel-topic-bar {
+  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+}
+.main.banner-mode-transparent .header-actions-box {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* ── Shared overlay-mode overrides (shaded/minimal/transparent) ─── */
+.main.banner-mode-shaded .channel-code-tag,
+.main.banner-mode-minimal .channel-code-tag,
+.main.banner-mode-transparent .channel-code-tag {
+  text-shadow: none;
+}
+.main.banner-mode-shaded .update-banner,
+.main.banner-mode-shaded .desktop-app-banner,
+.main.banner-mode-shaded .android-beta-banner,
+.main.banner-mode-minimal .update-banner,
+.main.banner-mode-minimal .desktop-app-banner,
+.main.banner-mode-minimal .android-beta-banner,
+.main.banner-mode-transparent .update-banner,
+.main.banner-mode-transparent .desktop-app-banner,
+.main.banner-mode-transparent .android-beta-banner {
+  text-shadow: none;
+}
+
+/* ── Role Icons ────────────────────────────────────── */
+.role-icon {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.1875rem;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 0.125rem;
+  flex-shrink: 0;
+}
+.role-icon-preview {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.25rem;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.role-icon-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* ── Discord Import ────────────────────────────────── */
+.import-format-info {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+}
+.import-format-row { margin: 0.1875rem 0; }
+.import-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.import-dropzone:hover,
+.import-dropzone.drag-over {
+  border-color: var(--accent-color, #5865f2);
+  background: color-mix(in srgb, var(--accent-color, #5865f2) 8%, transparent);
+}
+.import-dropzone-content { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.import-dropzone-icon { font-size: 1.75rem; }
+.import-dropzone a { color: var(--accent-color, #5865f2); text-decoration: underline; }
+.import-progress-bar {
+  height: 0.375rem;
+  background: var(--bg-secondary);
+  border-radius: 0.1875rem;
+  overflow: hidden;
+  margin-top: 0.625rem;
+}
+.import-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent-color, #5865f2);
+  border-radius: 0.1875rem;
+  transition: width .3s;
+}
+.import-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+}
+.import-format-badge {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.1875rem;
+  background: #5865f2;
+  color: #fff;
+  letter-spacing: .3px;
+}
+.import-format-badge.official { background: #57f287; color: #000; }
+.import-channel-list {
+  max-height: 18.75rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  margin-top: 0.5rem;
+}
+.import-channel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.625rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+.import-channel-row:last-child { border-bottom: none; }
+.import-channel-row label { display: flex; align-items: center; gap: 0.375rem; flex: 1; min-width: 0; cursor: pointer; }
+.import-channel-row .import-ch-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-channel-row .import-ch-name input[type="text"] {
+  width: 100%;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  color: var(--text-primary);
+}
+.import-channel-row .import-ch-count {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Import modal tabs */
+.import-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.import-tab {
+  background: none;
+  border: none;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -0.0625rem;
+  transition: color .2s, border-color .2s;
+}
+.import-tab:hover { color: var(--text-primary); }
+.import-tab.active {
+  color: var(--accent-color, #5865f2);
+  border-bottom-color: var(--accent-color, #5865f2);
+}
+.import-token-input {
+  flex: 1;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  color: var(--text-primary);
+  font-family: monospace;
+}
+/* ── Large Server Setup ── */
+.large-server-card {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+}
+.large-server-card-title { font-weight: 600; margin-bottom: 4px; }
+.large-server-choices { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.large-server-choice {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 0.375rem; cursor: pointer;
+}
+.large-server-choice input { margin-top: 3px; flex-shrink: 0; }
+.large-server-choice > span { display: flex; flex-direction: column; gap: 2px; }
+.large-server-choice small { color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.large-server-choice:has(input:checked) { border-color: var(--accent-color, #5865f2); }
+.large-server-choice-disabled { opacity: 0.55; cursor: default; }
+.large-server-status { margin: 4px 0 8px; font-size: 0.78rem; color: var(--text-muted); }
+.large-server-status.is-running { color: var(--success, #3ba55d); }
+.large-server-status.is-error { color: var(--danger, #ed4245); }
+.large-server-install { margin-top: 4px; }
+#voice-relay-install-log { font-size: 0.72rem; overflow-wrap: anywhere; }
+#voice-relay-install-log.is-error { color: var(--danger, #ed4245); }
+.large-server-checklist { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.large-server-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.large-server-item > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.large-server-item small { color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.large-server-item .btn-sm { flex-shrink: 0; }
+
+.import-ferry-box {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--accent-color, #5865f2);
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.import-ferry-box p { margin: 0.375rem 0 0.625rem; }
+.import-ferry-box #import-ferry-missing { margin: 0.625rem 0 0; }
+.import-personal-login { margin-top: 0.75rem; font-size: 0.75rem; }
+.import-personal-login > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+}
+.import-personal-login > summary:hover { color: var(--text-primary); }
+.import-token-risk {
+  margin: 0.5rem 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--warning, #faa61a);
+  border-left-width: 4px;
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.import-token-risk p { margin: 0.375rem 0 0; }
+.import-token-risk-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.import-token-risk-ack input { margin-top: 0.2rem; flex-shrink: 0; }
+.import-token-help { margin-top: 0.5rem; font-size: 0.75rem; }
+.import-token-help summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+}
+.import-token-help summary:hover { color: var(--text-primary); }
+.import-token-steps {
+  margin-top: 0.5rem;
+  padding: 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+.import-token-steps ol { padding-left: 1.125rem; margin: 0.25rem 0; }
+.import-token-steps kbd {
+  padding: 0.0625rem 0.3125rem;
+  border: 1px solid var(--border);
+  border-radius: 0.1875rem;
+  background: var(--bg-primary);
+  font-size: 0.625rem;
+}
+.import-token-snippet {
+  display: block;
+  padding: 0.375rem 0.5rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  font-size: 0.625rem;
+  word-break: break-all;
+  user-select: all;
+  margin-top: 0.25rem;
+}
+.import-server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.5rem;
+  max-height: 17.5rem;
+  overflow-y: auto;
+}
+.import-server-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+.import-server-card:hover {
+  border-color: var(--accent-color, #5865f2);
+  background: color-mix(in srgb, var(--accent-color, #5865f2) 8%, var(--bg-secondary));
+}
+.import-server-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.import-server-icon-placeholder {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+.import-server-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-channel-category {
+  padding: 0.375rem 0.625rem 0.1875rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.import-thread-row {
+  padding-left: 1.75rem;
+  background: color-mix(in srgb, var(--bg-secondary) 40%, transparent);
+}
+.import-type-badge {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.6;
+}
+
+/* DISCORD badge for imported messages */
+.discord-badge {
+  display: inline-block;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  background: #5865f2;
+  color: #fff;
+  vertical-align: middle;
+  margin-left: 0.25rem;
+}
+.imported-message .message-avatar {
+  border: 2px solid #5865f2;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Centralized Role Assignment — 3-Pane Modal (RAC)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.role-assign-center-box {
+  /* Default size: spacious-but-bounded. The user can drag the bottom-right
+     corner to grow the modal to whatever fits their screen — the previous
+     `max-width: 960px !important` made the corner-resize one-way (shrink
+     only) on large displays. We keep a sensible upper cap (98vw / 92vh)
+     so the modal can never exceed the viewport. */
+  width: min(960px, 82vw);
+  max-width: 98vw;
+  height: 80vh;
+  max-height: 92vh;
+  min-width: 35rem;
+  min-height: 26.25rem;
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  overflow: hidden;
+}
+.role-assign-center-subtitle {
+  font-size: 0.82rem;
+  margin-bottom: 0.625rem;
+}
+
+/* Three-pane layout */
+.rac-layout {
+  display: flex;
+  gap: 0.0625rem;
+  background: var(--border-light, #333);
+  border: 1px solid var(--border-light, #333);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  flex: 1;
+  min-height: 21.25rem;
+}
+.rac-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary, #1a1a2e);
+  overflow: hidden;
+}
+.rac-users-pane { flex: 0 0 220px; min-width: 11.25rem; }
+.rac-channels-pane { flex: 0 0 220px; min-width: 11.25rem; }
+.rac-config-pane { flex: 1; min-width: 15rem; }
+
+.rac-pane-header {
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--border-light, #333);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+.rac-pane-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: var(--text-muted, #888);
+}
+.rac-search {
+  width: 100%;
+  padding: 0.3125rem 0.5rem;
+  font-size: 0.82rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-light, #444);
+  background: var(--bg-secondary, #16213e);
+  color: var(--text-primary, #e0e0e0);
+  outline: none;
+}
+.rac-search:focus {
+  border-color: var(--accent, #6b4fdb);
+}
+.rac-pane-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0;
+}
+.rac-placeholder {
+  padding: 1.25rem 0.75rem;
+  text-align: center;
+  color: var(--text-muted, #888);
+  font-size: 0.82rem;
+}
+
+/* User items */
+.rac-user-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 0.85rem;
+}
+.rac-user-item:hover { background: rgba(255,255,255,0.04); }
+.rac-user-item.active { background: var(--accent, #6b4fdb)22; border-left: 3px solid var(--accent, #6b4fdb); }
+.rac-user-avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.rac-user-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.rac-user-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.rac-user-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--text-primary, #e0e0e0);
+}
+.rac-user-level {
+  font-size: 0.7rem;
+  color: var(--text-muted, #888);
+}
+
+/* Channel items */
+.rac-channel-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.625rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 0.84rem;
+  color: var(--text-secondary, #ccc);
+}
+.rac-channel-item:hover { background: rgba(255,255,255,0.04); }
+.rac-channel-item.active { background: var(--accent, #6b4fdb)22; border-left: 3px solid var(--accent, #6b4fdb); }
+.rac-channel-item.rac-server-wide {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-light, #333);
+  padding: 0.4375rem 0.625rem;
+}
+.rac-channel-item.rac-sub {
+  padding-left: 1.625rem;
+  font-size: 0.8rem;
+}
+.rac-channel-icon { opacity: 0.5; font-size: 0.8rem; }
+.rac-channel-current-role {
+  margin-left: auto;
+  font-size: 0.68rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.1875rem;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+}
+
+/* Config pane body */
+.rac-config-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.875rem;
+}
+.rac-config-section {
+  margin-bottom: 0.875rem;
+}
+.rac-config-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  color: var(--text-muted, #888);
+  margin-bottom: 0.3125rem;
+}
+.rac-config-row {
+  display: flex;
+  gap: 0.625rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.rac-level-input {
+  width: 4.375rem;
+  padding: 0.3125rem 0.5rem;
+  font-size: 0.88rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-light, #444);
+  background: var(--bg-secondary, #16213e);
+  color: var(--text-primary, #e0e0e0);
+  text-align: center;
+}
+.rac-role-select {
+  flex: 1;
+  padding: 0.3125rem 0.5rem;
+  font-size: 0.85rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-light, #444);
+  background: var(--bg-secondary, #16213e);
+  color: var(--text-primary, #e0e0e0);
+}
+
+/* Permissions grid */
+.rac-perms-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem 0.75rem;
+}
+.rac-perm-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8rem;
+  padding: 0.1875rem 0.375rem;
+  color: var(--text-secondary, #ccc);
+  border-radius: var(--radius-sm, 0.25rem);
+  transition: background 0.15s;
+}
+.rac-perm-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+.rac-perm-item.checked,
+.rac-perm-item:has(input[type="checkbox"]:checked) {
+  background: color-mix(in srgb, var(--accent, #6b4fdb) 12%, transparent);
+}
+.rac-perm-item input[type="checkbox"] {
+  accent-color: var(--accent, #6b4fdb);
+}
+.rac-perm-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Current role display in config pane */
+.rac-current-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 0.25rem;
+  background: rgba(255,255,255,0.06);
+  font-size: 0.82rem;
+  margin-bottom: 0.625rem;
+}
+.rac-current-role .rac-role-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+.rac-changed-badge {
+  font-size: 0.68rem;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  background: #e67e2244;
+  color: #e67e22;
+  margin-left: 0.375rem;
+  font-weight: 600;
+}
+
+/* Multi-role: each card represents one role at the selected scope. */
+.rac-roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.rac-role-card {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg-secondary);
+  padding: 0.5rem 0.625rem;
+}
+.rac-role-card.rac-card-dirty {
+  border-color: #e67e22;
+}
+.rac-role-card.rac-card-removed {
+  opacity: 0.6;
+}
+.rac-role-card.rac-card-removed .rac-card-name {
+  text-decoration: line-through;
+}
+.rac-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.rac-card-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rac-card-level {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+.rac-card-locked {
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+.rac-card-editor {
+  margin-top: 0.625rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+}
+.rac-card-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0.375rem 0.25rem 0.75rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.1875rem;
+  font-weight: 600;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  display: block;
+}
+.rac-state-held {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+.rac-state-added {
+  background: rgba(52, 152, 219, 0.18);
+  color: #3498db;
+}
+.rac-state-removed {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
+}
+.rac-state-edited {
+  background: rgba(230, 126, 34, 0.18);
+  color: #e67e22;
+}
+.rac-inherited-section .rac-role-card {
+  opacity: 0.7;
+  border-style: dashed;
+  pointer-events: none;
+}
+.rac-add-role-section {
+  border-top: 1px solid var(--border);
+  padding-top: 0.625rem;
+}
+
+/* Footer */
+.rac-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rac-footer-right {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* Responsive: stack panes on small screens */
+@media (max-width: 700px) {
+  .rac-layout {
+    flex-direction: column;
+    max-height: 60vh;
+  }
+  .rac-users-pane, .rac-channels-pane {
+    flex: 0 0 auto;
+    max-height: 9.375rem;
+  }
+  .rac-config-pane {
+    min-height: 12.5rem;
+  }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MOBILE-SPECIFIC OVERHAUL
+   Consolidated fixes for cramped / overflowing mobile UIs
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* ── Fix: Members modal — use horizontal space, not purely vertical ── */
+@media (max-width: 600px) {
+  /* The modal itself should be near full-width */
+  #all-members-modal .modal {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    padding: 0.875rem 0.625rem;
+    max-height: 88vh !important;
+  }
+  #all-members-modal .modal h3 { font-size: 1rem; margin-bottom: 0.125rem; }
+
+  /* Member rows: horizontal card, tighter padding */
+  .aml-member-row {
+    padding: 0.375rem 0.5rem;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+  }
+  .aml-avatar-wrap { width: 1.875rem; height: 1.875rem; }
+  .aml-avatar { width: 1.875rem; height: 1.875rem; }
+  .aml-avatar-default { font-size: 0.75rem; }
+  .aml-status-dot { width: 0.5rem; height: 0.5rem; border-width: 1.5px; }
+
+  .aml-member-name { font-size: 0.75rem; gap: 0.25rem; }
+  .aml-login-name { font-size: 0.625rem; }
+  .aml-admin-badge, .aml-banned-badge, .aml-new-badge { font-size: 0.5625rem; padding: 0 0.25rem; }
+
+  /* Meta row: keep horizontal flow, don't let it be super vertical */
+  .aml-member-meta {
+    gap: 0.25rem;
+    font-size: 0.625rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .aml-role-badge { font-size: 0.5625rem; padding: 0 0.3125rem; }
+  .aml-member-joined, .aml-member-channels, .aml-member-storage { font-size: 0.5625rem; }
+
+  /* Actions: always visible on mobile (no hover), compact */
+  .aml-actions {
+    opacity: 1;
+    gap: 0.125rem;
+  }
+  .aml-action-btn {
+    width: 1.625rem;
+    height: 1.625rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* ── Fix: RAC (Role Assignment) modal — less claustrophobic on mobile ── */
+@media (max-width: 600px) {
+  .role-assign-center-box {
+    width: 97vw !important;
+    max-width: 97vw !important;
+    padding: 0.75rem 0.5rem !important;
+    max-height: 90vh !important;
+  }
+  .role-assign-center-box h3 { font-size: 0.9375rem; margin-bottom: 0.125rem; }
+  .role-assign-center-subtitle { font-size: 0.72rem; margin-bottom: 0.375rem; }
+
+  .rac-pane-header { padding: 0.375rem 0.5rem; gap: 0.25rem; }
+  .rac-pane-title { font-size: 0.65rem; }
+  .rac-search { padding: 0.25rem 0.375rem; font-size: 0.78rem; }
+
+  .rac-user-item, .rac-channel-item { padding: 0.375rem 0.5rem; font-size: 0.78rem; }
+
+  /* Perms grid: single column on tiny screens */
+  .rac-perms-grid { grid-template-columns: 1fr; gap: 0.125rem 0; }
+  .rac-perm-item { font-size: 0.74rem; padding: 0.125rem 0; }
+
+  .rac-footer { flex-wrap: wrap; gap: 0.375rem; }
+  .rac-footer .btn-sm { min-height: 2.25rem; font-size: 0.75rem; padding: 0.375rem 0.625rem; }
+
+  /* Config body: more room */
+  .rac-config-body { padding: 0.5rem; }
+  .rac-level-input { width: 3.4375rem; font-size: 0.8rem; }
+  .rac-role-select { font-size: 0.78rem; }
+}
+
+/* ── Fix: Reaction picker overflow — keep within viewport ── */
+@media (max-width: 480px) {
+  .reaction-picker {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: 60px !important;
+    width: auto !important;
+    max-width: none !important;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    border-radius: 0.75rem;
+    z-index: 10001;
+  }
+  .reaction-pick-btn {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.125rem;
+  }
+  /* Full emoji picker: also fixed to bottom */
+  .reaction-full-picker {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 60px !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: 50vh;
+    z-index: 10002;
+  }
+}
+
+/* ── Fix: Wasted space under CHANNELS when collapsed (desktop AND mobile) ── */
+.sidebar-section.channel-section {
+  transition: padding 0.2s ease;
+}
+

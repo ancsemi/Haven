@@ -161,6 +161,16 @@ test('roles wishlist: gates, caps, menus, templates', async (t) => {
     await wait(200);
   });
 
+  await t.test('the member list leaves out members the gate hides the channel from (#5703)', async () => {
+    const got = next(A, 'online-users', (d) => d.channelCode === gated && d.users.some((u) => u.username === 'bob'));
+    A.emit('enter-channel', { code: gated });
+    const d = await got;
+    assert.ok(d, 'member list arrived');
+    const names = d.users.map((u) => u.username);
+    assert.ok(names.includes('bob'), 'bob holds the roles and is listed');
+    assert.ok(!names.includes('cara'), 'cara lacks them and is not listed, though she is online and a member');
+  });
+
   await t.test('deleting a role drops it from every gate', async () => {
     await ask(A, 'delete-role', { roleId: alpha.roleId });
     await wait(300);

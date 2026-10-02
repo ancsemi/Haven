@@ -51,10 +51,6 @@ _openPermMatrix() {
   ov.style.display = 'flex';
   this._setPermView(this._permPanel.view || 'roles');
   this._loadPermPanel();
-  this._roleEmit('get-admin-role-display', {}, (res) => {
-    if (res && res.display) this._adminRoleDisplay = res.display;
-    if (this._matrixRoles().length && this._permPanel.view === 'roles') this._renderPermMatrix();
-  });
 },
 
 _setPermView(view) {
@@ -147,7 +143,7 @@ _renderPermMatrix() {
   const table = document.getElementById('perm-matrix-table');
   if (!table) return;
   const roles = this._matrixRoles();
-  const adminName = this._adminRoleDisplay?.name || t('settings.admin.perm_matrix.admin');
+  const adminName = t('settings.admin.perm_matrix.admin');
   const esc = (s) => this._escapeHtml(String(s ?? ''));
 
   let head = `<th class="perm-matrix-perm">${esc(t('settings.admin.perm_matrix.permission'))}</th>`;
@@ -166,7 +162,7 @@ _renderPermMatrix() {
   }
   head += `<th class="perm-matrix-role perm-matrix-admin">
     <div class="perm-matrix-role-top">
-      <span class="perm-matrix-swatch" style="background:${esc(this._adminRoleDisplay?.color || '#e74c3c')}"></span>
+      <span class="perm-matrix-swatch" style="background:#e74c3c"></span>
       <span class="perm-matrix-role-name">${esc(adminName)}</span>
     </div>
     <span class="perm-matrix-auto muted-text">${esc(t('settings.admin.perm_matrix.host'))}</span>

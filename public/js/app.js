@@ -4,23 +4,62 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.14.2';
-import UIBindMethods   from './modules/app-ui.js?v=4.12.1';
-import MediaMethods    from './modules/app-media.js?v=4.13.1';
-import ContextMethods  from './modules/app-context.js?v=4.13.1';
-import ChannelMethods  from './modules/app-channels.js?v=4.12.1';
-import MessageMethods  from './modules/app-messages.js?v=4.12.1';
-import UserMethods     from './modules/app-users.js?v=4.9.1';
-import VoiceMethods    from './modules/app-voice.js?v=4.14.2';
-import UtilityMethods  from './modules/app-utilities.js?v=4.12.1';
-import AdminMethods    from './modules/app-admin.js?v=4.14.2';
-import PlatformMethods from './modules/app-platform.js?v=4.12.1';
+import SocketMethods   from './modules/app-socket.js?v=4.17.13';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.17.13';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.17.9';
+import UIBindMethods   from './modules/app-ui.js?v=4.17.4';
+import ComposerMethods from './modules/app-composer.js?v=4.17.3';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.2';
+import VoiceControlMethods from './modules/app-voice-controls.js?v=4.17.13';
+import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.17.2';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.6';
+import PeopleMethods from './modules/app-people.js?v=4.17.2';
+import SettingsMethods from './modules/app-settings.js?v=4.17.3';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.4';
+import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
+import MobileMethods from './modules/app-mobile.js?v=4.17.2';
+import MediaMethods    from './modules/app-media.js?v=4.17.5';
+import AttachmentMethods from './modules/app-attachments.js?v=4.17.5';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.17.5';
+import AppearanceMethods from './modules/app-appearance.js?v=4.17.5';
+import SoundMethods from './modules/app-sounds.js?v=4.17.5';
+import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.17.5';
+import BotMethods from './modules/app-bots.js?v=4.17.5';
+import ContextMethods  from './modules/app-context.js?v=4.17.1';
+import ChannelMethods  from './modules/app-channels.js?v=4.17.10';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.17.10';
+import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.17.10';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.17.10';
+import MessageMethods  from './modules/app-messages.js?v=4.17.12';
+import LinkPreviewMethods from './modules/app-link-previews.js?v=4.17.12';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.17.12';
+import UserMethods     from './modules/app-users.js?v=4.17.1';
+import VoiceMethods    from './modules/app-voice.js?v=4.17.11';
+import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.17.13';
+import StreamTileMethods from './modules/app-stream-tiles.js?v=4.17.13';
+import MusicMethods from './modules/app-music.js?v=4.17.11';
+import UtilityMethods  from './modules/app-utilities.js?v=4.17.6';
+import MessageContentMethods from './modules/app-message-content.js?v=4.17.7';
+import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.17.6';
+import GifPickerMethods from './modules/app-gif-picker.js?v=4.17.6';
+import ThreadMethods from './modules/app-threads.js?v=4.17.6';
+import AdminMethods    from './modules/app-admin.js?v=4.17.4';
+import BrandingMethods from './modules/app-branding.js?v=4.17.4';
+import MembersAdminMethods from './modules/app-members-admin.js?v=4.17.6';
+import AutocompleteMethods from './modules/app-autocomplete.js?v=4.17.4';
+import StatusMethods from './modules/app-status.js?v=4.17.4';
+import DiscordImportMethods from './modules/app-discord-import.js?v=4.17.4';
+import RoleMethods from './modules/app-roles.js?v=4.17.4';
+import RoleAssignMethods from './modules/app-role-assign.js?v=4.17.4';
+import ModerationMethods from './modules/app-moderation.js?v=4.17.4';
+import PlatformMethods from './modules/app-platform.js?v=4.17.1';
 import SearchMethods   from './modules/app-search.js?v=4.10.1';
-import FerryMethods    from './modules/app-ferry.js?v=4.14.2';
-import ForumMethods    from './modules/app-forum.js?v=4.11.1';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.10.0';
+import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
+import ForumMethods    from './modules/app-forum.js?v=4.17.1';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.16.3';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.10.0';
-import CallMethods from './modules/app-calls.js?v=4.12.1';
+import CallMethods from './modules/app-calls.js?v=4.17.1';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 
 class HavenApp {
@@ -444,7 +483,7 @@ class HavenApp {
         known.set(key, entry);
         this.slashCommands.push(entry);
       }
-    } catch { /* non-critical */ }
+    } catch (err) { console.warn('[Commands] could not load bot slash commands', err); }
   }
 
 }
@@ -452,15 +491,54 @@ class HavenApp {
 // ── Merge all method groups onto the prototype ────────────
 Object.assign(HavenApp.prototype,
   SocketMethods,
+  SocketChannelMethods,
+  SocketEventMethods,
   UIBindMethods,
+  ComposerMethods,
+  ChannelMenuMethods,
+  VoiceControlMethods,
+  MediaGalleryMethods,
+  MessageActionMethods,
+  PipPanelMethods,
+  PeopleMethods,
+  SettingsMethods,
+  AdminControlMethods,
+  ServerBarMethods,
+  MobileMethods,
   MediaMethods,
+  AttachmentMethods,
+  AvatarEditorMethods,
+  AppearanceMethods,
+  SoundMethods,
+  EmojiStickerMethods,
+  BotMethods,
   ContextMethods,
   ChannelMethods,
+  ChannelContextMethods,
+  ChannelOrganizeMethods,
+  ChannelUnreadMethods,
   MessageMethods,
+  LinkPreviewMethods,
+  MessageToolMethods,
   UserMethods,
   VoiceMethods,
+  ScreenWebcamMethods,
+  StreamTileMethods,
+  MusicMethods,
   UtilityMethods,
+  MessageContentMethods,
+  EmojiPickerMethods,
+  GifPickerMethods,
+  ThreadMethods,
   AdminMethods,
+  BrandingMethods,
+  MembersAdminMethods,
+  AutocompleteMethods,
+  StatusMethods,
+  DiscordImportMethods,
+  RoleMethods,
+  RoleAssignMethods,
+  ModerationMethods,
   PlatformMethods,
   SearchMethods,
   FerryMethods,

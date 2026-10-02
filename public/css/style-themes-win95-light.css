@@ -1,0 +1,761 @@
+﻿/* Haven core styles, part 2 of 16: the Windows 95, Daylight and Cloudy themes, page root and sliders. Loaded in order by style.css; the order matters. */
+/* ─── THEME: Windows 95 ────────────────────────────────── */
+[data-theme="win95"] {
+  --bg-primary:    #bfbfbf;
+  --bg-secondary:  #bfbfbf;
+  --bg-tertiary:   #bfbfbf;
+  --bg-hover:      #000080;
+  --bg-active:     #000080;
+  --bg-input:      #ffffff;
+  --bg-card:       #ffffff;
+
+  --accent:        #000080;
+  --accent-hover:  #0000aa;
+  --accent-dim:    #000066;
+  --accent-glow:   rgba(0, 0, 128, 0.2);
+
+  --text-primary:  #000000;
+  --text-secondary:#000000;
+  --text-muted:    #808080;
+  --text-link:     #000080;
+
+  --border:        #808080;
+  --border-light:  #dfdfdf;
+
+  --success:       #008000;
+  --danger:        #cc0000;
+  --warning:       #808000;
+
+  --led-on:        #008000;
+  --led-off:       #808080;
+  --led-glow:      rgba(0, 128, 0, 0.4);
+
+  --font-main:     'MS Sans Serif', 'Tahoma', 'Arial', sans-serif;
+  --font-heading:  'MS Sans Serif', 'Tahoma', 'Arial', sans-serif;
+  --font-mono:     'Fixedsys', 'Courier New', monospace;
+
+  --theme-logo:    "🪟";
+  --scanline:      none;
+}
+[data-theme="win95"] .brand-text { color: #fff; font-weight: 700; text-shadow: none; }
+[data-theme="win95"] .server-icon.home { background: #bfbfbf; border: 3px outset #fff; color: #000; border-radius: 0; box-shadow: none; }
+[data-theme="win95"] .server-icon { border-radius: 0 !important; }
+[data-theme="win95"] .channel-item.active::before { background: #000080; }
+[data-theme="win95"] .inline-code { color: #000080; background: #fff; border: 1px inset #808080; }
+[data-theme="win95"] .channel-badge { background: #000080; color: #fff; border-radius: 0; }
+[data-theme="win95"] .sidebar { background: #bfbfbf; border-right: 3px outset #fff; }
+[data-theme="win95"] .sidebar-header { background: linear-gradient(90deg, #000080, #1084d0); border-bottom: 3px outset #fff; }
+[data-theme="win95"] .sidebar-header .brand-text { color: #fff; }
+[data-theme="win95"] .sidebar .section-label,
+[data-theme="win95"] .sidebar .panel-title { color: #000; font-weight: 700; }
+[data-theme="win95"] .sidebar .channel-item { color: #000; border-radius: 0; }
+[data-theme="win95"] .sidebar .channel-item:hover { background: #000080; color: #fff; }
+[data-theme="win95"] .sidebar .channel-item.active { background: #000080; color: #fff; }
+[data-theme="win95"] .sidebar .user-item-name { color: #000; }
+[data-theme="win95"] .sidebar .channel-item.active .user-item-name,
+[data-theme="win95"] .sidebar .channel-item:hover .user-item-name { color: #fff; }
+[data-theme="win95"] .sidebar .current-user { color: #000; }
+[data-theme="win95"] .sidebar .muted-text { color: #808080; }
+[data-theme="win95"] .sidebar-bottom-bar { background: #bfbfbf; border-top: 3px outset #fff; }
+[data-theme="win95"] .sidebar-bottom-btn { color: #000; background: #bfbfbf; border: 3px outset #fff; border-radius: 0; margin: 0.125rem; }
+[data-theme="win95"] .sidebar-bottom-btn:hover { background: #dfdfdf; }
+[data-theme="win95"] .sidebar-bottom-btn:active { border: 3px inset #808080; }
+[data-theme="win95"] .channel-header { background: linear-gradient(90deg, #000080, #1084d0); border-bottom: 3px outset #fff; color: #fff; }
+[data-theme="win95"] .channel-header * { color: #fff; }
+[data-theme="win95"] .channel-code-tag { background: #fff; color: #000; border: 1px inset #808080; border-radius: 0; }
+[data-theme="win95"] .btn-sm { background: #bfbfbf; color: #000; border: 3px outset #fff; border-radius: 0; }
+[data-theme="win95"] .btn-sm:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .btn-sm:active { border: 3px inset #808080; }
+[data-theme="win95"] .btn-sm.btn-accent { background: #bfbfbf; color: #000; border: 3px outset #fff; }
+[data-theme="win95"] .btn-sm.btn-accent:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .btn-sm.btn-danger { background: #bfbfbf; color: #cc0000; border: 3px outset #fff; }
+
+
+/* Win95 icon buttons near username (rename, logout) — beveled */
+[data-theme="win95"] .icon-btn {
+  background: #bfbfbf; color: #000; border: 2px outset #fff;
+  border-radius: 0 !important; padding: 0.1875rem 0.3125rem;
+}
+[data-theme="win95"] .icon-btn:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .icon-btn:active { border: 2px inset #808080; }
+
+/* Win95 settings button */
+[data-theme="win95"] .btn-settings-popout,
+[data-theme="win95"] .btn-invite-popout {
+  background: #bfbfbf; color: #000; border: 3px outset #fff;
+  border-radius: 0 !important;
+}
+[data-theme="win95"] .btn-settings-popout:hover,
+[data-theme="win95"] .btn-invite-popout:hover {background: #dfdfdf; color: #000; }
+
+[data-theme="win95"] .btn-settings-popout:active,
+[data-theme="win95"] .btn-invite-popout:active { border: 3px inset #808080; }
+
+[data-theme="win95"] .btn-settings-popout svg,
+[data-theme="win95"] .btn-invite-popout svg { color: #000; }
+
+/* Win95 status picker dot — beveled */
+[data-theme="win95"] .status-picker-dot { border: 2px outset #fff; border-radius: 0 !important; }
+[data-theme="win95"] .status-picker-btn { border: 2px outset #fff; border-radius: 0 !important; background: #c0c0c0; }
+
+/* Win95 generic modal buttons — always black text on gray */
+[data-theme="win95"] .modal button,
+[data-theme="win95"] .modal-overlay button {
+  background: #bfbfbf; color: #000; border: 3px outset #fff; border-radius: 0 !important;
+}
+[data-theme="win95"] .modal button:hover,
+[data-theme="win95"] .modal-overlay button:hover { background: #dfdfdf; color: #000; }
+[data-theme="win95"] .modal button:active,
+[data-theme="win95"] .modal-overlay button:active { border: 3px inset #808080; }
+[data-theme="win95"] .modal .btn-danger,
+[data-theme="win95"] .modal-overlay .btn-danger { color: #cc0000; }
+
+/* Win95 message toolbar buttons */
+[data-theme="win95"] .msg-toolbar button {
+  background: #bfbfbf; color: #000; border: 2px outset #fff; border-radius: 0 !important;
+}
+[data-theme="win95"] .msg-toolbar button:hover { background: #dfdfdf; }
+[data-theme="win95"] .modal { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; box-shadow: 2px 2px 0 #000; }
+[data-theme="win95"] .modal h3 { background: linear-gradient(90deg, #000080, #1084d0); color: #fff; margin: -1.25rem -1.5rem 1rem -1.5rem; padding: 0.25rem 0.5rem; border-radius: 0; font-weight: 700; font-size: 0.75rem; }
+/* Message group separators were attempted twice (per-row, then group-only)
+   and both produced visually inconsistent results — sometimes a line, sometimes
+   a half-line, sometimes a doubled line depending on whether the previous
+   author's last message was a compact follow-up vs a group-leader.  The Win95
+   theme already gives enough vertical separation via avatar bevels and the
+   author colour change; an extra horizontal line just looks buggy.  Leaving
+   the rule out entirely is the cleanest option. */
+[data-theme="win95"] .message-row:hover { background: #dfdfdf; }
+/* Win95 user-group separator: the global rule paints a 1px line in
+   `var(--border)` which on win95 is #808080 — almost black on the
+   #bfbfbf surface, reading as a thick line and (paired with the avatar's
+   3px outset highlight) often appearing doubled.  Override with the
+   lighter palette colour and shrink the spacing so it matches the
+   subtler Minecraft / dark-theme look the user expects. */
+[data-theme="win95"] .message.message-user-sep {
+  border-top-color: #dfdfdf !important;
+  margin-top: 0.25rem !important;
+  padding-top: 0.125rem !important;
+}
+/* And explicitly suppress any phantom border that could land on
+   .message-row itself — nothing should ever draw one, but if a stray
+   inherited rule does, this will neutralise it on win95. */
+[data-theme="win95"] .message > .message-row,
+[data-theme="win95"] .message-compact > .message-row {
+  border: 0 !important;
+}
+[data-theme="win95"] .message-author { color: #000080; font-weight: 700; }
+[data-theme="win95"] .message-input-container { background: #fff; border: 3px inset #808080; border-radius: 0; }
+[data-theme="win95"] .input-actions-box { background: #bfbfbf; border: 2px outset #fff; border-radius: 0; }
+[data-theme="win95"] .input-actions-divider { background: #808080; }
+[data-theme="win95"] .input-actions-box .btn-upload,
+[data-theme="win95"] .input-actions-box .btn-emoji,
+[data-theme="win95"] .input-actions-box .btn-gif,
+[data-theme="win95"] .input-actions-box .btn-poll { color: #000; border-radius: 0; }
+[data-theme="win95"] .input-actions-box .btn-upload:hover,
+[data-theme="win95"] .input-actions-box .btn-emoji:hover,
+[data-theme="win95"] .input-actions-box .btn-gif:hover,
+[data-theme="win95"] .input-actions-box .btn-poll:hover { background: #dfdfdf; }
+[data-theme="win95"] .input-actions-box .btn-gif { border-color: #808080; }
+[data-theme="win95"] input[type="text"], [data-theme="win95"] textarea { background: #fff; border: 3px inset #808080 !important; border-radius: 0 !important; }
+[data-theme="win95"] .right-sidebar { background: #bfbfbf; border-left: 3px outset #fff; }
+/* Bulletproof win95 backgrounds — explicitly paint every major surface in
+   #bfbfbf so a stale inline custom-theme CSS variable on :root (e.g. left
+   over from a prior 'custom' / 'rgb' theme session that wasn't cleared by
+   the time the user landed on win95) can't leave the main message area or
+   members panel rendering with a dark inherited bg. Prior reports showed
+   the welcome screen & right panel rendering near-black while the explicitly
+   styled sidebar / channel header still looked correct. */
+[data-theme="win95"] body,
+[data-theme="win95"] .message-area,
+[data-theme="win95"] .messages,
+[data-theme="win95"] .welcome-screen,
+[data-theme="win95"] .right-sidebar-users,
+[data-theme="win95"] .channel-list-section,
+[data-theme="win95"] .left-sidebar-section { background: #bfbfbf !important; color: #000; }
+[data-theme="win95"] .user-item-avatar { border-radius: 0; }
+[data-theme="win95"] .message-avatar, [data-theme="win95"] .message-avatar-img { border-radius: 0; border: 3px outset #fff; }
+[data-theme="win95"] ::selection { background: #000080; color: #fff; }
+/* Win95 scrollbars: use scrollbar-color: auto so Chrome falls through to the
+   ::-webkit-scrollbar pseudo-element pipeline (which supports gradients / border-radius).
+   Setting explicit scrollbar-color triggers Chrome's flat-colour renderer that ignores
+   webkit pseudo-element styling and always draws rounded thumbs. */
+[data-theme="win95"] * { scrollbar-width: auto !important; scrollbar-color: auto !important; }
+[data-theme="win95"] ::-webkit-scrollbar { width: 1.125rem !important; height: 1.125rem !important; }
+[data-theme="win95"] ::-webkit-scrollbar-thumb {
+  background:
+    linear-gradient(to right,  #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to bottom, #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to left,   #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to top,    #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to right,  #dfdfdf 2px, #dfdfdf 3px, transparent 3px),
+    linear-gradient(to bottom, #dfdfdf 2px, #dfdfdf 3px, transparent 3px),
+    linear-gradient(to left,   #808080 2px, #808080 3px, transparent 3px),
+    linear-gradient(to top,    #808080 2px, #808080 3px, transparent 3px),
+    #bfbfbf !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  min-height: 2rem;
+  min-width: 2rem;
+}
+[data-theme="win95"] ::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(to right,  #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to bottom, #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to left,   #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to top,    #404040 0, #404040 2px, transparent 2px),
+    #d4d0c8 !important;
+}
+[data-theme="win95"] ::-webkit-scrollbar-thumb:active {
+  background:
+    linear-gradient(to right,  #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to bottom, #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to left,   #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to top,    #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to right,  #808080 2px, #808080 3px, transparent 3px),
+    linear-gradient(to bottom, #808080 2px, #808080 3px, transparent 3px),
+    linear-gradient(to left,   #dfdfdf 2px, #dfdfdf 3px, transparent 3px),
+    linear-gradient(to top,    #dfdfdf 2px, #dfdfdf 3px, transparent 3px),
+    #bfbfbf !important;
+}
+[data-theme="win95"] ::-webkit-scrollbar-track {
+  background: repeating-conic-gradient(#bfbfbf 0% 25%, #fff 0% 50%) 50%/2px 2px !important;
+  border: none !important;
+}
+[data-theme="win95"] ::-webkit-scrollbar-button {
+  background:
+    linear-gradient(to right,  #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to bottom, #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to left,   #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to top,    #404040 0, #404040 2px, transparent 2px),
+    #bfbfbf !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: block;
+  height: 1.125rem !important;
+  width: 1.125rem !important;
+  border-radius: 0 !important;
+}
+[data-theme="win95"] ::-webkit-scrollbar-button:hover {
+  background:
+    linear-gradient(to right,  #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to bottom, #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to left,   #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to top,    #404040 0, #404040 2px, transparent 2px),
+    #d4d0c8 !important;
+}
+[data-theme="win95"] ::-webkit-scrollbar-button:active {
+  background:
+    linear-gradient(to right,  #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to bottom, #404040 0, #404040 2px, transparent 2px),
+    linear-gradient(to left,   #ffffff 0, #ffffff 2px, transparent 2px),
+    linear-gradient(to top,    #ffffff 0, #ffffff 2px, transparent 2px),
+    #bfbfbf !important;
+}
+/* Hide duplicate scrollbar arrows — keep only one button at each end.
+   display:none alone is unreliable in some Chromium builds for scrollbar
+   pseudo-elements, so also collapse them to zero size. */
+[data-theme="win95"] ::-webkit-scrollbar-button:vertical:start:increment,
+[data-theme="win95"] ::-webkit-scrollbar-button:vertical:end:decrement,
+[data-theme="win95"] ::-webkit-scrollbar-button:horizontal:start:increment,
+[data-theme="win95"] ::-webkit-scrollbar-button:horizontal:end:decrement {
+  display: none !important;
+  height: 0 !important;
+  width: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+}
+[data-theme="win95"] ::-webkit-scrollbar-corner { background: #bfbfbf !important; }
+[data-theme="win95"] .server-bar { background: #bfbfbf; border-right: 3px outset #fff; }
+[data-theme="win95"] .server-bar .server-icon { border-radius: 0; }
+[data-theme="win95"] .status-bar { background: #bfbfbf; border-top: 3px outset #fff; }
+[data-theme="win95"] .status-bar .status-item { border: 1px inset #808080; border-radius: 0; }
+[data-theme="win95"] * { border-radius: 0 !important; }
+
+/* Win95 sliders — rectangular gray boxes with proper 3D bevel */
+[data-theme="win95"] input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  height: 1.375rem; background: transparent;
+}
+[data-theme="win95"] input[type="range"]::-webkit-slider-runnable-track {
+  background: #bfbfbf !important; height: 0.25rem !important;
+  border-top: 2px solid #404040 !important;
+  border-left: 2px solid #404040 !important;
+  border-right: 2px solid #ffffff !important;
+  border-bottom: 2px solid #ffffff !important;
+  border-radius: 0 !important;
+}
+[data-theme="win95"] input[type="range"]::-moz-range-track {
+  background: #bfbfbf !important; height: 0.25rem !important;
+  border-top: 2px solid #404040 !important;
+  border-left: 2px solid #404040 !important;
+  border-right: 2px solid #ffffff !important;
+  border-bottom: 2px solid #ffffff !important;
+  border-radius: 0 !important;
+}
+[data-theme="win95"] input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 0.75rem; height: 1.375rem; margin-top: -0.625rem;
+  background: #bfbfbf;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  box-shadow: inset 1px 1px 0 #dfdfdf, inset -1px -1px 0 #808080;
+  border-radius: 0 !important; cursor: pointer;
+}
+[data-theme="win95"] input[type="range"]::-webkit-slider-thumb:active {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #dfdfdf;
+}
+[data-theme="win95"] input[type="range"]::-moz-range-thumb {
+  width: 0.75rem; height: 1.375rem;
+  background: #bfbfbf;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  box-shadow: inset 1px 1px 0 #dfdfdf, inset -1px -1px 0 #808080;
+  border-radius: 0 !important; cursor: pointer;
+}
+[data-theme="win95"] input[type="range"]::-moz-range-thumb:active {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #dfdfdf;
+}
+/* Vertical range sliders (orient=vertical, writing-mode) */
+[data-theme="win95"] input[type="range"][orient="vertical"],
+[data-theme="win95"] input[type="range"].vertical {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  appearance: none;
+  width: 1.375rem; height: auto;
+}
+[data-theme="win95"] input[type="range"][orient="vertical"]::-webkit-slider-thumb,
+[data-theme="win95"] input[type="range"].vertical::-webkit-slider-thumb {
+  width: 1.375rem; height: 0.75rem; margin-top: 0; margin-left: -0.625rem;
+}
+
+/* Win95 text color — white text on navy backgrounds (hover/active/selected states) */
+[data-theme="win95"] .channel-item:hover *,
+[data-theme="win95"] .channel-item.active *,
+[data-theme="win95"] .user-item:hover .user-item-name,
+[data-theme="win95"] .user-item:hover .user-item-status,
+[data-theme="win95"] select option:checked,
+[data-theme="win95"] .dropdown-menu .dropdown-item:hover,
+[data-theme="win95"] .autocomplete-item:hover,
+[data-theme="win95"] .autocomplete-item.selected,
+[data-theme="win95"] .modal-overlay .btn-accent,
+[data-theme="win95"] .organize-item.dragging { color: #fff !important; }
+
+/* Win95 toggle-row / select-row items that sit on navy hover */
+[data-theme="win95"] .settings-section .toggle-row:hover,
+[data-theme="win95"] .settings-section .select-row:hover { background: transparent; }
+
+/* Win95 checkboxes — square, period-correct */
+[data-theme="win95"] input[type="checkbox"] {
+  -webkit-appearance: auto; appearance: auto;
+  accent-color: #000080;
+}
+
+/* Win95 settings modal — full blue title bar like real Win95 */
+[data-theme="win95"] .settings-header,
+[data-theme="win95"] .forum-modal-header {
+  background: linear-gradient(90deg, #000080, #1084d0);
+  padding: 0.25rem 0.5rem;
+  border-bottom: none;
+  min-height: 1.5rem;
+}
+[data-theme="win95"] .settings-header h3,
+[data-theme="win95"] .forum-modal-header h3 {
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
+  margin: 0;
+  padding: 0;
+  background: none;
+}
+[data-theme="win95"] .settings-close-btn,
+[data-theme="win95"] .modal-close {
+  width: 1.125rem; height: 1.125rem;
+  background: #bfbfbf;
+  border: 2px outset #fff;
+  color: #000;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0;
+  line-height: 1;
+}
+[data-theme="win95"] .settings-close-btn:hover,
+[data-theme="win95"] .modal-close:hover { background: #dfdfdf; }
+
+/* Win95 admin save bar — beveled gray box with black text */
+[data-theme="win95"] .admin-save-bar {
+  background: #bfbfbf;
+  border-top: 3px outset #fff;
+}
+[data-theme="win95"] .btn-admin-save {
+  background: #bfbfbf !important;
+  color: #000 !important;
+  border: 3px outset #fff;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
+  font-size: 0.75rem;
+}
+[data-theme="win95"] .btn-admin-save:hover { background: #dfdfdf !important; }
+[data-theme="win95"] .btn-admin-save:active { border: 3px inset #808080; }
+
+/* Win95 number inputs — boxy inset, no rounded corners */
+[data-theme="win95"] .settings-number-input,
+[data-theme="win95"] input[type="number"] {
+  background: #fff;
+  border: 2px inset #808080 !important;
+  border-radius: 0 !important;
+  color: #000;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
+}
+
+/* Win95 text inputs in settings */
+[data-theme="win95"] .settings-text-input {
+  background: #fff;
+  border: 2px inset #808080 !important;
+  border-radius: 0 !important;
+  color: #000;
+}
+
+/* Win95 select dropdowns */
+[data-theme="win95"] select {
+  background: #fff;
+  border: 2px inset #808080 !important;
+  border-radius: 0 !important;
+  color: #000;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
+}
+
+/* Win95 settings section titles — black text */
+[data-theme="win95"] .settings-section-title,
+[data-theme="win95"] .settings-section-subtitle {
+  color: #000;
+}
+[data-theme="win95"] .settings-hint { color: #444; }
+
+/* Win95 context menus — beveled 3D edges like real Win95 menus */
+[data-theme="win95"] .channel-ctx-menu {
+  background: #bfbfbf;
+  border: 3px outset #fff;
+  border-radius: 0;
+  box-shadow: 2px 2px 0 #000;
+  padding: 0.125rem;
+}
+[data-theme="win95"] .channel-ctx-item {
+  color: #000;
+  border-radius: 0;
+  padding: 0.25rem 0.75rem;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
+  font-size: 0.75rem;
+}
+[data-theme="win95"] .channel-ctx-item:hover {
+  background: #000080;
+  color: #fff !important;
+}
+[data-theme="win95"] .channel-ctx-item.danger { color: #cc0000; }
+[data-theme="win95"] .channel-ctx-item.danger:hover {
+  background: #000080;
+  color: #fff !important;
+}
+[data-theme="win95"] .channel-ctx-sep {
+  border-top: 1px solid #808080;
+  border-bottom: 1px solid #fff;
+  margin: 0.125rem 0;
+}
+
+/* Win95 emoji picker — beveled box */
+[data-theme="win95"] .emoji-picker {
+  background: #bfbfbf;
+  border: 3px outset #fff;
+  border-radius: 0;
+  box-shadow: 2px 2px 0 #000;
+}
+
+/* Win95 message toolbar — beveled */
+[data-theme="win95"] .msg-toolbar {
+  background: #bfbfbf;
+  border: 2px outset #fff;
+  border-radius: 0;
+  box-shadow: 1px 1px 0 #000;
+}
+
+/* Win95 toasts — beveled */
+[data-theme="win95"] .toast {
+  background: #bfbfbf;
+  border: 3px outset #fff;
+  border-radius: 0;
+  box-shadow: 2px 2px 0 #000;
+  color: #000;
+}
+[data-theme="win95"] .toast.error { background: #bfbfbf; border-color: #fff; color: #cc0000; }
+[data-theme="win95"] .toast.success { background: #bfbfbf; border-color: #fff; color: #008000; }
+
+/* ─── THEME: Daylight (Warm Light) ─────────────────────── */
+[data-theme="daylight"] {
+  --bg-primary:    #faf8f5;
+  --bg-secondary:  #f0ece6;
+  --bg-tertiary:   #e8e3da;
+  --bg-hover:      #ebe6dc;
+  --bg-active:     #ddd7cb;
+  --bg-input:      #ffffff;
+  --bg-card:       #f5f2ed;
+
+  --accent:        #d47f30;
+  --accent-hover:  #e09545;
+  --accent-dim:    #b86a22;
+  --accent-text:   #000000;
+  --accent-glow:   rgba(212, 127, 48, 0.18);
+
+  --text-primary:  #2c2418;
+  --text-secondary:#6b5d4f;
+  --text-muted:    #9c8e7e;
+  --text-link:     #2a7ab5;
+
+  --border:        #ddd7cb;
+  --border-light:  #e8e3da;
+
+  --success:       #3d8b3d;
+  --danger:        #c0392b;
+  --warning:       #d4940a;
+
+  --led-on:        #3d8b3d;
+  --led-off:       #ccc;
+  --led-glow:      rgba(61, 139, 61, 0.4);
+
+  --theme-logo:    "☀";
+  --scanline:      none;
+}
+/* Daylight accent overrides — warm amber tones */
+[data-theme="daylight"] .sidebar { background: var(--bg-secondary); }
+[data-theme="daylight"] .right-sidebar { background: var(--bg-secondary); }
+[data-theme="daylight"] .channel-header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
+[data-theme="daylight"] .message-row:hover { background: rgba(0,0,0,0.03); }
+[data-theme="daylight"] .message-input-container { background: var(--bg-input); border: 1px solid var(--border); }
+[data-theme="daylight"] .sidebar-bottom-bar { background: var(--bg-tertiary); }
+[data-theme="daylight"] .server-bar { background: var(--bg-tertiary); }
+[data-theme="daylight"] .modal { background: var(--bg-primary); border: 1px solid var(--border); }
+[data-theme="daylight"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15) !important; }
+[data-theme="daylight"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25) !important; }
+[data-theme="daylight"] ::selection { background: rgba(212, 127, 48, 0.25); }
+[data-theme="daylight"] .inline-code { color: #b35800; background: rgba(212, 127, 48, 0.1); }
+[data-theme="daylight"] .code-block { background: #f0ece6; border: 1px solid var(--border); color: var(--text-primary); }
+[data-theme="daylight"] .webcam-tile,
+[data-theme="daylight"] .screen-share-tile { background: #e0dbd3; }
+[data-theme="daylight"] .toast { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); }
+
+/* ─── THEME: Cloudy (Cool Light) ───────────────────────── */
+[data-theme="cloudy"] {
+  --bg-primary:    #f5f7fa;
+  --bg-secondary:  #e9ecf2;
+  --bg-tertiary:   #dde1ea;
+  --bg-hover:      #e2e6ee;
+  --bg-active:     #d3d8e4;
+  --bg-input:      #ffffff;
+  --bg-card:       #eef1f6;
+
+  --accent:        #5b7fc7;
+  --accent-hover:  #7094d8;
+  --accent-dim:    #4868a8;
+  --accent-glow:   rgba(91, 127, 199, 0.18);
+
+  --text-primary:  #1e2a3a;
+  --text-secondary:#5a6a80;
+  --text-muted:    #8e9aac;
+  --text-link:     #3a7bbd;
+
+  --border:        #d3d8e4;
+  --border-light:  #dde1ea;
+
+  --success:       #2f8a5e;
+  --danger:        #d04040;
+  --warning:       #cc8a15;
+
+  --led-on:        #2f8a5e;
+  --led-off:       #c8c8c8;
+  --led-glow:      rgba(47, 138, 94, 0.4);
+
+  --theme-logo:    "☁";
+  --scanline:      none;
+}
+/* Cloudy accent overrides — cool blue-gray tones */
+[data-theme="cloudy"] .sidebar { background: var(--bg-secondary); }
+[data-theme="cloudy"] .right-sidebar { background: var(--bg-secondary); }
+[data-theme="cloudy"] .channel-header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
+[data-theme="cloudy"] .message-row:hover { background: rgba(0,0,0,0.025); }
+[data-theme="cloudy"] .message-input-container { background: var(--bg-input); border: 1px solid var(--border); }
+[data-theme="cloudy"] .sidebar-bottom-bar { background: var(--bg-tertiary); }
+[data-theme="cloudy"] .server-bar { background: var(--bg-tertiary); }
+[data-theme="cloudy"] .modal { background: var(--bg-primary); border: 1px solid var(--border); }
+[data-theme="cloudy"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12) !important; }
+[data-theme="cloudy"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22) !important; }
+[data-theme="cloudy"] ::selection { background: rgba(91, 127, 199, 0.25); }
+[data-theme="cloudy"] .inline-code { color: #3a6ba8; background: rgba(91, 127, 199, 0.1); }
+[data-theme="cloudy"] .code-block { background: #e9ecf2; border: 1px solid var(--border); color: var(--text-primary); }
+[data-theme="cloudy"] .webcam-tile,
+[data-theme="cloudy"] .screen-share-tile { background: #dde1ea; }
+[data-theme="cloudy"] .toast { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); }
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   RESET
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Lock the document root so the html element itself can never scroll.
+   On mobile (Android Chrome especially), body { height: 100vh } makes the
+   body taller than the visible layout viewport when the URL bar is shown
+   or the on-screen keyboard opens. Without this, html ends up scrolling
+   and the entire UI slides up off-screen, leaving a blank gap at the
+   bottom (issue #5285). */
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  /* Root of the rem-driven interface scale. The Zoom slider sets --ui-scale
+     (a percentage), and because every size in this file is in rem, changing it
+     rescales the whole UI at once. Defaults to 100% (16px). See the INTERFACE
+     SCALE block near the end of this file. */
+  font-size: var(--ui-scale, 100%);
+}
+
+body {
+  font-family: var(--font-main), var(--font-emoji);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  overflow: hidden;
+  height: 100%;
+  /* Prefer the dynamic viewport unit when supported so resizes (URL bar
+     show/hide, keyboard open/close) don't leave us taller than visible. */
+  height: 100dvh;
+}
+
+/* Scanline overlay for Matrix theme */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--scanline);
+  pointer-events: none;
+  z-index: 99999;
+}
+
+a { color: var(--text-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font-family: inherit; cursor: pointer; border: none; outline: none; }
+input, textarea { font-family: inherit; outline: none; border: none; }
+::selection { background: var(--accent); color: var(--accent-text); }
+
+/* ── Range Input Track (slider background) ──────────────── */
+/* Slider classes set --track-bg / --track-h / --track-r to override
+   the defaults below. Themed tracks use --track-bg for colouring.  */
+input[type="range"]:not(.rgb-slider)::-webkit-slider-runnable-track {
+  background: var(--track-bg, rgba(255,255,255,0.25));
+  height: var(--track-h, 0.375rem);
+  border-radius: var(--track-r, 0.1875rem);
+  border: var(--track-border, 1px solid rgba(255,255,255,0.15));
+}
+input[type="range"]:not(.rgb-slider)::-moz-range-track {
+  background: var(--track-bg, rgba(255,255,255,0.25));
+  height: var(--track-h, 0.375rem);
+  border-radius: var(--track-r, 0.1875rem);
+  border: var(--track-border, 1px solid rgba(255,255,255,0.15));
+}
+/* Range thumb — centered on track */
+input[type="range"]:not(.rgb-slider)::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--accent, #7c5cfc);
+  border: 2px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+  margin-top: calc((var(--track-h, 0.375rem) - 0.875rem) / 2 - 0.0625rem);
+}
+input[type="range"]:not(.rgb-slider)::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--accent, #7c5cfc);
+  border: 2px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+}
+
+::-webkit-scrollbar { width: 0.375rem; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0.1875rem; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+/* ── RGB-cycling performance guard ──────────────────────────
+   When the RGB theme is active, theme.js adds .rgb-cycling to <html>.
+   CSS custom-property updates fire 20×/s which would restart every
+   transition that references a variable.  Using the universal selector
+   guarantees that NEW elements (modals, voice-user lists, expand buttons,
+   etc.) are automatically covered without maintaining a selector list.
+
+   CRITICAL: use `transition: none` not `transition-duration: 0s`.
+   `transition-duration: 0s` still causes Chromium to evaluate every
+   element's transition-property on each var change and create zero-
+   duration transition records in Blink's Oilpan heap (invisible to
+   performance.memory which only measures V8 heap).  These accumulate
+   over ~5 minutes and cause progressive FPS collapse.  `transition: none`
+   sets transition-property:none which skips the entire pipeline. */
+html.rgb-cycling *,
+html.rgb-cycling *::before,
+html.rgb-cycling *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   LED / STATUS INDICATORS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.led {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0,0,0,0.3);
+}
+
+.led.on {
+  background: var(--led-on);
+  box-shadow: 0 0 6px var(--led-glow), inset 0 -1px 2px rgba(0,0,0,0.2);
+}
+
+.led.off { background: var(--led-off); }
+
+.led.warn {
+  background: var(--warning);
+  box-shadow: 0 0 6px rgba(250, 166, 26, 0.5);
+}
+
+.led.danger {
+  background: var(--danger);
+  box-shadow: 0 0 6px rgba(240, 71, 71, 0.5);
+}
+
+.led.pulse { animation: ledPulse 1.5s ease-in-out infinite; }
+
+@keyframes ledPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+

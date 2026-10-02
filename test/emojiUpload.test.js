@@ -9,7 +9,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
-const modulePath = path.join(__dirname, '..', 'public', 'js', 'modules', 'app-media.js');
+const modulePath = path.join(__dirname, '..', 'public', 'js', 'modules', 'app-emoji-stickers.js');
 let M;
 test.before(async () => {
   M = Object.assign({}, (await import(pathToFileURL(modulePath).href)).default);

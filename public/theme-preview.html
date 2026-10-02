@@ -428,7 +428,7 @@
                download page instead of dismissing. Same trap as the Android
                banner below, which hit it with nested <button>s. -->
           <span id="desktop-app-banner" class="desktop-app-banner" style="display: inline-flex;">
-            <a class="desktop-app-link" href="https://ancsemi.github.io/Haven/#download" target="_blank" rel="noopener">
+            <a class="desktop-app-link" href="https://haven-app.com/#download" target="_blank" rel="noopener">
               <span class="desktop-app-icon">🖥️</span>
               <span class="desktop-app-text" data-i18n="header.get_desktop_app">Get the Desktop App</span>
             </a>
@@ -1378,7 +1378,7 @@ console.log(haven);</code></pre></div></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-moderation" style="display:none">🛡️ <span data-i18n="settings.nav.moderation">Moderation</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-security" style="display:none">🔒 <span data-i18n="settings.nav.security">Security</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-automod" style="display:none">🛡️ <span data-i18n="settings.nav.automod">Auto-Mod</span></div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🛡️ <span data-i18n="settings.nav.whitelist">Whitelist</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-whitelist" style="display:none">🚪 <span data-i18n="settings.nav.whitelist">Sign-ups</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-invite" style="display:none">🌐 <span data-i18n="settings.nav.invite">Invite Code</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-guests" style="display:none">👤 <span data-i18n="settings.nav.guests">Guest Access</span></div>
 
@@ -3147,7 +3147,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
 
         <!-- Whitelist -->
         <div class="admin-settings" id="section-whitelist" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🛡️ <span data-i18n="settings.admin.whitelist_title">Whitelist</span></h5>
+          <h5 class="settings-section-subtitle">🚪 <span data-i18n="settings.admin.whitelist_title">Who can sign up</span></h5>
           <label class="toggle-row">
             <span data-i18n="settings.admin.whitelist_enabled">Enabled</span>
             <input type="checkbox" id="whitelist-enabled">
@@ -3505,6 +3505,11 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
             <input type="number" id="cleanup-max-size" min="0" max="100000" value="0" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.cleanup_size_hint">Trim oldest messages when DB exceeds N MB (0 = off)</small>
+          <label class="select-row">
+            <span data-i18n="settings.admin.cleanup_max_uploads">Max Uploads Size (MB)</span>
+            <input type="number" id="cleanup-max-uploads" min="0" max="10000000" value="0" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.cleanup_uploads_hint">When the uploads folder passes N MB, remove the oldest messages with files until it is back under (0 = off). Avatars, emoji and stickers count toward it but are never removed.</small>
           <label class="select-row">
             <span data-i18n="settings.admin.deleted_retention">Keep deleted files for (days)</span>
             <input type="number" id="deleted-retention-days" min="1" max="3650" value="7" class="settings-number-input">

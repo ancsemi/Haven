@@ -6,17 +6,22 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'public/js/modules/app-voice.js'),
-  'utf8'
-);
+// The voice UI is spread over four modules that the app merges into one
+// object (the screen PiP code lives in app-stream-tiles.js); load them the
+// same way.
+const FILES = ['app-voice.js', 'app-screen-webcam.js', 'app-stream-tiles.js', 'app-music.js'];
+const SOURCES = FILES.map(name => fs.readFileSync(path.join(__dirname, '..', 'public/js/modules', name), 'utf8'));
 
 function loadMethods(globals = {}) {
-  const context = vm.createContext({ module: { exports: {} }, t: key => key, ...globals });
-  vm.runInContext(SOURCE.replace(/^export default/, 'module.exports ='), context, {
-    filename: 'app-voice.js',
+  const methods = {};
+  SOURCES.forEach((source, i) => {
+    const context = vm.createContext({ module: { exports: {} }, t: key => key, ...globals });
+    vm.runInContext(source.replace(/^export default/m, 'module.exports ='), context, {
+      filename: FILES[i],
+    });
+    Object.assign(methods, context.module.exports);
   });
-  return context.module.exports;
+  return methods;
 }
 
 function createClassList() {

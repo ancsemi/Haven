@@ -1,0 +1,1197 @@
+﻿/* Haven core styles, part 11 of 16: ban appeals and phone layouts. Loaded in order by style.css; the order matters. */
+/* Ban appeals (#5457) */
+.ban-item.has-appeal {
+  align-items: flex-start;
+  border-left: 3px solid var(--accent);
+}
+
+.ban-appeal {
+  margin-top: 5px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+}
+
+.ban-appeal-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.ban-appeal-text {
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.btn-dismiss-appeal {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 4px 8px !important;
+}
+
+.chat-image[src$=".gif"],
+.chat-image[src*=".gif?"] {
+  border: 1px solid var(--border);
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   COLLAPSIBLE SIDEBAR SECTIONS (Join/Create)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.collapsible-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.collapse-toggle-arrow {
+  font-size: 0.625rem;
+  transition: transform 0.2s ease;
+  color: var(--text-muted);
+  width: 0.75rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.collapse-toggle-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+.collapsible-section-body {
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+  max-height: 18.75rem;
+  opacity: 1;
+}
+
+.collapsible-section-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MOBILE SIDEBAR SERVER BUBBLES
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.mobile-servers-section {
+  display: none; /* shown only on mobile via media query */
+}
+
+.mobile-servers-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mobile-servers-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  max-height: 3.75rem;
+}
+
+.mobile-servers-row.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.mobile-servers-scroll {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  min-width: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 0.125rem 0;
+}
+
+.mobile-servers-scroll::-webkit-scrollbar { display: none; }
+
+.mobile-srv-bubble {
+  width: 2.375rem;
+  height: 2.375rem;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+  transition: border-radius 0.2s ease, background 0.2s ease;
+  border: none;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.mobile-srv-bubble:hover {
+  border-radius: 0.75rem;
+  background: var(--accent);
+}
+
+.mobile-srv-bubble img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.mobile-srv-bubble .msrv-status {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  border: 2px solid var(--bg-secondary);
+}
+
+.mobile-srv-bubble .msrv-status.online { background: var(--success, #43b581); }
+.mobile-srv-bubble .msrv-status.offline { background: var(--danger, #f04747); }
+.mobile-srv-bubble .msrv-status.unknown { background: var(--text-muted, #666); }
+
+.mobile-srv-add-btn {
+  width: 2.375rem;
+  height: 2.375rem;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 2px dashed var(--border-light);
+  color: var(--accent);
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.mobile-srv-add-btn:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.mobile-servers-empty {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0;
+  white-space: nowrap;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MOBILE MENU BUTTONS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.mobile-menu-btn,
+.mobile-users-btn {
+  display: none;  /* hidden on desktop */
+  width: 40px;
+  height: 2.5rem;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ensure mobile buttons are visible immediately on small screens
+   (avoids race where media queries in responsive section load late) */
+@media (max-width: 768px) {
+  .mobile-menu-btn,
+  .mobile-users-btn { display: flex !important; }
+}
+
+.mobile-menu-btn:hover,
+.mobile-users-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* Mobile server dropdown — hidden on desktop, shown at ≤768px */
+.mobile-server-dropdown { display: none; position: relative; }
+.mobile-server-btn {
+  background: transparent; border: none; color: var(--accent, #7c5cfc);
+  font-size: 1.25rem; cursor: pointer; padding: 0.25rem 0.375rem; border-radius: 0.25rem;
+  line-height: 1; -webkit-tap-highlight-color: transparent;
+}
+.mobile-server-btn:hover { background: var(--bg-hover); }
+.mobile-server-menu {
+  display: none; position: absolute; top: 100%; left: 0; z-index: 200;
+  background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border, #444);
+  border-radius: 0.5rem; padding: 0.375rem; min-width: 12.5rem; max-height: 60vh; overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.mobile-server-menu.open { display: block; }
+.mobile-server-menu-header {
+  font-size: 0.6875rem; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 0.25rem 0.5rem 0.375rem; border-bottom: 1px solid var(--border, #444); margin-bottom: 0.25rem;
+}
+.mobile-server-item {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem; cursor: pointer; color: var(--text-primary, #eee); font-size: 0.8125rem;
+  text-decoration: none; transition: background 0.15s;
+}
+.mobile-server-item:hover { background: var(--bg-hover, rgba(255,255,255,0.06)); }
+.mobile-server-item .msrv-dot {
+  width: 0.5rem; height: 0.5rem; border-radius: 50%; flex-shrink: 0;
+}
+.mobile-server-item .msrv-dot.online { background: var(--success, #43b581); }
+.mobile-server-item .msrv-dot.offline { background: var(--danger, #f04747); }
+.mobile-server-item .msrv-dot.unknown { background: var(--text-dim, #666); }
+.mobile-server-item .msrv-icon {
+  width: 1.5rem; height: 1.5rem; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+}
+.mobile-server-item .msrv-initial {
+  width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--bg-tertiary, #2a2a3a);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); flex-shrink: 0;
+}
+.mobile-server-add {
+  display: block; width: 100%; background: none; border: none; cursor: pointer;
+  color: var(--accent, #7c5cfc); font-size: 0.8125rem; padding: 0.5rem 0.625rem;
+  text-align: left; border-radius: 0.375rem; margin-top: 0.125rem;
+}
+.mobile-server-add:hover { background: rgba(124,92,252,0.1); }
+
+/* Mobile overlay (dim background when sidebar open) */
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  /* Must sit above .message-input-area (99995) so the mobile slide-in
+     sidebars (z-index: 100000) and their backdrop both clear the composer.
+     Otherwise the right userlist dock and overlay end up behind the
+     textarea on the 769-900px tablet band (#5384). */
+  z-index: 99996;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-overlay.active { display: block; }
+
+/* ── Mobile panel close button (hidden on desktop) ─────── */
+.mobile-panel-close {
+  display: none;
+  z-index: 110;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  color: var(--text-primary, #eee);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.mobile-panel-close:hover { background: rgba(255,255,255,0.2); }
+/* Left sidebar close: absolute positioned */
+.mobile-panel-close:not(.mobile-panel-close-right) {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+/* Right sidebar close: inline in voice header row (no absolute) */
+.mobile-panel-close-right {
+  position: static;
+  margin-left: auto;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   RESPONSIVE — Tablet (≤ 900px)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.mobile-settings-btn { display: none; }
+@media (max-width: 900px) {
+  /* Right sidebar slides in as an overlay on tablet widths so the Members
+     button works between 769-900px (was previously display:none and the
+     button appeared to do nothing). See #5274. */
+  .right-sidebar {
+    display: flex !important;
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 16.25rem;
+    min-width: 16.25rem;
+    /* 100000 sits above .message-input-area (99995) and below .modal-overlay
+       (100001). Was 1100, which left the dock hidden behind the composer on
+       769-900px (#5384). Keep in sync with the mobile-overlay (99996) band. */
+    z-index: 100000;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+  }
+  #app-body.mobile-right-open .right-sidebar { transform: translateX(0); }
+  .sidebar-collapse-btn { display: none; }
+  .mobile-users-btn { display: flex; }
+  .mobile-settings-btn { display: flex; }
+  .sidebar-settings-panel { display: none !important; }
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   RESPONSIVE — Small Tablet (≤ 768px)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+@media (max-width: 768px) {
+  /* Safe area insets — left/right only on #app; top/bottom applied
+     directly to edge elements (channel-header, input area, sidebar)
+     so iOS Safari honours them reliably with viewport-fit=cover. */
+  #app {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Show hamburger and users button */
+  .mobile-menu-btn,
+  .mobile-users-btn { display: flex !important; }
+
+  /* Show mobile server dropdown */
+  .mobile-server-dropdown { display: block; }
+
+  /* Show mobile server bubbles in sidebar */
+  .mobile-servers-section { display: block; }
+
+  /* Show mobile close buttons */
+  .mobile-panel-close { display: flex; }
+
+  /* Collapse server bar */
+  .server-bar { width: 0; min-width: 0; overflow: hidden; border: none; padding: 0; }
+
+  /* Main area takes full width on mobile */
+  .main { width: 100%; min-width: 0; }
+
+  /* Welcome screen centered properly */
+  .welcome-screen { width: 100%; justify-content: center; align-items: center; }
+  .welcome-content { max-width: 90vw; padding: 0 1rem; }
+
+  /* Left sidebar — slide out as overlay (! overrides theme [data-theme] .sidebar { position: relative }) */
+  .sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 17.5rem;
+    min-width: 17.5rem;
+    /* Above .message-input-area (99995), below .modal-overlay (100001). #5384. */
+    z-index: 100000;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    /* Safe area for notched phones + Android gesture bar */
+    padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.1 */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1.75rem);
+  }
+
+  #app-body.mobile-sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  /* The mobile-servers-section bubble row inside the sidebar already shows
+     all servers, so we hide the vertical .server-bar entirely on mobile to
+     avoid a duplicate server list when the sidebar overlay is open. (#5272) */
+  #app-body.mobile-sidebar-open .server-bar {
+    display: none;
+  }
+
+  /* Right sidebar — slide in from right as overlay */
+  .right-sidebar {
+    display: flex !important;
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 16.25rem;
+    min-width: 16.25rem;
+    /* Above .message-input-area (99995), below .modal-overlay (100001). #5384. */
+    z-index: 100000;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    /* iOS status bar + Android nav bar safe areas */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+  }
+
+  #app-body.mobile-right-open .right-sidebar {
+    transform: translateX(0);
+  }
+
+  /* Channel header adjustments — safe-area-inset-top prevents
+     underlapping the iOS status bar / Dynamic Island */
+  .channel-header {
+    padding: calc(0.5rem + constant(safe-area-inset-top)) 0.75rem 0.5rem; /* iOS 11.0-11.1 */
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    min-height: calc(3rem + env(safe-area-inset-top, 0px));
+    gap: 0.5rem;
+  }
+
+  .channel-info h3 { font-size: 0.875rem; }
+  .channel-code-tag { font-size: 0.625rem; padding: 0.0625rem 0.375rem; }
+
+  /* Hide header clutter — search/pin/delete tucked into long-press or sidebar */
+  #delete-channel-btn,
+  #search-toggle-btn,
+  #pinned-toggle-btn,
+  #copy-code-btn { display: none !important; }
+  .header-actions-divider { display: none; }
+
+  /* Hide entire header actions box on mobile to reclaim header space */
+  .header-actions-box { display: none !important; }
+
+  /* Toolbar touch overrides are in the (hover: none) query below */
+
+  /* Messages area */
+  .messages { padding: 0.75rem; }
+  .message-input-area { padding: 0.5rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom, 0px)); gap: 0.375rem; }
+  .message-content { word-break: break-word; overflow-wrap: break-word; }
+  .message-header { flex-wrap: wrap; }
+  .reply-banner { max-width: 100%; flex-wrap: wrap; }
+  .reply-preview { white-space: normal; word-break: break-word; }
+
+  /* GIF picker — constrained on tablet */
+  .gif-picker { max-width: 22.5rem; }
+
+  /* Screen share — constrained */
+  .screen-share-container { max-height: 40vh; }
+  /* Webcam — constrained */
+  .webcam-container { max-height: 10rem; }
+  .webcam-tile { width: 7.5rem; height: 5.625rem; }
+
+  /* Status bar — condense on small tablets but keep visible */
+  .status-bar .status-item:nth-child(n+5) { display: none; }
+
+  /* Server banner — smaller on mobile */
+  .server-banner-display { height: 7.5rem; }
+  .server-banner-display::after { height: 3.125rem; }
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   RESPONSIVE — Phone (≤ 480px)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+@media (max-width: 480px) {
+  /* Sidebar full width on phones */
+  .sidebar { width: 85vw; min-width: 85vw; }
+
+  /* Mobile server dropdown (visible on phones) */
+  .mobile-server-dropdown { display: block; }
+
+  .right-sidebar { width: 85vw; min-width: 85vw; }
+
+  /* Channel header — tight, prevent overflow, safe-area top */
+  .channel-header {
+    padding: calc(0.375rem + env(safe-area-inset-top, 0px)) 0.5rem 0.375rem;
+    min-height: calc(2.75rem + env(safe-area-inset-top, 0px));
+    gap: 0.25rem;
+    overflow: hidden;
+  }
+
+  .channel-info {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .channel-info h3 { font-size: 0.8125rem; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .channel-code-tag { display: none !important; }
+
+  /* Android beta banner — hide on phone, it eats header space */
+  .android-beta-banner { display: none !important; }
+
+  /* Update banner — compact on phone */
+  .update-banner { padding: 0.1875rem 0.5rem; font-size: 0.6875rem; }
+  .disk-low-banner { padding: 0.1875rem 0.5rem; font-size: 0.6875rem; }
+  .disk-low-dot { width: 0.375rem; height: 0.375rem; }
+  .update-pulse { width: 0.375rem; height: 0.375rem; }
+
+  /* Desktop app banner — hide on mobile (they have Haven-Android) */
+  .desktop-app-banner { display: none !important; }
+
+  @keyframes slideUpSheet {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+
+  /* Messages */
+  .messages { padding: 0.5rem; }
+  :root { --msg-pad-x: 0.25rem; --msg-pad-y: 0.25rem; --msg-avatar: 1.875rem; --msg-gap: 0.5rem; }
+  .message-avatar { font-size: 0.75rem; }
+  .user-item-avatar, .user-item-avatar-img { width: 1.25rem; height: 1.25rem; font-size: 0.5625rem; }
+  .user-avatar-wrapper { width: 1.25rem; height: 1.25rem; }
+  .user-status-dot { width: 0.5rem; height: 0.5rem; bottom: -2px; right: -2px; }
+  .message-author { font-size: 0.8125rem; }
+  .message-content { font-size: 0.875rem; line-height: 1.45; word-break: break-word; overflow-wrap: break-word; }
+  .message-time { font-size: 0.625rem; }
+  .message-header { flex-wrap: wrap; }
+
+  /* Reply banners — allow wrapping on mobile */
+  .reply-banner { max-width: 100%; flex-wrap: wrap; }
+  .reply-preview { white-space: normal; word-break: break-word; }
+
+  /* Chat images — scale down for mobile, preserve aspect ratio */
+  .chat-image { display: block; max-width: min(80%, 17.5rem); max-height: 18.75rem; object-fit: contain; width: auto; height: auto; }
+  .image-mode-full .chat-image { max-width: 100%; max-height: 17.5rem; }
+  .message-compact .chat-image { margin-top: 0.25rem; }
+
+  /* Input area — single-row inline layout */
+  .message-input-area {
+    padding: 0.375rem 0.5rem calc(0.375rem + env(safe-area-inset-bottom, 0px));
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+  }
+  .message-input-area textarea { min-width: auto; }
+
+  /* Media buttons — compact inline, not a separate row */
+  .input-actions-box {
+    border-radius: 1rem;
+    padding: 0.125rem 0.125rem;
+    gap: 0.0625rem;
+    flex-shrink: 0;
+    order: 0;
+    border: none;
+    background: none;
+  }
+  /* Hide dividers on phone — too cramped */
+  .input-actions-box .input-actions-divider { display: none; }
+  .input-actions-box .btn-upload,
+  .input-actions-box .btn-emoji,
+  .input-actions-box .btn-gif,
+  .input-actions-box .btn-poll {
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    font-size: 0.875rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .input-actions-box .btn-gif {
+    width: auto;
+    padding: 0 0.3125rem;
+    border-radius: var(--radius-sm);
+    height: 1.375rem;
+    min-height: 1.375rem;
+    font-size: 0.6875rem;
+  }
+
+  /* Textarea fills remaining space inline */
+  .message-input-area textarea {
+    padding: 0.375rem 0.625rem;
+    font-size: 1rem; /* prevents iOS zoom on focus */
+    border-radius: 20px;
+    min-height: 2.125rem;
+    flex: 1 1 0;
+    min-width: 0;
+    order: 1;
+  }
+
+  .message-input-area .btn-send {
+    width: 2.125rem;
+    height: 2.125rem;
+    min-width: 2.125rem;
+    min-height: 2.125rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    order: 2;
+  }
+
+  /* GIF picker — full width on phone */
+  .gif-picker {
+    left: 4px;
+    right: 4px;
+    bottom: 56px;
+    max-width: none;
+    width: auto;
+    max-height: 50vh;
+  }
+
+  .gif-picker-grid { max-height: 40vh; }
+
+  /* Emoji picker — fixed positioning on phone so it doesn't push layout */
+  .emoji-picker {
+    position: fixed;
+    left: 4px;
+    right: 4px;
+    bottom: 56px;
+    top: auto;
+    max-width: none;
+    width: auto;
+    max-height: 45vh;
+    margin-bottom: 0;
+  }
+
+  .emoji-grid { max-height: min(12.5rem, 30vh); }
+  .emoji-item { width: 2.5rem; height: 2.5rem; font-size: 1.375rem; }
+
+  /* Mention dropdown — wider */
+  .mention-dropdown {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .mention-item { padding: 0.75rem 0.875rem; font-size: 0.875rem; }
+
+  /* Reply bar */
+  .reply-bar { padding: 0.375rem 0.5rem; font-size: 0.75rem; }
+  .reply-banner { padding: 0.25rem 0.5rem; font-size: 0.75em; max-width: 100%; flex-wrap: wrap; }
+  .reply-preview { white-space: normal; word-break: break-word; }
+
+  /* Reaction badges — touch-friendly */
+  .reaction-badge { padding: 0.25rem 0.625rem; font-size: 0.875rem; }
+  .reaction-picker { gap: 0.25rem; padding: 0.375rem 0.5rem; }
+  .reaction-pick-btn { width: 2.375rem; height: 2.375rem; font-size: 1.25rem; }
+  .reaction-full-picker { width: calc(100vw - 2rem); max-width: 20rem; right: 0; }
+
+  /* Toolbar touch overrides are in the (hover: none) query below */
+
+  /* Screen share — smaller on phone */
+  .screen-share-container { max-height: 35vh; min-height: 7.5rem; }
+  /* Webcam — smaller on phone */
+  .webcam-container { max-height: 8.125rem; }
+  .webcam-tile { width: 6.25rem; height: 4.6875rem; }
+
+  /* Status bar — condense on phones */
+  .status-bar .status-item:nth-child(n+3) { display: none; }
+
+  /* Welcome screen */
+  .welcome-icon { font-size: 3rem; }
+  .welcome-content h2 { font-size: 1.125rem; }
+  .welcome-content p { font-size: 0.8125rem; }
+
+  /* Modal — wider on phone */
+  .modal { padding: 1.25rem; width: 95%; max-height: 85vh; overflow-y: auto; }
+  .modal h3 { font-size: 1.125rem; }
+
+  /* Settings modal — scrollable on phone, hide nav */
+  .modal-settings { max-height: 80vh; }
+  .settings-nav { display: none; }
+  .settings-body { overflow-y: auto; }
+
+  /* Toasts — full width */
+  #toast-container { left: 50%; right: auto; top: calc(8px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }
+  .toast { max-width: none; }
+
+  /* Typing indicator */
+  .typing-indicator { padding: 0 0.5rem; font-size: 0.6875rem; }
+
+  /* Search container */
+  .search-container { flex: 1; }
+  .search-input { font-size: 0.875rem; }
+
+  /* Stream audio controls — always visible on touch */
+  .stream-audio-controls { opacity: 1; }
+  .stream-vol-slider { width: 3.125rem; }
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   RESPONSIVE — Tiny Phone (≤ 360px)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+@media (max-width: 360px) {
+  .channel-info h3 { font-size: 0.75rem; max-width: 5.625rem; }
+  :root { --msg-avatar: 1.625rem; --msg-gap: 0.375rem; }
+  .message-avatar { font-size: 0.6875rem; }
+  .user-item-avatar, .user-item-avatar-img { width: 1.125rem; height: 1.125rem; font-size: 0.5rem; }
+  .user-avatar-wrapper { width: 1.125rem; height: 1.125rem; }
+  .user-status-dot { width: 0.4375rem; height: 0.4375rem; bottom: -2px; right: -2px; }
+  .message-content { font-size: 0.8125rem; }
+  .chat-image { max-width: min(90%, 15rem); }
+
+  /* Hide non-critical status items */
+  .status-bar .status-item:nth-child(n+3) { display: none; }
+
+  /* Sidebar slightly narrower */
+  .sidebar { width: 80vw; min-width: 80vw; }
+  .right-sidebar { width: 80vw; min-width: 80vw; }
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   iOS PWA KEYBOARD FIX
+   When the virtual keyboard opens on iOS standalone PWA,
+   the viewport doesn't shrink.  JS detects this via
+   visualViewport and sets #app height directly; this CSS
+   removes the safe-area bottom padding so the input sits
+   flush above the keyboard.
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.ios-keyboard-open .message-input-area {
+  padding-bottom: 0.375rem !important;
+}
+
+/* When iOS keyboard is open, constrain emoji/gif pickers to the visible area */
+.ios-keyboard-open .emoji-picker,
+.ios-keyboard-open .gif-picker {
+  max-height: 40vh;
+}
+
+.ios-keyboard-open .emoji-grid {
+  max-height: 25vh;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   iOS / MOBILE SAFE-AREA HARDENING
+   JS probes env(safe-area-inset-*) and sets --safe-top /
+   --safe-bottom as CSS custom properties with device-specific
+   minimum floors.  These override env() when the browser
+   returns 0 despite a notch / Dynamic Island being present.
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+@media (max-width: 768px) {
+  /* Header: use JS-measured safe-top when available, falling back to env() */
+  body.is-ios .channel-header,
+  body.is-android .channel-header {
+    padding-top: calc(0.5rem + var(--safe-top, env(safe-area-inset-top, 0px))) !important;
+    min-height: calc(3rem + var(--safe-top, env(safe-area-inset-top, 0px))) !important;
+  }
+
+  /* Left sidebar overlay */
+  body.is-ios .sidebar,
+  body.is-android .sidebar {
+    padding-top: var(--safe-top, env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* Right sidebar */
+  body.is-ios .right-sidebar,
+  body.is-android .right-sidebar {
+    padding-top: var(--safe-top, env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* Server bar */
+  body.is-ios .server-bar,
+  body.is-android .server-bar {
+    padding-top: calc(0.5rem + var(--safe-top, env(safe-area-inset-top, 0px))) !important;
+  }
+
+  /* Message input — bottom safe area */
+  body.is-ios .message-input-area,
+  body.is-android .message-input-area {
+    padding-bottom: calc(0.5rem + var(--safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+  }
+
+  /* Toasts */
+  body.is-ios #toast-container,
+  body.is-android #toast-container {
+    top: calc(8px + var(--safe-top, env(safe-area-inset-top, 0px)));
+  }
+}
+
+@media (max-width: 480px) {
+  body.is-ios .channel-header,
+  body.is-android .channel-header {
+    padding-top: calc(0.375rem + var(--safe-top, env(safe-area-inset-top, 0px))) !important;
+    min-height: calc(2.75rem + var(--safe-top, env(safe-area-inset-top, 0px))) !important;
+  }
+
+  body.is-ios .message-input-area,
+  body.is-android .message-input-area {
+    padding-bottom: calc(0.375rem + var(--safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+  }
+}
+
+/* Remove safe-top padding when iOS keyboard is open (bottom padding already
+   handled by .ios-keyboard-open rule above) */
+body.is-ios.ios-keyboard-open .message-input-area {
+  padding-bottom: 0.375rem !important;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   TOUCH & ACCESSIBILITY
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+@media (hover: none) and (pointer: coarse) {
+  /* Prevent pull-to-refresh on chat app */
+  html, body { overscroll-behavior-y: contain; }
+
+  /* Eliminate iOS double-tap delay on interactive elements */
+  .channel-item,
+  .user-item,
+  .status-option,
+  .sidebar-bottom-btn,
+  .mobile-server-item,
+  .dm-toggle,
+  button,
+  a {
+    touch-action: manipulation;
+  }
+
+  /* Disable hover effects on touch — prevents iOS "sticky hover" requiring
+     double-tap (first tap activates :hover, second fires click) */
+  .channel-item:hover { background: transparent; }
+  .channel-item:hover .channel-name { color: var(--text-secondary); }
+  .channel-item.active:hover { background: var(--bg-active); }
+  .channel-item.active:hover .channel-name { color: var(--text-primary); }
+  .status-option:hover { background: transparent; }
+
+  /* Prevent browser text-selection / callout on long-press of messages;
+     our JS handles the ⋯ button → toolbar instead. */
+  .message, .message-compact {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  /* Keep message-content selectable for copy-paste after tap  */
+  .msg-selected .message-content {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Touch devices — larger tap targets */
+  .channel-item { padding: 0.75rem 1rem; min-height: 2.75rem; }
+  .btn-sm { min-height: 2.75rem; padding: 0.625rem 0.875rem; }
+  .icon-btn { min-width: 2.5rem; min-height: 2.5rem; font-size: 1.125rem; }
+  .theme-btn { width: 2.25rem; height: 2.25rem; }
+  .toggle-row input[type="checkbox"] { width: 1.25rem; height: 1.25rem; }
+  .server-icon { width: 2.75rem; height: 2.75rem; }
+  /* Disable hover-only interactions on touch */
+  .message:hover, .message-compact:hover { background: transparent; }
+  .message-compact:hover .compact-time { display: none !important; }
+
+  /* Kill the hover-triggered toolbar — belt-and-suspenders in case
+     the browser still reports (hover: hover) for the base guard. */
+  .message:hover .msg-toolbar,
+  .message-compact:hover .msg-toolbar { display: none !important; }
+
+  /* Toolbar: hidden by default, shown only via JS ⋯ button (.msg-selected).
+     Stays position:absolute from the base rule so it floats over
+     content instead of pushing layout around. Anchored to top-right
+     of the message, same as desktop hover. */
+  .msg-toolbar {
+    display: none !important;
+    z-index: 50;
+  }
+
+  .msg-selected .msg-toolbar {
+    display: flex !important;
+    z-index: 100;
+  }
+
+  .msg-selected {
+    background: rgba(255,255,255,0.06);
+    border-radius: var(--radius);
+  }
+
+  .msg-toolbar button {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius);
+    min-width: 2.125rem;
+    min-height: 2.125rem;
+    font-size: 1rem;
+  }
+
+  /* Compact timestamp — always hidden on touch (no real hover exists) */
+  .message-compact .compact-time { display: none !important; }
+
+  /* Smoother scrolling on touch */
+  .messages, .sidebar, .right-sidebar, .modal {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent overscroll bounce on chat container (iOS rubber-banding) */
+  .messages {
+    overscroll-behavior: contain;
+  }
+}
+
+/* Extra safety: hide hover toolbar on any coarse-pointer device even if
+   the browser claims (hover: hover).  Toolbar is shown via .msg-selected
+   from the JS ⋯ button handler instead. */
+@media (pointer: coarse) {
+  .message:hover .msg-toolbar,
+  .message-compact:hover .msg-toolbar { display: none !important; }
+  .msg-toolbar { display: none !important; }
+  .msg-selected .msg-toolbar { display: flex !important; }
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   LANDSCAPE PHONE
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .status-bar .status-item:nth-child(n+3) { display: none; }
+  .channel-header { min-height: 2.5rem; padding: 0.25rem 0.5rem; }
+  .messages { padding: 0.25rem 0.5rem; }
+  .message-input-area { padding: 0.25rem 0.5rem 0.375rem; }
+  .welcome-icon { font-size: 2.25rem; }
+  .welcome-content h2 { font-size: 1rem; }
+  .server-banner-display { height: 5rem; }
+  .server-banner-display::after { height: 1.875rem; }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   USER LIST: Group Labels & Score Badges
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.user-group-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  padding: 0.5rem 0.375rem 0.25rem;
+  user-select: none;
+}
+
+.user-group-label.offline-label {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.625rem;
+}
+
+.user-score-badge {
+  font-size: 0.625rem;
+  color: var(--accent);
+  background: var(--bg-tertiary);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.5rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   EULA
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.eula-notice {
+  margin-top: 1rem;
+  padding: 0.75rem 0.875rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.eula-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.eula-check-row + .eula-check-row { margin-top: 0.625rem; }
+
+.eula-check-row input[type="checkbox"] {
+  margin-top: 0.125rem;
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.eula-check-row a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.eula-check-row a:hover {
+  color: var(--accent-hover);
+}
+
+.eula-modal {
+  max-width: 43.75rem;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.eula-content {
+  overflow-y: auto;
+  max-height: 55vh;
+  padding: 1rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin: 0.75rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.eula-content p { margin: 0.5rem 0; }
+.eula-content ol { padding-left: 1.25rem; }
+.eula-content ol li { margin: 0.625rem 0; }
+.eula-content ul { padding-left: 1.25rem; margin: 0.375rem 0; }
+.eula-content ul li { margin: 0.25rem 0; list-style: disc; }
+.eula-content h4 {
+  margin: 1.125rem 0 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+.eula-content strong { color: var(--text-primary); }
+.eula-content em { color: var(--text-muted); }
+
+.eula-footer {
+  margin-top: 0.75rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--danger);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   GAME BUTTON
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.btn-game {
+  margin-top: 1.25rem;
+  padding: 0.625rem 1.5rem;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-game:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   TTS MESSAGE INDICATOR
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.tts-tag {
+  font-size: 0.625rem;
+  color: var(--accent);
+  margin-left: 0.375rem;
+  opacity: 0.7;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   WEBCAM GRID
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.webcam-container {
+  display: none;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--bg-primary) 90%, #000);
+  border-bottom: 2px solid var(--accent);
+  max-height: 25vh;
+  min-height: 6.25rem;
+  position: relative;
+}
+.webcam-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+}
+.webcam-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.webcam-header .icon-btn.small {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.375rem;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 0.25rem;
+}
+.webcam-header .icon-btn.small:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.webcam-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  overflow-y: auto;
+  max-height: calc(25vh - 2rem);
+}
+.webcam-tile {
+  position: relative;
+  border-radius: 0.375rem;
+  overflow: hidden;
+  background: #111;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  max-width: 25vw;
+  min-width: 7.5rem;
+  flex-shrink: 0;
+}
+.webcam-tile:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+}
+.webcam-tile video {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  display: block;
+  max-height: 21vh;
+}
+.webcam-tile-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.1875rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  text-align: center;
+  pointer-events: none;
+}

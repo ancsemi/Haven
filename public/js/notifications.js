@@ -116,7 +116,7 @@ class NotificationManager {
       }
       audio.volume = Math.max(0, Math.min(1, this.volume * this.volume));
       audio.currentTime = 0;
-      audio.play().catch(() => {});
+      audio.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
     } catch { /* audio not available */ }
   }
 

@@ -29,7 +29,7 @@ function moveUploadToDeleted(relPath) {
   try {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
-  } catch { /* file locked or already moved */ }
+  } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
 }
 const { isString, isInt, releasableUploads } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
@@ -56,7 +56,10 @@ module.exports = function register(socket, ctx) {
         'INSERT OR IGNORE INTO user_roles (user_id, role_id, channel_id, granted_by) VALUES (?, ?, ?, ?)'
       ).run(userId, row.default_role_id, channelId, grantedBy);
       if (typeof applyRoleChannelAccess === 'function') {
-        try { applyRoleChannelAccess(row.default_role_id, userId, 'grant'); } catch { /* non-critical */ }
+        try { applyRoleChannelAccess(row.default_role_id, userId, 'grant'); } catch (err) {
+          // The role landed but its linked channels did not.
+          console.warn('applyChannelDefaultRole channel access grant failed:', err.message);
+        }
       }
     } catch (e) {
       console.warn('applyChannelDefaultRole failed:', e.message);
@@ -223,7 +226,7 @@ module.exports = function register(socket, ctx) {
         if (nonDmCount === 1) {
           db.prepare('UPDATE channels SET show_welcome = 1 WHERE id = ?').run(result.lastInsertRowid);
         }
-      } catch { /* non-critical */ }
+      } catch { /* only a starting default; admins can pick the welcome channel by hand */ }
 
       // Optional: bulk-add every existing user to the new channel.
       // Lets admins approximate Discord-style "everyone is in every channel"
@@ -310,7 +313,10 @@ module.exports = function register(socket, ctx) {
       if (existing && existing.cnt >= 3) {
         return socket.emit('error-msg', 'You already have the maximum number of temporary channels (3)');
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      // The per-user cap of 3 was not checked for this request.
+      console.warn('create-temp-channel limit check failed:', err.message);
+    }
 
     const code = generateUniqueSharedCode();
     const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString();
@@ -544,7 +550,10 @@ module.exports = function register(socket, ctx) {
           insertAutoRole.run(socket.user.id, ar.id);
           applyRoleChannelAccess(ar.id, socket.user.id, 'grant');
         }
-      } catch { /* non-critical */ }
+      } catch (err) {
+        // The join still stands, but the auto-assign roles may be missing.
+        console.warn('join-channel auto-role grant failed:', err.message);
+      }
 
       // (#5389) Per-channel default role auto-grant.
       _applyChannelDefaultRole(channel.id, socket.user.id);
@@ -591,7 +600,7 @@ module.exports = function register(socket, ctx) {
       fireWebhookEvent?.(channel.id, activeCode, 'member-joined', {
         user: { id: socket.user.id, username: socket.user.displayName }
       });
-    } catch { /* best-effort */ }
+    } catch { /* fireWebhookEvent catches and logs its own errors; this only guards the call */ }
 
     const isPrivateCode = channel.code_visibility === 'private' || channel.is_private;
     const joinerCanSeeCode = socket.user.isAdmin
@@ -745,7 +754,10 @@ module.exports = function register(socket, ctx) {
           if (isSafeUploadRelPath(m[1])) doomedUploads.add(m[1]);
         }
       }
-    } catch { /* best-effort cleanup — never block the delete */ }
+    } catch (err) {
+      // Never block the delete; the channel's files just stay in uploads/.
+      console.warn('delete-channel attachment scan failed:', err.message);
+    }
 
     const deleteAll = db.transaction((chIds) => {
       for (const chId of chIds) {
@@ -770,7 +782,7 @@ module.exports = function register(socket, ctx) {
           "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
         ).get(like);
         if (!still) moveUploadToDeleted(rel);
-      } catch { /* best-effort */ }
+      } catch { /* this one file stays in uploads/; nothing is lost and the delete goes on */ }
     }
 
     for (const deletedCode of deletedCodes) {
@@ -1204,9 +1216,13 @@ module.exports = function register(socket, ctx) {
         });
         txn();
         if (typeof applyRoleChannelAccess === 'function') {
+          let accessErr = null;
           for (const m of members) {
-            try { applyRoleChannelAccess(roleId, m.user_id, 'grant'); } catch { /* non-critical */ }
+            try { applyRoleChannelAccess(roleId, m.user_id, 'grant'); } catch (err) { accessErr = accessErr || err; }
           }
+          // One line per backfill, not per member: the role landed but some
+          // members may be missing its linked channels.
+          if (accessErr) console.warn('default role channel access backfill failed:', accessErr.message);
         }
       }
 
@@ -1371,6 +1387,8 @@ module.exports = function register(socket, ctx) {
       else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) s.leave(`channel:${channel.code}`);
     }
     broadcastChannelLists();
+    // The member list follows the requirement too (#5703).
+    emitOnlineUsers(channel.code);
     io.to(`channel:${code}`).emit('channel-role-gate-updated', { code, roleGate: stored ? JSON.parse(stored) : null });
     cb({ success: true, roleGate: stored ? JSON.parse(stored) : null });
     _audit({ actor: socket.user, action: 'channel_role_gate',
@@ -1449,7 +1467,7 @@ module.exports = function register(socket, ctx) {
         const parents = new Set(rows.map(r => r.parent_channel_id));
         if (parents.size === 1) _reorderParent = [...parents][0];
       }
-    } catch { /* fall through to create_channel check */ }
+    } catch { /* fall through to the stricter create_channel check, so this fails closed */ }
     if (!_canManageSubsOf(_reorderParent)) return socket.emit('error-msg', 'You don\'t have permission to reorder channels');
     try {
       const update = db.prepare('UPDATE channels SET position = ? WHERE code = ?');
@@ -1708,7 +1726,10 @@ module.exports = function register(socket, ctx) {
         insertAutoRole.run(targetUserId, ar.id);
         applyRoleChannelAccess(ar.id, targetUserId, 'grant');
       }
-    } catch { /* non-critical */ }
+    } catch (err) {
+      // The invite still stands, but the auto-assign roles may be missing.
+      console.warn('invite-to-channel auto-role grant failed:', err.message);
+    }
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
     for (const ts of targetSockets) {
       ts.join(`channel:${channel.code}`);
@@ -1848,7 +1869,10 @@ module.exports = function register(socket, ctx) {
           if (isSafeUploadRelPath(m[1])) filenames.add(m[1]);
         }
       }
-    } catch { /* ignore scan errors — best-effort cleanup */ }
+    } catch (err) {
+      // Never block the delete; the DM's attachments just stay in uploads/.
+      console.warn('delete-dm attachment scan failed:', err.message);
+    }
     if (Array.isArray(data.attachments)) {
       for (const url of data.attachments) {
         if (typeof url !== 'string') continue;

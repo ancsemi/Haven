@@ -635,7 +635,7 @@ test('Braid rolls back ownership when engagement persistence fails', () => {
 
 test('public density and layout-editing hooks are wired into core state changes', () => {
   const themeInit = fs.readFileSync(path.join(ROOT, 'public/js/theme-init.js'), 'utf8');
-  const media = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-media.js'), 'utf8');
+  const media = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-appearance.js'), 'utf8');
   const modMode = fs.readFileSync(path.join(ROOT, 'public/js/modmode.js'), 'utf8');
   const pluginLoader = fs.readFileSync(path.join(ROOT, 'public/js/plugin-loader.js'), 'utf8');
   const braid = fs.readFileSync(path.join(ROOT, 'plugins/BraidLayout.plugin.js'), 'utf8');

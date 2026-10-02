@@ -86,7 +86,7 @@ function _maxUploadBytes() {
     const db = getDb();
     const row = db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
     let cap = parseInt(row?.value, 10) || 25;
-    try { cap = Math.max(cap, parseInt(db.prepare('SELECT MAX(max_upload_mb) AS m FROM roles').get()?.m, 10) || 0); } catch {}
+    try { cap = Math.max(cap, parseInt(db.prepare('SELECT MAX(max_upload_mb) AS m FROM roles').get()?.m, 10) || 0); } catch { /* no per-role caps readable: the server-wide cap is the margin */ }
     return cap * 1024 * 1024;
   } catch {
     return 25 * 1024 * 1024;

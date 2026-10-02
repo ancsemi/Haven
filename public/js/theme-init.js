@@ -6,13 +6,13 @@
   // (URL bar / keyboard) and then persist that scroll across reloads.
   // That's what made the entire UI appear shifted up after a refresh in
   // issue #5285. Force-reset on every load.
-  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch(e) {}
+  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch(e) { /* read-only in some embedded views: the reset below still runs */ }
   function resetDocScroll() {
     try {
       if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
       if (document.documentElement) document.documentElement.scrollTop = 0;
       if (document.body) document.body.scrollTop = 0;
-    } catch(e) {}
+    } catch(e) { /* scroll reset is cosmetic */ }
   }
   resetDocScroll();
   window.addEventListener('load', resetDocScroll);
@@ -64,7 +64,7 @@
     }
     _z = Math.min(150, Math.max(70, _z));
     document.documentElement.style.setProperty('--ui-scale', _z + '%');
-  } catch (e) {}
+  } catch (e) { /* storage blocked: keep the 100% scale */ }
 
   var _themeCompat = window.HavenThemeCompat;
   var _safeMode = _themeCompat ? _themeCompat.isSafeMode(window.location) : false;
@@ -207,7 +207,7 @@
         el.style.setProperty('--border-light', _hex(h,bdrSat,0.21+vib*0.06));
         el.style.setProperty('--text-link', _hex((h+180)%360,.7,.95));
       }
-    } catch(e) {}
+    } catch(e) { /* corrupt saved colours: keep the base theme */ }
   }
   // RGB theme: set a neutral dark bg immediately; the cycle starts once theme.js loads
   if (t === 'rgb') {

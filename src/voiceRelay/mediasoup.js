@@ -134,7 +134,7 @@ class MediasoupRelay {
     const codes = [...this.rooms.keys()];
     this.rooms.clear();
     for (const slot of this.workers) {
-      try { slot.worker.close(); } catch { /* already gone */ }
+      try { slot.worker.close(); } catch { /* worker already closed or died */ }
     }
     this.workers = [];
     if (!keepState) { this.state = 'stopped'; this.error = null; this.address = null; }
@@ -208,7 +208,7 @@ class MediasoupRelay {
     // A second join for the same person while this one was setting up has
     // replaced it: close what this one made instead of leaving it behind.
     if (room.peers.get(peerId) !== peer) {
-      for (const t of peer.transports.values()) { try { t.close(); } catch { /* gone */ } }
+      for (const t of peer.transports.values()) { try { t.close(); } catch { /* transport already closed */ } }
       throw new Error('Joined again elsewhere');
     }
     return { rtpCapabilities: room.router.rtpCapabilities, send, recv };
@@ -336,7 +336,7 @@ class MediasoupRelay {
     const closed = [];
     for (const [id, p] of peer.producers) {
       if (!sources.includes(p.appData.source)) continue;
-      try { p.close(); } catch { /* gone */ }
+      try { p.close(); } catch { /* producer already closed */ }
       peer.producers.delete(id);
       closed.push(id);
     }
@@ -358,10 +358,10 @@ class MediasoupRelay {
     const peer = room?.peers.get(peerId);
     if (!peer) return [];
     const closed = [...peer.producers.keys()];
-    for (const t of peer.transports.values()) { try { t.close(); } catch { /* gone */ } }
+    for (const t of peer.transports.values()) { try { t.close(); } catch { /* transport already closed */ } }
     room.peers.delete(peerId);
     if (!room.peers.size) {
-      try { room.router.close(); } catch { /* gone */ }
+      try { room.router.close(); } catch { /* router already closed with its worker */ }
       room.slot.rooms.delete(code);
       this.rooms.delete(code);
     }

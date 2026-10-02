@@ -1,0 +1,1442 @@
+﻿/* Haven core styles, part 14 of 16: role management, density and zoom, panel layout, burn-after-read, polls and the DM pane. Loaded in order by style.css; the order matters. */
+/* ── Role management modal ───────────────────────────── */
+/* Make the role-modal flex its body so the sidebar/detail panes grow with the
+   modal and the Close button pins to the bottom-right at any resize size. */
+.role-management-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(95vw, 45rem);
+  max-width: 95vw;
+  height: min(85vh, 40rem);
+  min-height: 22.5rem;
+  padding-bottom: 1.125rem;
+}
+.role-management-modal > .role-editor-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+.role-management-modal > .modal-actions {
+  flex-shrink: 0;
+  margin-top: 0.75rem;
+}
+.role-editor-layout {
+  display: flex;
+  gap: 1rem;
+  min-height: 17.5rem;
+  max-height: 60vh;
+  margin: 0.75rem 0;
+}
+.role-sidebar {
+  width: 11.25rem;
+  border-right: 1px solid var(--border, #333);
+  padding-right: 0.75rem;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+.role-list-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 100%;
+  overflow-y: auto;
+}
+.role-sidebar-level {
+  font-size: 0.7em;
+  font-style: italic;
+  opacity: 0.6;
+  margin-left: auto;
+}
+.role-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  transition: background 0.15s;
+}
+.role-sidebar-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+.role-sidebar-item.active {
+  background: var(--accent, #5865f2);
+  color: var(--accent-text);
+}
+/* Separates the synthetic Admin role from the real roles in the sidebar. */
+.role-sidebar-divider {
+  height: 1px;
+  margin: 0.375rem 0.25rem;
+  background: var(--border, rgba(255,255,255,0.12));
+}
+.role-sidebar-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-style: italic;
+  opacity: 0.65;
+}
+.role-color-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Gradient role colors: the name is painted with a gradient from the role's
+   color to its second color. The span wraps the text only, so the whole
+   gradient fits the name whatever the width of the row around it. */
+.role-gradient {
+  background-image: linear-gradient(90deg, var(--role-c1), var(--role-c2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+/* Shimmer: the gradient runs start, end, start over twice the width and
+   slides one full width along, so the loop has no visible seam. CSS only,
+   so a long member list costs no timers. */
+.role-gradient.role-shimmer {
+  background-image: linear-gradient(90deg, var(--role-c1), var(--role-c2), var(--role-c1));
+  background-size: 200% 100%;
+  animation: role-shimmer 5s linear infinite;
+}
+@keyframes role-shimmer {
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .role-gradient.role-shimmer { animation: none; }
+}
+
+/* Role editor: the gradient switches and a sample name in the role's style. */
+.role-gradient-opts {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+}
+.role-style-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: var(--bg-tertiary);
+  font-size: 0.8125rem;
+}
+.role-style-preview-name {
+  font-weight: 600;
+}
+.role-detail {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 0.875rem;
+}
+/* With a role open, its settings scroll and the Members, Duplicate and Delete
+   row stays put underneath, since those act on the role, not its permissions. */
+.role-detail:has(> .role-detail-scroll) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-right: 0;
+}
+.role-detail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.875rem;
+}
+.role-detail-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.12));
+}
+.role-detail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.role-detail-form .settings-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted, #888);
+  margin-top: 0.25rem;
+}
+.role-detail-form .toggle-row {
+  font-size: 0.8125rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: var(--radius-sm, 0.25rem);
+  transition: background 0.15s;
+}
+.role-detail-form .toggle-row:hover {
+  background: rgba(255,255,255,0.04);
+}
+.role-detail-form .toggle-row:has(input[type="checkbox"]:checked) {
+  background: color-mix(in srgb, var(--accent, #6b4fdb) 12%, transparent);
+}
+
+/* ── Role preview in admin settings ──────────────────── */
+.role-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0;
+  font-size: 0.8125rem;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   DONATE BUTTON
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.donate-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+.donate-btn:hover {
+  filter: brightness(1.2);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   DONORS THANK YOU MODAL
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.donors-modal-box {
+  position: relative;
+  max-width: 31.25rem;
+  width: 92%;
+  max-height: 80vh;
+  padding: 2.25rem 2rem 1.75rem;
+  text-align: center;
+  border-radius: 1rem;
+  background: var(--bg-secondary, #2b2d31);
+  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+  animation: donorsSlideIn .3s ease;
+  /* Flex column so the Ko-fi donate button is pinned to the bottom of the
+     modal and the tier section owns the scroll instead of the whole box.
+     Previously the whole modal scrolled, which on shorter screens hid the
+     donate button below the fold until the user thought to scroll. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@keyframes donorsSlideIn {
+  from { opacity: 0; transform: translateY(20px) scale(.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.donors-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  font-size: 1.375rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  line-height: 1;
+  transition: color .15s, background .15s;
+}
+.donors-close-btn:hover {
+  color: var(--text-primary, #fff);
+  background: rgba(255,255,255,.08);
+}
+
+.donors-heart-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+  animation: donorsPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes donorsPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
+}
+
+.donors-title {
+  font-size: 1.625rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin: 0 0 0.5rem;
+}
+
+.donors-subtitle {
+  color: var(--text-muted, #aaa);
+  font-size: 0.84375rem;
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+  padding: 0 0.5rem;
+}
+
+.donors-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 0.25rem;
+  /* Owns the modal's scroll: the rest of the modal (heart, title, sort
+     toggle, note, Ko-fi button) stays put while only the tier lists
+     scroll. min-height:0 lets this child actually shrink inside the flex
+     parent (without it, flex children default to min-content height and
+     this section would push the donate button off-screen). */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.15) transparent;
+}
+
+.donors-tier {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+/* Section-divider label: thin rules on each side of the title */
+.donors-tier-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  /* Space below title, above the card */
+  margin: 0 0 10px;
+  /* Never shrink — stays above the scroll box */
+  flex-shrink: 0;
+}
+.donors-tier-title::before,
+.donors-tier-title::after {
+  content: '';
+  flex: 1;
+  height: 0.0625rem;
+  background: rgba(255,255,255,.1);
+}
+.donors-sponsor-title { color: #f8c53a; }
+.donors-donor-title   { color: #f0a040; }
+
+/* The card lives on the grid, not the tier wrapper.
+   max-height triggers a scroll bar once names fill the box;
+   the title above is never inside the scroll area so it's always visible. */
+.donors-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
+  gap: 0.5rem;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 0.625rem;
+  padding: 0.875rem 0.875rem;
+  max-height: 8.75rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.15) transparent;
+}
+
+.donor-chip {
+  background: rgba(255,255,255,.06);
+  padding: 0.3125rem 0.875rem;
+  border-radius: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-primary, #ddd);
+  border: 1px solid rgba(255,255,255,.08);
+  transition: background .15s, border-color .15s;
+}
+.donor-chip:hover {
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.15);
+}
+.donor-chip.donor-sponsor {
+  border-color: rgba(248,197,58,.3);
+  background: rgba(248,197,58,.08);
+  color: #f8c53a;
+  font-weight: 600;
+}
+
+.donors-note {
+  color: var(--text-muted, #777);
+  font-size: 0.71875rem;
+  margin: 0.875rem 0 1.125rem;
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+.donors-sort-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  margin: 0.625rem 0 0.375rem;
+}
+.donors-sort-btn {
+  padding: 0.3125rem 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color, #444);
+  background: transparent;
+  color: var(--text-muted, #999);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.donors-sort-btn:hover {
+  background: var(--bg-hover, rgba(255,255,255,.06));
+}
+.donors-sort-btn.active {
+  background: var(--accent-color, #5865f2);
+  color: #fff;
+  border-color: transparent;
+}
+
+.donors-kofi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1.5rem;
+  border-radius: 0.625rem;
+  background: linear-gradient(135deg, #ff5e5b 0%, #e24444 100%);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform .15s, box-shadow .15s;
+  box-shadow: 0 3px 12px rgba(226,68,68,.35);
+  /* Pinned to the bottom of the flex column modal — never shrinks, never
+     scrolls out of view. */
+  flex-shrink: 0;
+  align-self: center;
+}
+.donors-kofi-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(226,68,68,.45);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   LAYOUT DENSITY PICKER
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.density-picker,
+.channel-scroll-picker {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.density-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.625rem 0.5rem;
+  background: var(--bg-primary);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.75rem;
+}
+.density-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+.density-btn.active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.density-icon { font-size: 1.125rem; }
+.density-label { font-weight: 600; }
+
+/* ── Compact density ─────────────────────────────────────
+   Density adjusts spacing and message text size. Values are in rem so the
+   rows/avatars scale with the interface Zoom too; at the default 1rem = 16px
+   each tier is pixel-identical to the previous px-based rules. */
+[data-density="compact"] {
+  --msg-pad-x: 0.5rem;        /* 8px  */
+  --msg-pad-y: 0.125rem;      /* 2px  */
+  --msg-avatar: 1.75rem;      /* 28px */
+  --msg-gap: 0.5rem;          /* 8px  → gutter 44px */
+}
+[data-density="compact"] .message-avatar,
+[data-density="compact"] .message-avatar-img {
+  font-size: 0.6875rem;       /* 11px */
+}
+[data-density="compact"] .message-compact .compact-time {
+  font-size: 0.5625rem;       /* 9px */
+}
+[data-density="compact"] .message-content {
+  font-size: 0.8125rem;       /* 13px */
+}
+[data-density="compact"] .message-author {
+  font-size: 0.75rem;         /* 12px */
+}
+[data-density="compact"] .message-time {
+  font-size: 0.625rem;        /* 10px */
+}
+
+/* ── Spacious density ────────────────────────────────── */
+[data-density="spacious"] {
+  --msg-pad-x: 0.75rem;       /* 12px */
+  --msg-pad-y: 0.5rem;        /* 8px  */
+  --msg-avatar: 2.75rem;      /* 44px */
+  --msg-gap: 0.875rem;        /* 14px → gutter 70px */
+}
+[data-density="spacious"] .message-avatar,
+[data-density="spacious"] .message-avatar-img {
+  font-size: 1.0625rem;       /* 17px */
+}
+[data-density="spacious"] .message-content {
+  font-size: 0.9375rem;       /* 15px */
+  line-height: 1.5;
+}
+[data-density="spacious"] .message-author {
+  font-size: 0.875rem;        /* 14px */
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FONT SIZE SCALING
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.font-size-picker {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+/* ── Zoom slider (interface scale) ── */
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
+}
+.zoom-control .zoom-slider {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.zoom-step {
+  width: 1.625rem;
+  height: 1.625rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.zoom-step:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.zoom-value {
+  min-width: 3.4em;
+  text-align: right;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Interface scale ─────────────────────────────────────
+   The Zoom slider scales the whole UI by driving the root font-size through
+   --ui-scale (a percentage; 100% = 16px root). Because every size in this file
+   — text, spacing, avatars, rails, sidebars, icons — is expressed in rem, one
+   root change rescales the entire interface crisply, and the flex layout
+   reflows instead of overflowing. JS sets --ui-scale from the slider; it is
+   also applied pre-paint in theme-init.js. The root rule lives up in `html {}`. */
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ONLINE OVERLAY
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.status-online-trigger {
+  cursor: pointer;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  margin: -0.125rem -0.375rem;
+  transition: background 0.15s;
+}
+.status-online-trigger:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.online-overlay {
+  position: fixed;
+  z-index: 9999;
+  width: 13.75rem;
+  max-height: 21.875rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.online-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.online-overlay-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.online-overlay-list {
+  overflow-y: auto;
+  padding: 0.375rem 0;
+  max-height: 18.75rem;
+}
+
+.online-overlay-group {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 0.375rem 0.75rem 0.25rem;
+}
+.online-overlay-group.offline {
+  opacity: 0.6;
+}
+
+.online-overlay-user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+}
+.online-overlay-user.offline {
+  opacity: 0.45;
+}
+.online-overlay-user:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.online-overlay-avatar,
+.online-overlay-avatar-img {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #fff;
+}
+.online-overlay-avatar-img {
+  object-fit: cover;
+}
+
+.online-overlay-username {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.online-overlay-status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.online-overlay-status-dot.online { background: #43b581; }
+.online-overlay-status-dot.offline { background: #72767d; }
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MOD MODE — Layout customisation drag & drop
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.sidebar-mod-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+/* Expand scroll area to include scrolling join/create channel sections when screen height is short*/
+@media (max-height: 550px) {
+  .sidebar-mod-container {
+    overflow: auto;
+    display: block;
+  }
+}
+
+.mod-mode-active .mod-draggable {
+  cursor: move;
+  position: relative;
+  outline: 1px dashed transparent;
+  transition: outline-color 0.15s ease, background-color 0.15s ease;
+}
+
+.mod-mode-active .mod-draggable:hover {
+  outline-color: var(--accent);
+  background: color-mix(in srgb, var(--bg-secondary) 82%, var(--accent) 18%);
+}
+
+.mod-mode-active .mod-drag-over {
+  outline-color: var(--accent);
+}
+
+.mod-mode-active .mod-drop-above::before,
+.mod-mode-active .mod-drop-below::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 0.125rem;
+  background: var(--accent);
+  border-radius: 0.125rem;
+}
+
+.mod-mode-active .mod-drop-above::before { top: 2px; }
+.mod-mode-active .mod-drop-below::after { bottom: 2px; }
+
+.mod-mode-active .mod-dragging {
+  opacity: 0.6;
+}
+
+.mod-panel-target {
+  position: relative;
+}
+
+.mod-panel-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 0.375rem;
+  cursor: grab;
+  z-index: 40;
+  font-size: 0.875rem;
+  display: none;
+}
+
+.mod-mode-on .mod-panel-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mod-panel-handle.dragging {
+  cursor: grabbing;
+  opacity: 0.8;
+}
+
+.mod-snap-zone {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: auto;
+  border: 2px dashed var(--accent);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-secondary) 76%, var(--accent) 24%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mod-snap-zone.active {
+  background: color-mix(in srgb, var(--bg-secondary) 56%, var(--accent) 44%);
+}
+
+.mod-snap-zone.left { left: 0; top: 0; width: 5rem; height: 100vh; }
+.mod-snap-zone.right { right: 0; top: 0; width: 5rem; height: 100vh; }
+.mod-snap-zone.top { left: 0; top: 0; width: 100vw; height: 3.5rem; }
+.mod-snap-zone.bottom { left: 0; bottom: 0; width: 100vw; height: 3.5rem; }
+.mod-snap-zone.center {
+  left: 50%; top: 50%; width: 10rem; height: 5rem;
+  transform: translate(-50%, -50%);
+  border-radius: 0.75rem;
+}
+.mod-snap-zone.right-sidebar {
+  right: 0; top: 30%; width: 5rem; height: 40vh;
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+.mod-snap-zone.left-sidebar {
+  left: 0; top: 30%; width: 5rem; height: 40vh;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+#app[data-status-pos="top"] #status-bar {
+  order: -1;
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+#app[data-status-pos="bottom"] #status-bar {
+  order: 10;
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+}
+
+#app-body .server-bar[data-panel-pos="right"] {
+  order: 5;
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+
+#app-body .sidebar[data-panel-pos="right"] {
+  order: 4;
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+
+#app-body .server-bar[data-panel-pos="left"] { order: 0; }
+#app-body .sidebar[data-panel-pos="left"] { order: 1; }
+#app-body .main { order: 2; }
+/* Soundboard sidebar twins the voice/users panel — sits directly LEFT of it.
+   Default flex order with no explicit value is 0, which puts it at the far
+   LEFT of #app-body. Force it between main (2) and right-sidebar (4). */
+#app-body .sb-sidebar-panel { order: 3; }
+#app-body .right-sidebar { order: 4; }
+
+/* Right sidebar — snapped left */
+#app-body .right-sidebar[data-panel-pos="left"] {
+  order: 1;
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+#app-body .right-sidebar[data-panel-pos="left"] .right-sidebar-resize-handle {
+  left: auto; right: -3px;
+  cursor: col-resize;
+}
+#app-body .right-sidebar[data-panel-pos="right"] { order: 4; }
+
+/* Floating panel (center) — any panel */
+.mod-float {
+  position: fixed !important;
+  z-index: 500;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border-light) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
+  resize: both;
+  overflow: auto;
+}
+.right-sidebar.mod-float {
+  top: 80px; right: 24px;
+  width: 17.5rem; height: 26.25rem;
+  max-width: 50vw; max-height: 70vh;
+}
+
+.mod-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(12px);
+  opacity: 0;
+  z-index: 10000;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.mod-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SIDEBAR SPLIT — channels + DM panes with drag divider
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.sidebar-split {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+[data-channel-scroll="separate"] .sidebar-split {
+  display: flex;
+  overflow: hidden;
+}
+[data-channel-scroll="combined"] .sidebar-split {
+  display: block;
+  overflow: auto;
+}
+/* Short screen: use the expanded scrolling behavior regardless of mode */
+@media (max-height: 550px) {
+  [data-channel-scroll="separate"] .sidebar-split {
+    display: block;
+    overflow: auto;
+  }
+}
+
+/* Channels pane (top) */
+.sidebar-split .channel-section {
+  flex: 1 1 60%;
+  min-height: 5rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 1rem 0;
+  border-bottom: none;
+}
+.sidebar-split .channel-section .channel-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Collapsible channels header */
+.channels-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  transition: color 0.15s;
+}
+.channels-toggle:hover { color: var(--text-secondary); }
+/* Hover on organize buttons inside section headers */
+.channels-toggle #organize-channels-btn:hover,
+.dm-toggle #organize-dms-btn:hover {
+  opacity: 1 !important;
+  background: var(--bg-hover);
+}
+.channels-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 0.625rem;
+}
+.channels-toggle-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Drag handle between channels & DMs — blends with natural section border */
+.sidebar-split-handle {
+  height: 0;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 5;
+  border-top: 1px solid var(--border);
+  margin: 0 0.75rem;
+  padding: 0.25rem 0;
+  box-sizing: content-box;
+  transition: border-color 0.15s;
+}
+[data-channel-scroll="separate"] .sidebar-split-handle {
+  cursor: row-resize;
+}
+[data-channel-scroll="combined"] .sidebar-split-handle {
+  cursor: auto;
+}
+/* Short screen: use the expanded scrolling behavior regardless of mode */
+@media (max-height: 550px) {
+  [data-channel-scroll="separate"] .sidebar-split-handle {
+    cursor: auto;
+  }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   POLLS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.btn-poll {
+  width: 2.125rem;
+  height: 2.125rem;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.btn-poll:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+
+/* Burn-after-read input button (#5325) */
+.btn-burn {
+  width: 2.125rem;
+  height: 2.125rem;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 1.125rem;
+}
+.btn-burn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.btn-burn.active {
+  color: #ff6b35;
+  background: rgba(255, 107, 53, 0.15);
+}
+.btn-burn.active:hover {
+  color: #ff8c5a;
+  background: rgba(255, 107, 53, 0.25);
+}
+
+/* Burn-after-read message states */
+.message-burn-pending .message-content {
+  /* No left border — the flame icon is the indicator. The orange bar
+     looked noisy and inconsistent across full vs compact rows. */
+  padding-left: 0;
+}
+/* Row-level flame label shown on all unstarted burn messages (#5280) */
+.burn-pending-label {
+  font-size: 0.78em;
+  margin-left: 0.375rem;
+  opacity: 0.85;
+  cursor: default;
+  vertical-align: middle;
+}
+.message-inline-status .burn-pending-label {
+  margin-left: 0;
+}
+.message-burn-pending .message-header .burn-pending-label {
+  color: #ff6b35;
+}
+.message-inline-status .burn-pending-label {
+  color: #ff6b35;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  cursor: default;
+  user-select: none;
+  line-height: 1;
+}
+.burn-reveal-btn {
+  background: rgba(255, 107, 53, 0.12);
+  color: #ff6b35;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: var(--radius);
+  padding: 0.375rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all var(--transition);
+}
+.burn-reveal-btn:hover {
+  background: rgba(255, 107, 53, 0.22);
+  border-color: rgba(255, 107, 53, 0.5);
+}
+.message-burned .message-content {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* Poll widget inside messages */
+.poll-widget {
+  background: var(--bg-secondary, #2b2d31);
+  border: 1px solid var(--border, #3f4147);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-top: 0.375rem;
+  max-width: 25rem;
+}
+.poll-question {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary, #fff);
+}
+.poll-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-tertiary, #232428);
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
+  color: var(--text-primary, #fff);
+  font-size: 0.875rem;
+  text-align: left;
+  width: 100%;
+}
+.poll-option:hover {
+  border-color: var(--accent, #5865f2);
+}
+/* Picture on an option (#5648): sits above the label inside the same button */
+.poll-option.has-image { flex-wrap: wrap; }
+.poll-option-img {
+  position: relative; z-index: 1;
+  flex: 0 0 100%; width: 100%; max-height: 14rem; object-fit: cover;
+  border-radius: 0.3rem; margin-bottom: 0.4rem; display: block;
+}
+.poll-option-imgbtn {
+  flex: 0 0 auto; width: 2rem; height: 2rem; margin-left: 0.3rem;
+  border: 1px solid var(--border-light); border-radius: 0.3rem;
+  background: var(--bg-tertiary) center / cover no-repeat; color: var(--text-secondary);
+  cursor: pointer; font-size: 0.9rem; line-height: 1;
+}
+.poll-option-imgbtn.has-image { color: transparent; border-color: var(--accent); }
+/* A big picture poll in columns, square thumbnails, so 16 options fit on a
+   screen instead of one tall scroll (#5648) */
+.poll-options.poll-grid { display: grid; grid-template-columns: repeat(var(--poll-cols, 2), minmax(0, 1fr)); gap: 0.4rem; }
+.poll-grid .poll-option { flex-direction: column; align-items: stretch; }
+/* A picture of any shape fits inside its square instead of being cropped to
+   it, and a grid gets more room on a wide screen (#5648) */
+.poll-grid .poll-option-img { aspect-ratio: 1 / 1; height: auto; max-height: none; object-fit: contain; background: var(--bg-input, rgba(0,0,0,0.25)); }
+.poll-widget:has(.poll-grid) { max-width: min(100%, 42rem); }
+.poll-grid .poll-option-text { white-space: normal; }
+.poll-grid .poll-option-count { margin-left: 0; }
+.poll-option.poll-voted {
+  border-color: var(--accent, #5865f2);
+}
+.poll-option-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--accent, #5865f2);
+  opacity: 0.15;
+  border-radius: 0.3125rem;
+  transition: width 0.3s ease;
+  pointer-events: none;
+}
+.poll-voted .poll-option-bar {
+  opacity: 0.25;
+}
+.poll-option-text {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.poll-option-count {
+  position: relative;
+  z-index: 1;
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted, #949ba4);
+  white-space: nowrap;
+}
+.poll-footer {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #949ba4);
+}
+.poll-settings-info {
+  display: inline;
+  font-size: 0.75rem;
+  color: var(--text-muted, #949ba4);
+}
+
+/* Poll creation modal */
+.poll-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.poll-option-row {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+.poll-option-row .poll-option-input {
+  flex: 1;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-tertiary, #1e1f22);
+  border: 1px solid var(--border, #3f4147);
+  border-radius: 0.25rem;
+  color: var(--text-primary, #fff);
+  font-size: 0.875rem;
+}
+.poll-option-row .poll-option-input:focus {
+  border-color: var(--accent, #5865f2);
+  outline: none;
+}
+.poll-option-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted, #949ba4);
+  cursor: pointer;
+  font-size: 1.125rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+}
+.poll-option-remove:hover {
+  color: var(--danger, #ed4245);
+  background: rgba(237, 66, 69, 0.1);
+}
+.poll-settings-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.poll-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #b5bac1);
+  cursor: pointer;
+}
+.poll-checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent, #5865f2);
+}
+.sidebar-split-handle:hover,
+.sidebar-split-handle.dragging {
+  border-color: var(--accent);
+}
+
+/* DM pane (bottom) */
+.sidebar-split .dm-section-pane {
+  flex: 0 1 40%;
+  min-height: 3.75rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0 1rem;
+  border-bottom: none;
+  transition: flex 0.25s ease, min-height 0.25s ease, opacity 0.2s ease;
+}
+.dm-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.25rem 0;
+}
+
+/* ─── Collapse arrow positioning override ─────────────── */
+/* (moved to main .channel-collapse-arrow block above) */
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ORGANIZE MODAL — styled
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.organize-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.5rem;
+}
+.organize-toolbar-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.organize-select {
+  padding: 0.3125rem 0.5rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: var(--bg-input, rgba(255,255,255,0.06));
+  color: var(--text-primary, #eee);
+  font-size: 0.82rem;
+  cursor: pointer;
+  outline: none;
+  min-width: 0;
+}
+.organize-select:focus { border-color: var(--accent); }
+.organize-select option {
+  background: var(--bg-secondary, #1e1e2e);
+  color: var(--text-primary, #eee);
+}
+
+.organize-list {
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 0.5rem;
+  max-height: 17.5rem;
+  overflow-y: auto;
+  margin: 0.375rem 0;
+}
+
+.organize-tag-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  background: rgba(255,255,255,0.02);
+  font-weight: 600;
+  user-select: none;
+}
+.organize-tag-header.selected {
+  background: rgba(107,79,219,0.22);
+  opacity: 1;
+  cursor: pointer;
+}
+.organize-tag-header:hover:not(.selected) {
+  background: rgba(255,255,255,0.04);
+  opacity: 0.7;
+  cursor: pointer;
+}
+.organize-tag-header .tag-sort-select {
+  margin-left: auto;
+  padding: 0.0625rem 0.25rem;
+  font-size: 0.65rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  background: var(--bg-input, rgba(255,255,255,0.04));
+  color: var(--text-muted);
+  cursor: pointer;
+  outline: none;
+}
+.organize-tag-header .tag-sort-select option {
+  background: var(--bg-secondary, #1e1e2e);
+  color: var(--text-primary, #eee);
+}
+
+.organize-item {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.12s;
+}
+.organize-item:hover { background: rgba(255,255,255,0.04); }
+.organize-item.selected { background: rgba(107,79,219,0.22); }
+.organize-item .organize-tag-badge {
+  opacity: 0.45;
+  font-size: 0.72rem;
+  background: rgba(255,255,255,0.07);
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.organize-drill-hint {
+  font-size: 0.65rem;
+  opacity: 0.3;
+  flex-shrink: 0;
+  margin-left: 0.125rem;
+  transition: opacity 0.12s;
+}
+.organize-has-subs:hover .organize-drill-hint {
+  opacity: 0.8;
+}
+.organize-has-subs {
+  cursor: default;
+}
+.organize-has-subs:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.organize-controls {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  margin: 0.5rem 0;
+  flex-wrap: wrap;
+}
+.organize-spacer { flex: 1; min-width: 0.5rem; }
+.organize-tag-group {
+  display: flex;
+  gap: 0.3125rem;
+  align-items: center;
+}
+.organize-tag-input {
+  width: 6.875rem;
+  height: 1.875rem;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: var(--bg-input, rgba(255,255,255,0.06));
+  color: var(--text-primary, #eee);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.organize-tag-input:focus { border-color: var(--accent); }
+.organize-tag-input::placeholder { color: var(--text-muted, #888); opacity: 0.5; }
+.organize-tag-btn {
+  padding: 0.3125rem 0.5rem !important;
+  font-size: 0.78rem !important;
+}
+.organize-tag-btn.danger { color: var(--danger, #ff4444) !important; }
+
+/* Drag handles + drag state for organize modal items and category headers */
+.organize-tag-header[draggable="true"],
+.organize-item[draggable="true"] {
+  cursor: grab;
+}
+.organize-tag-header[draggable="true"]:active,
+.organize-item[draggable="true"]:active { cursor: grabbing; }
+.organize-tag-header.org-dragging,
+.organize-item.org-dragging {
+  opacity: 0.4;
+}
+.organize-drop-indicator {
+  height: 0.125rem;
+  background: var(--accent, #7c5cfc);
+  margin: 0 0.375rem;
+  border-radius: 0.125rem;
+  pointer-events: none;
+}
+.organize-tag-header.org-drop-above {
+  box-shadow: inset 0 2px 0 0 var(--accent, #7c5cfc);
+}
+.organize-tag-header.org-drop-below {
+  box-shadow: inset 0 -2px 0 0 var(--accent, #7c5cfc);
+}
+.organize-tag-drag {
+  opacity: 0.45;
+  font-size: 0.85rem;
+  cursor: grab;
+  user-select: none;
+  margin-right: 0.25rem;
+}
+

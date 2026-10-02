@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'modules', 'app-channels.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'modules', 'app-channel-unread.js'), 'utf8');
 
 test('the edge scroller exists and walks up to the element that really scrolls', () => {
   assert.match(src, /_makeEdgeScroller\(listEl, edge = 48, maxSpeed = 18\)/);

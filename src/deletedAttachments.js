@@ -35,6 +35,8 @@ function purgeDeletedAttachments(dir, retentionDays, now = Date.now()) {
   const days = resolveDeletedRetentionDays(retentionDays);
   const cutoff = now - days * 24 * 60 * 60 * 1000;
   let removed = 0;
+  let failed = 0;
+  let firstError = '';
 
   const walk = (folder, isRoot) => {
     let entries;
@@ -51,15 +53,20 @@ function purgeDeletedAttachments(dir, retentionDays, now = Date.now()) {
             removed++;
           }
         }
-      } catch { /* skip this entry */ }
+      } catch (err) {
+        // Skip it so one locked file cannot stop the sweep; counted and reported below.
+        failed++;
+        if (!firstError) firstError = err.message;
+      }
     }
     if (!isRoot) {
-      try { if (fs.readdirSync(folder).length === 0) fs.rmdirSync(folder); } catch { /* leave it */ }
+      try { if (fs.readdirSync(folder).length === 0) fs.rmdirSync(folder); } catch { /* empty folder in use: harmless, tried again next sweep */ }
     }
   };
 
   if (!dir || !fs.existsSync(dir)) return 0;
   walk(dir, true);
+  if (failed) console.warn(`deleted-attachments purge: ${failed} file(s) could not be removed, will retry next run (${firstError})`);
   return removed;
 }
 

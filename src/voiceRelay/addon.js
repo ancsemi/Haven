@@ -21,6 +21,7 @@ const INSTALL_TIMEOUT_MS = 15 * 60 * 1000;
 
 let cached = null;
 let installing = null;
+let loadErrorLogged = false;
 
 /** mediasoup if it is installed anywhere we look, else null. */
 function loadMediasoup() {
@@ -29,7 +30,14 @@ function loadMediasoup() {
     try {
       cached = require(id);
       return cached;
-    } catch { /* not there */ }
+    } catch (err) {
+      // Not installed is the normal answer. Installed but unloadable (for
+      // example built for another Node version) is worth saying, once.
+      if (err.code !== 'MODULE_NOT_FOUND' && !loadErrorLogged) {
+        loadErrorLogged = true;
+        console.warn('[voice-relay] mediasoup is installed but failed to load:', err.message);
+      }
+    }
   }
   return null;
 }
@@ -107,7 +115,7 @@ function install(onLine = () => {}) {
     };
     child.stdout.on('data', take);
     child.stderr.on('data', take);
-    const timer = setTimeout(() => { try { child.kill(); } catch { /* gone */ } }, INSTALL_TIMEOUT_MS);
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* installer already exited */ } }, INSTALL_TIMEOUT_MS);
     child.on('error', (err) => { clearTimeout(timer); resolve({ error: err.message }); });
     child.on('close', (code) => {
       clearTimeout(timer);

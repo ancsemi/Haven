@@ -25,6 +25,7 @@ const SEEDED = [
   'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'wikipedia.org',
   'imgur.com', 'giphy.com', 'tenor.com', 'spotify.com', 'soundcloud.com',
   'steamcommunity.com', 'steampowered.com', 'last.fm', 'archive.org',
+  'haven-app.com',
 ];
 
 const POLICY = {

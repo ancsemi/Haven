@@ -19,9 +19,10 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
-// _formatContent lives in app-utilities; the escaping helpers it leans on live
-// in app-context. The real app mixes both into one object, so the test does too.
-const MODULES = ['app-utilities.js', 'app-context.js'].map(name => ({
+// _formatContent lives in app-message-content, the time helpers in app-utilities
+// and the escaping helpers in app-context. The real app mixes them into one
+// object, so the test does too.
+const MODULES = ['app-utilities.js', 'app-message-content.js', 'app-context.js'].map(name => ({
   name,
   source: fs.readFileSync(path.join(ROOT, 'public/js/modules', name), 'utf8'),
 }));

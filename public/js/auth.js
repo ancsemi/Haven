@@ -109,7 +109,7 @@
   fetch('/api/version').then(r => r.json()).then(d => {
     const el = document.getElementById('auth-version');
     if (el && d.version) el.textContent = 'v' + d.version;
-  }).catch(() => {});
+  }).catch(() => { /* the version label is cosmetic: leave it blank */ });
 
   // ── Apply server default theme for first-time visitors ──
   // Only applies when the user has no personal theme preference stored locally.
@@ -164,7 +164,7 @@
         section.style.display = 'block';
       }
     }
-  }).catch(() => {});
+  }).catch((err) => { console.warn('[Auth] could not load the public config', err); });
 
   // ── EULA ─────────────────────────────────────────────
   const ageCheckbox  = document.getElementById('age-checkbox');
@@ -682,7 +682,7 @@
           }
         }
       }
-    } catch { /* ignore */ }
+    } catch { /* corrupt or blocked storage: no recent servers to suggest */ }
 
     let ssoAuthCode = null;
     let ssoServerUrl = null;
@@ -973,7 +973,7 @@
   function _resetCaptcha(which) {
     if (!window.turnstile) return;
     const id = which === 'sso' ? _turnstileSso : _turnstileMain;
-    if (id !== null && id !== undefined) { try { window.turnstile.reset(id); } catch { /* noop */ } }
+    if (id !== null && id !== undefined) { try { window.turnstile.reset(id); } catch { /* widget already removed */ } }
   }
 
   // ── Register ──────────────────────────────────────────
@@ -995,7 +995,7 @@
       if (info && info.captchaEnabled && info.turnstileSiteKey) {
         _initRegistrationCaptcha(info.turnstileSiteKey);
       }
-    } catch { /* ignore */ }
+    } catch (err) { console.warn('[Auth] could not load registration info', err); }
   }
   _initRegistrationForm();
 
@@ -1072,7 +1072,7 @@
         const sec = document.getElementById('guest-login-section');
         if (sec) sec.style.display = '';
       }
-    } catch { /* ignore */ }
+    } catch (err) { console.warn('[Auth] could not check guest access', err); }
   })();
 
   // ── (#12) SSO button — only when the server reports OIDC usable ──
@@ -1086,7 +1086,7 @@
       const btn = document.getElementById('oidc-login-btn');
       if (btn && cfg.oidc_button_label) btn.textContent = cfg.oidc_button_label;
       if (sec) sec.style.display = '';
-    } catch { /* ignore */ }
+    } catch (err) { console.warn('[Auth] could not check single sign-on', err); }
   })();
 
   const guestShowBtn = document.getElementById('guest-login-show-btn');

@@ -912,7 +912,11 @@ module.exports = function register(socket, ctx) {
       for (const [, s] of io.sockets.sockets) {
         try {
           if (ipMatches(socketClientIp(s), ip)) { s.emit('banned', { reason }); s.disconnect(true); }
-        } catch {}
+        } catch (err) {
+          // Keep sweeping the rest. This client may stay connected until it
+          // reloads; the ban still blocks its next connection.
+          console.warn('ban-ip: could not check or disconnect a socket:', err.message);
+        }
       }
       socket.emit('error-msg', `Banned IP ${ip}`);
       _audit({ actor: socket.user, action: 'ip_ban',

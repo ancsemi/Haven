@@ -1,0 +1,790 @@
+﻿/* Haven core styles, part 9 of 16: encryption prompts, spoilers, hidden pictures, DM notices and admin windows. Loaded in order by style.css; the order matters. */
+/* ── E2E Password Recovery Banner ─── */
+#e2e-recovery-banner {
+  background: var(--bg-tertiary);
+  border-bottom: 2px solid var(--accent);
+  padding: 0.5rem 1rem;
+  z-index: 50;
+  flex-shrink: 0;
+}
+.e2e-recovery-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+#e2e-recovery-pw {
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  width: 11.25rem;
+}
+#e2e-recovery-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.125rem 0.375rem;
+}
+#e2e-recovery-dismiss:hover { color: var(--text-primary); }
+
+/* ── E2E Key Reset Confirmation Modal ─── */
+.e2e-reset-modal {
+  max-width: 28.75rem;
+  text-align: center;
+}
+.e2e-reset-modal h3 {
+  color: var(--danger, #f44);
+  margin-bottom: 0.75rem;
+}
+.e2e-reset-warning {
+  background: rgba(255, 68, 68, 0.08);
+  border: 1px solid rgba(255, 68, 68, 0.25);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin: 0.75rem 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  text-align: left;
+  line-height: 1.6;
+}
+.e2e-reset-warning strong {
+  color: var(--danger, #f44);
+}
+.e2e-reset-warning ul {
+  margin: 0.5rem 0 0 1rem;
+  padding: 0;
+}
+.e2e-reset-warning ul li {
+  margin-bottom: 0.25rem;
+}
+.e2e-confirm-type {
+  margin: 1rem 0 0.75rem;
+}
+.e2e-confirm-type input {
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  width: 100%;
+  max-width: 16.25rem;
+  text-align: center;
+}
+.e2e-reset-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+.btn-danger {
+  background: var(--danger, #f44);
+  color: var(--danger-text);
+  border: none;
+  padding: 0.375rem 1.125rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  transition: opacity 0.15s;
+}
+.btn-danger:hover {
+  filter: brightness(1.15);
+}
+/* E2E reset button: starts disabled until user types RESET */
+#e2e-reset-confirm-btn {
+  opacity: 0.4;
+  pointer-events: none;
+}
+#e2e-reset-confirm-btn.enabled {
+  opacity: 1;
+  pointer-events: auto;
+}
+#e2e-reset-confirm-btn.enabled:hover {
+  filter: brightness(1.15);
+}
+
+/* ── E2E Lock Menu Dropdown ─── */
+.e2e-menu-wrapper {
+  position: relative;
+}
+/* The lock stands out when a DM is not encrypted or the partner's key changed. */
+#e2e-menu-btn.e2e-off,
+#e2e-menu-btn.e2e-changed {
+  background: rgba(231, 76, 60, 0.15);
+  border-radius: var(--radius-sm, 4px);
+}
+.e2e-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1050;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  min-width: 13.125rem;
+  padding: 0.375rem 0;
+  margin-top: 0.25rem;
+}
+.e2e-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.875rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.e2e-dropdown-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+.e2e-dropdown-item.e2e-danger {
+  color: var(--danger, #f44);
+}
+.e2e-dropdown-item.e2e-danger:hover {
+  background: rgba(255, 68, 68, 0.10);
+}
+
+/* ── E2E Password Prompt Modal ─── */
+.e2e-password-modal {
+  max-width: 23.75rem;
+  text-align: center;
+}
+.e2e-password-modal h3 {
+  margin-bottom: 0.5rem;
+}
+.e2e-pw-desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+.e2e-pw-field {
+  margin-bottom: 0.75rem;
+}
+.e2e-pw-field input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  text-align: center;
+  letter-spacing: 2px;
+}
+.e2e-pw-field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.e2e-pw-error {
+  color: var(--danger, #f44);
+  font-size: 0.75rem;
+  margin-bottom: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  background: rgba(255, 68, 68, 0.08);
+  border-radius: var(--radius-sm);
+}
+.e2e-pw-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+.e2e-pw-actions .btn-accent:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── E2E key-change system notice ─── */
+.system-message.e2e-notice {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.75rem;
+  padding: 0.25rem 1rem;
+  opacity: 0.7;
+  text-align: center;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   INLINE EDIT TEXTAREA
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.edit-textarea {
+  width: 100%;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: inherit;
+  resize: none;
+  max-height: 7.5rem;
+  line-height: 1.4;
+  outline: none;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.edit-save-btn, .edit-cancel-btn {
+  padding: 0.1875rem 0.625rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition);
+}
+
+.edit-save-btn {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.edit-save-btn:hover { background: var(--accent-hover); }
+
+.edit-cancel-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.edit-cancel-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.edit-emoji-btn {
+  padding: 0.1875rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  background: var(--bg-tertiary);
+  transition: all var(--transition);
+  line-height: 1;
+}
+.edit-emoji-btn:hover { background: var(--bg-hover); }
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SPOILER TEXT
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.spoiler {
+  background: var(--text-muted);
+  color: transparent;
+  border-radius: 0.1875rem;
+  padding: 0 0.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.spoiler.revealed {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  user-select: auto;
+}
+
+/* Custom emoji render as <img>, which `color: transparent` can't hide, so
+   they'd otherwise show through an unrevealed text spoiler. Keep them laid
+   out (the blur box stays the right size) but invisible until revealed. */
+.spoiler:not(.revealed) .custom-emoji {
+  visibility: hidden;
+}
+/* Coloured text and links set their own colour, which showed straight
+   through the spoiler box (#5661). */
+.spoiler:not(.revealed) * { color: transparent !important; }
+
+/* Inline code sets its own color and background, so `color: transparent`
+   can't hide it and it would show through an unrevealed spoiler. It's a
+   single line, so the spoiler's own bar covers it — just hide the element
+   (keeping its layout box) until revealed. */
+.spoiler:not(.revealed) .inline-code {
+  visibility: hidden;
+}
+
+/* Fenced code blocks are tall block-level boxes, but .spoiler is an inline
+   span whose background only paints the first and last line — the middle of
+   the block would be hidden-but-uncovered (transparent) instead of showing a
+   spoiler bar. So rather than hide the block, repaint it as the bar itself:
+   the muted background, transparent text, no border, and no language tag,
+   until revealed. */
+.spoiler:not(.revealed) .code-block {
+  background: var(--text-muted);
+  border-color: transparent;
+  color: transparent;
+}
+.spoiler:not(.revealed) .code-block code {
+  color: transparent;
+}
+.spoiler:not(.revealed) .code-block-lang {
+  visibility: hidden;
+}
+
+/* Spoiler images (sender marked the image as a spoiler) — blurred behind a
+   label until clicked. The inner .chat-image is the actual image. */
+.spoiler-media {
+  position: relative;
+  display: inline-block;
+  margin-top: 0.25rem;
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  vertical-align: top;
+}
+.spoiler-media .chat-image,
+.spoiler-media .e2e-img-pending,
+.spoiler-media .e2e-img-loading {
+  margin-top: 0;
+  filter: blur(22px);
+  transform: scale(1.05);
+  transition: filter 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+.spoiler-media-tag {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 62.4375rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.spoiler-media.revealed {
+  cursor: default;
+}
+.spoiler-media.revealed .chat-image,
+.spoiler-media.revealed .e2e-img-pending,
+.spoiler-media.revealed .e2e-img-loading {
+  filter: none;
+  transform: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.spoiler-media.revealed .spoiler-media-tag {
+  display: none;
+}
+
+/* A link wrapped in a || spoiler || carries the spoiler onto its embed card:
+   blur the card behind the shared spoiler tag until it's clicked to reveal.
+   Only the children are blurred and made click-through, so the card itself
+   catches the reveal click — same mechanic as .spoiler-media above. */
+.link-preview.lp-spoiler {
+  position: relative;
+  cursor: pointer;
+}
+.link-preview.lp-spoiler:not(.revealed) {
+  overflow: hidden;
+}
+.link-preview.lp-spoiler:not(.revealed) > *:not(.spoiler-media-tag) {
+  filter: blur(22px);
+  transform: scale(1.02);
+  pointer-events: none;
+}
+.link-preview.lp-spoiler.revealed {
+  cursor: default;
+}
+.link-preview.lp-spoiler.revealed > .spoiler-media-tag {
+  display: none;
+}
+
+/* Hidden image placeholder (viewer chose "Hide Image") — a compact pill that
+   restores the image when clicked. */
+.hidden-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.hidden-image:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* A link in a DM whose domain the server's link policy does not allow.
+   Rendered as plain text instead of an anchor, since an encrypted DM is
+   ciphertext to the server and can only be judged here. (#5483) */
+.blocked-link {
+  color: var(--text-muted);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+  word-break: break-all;
+}
+.blocked-link-badge {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--danger, #e5534b);
+  border-radius: var(--radius);
+  color: var(--danger, #e5534b);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+/* One-time identity disclosure at the top of a DM. Haven doesn't verify who
+   anyone is, so this reminds people to check before trusting a name. z-index
+   keeps it above the DM PiP's decorative banner backdrop. */
+.dm-safety-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
+  margin: 0.5rem 0.5rem 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent, #5865f2);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+.dm-safety-icon { flex: 0 0 auto; font-size: 0.95rem; }
+.dm-safety-text { flex: 1 1 auto; }
+.dm-safety-dismiss {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.dm-safety-dismiss:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Spoiler toggle on a queued image thumbnail */
+.image-queue-spoiler {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  width: 1.125rem;
+  height: 1.125rem;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  font-size: 0.6875rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.image-queue-thumb:hover .image-queue-spoiler,
+.image-queue-thumb.is-spoiler .image-queue-spoiler {
+  opacity: 1;
+}
+.image-queue-spoiler:hover {
+  background: var(--accent);
+}
+.image-queue-thumb.is-spoiler {
+  border-color: var(--accent);
+}
+.image-queue-thumb.is-spoiler img {
+  filter: blur(4px);
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   /me ACTION TEXT
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.action-text {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MARKDOWN / INLINE CODE
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.inline-code {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ADMIN PANEL / MODERATION
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.admin-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Admin save bar — fixed at bottom of settings modal */
+.admin-save-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1.5rem 1rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  z-index: 10;
+  flex-shrink: 0;
+}
+.btn-admin-save {
+  width: 100%;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: background 0.15s, transform 0.1s;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.btn-admin-save:hover { filter: brightness(1.15); }
+.btn-admin-save:active { transform: scale(0.97); }
+
+.btn-full {
+  width: 100%;
+  text-align: center;
+}
+
+.btn-danger-fill {
+  background: var(--danger) !important;
+  color: var(--danger-text) !important;
+}
+
+.btn-danger-fill:hover {
+  background: #d93636 !important;
+}
+
+.notif-divider {
+  height: 0.0625rem;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+
+.user-admin-actions {
+  display: none;
+  gap: 0.125rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.user-item:hover .user-admin-actions {
+  display: flex;
+}
+
+.user-action-btn {
+  width: 1.375rem;
+  height: 1.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+  border: none;
+  transition: background var(--transition);
+  padding: 0;
+}
+
+.user-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+/* ── Context menu scroll fallback (#5286) ──
+   Floating menus (right-click, gear, channel, image, etc.) get capped to the
+   viewport with overflow-y: auto so long menus scroll instead of clipping
+   or running off-screen. The 16px margin keeps a little breathing room.
+   .user-context-menu is omitted because its hover submenu would get clipped
+   by overflow:auto; it stays short on its own. */
+.channel-ctx-menu,
+.image-context-menu,
+.channel-functions-panel {
+  max-height: calc(100vh - 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ── Transfer Admin Modal ────────────────── */
+.transfer-admin-modal {
+  max-width: 26.25rem;
+  width: 90vw;
+}
+.transfer-admin-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  background: rgba(233,69,96,0.08);
+  border: 1px solid rgba(233,69,96,0.2);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+.transfer-admin-warning-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.transfer-admin-warning-text {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.transfer-admin-warning-text strong {
+  color: var(--text-primary);
+}
+.transfer-admin-note {
+  font-size: 0.75rem;
+  color: var(--danger);
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.transfer-admin-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  display: none;
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: rgba(233,69,96,0.08);
+  border-radius: var(--radius-sm);
+}
+
+.user-item.offline { opacity: 0.5; }
+.user-dot.away { background: var(--text-muted); border-radius: 0.125rem 0.125rem 50% 50%; }
+
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   BANS MODAL
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.modal-wide { max-width: 45rem; width: 95vw; }
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SETTINGS POPOUT MODAL
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem 0.75rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 10;
+  border-bottom: 1px solid var(--border);
+}
+
+.forum-modal-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.settings-tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+  margin-right: 0.5rem;
+}
+.settings-tab {
+  padding: 0.3125rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.settings-tab:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.settings-tab.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.settings-close-btn { margin-left: 0; }
+.modal-close { margin-left: auto; }
+
+.settings-header h3,
+.forum-modal-header h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-heading), var(--font-emoji);
+  margin: 0;
+}
+
+.settings-close-btn,
+.modal-close {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.settings-close-btn:hover,
+.modal-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+

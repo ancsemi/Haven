@@ -278,7 +278,7 @@ async function resolveMusicMetadata(url) {
         return { title: data.title || '', duration: '' };
       }
     }
-  } catch {}
+  } catch { /* metadata is optional: a slow or offline lookup just leaves the title blank */ }
   return { title: '', duration: '' };
 }
 

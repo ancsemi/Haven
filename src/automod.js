@@ -79,21 +79,29 @@ function settings() {
   if (_cache.settings && now < _cache.expires) return _cache.settings;
 
   const s = Object.assign({}, DEFAULTS);
+  let readFailed = false;
   try {
     const rows = getDb().prepare(
       "SELECT key, value FROM server_settings WHERE key LIKE 'automod_%'"
     ).all();
     for (const r of rows) s[r.key] = r.value;
-  } catch { /* pre-migration DB: fall back to defaults (all off) */ }
+  } catch (err) {
+    // Falls back to defaults (all off). Cached, so this logs at most every CACHE_MS.
+    console.warn('automod: could not read settings, filtering is off:', err.message);
+    readFailed = true;
+  }
 
   let allow = new Map(), deny = new Map();
   try {
     for (const r of getDb().prepare('SELECT domain, mode, include_subdomains FROM automod_domains').all()) {
       (r.mode === 'deny' ? deny : allow).set(r.domain, r.include_subdomains !== 0);
     }
-  } catch { /* table not created yet */ }
+  } catch (err) {
+    console.warn('automod: could not read domain lists:', err.message);
+    readFailed = true;
+  }
 
-  _cache = { settings: s, allow, deny, words: compileWordGroups(s.automod_words), expires: now + CACHE_MS };
+  _cache = { settings: s, allow, deny, words: compileWordGroups(s.automod_words), readFailed, expires: now + CACHE_MS };
   return s;
 }
 
@@ -133,7 +141,8 @@ const extractUrls = rules.extractUrls;
 // Content check
 // ══════════════════════════════════════════════════════════════════════
 
-// ctx: { userId, isAdmin, effectiveLevel, createdAt, surface }
+// ctx: { userId, isAdmin, effectiveLevel, createdAt, surface, markdown }
+// markdown: the text is a chat message, so bare addresses inside code do not count.
 // surface is one of 'message' | 'edit' | 'dm' | 'profile' | 'channel'.
 //
 // Returns { ok: true } or { ok: false, rule, message, host, excerpt }.
@@ -176,7 +185,9 @@ function checkText(text, ctx = {}) {
     }
   }
 
-  const links = extractUrls(text);
+  // A chat message's code only counts its full links (see automod-rules.js).
+  const linkOpts = { markdown: !!ctx.markdown };
+  const links = extractUrls(text, linkOpts);
   if (!links.length) return { ok: true };
 
   // ── New-account link gate ──
@@ -202,7 +213,7 @@ function checkText(text, ctx = {}) {
 
   // Domain policy itself is evaluated by the shared rules module, so the
   // server and the browser reach identical verdicts on identical input.
-  const hit = rules.checkText(text, policy());
+  const hit = rules.checkText(text, policy(), linkOpts);
   if (hit) {
     return {
       ok: false,
@@ -283,6 +294,10 @@ function recordInfraction(userId, verdict, channelId) {
 // merely scrolls past it, with no click involved.
 function previewAllowed(url) {
   const s = settings();
+  // Messages still go through when the settings cannot be read (blocking all
+  // chat would be worse), but a preview is optional: without knowing the
+  // admin's link policy, show none rather than fetch a host they may not allow.
+  if (_cache.readFailed) return false;
   if (!enabled()) return true;
   if (s.automod_preview_allowlist_only !== 'true') return true;
   if (s.automod_link_mode === 'off') return true;

@@ -317,7 +317,7 @@ test('HTML translations preserve required code and emphasis markup', () => {
 });
 
 test('the custom language picker preserves visible focus and listbox keyboard navigation', () => {
-  const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+  const css = require('./coreCss').readCoreCss();
   assert.match(css, /\.lang-picker-btn:focus-visible,[\s\S]*\.lang-picker-item:focus-visible/);
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape']) {
     assert.match(I18N_SOURCE, new RegExp(`event\\.key === '${key}'`));

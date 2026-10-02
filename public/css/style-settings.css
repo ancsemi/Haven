@@ -1,0 +1,903 @@
+﻿/* Haven core styles, part 10 of 16: the Settings layout, games, toggles and desktop app preferences. Loaded in order by style.css; the order matters. */
+/* ── Settings Layout (Nav + Body) ─────────────────────── */
+.settings-layout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.settings-nav {
+  width: 10.75rem;      /* 172px at Normal; scales so labels don't wrap when the font grows */
+  min-width: 10.75rem;
+  padding: 0.5rem 0 0.5rem 0.5rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-nav-group {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 0.625rem 0.625rem 0.25rem;
+  user-select: none;
+}
+
+.settings-nav-item {
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-bottom: 0.0625rem;
+  /* Wrap rather than truncate. The nav is a fixed width the user can't drag,
+     so an ellipsis here is unrecoverable — there is no way to reveal the rest
+     of the label. Two short lines beat "Activity & Conne…".
+     The hanging indent keeps a wrapped second line aligned with the text
+     instead of starting underneath the leading emoji. */
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+  padding-left: 1.625rem;
+  text-indent: -16px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-nav-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Section headers in the settings nav. Not clickable — they exist so ~20 flat
+   entries read as five short groups instead of one long list. */
+.settings-nav-group-label {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  padding: 0.625rem 0.625rem 0.1875rem;
+  margin-top: 0.125rem;
+  user-select: none;
+  pointer-events: none;
+}
+.settings-nav-group-label:first-child { margin-top: 0; padding-top: 0.125rem; }
+
+.settings-nav-item.active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.settings-nav-group.settings-nav-admin {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  min-width: 0;
+}
+
+.modal-settings {
+  /* Opens at the original 640px. `resize: both` gives a drag handle, but
+     max-width is what actually caps it — it used to be 640px too, so dragging
+     stopped dead at the default size. Raising only max-width keeps the
+     familiar default while letting the handle go somewhere. */
+  width: min(40rem, 92vw);       /* 640px at Normal; scales with the font setting */
+  max-width: min(1200px, 95vw);
+  min-width: 26.25rem;           /* 420px at Normal */
+  max-height: 85vh;
+  min-height: 20rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  resize: both;
+}
+
+/* ── Activities / Games Launcher ──────────────────────── */
+.modal-activities {
+  max-width: 32.5rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 0;
+}
+.activities-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0.75rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 10;
+  border-bottom: 1px solid var(--border);
+}
+.activities-header h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+.activities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem;
+}
+.activity-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+.activity-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.activity-card-icon {
+  font-size: 2.25rem;
+  line-height: 1;
+}
+.activity-card-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.activity-card-desc {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+.activity-card-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.flash-install-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.flash-install-banner .btn-sm { pointer-events: auto; flex-shrink: 0; }
+
+/* ── Iframe Game Overlay ──────────────────────────────── */
+.game-iframe-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
+.game-iframe-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.game-iframe-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.game-iframe-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.game-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: var(--bg-primary);
+}
+
+/* Win95 overrides for activities */
+[data-theme="win95"] .modal-activities { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; }
+[data-theme="win95"] .activities-header { background: linear-gradient(90deg, #000080, #1084d0); padding: 0.25rem 0.5rem; border-bottom: none; }
+[data-theme="win95"] .activities-header h3 { color: #fff; font-size: 0.75rem; font-weight: 700; margin: 0; background: none; font-family: "MS Sans Serif","Microsoft Sans Serif",Tahoma,Arial,sans-serif, var(--font-emoji); }
+[data-theme="win95"] .activity-card { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; }
+[data-theme="win95"] .activity-card:hover { border: 3px inset #808080; transform: none; box-shadow: none; }
+[data-theme="win95"] .game-iframe-header { background: linear-gradient(90deg, #000080, #1084d0); border-bottom: 2px solid #808080; }
+[data-theme="win95"] .game-iframe-title { color: #fff; font-family: "MS Sans Serif","Microsoft Sans Serif",Tahoma,Arial,sans-serif, var(--font-emoji); font-size: 0.75rem; }
+
+.settings-section {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.settings-section:last-child { border-bottom: none; }
+
+.settings-subsection { margin-top: 0.6rem; }
+
+/* ── Admin section divider ── */
+.admin-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+}
+.admin-divider-line {
+  flex: 1;
+  height: 0.125rem;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+.admin-divider-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.admin-save-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(var(--accent-rgb, 124,58,237), 0.12);
+  border: 1px solid rgba(var(--accent-rgb, 124,58,237), 0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  margin-bottom: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.settings-section-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-bottom: 0.875rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.settings-section-subtitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.625rem;
+  margin-top: 1rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Plugin & Theme Cards ── */
+.plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.plugin-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.75rem;
+  background: var(--bg-tertiary, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 0.5rem;
+  transition: background 0.15s;
+}
+.plugin-card:hover { background: var(--bg-hover, rgba(255,255,255,0.06)); }
+.plugin-card-info { flex: 1; min-width: 0; }
+.plugin-card-name {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plugin-card-desc {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  margin-top: 0.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plugin-card-meta {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  margin-top: 0.125rem;
+}
+.plugin-empty {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0;
+}
+.plugin-empty code {
+  background: var(--bg-tertiary);
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.1875rem;
+  font-size: 0.6875rem;
+}
+/* Toggle switch */
+.plugin-toggle {
+  position: relative;
+  display: inline-block;
+  width: 2.5rem;
+  height: 1.375rem;
+  flex-shrink: 0;
+  margin-left: 0.75rem;
+}
+.plugin-toggle input { opacity: 0; width: 0; height: 0; }
+.plugin-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg-tertiary, #333);
+  border-radius: 0.6875rem;
+  transition: background 0.2s;
+}
+.plugin-toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.plugin-toggle input:checked + .plugin-toggle-slider {
+  background: var(--accent, #7c5cfc);
+}
+.plugin-toggle input:checked + .plugin-toggle-slider::before {
+  transform: translateX(18px);
+}
+
+.settings-number-input {
+  width: 4.375rem;
+  padding: 0.25rem 0.375rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.settings-hint {
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  display: block;
+  /* Was -2px, which tucked the hint up into the row above. That was invisible
+     next to a 16px checkbox but collides with a 20px switch. */
+  margin-top: 0;
+}
+
+/* A hint sits under its control row but spans the full panel width, so its
+   text used to run underneath the control on the right. Reserve that column so
+   the text wraps before reaching it instead of sliding under it. */
+.toggle-row + .settings-hint,
+.select-row + .settings-hint,
+.checkbox-row + .settings-hint,
+.volume-row + .settings-hint {
+  padding-right: 2.75rem;   /* 44px */
+}
+.settings-hint.error { color: #e94560; }
+.settings-hint.success { color: #43b581; }
+/* Invite Links closes out the Server Invite Code section, so it carries a
+   divider. For someone holding only invite_users the rest of that section is
+   hidden and the block stands alone, leaving a rule with nothing above it to
+   separate — .invite-links-flush drops it. (#5470) */
+#invite-links-block {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+#invite-links-block.invite-links-flush {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+#invite-new-expiry { width: 6.5rem }
+
+/* Note on a setting that also has a value in the server's environment, so the
+   admin can see which of the two is actually live. (#5489) */
+.settings-hint.env-setting-hint {
+  color: var(--text-secondary);
+  border-left: 2px solid var(--accent);
+  padding-left: 0.5rem;
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
+.settings-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.875rem;
+  line-height: 1.45;
+}
+
+/* ── Desktop Shortcuts table ──────────────────────────── */
+.shortcut-table { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.625rem; }
+.shortcut-row {
+  display: flex; align-items: center; gap: 0.625rem;
+  padding: 0.375rem 0.5rem; border-radius: var(--radius-sm);
+  background: var(--bg-tertiary); border: 1px solid var(--border-color);
+}
+.shortcut-row.recording {
+  border-color: var(--accent); background: rgba(107,79,219,.1);
+}
+.shortcut-label { flex: 1; font-size: 0.75rem; color: var(--text-primary); }
+.shortcut-key {
+  min-width: 8.75rem; font-size: 0.6875rem; font-family: var(--font-mono, monospace);
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 0.1875rem; padding: 0.125rem 0.5rem; color: var(--text-secondary);
+  text-align: center;
+}
+.shortcut-key.recording-label {
+  color: var(--accent); border-color: var(--accent); animation: shortcut-pulse 1s ease infinite;
+}
+@keyframes shortcut-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+.shortcut-btns { display: flex; gap: 0.25rem; }
+
+/* ── Desktop App preference rows ─── */
+.desktop-pref-row { margin-bottom: 0.75rem; }
+.desktop-pref-row .toggle-row { justify-content: flex-start; gap: 0.625rem; font-size: 0.8125rem; color: var(--text-primary); cursor: pointer; }
+.desktop-pref-row .settings-hint { margin: 0.125rem 0 0 1.625rem; font-size: 0.6875rem; }
+
+.password-change-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.password-change-form .form-group.compact {
+  margin: 0;
+}
+.password-change-form input {
+  width: 100%;
+  padding: 0.4375rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  outline: none;
+}
+.password-change-form input:focus {
+  border-color: var(--accent);
+}
+
+.sidebar-settings-panel,
+.sidebar-invite-panel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+  padding: 0.625rem 1rem;
+}
+
+.btn-settings-popout,
+.btn-invite-popout {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.btn-settings-popout:hover,
+.btn-invite-popout:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.btn-settings-popout svg,
+.btn-invite-popout svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.btn-settings-popout:hover svg,
+.btn-invite-popout:hover svg { 
+  opacity: 1;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ADMIN MEMBER LIST
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.aml-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  gap: 0.625rem;
+}
+.aml-member-row:hover { background: var(--bg-hover); }
+
+.aml-member-left {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.aml-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.125rem;
+  height: 2.125rem;
+}
+
+.aml-avatar {
+  width: 2.125rem;
+  height: 2.125rem;
+  object-fit: cover;
+}
+
+.aml-avatar-default {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.aml-status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  border: 2px solid var(--bg-tertiary);
+}
+.aml-status-dot.aml-online { background: var(--success); }
+.aml-status-dot.aml-offline { background: var(--text-muted); }
+
+.aml-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+.aml-member-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  flex-wrap: wrap;
+}
+
+.aml-login-name {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.aml-admin-badge {
+  font-size: 0.625rem;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  background: var(--danger);
+  color: var(--danger-text);
+  font-weight: 600;
+}
+
+.aml-banned-badge {
+  font-size: 0.625rem;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  background: var(--text-muted);
+  color: #fff;
+  font-weight: 500;
+  text-decoration: line-through;
+}
+
+.aml-new-badge {
+  font-size: 0.625rem;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.aml-member-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.aml-role-badge {
+  font-size: 0.625rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.5625rem;
+  border: 1px solid;
+  font-weight: 500;
+}
+
+.aml-member-joined {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+
+.aml-member-channels {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Upload storage per member. Deliberately a touch stronger than the other
+   meta chips: it is the one number an admin scans this list looking for. */
+.aml-member-storage {
+  font-size: 0.625rem;
+  color: var(--text-secondary, var(--text-muted));
+  opacity: 0.85;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* ── Channel Picker (Add/Remove user from channels) ── */
+.aml-ch-picker {
+  max-width: 26.25rem;
+  width: 100%;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  gap: 0.625rem;
+}
+.aml-ch-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+}
+.aml-ch-picker-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aml-ch-picker-selectall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.aml-ch-picker-selectall input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+.aml-ch-picker-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.aml-ch-picker-count {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.aml-ch-picker-search {
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  background: var(--bg-input, rgba(0,0,0,0.25));
+  border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  border-radius: var(--radius-sm, 0.375rem);
+  color: var(--text);
+  outline: none;
+}
+.aml-ch-picker-search:focus {
+  border-color: var(--accent, #5865f2);
+}
+.aml-channel-list {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  padding: 0.125rem;
+  margin: 0 -0.125rem;
+}
+.aml-channel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.625rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.aml-channel-row:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+}
+.aml-channel-row input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.aml-ch-hash {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.aml-ch-name {
+  font-size: 0.8125rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aml-channel-row:has(input:checked) {
+  background: var(--bg-hover, rgba(88,101,242,0.10));
+}
+.aml-channel-row:has(input:checked) .aml-ch-name {
+  font-weight: 500;
+}
+.aml-ch-picker-actions {
+  margin-top: 0.25rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ── Member List Action Buttons ── */
+.aml-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.1875rem;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.aml-member-row:hover .aml-actions { opacity: 1; }
+
+.aml-action-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0;
+  transition: background 0.12s;
+}
+.aml-action-btn:hover { background: var(--bg-hover); }
+.aml-btn-ban:hover,
+.aml-btn-delete:hover { background: rgba(244, 63, 94, 0.15); }
+.aml-btn-unban:hover { background: rgba(74, 222, 128, 0.15); }
+
+/* ── Channel Picker (add/remove) ── */
+.aml-channel-row:hover {
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+}
+
+.bans-list {
+  max-height: 18.75rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.ban-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.ban-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.ban-info strong {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.ban-reason {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ban-date {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+
+.btn-unban {
+  flex-shrink: 0;
+  background: var(--success) !important;
+  color: var(--success-text) !important;
+}
+
+.btn-unban:hover { opacity: 0.85; }
+
+.ban-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.btn-delete-user {
+  flex-shrink: 0;
+  background: var(--danger) !important;
+  color: var(--danger-text) !important;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem !important;
+}
+
+.btn-delete-user:hover { opacity: 0.85; }
+

@@ -158,11 +158,11 @@ test('permissions grid: defaults, chips, and per-user ticks', async (t) => {
     assert.ok(res.error, 'a chip for a role at or above her level is refused');
   });
 
-  await t.test('Reset to Default seeds the same three roles', async () => {
+  await t.test('Reset to Default seeds the stock roles and the Admin role, as on a new server', async () => {
     const res = await ask(A, 'reset-roles-to-default', {});
     assert.ok(res.success || !res.error, `reset ok: ${res.error || ''}`);
     const { roles } = await ask(A, 'get-roles', {});
-    assert.deepStrictEqual(roles.map((r) => r.name).sort(), ['Channel Mod', 'Member', 'Mod']);
+    assert.deepStrictEqual(roles.map((r) => r.name).sort(), ['Admin', 'Channel Mod', 'Member', 'Mod']);
   });
 
   A.close(); C.close();

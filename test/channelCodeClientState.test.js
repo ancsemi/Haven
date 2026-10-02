@@ -7,15 +7,23 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
-const SOCKET_SOURCE = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-socket.js'), 'utf8');
+// The socket listeners are spread over three modules that the app merges into
+// one object; the test loads and merges them the same way.
+const SOCKET_FILES = ['app-socket.js', 'app-socket-channels.js', 'app-socket-events.js'];
+const SOCKET_SOURCES = SOCKET_FILES.map(name => fs.readFileSync(path.join(ROOT, 'public/js/modules', name), 'utf8'));
+const SOCKET_SOURCE = SOCKET_SOURCES.join('\n');
 const VOICE_SOURCE = fs.readFileSync(path.join(ROOT, 'public/js/voice.js'), 'utf8');
 
 function loadSocketMethods(globals = {}) {
-  const context = vm.createContext({ module: { exports: {} }, exports: {}, ...globals });
-  vm.runInContext(SOCKET_SOURCE.replace(/^export default/, 'module.exports ='), context, {
-    filename: 'app-socket.js'
+  const methods = {};
+  SOCKET_SOURCES.forEach((source, i) => {
+    const context = vm.createContext({ module: { exports: {} }, exports: {}, ...globals });
+    vm.runInContext(source.replace(/^export default/m, 'module.exports ='), context, {
+      filename: SOCKET_FILES[i]
+    });
+    Object.assign(methods, context.module.exports);
   });
-  return context.module.exports;
+  return methods;
 }
 
 function createStorage(values = {}) {

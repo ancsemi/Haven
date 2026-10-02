@@ -1,0 +1,27 @@
+name: Feature request
+description: An idea for something Haven could do.
+title: "[REQUEST] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search the [open issues](https://github.com/ancsemi/Haven/issues) first, in case someone has asked already. A thumbs up on an existing request counts too.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Haven to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What would it help with?
+      description: The situation where you'd use it. This helps more than a detailed design.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, or how another app does it.

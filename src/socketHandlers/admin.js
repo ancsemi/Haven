@@ -74,7 +74,7 @@ module.exports = function register(socket, ctx) {
     });
 
     let storedPublishedThemes = [];
-    try { storedPublishedThemes = JSON.parse(settings.published_themes || '[]'); } catch {}
+    try { storedPublishedThemes = JSON.parse(settings.published_themes || '[]'); } catch { /* malformed stored list: treat as none published */ }
     const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
     settings.published_themes = JSON.stringify(publishedThemes);
     settings.default_theme = validatedThemeDefault(
@@ -134,7 +134,7 @@ module.exports = function register(socket, ctx) {
     let clearDefaultTheme = false;
 
     const allowedKeys = [
-      'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb',
+      'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'cleanup_max_uploads_mb',
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
@@ -145,12 +145,12 @@ module.exports = function register(socket, ctx) {
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
-      'session_duration_days', 'max_message_chars',
+      'session_duration_days', 'max_message_chars', 'auto_away_visible_minutes', 'auto_away_hidden_minutes', 'auto_away_enabled',
       'default_join_channels', 'registration_token_enabled', 'invites_bypass_registration_token', // (#5344, #5345), registration_token has its own generate/clear handlers
       'admin_password_reset_enabled', // (#5300) admin password reset feature gate
       'guests_enabled', 'guest_channels', // (#5381) Join-as-Guest toggle + per-channel whitelist (CSV of channel ids)
       'guests_allow_voice', // (#5687) whether guests may join voice and video
-      'stun_urls', 'turn_url', 'turn_username', 'turn_password', // (#5399) voice connectivity (STUN/TURN)
+      'stun_urls', 'turn_url', 'turn_username', 'turn_password', 'voice_ice_disabled', // (#5399) voice connectivity (STUN/TURN)
       'registration_captcha_enabled', 'turnstile_site_key', 'turnstile_secret_key', // opt-in Cloudflare Turnstile on registration
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
       'max_invite_uses', // invite uses limiter for non-admin/mannage-server invite-links
@@ -181,6 +181,11 @@ module.exports = function register(socket, ctx) {
       const n = parseInt(value, 10);
       if (!Number.isInteger(n) || n < 1 || n > 3650 || String(n) !== String(value).trim()) return;
     }
+    if (key === 'auto_away_visible_minutes' || key === 'auto_away_hidden_minutes') {
+      const n = parseInt(value, 10);
+      if (!Number.isInteger(n) || n < 1 || n > 60 || String(n) !== String(value).trim()) return;
+    }
+    if (key === 'auto_away_enabled' && !['true', 'false'].includes(value)) return;
 
     // ── Auto-mod validation (v3.42.0) ─────────────────────
     const automodBools = [
@@ -282,6 +287,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'cleanup_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'cleanup_max_age_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 3650) return; }
     if (key === 'cleanup_max_size_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
+    if (key === 'cleanup_max_uploads_mb') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 10000000) return; value = String(n); }
     if (key === 'max_upload_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 102400) return; }
     if (key === 'max_attachments') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 50) return; } // (#5561)
     if (key === 'max_tags_per_attachment') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 10) return; } // (#tagging phase 4)
@@ -433,6 +439,7 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'turn_username') { if (value.length > 200) return; }
     if (key === 'turn_password') { if (value.length > 200) return; }
+    if (key === 'voice_ice_disabled' && !['true', 'false'].includes(value)) return;
     if (key === 'default_join_channels') {
       // (#5345) JSON array of channel IDs (integers). Empty string = "all public".
       if (value !== '') {
@@ -502,7 +509,8 @@ module.exports = function register(socket, ctx) {
     // Automod caches its settings for 15s on the hot path; drop the cache so
     // an admin toggle takes effect on the very next message. (v3.42.0)
     if (key.startsWith('automod_')) {
-      try { automod.invalidate(); _broadcastLinkPolicy(); } catch { /* module optional */ }
+      automod.invalidate();
+      _broadcastLinkPolicy();
     }
 
     // Audit: log the setting change. Skip per-user UI prefs that the
@@ -540,7 +548,7 @@ module.exports = function register(socket, ctx) {
     // still current, so this stays at most one request. (env override still wins)
     if (key === 'unicode_emoji_auto_update') {
       const emoji = require('../emoji');
-      emoji.ensureEmojiData(emoji.autoUpdateEnabled(value)).catch(() => {});
+      emoji.ensureEmojiData(emoji.autoUpdateEnabled(value)).catch((err) => console.warn('Emoji data refresh failed:', err.message));
     }
   });
 
@@ -767,7 +775,7 @@ module.exports = function register(socket, ctx) {
       r.enabled = !!r.enabled;
       r.is_expired = !!r.is_expired;
       let ch = [];
-      try { const p = JSON.parse(r.channels || '[]'); if (Array.isArray(p)) ch = p; } catch { /* keep [] */ }
+      try { const p = JSON.parse(r.channels || '[]'); if (Array.isArray(p)) ch = p; } catch { /* malformed stored list: show the link with no channels */ }
       r.channels = ch;
     });
     target.emit('invite-codes-list', rows);
@@ -1296,14 +1304,14 @@ module.exports = function register(socket, ctx) {
       }
 
       const roleRows = db.prepare(`
-        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color
+        SELECT ur.user_id, r.id as role_id, r.name, r.level, r.color, r.color2, r.color_shimmer
         FROM user_roles ur JOIN roles r ON ur.role_id = r.id
         GROUP BY ur.user_id, r.id ORDER BY r.level DESC
       `).all();
       const userRoles = {};
       roleRows.forEach(r => {
         if (!userRoles[r.user_id]) userRoles[r.user_id] = [];
-        userRoles[r.user_id].push({ id: r.role_id, name: r.name, level: r.level, color: r.color });
+        userRoles[r.user_id].push({ id: r.role_id, name: r.name, level: r.level, color: r.color, color2: r.color2, color_shimmer: r.color_shimmer });
       });
 
       const bannedRows = db.prepare('SELECT user_id FROM bans').all();
@@ -1534,7 +1542,10 @@ module.exports = function register(socket, ctx) {
         ? Object.assign(automod.policy(), { enabled: true, scanDms: s.automod_scan_dms === 'true' })
         : { enabled: false, mode: 'off', allow: [], deny: [], scanDms: false };
       io.except('bot-sockets').emit('link-policy', payload);
-    } catch { /* non-critical */ }
+    } catch (err) {
+      // Clients would keep enforcing the old link policy until they reconnect.
+      console.error('link policy broadcast failed:', err.message);
+    }
   }
 
   function _emitDomains() {

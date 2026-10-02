@@ -42,37 +42,52 @@ function group(label, inner) {
  * allows the same display name under two different parents, so a flat list can
  * show two identical entries with no way to pick the right one.
  */
+// A forum is named as one in every list, because a forum only pairs with a
+// forum and the admin needs to see which is which before picking.
+function forumMark(isForum) {
+  return isForum ? ' (' + t('modals.ferry.kind_forum') + ')' : '';
+}
+
 function buildChannelOptions(parents, subsByParent, orphans, esc) {
   const sorted = [...parents].sort((a, b) => a.name.localeCompare(b.name));
   let html = '';
 
   for (const p of sorted) {
     const kids = (subsByParent.get(p.id) || []).sort((a, b) => a.name.localeCompare(b.name));
-    const self = opt(esc(p.code), '#' + esc(p.name));
+    const self = opt(esc(p.code), '#' + esc(p.name) + esc(forumMark(p.is_forum)));
     if (!kids.length) { html += self; continue; }
-    const kidHtml = kids.map(k => opt(esc(k.code), '  ↳ ' + esc(k.name))).join('');
+    const kidHtml = kids.map(k => opt(esc(k.code), '  ↳ ' + esc(k.name) + esc(forumMark(k.is_forum)))).join('');
     html += group('#' + esc(p.name), self + kidHtml);
   }
 
   // A sub-channel whose parent is not visible to this admin would otherwise
   // vanish from the list entirely.
   if (orphans.length) {
-    html += group(t('modals.ferry.other'), orphans.map(c => opt(esc(c.code), '#' + esc(c.name))).join(''));
+    html += group(t('modals.ferry.other'), orphans.map(c => opt(esc(c.code), '#' + esc(c.name) + esc(forumMark(c.is_forum)))).join(''));
   }
   return html;
 }
 
-/** Discord channels, grouped by their Discord category. */
-function buildDiscordChannelOptions(guild, esc) {
+/**
+ * Discord channels, grouped by their Discord category. `forumOnly` is true
+ * for a Haven forum (offer Discord forums only), false for any other Haven
+ * channel (offer everything but forums), and null before a Haven channel is
+ * picked (offer everything, forums marked).
+ */
+function buildDiscordChannelOptions(guild, esc, forumOnly = null) {
   const byCategory = new Map();
   for (const c of (guild && guild.channels) || []) {
+    if (forumOnly !== null && !!c.forum !== forumOnly) continue;
     const key = c.category || t('modals.ferry.no_category');
     if (!byCategory.has(key)) byCategory.set(key, []);
     byCategory.get(key).push(c);
   }
+  if (guild && !byCategory.size && forumOnly !== null) {
+    return opt('', esc(t(forumOnly ? 'modals.ferry.no_matching_forum' : 'modals.ferry.no_matching_chat')));
+  }
   let html = opt('', t('modals.ferry.pick_one'));
   for (const [cat, chans] of byCategory) {
-    html += group(esc(cat), chans.map(c => opt(esc(c.id), '#' + esc(c.name))).join(''));
+    html += group(esc(cat), chans.map(c => opt(esc(c.id), '#' + esc(c.name) + esc(forumMark(c.forum)))).join(''));
   }
   return html;
 }
@@ -425,19 +440,22 @@ export default {
       step1Status = `<p class="ferry-status-bad">${esc(st.lastError || t('modals.ferry.connecting'))}</p>`;
     }
 
+    const isForumLink = (l) => l.discord_channel_type === 15 || l.discord_channel_type === 16;
     const linkRows = (cfg.links || []).map(l => `
       <tr data-ferry-link="${l.id}"${l.is_active ? '' : ' class="ferry-row-off"'}>
-        <td><strong>#${esc(l.channel_name)}</strong></td>
-        <td>${esc(l.guild_name)}<br><span class="muted-text">#${esc(l.discord_channel_name)}</span></td>
+        <td><strong>#${esc(l.channel_name)}</strong>${l.is_forum ? `<br><span class="muted-text">${esc(t('modals.ferry.kind_forum'))}</span>` : ''}</td>
+        <td>${esc(l.guild_name)}<br><span class="muted-text">#${esc(l.discord_channel_name)}${esc(forumMark(isForumLink(l)))}</span></td>
         <td>
           <select class="form-select ferry-mini" data-ferry-field="direction">
             ${FERRY_DIRECTIONS.map(([v, key]) => `<option value="${v}"${l.direction === v ? ' selected' : ''}>${esc(t(key))}</option>`).join('')}
           </select>
         </td>
         <td>
-          <select class="form-select ferry-mini" data-ferry-field="outMode"${l.direction === 'to_haven' ? ' disabled' : ''}>
+          ${isForumLink(l)
+            ? `<span class="muted-text">${esc(t('modals.ferry.forum_mirrors'))}</span>`
+            : `<select class="form-select ferry-mini" data-ferry-field="outMode"${l.direction === 'to_haven' ? ' disabled' : ''}>
             ${FERRY_MODES.map(([v, key]) => `<option value="${v}"${l.out_mode === v ? ' selected' : ''}>${esc(t(key))}</option>`).join('')}
-          </select>
+          </select>`}
         </td>
         <td class="ferry-actions-cell"><div class="ferry-actions-inner">
           <label class="toggle-row"><span>${esc(t('modals.ferry.on'))}</span><input type="checkbox" data-ferry-field="isActive"${l.is_active ? ' checked' : ''}></label>
@@ -496,7 +514,8 @@ export default {
              </select>
            </label>
             <button class="btn-sm btn-accent ferry-add-btn" id="ferry-add-btn">${esc(t('modals.ferry.add_pairing'))}</button>
-         </div>`
+         </div>
+         <small class="settings-hint" id="ferry-add-kind-hint">${esc(t('modals.ferry.kind_rule_hint'))}</small>`
       : `<p class="muted-text">${esc(t('modals.ferry.connect_first'))}</p>`;
 
     const pairTable = (cfg.links || []).length
@@ -632,14 +651,32 @@ export default {
       });
     });
 
-    // The Discord channel list depends on which server is picked.
+    // The Discord channel list depends on which server is picked, and on
+    // whether the Haven channel is a forum: a forum only pairs with a forum.
     const guildSel = body.querySelector('#ferry-add-guild');
     const dChanSel = body.querySelector('#ferry-add-dchannel');
-    guildSel?.addEventListener('change', () => {
+    const havenSel = body.querySelector('#ferry-add-channel');
+    const modeSel = body.querySelector('#ferry-add-mode');
+    const kindHint = body.querySelector('#ferry-add-kind-hint');
+    const refreshDiscordChannels = () => {
+      if (!guildSel || !dChanSel) return;
+      const esc = (v) => this._escapeHtml(String(v ?? ''));
+      const havenCh = (this.channels || []).find(c => c.code === havenSel?.value);
+      const forumOnly = havenCh ? !!havenCh.is_forum : null;
       const guild = (cfg.guilds || []).find(g => g.id === guildSel.value);
-      const esc = (s) => this._escapeHtml(String(s ?? ''));
-      dChanSel.innerHTML = buildDiscordChannelOptions(guild, (v) => this._escapeHtml(String(v ?? "")));
-    });
+      dChanSel.innerHTML = guild
+        ? buildDiscordChannelOptions(guild, esc, forumOnly)
+        : opt('', esc(t('modals.ferry.pick_server_first')));
+      // Forum pairings carry every post and reply, so the outgoing choice
+      // does not apply to them.
+      if (modeSel) {
+        modeSel.disabled = forumOnly === true;
+        if (forumOnly === true) modeSel.value = 'all';
+      }
+      if (kindHint) kindHint.textContent = t(forumOnly === true ? 'modals.ferry.forum_pair_hint' : 'modals.ferry.kind_rule_hint');
+    };
+    guildSel?.addEventListener('change', refreshDiscordChannels);
+    havenSel?.addEventListener('change', refreshDiscordChannels);
 
     body.querySelector('#ferry-add-btn')?.addEventListener('click', () => {
       const channelCode = body.querySelector('#ferry-add-channel')?.value;

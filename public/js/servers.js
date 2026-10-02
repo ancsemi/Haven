@@ -58,7 +58,7 @@ class ServerManager {
         const data = await res.json();
         if (data.fingerprint) this.selfFingerprint = data.fingerprint;
       }
-    } catch {}
+    } catch (err) { console.warn('[Servers] could not read this server fingerprint', err); }
   }
 
   _load() {

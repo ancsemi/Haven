@@ -28,7 +28,7 @@ test('every effects write in the picker goes through _persistEffects', () => {
 });
 
 test('the preferences handler restores effects before it applies the theme', () => {
-  const src = read('public/js/modules/app-socket.js');
+  const src = read('public/js/modules/app-socket-events.js');
   const sync = src.indexOf('syncEffectsFromServer(prefs.effects)');
   const theme = src.indexOf('applyThemeFromServer(prefs.theme, true, true)');
   assert.ok(sync > 0 && theme > sync, 'effects restored first, then theme applied');

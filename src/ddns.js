@@ -80,7 +80,7 @@ function _detectPublicIp() {
         });
       });
       req.on('error', () => { if (--remaining === 0 && !resolved) resolve(null); });
-      req.on('timeout', () => { try { req.destroy(); } catch {} });
+      req.on('timeout', () => { try { req.destroy(); } catch { /* already closed; the error handler resolves */ } });
     };
     sources.forEach(tryOne);
   });
@@ -95,7 +95,7 @@ function _httpGetText(url) {
       res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
     });
     req.on('error', reject);
-    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch { /* already closed; the error handler rejects */ } });
   });
 }
 
@@ -111,7 +111,7 @@ function _httpRequestJson(url, opts, payload) {
       });
     });
     req.on('error', reject);
-    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch { /* already closed; the error handler rejects */ } });
     if (payload) req.write(typeof payload === 'string' ? payload : JSON.stringify(payload));
     req.end();
   });

@@ -43,7 +43,7 @@ module.exports = function register(socket, ctx) {
     return db.prepare(`
       SELECT f.id, f.channel_id, f.guild_id, f.guild_name, f.discord_channel_id, f.discord_channel_name,
              f.direction, f.out_mode, f.is_active, f.last_activity_at, f.last_error, f.created_at,
-             c.code AS channel_code, c.name AS channel_name,
+             f.discord_channel_type, c.code AS channel_code, c.name AS channel_name, c.is_forum,
              (f.webhook_id IS NOT NULL) AS has_webhook
       FROM ferry_links f
       JOIN channels c ON f.channel_id = c.id
@@ -199,7 +199,7 @@ module.exports = function register(socket, ctx) {
     const guildId = typeof data.guildId === 'string' ? data.guildId.trim() : '';
     const discordChannelId = typeof data.discordChannelId === 'string' ? data.discordChannelId.trim() : '';
     const direction = DIRECTIONS.has(data.direction) ? data.direction : 'both';
-    const outMode = OUT_MODES.has(data.outMode) ? data.outMode : 'command';
+    let outMode = OUT_MODES.has(data.outMode) ? data.outMode : 'command';
 
     if (!/^[a-f0-9]{8}$/i.test(channelCode)) return socket.emit('error-msg', 'Pick a Haven channel');
     if (!SNOWFLAKE.test(guildId) || !SNOWFLAKE.test(discordChannelId)) {
@@ -208,7 +208,7 @@ module.exports = function register(socket, ctx) {
 
     // DM channels are per-person and paired with nothing, and a bridge into one
     // would expose a private conversation to a Discord server.
-    const channel = db.prepare('SELECT id, name FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
+    const channel = db.prepare('SELECT id, name, is_forum FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
 
     // Confirm the target against what the bot can actually see. A pairing to a
@@ -219,12 +219,26 @@ module.exports = function register(socket, ctx) {
     const dChannel = guild.channels.find(c => c.id === discordChannelId);
     if (!dChannel) return socket.emit('error-msg', 'The bot cannot see that Discord channel');
 
+    // A forum only pairs with a forum. A Discord post has a title and a
+    // thread of replies, and so does a Haven topic; a chat line has neither,
+    // so a mixed pairing would have nothing sensible to do with either side.
+    const discordIsForum = ferry.isForumType(dChannel.type);
+    if (!!channel.is_forum !== discordIsForum) {
+      return socket.emit('error-msg', channel.is_forum
+        ? `#${channel.name} is a forum, so it can only pair with a Discord forum channel`
+        : `#${dChannel.name} is a Discord forum, so it can only pair with a Haven forum channel`);
+    }
+    // Forum pairings always carry every post and reply. "On command" has no
+    // meaning there: a reply cannot go to a post that was never sent.
+    if (discordIsForum) outMode = 'all';
+
     try {
       db.prepare(`
         INSERT INTO ferry_links (channel_id, guild_id, guild_name, discord_channel_id, discord_channel_name,
-                                 direction, out_mode, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(channel.id, guildId, guild.name, discordChannelId, dChannel.name, direction, outMode, socket.user.id);
+                                 direction, out_mode, created_by, discord_channel_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(channel.id, guildId, guild.name, discordChannelId, dChannel.name, direction, outMode, socket.user.id,
+        Number.isInteger(dChannel.type) ? dChannel.type : null);
 
       logAudit({ actor: socket.user, action: 'ferry_link_create', target_type: 'channel', target_id: channel.id,
         details: { guild: guild.name, discord_channel: dChannel.name, direction, out_mode: outMode } });
@@ -243,13 +257,16 @@ module.exports = function register(socket, ctx) {
     const id = parseInt(data?.id);
     if (!Number.isInteger(id)) return;
 
-    const link = db.prepare('SELECT id FROM ferry_links WHERE id = ?').get(id);
+    const link = db.prepare('SELECT id, discord_channel_type FROM ferry_links WHERE id = ?').get(id);
     if (!link) return socket.emit('error-msg', 'Pairing not found');
 
     const sets = [];
     const args = [];
     if (DIRECTIONS.has(data.direction)) { sets.push('direction = ?'); args.push(data.direction); }
-    if (OUT_MODES.has(data.outMode))    { sets.push('out_mode = ?');  args.push(data.outMode); }
+    // A forum pairing stays on "every post and reply" (see create-link).
+    if (OUT_MODES.has(data.outMode) && !ferry.isForumType(link.discord_channel_type)) {
+      sets.push('out_mode = ?'); args.push(data.outMode);
+    }
     if (data.isActive !== undefined)    { sets.push('is_active = ?'); args.push(data.isActive ? 1 : 0); }
     if (!sets.length) return;
 
@@ -273,6 +290,14 @@ module.exports = function register(socket, ctx) {
     // The Discord webhook is left in place on purpose. Deleting it would need
     // Manage Webhooks that the bot may no longer have, and an orphaned webhook
     // sends nothing on its own; the Discord admin can remove it if they want.
+    // Which topic matches which Discord post is forgotten with the pairing,
+    // so pairing the same forums again later starts clean instead of
+    // threading new replies into posts from before.
+    const gone = db.prepare('SELECT channel_id, discord_channel_id FROM ferry_links WHERE id = ?').get(id);
+    if (gone) {
+      db.prepare('DELETE FROM ferry_forum_threads WHERE channel_id = ? AND discord_forum_id = ?')
+        .run(gone.channel_id, gone.discord_channel_id);
+    }
     db.prepare('DELETE FROM ferry_links WHERE id = ?').run(id);
     logAudit({ actor: socket.user, action: 'ferry_link_delete', target_type: 'channel', target_id: id, details: {} });
     sendConfig();

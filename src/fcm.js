@@ -89,7 +89,7 @@ function findServiceAccount(dir) {
       );
       if (files.length > 0) return path.join(d, files[0]);
     }
-  } catch {}
+  } catch { /* folder unreadable: no service account here, so relay mode is used */ }
   return null;
 }
 

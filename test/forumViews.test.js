@@ -13,8 +13,8 @@ const test = require('node:test');
 
 const ROOT = path.join(__dirname, '..');
 const forum = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-forum.js'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-ui.js'), 'utf8');
-const css = fs.readFileSync(path.join(ROOT, 'public/css/style.css'), 'utf8');
+const gallery = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-media-gallery.js'), 'utf8');
+const css = require('./coreCss').readCoreCss();
 const html = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
 
 function parseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; }
@@ -61,7 +61,7 @@ test('files and media photos have a tile size slider', () => {
   assert.equal(mediaTilePx('999'), 360);
   assert.equal(mediaTilePx('nope'), 150);
   assert.match(html, /id="media-gallery-tile"/);
-  assert.match(ui, /_mediaTilePx/);
-  assert.match(ui, /_applyMediaTileSize/);
+  assert.match(gallery, /_mediaTilePx/);
+  assert.match(gallery, /_applyMediaTileSize/);
   assert.match(css, /minmax\(var\(--media-tile, 150px\), 1fr\)/);
 });

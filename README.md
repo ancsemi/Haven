@@ -154,5 +154,5 @@ network service, you have to publish its source. See [LICENSE](LICENSE).
 ---
 
 <p align="center">
-  <b>⬡ Haven</b>. Because your conversations are yours.
+  <b>⬡ Haven</b>
 </p>

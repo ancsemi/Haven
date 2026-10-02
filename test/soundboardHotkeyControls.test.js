@@ -12,7 +12,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
-const file = path.join(__dirname, '..', 'public', 'js', 'modules', 'app-media.js');
+const file = path.join(__dirname, '..', 'public', 'js', 'modules', 'app-sounds.js');
 const src = fs.readFileSync(file, 'utf8');
 let M;
 test.before(async () => { M = (await import(pathToFileURL(file).href)).default; });
