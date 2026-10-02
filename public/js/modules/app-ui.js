@@ -1466,7 +1466,7 @@ _setupUI() {
   const screenFpsSelect = document.getElementById('screen-fps-select');
   if (screenResSelect) {
     // Restore saved value (0 = "source")
-    const savedRes = localStorage.getItem('haven_screen_res') || '0';
+    const savedRes = localStorage.getItem('haven_screen_res') || '1080';
     screenResSelect.value = savedRes === '0' ? 'source' : savedRes;
     screenResSelect.addEventListener('change', (e) => {
       const val = e.target.value === 'source' ? 0 : parseInt(e.target.value, 10);
@@ -1690,7 +1690,7 @@ _setupUI() {
     });
   }
   if (screenFpsSelect) {
-    const savedFps = localStorage.getItem('haven_screen_fps') || '60';
+    const savedFps = localStorage.getItem('haven_screen_fps') || '30';
     screenFpsSelect.value = savedFps;
     screenFpsSelect.addEventListener('change', (e) => {
       this.voice.setScreenFrameRate(parseInt(e.target.value, 10));

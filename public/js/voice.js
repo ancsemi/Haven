@@ -91,12 +91,12 @@ class VoiceManager {
 
     // Screen share quality settings (populated from localStorage)
     const savedRes = localStorage.getItem('haven_screen_res');
-    this.screenResolution = savedRes !== null ? parseInt(savedRes, 10) : 0;  // 0 = source
-    this.screenFrameRate = parseInt(localStorage.getItem('haven_screen_fps') || '60', 10) || 60;
+    this.screenResolution = savedRes !== null ? parseInt(savedRes, 10) : 1080;  // 1080p default
+    this.screenFrameRate = parseInt(localStorage.getItem('haven_screen_fps') || '30', 10) || 30;
     // User bitrate cap in kbps (0 = unlimited). Stepper in Settings moves in
     // 100 kbps steps between 300 and 10000; anything above wraps to unlimited.
     // Default 8000 restores the #5379 1080p ceiling for people who never
-    // touched the setting (Source/60 needs at least that on 1440p/4K).
+    // touched the setting.
     this.screenBitrate = this._normalizeScreenBitrate(
       localStorage.getItem('haven_screen_bitrate')
     );
