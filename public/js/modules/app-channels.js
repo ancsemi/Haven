@@ -1882,6 +1882,23 @@ _renderChannels() {
   const subPanelBtn = document.getElementById('sub-channel-panel-btn');
   if (subPanelBtn) subPanelBtn.style.display = Object.keys(subChannelMap).length > 0 ? '' : 'none';
 
+  // ── Channel management buttons ──
+  if (!this._channelManagementButtonsBound) {
+    this._channelManagementButtonsBound = true;
+
+    // Organize Channels button
+    document.getElementById('organize-channels-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openOrganizeModal(null, true);
+    });
+
+    // Sub-channel subscriptions panel button
+    document.getElementById('sub-channel-panel-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openSubChannelPanel();
+    });
+  }
+
   // Sort sub-channels — respect parent's sort_alphabetical setting & per-tag overrides
   // sort_alphabetical: 0=manual, 1=alpha, 2=created, 3=oldest
   // Per-tag overrides (from organize modal) are stored in localStorage
