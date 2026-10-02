@@ -113,6 +113,10 @@ jobs:
 
       - name: Label translations-only PR
         if: steps.changes.outputs.translations_only == 'true' && success()
+        # Best-effort: PRs from forks run with a read-only token, so adding
+        # the label (or creating it) can fail. Validation above already
+        # passed, so a labeling failure must not fail the whole job (#5716).
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -121,7 +125,7 @@ jobs:
           # The label may not exist yet — create it then retry
           gh label create "translations-only" --color "0E8A16" --description "Auto-mergeable translation update" 2>/dev/null || true
           gh pr edit "${{ github.event.pull_request.number }}" \
-            --add-label "translations-only"
+            --add-label "translations-only" || true
 
       - name: Enable auto-merge on translations-only PR
         if: steps.changes.outputs.translations_only == 'true' && success()
