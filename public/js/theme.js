@@ -30,8 +30,8 @@ function getAccentTextColor(r, g, b) {
   const whiteContrast = 1.05 / (luminance + 0.05);
   const blackContrast = (luminance + 0.05) / 0.05;
 
-  // bias towards white 5%
-  return whiteContrast * 1.05 >= blackContrast ? '#fff' : '#000';
+  // bias towards white 10%
+  return whiteContrast * 1.1 >= blackContrast ? '#fff' : '#000';
 }
 
 // ── Generate full theme palette from a single HSV accent ─
