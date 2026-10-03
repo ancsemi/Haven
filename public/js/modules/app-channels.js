@@ -24,6 +24,7 @@ async switchChannel(code) {
   if (jumpBtn) jumpBtn.classList.remove('visible');
   const channel = this.channels.find(c => c.code === code);
   const isDm = channel && channel.is_dm;
+  this._setChannelTab(isDm ? 'DMs' : 'channels');
   const displayName = isDm && channel.dm_target
     ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
     : channel ? `# ${channel.name}` : code;
