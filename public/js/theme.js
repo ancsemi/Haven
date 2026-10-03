@@ -44,8 +44,8 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
   const vib = Math.max(0, Math.min(1, vibrancy));
   const rgb = hsvToRgb(h, s, v);
   const accentText = getAccentTextColor(...rgb);
-  const bgSat = 0.05 + vib * 0.30;
-  const bdrSat = 0.05 + vib * 0.25;
+  const bgSat  = lightBase ? 0.01 + vib * 0.05 : 0.05 + vib * 0.30;
+  const bdrSat = lightBase ? 0.02 + vib * 0.08 : 0.05 + vib * 0.25;
 
   let bgPrimary;
   let bgSecondary;
@@ -63,19 +63,20 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
   let borderLight;
 
   if (lightBase) {
-    bgPrimary   = hsvToHex(h, bgSat,       0.96);
-    bgSecondary = hsvToHex(h, bgSat * 0.85, 0.92);
-    bgTertiary  = hsvToHex(h, bgSat * 0.7,  0.87);
-    bgHover     = hsvToHex(h, bgSat * 0.7,  0.82);
-    bgActive    = hsvToHex(h, bgSat * 0.7,  0.77);
-    bgInput     = hsvToHex(h, bgSat,       0.97);
-    bgCard      = hsvToHex(h, bgSat * 0.85, 0.94);
+    bgPrimary   = hsvToHex(h, bgSat,       0.985);
+    bgSecondary = hsvToHex(h, bgSat * 0.85, 0.965);
+    bgTertiary  = hsvToHex(h, bgSat * 0.7,  0.945);
+    bgHover     = hsvToHex(h, bgSat * 0.7,  0.925);
+    bgActive    = hsvToHex(h, bgSat * 0.7,  0.900);
+    bgInput     = hsvToHex(h, bgSat,       0.975);
+    bgCard      = hsvToHex(h, bgSat * 0.85, 0.975);
 
     // Dark text for the light base.
     const txtS = vib * 0.08;
-    txtPri = hsvToHex(h, txtS,       0.18);
+    txtPri = hsvToHex(h, txtS,        0.18);
     txtSec = hsvToHex(h, txtS + 0.02, 0.38);
-    txtMut = hsvToHex(h, txtS,       0.55);
+    txtMut = hsvToHex(h, txtS,        0.55);
+
     border      = hsvToHex(h, bdrSat, 0.72);
     borderLight = hsvToHex(h, bdrSat, 0.62);
   } else {
@@ -158,23 +159,34 @@ let _rgbLastTick = 0;
 let _rgbLastHueInt = -1;
 let _rgbPaletteLut = null;
 let _rgbPaletteLutVibrancy = -1;
+let _rgbPaletteLutLightBase = false;
 
 function _rebuildRgbPaletteLut(vibrancy) {
   const vib = Math.max(10, Math.min(100, Math.round(vibrancy)));
+  const lightBase = isLightColorBase();
+
   _rgbPaletteLut = new Array(360);
+
   for (let h = 0; h < 360; h += 1) {
-    _rgbPaletteLut[h] = generateCustomPalette(h, 0.75, 0.95, vib / 100);
+    _rgbPaletteLut[h] = generateCustomPalette(h, 0.75, 0.95, vib / 100, lightBase);
   }
   _rgbPaletteLutVibrancy = vib;
+  _rgbPaletteLutLightBase = lightBase;
 }
 
 function _getRgbPalette(hue, vibrancy) {
   const h = Math.round(((hue % 360) + 360) % 360);
   const vib = Math.max(10, Math.min(100, Math.round(vibrancy)));
-  if (!_rgbPaletteLut || _rgbPaletteLutVibrancy !== vib) {
+  const lightBase = isLightColorBase();
+
+  if (!_rgbPaletteLut || _rgbPaletteLutVibrancy !== vib || _rgbPaletteLutLightBase !== lightBase) {
     _rebuildRgbPaletteLut(vib);
   }
-  return { h, palette: _rgbPaletteLut[h] };
+
+  return {
+    h,
+    palette: _rgbPaletteLut[h]
+  };
 }
 
 function startRgbCycle() {
