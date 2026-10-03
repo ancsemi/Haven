@@ -152,7 +152,7 @@
   // own --bg-primary and leave large surfaces rendering with a dark color
   // while explicitly-styled chrome (sidebar, channel header) looks correct.
   if (t && t !== 'custom' && t !== 'rgb') {
-    var leakedKeys = ['--accent','--accent-hover','--accent-dim','--accent-glow',
+    var leakedKeys = ['--accent','--accent-text','--accent-hover','--accent-dim','--accent-glow',
       '--bg-primary','--bg-secondary','--bg-tertiary','--bg-hover','--bg-active',
       '--bg-input','--bg-card','--text-primary','--text-secondary','--text-muted',
       '--text-link','--border','--border-light','--success','--danger','--warning',
@@ -195,6 +195,23 @@
         el.style.setProperty('--accent-hover', _hex(h,Math.max(s-.15,0),Math.min(v+.15,1)));
         el.style.setProperty('--accent-dim', _hex(h,Math.min(s+.1,1),Math.max(v-.2,0)));
         var rgb=_hsvRgb(h,s,v);
+        var rgb=_hsvRgb(h,s,v);
+
+        function _accentTextColor(r,g,b) {
+          function linearize(c) {
+            c /= 255;
+            return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+          }
+          const luminance = (0.2126 * linearize(r)) + (0.7152 * linearize(g)) + (0.0722 * linearize(b));
+          // Choose whichever gives the stronger contrast.
+          const whiteContrast = 1.05 / (luminance + 0.05);
+          const blackContrast = (luminance + 0.05) / 0.05;
+
+          // bias towards white 5%
+          return whiteContrast * 1.05 >= blackContrast ? '#fff' : '#000';
+        }
+
+        el.style.setProperty('--accent-text', _accentTextColor(rgb[0],rgb[1],rgb[2]));
         el.style.setProperty('--accent-glow', 'rgba('+rgb.join(',')+',0.25)');
         el.style.setProperty('--bg-primary', _hex(h,bgSat,0.07+vib*0.03));
         el.style.setProperty('--bg-secondary', _hex(h,bgSat*0.85,0.09+vib*0.04));

@@ -17,6 +17,22 @@ function hsvToRgb(h, s, v) {
 }
 function rgbToHex(r, g, b) { return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join(''); }
 function hsvToHex(h, s, v) { return rgbToHex(...hsvToRgb(h, s, v)); }
+function getAccentTextColor(r, g, b) {
+  // Relative luminance using the WCAG sRGB conversion.
+  function linearize(c) {
+    c /= 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+
+  const luminance = (0.2126 * linearize(r)) + (0.7152 * linearize(g)) + (0.0722 * linearize(b));
+
+  // Choose whichever gives the stronger contrast.
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  const blackContrast = (luminance + 0.05) / 0.05;
+
+  // bias towards white 5%
+  return whiteContrast * 1.05 >= blackContrast ? '#fff' : '#000';
+}
 
 // ── Generate full theme palette from a single HSV accent ─
 // vibrancy: 0-1, controls how much the hue tints backgrounds/text/borders
@@ -24,6 +40,7 @@ function generateCustomPalette(h, s, v, vibrancy) {
   if (vibrancy === undefined) vibrancy = 0.5;
   const vib = Math.max(0, Math.min(1, vibrancy));
   const rgb = hsvToRgb(h, s, v);
+  const accentText = getAccentTextColor(...rgb);
 
   // Background saturation scales with vibrancy (0.05 at 0, 0.35 at 1)
   const bgSat = 0.05 + vib * 0.30;
@@ -37,6 +54,7 @@ function generateCustomPalette(h, s, v, vibrancy) {
 
   return {
     '--accent':        hsvToHex(h, s, v),
+    '--accent-text':   accentText,
     '--accent-hover':  hsvToHex(h, Math.max(s - 0.15, 0), Math.min(v + 0.15, 1)),
     '--accent-dim':    hsvToHex(h, Math.min(s + 0.1, 1), Math.max(v - 0.2, 0)),
     '--accent-glow':   `rgba(${rgb.join(',')}, ${(0.15 + vib * 0.20).toFixed(2)})`,
@@ -80,7 +98,7 @@ function applyCustomVars(palette) {
 function clearCustomVars() {
   if (_themeStyleEl) { _themeStyleEl.textContent = ''; }
   // Also remove any leftover inline custom properties (legacy path)
-  const keys = ['--accent','--accent-hover','--accent-dim','--accent-glow',
+  const keys = ['--accent','--accent-text','--accent-hover','--accent-dim','--accent-glow',
     '--bg-primary','--bg-secondary','--bg-tertiary','--bg-hover','--bg-active',
     '--bg-input','--bg-card','--text-primary','--text-secondary','--text-muted',
     '--text-link','--border','--border-light','--success','--danger','--warning',
