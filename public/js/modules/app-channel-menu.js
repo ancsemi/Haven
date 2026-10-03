@@ -982,12 +982,15 @@ _bindChannelMenu() {
 },
 
 _setChannelTab(tab) {
+  const allowedTabs = ["channels", "DMs"];
+  if (!allowedTabs.includes(tab)) {
+    return;
+  }
+
   localStorage.setItem("activeChannelTab", tab);
+
   document.querySelectorAll("[data-channel-tab]").forEach(function(button) {
-    button.classList.toggle(
-      "active",
-      button.dataset.channelTab === tab
-    );
+    button.classList.toggle("active", button.dataset.channelTab === tab);
   });
 
   const channelsPane = document.getElementById("channels-pane");
@@ -998,7 +1001,7 @@ _setChannelTab(tab) {
     if (dmPane) dmPane.classList.add("pane-hidden");
   } else if (tab === "DMs") {
     if (channelsPane) channelsPane.classList.add("pane-hidden");
-    if (dmPane)dmPane.classList.remove("pane-hidden");
+    if (dmPane) dmPane.classList.remove("pane-hidden");
   }
 },
 
