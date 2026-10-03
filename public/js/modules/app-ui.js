@@ -468,8 +468,6 @@ _applyGuestMode() {
   if (!this.user || !this.user.isGuest) return;
   const dmPane = document.getElementById('dm-pane');
   if (dmPane) dmPane.style.display = 'none';
-  const split = document.getElementById('sidebar-split-handle');
-  if (split) split.style.display = 'none';
   const dmPip = document.getElementById('dm-pip-panel');
   if (dmPip) dmPip.style.display = 'none';
   document.body.classList.add('is-guest');

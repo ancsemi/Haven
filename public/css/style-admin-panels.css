@@ -411,6 +411,14 @@
   opacity: 0.7;
 }
 
+/* ── join-create-channels-modal ─────────────────────────── */
+.create-channel-section,
+.join-channel-section { 
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
 /* ── Settings Group Card ─────────────────────────── */
 .settings-group {
   background: var(--bg-tertiary);

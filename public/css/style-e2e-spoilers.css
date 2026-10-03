@@ -735,7 +735,8 @@
   margin-left: auto;
   margin-right: 0.5rem;
 }
-.settings-tab {
+.settings-tab,
+.channel-tab {
   padding: 0.3125rem 0.875rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -746,11 +747,13 @@
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.settings-tab:hover {
+.settings-tab:hover,
+.channel-tab:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
-.settings-tab.active {
+.settings-tab.active,
+.channel-tab.active {
   background: var(--accent);
   color: var(--accent-text);
   border-color: var(--accent);

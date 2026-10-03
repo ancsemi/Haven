@@ -431,8 +431,7 @@
    LAYOUT DENSITY PICKER
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-.density-picker,
-.channel-scroll-picker {
+.density-picker {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
@@ -693,7 +692,7 @@
   flex: 1;
 }
 /* Expand scroll area to include scrolling join/create channel sections when screen height is short*/
-@media (max-height: 550px) {
+@media (max-height: 400px) {
   .sidebar-mod-container {
     overflow: auto;
     display: block;
@@ -893,26 +892,12 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-}
-[data-channel-scroll="separate"] .sidebar-split {
-  display: flex;
-  overflow: hidden;
-}
-[data-channel-scroll="combined"] .sidebar-split {
-  display: block;
   overflow: auto;
-}
-/* Short screen: use the expanded scrolling behavior regardless of mode */
-@media (max-height: 550px) {
-  [data-channel-scroll="separate"] .sidebar-split {
-    display: block;
-    overflow: auto;
-  }
 }
 
 /* Channels pane (top) */
 .sidebar-split .channel-section {
-  flex: 1 1 60%;
+  flex: 1;
   min-height: 5rem;
   overflow: hidden;
   display: flex;
@@ -940,39 +925,6 @@
 .dm-toggle #organize-dms-btn:hover {
   opacity: 1 !important;
   background: var(--bg-hover);
-}
-.channels-toggle-arrow {
-  display: inline-block;
-  transition: transform 0.2s ease;
-  font-size: 0.625rem;
-}
-.channels-toggle-arrow.collapsed {
-  transform: rotate(-90deg);
-}
-
-/* Drag handle between channels & DMs — blends with natural section border */
-.sidebar-split-handle {
-  height: 0;
-  position: relative;
-  flex-shrink: 0;
-  z-index: 5;
-  border-top: 1px solid var(--border);
-  margin: 0 0.75rem;
-  padding: 0.25rem 0;
-  box-sizing: content-box;
-  transition: border-color 0.15s;
-}
-[data-channel-scroll="separate"] .sidebar-split-handle {
-  cursor: row-resize;
-}
-[data-channel-scroll="combined"] .sidebar-split-handle {
-  cursor: auto;
-}
-/* Short screen: use the expanded scrolling behavior regardless of mode */
-@media (max-height: 550px) {
-  [data-channel-scroll="separate"] .sidebar-split-handle {
-    cursor: auto;
-  }
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1231,14 +1183,10 @@
 .poll-checkbox-label input[type="checkbox"] {
   accent-color: var(--accent, #5865f2);
 }
-.sidebar-split-handle:hover,
-.sidebar-split-handle.dragging {
-  border-color: var(--accent);
-}
 
 /* DM pane (bottom) */
 .sidebar-split .dm-section-pane {
-  flex: 0 1 40%;
+  flex: 1;
   min-height: 3.75rem;
   overflow: hidden;
   display: flex;
@@ -1252,6 +1200,10 @@
   min-height: 0;
   overflow-y: auto;
   padding: 0.25rem 0;
+}
+
+.sidebar-split .pane-hidden {
+	display: none;
 }
 
 /* ─── Collapse arrow positioning override ─────────────── */

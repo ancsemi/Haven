@@ -21,14 +21,11 @@ _openSubChannelPanel() {
   modal.style.display = 'flex';
 
   // Close handlers
-  const closeBtn = document.getElementById('sub-panel-close-btn');
   const closeHandler = () => {
     modal.style.display = 'none';
-    closeBtn.removeEventListener('click', closeHandler);
     modal.removeEventListener('click', overlayHandler);
   };
   const overlayHandler = (e) => { if (e.target === modal) closeHandler(); };
-  closeBtn.addEventListener('click', closeHandler);
   modal.addEventListener('click', overlayHandler);
 },
 

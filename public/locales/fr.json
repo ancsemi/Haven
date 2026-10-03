@@ -76,16 +76,6 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "Serveurs",
-      "join_channel": "Rejoindre un salon",
-      "join_placeholder": "Entrez le code...",
-      "join_btn": "Rejoindre",
-      "create_channel": "Créer un salon",
-      "channel_name_placeholder": "Nom du salon...",
-      "private_channel": "Privé",
-      "private_hint": "(sur invitation)",
-      "temporary_channel": "Temporaire",
-      "temporary_hint": "(suppression auto)",
-      "hours": "heures",
       "channels": "Salons",
       "direct_messages": "Messages privés",
       "add_server": "Ajouter un serveur",
@@ -1045,6 +1035,22 @@
     }
   },
   "modals": {
+    "join-create-channel": {
+      "join": {
+        "title": "Rejoindre un salon",
+        "placeholder": "Entrez le code...",
+        "button": "Rejoindre"
+      },
+      "create": {
+        "title": "Créer un salon",
+        "name_placeholder": "Nom du salon...",
+        "private": "Privé",
+        "private_hint": "(sur invitation)",
+        "temporary": "Temporaire",
+        "temporary_hint": "(suppression auto)",
+        "hours": "heures"
+      }
+    },
     "common": {
       "cancel": "Annuler",
       "save": "Sauvegarder",

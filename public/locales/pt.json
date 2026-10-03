@@ -182,38 +182,12 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "Servidores",
-      "join_channel": "Entrar em um canal",
-      "join_placeholder": "Digite o código...",
-      "join_btn": "Entrar",
-      "create_channel": "Criar canal",
-      "channel_name_placeholder": "Nome do canal...",
-      "private_channel": "Privado",
-      "private_hint": "(somente por convite)",
-      "temporary_channel": "Temporário",
-      "temporary_hint": "(exclusão automática)",
-      "add_all_members": "Adicionar todos os membros",
-      "add_all_hint": "(todos entram automaticamente)",
-      "forum_channel": "Fórum",
-      "forum_hint": "(cada mensagem abre um tópico)",
-      "hours": "horas",
       "channels": "Canais",
       "direct_messages": "Mensagens diretas",
       "add_server": "Adicionar servidor",
       "manage_servers": "Gerenciar servidores",
       "sync_servers": "Sincronizar lista de servidores",
-      "this_server": "Este servidor",
-      "templates": {
-        "hint": "Comece por um modelo: ele já marca as opções e define tópico, somente leitura, anúncio e modo lento para você",
-        "chat": "Conversa",
-        "announcements": "Anúncios",
-        "forum": "Fórum",
-        "team": "Equipe privada",
-        "event": "Evento (24h)",
-        "slow": "Conversa lenta",
-        "text_only": "Só texto",
-        "delete_title": "Excluir modelo",
-        "delete_prompt": "Excluir o modelo salvo \"{{name}}\"?"
-      }
+      "this_server": "Este servidor"
     },
     "theme": {
       "title": "Tema",
@@ -2719,6 +2693,39 @@
     "search_placeholder": "Pesquisar configurações (Ctrl+F)"
   },
   "modals": {
+    "join-create-channel": {
+      "title": "Entrar ou criar canal",
+      "join": {
+        "title": "Entrar em um canal",
+        "placeholder": "Digite o código...",
+        "button": "Entrar"
+      },
+      "create": {
+        "title": "Criar canal",
+        "name_placeholder": "Nome do canal...",
+        "private": "Privado",
+        "private_hint": "(somente por convite)",
+        "temporary": "Temporário",
+        "temporary_hint": "(exclusão automática)",
+        "add_all_members": "Adicionar todos os membros",
+        "add_all_hint": "(todos entram automaticamente)",
+        "forum": "Fórum",
+        "forum_hint": "(cada mensagem abre um tópico)",
+        "hours": "horas",
+        "templates": {
+          "hint": "Comece por um modelo: ele já marca as opções e define tópico, somente leitura, anúncio e modo lento para você",
+          "chat": "Conversa",
+          "announcements": "Anúncios",
+          "forum": "Fórum",
+          "team": "Equipe privada",
+          "event": "Evento (24h)",
+          "slow": "Conversa lenta",
+          "text_only": "Só texto",
+          "delete_title": "Excluir modelo",
+          "delete_prompt": "Excluir o modelo salvo \"{{name}}\"?"
+        }
+      }
+    },
     "timezone": {
       "title": "Hora e fuso horário",
       "desc": "Defina aqui seu fuso horário e formato preferidos. Isso fica salvo na sua conta e vale em todos os seus dispositivos. Seu fuso nunca é mostrado para ninguém.",
