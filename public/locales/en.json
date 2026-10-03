@@ -245,7 +245,8 @@
       "ocean_depth": "Ocean Depth",
       "cross_light": "Cross Light",
       "stained_glass": "Stained Glass",
-      "divine_radiance": "Divine Radiance"
+      "divine_radiance": "Divine Radiance",
+      "light_mode": "Light Mode"
     },
     "actions": {
       "logout": "Logout",
