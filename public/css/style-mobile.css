@@ -315,6 +315,7 @@
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
+  padding-bottom: 0.18em;
 }
 .mobile-panel-close:hover { background: rgba(255,255,255,0.2); }
 /* Left sidebar close: absolute positioned */
