@@ -76,16 +76,6 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "Server",
-      "join_channel": "Einem Kanal beitreten",
-      "join_placeholder": "Code eingeben...",
-      "join_btn": "Beitreten",
-      "create_channel": "Kanal erstellen",
-      "channel_name_placeholder": "Kanalname...",
-      "private_channel": "Privat",
-      "private_hint": "(nur auf Einladung)",
-      "temporary_channel": "Temporär",
-      "temporary_hint": "(automatisch löschen)",
-      "hours": "Stunden",
       "channels": "Kanäle",
       "direct_messages": "Direktnachrichten",
       "add_server": "Server hinzufügen",
@@ -1053,6 +1043,22 @@
     }
   },
   "modals": {
+    "join-create-channel": {
+      "join": {
+        "title": "Einem Kanal beitreten",
+        "placeholder": "Code eingeben...",
+        "button": "Beitreten"
+      },
+      "create": {
+        "title": "Kanal erstellen",
+        "name_placeholder": "Kanalname...",
+        "private": "Privat",
+        "private_hint": "(nur auf Einladung)",
+        "temporary": "Temporär",
+        "temporary_hint": "(automatisch löschen)",
+        "hours": "Stunden"
+      }
+    },
     "common": {
       "cancel": "Abbrechen",
       "save": "Speichern",

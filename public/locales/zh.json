@@ -76,16 +76,6 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "服务器",
-      "join_channel": "加入频道",
-      "join_placeholder": "输入邀请码...",
-      "join_btn": "加入",
-      "create_channel": "创建频道",
-      "channel_name_placeholder": "频道名称...",
-      "private_channel": "私密",
-      "private_hint": "（仅限邀请）",
-      "temporary_channel": "临时",
-      "temporary_hint": "（自动删除）",
-      "hours": "小时",
       "channels": "频道",
       "direct_messages": "私信",
       "add_server": "添加服务器",
@@ -1045,6 +1035,22 @@
     }
   },
   "modals": {
+    "join-create-channel": {
+      "join": {
+        "title": "加入频道",
+        "placeholder": "输入邀请码...",
+        "button": "加入"
+      },
+      "create": {
+        "title": "创建频道",
+        "name_placeholder": "频道名称...",
+        "private": "私密",
+        "private_hint": "（仅限邀请）",
+        "temporary": "临时",
+        "temporary_hint": "（自动删除）",
+        "hours": "小时"
+      }
+    },
     "common": {
       "cancel": "取消",
       "save": "保存",

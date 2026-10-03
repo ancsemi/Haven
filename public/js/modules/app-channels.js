@@ -285,6 +285,30 @@ async switchChannel(code) {
   if (e2eDropdown) e2eDropdown.style.display = 'none';
 },
 
+_updateChannelTabNotificationDots() {
+	const channelDot = document.getElementById('channels-channel-tab-notify-dot');
+	const dmDot = document.getElementById('DMs-channel-tab-notify-dot');
+
+	if (!channelDot && !dmDot) return;
+
+	let hasChannelUnread = false;
+	let hasDmUnread      = false;
+
+	for (const ch of this.channels || []) {
+		const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
+		if (count <= 0) continue;
+
+		if (ch.is_dm) {
+			hasDmUnread = true;
+		} else {
+			hasChannelUnread = true;
+		}
+		if (hasChannelUnread && hasDmUnread) break;
+	}
+	if (channelDot) { channelDot.style.display = hasChannelUnread ? '' : 'none'; }
+	if (dmDot)      { dmDot.style.display      = hasDmUnread      ? '' : 'none'; }
+},
+
 _updateDmCleanupNotice(channel) {
   // Build / locate the notice element. Sits just below the topic bar (or the
   // header if no topic bar) so the layout is identical for everyone — the
@@ -435,6 +459,23 @@ _renderChannels() {
   // Show/hide sub-channel panel button based on whether sub-channels exist
   const subPanelBtn = document.getElementById('sub-channel-panel-btn');
   if (subPanelBtn) subPanelBtn.style.display = Object.keys(subChannelMap).length > 0 ? '' : 'none';
+
+  // ── Channel management buttons ──
+  if (!this._channelManagementButtonsBound) {
+    this._channelManagementButtonsBound = true;
+
+    // Organize Channels button
+    document.getElementById('organize-channels-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openOrganizeModal(null, true);
+    });
+
+    // Sub-channel subscriptions panel button
+    document.getElementById('sub-channel-panel-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openSubChannelPanel();
+    });
+  }
 
   // Sort sub-channels — respect parent's sort_alphabetical setting & per-tag overrides
   // sort_alphabetical: 0=manual, 1=alpha, 2=created, 3=oldest
@@ -679,57 +720,6 @@ _renderChannels() {
     return el;
   };
 
-  // ── Channels toggle (collapsible) ──
-  const channelsCollapsed = localStorage.getItem('haven_channels_collapsed') === 'true';
-  const channelsArrow = document.getElementById('channels-toggle-arrow');
-  if (channelsArrow) {
-    channelsArrow.classList.toggle('collapsed', channelsCollapsed);
-  }
-
-  // Set up channels toggle click (only once)
-  if (!this._channelsToggleBound) {
-    this._channelsToggleBound = true;
-    document.getElementById('channels-toggle')?.addEventListener('click', (e) => {
-      // Ignore clicks on the organize button or sub-panel button inside the header
-      if (e.target.closest('#organize-channels-btn')) return;
-      if (e.target.closest('#sub-channel-panel-btn')) return;
-      const nowCollapsed = list.style.display !== 'none';
-      list.style.display = nowCollapsed ? 'none' : '';
-      const arrow = document.getElementById('channels-toggle-arrow');
-      if (arrow) arrow.classList.toggle('collapsed', nowCollapsed);
-      localStorage.setItem('haven_channels_collapsed', nowCollapsed);
-      // Adjust pane flex so DMs fill when channels collapsed
-      const channelsPane = document.getElementById('channels-pane');
-      const dmPane = document.getElementById('dm-pane');
-      if (nowCollapsed) {
-        channelsPane.style.flex = '0 0 auto';
-        dmPane.style.flex = '1 1 0';
-      } else {
-        const savedRatio = localStorage.getItem('haven_sidebar_split_ratio');
-        const ratio = savedRatio ? parseFloat(savedRatio) : 0.6;
-        channelsPane.style.flex = `${ratio} 1 0`;
-        dmPane.style.flex = `${1 - ratio} 1 0`;
-      }
-    });
-    // Organize Channels button (admin only)
-    document.getElementById('organize-channels-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._openOrganizeModal(null, true); // server-level mode
-    });
-    // Sub-channel subscriptions panel button
-    document.getElementById('sub-channel-panel-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._openSubChannelPanel();
-    });
-  }
-  if (channelsCollapsed) {
-    list.style.display = 'none';
-    const cp = document.getElementById('channels-pane');
-    const dp = document.getElementById('dm-pane');
-    if (cp) cp.style.flex = '0 0 auto';
-    if (dp) dp.style.flex = '1 1 0';
-  }
-
   // ── Render channels grouped by category (case-insensitive) ──
   const categories = new Map();
   const _catCanonical = new Map(); // lowercase -> first-seen casing
@@ -906,40 +896,6 @@ _renderChannels() {
     }
   }
 
-  // ── "Create Temp Channel" button (visible if user has create_temp_channel perm) ──
-  if (this.user?.isAdmin || this._hasPerm('create_temp_channel')) {
-    const tempBtn = document.createElement('div');
-    tempBtn.className = 'channel-item temp-channel-create-btn';
-    tempBtn.style.cssText = 'opacity:0.5;cursor:pointer;padding:4px 12px;font-size:0.8rem;display:flex;align-items:center;gap:6px';
-    tempBtn.innerHTML = `<span style="font-size:0.9rem">➕</span><span>${t('channels.create_temp_channel')}</span>`;
-    tempBtn.title = t('channels.create_temp_channel_title');
-    tempBtn.addEventListener('click', async () => {
-      // One create form for every kind of channel: open it with Temporary
-      // ticked instead of a second prompt that only made a temp channel.
-      const form = document.getElementById('create-section-body');
-      const nameInput = document.getElementById('new-channel-name');
-      const tmp = document.getElementById('new-channel-temporary');
-      if (form && nameInput && tmp) {
-        form.style.display = '';
-        const arrow = document.getElementById('create-section-arrow');
-        if (arrow) arrow.textContent = '▾';
-        tmp.checked = true;
-        tmp.dispatchEvent(new Event('change'));
-        nameInput.focus();
-        nameInput.scrollIntoView({ block: 'center' });
-        return;
-      }
-      const name = await this._showPromptModal(
-        t('channels.create_temp_channel_title'),
-        t('channels.create_temp_channel_hint')
-      );
-      if (name && name.trim()) {
-        this.socket.emit('create-temp-channel', { name: name.trim() });
-      }
-    });
-    list.appendChild(tempBtn);
-  }
-
   // ── Hidden channels restore bar (#5409) ──
   // Only counts hidden channels that still exist and aren't the one currently
   // being viewed (a hidden current channel is still shown in the list).
@@ -959,41 +915,6 @@ _renderChannels() {
   const dmList = document.getElementById('dm-list');
   if (dmList) {
     dmList.innerHTML = '';
-    const dmCollapsed = localStorage.getItem('haven_dm_collapsed') === 'true';
-    const dmArrow = document.getElementById('dm-toggle-arrow');
-
-    // Set up DM toggle click (only once)
-    if (!this._dmToggleBound) {
-      this._dmToggleBound = true;
-      document.getElementById('dm-toggle-header')?.addEventListener('click', (e) => {
-        if (e.target.closest('#organize-dms-btn')) return;
-        const nowCollapsed = dmList.style.display !== 'none';
-        dmList.style.display = nowCollapsed ? 'none' : '';
-        const arrow = document.getElementById('dm-toggle-arrow');
-        if (arrow) arrow.classList.toggle('collapsed', nowCollapsed);
-        localStorage.setItem('haven_dm_collapsed', nowCollapsed);
-        // Shrink/restore the DM pane so channels get the freed space
-        const dp = document.getElementById('dm-pane');
-        const cp = document.getElementById('channels-pane');
-        if (nowCollapsed) {
-          if (dp) dp.style.flex = '0 0 auto';
-          if (cp) cp.style.flex = '1 1 0';
-        } else {
-          const r = parseFloat(localStorage.getItem('haven_sidebar_split_ratio')) || 0.6;
-          if (dp) dp.style.flex = `${1 - r} 1 0`;
-          if (cp) cp.style.flex = `${r} 1 0`;
-        }
-      });
-    }
-
-    if (dmArrow) dmArrow.classList.toggle('collapsed', dmCollapsed);
-    if (dmCollapsed) {
-      dmList.style.display = 'none';
-      const dp = document.getElementById('dm-pane');
-      const cp = document.getElementById('channels-pane');
-      if (dp) dp.style.flex = '0 0 auto';
-      if (cp) cp.style.flex = '1 1 0';
-    }
 
     // Update unread badge
     const totalUnread = dmChannels.reduce((sum, ch) => sum + ((ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0)), 0);
@@ -1006,10 +927,6 @@ _renderChannels() {
         badge.style.display = 'none';
       }
     }
-
-    // Show/hide DM pane
-    const dmPane = document.getElementById('dm-pane');
-    if (dmPane) dmPane.style.display = dmChannels.length ? '' : 'none';
 
     // ── DM categorization (client-side localStorage) ──
     const dmAssignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
@@ -1174,6 +1091,7 @@ _renderChannels() {
   this._setupChannelDragDrop();
   this._setupDmDragDrop();
   this._updateNestedIndicators();
+  this._updateChannelTabNotificationDots();
 },
 
 // ── Keyboard Navigation ──────────────────────────────────

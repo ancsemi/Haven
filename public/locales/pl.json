@@ -76,18 +76,6 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "Serwery",
-      "join_channel": "Dołącz do kanału",
-      "join_placeholder": "Wprowadź kod...",
-      "join_btn": "Dołącz",
-      "create_channel": "Utwórz kanał",
-      "channel_name_placeholder": "Nazwa kanału...",
-      "private_channel": "Prywatny",
-      "private_hint": "(tylko na zaproszenie)",
-      "temporary_channel": "Tymczasowy",
-      "temporary_hint": "(automatyczne usunięcie)",
-      "add_all_members": "Dodaj wszystkich członków serwera",
-      "add_all_hint": "(wszyscy dołączają automatycznie)",
-      "hours": "godziny",
       "channels": "Kanały",
       "direct_messages": "Wiadomości prywatne",
       "add_server": "Dodaj serwer",
@@ -1093,6 +1081,24 @@
     }
   },
   "modals": {
+    "join-create-channel": {
+      "join": {
+        "title": "Dołącz do kanału",
+        "placeholder": "Wprowadź kod...",
+        "button": "Dołącz"
+      },
+      "create": {
+        "title": "Utwórz kanał",
+        "name_placeholder": "Nazwa kanału...",
+        "private": "Prywatny",
+        "private_hint": "(tylko na zaproszenie)",
+        "temporary": "Tymczasowy",
+        "temporary_hint": "(automatyczne usunięcie)",
+        "add_all_members": "Dodaj wszystkich członków serwera",
+        "add_all_hint": "(wszyscy dołączają automatycznie)",
+        "hours": "godziny"
+      }
+    },
     "common": {
       "cancel": "Anuluj",
       "save": "Zapisz",

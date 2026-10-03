@@ -179,6 +179,36 @@
 .btn-sm.btn-danger { background: var(--danger, #e74c3c); color: var(--danger-text); font-size: 1rem; padding: 0.4375rem 0.625rem; line-height: 1; }
 .btn-sm.btn-danger:hover { filter: brightness(1.15); }
 
+/* ── Channel tabs ──────────────────────────────────────── */
+.sidebar-section.channel-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.channel-tab{
+  position: relative;
+}
+
+.channel-tab-notify-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--danger);
+  border-radius: 50%;
+}
+
+.join-create-btn {
+  background-color: transparent;
+  margin-left: auto;
+  font-size: 1.2em;
+  border-radius: var(--radius-sm);
+}
+.join-create-btn:hover {
+  background-color: var(--bg-hover);
+}
+
 /* ── Channel List ──────────────────────────────────────── */
 
 .channel-list { flex: 1; overflow-y: auto; padding: 0.25rem 0; }

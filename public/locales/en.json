@@ -182,37 +182,16 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "Servers",
-      "join_channel": "Join a Channel",
-      "join_placeholder": "Enter code...",
-      "join_btn": "Join",
-      "create_channel": "Create Channel",
-      "channel_name_placeholder": "Channel name...",
-      "private_channel": "Private",
-      "private_hint": "(invite-only)",
-      "temporary_channel": "Temporary",
-      "temporary_hint": "(auto-delete)",
-      "add_all_members": "Add all members",
-      "add_all_hint": "(everyone joins automatically)",
-      "forum_channel": "Forum",
-      "forum_hint": "(each message starts a topic)",
-      "hours": "hours",
+      "join-create": "Join or create channels",
       "channels": "Channels",
       "direct_messages": "Direct Messages",
       "add_server": "Add Server",
       "manage_servers": "Manage Servers",
       "sync_servers": "Sync Server List",
       "this_server": "This Server",
-      "templates": {
-        "hint": "Start from a template: it ticks the boxes and sets topic, read-only, announcement and slow mode for you",
-        "chat": "Chat",
-        "announcements": "Announcements",
-        "forum": "Forum",
-        "team": "Private team",
-        "event": "Event (24h)",
-        "slow": "Slow chat",
-        "text_only": "Text only",
-        "delete_title": "Delete template",
-        "delete_prompt": "Delete the saved template \"{{name}}\"?"
+      "tab": {
+        "channels": "Channels",
+        "dms": "DMs"
       }
     },
     "theme": {
@@ -2719,6 +2698,41 @@
     "search_placeholder": "Search settings (Ctrl+F)"
   },
   "modals": {
+    "join-create-channel": {
+      "title": "Join or Create Channel",
+      "join": {
+        "title": "Join a Channel",
+        "placeholder": "Enter code...",
+        "button": "Join"
+      },
+      "create": {
+        "title": "Create Channel",
+        "name_placeholder": "Channel name...",
+        "button": "Create",
+        "private": "Private",
+        "private_hint": "(invite-only)",
+        "temporary": "Temporary",
+        "temporary_hint": "(auto-delete)",
+        "forum": "Forum",
+        "forum_hint": "(each message starts a topic)",
+        "add_all_members": "Add all members",
+        "add_all_hint": "(everyone joins automatically)",
+        "hours": "hours",
+        "templates": {
+          "hint": "Start from a template: it ticks the boxes and sets topic, read-only, announcement and slow mode for you",
+          "chat": "Chat",
+          "announcements": "Announcements",
+          "forum": "Forum",
+          "team": "Private team",
+          "event": "Event (24h)",
+          "slow": "Slow chat",
+          "text_only": "Text only",
+          "delete_title": "Delete template",
+          "delete_prompt": "Delete the saved template \"{{name}}\"?"
+        },
+        "temp_voice": "Create Temp Voice Channel"
+      }
+    },
     "timezone": {
       "title": "Time & Timezone",
       "desc": "Set your preferred timezone and formatting here. These settings will be persisted to your account and will be used across all your devices. Your timezone is never revealed to any user.",

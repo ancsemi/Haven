@@ -232,14 +232,8 @@ _listenFeatureEvents() {
     if (data.is_dm && data.dm_target) {
       this._fetchDMPartnerKey(data);
     }
-    // Auto-expand DM section when a DM opens
-    const dmList = document.getElementById('dm-list');
-    if (dmList && dmList.style.display === 'none') {
-      dmList.style.display = '';
-      const arrow = document.querySelector('.dm-toggle-arrow');
-      if (arrow) arrow.classList.remove('collapsed');
-      localStorage.setItem('haven_dm_collapsed', false);
-    }
+    // Auto-show DM section when a DM opens
+    this._setChannelTab('DMs');
     // Open the new/existing DM as a PiP overlay rather than switching the
     // active channel. Single-click on the sidebar entry, the "Message [User]"
     // button, and right-click → DM all funnel through here.
