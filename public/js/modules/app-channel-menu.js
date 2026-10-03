@@ -84,6 +84,7 @@ _bindChannelMenu() {
       if (code) {
         this.socket.emit('join-channel', { code });
         closeJoinCreateChannelModal();
+        this._setChannelTab("channels");
       }
     });
 
@@ -107,6 +108,7 @@ _bindChannelMenu() {
       if (name) {
         this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, ...this._channelTemplateExtras()});
         closeJoinCreateChannelModal();
+        this._setChannelTab("channels");
       }
     });
 
@@ -134,6 +136,7 @@ _bindChannelMenu() {
     if (name && name.trim()) {
       this.socket.emit('create-temp-channel', { name: name.trim() });
       closeJoinCreateChannelModal();
+      this._setChannelTab("channels");
     }
   });
 
