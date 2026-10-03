@@ -219,9 +219,17 @@
             <div id="custom-theme-editor" style="display:none">
               <canvas id="custom-hue-bar" width="206" height="18"></canvas>
               <canvas id="custom-triangle" width="206" height="180"></canvas>
+              <label class="toggle-row theme-base-toggle">
+                <span data-i18n="app.theme.light_base">Light base</span>
+                <input type="checkbox" data-color-base-toggle>
+              </label>
             </div>
             <!-- RGB theme controls -->
             <div id="rgb-theme-editor" class="rgb-theme-editor" style="display:none">
+              <label class="toggle-row theme-base-toggle">
+                <span data-i18n="app.theme.light_base">Light base</span>
+                <input type="checkbox" data-color-base-toggle>
+              </label>
               <label class="rgb-slider-row">
                 <span class="rgb-slider-label" data-i18n="app.theme.speed">Speed</span>
                 <input type="range" id="rgb-speed-slider" min="1" max="100" value="30" class="slider-sm rgb-slider">

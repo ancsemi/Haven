@@ -195,7 +195,10 @@
         el.style.setProperty('--accent-hover', _hex(h,Math.max(s-.15,0),Math.min(v+.15,1)));
         el.style.setProperty('--accent-dim', _hex(h,Math.min(s+.1,1),Math.max(v-.2,0)));
         var rgb=_hsvRgb(h,s,v);
-        var rgb=_hsvRgb(h,s,v);
+        var lightBase = false;
+        try {
+          lightBase = localStorage.getItem('haven_color_base') === 'light';
+        } catch {}
 
         function _accentTextColor(r,g,b) {
           function linearize(c) {

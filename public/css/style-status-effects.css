@@ -1054,6 +1054,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  position: relative;
 }
 #custom-hue-bar {
   width: 100%;
@@ -1069,6 +1070,14 @@
   cursor: crosshair;
   display: block;
   border-radius: var(--radius-sm);
+}
+
+#custom-theme-editor .toggle-row.theme-base-toggle{
+  position: absolute;
+  left: 4px;
+  bottom: 134px;
+  width: 100px;
+  flex-direction: column;
 }
 
 /* ─── RGB Theme Editor ───────────────────────── */
