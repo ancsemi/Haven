@@ -76,18 +76,6 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "Серверы",
-      "join_channel": "Присоединиться к каналу",
-      "join_placeholder": "Введите код...",
-      "join_btn": "Присоединиться",
-      "create_channel": "Создать канал",
-      "channel_name_placeholder": "Название канала...",
-      "private_channel": "Приватный",
-      "private_hint": "(только по приглашению)",
-      "temporary_channel": "Временный",
-      "temporary_hint": "(автоудаление)",
-      "add_all_members": "Добавить всех участников сервера",
-      "add_all_hint": "(все присоединяются автоматически)",
-      "hours": "часов",
       "channels": "Каналы",
       "direct_messages": "Личные сообщения",
       "add_server": "Добавить сервер",
@@ -1103,6 +1091,24 @@
     }
   },
   "modals": {
+    "join-create-channel": {
+      "join": {
+        "title": "Присоединиться к каналу",
+        "placeholder": "Введите код...",
+        "button": "Присоединиться"
+      },
+      "create": {
+        "title": "Создать канал",
+        "name_placeholder": "Название канала...",
+        "private": "Приватный",
+        "private_hint": "(только по приглашению)",
+        "temporary": "Временный",
+        "temporary_hint": "(автоудаление)",
+        "add_all_members": "Добавить всех участников сервера",
+        "add_all_hint": "(все присоединяются автоматически)",
+        "hours": "часов"
+      }
+    },
     "common": {
       "cancel": "Отмена",
       "save": "Сохранить",

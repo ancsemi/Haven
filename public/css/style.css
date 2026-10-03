@@ -3514,6 +3514,13 @@ html.rgb-cycling *::after {
   padding-bottom: 0;
 }
 
+create-channel-section,
+join-channel-section { 
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
 .section-label {
   font-size: 0.6875rem;
   font-weight: 700;

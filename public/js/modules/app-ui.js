@@ -3434,6 +3434,129 @@ _setupUI() {
     this.adminActionTarget = null;
   });
 
+  // ── join-create-channel popout modal ─────────────────
+  const clearJoinCreateChannelModalForm = () => {
+    const codeInput = document.getElementById('channel-code-input');
+    if (codeInput) codeInput.value = '';
+
+    const nameInput = document.getElementById('new-channel-name');
+    if (nameInput) nameInput.value = '';
+
+    const pvt = document.getElementById('new-channel-private');
+    if (pvt) pvt.checked = false;
+
+    const tmp = document.getElementById('new-channel-temporary');
+    if (tmp) {
+      tmp.checked = false;
+      tmp.dispatchEvent(new Event('change'));
+    }
+
+    const forum = document.getElementById('new-channel-forum');
+    if (forum) forum.checked = false;
+
+    const all = document.getElementById('new-channel-add-all');
+    if (all) all.checked = false;
+
+    const duration = document.getElementById('new-channel-duration');
+    if (duration) duration.value = '24';
+
+    this._resetChannelTemplate();
+  };
+
+  const openJoinCreateChannelModal = () => {
+    const modal = document.getElementById('join-create-modal');
+    if (!modal) return;
+
+    const canCreateChannel = this.user.isAdmin || this._hasGlobalPerm('create_channel');
+    const createSection = modal.querySelector('.create-channel-section');
+    if (createSection) createSection.style.display = canCreateChannel ? '' : 'none';
+
+    const canCreateTempChannel = this.user.isAdmin || this._hasPerm('create_temp_channel');
+    const tempBtn = document.getElementById('create-temp-channel-btn');
+    if (tempBtn) tempBtn.style.display = canCreateTempChannel ? '' : 'none';
+
+    clearJoinCreateChannelModalForm();
+    modal.style.display = 'flex';
+  };
+  const closeJoinCreateChannelModal = () => {
+    const modal = document.getElementById('join-create-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    clearJoinCreateChannelModalForm();
+  };
+  document.getElementById('join-create-btn')?.addEventListener('click', () => {
+    openJoinCreateChannelModal();
+  });
+
+  document.getElementById('close-join-create-btn')?.addEventListener('click', () => {
+    closeJoinCreateChannelModal();
+  });
+  document.getElementById('join-create-modal')?.addEventListener('modal-dismiss', () => {
+    clearJoinCreateChannelModalForm();
+  });
+
+  // Join channel
+  const joinBtn = document.getElementById('join-channel-btn');
+  const codeInput = document.getElementById('channel-code-input');
+  if (joinBtn && codeInput) {
+    joinBtn.addEventListener('click', () => {
+      const code = codeInput.value.trim();
+      if (code) {
+        this.socket.emit('join-channel', { code });
+        closeJoinCreateChannelModal();
+      }
+    });
+
+    codeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') joinBtn.click();
+    });
+  }
+
+  // Create channel (admin)
+  const createBtn = document.getElementById('create-channel-btn');
+  const nameInput = document.getElementById('new-channel-name');
+  if (createBtn && nameInput) {
+    createBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      const isPrivate = document.getElementById('new-channel-private')?.checked || false;
+      const temporary = document.getElementById('new-channel-temporary')?.checked || false;
+      const duration = parseInt(document.getElementById('new-channel-duration')?.value, 10) || 24;
+      const addAllMembers = document.getElementById('new-channel-add-all')?.checked || false;
+      const isForum = document.getElementById('new-channel-forum')?.checked || false;
+
+      if (name) {
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, ...this._channelTemplateExtras()});
+        closeJoinCreateChannelModal();
+      }
+    });
+
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') createBtn.click();
+    });
+  }
+
+  // Toggle temporary channel duration row
+  const tempCheckbox = document.getElementById('new-channel-temporary');
+  if (tempCheckbox) {
+    tempCheckbox.addEventListener('change', () => {
+      const durRow = document.getElementById('temp-channel-duration-row');
+      if (durRow) durRow.style.display = tempCheckbox.checked ? '' : 'none';
+    });
+  }
+
+  // create temp voice channel button action
+  document.getElementById('create-temp-channel-btn')?.addEventListener('click', async () => {
+    const name = await this._showPromptModal(
+      t('channels.create_temp_channel_title'),
+      t('channels.create_temp_channel_hint')
+    );
+
+    if (name && name.trim()) {
+      this.socket.emit('create-temp-channel', { name: name.trim() });
+      closeJoinCreateChannelModal();
+    }
+  });
+
   // ── Settings popout modal ────────────────────────────
   const openSettingsModal = () => {
     this._snapshotAdminSettings();

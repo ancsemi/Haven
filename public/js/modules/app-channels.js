@@ -2315,40 +2315,6 @@ _renderChannels() {
     }
   }
 
-  // ── "Create Temp Channel" button (visible if user has create_temp_channel perm) ──
-  if (this.user?.isAdmin || this._hasPerm('create_temp_channel')) {
-    const tempBtn = document.createElement('div');
-    tempBtn.className = 'channel-item temp-channel-create-btn';
-    tempBtn.style.cssText = 'opacity:0.5;cursor:pointer;padding:4px 12px;font-size:0.8rem;display:flex;align-items:center;gap:6px';
-    tempBtn.innerHTML = `<span style="font-size:0.9rem">➕</span><span>${t('channels.create_temp_channel')}</span>`;
-    tempBtn.title = t('channels.create_temp_channel_title');
-    tempBtn.addEventListener('click', async () => {
-      // One create form for every kind of channel: open it with Temporary
-      // ticked instead of a second prompt that only made a temp channel.
-      const form = document.getElementById('create-section-body');
-      const nameInput = document.getElementById('new-channel-name');
-      const tmp = document.getElementById('new-channel-temporary');
-      if (form && nameInput && tmp) {
-        form.style.display = '';
-        const arrow = document.getElementById('create-section-arrow');
-        if (arrow) arrow.textContent = '▾';
-        tmp.checked = true;
-        tmp.dispatchEvent(new Event('change'));
-        nameInput.focus();
-        nameInput.scrollIntoView({ block: 'center' });
-        return;
-      }
-      const name = await this._showPromptModal(
-        t('channels.create_temp_channel_title'),
-        t('channels.create_temp_channel_hint')
-      );
-      if (name && name.trim()) {
-        this.socket.emit('create-temp-channel', { name: name.trim() });
-      }
-    });
-    list.appendChild(tempBtn);
-  }
-
   // ── Hidden channels restore bar (#5409) ──
   // Only counts hidden channels that still exist and aren't the one currently
   // being viewed (a hidden current channel is still shown in the list).

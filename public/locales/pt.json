@@ -179,18 +179,6 @@
     "brand": "HAVEN",
     "sidebar": {
       "servers": "Servidores",
-      "join_channel": "Entrar em um canal",
-      "join_placeholder": "Digite o código...",
-      "join_btn": "Entrar",
-      "create_channel": "Criar canal",
-      "channel_name_placeholder": "Nome do canal...",
-      "private_channel": "Privado",
-      "private_hint": "(somente por convite)",
-      "temporary_channel": "Temporário",
-      "temporary_hint": "(exclusão automática)",
-      "add_all_members": "Adicionar todos os membros",
-      "add_all_hint": "(todos entram automaticamente)",
-      "hours": "horas",
       "channels": "Canais",
       "direct_messages": "Mensagens diretas",
       "add_server": "Adicionar servidor",
@@ -2376,6 +2364,24 @@
     }
   },
   "modals": {
+    "join-create-channel": {
+      "join": {
+        "title": "Entrar em um canal",
+        "placeholder": "Digite o código...",
+        "button": "Entrar"
+      },
+      "create": {
+        "title": "Criar canal",
+        "name_placeholder": "Nome do canal...",
+        "private": "Privado",
+        "private_hint": "(somente por convite)",
+        "temporary": "Temporário",
+        "temporary_hint": "(exclusão automática)",
+        "add_all_members": "Adicionar todos os membros",
+        "add_all_hint": "(todos entram automaticamente)",
+        "hours": "horas"
+      }
+    },
     "common": {
       "cancel": "Cancelar",
       "save": "Salvar",

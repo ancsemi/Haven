@@ -3962,6 +3962,69 @@
     </div>
   </div>
 
+  <!-- Join / Create Channel Modal -->
+  <div class="modal-overlay" id="join-create-modal" style="display:none">
+    <div class="modal modal-wide" style="min-width:320px;max-height:85vh;display:flex;flex-direction:column">
+      <h3>➕ <span data-i18n="modals.join-create-channel.title">Join or Create Channel</span></h3>
+
+      <!-- Join Channel -->
+      <div class="join-channel-section" data-mod-id="join" data-haven-region="join-channel">
+        <h5 class="section-label">
+          <span class="section-label-text" style="flex:1" data-i18n="modals.join-create-channel.join.title">Join a Channel</span>
+        </h5>
+        <div class="input-row">
+          <input type="text" id="channel-code-input" data-i18n-placeholder="modals.join-create-channel.join.placeholder" placeholder="Enter code..." maxlength="8" spellcheck="false">
+          <button id="join-channel-btn" class="btn-sm btn-accent" data-i18n="modals.join-create-channel.join.button">Join</button>
+        </div>
+      </div>
+      <!-- Create Channel -->
+      <div class="create-channel-section" data-mod-id="create" data-haven-region="create-channel" style="display:none">
+        <h5 class="section-label">
+          <span class="section-label-text" style="flex:1" data-i18n="modals.join-create-channel.create.title">Create Channel</span>
+        </h5>
+        <div class="input-row select-row" id="new-channel-template-row" style="gap:6px;margin-bottom:4px">
+          <select id="new-channel-template" data-i18n-title="modals.join-create-channel.create.templates.hint" title="Start from a template: it ticks the boxes and sets topic, read-only, announcement and slow mode for you" style="flex:1;font-size:0.8rem"></select>
+          <button id="new-channel-template-del" class="btn-sm" type="button" data-i18n-title="modals.join-create-channel.create.templates.delete_title" title="Delete this saved template" style="display:none">🗑</button>
+        </div>
+        <div class="input-row">
+          <input type="text" id="new-channel-name" data-i18n-placeholder="modals.join-create-channel.create.name_placeholder" placeholder="Channel name..." maxlength="50">
+          <button id="create-channel-btn" class="btn-sm btn-accent" data-i18n="modals.join-create-channel.create.button">Create</button>
+        </div>
+
+        <label class="checkbox-row" data-i18n-title="modals.join-create-channel.create.private_hint" title="Invite-only" style="margin:6px 0 2px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+          <input type="checkbox" id="new-channel-private">
+          <span>🔒 <span data-i18n="modals.join-create-channel.create.private">Private</span></span>
+        </label>
+        <label class="checkbox-row" data-i18n-title="modals.join-create-channel.create.temporary_hint" title="Auto-deletes when empty" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+          <input type="checkbox" id="new-channel-temporary">
+          <span>⏱️ <span data-i18n="modals.join-create-channel.create.temporary">Temporary</span></span>
+        </label>
+        <label class="checkbox-row" data-i18n-title="modals.join-create-channel.create.forum_hint" title="Each message starts a topic; replies go in its thread" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+          <input type="checkbox" id="new-channel-forum">
+          <span>🗂️ <span data-i18n="modals.join-create-channel.create.forum">Forum</span></span>
+        </label>
+        <label class="checkbox-row" id="new-channel-add-all-row" data-i18n-title="modals.join-create-channel.create.add_all_hint" title="Everyone joins automatically" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+          <input type="checkbox" id="new-channel-add-all">
+          <span>👥 <span data-i18n="modals.join-create-channel.create.add_all_members">Add all members</span></span>
+        </label>
+
+        <div id="temp-channel-duration-row" style="display:none;margin:4px 0 2px;padding-left:22px">
+          <div class="input-row" style="gap:6px;align-items:center">
+            <input type="number" id="new-channel-duration" min="1" max="720" value="24" style="width:60px;max-width:6px;font-size:0.8rem" data-i18n-placeholder="modals.join-create-channel.create.hours" placeholder="Hours">
+            <span style="font-size:0.75rem;opacity:0.6" data-i18n="modals.join-create-channel.create.hours">hours</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top:auto;">
+        <button id="create-temp-channel-btn" class="btn-sm" style="margin-right:auto;display:none">
+          ➕ <span data-i18n="modals.join-create-channel.create.temp_voice">Create Temp Voice Channel</span>
+        </button>
+        <button class="btn-sm" id="close-join-create-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Invite Links Modal -->
   <div class="modal-overlay" id="invite-links-modal" style="display:none">
     <div class="modal modal-wide" style="max-width:640px;max-height:85vh;display:flex;flex-direction:column">
