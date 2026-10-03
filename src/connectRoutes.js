@@ -88,7 +88,7 @@ function baseUrl(req) {
 function connectUserId(token, provider) {
   if (!token || typeof token !== 'string') return null;
   const { verifyToken } = require('./auth');
-  const decoded = verifyToken(token);
+  const decoded = verifyToken(token, { allowScoped: true });
   if (!decoded || decoded.scope !== 'connect') return null;
   if (provider && decoded.provider !== provider) return null;
   return typeof decoded.id === 'number' ? decoded.id : null;
@@ -137,7 +137,7 @@ function finish(res, status, provider) {
 <script>
   // Only works when this page was opened via window.open (the normal path).
   // A tab the user landed in some other way just shows the message.
-  setTimeout(function(){ try { window.close(); } catch (e) {} }, ${ok ? 1200 : 4000});
+  setTimeout(function(){ try { window.close(); } catch (e) { /* browser refused; the message stays up */ } }, ${ok ? 1200 : 4000});
 </script></body></html>`);
 }
 
@@ -243,7 +243,7 @@ function createConnectRoutes(getActivity) {
           const data = await sumResp.json();
           personaName = data?.response?.players?.[0]?.personaname || '';
         }
-      } catch { /* name is cosmetic */ }
+      } catch { /* name is cosmetic; the link is already verified and is saved without it */ }
 
       req.activity.saveConnection(userId, 'steam', {
         externalId: steamId,
@@ -255,7 +255,7 @@ function createConnectRoutes(getActivity) {
 
       // Populate immediately so the user sees their game without waiting up to
       // a minute for the next poll tick.
-      req.activity.pollSteam().catch(() => {});
+      req.activity.pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message));
       return finish(res, 'ok', 'steam');
     } catch (err) {
       console.error('[Haven activity] Steam link failed:', err.message);
@@ -318,7 +318,7 @@ function createConnectRoutes(getActivity) {
           displayName = me.display_name || me.id || '';
           externalId = me.id || '';
         }
-      } catch { /* cosmetic */ }
+      } catch { /* profile name is cosmetic; the tokens above are what the link needs */ }
 
       req.activity.saveConnection(userId, 'spotify', {
         externalId,
@@ -328,7 +328,7 @@ function createConnectRoutes(getActivity) {
         expiresAt: Date.now() + ((Number(tok.expires_in) || 3600) * 1000),
       });
 
-      req.activity.pollSpotifyUser(userId).catch(() => {});
+      req.activity.pollSpotifyUser(userId).catch((err) => console.warn('[Haven activity] Spotify poll failed:', err.message));
       return finish(res, 'ok', 'spotify');
     } catch (err) {
       console.error('[Haven activity] Spotify link failed:', err.message);

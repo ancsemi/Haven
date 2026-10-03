@@ -19,10 +19,10 @@ _markRead(messageId) {
     // don't bounce back to "1" on the next channels-list snapshot.
     if (this.unreadCounts && this.unreadCounts[code]) {
       this.unreadCounts[code] = 0;
-      try { this._updateBadge?.(code); } catch {}
-      try { this._updateDmSectionBadge?.(); } catch {}
-      try { this._updateTabTitle?.(); } catch {}
-      try { this._updateDesktopBadge?.(); } catch {}
+      try { this._updateBadge?.(code); } catch (err) { console.warn('[Unread] _updateBadge failed', err); }
+      try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Unread] _updateDmSectionBadge failed', err); }
+      try { this._updateTabTitle?.(); } catch (err) { console.warn('[Unread] _updateTabTitle failed', err); }
+      try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[Unread] _updateDesktopBadge failed', err); }
     }
   }, 500);
 },
@@ -186,32 +186,33 @@ _initDesktopAppBanner() {
  *  is shown via the unified welcome-popup queue (see `_initWelcomePopups`). */
 _initAndroidBetaBanner() {
   // ── Top-bar banner ──
-  // Only permanently hidden if user checked "Don't show this again";
-  // the X button is session-only so it returns on next visit.
-  const permaDismissed = localStorage.getItem('haven_ab_banner_nodisplay');
-  const sessionDismissed = sessionStorage.getItem('haven_ab_banner_session');
-  if (!permaDismissed && !sessionDismissed) {
-    const banner = document.getElementById('android-beta-banner');
-    if (banner) {
-      banner.style.display = 'inline-flex';
-      banner.addEventListener('click', (e) => {
-        // Don't open modal if dismiss button was clicked
-        if (e.target.closest('.android-beta-dismiss')) return;
-        const modal = document.getElementById('android-beta-modal');
-        if (modal) modal.style.display = 'flex';
+  // Gone for good once the person closes it, or ticks "Don't show this
+  // again" on the promo. The record lives with the account like the promo's
+  // own, with a localStorage copy for the moment before preferences arrive.
+  // Nothing wrote the permanent flag before, so the banner came back on
+  // every reload whatever was clicked (#5594).
+  const banner = document.getElementById('android-beta-banner');
+  if (banner && !banner.dataset.wired) {
+    banner.dataset.wired = '1';
+    banner.addEventListener('click', (e) => {
+      // Don't open modal if dismiss button was clicked
+      if (e.target.closest('.android-beta-dismiss')) return;
+      const modal = document.getElementById('android-beta-modal');
+      if (modal) modal.style.display = 'flex';
+    });
+    const dismissBtn = document.getElementById('android-beta-dismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try { localStorage.setItem('haven_ab_banner_nodisplay', '1'); } catch { /* storage unavailable */ }
+        if (this._userPrefs) this._userPrefs.android_banner_seen = 'true';
+        this.socket?.emit('set-preference', { key: 'android_banner_seen', value: 'true' });
+        this._syncAndroidBanner();
       });
-      const dismissBtn = document.getElementById('android-beta-dismiss');
-      if (dismissBtn) {
-        dismissBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          banner.style.display = 'none';
-          // Session-only: banner comes back on next page load
-          sessionStorage.setItem('haven_ab_banner_session', '1');
-        });
-      }
     }
   }
+  this._syncAndroidBanner();
 
   // ── Wire the modal's own close buttons (Maybe Later, Submit, overlay
   // click) to just hide the modal. The welcome-popup queue takes care of
@@ -231,6 +232,23 @@ _initAndroidBetaBanner() {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.style.display = 'none';
   });
+},
+
+/** Show or hide the top-bar Android banner from what is known right now:
+ *  closed once (account record or its local copy), or the promo's "Don't
+ *  show this again" ticked. Runs at start-up, when preferences arrive, and
+ *  after either dismissal (#5594). Until the account's record is in, the
+ *  banner stays down rather than flashing at someone who already closed it. */
+_syncAndroidBanner() {
+  const banner = document.getElementById('android-beta-banner');
+  if (!banner) return;
+  let local = false;
+  try { local = !!localStorage.getItem('haven_ab_banner_nodisplay'); } catch { /* storage unavailable */ }
+  const prefs = this._userPrefs || {};
+  const gone = local || prefs.android_banner_seen === 'true' || prefs.promo_seen_android === 'true';
+  if (gone) { banner.style.display = 'none'; return; }
+  if (!this._userPrefs) return;
+  banner.style.display = 'inline-flex';
 },
 
 // ── Welcome Popup Queue (#5391 followup) ───────────────
@@ -287,6 +305,11 @@ _initWelcomePopups() {
     }
   } catch { /* storage unavailable: nothing to carry over */ }
 
+  this._runWelcomePromoQueue();
+},
+
+/** The app-promo sequencer. */
+_runWelcomePromoQueue() {
   // ── Build the queue ──
   // Each entry: { id, modalId, prefKey, checkboxId, shouldShow }. A popup is
   // filtered out only if its persisted "Don't show again" pref is set.
@@ -370,11 +393,11 @@ _initWelcomePopups() {
     // to display going from flex back to none/empty and advance.
     modal.style.display = 'flex';
 
-    if (activeObserver) { try { activeObserver.disconnect(); } catch {} activeObserver = null; }
+    if (activeObserver) { activeObserver.disconnect(); activeObserver = null; }
     activeObserver = new MutationObserver(() => {
       const d = modal.style.display;
       if (d === 'none' || d === '') {
-        try { activeObserver.disconnect(); } catch {}
+        activeObserver.disconnect();
         activeObserver = null;
         // Persist a dismissal only when the user ticked this modal's "Don't
         // show again" box. A plain close (Next / Done / Maybe Later / overlay)
@@ -383,6 +406,9 @@ _initWelcomePopups() {
         const checkbox = document.getElementById(entry.checkboxId);
         if (checkbox && checkbox.checked) {
           this.socket.emit('set-preference', { key: entry.prefKey, value: 'true' });
+          if (this._userPrefs) this._userPrefs[entry.prefKey] = 'true';
+          // The Android promo's box retires the top-bar banner too (#5594).
+          if (entry.prefKey === 'promo_seen_android') this._syncAndroidBanner?.();
         }
         idx++;
         // Tiny delay so the close animation / focus shift completes before
@@ -397,6 +423,201 @@ _initWelcomePopups() {
   setTimeout(showCurrent, 1200);
 },
 
+// ── Persisted timezone / time-format ────────────────────────────────────
+// Storage (server-side user_preferences): `timezone` is an IANA zone id, so
+// Intl resolves DST per-instant rather than freezing an offset; `time_format`
+// is '12' or '24'. Nothing is asked at login: the modal opens from Settings,
+// Localization, Configure Time, and until someone saves a zone every time
+// follows the browser as before.
+
+/** Common IANA zones for the rare engine without Intl.supportedValuesOf. */
+_fallbackTimezones() {
+  return [
+    'UTC', 'America/Los_Angeles', 'America/Denver', 'America/Chicago',
+    'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Paris',
+    'Europe/Berlin', 'Europe/Moscow', 'Africa/Johannesburg', 'Asia/Dubai',
+    'Asia/Kolkata', 'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Sydney',
+    'Pacific/Auckland',
+  ];
+},
+
+/** Fill the timezone dropdown once from the full IANA list (or the fallback),
+ *  always including the device's own zone and UTC. */
+_buildTimezoneSelect() {
+  const sel = document.getElementById('timezone-select');
+  if (!sel || sel.dataset.built === '1') return;
+  let zones = [];
+  try { zones = (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone') : []; } catch { zones = []; }
+  if (!zones.length) zones = this._fallbackTimezones();
+  let browserTz = 'UTC';
+  try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
+  if (browserTz && !zones.includes(browserTz)) zones = [browserTz, ...zones];
+  if (!zones.includes('UTC')) zones = ['UTC', ...zones];
+  const frag = document.createDocumentFragment();
+  for (const z of zones) {
+    const o = document.createElement('option');
+    o.value = z;
+    o.textContent = z.replace(/_/g, ' ');
+    frag.appendChild(o);
+  }
+  sel.innerHTML = '';
+  sel.appendChild(frag);
+  sel.dataset.built = '1';
+},
+
+/** Open the modal. `firstRun` is informational; the buttons behave the same
+ *  whether it was opened automatically or from settings. `onClose` runs after
+ *  Skip / Remind later (Confirm reloads instead). */
+_openTimezoneModal({ firstRun = false, onClose = null } = {}) {
+  const modal = document.getElementById('timezone-modal');
+  if (!modal) { if (onClose) onClose(); return; }
+  this._buildTimezoneSelect();
+  const tzSel = document.getElementById('timezone-select');
+  const fmtSel = document.getElementById('timeformat-select');
+
+  // Seed from the saved prefs, else the browser's current zone / clock.
+  let browserTz = 'UTC';
+  try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
+  const wantTz = (this._userPrefs && this._userPrefs.timezone) || browserTz;
+  if (tzSel) {
+    tzSel.value = wantTz;
+    if (tzSel.value !== wantTz) { // zone not in the list: add and select it
+      const o = document.createElement('option');
+      o.value = wantTz; o.textContent = wantTz.replace(/_/g, ' ');
+      tzSel.appendChild(o); tzSel.value = wantTz;
+    }
+  }
+  const wantFmt = (this._userPrefs && this._userPrefs.time_format) || (this._tsm24hDefault?.() ? '24' : '12');
+  if (fmtSel) fmtSel.value = wantFmt;
+
+  this._tzModalOnClose = typeof onClose === 'function' ? onClose : null;
+
+  // Erase only shows once a zone is saved; it clears the saved zone and
+  // returns the account to the browser default.
+  const hasTz = !!(this._userPrefs && this._userPrefs.timezone);
+  const eraseBtn = document.getElementById('timezone-erase-btn');
+  if (eraseBtn) eraseBtn.style.display = hasTz ? '' : 'none';
+
+  if (!this._tzModalWired) {
+    this._tzModalWired = true;
+    const live = () => this._updateTimezonePreview();
+    tzSel?.addEventListener('change', live);
+    fmtSel?.addEventListener('change', live);
+    document.getElementById('timezone-erase-btn')?.addEventListener('click', () => this._resolveTimezoneModal('erase'));
+    document.getElementById('timezone-cancel-btn')?.addEventListener('click', () => this._resolveTimezoneModal('cancel'));
+    document.getElementById('timezone-confirm-btn')?.addEventListener('click', () => this._resolveTimezoneModal('confirm'));
+    // A click on the backdrop closes without saving, like Cancel.
+    modal.addEventListener('click', (e) => { if (e.target === modal) this._resolveTimezoneModal('cancel'); });
+  }
+
+  this._updateTimezonePreview();
+  // When opened from the settings panel, close it first so this modal is not
+  // stacked behind it (both share the same modal-overlay z-index). Harmless on
+  // the first-run path, where settings is already closed.
+  const settings = document.getElementById('settings-modal');
+  if (settings) settings.style.display = 'none';
+  modal.style.display = 'flex';
+},
+
+/** Live sample of the chosen zone + format, refreshed on every change. */
+_updateTimezonePreview() {
+  const el = document.getElementById('timezone-preview');
+  if (!el) return;
+  const tz = document.getElementById('timezone-select')?.value;
+  const fmt = document.getElementById('timeformat-select')?.value;
+  const opts = { dateStyle: 'full', timeStyle: 'medium' };
+  if (tz) opts.timeZone = tz;
+  if (fmt === '12') opts.hour12 = true;
+  else if (fmt === '24') opts.hour12 = false;
+  try { el.textContent = new Date().toLocaleString(this._timeLocale?.(), opts); }
+  catch { el.textContent = new Date().toLocaleString(); }
+},
+
+/** Handle one of the three buttons. */
+_resolveTimezoneModal(action) {
+  const modal = document.getElementById('timezone-modal');
+  const tz = document.getElementById('timezone-select')?.value;
+  const fmt = document.getElementById('timeformat-select')?.value === '24' ? '24' : '12';
+  const onClose = this._tzModalOnClose; this._tzModalOnClose = null;
+  if (modal) modal.style.display = 'none';
+
+  if (action === 'confirm') {
+    // Saves both prefs, then reloads so every already-rendered timestamp picks
+    // up the new zone/format. onClose (the promo queue) is intentionally not
+    // run — the reload re-evaluates it cleanly afterwards.
+    this._saveTimezonePrefs(tz, fmt);
+    return;
+  }
+  if (action === 'erase') {
+    // Clear the saved zone/format and reload so every timestamp reverts to the
+    // browser default. onClose is not run — the reload re-evaluates cleanly.
+    this._eraseTimezonePrefs();
+    return;
+  }
+  // Cancel persists nothing.
+  if (onClose) onClose();
+},
+
+/** Delete the saved timezone/format, then reload once the server confirms. */
+_eraseTimezonePrefs() {
+  this._userPrefs = this._userPrefs || {};
+  delete this._userPrefs.timezone;
+  delete this._userPrefs.time_format;
+  this._updateTimezoneSummary?.();
+
+  const reload = () => { try { location.reload(); } catch { /* non-browser */ } };
+  if (!this.socket) { reload(); return; }
+
+  // Delete both rows and reload once their deletions are acknowledged.
+  const pending = new Set(['timezone', 'time_format']);
+  let timer = null;
+  const finish = () => { this.socket.off('preference-deleted', onDeleted); clearTimeout(timer); reload(); };
+  const onDeleted = ({ key } = {}) => { pending.delete(key); if (!pending.size) finish(); };
+  this.socket.on('preference-deleted', onDeleted);
+  timer = setTimeout(finish, 1500);
+  this.socket.emit('delete-preference', { key: 'timezone' });
+  this.socket.emit('delete-preference', { key: 'time_format' });
+},
+
+/** Persist timezone + format, wait for the server to confirm, then reload. */
+_saveTimezonePrefs(tz, fmt) {
+  const zone = (typeof tz === 'string' && tz) ? tz : null;
+  const format = fmt === '24' ? '24' : '12';
+  this._userPrefs = this._userPrefs || {};
+  if (zone) this._userPrefs.timezone = zone;
+  this._userPrefs.time_format = format;
+  this._updateTimezoneSummary?.();
+
+  const reload = () => { try { location.reload(); } catch { /* non-browser */ } };
+  if (!this.socket || !zone) { reload(); return; }
+
+  // Reload only once the writes are acknowledged, so a fresh get-preferences
+  // after the reload is guaranteed to return them. A short timeout guards
+  // against a dropped ack so we never hang on this screen.
+  const pending = new Set(['timezone', 'time_format']);
+  let timer = null;
+  const finish = () => { this.socket.off('preference-saved', onSaved); clearTimeout(timer); reload(); };
+  const onSaved = ({ key } = {}) => { pending.delete(key); if (!pending.size) finish(); };
+  this.socket.on('preference-saved', onSaved);
+  timer = setTimeout(finish, 1500);
+  this.socket.emit('set-preference', { key: 'timezone', value: zone });
+  this.socket.emit('set-preference', { key: 'time_format', value: format });
+},
+
+/** Reflect the saved (or unset) state in the settings row. */
+_updateTimezoneSummary() {
+  const el = document.getElementById('timezone-current-summary');
+  if (!el) return;
+  const tz = this._userPrefs && this._userPrefs.timezone;
+  const fmt = this._userPrefs && this._userPrefs.time_format;
+  if (tz) {
+    const fmtLabel = fmt ? ` · ${t(fmt === '24' ? 'settings.timezone_section.fmt_24' : 'settings.timezone_section.fmt_12')}` : '';
+    el.textContent = tz.replace(/_/g, ' ') + fmtLabel;
+  } else {
+    el.textContent = t('settings.timezone_section.not_set');
+  }
+},
+
 async _setupDesktopShortcuts() {
   if (!window.havenDesktop?.shortcuts) return;
   // Guard against duplicate listener attachment (called each time the nav item is clicked)
@@ -408,6 +629,8 @@ async _setupDesktopShortcuts() {
     'ArrowLeft': 'Left', 'ArrowRight': 'Right',
     'Escape': 'Escape', 'Tab': 'Tab', 'Enter': 'Return',
     'Backspace': 'Backspace', 'Delete': 'Delete',
+    // Electron spells the lock keys this way; the browser reports CapsLock.
+    'CapsLock': 'Capslock', 'NumLock': 'Numlock', 'ScrollLock': 'Scrolllock',
     'Home': 'Home', 'End': 'End', 'PageUp': 'PageUp', 'PageDown': 'PageDown',
   };
 
@@ -417,7 +640,7 @@ async _setupDesktopShortcuts() {
   };
 
   let config = {};
-  try { config = await window.havenDesktop.shortcuts.getConfig(); } catch (e) {}
+  try { config = await window.havenDesktop.shortcuts.getConfig(); } catch (e) { console.warn('[Desktop] could not read the shortcut config', e); }
 
   const actions = ['mute', 'deafen', 'ptt'];
 
@@ -436,7 +659,7 @@ async _setupDesktopShortcuts() {
         recordBtn.textContent = t('platform.shortcuts.record');
         keyEl.classList.remove('recording-label');
         // Re-register shortcuts after cancelling recording
-        window.havenDesktop.shortcuts.setConfig({}).catch(() => {});
+        window.havenDesktop.shortcuts.setConfig({}).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
         return;
       }
       recordBtn.classList.add('recording');
@@ -446,7 +669,7 @@ async _setupDesktopShortcuts() {
 
       // Temporarily clear the shortcut being recorded so its global hotkey
       // doesn't swallow the keystroke before the BrowserView sees it
-      window.havenDesktop.shortcuts.setConfig({ [action]: '' }).catch(() => {});
+      window.havenDesktop.shortcuts.setConfig({ [action]: '' }).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
 
       // (#5255) Three things the previous recorder couldn't do:
       // 1. Lone modifiers (just Alt / Ctrl / Shift) — useful while gaming so
@@ -483,7 +706,7 @@ async _setupDesktopShortcuts() {
             ? !!outcome.ok
             : (outcome !== false);                // boolean (old shape) or undefined → trust it
           if (!ok) {
-            await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch(() => {});
+            await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
             keyEl.textContent = formatAccel(config[action] || '');
             const reason = (typeof outcome === 'object' && outcome.reason) || '';
             let msg;
@@ -500,7 +723,7 @@ async _setupDesktopShortcuts() {
           config[action] = accel;
           keyEl.textContent = formatAccel(accel);
         } catch (err) {
-          await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch(() => {});
+          await window.havenDesktop.shortcuts.setConfig({ [action]: config[action] || '' }).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
           keyEl.textContent = formatAccel(config[action] || '');
           this._showToast?.(t('platform.shortcuts.register_failed'), 'error');
         }
@@ -559,7 +782,7 @@ async _setupDesktopShortcuts() {
         await window.havenDesktop.shortcuts.setConfig({ [action]: '' });
         config[action] = '';
         keyEl.textContent = '—';
-      } catch (err) {}
+      } catch (err) { console.warn('[Desktop] could not clear the shortcut', err); }
     });
   });
 
@@ -588,7 +811,7 @@ async _setupDesktopAppPrefs() {
   this._desktopPrefsReady = true;
 
   let prefs = {};
-  try { prefs = await window.havenDesktop.prefs.get(); } catch {}
+  try { prefs = await window.havenDesktop.prefs.get(); } catch (err) { console.warn('[Desktop] could not read desktop preferences', err); }
 
   const startEl   = document.getElementById('pref-start-on-login');
   const hiddenEl  = document.getElementById('pref-start-hidden');
@@ -598,6 +821,7 @@ async _setupDesktopAppPrefs() {
   const menuBarEl = document.getElementById('pref-hide-menu-bar');
   const gpuVsyncEl     = document.getElementById('pref-disable-gpu-vsync');
   const unlimitFpsEl   = document.getElementById('pref-unlimit-frame-rate');
+  const linuxVaapiEl   = document.getElementById('pref-linux-vaapi');
   const versionEl = document.getElementById('desktop-version-info');
 
   if (startEl) { startEl.checked = !!prefs.startOnLogin; }
@@ -608,13 +832,14 @@ async _setupDesktopAppPrefs() {
   if (menuBarEl) { menuBarEl.checked = !!prefs.hideMenuBar; }
   if (gpuVsyncEl)   { gpuVsyncEl.checked   = !!prefs.disableGpuVsync; }
   if (unlimitFpsEl) { unlimitFpsEl.checked = !!prefs.unlimitFrameRate; }
+  if (linuxVaapiEl) { linuxVaapiEl.checked = !!prefs.linuxVaapiBypass; }
 
   // Show desktop version
   if (versionEl && window.havenDesktop.getVersion) {
     try {
       const v = await window.havenDesktop.getVersion();
       versionEl.textContent = `Haven Desktop v${v}`;
-    } catch {}
+    } catch (err) { console.warn('[Desktop] could not read the app version', err); }
   }
 
   startEl?.addEventListener('change', async () => {
@@ -668,6 +893,18 @@ async _setupDesktopAppPrefs() {
       }
     } catch { unlimitFpsEl.checked = !unlimitFpsEl.checked; }
   });
+
+  linuxVaapiEl?.addEventListener('change', async () => {
+    try {
+      const res = await window.havenDesktop.prefs.setLinuxVaapiBypass(linuxVaapiEl.checked);
+      if (res?.requiresRestart) {
+        this._showToast?.(t('platform.desktop.vaapi_updated'), 'info');
+      }
+    } catch (err) {
+      console.warn('[Desktop] could not save the VA-API setting', err);
+      linuxVaapiEl.checked = !linuxVaapiEl.checked;
+    }
+  });
 },
 
 /* ── E2E Encryption Helpers ──────────────────────────── */
@@ -692,14 +929,15 @@ async _initE2E() {
       try {
         const savedKey = localStorage.getItem('haven_sync_key');
         if (savedKey) this._e2eWrappingKey = savedKey;
-      } catch { /* ignore */ }
+      } catch { /* storage blocked (private mode): keep the default */ }
     }
     if (ok) {
       await this._e2eSetupListeners();
+      this._updateE2EIndicator();
       // If keys were auto-reset during init (backup unwrap failed), notify
       if (this.e2e.keysWereReset) {
         setTimeout(() => {
-          this._appendE2ENotice(t('platform.e2e.keys_regenerated', { date: new Date().toLocaleString() }));
+          this._appendE2ENotice(t('platform.e2e.keys_regenerated', { date: this._fmtDateTime(new Date()) }));
         }, 500);
       }
     } else {
@@ -730,7 +968,7 @@ async _initE2E() {
               await this.serverManager.syncWithServer(this.token, key);
               this._renderServerBar();
               this._pushServersToDesktopHistory();
-            } catch { /* silent — best-effort background sync */ }
+            } catch (err) { console.warn('[Sync] server list sync failed', err); }
           }
         }, 5 * 60 * 1000);
       }
@@ -746,7 +984,7 @@ async _initE2E() {
               await this.serverManager.syncWithServer(this.token, key);
               this._renderServerBar();
               this._pushServersToDesktopHistory();
-            } catch { /* silent */ }
+            } catch (err) { console.warn('[Sync] server list sync failed', err); }
           }
         });
       }
@@ -794,21 +1032,26 @@ async _e2eSetupListeners() {
   this._e2eListenersAttached = true;
 
   this.socket.on('public-key-result', (data) => {
-    if (!data.jwk) return;
+    if (!data || !data.userId) return;
+    // Remembered so the DM header can say messages there are not encrypted.
+    if (!data.jwk) {
+      this._e2eNoKey.add(data.userId);
+      this._updateE2EIndicator();
+      return;
+    }
+    this._e2eNoKey.delete(data.userId);
     const oldKey = this._dmPublicKeys[data.userId];
     const changed = oldKey && (oldKey.x !== data.jwk.x || oldKey.y !== data.jwk.y);
+    // The first key seen for a partner is remembered on this device.
+    if (data.userId !== this.user?.id) this._e2ePinCheck(data.userId, data.jwk);
     this._dmPublicKeys[data.userId] = data.jwk;
+    this._updateE2EIndicator();
 
     if (changed && this.e2e) {
       this.e2e.clearSharedKey(data.userId);
       console.warn(`[E2E] Partner ${data.userId} key changed — cache invalidated`);
-
-      // Post a visible notice if we're currently viewing a DM with this partner.
-      // Store it so it survives the message re-render triggered by _retryDecryptForUser.
-      const ch = this.channels.find(c => c.code === this.currentChannel);
-      if (ch && ch.is_dm && ch.dm_target && ch.dm_target.id === data.userId) {
-        this._pendingE2ENotice = t('platform.e2e.partner_keys_changed', { name: ch.dm_target.username, date: new Date().toLocaleString() });
-      }
+      // Noted in their DM for the rest of the session (see _renderMessages).
+      this._noteE2EKeyChange(data.userId);
     }
 
     // Resolve any pending requestPartnerKey promises for this user
@@ -892,7 +1135,7 @@ async _recoverE2EFromBackup() {
   if (synced.ok) {
     await this.e2e.publishKey(this.socket);
     this._dmPublicKeys = {};
-    this._appendE2ENotice(t('platform.e2e.keys_recovered_notice', { date: new Date().toLocaleString() }));
+    this._appendE2ENotice(t('platform.e2e.keys_recovered_notice', { date: this._fmtDateTime(new Date()) }));
     this._showToast(t('platform.e2e.keys_recovered'), 'success');
 
     // Re-fetch messages if currently in a DM so they attempt decryption again.
@@ -1000,12 +1243,13 @@ _showE2EPasswordModal() {
 
   // (#12) An SSO account has no Haven password — its key is wrapped with the
   // separate encryption passphrase set at first sign-in. Ask for that instead,
-  // or the prompt tells the user to enter a password they do not have.
-  if (this.user?.isSso) {
+  // or the prompt tells the user to enter a password they do not have. An
+  // account that chose its own encryption passphrase is asked for that too.
+  if (this._e2eUsesPassphrase()) {
     const titleEl = modal.querySelector('h3 span');
     const descEl = modal.querySelector('.e2e-pw-desc');
     if (titleEl) titleEl.textContent = t('platform.e2e.passphrase_required');
-    if (descEl) descEl.textContent = t('platform.e2e.passphrase_desc');
+    if (descEl) descEl.textContent = t(this.user?.isSso ? 'platform.e2e.passphrase_desc' : 'platform.e2e.passphrase_desc_own');
     input.placeholder = t('platform.e2e.passphrase_placeholder');
   }
 
@@ -1035,7 +1279,7 @@ async _submitE2EPassword() {
 
   const password = input.value;
   if (!password) {
-    errorEl.textContent = t(this.user?.isSso ? 'platform.e2e.enter_passphrase' : 'platform.e2e.enter_password');
+    errorEl.textContent = t(this._e2eUsesPassphrase() ? 'platform.e2e.enter_passphrase' : 'platform.e2e.enter_password');
     errorEl.style.display = 'block';
     return;
   }
@@ -1065,7 +1309,7 @@ async _submitE2EPassword() {
     // copy and no hash of it. Unwrapping the key IS the check: a wrong
     // passphrase fails the AES-GCM auth tag below, and init() leaves the
     // existing backup untouched rather than regenerating over it.
-    const data = this.user?.isSso
+    const data = this._e2eUsesPassphrase()
       ? { valid: true }
       : await (await fetch('/api/auth/verify-password', {
           method: 'POST',
@@ -1108,6 +1352,7 @@ async _submitE2EPassword() {
     if (ok) {
       // Set up E2E listeners (handles publish + conflict resolution)
       await this._e2eSetupListeners();
+      this._updateE2EIndicator();
       this._closeE2EPasswordModal();
       this._showToast(t('platform.e2e.unlocked'), 'success');
 
@@ -1130,6 +1375,12 @@ async _submitE2EPassword() {
     submitBtn.disabled = false;
     submitBtn.textContent = t('platform.e2e.unlock');
   }
+},
+
+/** SSO accounts, and accounts that chose one, unlock E2E with a passphrase
+ *  the server never sees rather than with the login password. */
+_e2eUsesPassphrase() {
+  return !!(this.user?.isSso || this.user?.e2ePassphrase);
 },
 
 /**
@@ -1159,6 +1410,142 @@ _getE2EPartnerFor(code) {
   if (!ch || !ch.is_dm || !ch.dm_target) return null;
   const jwk = this._dmPublicKeys[ch.dm_target.id];
   return jwk ? { userId: ch.dm_target.id, publicKeyJwk: jwk } : null;
+},
+
+// ── Partner key pinning ───────────────────────────────
+// The first key seen for each DM partner is remembered on this device. A
+// different one later means they reset their keys, or someone in between
+// swapped it, and nothing is encrypted to it until the sender accepts it.
+_e2ePinStore() {
+  return `haven_e2e_pins_${this.user?.id}`;
+},
+
+_e2ePinFingerprint(jwk) {
+  return `${jwk.x}.${jwk.y}`;
+},
+
+_e2ePins() {
+  try { return JSON.parse(localStorage.getItem(this._e2ePinStore()) || '{}') || {}; } catch { return {}; }
+},
+
+_e2ePinSet(userId, jwk) {
+  try {
+    const pins = this._e2ePins();
+    pins[userId] = this._e2ePinFingerprint(jwk);
+    localStorage.setItem(this._e2ePinStore(), JSON.stringify(pins));
+  } catch { /* no storage: nothing is remembered */ }
+},
+
+/** 'new' (and now remembered), 'same', or 'changed'. */
+_e2ePinCheck(userId, jwk) {
+  const pinned = this._e2ePins()[userId];
+  if (!pinned) { this._e2ePinSet(userId, jwk); return 'new'; }
+  return pinned === this._e2ePinFingerprint(jwk) ? 'same' : 'changed';
+},
+
+/** Web Crypto only exists on HTTPS (and localhost), so plain HTTP has no E2E. */
+_e2eSupported() {
+  return typeof HavenE2E !== 'undefined' && !!(window.crypto && window.crypto.subtle);
+},
+
+/**
+ * Every DM send asks here first. Resolves { partner } to encrypt for,
+ * { partner: null } to send as it is (not a DM, or the sender agreed to send
+ * it unencrypted), or null when the sender backed out. A DM used to go out
+ * unencrypted, without asking, whenever a key was missing, and a partner's
+ * key could be swapped without anyone noticing.
+ */
+_dmSendGate(code) {
+  const ch = this.channels?.find(c => c.code === code);
+  if (!ch || !ch.is_dm || !ch.dm_target) return Promise.resolve({ partner: null });
+  // One question per conversation at a time, so a batch of files asks once.
+  if (this._dmGateAsking.has(code)) return this._dmGateAsking.get(code);
+  const asking = this._dmSendGateAsk(ch).finally(() => this._dmGateAsking.delete(code));
+  this._dmGateAsking.set(code, asking);
+  return asking;
+},
+
+async _dmSendGateAsk(ch) {
+  const code = ch.code;
+  const partnerId = ch.dm_target.id;
+  const name = ch.dm_target.username;
+  const self = ch.is_self_dm || partnerId === this.user?.id;
+  let partner = this._getE2EPartnerFor(code);
+  if (!partner && this.e2e?.ready) {
+    try {
+      const jwk = await this.e2e.requestPartnerKey(this.socket, partnerId);
+      if (jwk) { this._dmPublicKeys[partnerId] = jwk; partner = this._getE2EPartnerFor(code); }
+    } catch { /* same as no key */ }
+  }
+  if (partner) {
+    if (self || this._e2ePinCheck(partnerId, partner.publicKeyJwk) !== 'changed') return { partner };
+    const choice = await this._askChoice(
+      t('platform.e2e.key_changed_title', { name }),
+      t('platform.e2e.key_changed_body', { name }),
+      [
+        { id: 'cancel', label: t('modals.common.cancel') },
+        { id: 'verify', label: t('platform.e2e.key_changed_verify') },
+        { id: 'trust', label: t('platform.e2e.key_changed_trust'), danger: true },
+      ]
+    );
+    if (choice === 'verify') this._showE2EVerification(code);
+    if (choice !== 'trust') return null;
+    this._e2ePinSet(partnerId, partner.publicKeyJwk);
+    this._updateE2EIndicator();
+    return { partner };
+  }
+  if (this._plainDmOk.has(code)) return { partner: null };
+  const supported = this._e2eSupported();
+  const locked = supported && !this.e2e?.ready;
+  const buttons = [{ id: 'cancel', label: t('modals.common.cancel') }];
+  if (locked) buttons.push({ id: 'unlock', label: t('platform.e2e.plain_unlock'), accent: true });
+  buttons.push({ id: 'send', label: t('platform.e2e.plain_send'), danger: true });
+  let why;
+  if (!supported) why = t('platform.e2e.plain_unsupported');
+  else if (locked) why = t('platform.e2e.plain_locked');
+  else why = t('platform.e2e.plain_no_key', { name });
+  const choice = await this._askChoice(t('platform.e2e.plain_title'), why, buttons);
+  if (choice === 'unlock') this._requireE2E(() => this._updateE2EIndicator());
+  if (choice !== 'send') return null;
+  this._plainDmOk.add(code);
+  return { partner: null };
+},
+
+/** A partner's key change is noted in their DM for the rest of the session. */
+_noteE2EKeyChange(userId) {
+  if (this._e2eKeyNotices.has(userId)) return;
+  const ch = this.channels?.find(c => c.is_dm && c.dm_target && c.dm_target.id === userId);
+  if (!ch) return;
+  this._e2eKeyNotices.set(userId, t('platform.e2e.partner_keys_changed', { name: ch.dm_target.username, date: this._fmtDateTime(new Date()) }));
+},
+
+/** The lock in a DM's header shows whether what you send there is encrypted. */
+_updateE2EIndicator() {
+  const btn = document.getElementById('e2e-menu-btn');
+  const ch = this.channels?.find(c => c.code === this.currentChannel);
+  if (!btn || !ch || !ch.is_dm || !ch.dm_target) return;
+  const id = ch.dm_target.id;
+  const name = ch.dm_target.username;
+  const jwk = this._dmPublicKeys[id];
+  const self = ch.is_self_dm || id === this.user?.id;
+  const pinned = jwk && !self ? this._e2ePins()[id] : null;
+  let icon = '🔐', off = false, changed = false, title = t('platform.e2e.status_on');
+  if (!this._e2eSupported()) {
+    icon = '🔓'; off = true; title = t('platform.e2e.status_off_unsupported');
+  } else if (!this.e2e?.ready) {
+    icon = '🔓'; off = true; title = t('platform.e2e.status_off_locked');
+  } else if (pinned && pinned !== this._e2ePinFingerprint(jwk)) {
+    icon = '⚠️'; changed = true; title = t('platform.e2e.status_changed', { name });
+    // Said in the conversation as well. After a reload the old key is not
+    // in memory, so this comparison is the only place the change shows up.
+    this._noteE2EKeyChange(id);
+  } else if (!jwk && this._e2eNoKey.has(id)) {
+    icon = '🔓'; off = true; title = t('platform.e2e.status_off_no_key', { name });
+  }
+  btn.textContent = icon;
+  btn.classList.toggle('e2e-off', off);
+  btn.classList.toggle('e2e-changed', changed);
+  btn.title = title;
 },
 
 /**
@@ -1193,15 +1580,15 @@ async _fetchDMPartnerKey(channel) {
 /**
  * Show E2E verification code modal for the current DM.
  */
-async _showE2EVerification() {
-  const partner = this._getE2EPartner();
+async _showE2EVerification(channelCode = this.currentChannel) {
+  const partner = this._getE2EPartnerFor(channelCode);
   if (!partner || !this.e2e?.ready) {
     this._showToast(t('platform.e2e.no_partner_key'), 'error');
     return;
   }
   try {
     const code = await this.e2e.getVerificationCode(this.e2e.publicKeyJwk, partner.publicKeyJwk);
-    const ch = this.channels.find(c => c.code === this.currentChannel);
+    const ch = this.channels.find(c => c.code === channelCode);
     const partnerName = ch?.dm_target?.username || t('platform.e2e.partner');
 
     let overlay = document.getElementById('e2e-verify-overlay');
@@ -1358,7 +1745,7 @@ async _performE2EKeyReset() {
     this._dmPublicKeys = {};
 
     // Post a timestamped notice in the current chat
-    this._appendE2ENotice(t('platform.e2e.keys_reset_notice', { date: new Date().toLocaleString() }));
+    this._appendE2ENotice(t('platform.e2e.keys_reset_notice', { date: this._fmtDateTime(new Date()) }));
 
     this._showToast(t('platform.e2e.keys_reset'), 'success');
     console.log('[E2E] Keys reset by user');
@@ -1475,6 +1862,8 @@ _decryptE2EFiles(root) {
           mediaEl.preload = 'metadata';
           mediaEl.src = objectUrl;
           mediaEl.className = isVideo ? 'file-video' : 'file-audio';
+          // The click that decrypted a voice message was a play click (#5665).
+          if (isAudio && /^voice-message/i.test(name)) mediaEl.autoplay = true;
 
           row.classList.remove('e2e-file-loading');
           row.innerHTML = '';
@@ -1580,10 +1969,12 @@ _decryptE2EImages(root) {
         // object URL keeps the decrypted bytes alive for the life of the tab,
         // so scrolling a media-heavy DM slowly locks up hundreds of MB. Same
         // revoke-on-load pattern the upload previews use. (#5426)
-        img.addEventListener('load', () => {
-          try { URL.revokeObjectURL(img.src); } catch {}
-        }, { once: true });
-        img.src = URL.createObjectURL(blob);
+        const objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+        // Revoking in the load handler blanks the picture on some Tauri
+        // webviews (the bitmap is still tied to the blob URL). Keep it
+        // a minute, same as decrypted file attachments.
+        setTimeout(() => { try { URL.revokeObjectURL(objectUrl); } catch { /* already revoked */ } }, 60_000);
         img.classList.remove('e2e-img-loading');
       })
       .catch(() => {

@@ -8,8 +8,8 @@ const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, getChannelRoleChain, userHasPermission, getUserEffectiveLevel,
-          emitOnlineUsers, broadcastVoiceUsers, generateToken,
-          touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit, getAdminRoleDisplay } = ctx;
+          emitOnlineUsers, emitDmPresence, broadcastVoiceUsers, generateToken,
+          touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
@@ -19,6 +19,10 @@ module.exports = function register(socket, ctx) {
     const checked = normalizeDisplayName(typeof data.username === 'string' ? data.username : '');
     if (checked.error) return socket.emit('error-msg', checked.error);
     const newName = checked.value;
+    // Saving the profile for a bio or avatar change sends the name along
+    // unchanged, which announced "fenix is now known as fenix" to the
+    // channel every time. Nothing changed, so nothing to do.
+    if (newName === socket.user.displayName) return;
 
     // (#5482) A moderator-set display name holds. Otherwise the whole
     // Manage Display Names permission is decorative — the moderated user
@@ -245,6 +249,8 @@ module.exports = function register(socket, ctx) {
         emitOnlineUsers(code);
       }
     }
+    // DM partners see the new status too, with the DM not on screen (#5574).
+    if (emitDmPresence) emitDmPresence(socket.user.id);
 
     socket.emit('status-updated', { status, statusText });
   });
@@ -261,7 +267,7 @@ module.exports = function register(socket, ctx) {
       if (!row) return;
 
       const roles = db.prepare(
-        `SELECT DISTINCT r.id, r.name, r.level, r.color
+        `SELECT DISTINCT r.id, r.name, r.level, r.color, r.color2, r.color_shimmer
          FROM roles r
          JOIN user_roles ur ON r.id = ur.role_id
          WHERE ur.user_id = ? AND ur.channel_id IS NULL
@@ -277,7 +283,7 @@ module.exports = function register(socket, ctx) {
           if (chain.length > 0) {
             const placeholders = chain.map(() => '?').join(',');
             const channelRoles = db.prepare(
-              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color
+              `SELECT DISTINCT r.id, r.name, COALESCE(ur.custom_level, r.level) as level, r.color, r.color2, r.color_shimmer
                FROM roles r
                JOIN user_roles ur ON r.id = ur.role_id
                WHERE ur.user_id = ? AND ur.channel_id IN (${placeholders})
@@ -296,12 +302,7 @@ module.exports = function register(socket, ctx) {
         }
       }
 
-      const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(data.userId);
-      if (isAdmin && isAdmin.is_admin) {
-        roles.length = 0;
-        const d = getAdminRoleDisplay();
-        if (d.visible) roles.push({ id: -1, name: d.name, level: 100, color: d.color, icon: d.icon });
-      } else if (roles.length > 1) {
+      if (roles.length > 1) {
         const userRoleIdx = roles.findIndex(r => r.name === 'User' && r.level <= 1);
         if (userRoleIdx !== -1) roles.splice(userRoleIdx, 1);
       }
@@ -310,6 +311,10 @@ module.exports = function register(socket, ctx) {
       for (const [, s] of io.of('/').sockets) {
         if (s.user && s.user.id === data.userId) { isOnline = true; break; }
       }
+      // Invisible means offline to everyone else, here as in the member
+      // list: reporting online next to status 'invisible' gave it away.
+      const hidden = row.status === 'invisible' && data.userId !== socket.user.id;
+      if (hidden) isOnline = false;
 
       socket.emit('user-profile', {
         id: row.id,
@@ -320,7 +325,7 @@ module.exports = function register(socket, ctx) {
         border: row.border || null,
         borderTransform: parseBorderTransform(row.border_transform),
         animateProfile: row.animate_profile || 'trigger',
-        status: row.status || 'online',
+        status: hidden ? 'offline' : (row.status || 'online'),
         statusText: row.status_text || '',
         bio: row.bio || '',
         roles: roles,
@@ -350,15 +355,21 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Push Notifications ──────────────────────────────────
-  socket.on('push-subscribe', (data) => {
+  socket.on('push-subscribe', async (data) => {
     if (!data || typeof data !== 'object') return;
     const { endpoint, keys } = data;
-    if (typeof endpoint !== 'string' || !endpoint) return;
+    if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048) return;
     if (!keys || typeof keys !== 'object') return;
-    if (typeof keys.p256dh !== 'string' || !keys.p256dh) return;
-    if (typeof keys.auth !== 'string' || !keys.auth) return;
+    if (typeof keys.p256dh !== 'string' || !keys.p256dh || keys.p256dh.length > 512) return;
+    if (typeof keys.auth !== 'string' || !keys.auth || keys.auth.length > 512) return;
 
     try { const u = new URL(endpoint); if (u.protocol !== 'https:') return; } catch { return; }
+    // The server posts to this address for every notification, so it has to
+    // be a public push service: a client-chosen endpoint on the server's own
+    // network was a way to make it send requests there.
+    try {
+      await require('../webhookCallback').resolveCallbackDestination(endpoint);
+    } catch { return; }
 
     try {
       // One endpoint is one browser/device, and only one account is signed
@@ -373,6 +384,12 @@ module.exports = function register(socket, ctx) {
           VALUES (?, ?, ?, ?)
           ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth
         `).run(socket.user.id, endpoint, keys.p256dh, keys.auth);
+        // Ten devices per person is plenty; the oldest go first. Without a cap
+        // one account could register endless endpoints for the push queue.
+        db.prepare(`
+          DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+            SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 10)
+        `).run(socket.user.id, socket.user.id);
       })();
       socket.emit('push-subscribed');
     } catch (err) {
@@ -505,8 +522,17 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Encrypted key data too large');
     }
     try {
-      db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ? WHERE id = ?')
-        .run(encryptedKey, salt, socket.user.id);
+      // separatePassphrase says what this backup is locked with, when the
+      // client is switching between its login password and a passphrase of
+      // its own; the two are saved together so they never disagree.
+      if (typeof data.separatePassphrase === 'boolean') {
+        db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ?, e2e_passphrase = ? WHERE id = ?')
+          .run(encryptedKey, salt, data.separatePassphrase ? 1 : 0, socket.user.id);
+        socket.user.e2ePassphrase = data.separatePassphrase;
+      } else {
+        db.prepare('UPDATE users SET encrypted_private_key = ?, e2e_key_salt = ? WHERE id = ?')
+          .run(encryptedKey, salt, socket.user.id);
+      }
       socket.emit('encrypted-key-stored');
     } catch (err) {
       console.error('Store encrypted key error:', err);
@@ -527,7 +553,7 @@ module.exports = function register(socket, ctx) {
         try {
           const parsed = typeof row.public_key === 'string' ? JSON.parse(row.public_key) : row.public_key;
           if (parsed && parsed.x && parsed.y) publicKey = { kty: parsed.kty, crv: parsed.crv, x: parsed.x, y: parsed.y };
-        } catch { /* stored pub key not JSON — skip */ }
+        } catch { /* stored pub key not JSON: send none, the client copes with that */ }
       }
       socket.emit('encrypted-key-result', {
         encryptedKey: row?.encrypted_private_key || null,
@@ -556,7 +582,11 @@ module.exports = function register(socket, ctx) {
     const value = typeof data.value === 'string' ? data.value.trim() : '';
 
     const allowedKeys = [
-      'theme', 'hide_score_badge',
+      'theme', 'hide_score_badge', 'hide_nsfw',
+      // Visual effects picker (theme.js). Same reason as theme: a desktop app
+      // that lands on a different storage origin (http vs https autodetect)
+      // loses localStorage, and only server-side preferences come back.
+      'effects',
       // Rich presence. share_activity is the master switch and defaults to
       // OFF (absent row = not sharing); the two sub-toggles default ON but
       // only matter once the master is enabled.
@@ -566,8 +596,16 @@ module.exports = function register(socket, ctx) {
       // hardened browsers that wipe local storage every session still honour a
       // prior dismissal instead of re-showing the modal on every login.
       'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
+      // The top-bar Android banner, closed once (#5594).
+      'android_banner_seen',
+      // Persisted localization. timezone is an IANA zone id (e.g.
+      // "America/New_York") so DST is resolved per-instant by Intl, never a
+      // frozen offset. time_format is '12' or '24'.
+      'timezone', 'time_format',
     ];
-    if (!allowedKeys.includes(key) || !value || value.length > 50) return;
+    // 'effects' is a JSON array of effect ids, longer than the other values.
+    const maxLen = key === 'effects' ? 400 : 50;
+    if (!allowedKeys.includes(key) || !value || value.length > maxLen) return;
 
     db.prepare(
       'INSERT OR REPLACE INTO user_preferences (user_id, key, value) VALUES (?, ?, ?)'
@@ -584,6 +622,19 @@ module.exports = function register(socket, ctx) {
     if ((key === 'hide_score_badge' || ACTIVITY_KEYS.includes(key)) && socket.currentChannel) {
       emitOnlineUsers(socket.currentChannel);
     }
+  });
+
+  // Clear a preference back to unset. Only the localization keys are erasable
+  // (the Erase button in the timezone modal), which returns the account to the
+  // browser-default behaviour. set-preference never writes empty values, so a
+  // dedicated delete is the way to remove a row.
+  socket.on('delete-preference', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const key = typeof data.key === 'string' ? data.key.trim() : '';
+    const deletableKeys = ['timezone', 'time_format'];
+    if (!deletableKeys.includes(key)) return;
+    db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(socket.user.id, key);
+    socket.emit('preference-deleted', { key });
   });
 
   // ── Recovery-codes notice gating ────────────────────────
@@ -718,7 +769,7 @@ module.exports = function register(socket, ctx) {
     // it now rather than waiting up to STEAM_POLL_MS for the next tick to pick
     // up the rotated key. Non-fatal: a failure here just means the old cadence.
     if (key === 'STEAM_API_KEY') {
-      try { activity.pollSteam().catch(() => {}); } catch { /* ignore */ }
+      try { activity.pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message)); } catch { /* the regular poll picks up the new key anyway */ }
     }
 
     _audit({
@@ -767,7 +818,7 @@ module.exports = function register(socket, ctx) {
     });
 
     // Populate straight away rather than waiting up to 30s for the next tick.
-    activity.pollLastfmUser(socket.user.id).catch(() => {});
+    activity.pollLastfmUser(socket.user.id).catch((err) => console.warn('[Haven activity] Last.fm poll failed:', err.message));
     if (socket.currentChannel) emitOnlineUsers(socket.currentChannel);
   });
 
@@ -880,7 +931,12 @@ module.exports = function register(socket, ctx) {
     try {
       const filePath = path.join(DATA_DIR, 'beta-signups.json');
       let signups = [];
-      try { signups = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { /* first signup */ }
+      try { signups = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (err) {
+        // No file yet means this is the first signup. Anything else (an
+        // unreadable or corrupt file) must not be treated as empty, or the
+        // write below would wipe every earlier signup.
+        if (err.code !== 'ENOENT') throw err;
+      }
 
       if (signups.some(s => s.email === email)) {
         return callback({ ok: true });

@@ -33,6 +33,7 @@
 
 const https = require('https');
 const http = require('http');
+const { agentFor } = require('./outboundProxy');
 
 let timer = null;
 let lastResult = {
@@ -65,7 +66,7 @@ function _detectPublicIp() {
     let resolved = false;
     const tryOne = (url) => {
       const proto = url.startsWith('https') ? https : http;
-      const req = proto.get(url, { timeout: 5000 }, (res) => {
+      const req = proto.get(url, { timeout: 5000, agent: agentFor(url) }, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
@@ -80,7 +81,7 @@ function _detectPublicIp() {
         });
       });
       req.on('error', () => { if (--remaining === 0 && !resolved) resolve(null); });
-      req.on('timeout', () => { try { req.destroy(); } catch {} });
+      req.on('timeout', () => { try { req.destroy(); } catch { /* already closed; the error handler resolves */ } });
     };
     sources.forEach(tryOne);
   });
@@ -89,20 +90,20 @@ function _detectPublicIp() {
 function _httpGetText(url) {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
-    const req = proto.get(url, { timeout: 10000 }, (res) => {
+    const req = proto.get(url, { timeout: 10000, agent: agentFor(url) }, (res) => {
       let data = '';
       res.on('data', (c) => { data += c; });
       res.on('end', () => resolve({ status: res.statusCode || 0, body: data }));
     });
     req.on('error', reject);
-    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch { /* already closed; the error handler rejects */ } });
   });
 }
 
 function _httpRequestJson(url, opts, payload) {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
-    const req = proto.request(url, { timeout: 10000, ...opts }, (res) => {
+    const req = proto.request(url, { timeout: 10000, agent: agentFor(url), ...opts }, (res) => {
       let data = '';
       res.on('data', (c) => { data += c; });
       res.on('end', () => {
@@ -111,7 +112,7 @@ function _httpRequestJson(url, opts, payload) {
       });
     });
     req.on('error', reject);
-    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+    req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch { /* already closed; the error handler rejects */ } });
     if (payload) req.write(typeof payload === 'string' ? payload : JSON.stringify(payload));
     req.end();
   });

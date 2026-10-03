@@ -4,6 +4,7 @@ const dns = require('node:dns').promises;
 const http = require('node:http');
 const https = require('node:https');
 const net = require('node:net');
+const outboundProxy = require('./outboundProxy');
 
 const alwaysBlocked = new net.BlockList();
 const privateBlocked = new net.BlockList();
@@ -132,6 +133,8 @@ async function resolveCallbackDestination(urlString, options = {}) {
   }
 
   const literalFamily = net.isIP(hostname);
+  const proxy = (options.proxyFor || outboundProxy.proxyFor)(url);
+  if (proxy) return checkProxiedDestination(url, hostname, literalFamily, proxy, lookup, allowPrivateCallbacks);
   const addresses = literalFamily
     ? [{ address: hostname, family: literalFamily }]
     : await lookup(hostname, { all: true, verbatim: true });
@@ -150,6 +153,39 @@ async function resolveCallbackDestination(urlString, options = {}) {
     address: selected.address,
     family: net.isIP(selected.address)
   };
+}
+
+// Through a proxy it is the proxy that looks the name up and connects, so
+// there is no address to pin. Refuse what can be refused from here: a blocked
+// literal address, or a name that this machine resolves to a blocked network.
+// A name that does not resolve here is normal when the proxy is the only way
+// out, and the proxy's own rules decide where it may go. A name that resolves
+// only to private addresses the host allowed (a bot next to Haven) is on this
+// machine's own network, which a proxy usually cannot reach, so it stays a
+// direct connection to the checked address, as it was before proxy support.
+// The lookup is not cut short (every caller has its own deadline), so a slow
+// answer is still checked instead of being handed to the proxy unchecked.
+async function checkProxiedDestination(url, hostname, literalFamily, proxy, lookup, allowPrivateCallbacks) {
+  let addresses = [];
+  if (literalFamily) {
+    addresses = [{ address: hostname, family: literalFamily }];
+  } else {
+    try {
+      addresses = await lookup(hostname, { all: true, verbatim: true });
+    } catch {
+      addresses = [];
+    }
+  }
+  const usable = (Array.isArray(addresses) ? addresses : []).filter(entry => entry.address && net.isIP(entry.address));
+  for (const entry of usable) {
+    if (isBlockedAddress(entry.address, net.isIP(entry.address), allowPrivateCallbacks)) {
+      throw new UnsafeCallbackError('Callback URL resolves to a blocked network');
+    }
+  }
+  if (usable.length && usable.every(entry => isBlockedAddress(entry.address, net.isIP(entry.address), false))) {
+    return { url, address: usable[0].address, family: net.isIP(usable[0].address) };
+  }
+  return { url, proxy };
 }
 
 function createPinnedLookup(address, family) {
@@ -184,12 +220,11 @@ function postResolvedCallback(destination, payload, headers, deadlineAt) {
       if (error) reject(error);
       else resolve(result);
     };
-    const request = transport.request(destination.url, {
+    const requestOptions = {
       method: 'POST',
-      agent: false,
-      headers: { ...headers, 'Content-Length': Buffer.byteLength(payload) },
-      lookup: createPinnedLookup(destination.address, destination.family)
-    }, incoming => {
+      headers: { ...headers, 'Content-Length': Buffer.byteLength(payload) }
+    };
+    const onResponse = incoming => {
       response = incoming;
       incoming.on('error', finish);
       incoming.on('end', () => finish(null, {
@@ -197,7 +232,14 @@ function postResolvedCallback(destination, payload, headers, deadlineAt) {
         status: incoming.statusCode
       }));
       incoming.resume();
-    });
+    };
+    const request = destination.proxy
+      ? outboundProxy.request(destination.url, requestOptions, onResponse, destination.proxy)
+      : transport.request(destination.url, {
+        ...requestOptions,
+        agent: false,
+        lookup: createPinnedLookup(destination.address, destination.family)
+      }, onResponse);
     timer = setTimeout(() => {
       const error = new Error('Webhook callback exceeded its deadline');
       response?.destroy(error);

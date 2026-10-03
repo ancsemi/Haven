@@ -155,7 +155,12 @@ function downloadExtensionAsset(url, limit, redirects = 0, deadline = Date.now()
       );
       assertValid(
         ['api.github.com', 'github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) ||
-          (u.origin === 'https://ancsemi.github.io' && u.pathname === '/Haven/blocklist.json' && !u.search),
+          (!u.search && (
+            (u.origin === 'https://ancsemi.github.io' && u.pathname === '/Haven/blocklist.json') ||
+            // The repository's Pages site redirects to its configured domain.
+            // Allow only the blocklist file there, not arbitrary site URLs.
+            (u.origin === 'https://haven-app.com' && u.pathname === '/blocklist.json')
+          )),
         'Unapproved download host.',
       );
       assertValid(redirects <= 4 && deadline > Date.now(), 'Download timed out or redirected too often.');
@@ -315,37 +320,59 @@ function createExtensionUpdater({
     const saved = readInstalledState();
     for (const type of ['plugin', 'theme']) {
       for (const file of fs.readdirSync(dirs[type]).filter(f => f.endsWith(extensionSuffix(type)))) {
-        const item = { type, file };
-        const bytes = fs.readFileSync(installedFilePath(item));
-        const h = parseExtensionHeader(bytes);
-        if (!h.id && !h['update-repo']) continue;
         const key = type + ':' + file;
+        const item = { type, file, key };
         const previous = saved[key];
-        const repo = h['update-repo'];
-        assertValid(
-          typeof h.id === 'string' &&
-            EXTENSION_ID_PATTERN.test(h.id) &&
-            typeof repo === 'string' &&
-            REPOSITORY_PATTERN.test(repo) &&
-            isStableVersion(h.version),
-          'Invalid update metadata in ' + file + '.',
-        );
-        const installed = { ...item, key, id: h.id, repo, version: h.version, sha256: sha256(bytes) };
-        if (previous)
+        // A bad file belongs on its own row. It must not prevent checking or
+        // updating an unrelated extension, and never receives an offer itself.
+        try {
+          const bytes = fs.readFileSync(installedFilePath(item));
+          const h = parseExtensionHeader(bytes);
+          if (!h.id && !h['update-repo']) {
+            // Removing a managed file's headers is still a local edit, not an
+            // opt-out that lets us forget the saved identity and checksum.
+            assertValid(!previous, 'Local edits or source changes detected in ' + file +
+              '. Restore the managed file before updating.');
+            continue;
+          }
+          const repo = h['update-repo'];
           assertValid(
-            previous.id === installed.id &&
-              previous.repo.toLowerCase() === repo.toLowerCase() &&
-              previous.sha256 === installed.sha256 &&
-              previous.version === installed.version,
-            'Local edits or source changes detected in ' +
-              file +
-              '. Restore the managed file before updating.',
+            typeof h.id === 'string' &&
+              EXTENSION_ID_PATTERN.test(h.id) &&
+              typeof repo === 'string' &&
+              REPOSITORY_PATTERN.test(repo) &&
+              isStableVersion(h.version),
+            'Invalid update metadata in ' + file + '.',
           );
-        assertValid(
-          !result.some(e => e.repo.toLowerCase() === repo.toLowerCase() && e.id === h.id),
-          'Duplicate installed extension ID: ' + h.id,
-        );
-        result.push(installed);
+          Object.assign(item, { id: h.id, repo, version: h.version, sha256: sha256(bytes) });
+          if (previous)
+            assertValid(
+              previous.id === item.id &&
+                previous.repo.toLowerCase() === repo.toLowerCase() &&
+                previous.sha256 === item.sha256 &&
+                previous.version === item.version,
+              'Local edits or source changes detected in ' + file +
+                '. Restore the managed file before updating.',
+            );
+        } catch (e) {
+          item.error = e.message;
+        }
+        result.push(item);
+      }
+    }
+    // Every duplicate is ambiguous, regardless of directory enumeration order.
+    // Invalidate all matching rows rather than offering whichever was read first.
+    const identities = new Map();
+    for (const item of result) {
+      if (!item.repo || !item.id) continue;
+      const identity = item.repo.toLowerCase() + ':' + item.id;
+      const duplicate = identities.get(identity);
+      if (duplicate) {
+        const error = 'Duplicate installed extension ID: ' + item.id;
+        duplicate.error = duplicate.error || error;
+        item.error = item.error || error;
+      } else {
+        identities.set(identity, item);
       }
     }
     return result;
@@ -386,8 +413,9 @@ function createExtensionUpdater({
       const rows = [];
       const repos = new Map();
       for (const item of installed) {
-        const row = { ...item, warning: getBlockedReason(list, item) || null, offers: [] };
+        const row = { ...item, warning: item.error ? null : getBlockedReason(list, item) || null, offers: [] };
         rows.push(row);
+        if (item.error) continue;
         let updateOffer;
         try {
           if (!repos.has(item.repo.toLowerCase())) {
@@ -503,6 +531,7 @@ function createExtensionUpdater({
         'This version is blocked for security reasons.',
       );
       const current = readInstalledExtensions().find(e => e.key === item.key);
+      assertValid(!current?.error, current?.error);
       assertValid(
         current && current.sha256 === item.sha256,
         'The installed file changed. Check for updates again.',

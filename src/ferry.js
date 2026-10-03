@@ -22,6 +22,12 @@
  *              actually wrote it instead of as one anonymous bot. We create
  *              those webhooks ourselves when the bot has Manage Webhooks.
  *
+ * Forums pair only with forums. A Discord forum post becomes a Haven forum
+ * topic and the other way round, and replies follow their post; see the two
+ * "Forums" sections below. They use the same two transports: posts arrive as
+ * thread and message events on the gateway, and go out through the forum's
+ * webhook with `thread_name` (a new post) or `thread_id` (a reply).
+ *
  * DMs are the exception to the above and are deliberately limited. A bot can
  * only DM someone who shares a guild with it and has DMs open, it cannot
  * impersonate in a DM, and Discord flags accounts that DM in bulk. So DMs are
@@ -30,14 +36,37 @@
  */
 
 const WebSocket = require('ws');
+const { agentFor } = require('./outboundProxy');
 const automod = require('./automod');
+const { stripRoleMentions } = require('./socketHandlers/helpers');
 
-const API = 'https://discord.com/api/v10';
+/**
+ * The tests run Ferry against a stand-in Discord on this machine, set through
+ * FERRY_TEST_DISCORD_API and FERRY_TEST_DISCORD_GATEWAY. They only count when
+ * NODE_ENV is "test", so a real server ignores them, and only a loopback
+ * address is honoured, so a stray environment variable can never send the bot
+ * token anywhere but Discord or this same computer.
+ */
+function loopbackOverride(value, fallback, protocols) {
+  if (!value || process.env.NODE_ENV !== 'test') return fallback;
+  try {
+    const u = new URL(String(value));
+    const host = u.hostname.replace(/^\[|\]$/g, '');
+    if (protocols.includes(u.protocol) && ['127.0.0.1', 'localhost', '::1'].includes(host)) {
+      return String(value).replace(/\/+$/, '');
+    }
+  } catch { /* not a URL, use the real Discord */ }
+  return fallback;
+}
+
+const API = loopbackOverride(process.env.FERRY_TEST_DISCORD_API, 'https://discord.com/api/v10', ['http:', 'https:']);
+const GATEWAY = loopbackOverride(process.env.FERRY_TEST_DISCORD_GATEWAY, 'wss://gateway.discord.gg', ['ws:', 'wss:']);
 const USER_AGENT = 'DiscordBot (https://github.com/ancsemi/Haven, 1.0)';
 
 // ── Gateway intents ─────────────────────────────────────────
 const INTENT_GUILDS          = 1 << 0;
 const INTENT_GUILD_MEMBERS   = 1 << 1;   // privileged, only requested for DM lookup
+const INTENT_GUILD_EXPRESSIONS = 1 << 3; // emote list changes, so :name: keeps matching after an admin adds one
 const INTENT_GUILD_MESSAGES  = 1 << 9;
 const INTENT_MESSAGE_CONTENT = 1 << 15;  // privileged. Without it every message body is empty
 
@@ -89,6 +118,18 @@ const ownWebhookIds = new Set();
 // safe direction to fail in.
 const relayedMessages = new Map();
 const RELAY_MAP_MAX = 500;
+
+// Active Discord threads the bot can see: thread id -> { id, guildId,
+// parentId, name, appliedTags, locked }. A message carries only its thread's
+// id, so this is how a new forum post is traced back to its forum. Rebuilt
+// from GUILD_CREATE and the THREAD_* events, so it needs no storage.
+const threads = new Map();
+const THREAD_CACHE_MAX = 5000;
+
+// The first message of a forum post can arrive a moment before Discord says
+// the post exists. It waits here, briefly, for its THREAD_CREATE.
+const pendingStarters = new Map();
+const PENDING_STARTER_MS = 30000;
 
 // Per-destination send queues. Discord rate limits webhooks at roughly five
 // messages per two seconds each, and a busy Haven channel will exceed that.
@@ -142,10 +183,38 @@ function getConfig() {
 // Discord REST
 // ══════════════════════════════════════════════════════════════
 
+// Discord answers a burst with a 429 and says how long to wait. A short wait
+// is honoured in place (the per-channel queue holds later messages behind
+// this one), up to three times; a long one is reported instead, with the
+// number of seconds, so the sender knows Discord is throttling the channel
+// and the bridge is not broken. Before this the bridge waited at most ten
+// seconds once and then showed Discord's own words, which read as a fault.
+const RATE_LIMIT_MAX_WAIT_MS = 30000;
+const RATE_LIMIT_ATTEMPTS = 3;
+
+async function rateLimitWaitMs(res) {
+  let seconds = 0;
+  try {
+    const info = await res.clone().json();
+    if (Number.isFinite(info?.retry_after)) seconds = info.retry_after;
+  } catch { /* header-only 429: use the Retry-After header below */ }
+  if (!seconds) {
+    const header = Number(res.headers.get('retry-after'));
+    seconds = Number.isFinite(header) && header > 0 ? header : 1;
+  }
+  return Math.max(250, Math.ceil(seconds * 1000));
+}
+
+function rateLimitError(waitMs) {
+  const err = new Error(`Discord is rate limiting this channel; try again in about ${Math.ceil(waitMs / 1000)}s`);
+  err.status = 429;
+  return err;
+}
+
 /**
- * One REST call with bot auth. Retries once on a 429 using Discord's own
- * retry_after, and once on a 5xx. Everything else surfaces to the caller so the
- * admin UI can show the real reason a pairing is broken.
+ * One REST call with bot auth. Waits out short 429s using Discord's own
+ * retry_after, retries once on a 5xx. Everything else surfaces to the caller
+ * so the admin UI can show the real reason a pairing is broken.
  */
 async function discordRequest(method, path, body, attempt = 0) {
   const { token } = getConfig();
@@ -162,11 +231,14 @@ async function discordRequest(method, path, body, attempt = 0) {
     signal: AbortSignal.timeout(15000),
   });
 
-  if (res.status === 429 && attempt < 1) {
-    let wait = 1000;
-    try { wait = Math.min(10000, Math.ceil((await res.clone().json()).retry_after * 1000) || 1000); } catch { /* header-only 429 */ }
-    await sleep(wait);
-    return discordRequest(method, path, body, attempt + 1);
+  if (res.status === 429) {
+    const wait = await rateLimitWaitMs(res);
+    console.warn(`[ferry] Discord rate limit on ${method} ${path}: retry after ${Math.ceil(wait / 1000)}s`);
+    if (attempt < RATE_LIMIT_ATTEMPTS - 1 && wait <= RATE_LIMIT_MAX_WAIT_MS) {
+      await sleep(wait);
+      return discordRequest(method, path, body, attempt + 1);
+    }
+    throw rateLimitError(wait);
   }
   if (res.status >= 500 && attempt < 1) {
     await sleep(1500);
@@ -176,7 +248,7 @@ async function discordRequest(method, path, body, attempt = 0) {
   if (res.status === 204) return null;
 
   let payload = null;
-  try { payload = await res.json(); } catch { /* empty body */ }
+  try { payload = await res.json(); } catch { /* empty or non-JSON body; errors below fall back to the HTTP status */ }
 
   if (!res.ok) {
     const detail = payload?.message || `HTTP ${res.status}`;
@@ -191,27 +263,31 @@ async function discordRequest(method, path, body, attempt = 0) {
 /**
  * Webhook execution uses the webhook's own token, not the bot token, so it goes
  * through its own path rather than discordRequest.
+ *
+ * `threadId` posts into one thread of the webhook's channel, which is how a
+ * reply reaches a forum post. Discord unarchives the thread on the way in.
  */
-async function executeWebhook(webhookId, webhookToken, payload, attempt = 0) {
-  const res = await fetch(`${API}/webhooks/${webhookId}/${webhookToken}?wait=true`, {
+async function executeWebhook(webhookId, webhookToken, payload, { threadId = null } = {}, attempt = 0) {
+  const thread = threadId && SNOWFLAKE.test(String(threadId)) ? `&thread_id=${threadId}` : '';
+  const res = await fetch(`${API}/webhooks/${webhookId}/${webhookToken}?wait=true${thread}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(15000),
   });
 
-  if (res.status === 429 && attempt < 2) {
-    let wait = 1000;
-    try {
-      const info = await res.clone().json();
-      wait = Math.min(10000, Math.ceil((info.retry_after || 1) * 1000));
-    } catch { /* header-only 429, fall back to the 1s default */ }
-    await sleep(wait);
-    return executeWebhook(webhookId, webhookToken, payload, attempt + 1);
+  if (res.status === 429) {
+    const wait = await rateLimitWaitMs(res);
+    console.warn(`[ferry] Discord rate limit on webhook ${webhookId}: retry after ${Math.ceil(wait / 1000)}s`);
+    if (attempt < RATE_LIMIT_ATTEMPTS - 1 && wait <= RATE_LIMIT_MAX_WAIT_MS) {
+      await sleep(wait);
+      return executeWebhook(webhookId, webhookToken, payload, { threadId }, attempt + 1);
+    }
+    throw rateLimitError(wait);
   }
 
   let data = null;
-  try { data = await res.json(); } catch { /* 204 */ }
+  try { data = await res.json(); } catch { /* 204 or non-JSON body; errors below fall back to the HTTP status */ }
   if (!res.ok) {
     const err = new Error(data?.message || `HTTP ${res.status}`);
     err.status = res.status;
@@ -228,7 +304,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // ══════════════════════════════════════════════════════════════
 
 function currentIntents() {
-  let intents = INTENT_GUILDS | INTENT_GUILD_MESSAGES | INTENT_MESSAGE_CONTENT;
+  let intents = INTENT_GUILDS | INTENT_GUILD_EXPRESSIONS | INTENT_GUILD_MESSAGES | INTENT_MESSAGE_CONTENT;
   // The member intent is only needed to look people up for DM autocomplete.
   // Asking for a privileged intent the admin never enabled kills the whole
   // connection with a 4014, so it is opt-in twice over: the DM setting has to
@@ -247,11 +323,11 @@ function connect() {
   clearTimeout(reconnectTimer);
   reconnectTimer = null;
 
-  const base = (sessionId && resumeUrl) ? resumeUrl : 'wss://gateway.discord.gg';
+  const base = (sessionId && resumeUrl) ? resumeUrl : GATEWAY;
   const url = `${base}/?v=10&encoding=json`;
 
   try {
-    ws = new WebSocket(url);
+    ws = new WebSocket(url, { agent: agentFor(url) });
   } catch (err) {
     lastError = `Could not open the Discord gateway: ${err.message}`;
     scheduleReconnect();
@@ -368,7 +444,7 @@ function stopHeartbeat() {
 
 function gatewaySend(payload) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  try { ws.send(JSON.stringify(payload)); } catch { /* socket died mid-write */ }
+  try { ws.send(JSON.stringify(payload)); } catch { /* socket died mid-write; its close handler reconnects */ }
 }
 
 function sendHeartbeat() { gatewaySend({ op: 1, d: seq }); }
@@ -417,6 +493,7 @@ function handleDispatch(type, d) {
       resumeUrl = d.resume_gateway_url || null;
       botUser = d.user ? { id: d.user.id, username: d.user.username, discriminator: d.user.discriminator, avatar: d.user.avatar } : null;
       guilds.clear();
+      threads.clear();
       break;
 
     case 'RESUMED':
@@ -439,6 +516,12 @@ function handleDispatch(type, d) {
       if (!d.unavailable) guilds.delete(d.id);
       break;
 
+    case 'GUILD_EMOJIS_UPDATE': {
+      const g = guilds.get(d.guild_id);
+      if (g) g.emojis = emojiMap(d.emojis);
+      break;
+    }
+
     case 'CHANNEL_CREATE':
     case 'CHANNEL_UPDATE':
       cacheChannel(d);
@@ -446,7 +529,24 @@ function handleDispatch(type, d) {
 
     case 'CHANNEL_DELETE': {
       const g = guilds.get(d.guild_id);
-      if (g) g.channels.delete(d.id);
+      if (g) { g.channels.delete(d.id); g.channelNames?.delete(d.id); }
+      break;
+    }
+
+    case 'GUILD_ROLE_CREATE':
+    case 'GUILD_ROLE_UPDATE': {
+      const g = guilds.get(d.guild_id);
+      const r = d.role;
+      if (g && r && r.id && r.name && r.id !== d.guild_id) {
+        if (!g.roles) g.roles = new Map();
+        g.roles.set(String(r.id), { id: String(r.id), name: String(r.name), mentionable: !!r.mentionable });
+      }
+      break;
+    }
+
+    case 'GUILD_ROLE_DELETE': {
+      const g = guilds.get(d.guild_id);
+      if (g && g.roles) g.roles.delete(String(d.role_id));
       break;
     }
 
@@ -457,15 +557,91 @@ function handleDispatch(type, d) {
     case 'MESSAGE_UPDATE':
       relayEditToHaven(d);
       break;
+
+    case 'THREAD_CREATE':
+      cacheThread(d);
+      takePendingStarter(d && d.id);
+      break;
+
+    case 'THREAD_UPDATE': {
+      // What the post looked like before this update, read before the cache
+      // is overwritten, so only what Discord actually changed is passed on.
+      const before = d && d.id ? threads.get(String(d.id)) || null : null;
+      cacheThread(d);
+      relayThreadUpdateToHaven(d, before);
+      break;
+    }
+
+    case 'THREAD_DELETE':
+      if (d && d.id) {
+        threads.delete(String(d.id));
+        pendingStarters.delete(String(d.id));
+        relayThreadDeleteToHaven(d);
+      }
+      break;
+
+    case 'THREAD_LIST_SYNC': {
+      // Sent when the bot gains access to channels. `channel_ids` names the
+      // parents being synced; their old threads are dropped before the fresh
+      // list goes in. With no `channel_ids` the whole guild is being synced.
+      const parents = Array.isArray(d && d.channel_ids) ? new Set(d.channel_ids.map(String)) : null;
+      for (const [id, th] of threads) {
+        if (th.guildId === String(d && d.guild_id) && (!parents || parents.has(th.parentId))) threads.delete(id);
+      }
+      for (const th of (d && d.threads) || []) cacheThread({ ...th, guild_id: th.guild_id || d.guild_id });
+      break;
+    }
   }
 }
 
-// Text-ish channel types worth pairing. 0 text, 5 announcement, 11/12 threads.
-const RELAYABLE_TYPES = new Set([0, 5, 11, 12]);
+// Text-ish channel types worth pairing. 0 text, 5 announcement, 11/12 threads,
+// 15 forum, 16 media. Media channels are forums whose posts lead with a
+// picture, and Discord treats their posts exactly like forum posts.
+const RELAYABLE_TYPES = new Set([0, 5, 11, 12, 15, 16]);
+const FORUM_TYPES = new Set([15, 16]);
+// Discord's channel flag for "a post here must carry a tag".
+const FLAG_REQUIRE_TAG = 1 << 4;
+
+function isForumType(type) {
+  return FORUM_TYPES.has(Number(type));
+}
+
+// The forum-only parts of a Discord channel: its tags, whether a post must
+// carry one, and whether the forum is age-restricted (NSFW), which decides if
+// an NSFW Haven topic may go there. Empty for every other kind of channel.
+function forumFields(c) {
+  if (!isForumType(c.type)) return {};
+  return {
+    tags: (c.available_tags || [])
+      .filter(t => t && t.id && t.name)
+      .map(t => ({ id: String(t.id), name: String(t.name), moderated: !!t.moderated })),
+    requireTag: !!((Number(c.flags) || 0) & FLAG_REQUIRE_TAG),
+    nsfw: c.nsfw === true,
+  };
+}
+
+function cacheThread(t) {
+  if (!t || !t.id || !t.parent_id) return;
+  if (threads.size >= THREAD_CACHE_MAX && !threads.has(String(t.id))) {
+    threads.delete(threads.keys().next().value);
+  }
+  threads.set(String(t.id), {
+    id: String(t.id),
+    guildId: String(t.guild_id || ''),
+    parentId: String(t.parent_id),
+    name: String(t.name || ''),
+    appliedTags: Array.isArray(t.applied_tags) ? t.applied_tags.map(String) : [],
+    locked: !!(t.thread_metadata && t.thread_metadata.locked),
+  });
+}
 
 function cacheGuild(g) {
   const channels = new Map();
   const byId = new Map((g.channels || []).map(c => [c.id, c]));
+  // Every channel's name, voice and categories included, for turning a
+  // <#id> in a message into a name people can read.
+  const channelNames = new Map();
+  for (const c of g.channels || []) if (c && c.id && c.name) channelNames.set(c.id, c.name);
   for (const c of g.channels || []) {
     if (!RELAYABLE_TYPES.has(c.type)) continue;
     channels.set(c.id, {
@@ -473,17 +649,46 @@ function cacheGuild(g) {
       name: c.name,
       type: c.type,
       category: c.parent_id ? (byId.get(c.parent_id)?.name || null) : null,
+      ...forumFields(c),
     });
   }
-  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels });
+  guilds.set(g.id, { id: g.id, name: g.name, icon: g.icon || null, channels, channelNames, emojis: emojiMap(g.emojis), roles: roleMap(g.roles, g.id) });
+  // Every active thread the bot can see comes with the guild, forum posts
+  // among them. Archived ones do not, and are learned when they wake up.
+  for (const th of g.threads || []) cacheThread({ ...th, guild_id: th.guild_id || g.id });
+}
+
+// Role id -> { id, name, mentionable }. GUILD_CREATE carries the full list and
+// the GUILD_ROLE_* events keep it current. @everyone is a role too, with the
+// guild's own id, and is left out: it never relays as a role.
+function roleMap(list, guildId) {
+  const map = new Map();
+  for (const r of list || []) {
+    if (!r || !r.id || !r.name || r.id === guildId || r.name === '@everyone') continue;
+    map.set(String(r.id), { id: String(r.id), name: String(r.name), mentionable: !!r.mentionable });
+  }
+  return map;
+}
+
+// Lowercased name -> { id, name, animated }, so a Haven :name: can go out as
+// the guild's own emote. GUILD_CREATE carries the full list and
+// GUILD_EMOJIS_UPDATE replaces it whenever an admin adds or removes one.
+function emojiMap(list) {
+  const map = new Map();
+  for (const e of list || []) {
+    if (!e || !e.id || !e.name) continue;
+    map.set(String(e.name).toLowerCase(), { id: String(e.id), name: String(e.name), animated: !!e.animated });
+  }
+  return map;
 }
 
 function cacheChannel(c) {
   if (!c.guild_id) return;
   const g = guilds.get(c.guild_id);
   if (!g) return;
+  if (g.channelNames && c.id && c.name) g.channelNames.set(c.id, c.name);
   if (!RELAYABLE_TYPES.has(c.type)) { g.channels.delete(c.id); return; }
-  g.channels.set(c.id, { id: c.id, name: c.name, type: c.type, category: g.channels.get(c.id)?.category || null });
+  g.channels.set(c.id, { id: c.id, name: c.name, type: c.type, category: g.channels.get(c.id)?.category || null, ...forumFields(c) });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -507,13 +712,24 @@ function relayToHaven(msg) {
     // notice, pin notice, boost notice and so on, which is noise in Haven.
     if (msg.type !== undefined && msg.type !== 0 && msg.type !== 19) return;
 
-    const links = deps.db.prepare(`
+    // Posts and replies in a paired Discord forum take their own route,
+    // because they become topics and thread replies rather than chat lines.
+    if (relayForumMessage(msg)) return;
+
+    const rows = deps.db.prepare(`
       SELECT f.id, f.channel_id, f.direction, f.discord_channel_id, f.guild_name, f.discord_channel_name,
-             c.code AS channel_code, c.name AS channel_name
+             c.code AS channel_code, c.name AS channel_name, c.is_forum
       FROM ferry_links f
       JOIN channels c ON f.channel_id = c.id
       WHERE f.discord_channel_id = ? AND f.is_active = 1 AND f.direction IN ('both','to_haven')
     `).all(msg.channel_id);
+    // A chat line has no title and no place in a forum. This only happens when
+    // a paired Haven channel was switched to a forum after it was paired.
+    const links = rows.filter(l => {
+      if (!l.is_forum) return true;
+      touchLink(l.id, KIND_MISMATCH);
+      return false;
+    });
     if (!links.length) return;
 
     const content = buildHavenContent(msg);
@@ -578,6 +794,312 @@ function relayEditToHaven(msg) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// Forums, Discord → Haven
+// ══════════════════════════════════════════════════════════════
+//
+// A Discord forum post is a thread whose first message has the same id as the
+// thread. It becomes a Haven forum topic: the post's name is the title, its
+// first message the body, and its tags are matched to the Haven forum's tags
+// by name. Later messages in the thread become replies in the topic. Which
+// topic is which post is stored in ferry_forum_threads, so replies keep their
+// place across restarts.
+//
+// Only posts made while the pairing exists come across. A reply in an older
+// post, or in a post whose Haven topic was deleted, is dropped rather than
+// rebuilding the topic, so deleting a topic in Haven keeps it deleted.
+
+const KIND_MISMATCH = 'This pairing joins a forum to a channel that is not a forum, so nothing crosses. Remove it and pair a forum with a forum.';
+
+function discordAuthorName(msg) {
+  return msg.member?.nick || msg.author?.global_name || msg.author?.username || 'Discord user';
+}
+
+// Active pairings for one Discord forum that bring things into Haven, with
+// the Haven forum's tag list. A Haven channel that stopped being a forum is
+// marked on the pairing and skipped.
+function inboundForumLinks(discordForumId) {
+  const rows = deps.db.prepare(`
+    SELECT f.id, f.channel_id, f.guild_id, f.discord_channel_id, f.direction,
+           c.code AS channel_code, c.is_forum, c.forum_tags
+    FROM ferry_links f JOIN channels c ON f.channel_id = c.id
+    WHERE f.discord_channel_id = ? AND f.is_active = 1 AND f.direction IN ('both','to_haven')
+  `).all(String(discordForumId));
+  return rows.filter(l => {
+    if (l.is_forum) return true;
+    touchLink(l.id, KIND_MISMATCH);
+    return false;
+  });
+}
+
+// Every Haven topic one Discord post is carried in, with whether its pairing
+// still brings things into Haven.
+function mappedTopics(discordThreadId) {
+  return deps.db.prepare(`
+    SELECT t.topic_message_id, t.channel_id, t.discord_forum_id, t.origin,
+           c.code AS channel_code, f.id AS link_id,
+           (f.is_active = 1 AND f.direction IN ('both','to_haven')) AS inbound
+    FROM ferry_forum_threads t
+    JOIN channels c ON c.id = t.channel_id
+    JOIN ferry_links f ON f.channel_id = t.channel_id AND f.discord_channel_id = t.discord_forum_id
+    WHERE t.discord_thread_id = ?
+  `).all(String(discordThreadId));
+}
+
+/**
+ * Handles a message if it belongs to a Discord forum post. Returns true when
+ * it did (or deliberately dropped it), false to let the chat path try.
+ */
+function relayForumMessage(msg) {
+  const threadId = String(msg.channel_id);
+  const isStarter = String(msg.id) === threadId;
+
+  const mapped = mappedTopics(threadId);
+  if (mapped.length) {
+    // The first message of a post Ferry already carries is never a reply.
+    // That is how our own posts look when they echo back.
+    if (isStarter) return true;
+    const live = mapped.filter(r => r.inbound);
+    if (!live.length) return true;
+    const content = buildHavenContent(msg);
+    if (!content) return true;
+    const username = discordAuthorName(msg);
+    const avatarUrl = discordAvatarUrl(msg.author);
+    const targets = [];
+    for (const r of live) {
+      const id = deps.insertHavenThreadReply({
+        channelId: r.channel_id, channelCode: r.channel_code, parentId: r.topic_message_id,
+        username, avatarUrl, content,
+      });
+      if (id) targets.push({ havenMessageId: id, channelCode: r.channel_code });
+      touchLink(r.link_id, null);
+    }
+    if (targets.length) rememberRelay(msg.id, content, targets);
+    return true;
+  }
+
+  const thread = threads.get(threadId);
+  if (!thread) {
+    // Only a forum post's first message shares its id with its channel, so
+    // this is a post whose THREAD_CREATE has not arrived yet.
+    if (isStarter) stashStarter(msg);
+    return false;
+  }
+
+  // A thread in a channel that is not a paired forum is left to the chat path.
+  const parentPaired = deps.db.prepare(
+    'SELECT 1 FROM ferry_links WHERE discord_channel_id = ? LIMIT 1'
+  ).get(thread.parentId);
+  if (!parentPaired) return false;
+
+  if (isStarter) relayForumStarter(msg, thread);
+  return true;
+}
+
+function stashStarter(msg) {
+  const now = Date.now();
+  for (const [id, p] of pendingStarters) if (now - p.at > PENDING_STARTER_MS) pendingStarters.delete(id);
+  if (pendingStarters.size >= 100) return;
+  pendingStarters.set(String(msg.id), { msg, at: now });
+}
+
+function takePendingStarter(threadId) {
+  if (!threadId) return;
+  const pending = pendingStarters.get(String(threadId));
+  if (!pending) return;
+  pendingStarters.delete(String(threadId));
+  if (Date.now() - pending.at > PENDING_STARTER_MS) return;
+  try { relayToHaven(pending.msg); } catch (err) { console.error('Ferry forum relay error:', err.message); }
+}
+
+// An automod fault must never take the bridge down, so the text passes
+// unfiltered; but it means filtering is off for bridged messages, so the
+// admin hears about it once rather than once per message.
+let automodFaultLogged = false;
+function noteAutomodFault(err) {
+  if (automodFaultLogged) return;
+  automodFaultLogged = true;
+  console.warn('[ferry] Automod check failed, bridged text is passing unfiltered:', err && err.message);
+}
+
+/**
+ * A forum post's title, cleaned the way Haven cleans a topic title typed in
+ * Haven. Empty when there is nothing left or the link policy refuses it.
+ */
+function havenTopicTitle(name) {
+  let title = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  if (deps?.sanitizeText) title = deps.sanitizeText(title);
+  title = neutralizeLiteralPings(title).trim();
+  if (!title) return '';
+  try {
+    if (automod.checkText(title, { surface: 'message' }).ok === false) return '';
+  } catch (err) { noteAutomodFault(err); }
+  return title;
+}
+
+/**
+ * Discord tag names to the Haven forum's own tag names, matched without
+ * regard to case. Tags Haven does not have are left off. Pure, unit tested.
+ */
+function matchForumTags(discordNames, havenTagsJson) {
+  let haven = [];
+  try { haven = JSON.parse(havenTagsJson || '[]'); } catch { haven = []; }
+  if (!Array.isArray(haven)) return [];
+  const byLower = new Map();
+  for (const t of haven) if (t && typeof t.name === 'string') byLower.set(t.name.toLowerCase(), t.name);
+  const out = [];
+  for (const n of discordNames || []) {
+    const hit = byLower.get(String(n).trim().toLowerCase());
+    if (hit && !out.includes(hit)) out.push(hit);
+  }
+  return out.slice(0, 5);
+}
+
+/**
+ * Haven tag names to the Discord forum's tag ids, matched without regard to
+ * case. Moderated tags are skipped: only Discord moderators may set those,
+ * and asking for one fails the whole post. Discord allows five.
+ */
+function discordTagIdsFor(havenNames, discordTags) {
+  const byLower = new Map();
+  for (const t of discordTags || []) {
+    if (t && t.id && t.name && !t.moderated) byLower.set(String(t.name).toLowerCase(), String(t.id));
+  }
+  const out = [];
+  for (const n of havenNames || []) {
+    const id = byLower.get(String(n).trim().toLowerCase());
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out.slice(0, 5);
+}
+
+// The tag names on a Discord post, read from its forum's tag list.
+function discordTagNames(thread) {
+  const forum = guilds.get(thread.guildId)?.channels.get(thread.parentId);
+  if (!forum || !forum.tags) return [];
+  return thread.appliedTags
+    .map(id => forum.tags.find(t => t.id === id))
+    .filter(Boolean)
+    .map(t => t.name);
+}
+
+function relayForumStarter(msg, thread) {
+  try {
+    const links = inboundForumLinks(thread.parentId);
+    if (!links.length) return;
+
+    // A post the link policy refuses, in its title or its body, does not
+    // come across at all, and its replies have no topic to land in.
+    const title = havenTopicTitle(thread.name);
+    if (!title) return;
+    const content = buildHavenContent(msg);
+    if (!content) return;
+
+    const username = discordAuthorName(msg);
+    const avatarUrl = discordAvatarUrl(msg.author);
+    const tagNames = discordTagNames(thread);
+    const remember = deps.db.prepare(`
+      INSERT OR IGNORE INTO ferry_forum_threads
+        (topic_message_id, channel_id, guild_id, discord_forum_id, discord_thread_id, origin)
+      VALUES (?, ?, ?, ?, ?, 'discord')
+    `);
+    const already = deps.db.prepare(
+      'SELECT 1 FROM ferry_forum_threads WHERE discord_thread_id = ? AND channel_id = ?'
+    );
+
+    const targets = [];
+    for (const link of links) {
+      // Discord can deliver the same event twice across a resume.
+      if (already.get(thread.id, link.channel_id)) continue;
+      const tags = matchForumTags(tagNames, link.forum_tags);
+      const topicId = deps.insertHavenMessage({
+        channelId: link.channel_id,
+        channelCode: link.channel_code,
+        username, avatarUrl, content,
+        title,
+        tags: tags.length ? tags : null,
+      });
+      if (!topicId) continue;
+      remember.run(topicId, link.channel_id, thread.guildId || link.guild_id, thread.parentId, thread.id);
+      if (thread.locked) deps.updateHavenTopic({ messageId: topicId, channelCode: link.channel_code, closed: true });
+      targets.push({ havenMessageId: topicId, channelCode: link.channel_code });
+      touchLink(link.id, null);
+    }
+    if (targets.length) rememberRelay(msg.id, content, targets);
+  } catch (err) {
+    console.error('Ferry forum relay error:', err.message);
+  }
+}
+
+/**
+ * A renamed, retagged, locked or unlocked Discord post updates its Haven
+ * topic. Only topics that started on Discord follow along: a topic written in
+ * Haven belongs to its Haven author, and a Discord moderator does not get to
+ * retitle it. A lock closes the topic and an unlock opens it again. Archiving
+ * is ignored, because Discord archives every quiet post on a timer.
+ *
+ * Discord sends the post's whole current state, archive and unarchive
+ * included, so only the fields that changed since the previous state are
+ * passed on. Otherwise a Haven moderator's close, new title or tag would be
+ * undone the next time Discord archived the post. With no previous state
+ * (after a restart, or for a post that was archived when Ferry connected)
+ * there is no telling what Discord changed, so nothing is passed on; the next
+ * real change on Discord's side is.
+ */
+function relayThreadUpdateToHaven(t, before) {
+  try {
+    if (!t || !t.id || !before) return;
+    const thread = threads.get(String(t.id));
+    if (!thread) return;
+    const renamed = thread.name !== before.name;
+    const retagged = [...thread.appliedTags].sort().join(',') !== [...before.appliedTags].sort().join(',');
+    const relocked = thread.locked !== before.locked;
+    if (!renamed && !retagged && !relocked) return;
+    const rows = mappedTopics(thread.id).filter(r => r.inbound && r.origin === 'discord');
+    if (!rows.length) return;
+
+    const title = renamed ? havenTopicTitle(thread.name) : '';
+    const tagNames = discordTagNames(thread);
+    for (const r of rows) {
+      const current = deps.db.prepare('SELECT title, tags, closed FROM messages WHERE id = ?').get(r.topic_message_id);
+      if (!current) continue;
+      const update = {};
+      if (title && title !== current.title) update.title = title;
+      if (retagged) {
+        const forumTags = deps.db.prepare('SELECT forum_tags FROM channels WHERE id = ?').get(r.channel_id)?.forum_tags;
+        const tags = matchForumTags(tagNames, forumTags);
+        const tagsJson = tags.length ? JSON.stringify(tags) : null;
+        if (tagsJson !== (current.tags || null)) update.tags = tags;
+      }
+      if (relocked && !!current.closed !== thread.locked) update.closed = thread.locked;
+      if (!Object.keys(update).length) continue;
+      deps.updateHavenTopic({ messageId: r.topic_message_id, channelCode: r.channel_code, ...update });
+    }
+  } catch (err) {
+    console.error('Ferry forum update error:', err.message);
+  }
+}
+
+/**
+ * A post deleted on Discord is unlinked. Its Haven topic stays, the same way
+ * a deleted Discord message stays in Haven, but a topic that came from
+ * Discord is closed so nobody waits for answers from a post that is gone.
+ * Replies to a Haven topic whose Discord copy was deleted stay in Haven.
+ */
+function relayThreadDeleteToHaven(d) {
+  try {
+    const rows = mappedTopics(d.id);
+    for (const r of rows) {
+      if (r.inbound && r.origin === 'discord') {
+        deps.updateHavenTopic({ messageId: r.topic_message_id, channelCode: r.channel_code, closed: true });
+      }
+    }
+    deps.db.prepare('DELETE FROM ferry_forum_threads WHERE discord_thread_id = ?').run(String(d.id));
+  } catch (err) {
+    console.error('Ferry forum delete error:', err.message);
+  }
+}
+
 /**
  * Flattens a Discord message into the plain text Haven stores. Attachments and
  * stickers become links rather than being re-hosted: Discord CDN links are
@@ -592,12 +1114,20 @@ function buildHavenContent(msg) {
   const authored = [];
   const media = [];
 
-  const text = translateDiscordEmotes(translateDiscordMentions(msg.content || '', msg)).trim();
+  // Custom emotes stay as Discord wrote them, <:name:id> or <a:name:id>. Every
+  // Haven client renders that token as the emote itself, through the server's
+  // emote cache, so nothing is lost by keeping the id. Folding it to :name:
+  // used to leave a bare shortcode on any server without a same-named emoji.
+  const text = translateDiscordMentions(msg.content || '', msg).trim();
   if (text) authored.push(text);
 
   for (const att of msg.attachments || []) {
     if (att.url) media.push(att.url);
   }
+  // Discord's own client now sends a post with two or more pictures as a
+  // media gallery component and leaves `attachments` empty, so walking the
+  // attachments alone relayed those posts as nothing. Amnibro spotted this.
+  collectComponentMedia(msg.components, media);
   for (const sticker of msg.sticker_items || []) {
     media.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
   }
@@ -651,7 +1181,7 @@ function buildHavenContent(msg) {
       // announcement down with it.
       try {
         if (link && automod.checkText(link, { surface: 'message' }).ok === false) link = '';
-      } catch { /* an automod fault must never take the bridge down */ }
+      } catch (err) { noteAutomodFault(err); }
     } else if (media.length) {
       // Once the image is coming through, e.url is the link that would be
       // unfurled, so it is dropped and the readable parts are kept for context.
@@ -680,40 +1210,198 @@ function buildHavenContent(msg) {
   // Discord's CDN to the allowlist instead would have opened that domain to
   // everybody on the server rather than just to the bridge.
   try {
-    if (authoredText && automod.checkText(authoredText, { surface: 'message' }).ok === false) return '';
-  } catch { /* an automod fault must never take the bridge down */ }
+    if (authoredText && automod.checkText(authoredText, { surface: 'message', markdown: true }).ok === false) return '';
+  } catch (err) { noteAutomodFault(err); }
 
-  return cleanOf([...authored, ...media].join('\n').slice(0, 4000));
+  // A picture referenced from both a component and an attachment goes once.
+  const uniqueMedia = [...new Set(media.filter(Boolean))];
+  return cleanOf([...authored, ...uniqueMedia].join('\n').slice(0, 4000));
 }
 
-/**
- * Discord writes custom emotes into message text as <:name:id> (or <a:name:id>
- * when animated). Relayed raw, a Haven reader sees "<:blue_heart:117883303624>"
- * in the middle of a sentence.
- *
- * They become :name: rather than the emote's CDN image, because Haven renders a
- * bare image URL at full chat-image size. As :name: it reads correctly as text
- * and, when the Haven server happens to have an emoji of the same name, renders
- * as that emoji.
- */
+function discordHttpUrl(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  const u = obj.url || obj.proxy_url || '';
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+
+// Walk a message's components (containers, sections, media galleries, file
+// blocks) and collect every picture or file URL in them.
+function collectComponentMedia(node, into, depth = 0) {
+  if (!node || depth > 8) return;
+  if (Array.isArray(node)) {
+    for (const child of node) collectComponentMedia(child, into, depth + 1);
+    return;
+  }
+  if (typeof node !== 'object') return;
+  const url = discordHttpUrl(node.media) || discordHttpUrl(node.file);
+  if (url) into.push(url);
+  collectComponentMedia(node.items, into, depth + 1);
+  collectComponentMedia(node.components, into, depth + 1);
+  collectComponentMedia(node.accessory, into, depth + 1);
+}
+
 /**
  * Discord writes mentions into message text as <@1178833036244652178>. The
  * names come from the message's own `mentions` array, so this is exact rather
  * than a lookup, and an unresolved id is left as-is rather than guessed at.
  */
 function translateDiscordMentions(text, msg) {
-  let out = String(text || '');
+  // Anything typed as plain text that would ping a group on Haven is
+  // defused first: @everyone and @here unless Discord itself says the
+  // message pinged everyone (it only does when the author was allowed to),
+  // and a Haven role's name typed out. A real Discord role mention,
+  // translated below and only when pings are allowed, is the one way a
+  // Discord message pings a Haven role.
+  let out = neutralizeLiteralPings(String(text || ''), msg && msg.mention_everyone === true);
   for (const u of (msg && msg.mentions) || []) {
     if (!u || !u.id) continue;
     const name = u.global_name || u.username;
     if (!name) continue;
     out = out.split(`<@${u.id}>`).join(`@${name}`).split(`<@!${u.id}>`).join(`@${name}`);
   }
+  const guild = msg && msg.guild_id ? guilds.get(String(msg.guild_id)) : null;
+  return translateDiscordRefs(out, guild, {
+    pingRoles: deps ? boolSetting('ferry_allow_mentions', false) : false,
+    havenChannelFor: pairedHavenChannelName,
+  });
+}
+
+function neutralizeLiteralPings(text, discordPingedEveryone = false) {
+  let out = String(text || '');
+  if (!discordPingedEveryone) out = out.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1');
+  if (deps && deps.db) {
+    try { out = stripRoleMentions(out, deps.db.prepare('SELECT name FROM roles').all().map(r => r.name)); } catch { /* roles table optional in tests; always present on a real server */ }
+  }
   return out;
 }
 
-function translateDiscordEmotes(text) {
-  return String(text || '').replace(/<(a?):([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$2:');
+/**
+ * Role and channel mentions from Discord, which arrive as <@&id> and <#id>.
+ *
+ * A role becomes @Name, so a Haven role of the same name lights up for the
+ * people who hold it: the two sides ping together. That only happens when the
+ * admin has pings on and the Discord role is one anybody there may mention;
+ * otherwise the name shows with a zero-width space after the @, which reads
+ * the same and pings nobody, the way Haven treats a role ping from someone
+ * not allowed to send one.
+ *
+ * A channel becomes #name: the Haven channel it is paired with when there is
+ * one, so it turns into a link people can click, and the Discord name when
+ * there is not. Unknown ids are left as they are rather than guessed at.
+ */
+function translateDiscordRefs(text, guild, { pingRoles = false, havenChannelFor = null } = {}) {
+  let out = String(text || '');
+  if (!guild) return out;
+  out = out.replace(/<@&([0-9]{15,25})>/g, (full, id) => {
+    const r = guild.roles && guild.roles.get(id);
+    if (!r) return full;
+    return (pingRoles && r.mentionable ? '@' : '@\u200B') + r.name;
+  });
+  out = out.replace(/<#([0-9]{15,25})>/g, (full, id) => {
+    const haven = havenChannelFor ? havenChannelFor(id) : null;
+    const name = haven || (guild.channelNames && guild.channelNames.get(id)) || (guild.channels && guild.channels.get(id)?.name);
+    return name ? '#' + String(name).replace(/\s+/g, '_') : full;
+  });
+  return out;
+}
+
+// The Haven channel a Discord channel is paired with, by name, if any.
+function pairedHavenChannelName(discordChannelId) {
+  if (!deps || !deps.db) return null;
+  try {
+    const row = deps.db.prepare(`
+      SELECT c.name FROM ferry_links f JOIN channels c ON f.channel_id = c.id
+      WHERE f.discord_channel_id = ? AND f.is_active = 1 ORDER BY f.id LIMIT 1
+    `).get(String(discordChannelId));
+    return row ? row.name : null;
+  } catch { return null; }
+}
+
+// The Discord channel a Haven channel is paired with in one guild, by the
+// Haven channel's name (a #name in a Haven message).
+function pairedDiscordChannelId(guildId, havenName) {
+  if (!deps || !deps.db) return null;
+  try {
+    const rows = deps.db.prepare(`
+      SELECT f.discord_channel_id, c.name FROM ferry_links f JOIN channels c ON f.channel_id = c.id
+      WHERE f.guild_id = ? AND f.is_active = 1
+    `).all(String(guildId));
+    const want = String(havenName).toLowerCase();
+    const hit = rows.filter(r => r.name && (r.name.toLowerCase() === want || r.name.toLowerCase().replace(/\s+/g, '_') === want));
+    return hit.length === 1 ? hit[0].discord_channel_id : null;
+  } catch { return null; }
+}
+
+/**
+ * The other way round: a Haven @Role and #channel go out as Discord's own
+ * <@&id> and <#id>. Returns the text and the role ids it may ping.
+ *
+ * A role is only turned into a ping when pings are on and the Discord role is
+ * one anybody there may mention, which is Discord's own rule for a member
+ * typing it. A Haven sender who may not ping roles here has had the ping
+ * broken with a zero-width space before this runs, so it never matches.
+ * Names are matched whole and case-insensitively; two roles sharing a name is
+ * ambiguous, and neither is pinged.
+ *
+ * A channel is the one its Haven channel is paired with in this guild, or
+ * failing that the one Discord channel with that name. Channel links ping
+ * nobody, so they are translated whether or not pings are on.
+ */
+function translateHavenRefs(content, guild, { pingRoles = false, discordChannelFor = null } = {}) {
+  let text = String(content || '');
+  const roleIds = [];
+  if (!guild) return { content: text, roleIds };
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  if (pingRoles && guild.roles && guild.roles.size && text.includes('@')) {
+    const byName = new Map();
+    for (const r of guild.roles.values()) {
+      const key = r.name.toLowerCase();
+      byName.set(key, byName.has(key) ? null : r);
+    }
+    const names = [...byName.keys()].filter(k => byName.get(k) && byName.get(k).mentionable)
+      .sort((a, b) => b.length - a.length);
+    if (names.length) {
+      const re = new RegExp(`(?<![\\w@<])@(${names.map(esc).join('|')})(?![\\w])`, 'gi');
+      text = text.replace(re, (full, name) => {
+        const r = byName.get(name.toLowerCase());
+        if (!r) return full;
+        if (!roleIds.includes(r.id)) roleIds.push(r.id);
+        return `<@&${r.id}>`;
+      });
+    }
+  }
+
+  if (text.includes('#')) {
+    const byName = new Map();
+    const names = guild.channelNames && guild.channelNames.size ? guild.channelNames : new Map([...(guild.channels || new Map()).values()].map(c => [c.id, c.name]));
+    for (const [id, name] of names) {
+      const key = String(name).toLowerCase();
+      byName.set(key, byName.has(key) ? null : id);
+    }
+    text = text.replace(/(?<![\w#&<\/])#([\p{L}\p{N}_-]{1,100})/gu, (full, name) => {
+      const lower = name.toLowerCase();
+      const id = (discordChannelFor && discordChannelFor(lower))
+        || byName.get(lower) || byName.get(lower.replace(/_/g, '-'));
+      return id ? `<#${id}>` : full;
+    });
+  }
+  return { content: text, roleIds };
+}
+
+/**
+ * Turns a Haven :name: into the paired guild's own emote, <:name:id>, so it
+ * shows as a picture on the Discord side instead of a shortcode. Only names the
+ * guild actually has are touched. A token already in Discord's form is left
+ * alone, and so is anything glued to other text, like the colons in a time.
+ */
+function translateHavenEmotes(content, emojis) {
+  const text = String(content || '');
+  if (!emojis || !emojis.size) return text;
+  return text.replace(/(?<![<\w]):([A-Za-z0-9_]{2,32}):(?![\w>])/g, (full, name) => {
+    const e = emojis.get(name.toLowerCase());
+    return e ? `<${e.animated ? 'a' : ''}:${e.name}:${e.id}>` : full;
+  });
 }
 
 function discordAvatarUrl(author) {
@@ -769,10 +1457,10 @@ function absolutizeUploads(content) {
  * @everyone someone else's Discord server through the bridge, and the server
  * owner would see it as coming from the bot they installed.
  */
-function mentionPolicy() {
-  return boolSetting('ferry_allow_mentions', false)
-    ? { parse: ['users'] }     // still never everyone or roles
-    : { parse: [] };
+function mentionPolicy(roleIds = []) {
+  if (!boolSetting('ferry_allow_mentions', false)) return { parse: [] };
+  // Never @everyone. Roles only by id, the ones translateHavenRefs checked.
+  return roleIds.length ? { parse: ['users'], roles: roleIds.slice(0, 100) } : { parse: ['users'] };
 }
 
 /**
@@ -845,7 +1533,7 @@ function enqueue(key, task) {
   // The stored chain swallows failures so one rejected send does not poison
   // every later message to the same destination. The caller still sees the
   // real rejection through `run`.
-  const chain = run.catch(() => {});
+  const chain = run.catch(() => { /* the caller sees this failure through run */ });
   sendQueues.set(key, chain);
   // Drop the entry once drained, so the map does not grow one dead promise per
   // destination for the life of the process.
@@ -871,7 +1559,7 @@ async function ensureLinkWebhook(link) {
   try {
     const existing = await discordRequest('GET', `/channels/${link.discord_channel_id}/webhooks`);
     created = (existing || []).find(w => w.token && botUser && w.application_id === botUser.id) || null;
-  } catch { /* fall through to create */ }
+  } catch { /* cannot list webhooks: fall through to create, which reports its own error */ }
 
   if (!created) {
     created = await discordRequest('POST', `/channels/${link.discord_channel_id}/webhooks`, { name: 'Haven Ferry' });
@@ -890,33 +1578,184 @@ async function ensureLinkWebhook(link) {
  * Relays one Haven message to one paired Discord channel, as the Haven author.
  */
 async function sendToDiscord(link, { username, avatar, content }) {
-  const body = absolutizeUploads(String(content || '')).slice(0, MAX_DISCORD_CONTENT);
+  const guild = guilds.get(String(link.guild_id || ''));
+  const body = outboundBody(content, guild);
   if (!body.trim()) return;
+  if (isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
     try {
       const hook = await ensureLinkWebhook(link);
-      // Resolved per destination: the same @name can be a different person in
-      // a different Discord server.
-      const withMentions = await resolveOutgoingMentions(link.guild_id, body);
-      await executeWebhook(hook.id, hook.token, {
-        content: withMentions,
-        username: sanitizeWebhookUsername(username),
-        avatar_url: absoluteAvatarUrl(avatar) || undefined,
-        allowed_mentions: mentionPolicy(),
-      });
+      await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }));
       touchLink(link.id, null);
     } catch (err) {
-      // A 10015 means the webhook was deleted on Discord's side. Clear it so
-      // the next send recreates one instead of failing forever.
-      if (err.discordCode === 10015 || err.status === 404) {
-        deps.db.prepare('UPDATE ferry_links SET webhook_id = NULL, webhook_token = NULL WHERE id = ?').run(link.id);
+      throw sendFailure(link, err);
+    }
+  });
+}
+
+// Haven's text made ready for Discord: uploads as full links, :name: as the
+// guild's own emotes, and cut to Discord's length limit.
+function outboundBody(content, guild) {
+  return translateHavenEmotes(absolutizeUploads(String(content || '')), guild && guild.emojis)
+    .slice(0, MAX_DISCORD_CONTENT);
+}
+
+// The webhook body for one relayed message, shown as its Haven author.
+async function webhookPayload(link, guild, { username, avatar, body }) {
+  // Resolved per destination: the same @name can be a different person in
+  // a different Discord server.
+  const withMentions = await resolveOutgoingMentions(link.guild_id, body);
+  // Roles and channels after people, so a person who shares a role's
+  // name is the one pinged, the same as in Haven.
+  const refs = translateHavenRefs(withMentions, guild, {
+    pingRoles: boolSetting('ferry_allow_mentions', false),
+    discordChannelFor: (name) => pairedDiscordChannelId(link.guild_id, name),
+  });
+  return {
+    content: refs.content.slice(0, MAX_DISCORD_CONTENT),
+    username: sanitizeWebhookUsername(username),
+    avatar_url: absoluteAvatarUrl(avatar) || undefined,
+    allowed_mentions: mentionPolicy(refs.roleIds),
+  };
+}
+
+/**
+ * Turns a failed send into the sentence the admin sees on the pairing and the
+ * author sees in a toast, and repairs what can be repaired.
+ */
+function sendFailure(link, err) {
+  // A 10015 means the webhook was deleted on Discord's side. Clear it so
+  // the next send recreates one instead of failing forever.
+  if (err.discordCode === 10015 || (err.status === 404 && err.discordCode !== 10003)) {
+    deps.db.prepare('UPDATE ferry_links SET webhook_id = NULL, webhook_token = NULL WHERE id = ?').run(link.id);
+  }
+  let reason = err.message;
+  if (err.status === 403) reason = 'The bot needs the "Manage Webhooks" permission in that Discord channel.';
+  // Discord's codes for "this forum needs a tag on every post", and for a
+  // forum webhook sent without a post to go in.
+  else if (err.discordCode === 40067) reason = 'That Discord forum requires a tag on every post. Give the Haven forum a tag with the same name as one of the Discord forum\'s tags, and tag the topic with it.';
+  else if (err.discordCode === 220001) reason = KIND_MISMATCH;
+  touchLink(link.id, reason);
+  return new Error(reason);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Forums, Haven → Discord
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * A Discord post's name. Discord needs one of 1 to 100 characters, and a
+ * Haven topic always has a title, but an older client can post without one,
+ * so the first line of the body stands in.
+ */
+function forumThreadName(title, body) {
+  const pick = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  let name = pick(title) || pick(String(body || '').split('\n')[0]) || 'Haven topic';
+  if (name.length > 100) name = name.slice(0, 99) + '…';
+  return name;
+}
+
+const NSFW_HELD = 'This topic is marked NSFW and the paired Discord forum is not age-restricted, so it stayed in Haven. Mark the Discord forum as age-restricted to carry NSFW topics.';
+
+// Whether a Haven topic is marked NSFW, read from the stored topic so it holds
+// whatever the caller passed along.
+function topicIsNsfw(topicId) {
+  if (!Number.isInteger(topicId)) return false;
+  try {
+    return !!deps.db.prepare('SELECT nsfw FROM messages WHERE id = ?').get(topicId)?.nsfw;
+  } catch { return false; }
+}
+
+// Whether the paired Discord forum is age-restricted. Comes from the channel
+// Discord sent on connect and on every change. Not knowing counts as no.
+function discordForumIsNsfw(guild, link) {
+  const forum = guild && guild.channels.get(String(link.discord_channel_id));
+  return !!(forum && forum.nsfw === true);
+}
+
+/**
+ * A new topic in a paired Haven forum becomes a new post in the Discord forum,
+ * made through the pairing's webhook so it shows the Haven author. Discord
+ * makes the post when the webhook call carries `thread_name`, and answers with
+ * the post's first message, whose channel is the new post.
+ */
+async function sendTopicToDiscord(link, { username, avatar, content, title, tags, topicId, nsfw = false }) {
+  const guild = guilds.get(String(link.guild_id || ''));
+  const body = outboundBody(content, guild);
+  if (!body.trim()) return;
+  if (!isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
+  // An NSFW topic only goes to a Discord forum that is age-restricted too.
+  // Held back, it has no Discord post, so its replies stay in Haven as well.
+  if ((nsfw === true || topicIsNsfw(topicId)) && !discordForumIsNsfw(guild, link)) {
+    touchLink(link.id, NSFW_HELD);
+    throw new Error(NSFW_HELD);
+  }
+
+  return enqueue(`ch:${link.discord_channel_id}`, async () => {
+    try {
+      const hook = await ensureLinkWebhook(link);
+      const payload = await webhookPayload(link, guild, { username, avatar, body });
+      payload.thread_name = forumThreadName(title, body);
+      const forum = guild && guild.channels.get(String(link.discord_channel_id));
+      const tagIds = discordTagIdsFor(tags, forum && forum.tags);
+      if (tagIds.length) payload.applied_tags = tagIds;
+      const sent = await executeWebhook(hook.id, hook.token, payload);
+      const threadId = String((sent && (sent.channel_id || sent.id)) || '');
+      if (SNOWFLAKE.test(threadId) && Number.isInteger(topicId)) {
+        deps.db.prepare(`
+          INSERT OR IGNORE INTO ferry_forum_threads
+            (topic_message_id, channel_id, guild_id, discord_forum_id, discord_thread_id, origin)
+          VALUES (?, ?, ?, ?, ?, 'haven')
+        `).run(topicId, link.channel_id, String(link.guild_id), String(link.discord_channel_id), threadId);
       }
-      const reason = err.status === 403
-        ? 'The bot needs the "Manage Webhooks" permission in that Discord channel.'
-        : err.message;
-      touchLink(link.id, reason);
-      throw new Error(reason);
+      touchLink(link.id, null);
+    } catch (err) {
+      throw sendFailure(link, err);
+    }
+  });
+}
+
+/**
+ * A reply in a Haven topic goes into the Discord post the topic is linked to,
+ * through the same webhook with `thread_id`. A topic with no Discord post
+ * (written before the pairing, or its post was deleted on Discord) keeps its
+ * replies in Haven. The lookup runs inside the queue, so a reply sent right
+ * after its topic waits for the topic's post to exist.
+ */
+async function sendReplyToDiscord(link, { username, avatar, content, topicId }) {
+  const guild = guilds.get(String(link.guild_id || ''));
+  const body = outboundBody(content, guild);
+  if (!body.trim()) return;
+  if (!isForumType(link.discord_channel_type)) return;
+
+  return enqueue(`ch:${link.discord_channel_id}`, async () => {
+    const row = deps.db.prepare(
+      'SELECT discord_thread_id FROM ferry_forum_threads WHERE topic_message_id = ? AND channel_id = ? AND discord_forum_id = ?'
+    ).get(topicId, link.channel_id, String(link.discord_channel_id));
+    if (!row) return;
+    // A topic marked NSFW after its post was made stops sending replies to a
+    // forum that is not age-restricted.
+    if (topicIsNsfw(topicId) && !discordForumIsNsfw(guild, link)) {
+      throw new Error('This topic is marked NSFW and the paired Discord forum is not age-restricted, so this reply stayed in Haven.');
+    }
+    try {
+      const hook = await ensureLinkWebhook(link);
+      await executeWebhook(hook.id, hook.token,
+        await webhookPayload(link, guild, { username, avatar, body }),
+        { threadId: row.discord_thread_id });
+      touchLink(link.id, null);
+    } catch (err) {
+      // 10003 is "unknown channel": the post is gone, so forget it.
+      if (err.discordCode === 10003) {
+        deps.db.prepare('DELETE FROM ferry_forum_threads WHERE discord_thread_id = ?').run(row.discord_thread_id);
+        throw new Error('That Discord post was deleted, so replies now stay in Haven.');
+      }
+      // Discord's codes for a locked or archived post.
+      if (err.discordCode === 160005 || err.discordCode === 50083) {
+        throw new Error('That Discord post is locked, so this reply stayed in Haven.');
+      }
+      throw sendFailure(link, err);
     }
   });
 }
@@ -1019,7 +1858,7 @@ function touchLink(linkId, error) {
     deps.db.prepare(
       'UPDATE ferry_links SET last_activity_at = CURRENT_TIMESTAMP, last_error = ? WHERE id = ?'
     ).run(error || null, linkId);
-  } catch { /* best-effort health tracking */ }
+  } catch { /* best-effort health tracking, runs per relayed message, so not logged */ }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1088,7 +1927,9 @@ function getDirectory() {
       id: g.id,
       name: g.name,
       channels: [...g.channels.values()]
-        .map(c => ({ id: c.id, name: c.name, category: c.category }))
+        // `forum` lets the pairing form offer a Haven forum only Discord
+        // forums, and a chat channel only the rest.
+        .map(c => ({ id: c.id, name: c.name, category: c.category, type: c.type, forum: isForumType(c.type) }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     });
   }
@@ -1136,7 +1977,10 @@ function initFerry(dependencies) {
     for (const row of deps.db.prepare('SELECT webhook_id FROM ferry_links WHERE webhook_id IS NOT NULL').all()) {
       ownWebhookIds.add(row.webhook_id);
     }
-  } catch { /* table arrives with the migration */ }
+  } catch (err) {
+    // Without this list, the first messages after a restart can echo back into Haven.
+    console.warn('[ferry] Could not load webhook ids for the loop guard:', err.message);
+  }
 
   if (getConfig().enabled && getConfig().token) {
     connect();
@@ -1167,6 +2011,7 @@ function reconnectFerry() {
   reconnectAttempts = 0;
   lastError = null;
   guilds.clear();
+  threads.clear();
   setTimeout(() => { if (getConfig().enabled && getConfig().token) connect(); }, 250);
 }
 
@@ -1212,6 +2057,17 @@ async function verifyToken(token) {
   return { id: user.id, username: user.username, avatar: discordAvatarUrl(user) };
 }
 
+/**
+ * Headers for reading Discord as the Ferry bot, for the Discord import. The
+ * token never leaves the server: the import routes call Discord with these
+ * and the client only says "use Ferry". Null when Ferry has no token.
+ */
+function importHeaders() {
+  const { token } = getConfig();
+  if (!token) return null;
+  return { 'Authorization': `Bot ${token}`, 'User-Agent': USER_AGENT };
+}
+
 /** The invite link an admin needs, with exactly the permissions Ferry uses. */
 function inviteUrl(applicationId) {
   // 536870912 Manage Webhooks + 2048 Send Messages + 1024 View Channel
@@ -1226,14 +2082,25 @@ module.exports = {
   resolveFerryTarget,
   sanitizeWebhookUsername,
   buildHavenContent,
+  translateHavenEmotes,
+  translateDiscordRefs,
+  translateHavenRefs,
+  roleMap,
   discordAvatarUrl,
+  isForumType,
+  matchForumTags,
+  discordTagIdsFor,
+  forumThreadName,
   applySettings,
   reconnectFerry,
   stopFerry: stop,
   getFerryState,
+  importHeaders,
   getDirectory,
   searchMembers,
   sendToDiscord,
+  sendTopicToDiscord,
+  sendReplyToDiscord,
   sendDiscordDm,
   authorizeDmTarget,
   verifyToken,

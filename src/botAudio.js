@@ -108,7 +108,7 @@ class BotAudioManager {
     // Queue state is in memory, so files left by an interrupted process can
     // never be resumed safely and must not survive a restart.
     for (const name of fs.readdirSync(audioDir)) {
-      try { fs.rmSync(path.join(audioDir, name), { recursive: true, force: true }); } catch {}
+      try { fs.rmSync(path.join(audioDir, name), { recursive: true, force: true }); } catch { /* leftover temp audio still locked; cleared on the next start */ }
     }
   }
 
@@ -272,7 +272,7 @@ class BotAudioManager {
         });
       }
       for (const entry of entries) {
-        try { fs.rmSync(entry.filePath, { force: true }); } catch {}
+        try { fs.rmSync(entry.filePath, { force: true }); } catch { /* temp audio; the folder sweep below and the next start clear it */ }
       }
     }
     this.channels.clear();
@@ -280,7 +280,7 @@ class BotAudioManager {
       for (const name of fs.readdirSync(this.audioDir)) {
         fs.rmSync(path.join(this.audioDir, name), { recursive: true, force: true });
       }
-    } catch {}
+    } catch { /* shutting down; temp audio left behind is cleared on the next start */ }
     return removed;
   }
 

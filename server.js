@@ -1,5 +1,7 @@
 ﻿// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('./src/paths');
+const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
+const { trimUploadsToLimit } = require('./src/uploadsTrim');
 
 // ── Node.js version guard ─────────────────────────────────
 const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
@@ -30,7 +32,7 @@ const path = require('path');
 {
   const srcDir = path.join(__dirname, 'src');
   let entries = [];
-  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); } catch { /* no src = other problems */ }
+  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); } catch { /* no src folder: the require() calls below fail loudly on their own */ }
   const dirNames = new Set(entries.filter(e => e.isDirectory()).map(e => e.name));
   const stale = entries.filter(e =>
     e.isFile() && e.name.endsWith('.js') && dirNames.has(e.name.slice(0, -3)) &&
@@ -75,6 +77,10 @@ if (fs.existsSync(rootEnv)) {
   require('dotenv').config({ path: rootEnv, override: false });
   console.log('📄 Loaded project root .env as supplementary source');
 }
+
+// Send outgoing requests through the host's proxy (https_proxy / http_proxy /
+// no_proxy) when one is set. Without one this does nothing.
+require('./src/outboundProxy').install();
 
 const express = require('express');
 const { createServer } = require('http');
@@ -136,6 +142,15 @@ fs.mkdirSync(BOT_AUDIO_DIR, { recursive: true });
 let botAudioManager = null;
 let socketRuntime = null;
 
+// Values set up further down this file (the socket server, the database,
+// bot audio) or reassigned while running. Route modules in src/routes read
+// them through this object at the moment they use them, so they always
+// see the current one.
+const late = {
+  get io() { return io; },
+  get botAudioManager() { return botAudioManager; },
+};
+
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 const UPLOAD_URL_PATH_RE = /\/uploads\/+([-A-Za-z0-9_.~%/\\]+)/gi;
 
@@ -162,7 +177,14 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
   try {
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(src, dst);
-  } catch { /* file locked or already moved */ }
+    // A rename keeps the upload's own timestamp. The retention window counts
+    // from the deletion, so stamp the file now.
+    try { const now = new Date(); fs.utimesSync(dst, now, now); } catch { /* purge falls back to the upload time */ }
+  } catch (err) {
+    // Already moved by another path is fine; anything else leaves the file
+    // live in uploads/ after its message was deleted, so say so.
+    if (err.code !== 'ENOENT') console.warn(`[uploads] Could not move ${relPath} to deleted-attachments:`, err.message);
+  }
 }
 
 function collectUploadRelPaths(contents) {
@@ -333,7 +355,10 @@ function getUploadUsage() {
       entry.files++;
       attributedBytes += bytes;
     }
-  } catch { /* table missing on a database that has not migrated yet */ }
+  } catch (err) {
+    // Every file then shows as unattributed, so the report is wrong; say why.
+    console.warn('[uploads] Could not read upload ownership for the usage report:', err.message);
+  }
 
   let liveBytes = 0;
   for (const bytes of sizes.values()) liveBytes += bytes;
@@ -351,22 +376,22 @@ function getUploadUsage() {
   return data;
 }
 
-// Trust proxy configuration — controls how many reverse-proxy hops to trust
-// when reading the real client IP from X-Forwarded-For.
+// Trust proxy configuration: whose X-Forwarded-For to believe when reading
+// the real client IP. src/clientIp.js holds the rule, so HTTP and sockets
+// agree.
 //
-//   TRUST_PROXY=1  (default) — trust the first hop (nginx/Traefik/Cloudflare)
-//   TRUST_PROXY=0             — direct exposure; do NOT trust XFF headers
-//                               (prevents attackers from spoofing their IP to
-//                               bypass the auth rate limiter)
-//   TRUST_PROXY=2             — two proxy hops, etc.
+//   (unset)        default: a proxy on this machine or the local network
+//                  (loopback, link-local, private ranges). Directly exposed
+//                  servers ignore the header, so nobody can spoof their IP
+//                  past the auth rate limiter or an IP ban.
+//   TRUST_PROXY=1  one hop, wherever it is (Cloudflare's proxy, or any proxy
+//                  on another machine)
+//   TRUST_PROXY=2  two hops, etc.; TRUST_PROXY=0 trusts nothing
 //
-// Without this every user behind a reverse proxy shares the loopback IP in
-// the auth rate limiter, causing innocent users to hit the limit on their
-// very first login/register attempt.
-const _trustProxy = process.env.TRUST_PROXY !== undefined
-  ? (isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY))
-  : 1;
-app.set('trust proxy', _trustProxy);
+// Without a trusted proxy every user behind one shares its IP in the auth
+// rate limiter, so innocent users would hit the limit on their first login.
+const { trustProxySetting } = require('./src/clientIp');
+app.set('trust proxy', trustProxySetting());
 
 // ── IP ban gate (v3.20.0) ─────────────────────────────────
 // Run before anything else (parsers, helmet, static) so banned addresses
@@ -391,7 +416,13 @@ function _refreshIpBanCache() {
       else set.add(_clientIp.normalizeIp(r.ip));
     }
     _ipBanCache = { set, cidrs, expires: Date.now() + 30000 };
-  } catch { _ipBanCache = { set: new Set(), cidrs: [], expires: Date.now() + 30000 }; }
+  } catch (err) {
+    // Keep the bans already known rather than dropping them all: an empty
+    // list here would let every banned address back in until the next read.
+    // Try again in a few seconds.
+    console.warn('[ip-bans] Could not read the ban list, keeping the last one:', err.message);
+    _ipBanCache = { ..._ipBanCache, expires: Date.now() + 5000 };
+  }
 }
 function invalidateIpBanCache() { _ipBanCache.expires = 0; }
 function isIpBanned(ip) {
@@ -414,6 +445,21 @@ app.set('isIpBanned', isIpBanned);
 
 // ── Helper: verify admin from DB (don't trust JWT claims alone) ─────
 // JWT isAdmin may be stale if admin was demoted since token was issued.
+// Upload cap for one user: the server setting, or a higher one from a role
+// they hold (roles.max_upload_mb). Admins are checked against the setting.
+function uploadCapMb(user) {
+  const db = require('./src/database').getDb();
+  const base = parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25;
+  if (verifyAdminFromDb(user)) return base;
+  try {
+    const row = db.prepare(`
+      SELECT MAX(r.max_upload_mb) AS cap FROM roles r JOIN user_roles ur ON ur.role_id = r.id
+      WHERE ur.user_id = ? AND ur.channel_id IS NULL AND r.max_upload_mb IS NOT NULL
+    `).get(user.id);
+    return Math.max(base, parseInt(row?.cap, 10) || 0);
+  } catch { return base; }
+}
+
 function verifyAdminFromDb(user) {
   if (!user) return false;
   try {
@@ -423,13 +469,38 @@ function verifyAdminFromDb(user) {
   } catch { return false; }
 }
 
+// The permission check the rest of Haven uses (roles, the level thresholds
+// and permissions set on one person), made once the database is open.
+let _permissions = null;
+function permissionsModule() {
+  if (!_permissions) _permissions = require('./src/socketHandlers/permissions')(require('./src/database').getDb());
+  return _permissions;
+}
+
+// For the HTTP routes. It used to look only at roles, so someone given a
+// permission through the level thresholds or on their own (which the app shows
+// as granted) was refused here, uploads included, and someone denied one on
+// their own was still let through by a role.
 function userHasPermission(userId, permission) {
   if (!userId) return false;
   try {
     const { getDb } = require('./src/database');
-    const isAdmin = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+    const db = getDb();
+    const isAdmin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
     if (isAdmin && isAdmin.is_admin) return true;
-    const row = getDb().prepare(`
+    // A server-wide setting on the person decides first, allow or deny. The
+    // table is created at startup; if this read fails, the outer catch denies
+    // rather than skipping a personal deny and letting a role allow it.
+    const own = db.prepare(`
+      SELECT allowed FROM user_role_perms
+      WHERE user_id = ? AND permission = ? AND channel_id IS NULL
+      ORDER BY allowed ASC LIMIT 1
+    `).get(userId, permission);
+    if (own) return own.allowed === 1;
+    if (permissionsModule().userHasPermission(userId, permission)) return true;
+    // These routes aren't tied to one channel, so a role held in any channel
+    // still counts, as it always has here.
+    const row = db.prepare(`
       SELECT 1 FROM role_permissions rp
       JOIN roles r ON rp.role_id = r.id
       JOIN user_roles ur ON r.id = ur.role_id
@@ -482,10 +553,23 @@ let currentReferrerPolicy = DEFAULT_REFERRER_POLICY;
 let sslCert = process.env.SSL_CERT_PATH;
 let sslKey  = process.env.SSL_KEY_PATH;
 
-// If not explicitly configured, check if the startup scripts generated certs
+const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
+
+// If not explicitly configured, use the certs in the data directory, and make
+// them ourselves when they are missing. The startup scripts used to need an
+// openssl.exe for this, which Windows does not ship (OpenSSH is not OpenSSL),
+// so those machines silently fell back to HTTP.
 if (!sslCert && !sslKey) {
   const autoCert = path.join(CERTS_DIR, 'cert.pem');
   const autoKey  = path.join(CERTS_DIR, 'key.pem');
+  if (!forceHttp && !(fs.existsSync(autoCert) && fs.existsSync(autoKey))) {
+    try {
+      const made = require('./src/selfsignedCert').ensureCerts(CERTS_DIR);
+      console.log(`🔒 Generated a self-signed certificate in ${CERTS_DIR} (${made.names.join(', ')})`);
+    } catch (err) {
+      console.warn('⚠️  Could not generate a self-signed certificate:', err.message);
+    }
+  }
   if (fs.existsSync(autoCert) && fs.existsSync(autoKey)) {
     sslCert = autoCert;
     sslKey  = autoKey;
@@ -496,49 +580,19 @@ if (!sslCert && !sslKey) {
   if (sslKey  && !path.isAbsolute(sslKey))  sslKey  = path.resolve(DATA_DIR, sslKey);
 }
 
-const forceHttp = (process.env.FORCE_HTTP || '').toLowerCase() === 'true';
-
-// No certificate and no wish for plain HTTP: make one. Voice, camera and the
-// mobile app all need HTTPS, and the Windows installer used to skip this step
-// quietly whenever OpenSSL was missing, leaving people on HTTP with no idea
-// why nothing worked. Built with Node's own crypto, so nothing to install.
-// FORCE_HTTP=true is the way to say plain HTTP is on purpose.
-if (!sslCert && !sslKey && !forceHttp) {
-  try {
-    const { generateSelfSignedCert } = require('./src/selfsignedCert');
-    const lanIps = [];
-    try {
-      for (const ifaces of Object.values(require('os').networkInterfaces())) {
-        for (const i of ifaces || []) if (i.family === 'IPv4' && !i.internal) lanIps.push(i.address);
-      }
-    } catch { /* no LAN names in the certificate; still a working certificate */ }
-    const made = generateSelfSignedCert({ commonName: 'Haven', altNames: ['localhost'], ipAddresses: ['127.0.0.1', ...lanIps] });
-    const autoCert = path.join(CERTS_DIR, 'cert.pem');
-    const autoKey  = path.join(CERTS_DIR, 'key.pem');
-    fs.mkdirSync(CERTS_DIR, { recursive: true });
-    fs.writeFileSync(autoKey, made.key, { mode: 0o600 });
-    fs.writeFileSync(autoCert, made.cert);
-    sslCert = autoCert;
-    sslKey  = autoKey;
-    console.log(`\u{1F512} No certificate found, so Haven made a self-signed one in ${CERTS_DIR}. Browsers will warn once. Set FORCE_HTTP=true to run plain HTTP on purpose.`);
-  } catch (err) {
-    console.warn('\u26A0\uFE0F  Could not create a self-signed certificate, running plain HTTP:', err && err.message);
-  }
-}
-
 const useSSL = !!(sslCert && sslKey) && !forceHttp;
 
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'", "blob:", "https://www.youtube.com", "https://w.soundcloud.com", "https://unpkg.com", "https://challenges.cloudflare.com"],  // last host: opt-in Turnstile CAPTCHA on registration
+      scriptSrc: ["'self'", "'unsafe-eval'", "'wasm-unsafe-eval'", "blob:", "https://www.youtube.com", "https://w.soundcloud.com", "https://challenges.cloudflare.com"],  // last host: opt-in Turnstile CAPTCHA on registration
       styleSrc: ["'self'", "'unsafe-inline'"],  // inline styles (fonts are self-hosted, no third-party CDN)
       imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],  // link preview OG images + GIPHY (http: for local/self-hosted services)
       connectSrc: ["'self'", "ws:", "wss:", "https:"],  // Socket.IO + cross-origin health checks
       mediaSrc: ["'self'", "blob:", "data:", "https:", "http:"],  // WebRTC audio + notification sounds + link preview video embeds
       fontSrc: ["'self'"],  // self-hosted fonts only (see /public/fonts)
-      workerSrc: ["'self'", "blob:", "https://unpkg.com"],  // service worker + Ruffle WebAssembly workers
+      workerSrc: ["'self'", "blob:"],  // service worker + Ruffle WebAssembly workers
       objectSrc: ["'none'"],
       frameSrc: ["'self'", "https://open.spotify.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://w.soundcloud.com", "https://challenges.cloudflare.com"],  // Listen Together embeds + game iframes + Turnstile widget
       baseUri: ["'self'"],
@@ -584,6 +638,30 @@ app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
   immutable: true,
 }));
 
+// ── Flash player (Ruffle) ────────────────────────────────
+// Served from the npm package pinned in package.json. It used to come from
+// unpkg, which meant whatever version was newest that day, fetched from a
+// third party by every player, and a CSP that let the games pages run any
+// script published to npm. The core scripts and .wasm files carry a content
+// hash in their names, so those can be cached for good.
+let RUFFLE_DIR = null;
+try {
+  RUFFLE_DIR = path.dirname(require.resolve('@ruffle-rs/ruffle/package.json'));
+} catch {
+  console.warn('Flash games are unavailable: the Flash player package is missing. Run npm install in the Haven folder.');
+}
+if (RUFFLE_DIR) {
+  app.use('/games/ruffle', express.static(RUFFLE_DIR, {
+    dotfiles: 'deny',
+    maxAge: 0,
+    setHeaders: (res, file) => {
+      if (/(^|\.)[0-9a-f]{20}\.(js|wasm)$/.test(path.basename(file))) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+}
+
 // ── Static files with caching ────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
   dotfiles: 'deny',       // block .env, .git, etc.
@@ -606,6 +684,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // Decode the path, resolve it against the uploads root, and check containment,
 // so it is the real target on disk being judged rather than the spelling of
 // the URL. Compared case-insensitively because NTFS is.
+const UPLOAD_MEDIA_EXTS = new Set([
+  '.mp3', '.ogg', '.oga', '.wav', '.m4a', '.aac', '.flac', '.opus', '.weba',
+  '.mp4', '.webm', '.mov', '.m4v', '.ogv',
+]);
 const BLOCKED_UPLOAD_DIRS = ['deleted-attachments', 'bot-audio'].map(
   dir => path.resolve(UPLOADS_DIR, dir).toLowerCase()
 );
@@ -655,6 +737,13 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     } else {
       res.setHeader('Content-Disposition', 'attachment');
+      // Anyone can upload a file, and one served as JavaScript (or HTML, CSS,
+      // XML) from Haven's own origin counts as 'self' in the CSP: a <script
+      // src="/uploads/x.js"> anywhere would run it, whatever the disposition
+      // says. Only audio and video keep their real type, for the inline
+      // players; everything else is opaque bytes, which nosniff refuses to
+      // run as script.
+      if (!UPLOAD_MEDIA_EXTS.has(ext)) res.setHeader('Content-Type', 'application/octet-stream');
     }
   }
 }));
@@ -742,22 +831,41 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
-// Image-only upload — multer cap is generous; real limit enforced per-request from DB
-const upload = multer({
-  storage: uploadStorage,
-  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
-  fileFilter: (req, file, cb) => {
-    if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
-    else cb(new Error('Only images allowed (jpg, png, gif, webp)'));
-  }
-});
+// Uploads stop at the caller's own cap while they stream. The ceiling used to
+// be a nominal 100 GB with the real cap checked only once the whole file was
+// on disk, so anyone signed in could fill the disk with one request (the
+// avatar route needs no permission at all). Each route still checks its own,
+// often smaller, limit afterwards. Multer removes a file cut off this way.
+function uploadCapMbFor(req) {
+  const token = req.headers.authorization?.split(' ')[1];
+  const user = token ? verifyToken(token) : null;
+  const mb = user ? uploadCapMb(user) : 25;
+  return Number.isFinite(mb) && mb > 0 ? mb : 25;
+}
+// A multer wrapper that cuts the upload off at the caller's cap and, when it
+// does, reports it the way the routes do ("File too large (max N MB)").
+function cappedUpload(options) {
+  return {
+    single: (field) => (req, res, next) => {
+      const capMb = uploadCapMbFor(req);
+      multer({ ...options, limits: { fileSize: capMb * 1024 * 1024 + 1 } }).single(field)(req, res, (err) => {
+        if (err && err.code === 'LIMIT_FILE_SIZE') err.message = `File too large (max ${capMb} MB)`;
+        next(err);
+      });
+    }
+  };
+}
+const imageOnlyFilter = (req, file, cb) => {
+  if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) cb(null, true);
+  else cb(new Error('Only images allowed (jpg, png, gif, webp)'));
+};
+
+// Image-only upload
+const upload = cappedUpload({ storage: uploadStorage, fileFilter: imageOnlyFilter });
 
 // General file upload — no MIME restrictions; safety enforced via
 // Content-Disposition: attachment on non-image downloads (see /uploads handler)
-const fileUpload = multer({
-  storage: uploadStorage,
-  limits: { fileSize: 100 * 1024 * 1024 * 1024 },  // 100 GB ceiling — admin DB setting is the real limit
-});
+const fileUpload = cappedUpload({ storage: uploadStorage });
 
 const botAudioUpload = multer({
   storage: multer.diskStorage({
@@ -837,14 +945,25 @@ app.get('/api/push/vapid-key', (req, res) => {
 });
 
 // ── Push notification subscription endpoints ─────────────
-app.post('/api/push/subscribe', express.json(), (req, res) => {
+app.post('/api/push/subscribe', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { endpoint, keys } = req.body;
-  if (!endpoint || !keys?.p256dh || !keys?.auth)
+  const { endpoint, keys } = req.body || {};
+  if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048 ||
+      typeof keys?.p256dh !== 'string' || !keys.p256dh || keys.p256dh.length > 512 ||
+      typeof keys?.auth !== 'string' || !keys.auth || keys.auth.length > 512)
     return res.status(400).json({ error: 'Invalid subscription object' });
+  // Same rule as the socket path: the server posts to this address for every
+  // notification, so it must be a public HTTPS push service, never an address
+  // on the server's own network.
+  try {
+    if (new URL(endpoint).protocol !== 'https:') throw new Error('not https');
+    await require('./src/webhookCallback').resolveCallbackDestination(endpoint);
+  } catch {
+    return res.status(400).json({ error: 'Invalid subscription object' });
+  }
 
   try {
     const { getDb } = require('./src/database');
@@ -863,6 +982,12 @@ app.post('/api/push/subscribe', express.json(), (req, res) => {
         VALUES (?, ?, ?, ?)
         ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth
       `).run(user.id, endpoint, keys.p256dh, keys.auth);
+        // Ten devices per person is plenty; the oldest go first. Without a cap
+        // one account could register endless endpoints for the push queue.
+        db.prepare(`
+          DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+            SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT 10)
+        `).run(user.id, user.id);
     })();
     res.json({ ok: true });
   } catch (err) {
@@ -972,6 +1097,17 @@ app.get('/api/ice-servers', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  // TURN credentials relay traffic through the admin's server; a banned
+  // account gets none.
+  try {
+    if (require('./src/database').getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+  } catch (err) {
+    // Fail closed: without the ban check a banned account would get TURN credentials.
+    console.error('[ice-servers] Ban check failed:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 
   // Admin-configured STUN/TURN (#5399) live in server_settings and take
   // precedence over env vars, which in turn override the built-in pool.
@@ -981,10 +1117,17 @@ app.get('/api/ice-servers', (req, res) => {
   try {
     const { getDb } = require('./src/database');
     const rows = getDb().prepare(
-      "SELECT key, value FROM server_settings WHERE key IN ('stun_urls','turn_url','turn_username','turn_password','voice_force_relay')"
+      "SELECT key, value FROM server_settings WHERE key IN ('stun_urls','turn_url','turn_username','turn_password','voice_force_relay','voice_ice_disabled')"
     ).all();
     rows.forEach(r => { dbSettings[r.key] = r.value; });
-  } catch { /* DB not ready — fall back to env/defaults below */ }
+  } catch (err) {
+    // Falls back to env/defaults, which ignores the admin's voice settings.
+    console.warn('[ice-servers] Could not read voice settings, using env/defaults:', err.message);
+  }
+
+  // An explicit admin disable takes precedence over env and built-in servers.
+  // Empty iceServers tells WebRTC to use direct host candidates only.
+  if (dbSettings.voice_ice_disabled === 'true') return res.json({ iceServers: [] });
 
   // STUN precedence: admin setting → STUN_URLS env → built-in defaults.
   // 3.20.2 (#5399): old defaults (stun.stunprotocol.org + stun.nextcloud.com)
@@ -1077,500 +1220,8 @@ app.get('/api/ice-servers', (req, res) => {
   res.json({ iceServers });
 });
 
-// ── Avatar upload endpoint (saves to /uploads, updates DB) ──
-app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { getDb } = require('./src/database');
-  const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
-  if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
-
-  upload.single('avatar')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    if (req.file.size > 2 * 1024 * 1024) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Avatar must be under 2 MB' });
-    }
-
-    // Validate file magic bytes
-    try {
-      const fd = fs.openSync(req.file.path, 'r');
-      const hdr = Buffer.alloc(12);
-      fs.readSync(fd, hdr, 0, 12, 0);
-      fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
-      }
-    } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: 'Failed to validate file' });
-    }
-
-    // Force safe extension
-    const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-    const safeExt = mimeToExt[req.file.mimetype];
-    if (!safeExt) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Invalid file type' });
-    }
-    const currentExt = path.extname(req.file.filename).toLowerCase();
-    let finalName = req.file.filename;
-    if (currentExt !== safeExt) {
-      finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-      const oldPath = req.file.path;
-      const newPath = path.join(uploadDir, finalName);
-      fs.renameSync(oldPath, newPath);
-    }
-    const avatarUrl = `/uploads/${finalName}`;
-
-    recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
-
-    // Update the user's avatar in the database
-    try {
-      const db = getDb();
-      db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarUrl, user.id);
-      console.log(`[Avatar] ${user.username} uploaded avatar: ${avatarUrl}`);
-    } catch (dbErr) {
-      console.error('Avatar DB update error:', dbErr);
-      return res.status(500).json({ error: 'Failed to save avatar' });
-    }
-
-    res.json({ url: avatarUrl });
-  });
-});
-
-// ── Avatar remove endpoint ──
-app.post('/api/remove-avatar', express.json(), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const { getDb } = require('./src/database');
-    getDb().prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(user.id);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Avatar remove error:', err);
-    res.status(500).json({ error: 'Failed to remove avatar' });
-  }
-});
-
-// ── Border upload endpoint (pfp overlay, mirrors avatar upload) ──
-app.post('/api/upload-border', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { getDb } = require('./src/database');
-  const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
-  if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
-
-  // Enforce upload_files permission (admin always allowed)
-  if (!verifyAdminFromDb(user)) {
-    const hasPerm = getDb().prepare(`
-      SELECT 1 FROM role_permissions rp
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ? AND rp.permission = 'upload_files' AND rp.allowed = 1 LIMIT 1
-    `).get(user.id);
-    if (!hasPerm) return res.status(403).json({ error: 'You don\'t have permission to upload files' });
-  }
-
-  upload.single('border')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    if (req.file.size > 2 * 1024 * 1024) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Border must be under 2 MB' });
-    }
-
-    // Validate file magic bytes
-    try {
-      const fd = fs.openSync(req.file.path, 'r');
-      const hdr = Buffer.alloc(12);
-      fs.readSync(fd, hdr, 0, 12, 0);
-      fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
-      }
-    } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: 'Failed to validate file' });
-    }
-
-    // Force safe extension
-    const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-    const safeExt = mimeToExt[req.file.mimetype];
-    if (!safeExt) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Invalid file type' });
-    }
-    const currentExt = path.extname(req.file.filename).toLowerCase();
-    let finalName = req.file.filename;
-    if (currentExt !== safeExt) {
-      finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-      const oldPath = req.file.path;
-      const newPath = path.join(uploadDir, finalName);
-      fs.renameSync(oldPath, newPath);
-    }
-    const borderUrl = `/uploads/${finalName}`;
-
-    // Update the user's border in the database
-    try {
-      const db = getDb();
-      // A new image invalidates the old fit; clear it so no stale transform lingers.
-      db.prepare('UPDATE users SET border = ?, border_transform = NULL WHERE id = ?').run(borderUrl, user.id);
-      console.log(`[Border] ${user.username} uploaded border: ${borderUrl}`);
-    } catch (dbErr) {
-      console.error('Border DB update error:', dbErr);
-      return res.status(500).json({ error: 'Failed to save border' });
-    }
-
-    res.json({ url: borderUrl });
-  });
-});
-
-// ── Border remove endpoint ──
-app.post('/api/remove-border', express.json(), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const { getDb } = require('./src/database');
-    getDb().prepare('UPDATE users SET border = NULL, border_transform = NULL WHERE id = ?').run(user.id);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Border remove error:', err);
-    res.status(500).json({ error: 'Failed to remove border' });
-  }
-});
-
-// ── Border fit (op log) endpoint ──
-// Stores the pfp-overlay transform as sanitized JSON, mirroring set-avatar-shape.
-app.post('/api/set-border-transform', express.json(), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const clean = sanitizeBorderTransform(req.body.transform);
-  const toStore = (clean && clean.length) ? JSON.stringify(clean) : null;
-  try {
-    const { getDb } = require('./src/database');
-    getDb().prepare('UPDATE users SET border_transform = ? WHERE id = ?').run(toStore, user.id);
-    res.json({ transform: toStore ? clean : null });
-  } catch (err) {
-    console.error('Border transform error:', err);
-    res.status(500).json({ error: 'Failed to save border fit' });
-  }
-});
-
-// ── Avatar shape endpoint ──
-app.post('/api/set-avatar-shape', express.json(), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const validShapes = ['circle', 'rounded', 'squircle', 'hex', 'diamond'];
-  const shape = validShapes.includes(req.body.shape) ? req.body.shape : 'circle';
-  try {
-    const { getDb } = require('./src/database');
-    getDb().prepare('UPDATE users SET avatar_shape = ? WHERE id = ?').run(shape, user.id);
-    res.json({ shape });
-  } catch (err) {
-    console.error('Avatar shape error:', err);
-    res.status(500).json({ error: 'Failed to save shape' });
-  }
-});
-
-// ── Animated-profile policy endpoint ──
-// How this user's animated avatar/border play for everyone, mirroring set-avatar-shape.
-app.post('/api/set-animate-profile', express.json(), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const valid = ['trigger', 'disabled'];
-  const mode = valid.includes(req.body.mode) ? req.body.mode : 'trigger';
-  try {
-    const { getDb } = require('./src/database');
-    getDb().prepare('UPDATE users SET animate_profile = ? WHERE id = ?').run(mode, user.id);
-    res.json({ mode });
-  } catch (err) {
-    console.error('Animate profile error:', err);
-    res.status(500).json({ error: 'Failed to save animation policy' });
-  }
-});
-
-// ── Webhook/Bot avatar upload endpoint ──
-app.post('/api/upload-webhook-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  // Admins or users with manage_webhooks permission can upload webhook avatars
-  const { getDb } = require('./src/database');
-  const dbUser = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
-  if (!dbUser || (!dbUser.is_admin && !userHasPermission(user.id, 'manage_webhooks'))) {
-    return res.status(403).json({ error: 'Insufficient permissions' });
-  }
-
-  upload.single('avatar')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    // Validate file magic bytes
-    try {
-      const fd = fs.openSync(req.file.path, 'r');
-      const hdr = Buffer.alloc(12);
-      fs.readSync(fd, hdr, 0, 12, 0);
-      fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
-      }
-    } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: 'Failed to validate file' });
-    }
-
-    const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-    const safeExt = mimeToExt[req.file.mimetype];
-    if (!safeExt) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Invalid file type' });
-    }
-    const currentExt = path.extname(req.file.filename).toLowerCase();
-    let finalName = req.file.filename;
-    if (currentExt !== safeExt) {
-      finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-      fs.renameSync(req.file.path, path.join(uploadDir, finalName));
-    }
-    const avatarUrl = `/uploads/${finalName}`;
-
-    // Update the webhook's avatar in DB
-    const webhookId = parseInt(req.body?.webhookId || req.query?.webhookId);
-    if (!isNaN(webhookId)) {
-      try {
-        getDb().prepare('UPDATE webhooks SET avatar_url = ? WHERE id = ?').run(avatarUrl, webhookId);
-      } catch (dbErr) {
-        console.error('Webhook avatar DB error:', dbErr);
-      }
-    }
-    res.json({ url: avatarUrl });
-  });
-});
-
-// ── Personas (proxy feature) (#86, #5349) ─────────────────
-// CRUD + avatar upload for per-user personas. Triggered in chat with
-// "PersonaName: message" (handled by send-message socket handler).
-app.get('/api/personas', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const { getDb } = require('./src/database');
-    const rows = getDb().prepare(
-      'SELECT id, name, avatar, bio, created_at FROM user_personas WHERE user_id = ? ORDER BY name COLLATE NOCASE ASC'
-    ).all(user.id);
-    res.json({ personas: rows });
-  } catch (err) {
-    console.error('GET /api/personas error:', err);
-    res.status(500).json({ error: 'Failed to load personas' });
-  }
-});
-
-const _validatePersonaName = (raw) => {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (trimmed.length < 1 || trimmed.length > 32) return null;
-  // Disallow ":" and control/newline chars (the trigger uses "Name:")
-  if (/[\u0000-\u001F:\n\r]/.test(trimmed)) return null;
-  return trimmed;
-};
-
-app.post('/api/personas', express.json(), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const name = _validatePersonaName(req.body?.name);
-  if (!name) return res.status(400).json({ error: 'Persona name must be 1-32 chars and may not contain ":" or line breaks' });
-  const bio = typeof req.body?.bio === 'string' ? req.body.bio.slice(0, 190) : null;
-  const avatar = typeof req.body?.avatar === 'string' && req.body.avatar.startsWith('/uploads/')
-    ? req.body.avatar : null;
-  try {
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    // Cap personas per user to keep abuse / accidental spam in check.
-    const count = db.prepare('SELECT COUNT(*) as c FROM user_personas WHERE user_id = ?').get(user.id).c;
-    if (count >= 25) return res.status(400).json({ error: 'Persona limit reached (25 max)' });
-    // Block names that collide with real usernames to prevent impersonation.
-    const collision = db.prepare(
-      'SELECT id FROM users WHERE username = ? COLLATE NOCASE OR display_name = ? COLLATE NOCASE'
-    ).get(name, name);
-    if (collision) return res.status(400).json({ error: 'That name is already taken by a real user' });
-    const result = db.prepare(
-      'INSERT INTO user_personas (user_id, name, avatar, bio) VALUES (?, ?, ?, ?)'
-    ).run(user.id, name, avatar, bio);
-    const row = db.prepare(
-      'SELECT id, name, avatar, bio, created_at FROM user_personas WHERE id = ?'
-    ).get(result.lastInsertRowid);
-    res.json({ persona: row });
-  } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return res.status(400).json({ error: 'You already have a persona with that name' });
-    }
-    console.error('POST /api/personas error:', err);
-    res.status(500).json({ error: 'Failed to create persona' });
-  }
-});
-
-app.patch('/api/personas/:id', express.json(), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const id = parseInt(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id' });
-  try {
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    const persona = db.prepare('SELECT id FROM user_personas WHERE id = ? AND user_id = ?').get(id, user.id);
-    if (!persona) return res.status(404).json({ error: 'Persona not found' });
-
-    const updates = [];
-    const vals = [];
-    if (req.body?.name !== undefined) {
-      const name = _validatePersonaName(req.body.name);
-      if (!name) return res.status(400).json({ error: 'Persona name must be 1-32 chars and may not contain ":" or line breaks' });
-      const collision = db.prepare(
-        'SELECT id FROM users WHERE username = ? COLLATE NOCASE OR display_name = ? COLLATE NOCASE'
-      ).get(name, name);
-      if (collision) return res.status(400).json({ error: 'That name is already taken by a real user' });
-      updates.push('name = ?'); vals.push(name);
-    }
-    if (req.body?.avatar !== undefined) {
-      const avatar = req.body.avatar === null ? null
-        : (typeof req.body.avatar === 'string' && req.body.avatar.startsWith('/uploads/') ? req.body.avatar : null);
-      updates.push('avatar = ?'); vals.push(avatar);
-    }
-    if (req.body?.bio !== undefined) {
-      const bio = req.body.bio === null ? null
-        : (typeof req.body.bio === 'string' ? req.body.bio.slice(0, 190) : null);
-      updates.push('bio = ?'); vals.push(bio);
-    }
-    if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
-    vals.push(id, user.id);
-    db.prepare(`UPDATE user_personas SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...vals);
-    const row = db.prepare(
-      'SELECT id, name, avatar, bio, created_at FROM user_personas WHERE id = ?'
-    ).get(id);
-    res.json({ persona: row });
-  } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return res.status(400).json({ error: 'You already have a persona with that name' });
-    }
-    console.error('PATCH /api/personas/:id error:', err);
-    res.status(500).json({ error: 'Failed to update persona' });
-  }
-});
-
-app.delete('/api/personas/:id', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const id = parseInt(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id' });
-  try {
-    const { getDb } = require('./src/database');
-    getDb().prepare('DELETE FROM user_personas WHERE id = ? AND user_id = ?').run(id, user.id);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('DELETE /api/personas/:id error:', err);
-    res.status(500).json({ error: 'Failed to delete persona' });
-  }
-});
-
-// Persona avatar upload — same validation as user avatar (2 MB, magic-byte check)
-app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { getDb } = require('./src/database');
-  const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
-  if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
-
-  upload.single('avatar')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    if (req.file.size > 2 * 1024 * 1024) {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: 'Avatar must be under 2 MB' });
-    }
-    try {
-      const fd = fs.openSync(req.file.path, 'r');
-      const hdr = Buffer.alloc(12);
-      fs.readSync(fd, hdr, 0, 12, 0);
-      fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
-      }
-    } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: 'Failed to validate file' });
-    }
-    const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-    const safeExt = mimeToExt[req.file.mimetype];
-    if (!safeExt) {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: 'Invalid file type' });
-    }
-    const currentExt = path.extname(req.file.filename).toLowerCase();
-    let finalName = req.file.filename;
-    if (currentExt !== safeExt) {
-      finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-      fs.renameSync(req.file.path, path.join(uploadDir, finalName));
-    }
-    const avatarUrl = `/uploads/${finalName}`;
-    recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
-
-    // Optional: if a personaId is supplied, persist immediately (verifying ownership).
-    const personaId = parseInt(req.body?.personaId || req.query?.personaId);
-    if (Number.isFinite(personaId)) {
-      try {
-        const persona = getDb().prepare(
-          'SELECT id FROM user_personas WHERE id = ? AND user_id = ?'
-        ).get(personaId, user.id);
-        if (!persona) return res.status(403).json({ error: 'Not your persona' });
-        getDb().prepare('UPDATE user_personas SET avatar = ? WHERE id = ?').run(avatarUrl, personaId);
-      } catch (dbErr) {
-        console.error('Persona avatar DB error:', dbErr);
-        return res.status(500).json({ error: 'Failed to save avatar' });
-      }
-    }
-    res.json({ url: avatarUrl });
-  });
-});
+// ── Profile pictures, borders and personas: src/routes/profile.js ──
+require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, uploadDir, upload, uploadLimiter });
 
 // ── Serve pages ──────────────────────────────────────────
 
@@ -1682,7 +1333,7 @@ app.get('/api/donors', (req, res) => {
         const ordered = JSON.parse(fs.readFileSync(orderPath, 'utf-8'));
         data.featuredSponsors = ordered.sponsors || [];
         data.featuredDonors = ordered.donors || [];
-      } catch {}
+      } catch { /* optional ordering file; the plain donors list still shows */ }
     }
     res.json(data);
   } catch {
@@ -1707,7 +1358,7 @@ app.get('/api/health', (req, res) => {
     if (iconRow && iconRow.value) icon = iconRow.value;
     const fpRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get();
     if (fpRow && fpRow.value) fingerprint = fpRow.value;
-  } catch {}
+  } catch { /* frequent unauthenticated ping: answer with the env defaults rather than fail or log */ }
   res.json({
     status: 'online',
     name,
@@ -1740,7 +1391,7 @@ app.get('/api/public-config', (req, res) => {
     const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
     const oidcConfig = require('./src/oidc').getOidcConfig();
     let storedPublishedThemes = [];
-    try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch {}
+    try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch { /* malformed setting: treat as no published themes */ }
     const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
     res.json({
       default_theme: validatedThemeDefault(THEMES_DIR, themeRow?.value || '', publishedThemes),
@@ -1778,12 +1429,13 @@ app.get('/api/port-check', async (req, res) => {
   const port = process.env.PORT || 3000;
   const https = require('https');
   const http = require('http');
+  const { agentFor } = require('./src/outboundProxy');
 
   // Step 1: Get public IP
   let publicIp = null;
   try {
     publicIp = await new Promise((resolve, reject) => {
-      const req = https.get('https://api.ipify.org?format=json', { timeout: 5000 }, (resp) => {
+      const req = https.get('https://api.ipify.org?format=json', { timeout: 5000, agent: agentFor('https://api.ipify.org') }, (resp) => {
         let data = '';
         resp.on('data', chunk => data += chunk);
         resp.on('end', () => {
@@ -1803,7 +1455,7 @@ app.get('/api/port-check', async (req, res) => {
   try {
     reachable = await new Promise((resolve, reject) => {
       const url = `https://portchecker.io/api/v1/query?host=${publicIp}&ports=${port}`;
-      const req = https.get(url, { timeout: 10000 }, (resp) => {
+      const req = https.get(url, { timeout: 10000, agent: agentFor(url) }, (resp) => {
         let data = '';
         resp.on('data', chunk => data += chunk);
         resp.on('end', () => {
@@ -1850,17 +1502,16 @@ app.get('/api/port-check', async (req, res) => {
 // ── Upload rate limiting ─────────────────────────────────
 const uploadLimitStore = new Map();
 function uploadLimiter(req, res, next) {
+  // Server admins are not throttled: posting a batch of pictures for a guide
+  // or an example is a normal thing for them to do (#5698). The disk guard
+  // and size caps still apply.
+  const token = req.headers.authorization?.split(' ')[1];
+  const tokenUser = token ? verifyToken(token) : null;
+  if (tokenUser && verifyAdminFromDb(tokenUser)) return next();
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
   const windowMs = 60 * 1000; // 1 minute
-  // One message can carry up to max_attachments files, each its own request,
-  // so the allowance follows that setting (twice it, never under the old 10)
-  // rather than refusing the tail of a single drop. (#5561)
-  let attachmentCap = 10;
-  try {
-    attachmentCap = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_attachments'").get()?.value) || 10;
-  } catch { /* keep the default */ }
-  const maxUploads = Math.max(10, attachmentCap * 2);
+  const maxUploads = 10;
   if (!uploadLimitStore.has(ip)) uploadLimitStore.set(ip, []);
   const stamps = uploadLimitStore.get(ip).filter(t => now - t < windowMs);
   uploadLimitStore.set(ip, stamps);
@@ -1870,602 +1521,20 @@ function uploadLimiter(req, res, next) {
 }
 setInterval(() => { const now = Date.now(); for (const [ip, t] of uploadLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) uploadLimitStore.delete(ip); else uploadLimitStore.set(ip, f); } }, 5 * 60 * 1000);
 
-// ── Image upload (authenticated + not banned) ────────────
-app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  // Check if user is banned
-  const { getDb } = require('./src/database');
-  const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
-  if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
-
-  // Enforce upload_files permission (admin always allowed)
-  if (!verifyAdminFromDb(user)) {
-    const hasPerm = getDb().prepare(`
-      SELECT 1 FROM role_permissions rp
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ? AND rp.permission = 'upload_files' AND rp.allowed = 1 LIMIT 1
-    `).get(user.id);
-    if (!hasPerm) return res.status(403).json({ error: 'You don\'t have permission to upload files' });
-  }
-
-  upload.single('image')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    // Enforce DB-configurable max upload size (same setting as general file uploads)
-    const maxMbRow = getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
-    const maxBytes = (parseInt(maxMbRow?.value) || 25) * 1024 * 1024;
-    if (req.file.size > maxBytes) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: `Image too large (max ${maxMbRow?.value || 25} MB)` });
-    }
-
-    // Validate file magic bytes (don't trust MIME type alone)
-    try {
-      const fd = fs.openSync(req.file.path, 'r');
-      const hdr = Buffer.alloc(12);
-      fs.readSync(fd, hdr, 0, 12, 0);
-      fs.closeSync(fd);
-      let validMagic = false;
-      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!validMagic) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match image type' });
-      }
-    } catch {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: 'Failed to validate file' });
-    }
-
-    // Force safe extension based on validated mimetype (prevent HTML/SVG upload)
-    const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-    const safeExt = mimeToExt[req.file.mimetype];
-    if (!safeExt) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Invalid file type' });
-    }
-    // Rename file to use safe extension if it doesn't already match
-    const currentExt = path.extname(req.file.filename).toLowerCase();
-    if (currentExt !== safeExt) {
-      const safeName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-      const oldPath = req.file.path;
-      const newPath = path.join(uploadDir, safeName);
-      fs.renameSync(oldPath, newPath);
-      recordUploadOwnership(user.id, safeName, req.file.size, uploadScopeFromRequest(req));
-      return res.json({ url: `/uploads/${safeName}` });
-    }
-    recordUploadOwnership(user.id, req.file.filename, req.file.size, uploadScopeFromRequest(req));
-    res.json({ url: `/uploads/${req.file.filename}` });
-  });
-});
-
-// ── General file upload (authenticated + not banned) ─────
-app.post('/api/upload-file', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { getDb } = require('./src/database');
-  const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
-  if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
-
-  // Enforce upload_files permission (admin always allowed)
-  if (!verifyAdminFromDb(user)) {
-    const hasPerm = getDb().prepare(`
-      SELECT 1 FROM role_permissions rp
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ? AND rp.permission = 'upload_files' AND rp.allowed = 1 LIMIT 1
-    `).get(user.id);
-    if (!hasPerm) return res.status(403).json({ error: 'You don\'t have permission to upload files' });
-  }
-
-  fileUpload.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    // Enforce DB-configurable max upload size
-    const maxMbRow = getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get();
-    const maxBytes = (parseInt(maxMbRow?.value) || 25) * 1024 * 1024;
-    if (req.file.size > maxBytes) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: `File too large (max ${maxMbRow?.value || 25} MB)` });
-    }
-
-    const isImage = /^image\//.test(req.file.mimetype);
-    // multer passes the raw bytes from the multipart header as a latin1 string;
-    // browsers encode filenames as UTF-8 bytes, so re-decode to recover the
-    // original text (fixes garbled Chinese/emoji/non-ASCII filenames).
-    const originalName = Buffer.from(req.file.originalname || 'file', 'latin1').toString('utf8');
-    const fileSize = req.file.size;
-
-    recordUploadOwnership(user.id, req.file.filename, fileSize, uploadScopeFromRequest(req));
-
-    res.json({
-      url: `/uploads/${req.file.filename}`,
-      originalName,
-      fileSize,
-      isImage,
-      mimetype: req.file.mimetype
-    });
-  });
-});
-
-// ── Flash ROM status & download ──────────────────────────
-const ROMS_DIR = path.join(__dirname, 'public', 'games', 'roms');
-const FLASH_ROM_MANIFEST = [
-  { file: 'flight-759879f9.swf',    url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/flight-759879f9.swf',    size: 8570000 },
-  { file: 'learn-to-fly-3.swf',     url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/learn-to-fly-3.swf',     size: 17340000 },
-  { file: 'Bubble Tanks 3.swf',     url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/Bubble%20Tanks%203.swf',  size: 3870000 },
-  { file: 'tanks.swf',              url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/tanks.swf',               size: 32000 },
-  { file: 'SuperSmash.swf',         url: 'https://raw.githubusercontent.com/ancsemi/Haven/ccf21d874c5502eefccc7a46fe525a793e0bc603/public/games/roms/SuperSmash.swf',          size: 8830000 },
-];
-
-app.get('/api/flash-rom-status', (req, res) => {
-  const status = FLASH_ROM_MANIFEST.map(rom => ({
-    file: rom.file,
-    installed: fs.existsSync(path.join(ROMS_DIR, rom.file))
-  }));
-  const allInstalled = status.every(r => r.installed);
-  res.json({ allInstalled, roms: status });
-});
-
-app.post('/api/install-flash-roms', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  // Only admins can trigger ROM downloads
-  const { getDb } = require('./src/database');
-  const adminRow = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
-  if (!adminRow || !adminRow.is_admin) return res.status(403).json({ error: 'Only admins can install flash games' });
-
-  if (!fs.existsSync(ROMS_DIR)) fs.mkdirSync(ROMS_DIR, { recursive: true });
-
-  const results = [];
-  for (const rom of FLASH_ROM_MANIFEST) {
-    const dest = path.join(ROMS_DIR, rom.file);
-    if (fs.existsSync(dest)) { results.push({ file: rom.file, status: 'already-installed' }); continue; }
-    try {
-      const resp = await fetch(rom.url);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const buffer = Buffer.from(await resp.arrayBuffer());
-      fs.writeFileSync(dest, buffer);
-      results.push({ file: rom.file, status: 'installed' });
-    } catch (err) {
-      results.push({ file: rom.file, status: 'error', error: err.message });
-    }
-  }
-  res.json({ results });
-});
+// ── Image and file uploads, and Flash ROMs: src/routes/uploads.js ──
+require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, uploadDir, upload, fileUpload, uploadLimiter });
 
 // (duplicate avatar handler removed — handled above at /api/upload-avatar)
 
-// ── Built-in sounds (bundled with Haven, always available) ────
-const BUILTIN_SOUNDS = [
-  { name: 'AOL - Door Open',       url: '/sounds/aol_door_open.mp3',   builtin: true },
-  { name: 'AOL - Door Close',      url: '/sounds/aol_door_close.mp3',  builtin: true },
-  { name: "AOL - You've Got Mail", url: '/sounds/aol_got_mail.mp3',    builtin: true },
-  { name: 'AOL - Message',         url: '/sounds/aol_message.mp3',     builtin: true },
-  { name: 'AOL - Files Done',      url: '/sounds/aol_filesdone.mp3',   builtin: true },
-];
+// ── Sounds, custom emoji and stickers: src/routes/media-library.js ──
+const { BUILTIN_SOUNDS, seedStarterStickers } = require('./src/routes/media-library')({ uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter });
 
-// (#5426) Custom sounds, emojis and stickers are uploaded/deleted over HTTP,
-// so other connected clients never heard about the change and only saw it
-// after a full app restart. Broadcast a lightweight signal so every client
-// re-fetches the relevant library live. `io` is created later in the file, so
-// resolve it at request time via app.set('io', io).
-function broadcastLibraryUpdate(req, kind) {
-  try { req.app.get('io')?.emit('library-updated', { kind }); } catch {}
-}
-
-// ── Sound upload (admin only, wav/mp3/ogg, configurable max size) ────
-function createSoundUpload() {
-  const { getDb } = require('./src/database');
-  const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_sound_kb')?.value) || 1024;
-  return multer({
-    storage: uploadStorage,
-    limits: { fileSize: maxKb * 1024 },
-    fileFilter: (req, file, cb) => {
-      if (/^audio\/(mpeg|ogg|wav|webm)$/.test(file.mimetype)) cb(null, true);
-      else cb(new Error('Only audio files allowed (mp3, ogg, wav, webm)'));
-    }
-  });
-}
-
-app.post('/api/upload-sound', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
-
-  createSoundUpload().single('sound')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    let name = sanitizeSoundName(req.body.name || '');
-    if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
-
-    const { getDb } = require('./src/database');
-    try {
-      getDb().prepare(
-        'INSERT OR REPLACE INTO custom_sounds (name, filename, uploaded_by) VALUES (?, ?, ?)'
-      ).run(name, req.file.filename, user.id);
-      broadcastLibraryUpdate(req, 'sounds');
-      res.json({ name, url: `/uploads/${req.file.filename}` });
-    } catch { res.status(500).json({ error: 'Failed to save sound' }); }
-  });
-});
-
-app.get('/api/sounds', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const { getDb } = require('./src/database');
-  try {
-    const disabledRows = getDb().prepare('SELECT name FROM disabled_builtin_sounds').all();
-    const disabledSet = new Set(disabledRows.map(r => r.name));
-    const enabledBuiltins = BUILTIN_SOUNDS.filter(s => !disabledSet.has(s.name));
-    const custom = getDb().prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
-    const customList = custom.map(s => ({ name: s.name, url: `/uploads/${s.filename}` }));
-    res.json({ sounds: [...enabledBuiltins, ...customList] });
-  } catch { res.json({ sounds: [...BUILTIN_SOUNDS] }); }
-});
-
-app.delete('/api/sounds/:name', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
-  const name = req.params.name;
-  const { getDb } = require('./src/database');
-  try {
-    // Built-in sounds are disabled by adding them to a blocklist (they can't be physically deleted)
-    if (BUILTIN_SOUNDS.some(s => s.name === name)) {
-      getDb().prepare('INSERT OR IGNORE INTO disabled_builtin_sounds (name) VALUES (?)').run(name);
-      broadcastLibraryUpdate(req, 'sounds');
-      return res.json({ ok: true });
-    }
-    const row = getDb().prepare('SELECT filename FROM custom_sounds WHERE name = ?').get(name);
-    if (row) {
-      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
-      getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
-    }
-    broadcastLibraryUpdate(req, 'sounds');
-    res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Failed to delete sound' }); }
-});
-
-app.patch('/api/sounds/:name', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
-  const oldName = req.params.name;
-  if (BUILTIN_SOUNDS.some(s => s.name === oldName)) return res.status(403).json({ error: 'Cannot rename built-in sounds' });
-  const newName = sanitizeSoundName(req.body.newName || '');
-  if (!newName) return res.status(400).json({ error: 'Invalid new name' });
-  const { getDb } = require('./src/database');
-  try {
-    const row = getDb().prepare('SELECT id FROM custom_sounds WHERE name = ?').get(oldName);
-    if (!row) return res.status(404).json({ error: 'Sound not found' });
-    const existing = getDb().prepare('SELECT id FROM custom_sounds WHERE name = ? AND name != ?').get(newName, oldName);
-    if (existing) return res.status(409).json({ error: 'Name already taken' });
-    getDb().prepare('UPDATE custom_sounds SET name = ? WHERE name = ?').run(newName, oldName);
-    broadcastLibraryUpdate(req, 'sounds');
-    res.json({ ok: true, name: newName });
-  } catch { res.status(500).json({ error: 'Failed to rename sound' }); }
-});
-
-// -- User sound preferences ---------------------------------------------------
-app.get('/api/user-sound-prefs', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const { getDb } = require('./src/database');
-  try {
-    const rows = getDb().prepare('SELECT sound_name, hidden, custom_order FROM sound_preferences WHERE user_id = ?').all(user.id);
-    const prefs = {};
-    rows.forEach(r => { prefs[r.sound_name] = { hidden: !!r.hidden, customOrder: r.custom_order }; });
-    res.json({ prefs });
-  } catch { res.json({ prefs: {} }); }
-});
-
-app.post('/api/user-sound-prefs', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const { prefs } = req.body || {};
-  if (!prefs || typeof prefs !== 'object') return res.status(400).json({ error: 'Invalid prefs' });
-  const { getDb } = require('./src/database');
-  try {
-    const db = getDb();
-    const upsert = db.prepare('INSERT INTO sound_preferences (user_id, sound_name, hidden, custom_order) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, sound_name) DO UPDATE SET hidden = excluded.hidden, custom_order = excluded.custom_order');
-    const runMany = db.transaction(() => { Object.entries(prefs).forEach(([name, pref]) => { upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null); }); });
-    runMany();
-    res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Failed to save prefs' }); }
-});
-
-// ── Custom emoji upload (admin only, image, configurable max size) ──
-function createEmojiUpload() {
-  const { getDb } = require('./src/database');
-  const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_emoji_kb')?.value) || 256;
-  return multer({
-    storage: uploadStorage,
-    limits: { fileSize: maxKb * 1024 },
-    fileFilter: (req, file, cb) => {
-      if (/^image\/(png|gif|webp|jpeg)$/.test(file.mimetype)) cb(null, true);
-      else cb(new Error('Only images allowed (png, gif, webp, jpg)'));
-    }
-  });
-}
-
-app.post('/api/upload-emoji', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
-
-  createEmojiUpload().single('emoji')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
-    if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
-    if (name.length > 30) name = name.slice(0, 30);
-
-    const { getDb } = require('./src/database');
-    try {
-      getDb().prepare(
-        'INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)'
-      ).run(name, req.file.filename, user.id);
-      broadcastLibraryUpdate(req, 'emojis');
-      res.json({ name, url: `/uploads/${req.file.filename}` });
-    } catch { res.status(500).json({ error: 'Failed to save emoji' }); }
-  });
-});
-
-// ── Bulk emoji upload (multiple files, auto-named from filenames) ──
-app.post('/api/upload-emojis', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
-
-  createEmojiUpload().array('emojis', 50)(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
-
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    const results = [];
-    const errors = [];
-    const insert = db.prepare('INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)');
-
-    for (const file of req.files) {
-      let name = path.basename(file.originalname, path.extname(file.originalname))
-        .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
-      if (!name) name = path.basename(file.filename, path.extname(file.filename));
-      if (name.length > 30) name = name.slice(0, 30);
-      try {
-        insert.run(name, file.filename, user.id);
-        results.push({ name, url: `/uploads/${file.filename}` });
-      } catch (e) {
-        errors.push({ name, error: e.message });
-      }
-    }
-    if (results.length) broadcastLibraryUpdate(req, 'emojis');
-    res.json({ uploaded: results, errors });
-  });
-});
-
-app.get('/api/emojis', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const { getDb } = require('./src/database');
-  try {
-    const emojis = getDb().prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all();
-    res.json({ emojis: emojis.map(e => ({ name: e.name, url: `/uploads/${e.filename}` })) });
-  } catch { res.json({ emojis: [] }); }
-});
-
-// Full Unicode emoji list (built from emoji-test.txt), rendered client-side
-// with the OS font. Falls back to the client's built-in list when unavailable.
-app.get('/api/standard-emojis', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token || !verifyToken(token)) return res.status(401).json({ error: 'Unauthorized' });
-  res.json(require('./src/emoji').getEmojiData() || { categories: {}, names: {}, modifierBase: [] });
-});
-
-app.delete('/api/emojis/:name', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
-  const name = req.params.name;
-  const { getDb } = require('./src/database');
-  try {
-    const row = getDb().prepare('SELECT filename FROM custom_emojis WHERE name = ?').get(name);
-    if (row) {
-      try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch {}
-      getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
-    }
-    broadcastLibraryUpdate(req, 'emojis');
-    res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Failed to delete emoji' }); }
-});
-
-// ── Stickers (admin/manage_stickers-only upload, anyone can list/send) ──
-// (#5335) `manage_stickers` is the canonical permission. We still accept
-// `manage_emojis` as a fallback so anyone who already had emoji-management
-// access keeps sticker access without an explicit re-grant.
-// Stored under uploads/stickers/<file> so message rendering can detect
-// them by URL prefix and render at sticker dimensions.
-const STICKERS_DIR = path.join(uploadDir, 'stickers');
-try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch {}
-
-// (#5335) Seed a small starter pack on first run so the picker isn't empty
-// out of the box. Files in public/starter-stickers/ are copied into
-// uploads/stickers/ and registered in the `stickers` table under the
-// "Starter" pack — but only if there are zero stickers in the DB. Once
-// any sticker exists we leave things alone so admin uploads or deletions
-// aren't trampled on next restart.
-function seedStarterStickers() {
-  try {
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    const existing = db.prepare('SELECT COUNT(*) as c FROM stickers').get();
-    if (existing && existing.c > 0) return;
-    const seedDir = path.join(__dirname, 'public', 'starter-stickers');
-    if (!fs.existsSync(seedDir)) return;
-    const files = fs.readdirSync(seedDir).filter(f => /\.(svg|png|gif|webp|jpg|jpeg)$/i.test(f));
-    const insert = db.prepare(
-      'INSERT OR IGNORE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, NULL)'
-    );
-    let seeded = 0;
-    for (const file of files) {
-      try {
-        const ext = path.extname(file).toLowerCase();
-        const baseName = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        if (!baseName) continue;
-        const destName = `starter-${baseName}${ext}`;
-        const destPath = path.join(STICKERS_DIR, destName);
-        if (!fs.existsSync(destPath)) fs.copyFileSync(path.join(seedDir, file), destPath);
-        insert.run(baseName, 'Starter', destName);
-        seeded++;
-      } catch {}
-    }
-    if (seeded > 0) console.log(`[stickers] Seeded ${seeded} starter sticker(s) into the "Starter" pack.`);
-  } catch (err) {
-    // Non-fatal — the server runs fine without the starter pack.
-    console.warn('[stickers] Could not seed starter pack:', err?.message || err);
-  }
-}
-const stickerStorage = multer.diskStorage({
-  destination: STICKERS_DIR,
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
-  }
-});
-function createStickerUpload() {
-  const { getDb } = require('./src/database');
-  // Stickers are larger than emojis by design — separate setting, default 1 MB.
-  const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_sticker_kb')?.value) || 1024;
-  return multer({
-    storage: stickerStorage,
-    limits: { fileSize: maxKb * 1024 },
-    fileFilter: (req, file, cb) => {
-      if (/^image\/(png|gif|webp|jpeg)$/.test(file.mimetype)) cb(null, true);
-      else cb(new Error('Only images allowed (png, gif, webp, jpg)'));
-    }
-  });
-}
-
-app.post('/api/upload-sticker', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
-
-  createStickerUpload().single('sticker')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
-    if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
-    if (name.length > 40) name = name.slice(0, 40);
-
-    let pack = (req.body.pack_name || '').trim().slice(0, 40);
-    if (!pack) pack = 'General';
-
-    const { getDb } = require('./src/database');
-    try {
-      getDb().prepare(
-        'INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)'
-      ).run(name, pack, req.file.filename, user.id);
-      broadcastLibraryUpdate(req, 'stickers');
-      res.json({ name, pack_name: pack, url: `/uploads/stickers/${req.file.filename}` });
-    } catch { res.status(500).json({ error: 'Failed to save sticker' }); }
-  });
-});
-
-app.post('/api/upload-stickers', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
-
-  createStickerUpload().array('stickers', 50)(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
-
-    let pack = (req.body.pack_name || '').trim().slice(0, 40);
-    if (!pack) pack = 'General';
-
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    const results = [];
-    const errors = [];
-    const insert = db.prepare('INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)');
-
-    for (const file of req.files) {
-      let name = path.basename(file.originalname, path.extname(file.originalname))
-        .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
-      if (!name) name = path.basename(file.filename, path.extname(file.filename));
-      if (name.length > 40) name = name.slice(0, 40);
-      try {
-        insert.run(name, pack, file.filename, user.id);
-        results.push({ name, pack_name: pack, url: `/uploads/stickers/${file.filename}` });
-      } catch (e) {
-        errors.push({ name, error: e.message });
-      }
-    }
-
-    if (results.length) broadcastLibraryUpdate(req, 'stickers');
-    res.json({ uploaded: results, errors });
-  });
-});
-
-app.get('/api/stickers', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const { getDb } = require('./src/database');
-  try {
-    const rows = getDb().prepare('SELECT id, name, pack_name, filename FROM stickers ORDER BY pack_name COLLATE NOCASE, name COLLATE NOCASE').all();
-    res.json({ stickers: rows.map(r => ({ id: r.id, name: r.name, pack_name: r.pack_name, url: `/uploads/stickers/${r.filename}` })) });
-  } catch { res.json({ stickers: [] }); }
-});
-
-app.delete('/api/stickers/:name', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
-  const name = req.params.name;
-  const { getDb } = require('./src/database');
-  try {
-    const row = getDb().prepare('SELECT filename FROM stickers WHERE name = ?').get(name);
-    if (row) {
-      try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch {}
-      getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
-    }
-    broadcastLibraryUpdate(req, 'stickers');
-    res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Failed to delete sticker' }); }
-});
-
-// ── GIF search proxy (GIPHY, with a legacy Tenor fallback) ──
-// GIPHY is the supported provider. Tenor is no longer offered for new
-// setup; an existing tenor_api_key still works if no GIPHY key is set.
+// ── GIF search proxy (GIPHY, KLIPY, or a legacy Tenor fallback) ──
+// Three providers are supported. preferred_gif_search picks which one to use
+// when more than one key is set. If that preference is unset or not a known
+// provider, we fall back to whatever is configured, trying GIPHY first, then
+// KLIPY, and Tenor last (Tenor is deprecated).
+const GIF_FALLBACK_ORDER = ['giphy', 'klipy', 'tenor'];
 function getGifProvider() {
   // Check database first (set via admin panel), fall back to .env
   const readSetting = (key) => {
@@ -2476,16 +1545,41 @@ function getGifProvider() {
     } catch { /* DB not ready yet or no key stored */ }
     return '';
   };
-  const giphyKey = readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '';
-  if (giphyKey) return { provider: 'giphy', key: giphyKey };
-  const tenorKey = readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '';
-  if (tenorKey) return { provider: 'tenor', key: tenorKey };
+  const keys = {
+    giphy: readSetting('giphy_api_key') || process.env.GIPHY_API_KEY || '',
+    klipy: readSetting('klipy_api_key') || process.env.KLIPY_API_KEY || '',
+    tenor: readSetting('tenor_api_key') || process.env.TENOR_API_KEY || '',
+  };
+  const preferred = (readSetting('preferred_gif_search') || process.env.PREFERRED_GIF_SEARCH || '')
+    .trim().toLowerCase();
+  // Honour the preference only when it names a known provider that actually
+  // has a key; otherwise fall through to the configured-order fallback.
+  if (GIF_FALLBACK_ORDER.includes(preferred) && keys[preferred]) {
+    return { provider: preferred, key: keys[preferred] };
+  }
+  for (const provider of GIF_FALLBACK_ORDER) {
+    if (keys[provider]) return { provider, key: keys[provider] };
+  }
   return null;
 }
 
-// Both providers normalize to the same result shape the client expects:
+// All providers normalize to the same result shape the client expects:
 // { id, title, tiny (grid thumbnail), full (send URL) }.
 function fetchGifs(kind, q, limit, cfg) {
+  if (cfg.provider === 'klipy') {
+    // The app key is a path segment; the small (220px) gif is the grid
+    // thumbnail and the hd/md gif is the send URL.
+    const path = kind === 'search'
+      ? `gifs/search?q=${encodeURIComponent(q)}&`
+      : 'gifs/trending?';
+    const url = `https://api.klipy.com/api/v1/${encodeURIComponent(cfg.key)}/${path}per_page=${limit}&content_filter=off`;
+    return fetch(url).then(r => r.json()).then(data => (data.data?.data || []).map(g => ({
+      id: g.id,
+      title: g.title || '',
+      tiny: g.file?.sm?.gif?.url || g.file?.xs?.gif?.url || '',
+      full: g.file?.hd?.gif?.url || g.file?.md?.gif?.url || '',
+    })));
+  }
   if (cfg.provider === 'tenor') {
     const base = kind === 'search'
       ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&`
@@ -2536,7 +1630,7 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
       else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
       else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
-    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
     const iconUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
@@ -2572,411 +1666,15 @@ app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => 
       else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
       else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
-    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
     const iconUrl = `/uploads/${req.file.filename}`;
     res.json({ path: iconUrl });
   });
 });
 
-// ── Admin: Server backup download (admin only) ──
-// Configurable per-section via ?include=channels,users,settings,messages,files
-// Backwards-compat: ?mode=structure → channels,users,settings ;
-//                   ?mode=full      → channels,users,settings,messages,files
-// Token may be passed via ?token=... so the browser can trigger a normal download.
-const ALL_BACKUP_SECTIONS = ['channels', 'users', 'settings', 'messages', 'dms', 'files'];
-
-// Resolve the requested sections into a concrete backup plan (sync, no IO).
-function backupPlan(includeRaw) {
-  let include = Array.isArray(includeRaw)
-    ? includeRaw.map(s => String(s).trim().toLowerCase()).filter(s => ALL_BACKUP_SECTIONS.includes(s))
-    : ALL_BACKUP_SECTIONS.slice();
-  if (!include.length) include = ALL_BACKUP_SECTIONS.slice();
-  const has = (s) => include.includes(s);
-  const mode = (has('messages') && has('files')) ? 'full' : 'partial';
-  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const filename = `haven-backup-${mode === 'full' ? 'full' : include.join('-')}-${ts}.zip`;
-  return { include, has, mode, filename };
-}
-
-// Build a backup zip and pipe it into `destStream` (a file write stream OR the
-// HTTP response). Resolves when the archive has been fully written.
-//
-// Everything is streamed via `archiver` rather than built in memory. The old
-// adm-zip path called `zip.toBuffer()`, holding every upload plus the whole
-// compressed archive in RAM at once — a ~30GB backup blew past Node's Buffer
-// limit (RangeError) and the heap (OOM), crashing the server. Streaming to the
-// response (instead of building a temp file first) also means bytes start
-// flowing immediately, so a large manual download no longer sits silent long
-// enough for a proxy in front of Haven to time out with a 502. See issue #5434.
-function pipeBackupArchive(plan, destStream) {
-  const archiver = require('archiver');
-  const { include, has, mode } = plan;
-
-  return new Promise((resolve, reject) => {
-    let tmpDb = null;
-    let settled = false;
-    const cleanup = () => { if (tmpDb) { try { fs.unlinkSync(tmpDb); } catch {} } };
-    // Resolve/reject exactly once, always after the temp DB clone is removed.
-    const finish = (err) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      if (err) reject(err);
-      else resolve(plan);
-    };
-
-    try {
-      const { getDb } = require('./src/database');
-      const db = getDb();
-
-      const archive = archiver('zip', { zlib: { level: 6 } });
-      // 'finish' fires for both fs write streams and the HTTP response once all
-      // bytes are written; 'close' covers a client that disconnects mid-stream.
-      destStream.on('finish', () => finish());
-      destStream.on('close', () => finish());
-      destStream.on('error', finish);
-      archive.on('error', finish);
-      // ENOENT here just means a file vanished mid-walk (e.g. an attachment was
-      // deleted) — skip it rather than failing the whole backup.
-      archive.on('warning', (w) => { if (w.code !== 'ENOENT') finish(w); });
-      archive.pipe(destStream);
-
-      const manifest = {
-        app: 'haven',
-        version: require('./package.json').version,
-        exportedAt: new Date().toISOString(),
-        mode,
-        include,
-        serverName: process.env.SERVER_NAME || 'Haven',
-      };
-      archive.append(Buffer.from(JSON.stringify(manifest, null, 2)), { name: 'manifest.json' });
-
-      const structureTables = [];
-      if (has('channels')) structureTables.push('channels', 'roles', 'role_permissions', 'user_roles', 'channel_members');
-      if (has('users')) structureTables.push('users');
-      if (has('settings')) structureTables.push('server_settings', 'whitelist');
-
-      if (structureTables.length) {
-        const data = {};
-        for (const tbl of structureTables) {
-          try { data[tbl] = db.prepare(`SELECT * FROM ${tbl}`).all(); }
-          catch { data[tbl] = []; }
-        }
-        // Filter out DM channels (and their members) when DMs aren't included.
-        // DM bodies are E2E-encrypted, but the channel rows still leak who
-        // talked to whom — keep the metadata out unless the admin opted in.
-        if (!has('dms') && data.channels) {
-          const dmChannelIds = new Set(data.channels.filter(c => c.is_dm).map(c => c.id));
-          data.channels = data.channels.filter(c => !c.is_dm);
-          if (data.channel_members) {
-            data.channel_members = data.channel_members.filter(m => !dmChannelIds.has(m.channel_id));
-          }
-        }
-        if (data.users) {
-          data.users = data.users.map(u => {
-            const safe = { ...u };
-            delete safe.password_hash;
-            delete safe.password_version;
-            delete safe.totp_secret;
-            delete safe.totp_backup_codes;
-            delete safe.recovery_codes_hash;
-            delete safe.recovery_codes;
-            delete safe.email;
-            return safe;
-          });
-        }
-        if (data.server_settings) {
-          const SENSITIVE_KEYS = new Set(['vanity_code', 'server_invite_code']);
-          data.server_settings = data.server_settings.filter(r => !SENSITIVE_KEYS.has(r.key));
-        }
-        archive.append(Buffer.from(JSON.stringify(data, null, 2)), { name: 'structure.json' });
-      }
-
-      if (has('messages')) {
-        tmpDb = path.join(DATA_DIR, `.backup-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
-        try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch {}
-        const safePath = tmpDb.replace(/'/g, "''");
-        db.prepare(`VACUUM INTO '${safePath}'`).run();
-        // If DMs are NOT included, scrub them from the cloned DB so the backup
-        // doesn't ship encrypted-but-still-private DM ciphertext (or attachment
-        // refs) to wherever the admin stores their backup files.
-        if (!has('dms')) {
-          const Database = require('better-sqlite3');
-          const tmp = new Database(tmpDb);
-          try {
-            tmp.exec('DELETE FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE is_dm = 1)');
-            tmp.exec('DELETE FROM channels WHERE is_dm = 1');
-            tmp.exec('VACUUM');
-          } finally {
-            tmp.close();
-          }
-        }
-        // Streamed from disk during finalize; the temp clone is unlinked in finish().
-        archive.file(tmpDb, { name: 'haven.db' });
-      }
-
-      if (has('files') && fs.existsSync(UPLOADS_DIR)) {
-        const walk = (dir, rel) => {
-          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-            if (entry.name === 'deleted-attachments') continue;
-            if (!rel && entry.name === 'bot-audio') continue;
-            const full = path.join(dir, entry.name);
-            const sub = rel ? `${rel}/${entry.name}` : entry.name;
-            try {
-              if (entry.isFile()) archive.file(full, { name: `uploads/${sub}` });
-              else if (entry.isDirectory()) walk(full, sub);
-            } catch {}
-          }
-        };
-        walk(UPLOADS_DIR, '');
-      }
-
-      archive.finalize();
-    } catch (err) {
-      finish(err);
-    }
-  });
-}
-
-// Build a backup zip to a file on disk (used by the auto-backup scheduler).
-// Returns a Promise<{ filePath, filename, mode, include }>.
-function buildBackupFile(includeRaw, outPath) {
-  const plan = backupPlan(includeRaw);
-  const output = fs.createWriteStream(outPath);
-  return pipeBackupArchive(plan, output)
-    .then(() => ({ filePath: outPath, filename: plan.filename, mode: plan.mode, include: plan.include }))
-    .catch((err) => { try { fs.unlinkSync(outPath); } catch {} throw err; });
-}
-
-app.get('/api/admin/backup', async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-
-  // Resolve which sections to include
-  let include = [];
-  if (typeof req.query.include === 'string' && req.query.include.trim()) {
-    include = req.query.include.split(',');
-  } else if (req.query.mode === 'full') {
-    include = ALL_BACKUP_SECTIONS.slice();
-  } else {
-    include = ['channels', 'users', 'settings'];
-  }
-
-  // Stream the zip straight to the response. Building a temp file first meant a
-  // large (30GB) backup produced no response for minutes, so a proxy in front of
-  // Haven returned 502 and the download "failed" (#5434). Piping to res starts
-  // the bytes immediately and keeps the connection active; clear the inactivity
-  // timeout since a big backup takes longer than the 2 min socket timeout.
-  req.setTimeout(0);
-  res.setTimeout(0);
-  const plan = backupPlan(include);
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="${plan.filename}"`);
-  try {
-    await pipeBackupArchive(plan, res);
-  } catch (err) {
-    console.error('[Backup] Failed:', err);
-    if (!res.headersSent) res.status(500).json({ error: 'Backup failed: ' + err.message });
-    else { try { res.destroy(); } catch {} }
-  }
-});
-
-// ── Admin: Server backup restore (admin only, full backups only) ──
-// Stages the uploaded backup, then schedules a process exit so the
-// supervisor (Docker / systemd / installer service) restarts the server
-// with the restored DB and uploads in place. The pre-restore data is
-// preserved at haven.db.pre-restore / uploads.pre-restore for one cycle.
-const restoreUpload = multer({
-  dest: path.join(DATA_DIR, 'tmp-restore'),
-  // Admin-only endpoint. A full backup that includes files can be very large
-  // (reporters hit 15GB+), and the old 4GB cap rejected the upload part-way,
-  // which surfaced to the browser as a "failed to fetch" (#5436). The practical
-  // limit is the host's disk, not this number.
-  limits: { fileSize: 512 * 1024 * 1024 * 1024 },
-});
-
-// Stream a full backup zip into staged DB + uploads on disk. Reads entries with
-// yauzl (random access, low memory) instead of loading the whole archive into
-// RAM the way adm-zip did, so restoring a large backup (15GB+) no longer OOMs
-// or crashes the server (#5436). Resolves with the parsed manifest. Rejects with
-// an Error whose .status is 400 for a bad/partial backup, or a generic error
-// (treated as 500) for IO problems.
-function extractFullBackup(zipPath, stagedDb, stagedUploads, onProgress) {
-  const yauzl = require('yauzl');
-  const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
-
-  const readEntryBuffer = (zipfile, entry) => new Promise((resolve, reject) => {
-    zipfile.openReadStream(entry, (err, rs) => {
-      if (err) return reject(err);
-      const chunks = [];
-      rs.on('data', c => chunks.push(c));
-      rs.on('end', () => resolve(Buffer.concat(chunks)));
-      rs.on('error', reject);
-    });
-  });
-  const streamEntryToFile = (zipfile, entry, dest) => new Promise((resolve, reject) => {
-    zipfile.openReadStream(entry, (err, rs) => {
-      if (err) return reject(err);
-      const ws = fs.createWriteStream(dest);
-      rs.on('error', reject);
-      ws.on('error', reject);
-      ws.on('finish', resolve);
-      rs.pipe(ws);
-    });
-  });
-
-  return new Promise((resolve, reject) => {
-    yauzl.open(zipPath, { lazyEntries: true, autoClose: false }, (err, zipfile) => {
-      if (err) return reject(bad('Invalid backup: not a readable zip file'));
-      const entries = [];
-      zipfile.on('error', reject);
-      zipfile.on('entry', (entry) => { entries.push(entry); zipfile.readEntry(); });
-      zipfile.on('end', async () => {
-        try {
-          const find = (n) => entries.find(e => e.fileName === n);
-          const manifestEntry = find('manifest.json');
-          if (!manifestEntry) throw bad('Invalid backup: missing manifest.json');
-          let manifest;
-          try { manifest = JSON.parse((await readEntryBuffer(zipfile, manifestEntry)).toString('utf8')); }
-          catch { throw bad('Invalid backup: corrupt manifest.json'); }
-          if (manifest.app !== 'haven') throw bad('Not a Haven backup file');
-          if (manifest.mode !== 'full') throw bad('Only full backups can be restored automatically. Structure-only backups must be re-imported manually.');
-          const dbEntry = find('haven.db');
-          if (!dbEntry) throw bad('Invalid full backup: missing haven.db');
-
-          // Progress accounting: total = the DB clone + every upload file
-          // (uncompressed bytes). Emitted (throttled to ~400ms) via onProgress
-          // so the admin's restore UI can show a real extraction bar instead of
-          // an opaque multi-minute wait on large backups (#5438).
-          const uploadEntries = entries.filter(e => e.fileName.startsWith('uploads/') && !e.fileName.endsWith('/'));
-          const bytesTotal = (dbEntry.uncompressedSize || 0) +
-            uploadEntries.reduce((sum, e) => sum + (e.uncompressedSize || 0), 0);
-          let bytesDone = 0;
-          let lastEmit = 0;
-          const emitProgress = (force) => {
-            if (typeof onProgress !== 'function') return;
-            const now = Date.now();
-            if (!force && now - lastEmit < 400) return;
-            lastEmit = now;
-            try { onProgress({ phase: 'extract', bytesDone, bytesTotal }); } catch {}
-          };
-          emitProgress(true);
-
-          // Stage the DB clone (streamed from the zip to disk).
-          await streamEntryToFile(zipfile, dbEntry, stagedDb);
-          bytesDone += dbEntry.uncompressedSize || 0;
-          emitProgress(true);
-
-          // Stage uploads, one entry at a time, with a path-traversal guard so a
-          // crafted entry name can't write outside the staging directory.
-          if (fs.existsSync(stagedUploads)) fs.rmSync(stagedUploads, { recursive: true, force: true });
-          if (uploadEntries.length) {
-            fs.mkdirSync(stagedUploads, { recursive: true });
-            const root = path.resolve(stagedUploads);
-            for (const ue of uploadEntries) {
-              const rel = ue.fileName.slice('uploads/'.length);
-              if (!rel) continue;
-              const dest = path.resolve(root, rel);
-              if (dest !== root && !dest.startsWith(root + path.sep)) continue; // reject ../ escapes
-              fs.mkdirSync(path.dirname(dest), { recursive: true });
-              await streamEntryToFile(zipfile, ue, dest);
-              bytesDone += ue.uncompressedSize || 0;
-              emitProgress(false);
-            }
-          }
-          emitProgress(true);
-          zipfile.close();
-          resolve(manifest);
-        } catch (e) {
-          try { zipfile.close(); } catch {}
-          reject(e);
-        }
-      });
-      zipfile.readEntry();
-    });
-  });
-}
-
-app.post('/api/admin/restore', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-
-  // A large restore uploads a multi-GB body and then stages it to disk, both of
-  // which run far longer than the 2 min socket inactivity timeout. Clear the
-  // timeout on this admin-only connection so it isn't killed mid-restore (#5436).
-  req.setTimeout(0);
-  res.setTimeout(0);
-
-  const tmpDir = path.join(DATA_DIR, 'tmp-restore');
-  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-
-  restoreUpload.single('backup')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No backup file uploaded' });
-
-    const cleanupTmp = () => { try { fs.unlinkSync(req.file.path); } catch {} };
-    const stagedDb = DB_PATH + '.restore';
-    const stagedUploads = UPLOADS_DIR + '.restore';
-
-    // Push extraction progress to the requesting admin's live socket(s) so the
-    // restore UI can show a real "extracting" bar during the long staging step.
-    const sendRestoreProgress = (p) => {
-      if (!io) return;
-      for (const [, s] of io.sockets.sockets) {
-        if (s.user && s.user.id === user.id) { try { s.emit('restore-progress', p); } catch {} }
-      }
-    };
-
-    let manifest;
-    try {
-      manifest = await extractFullBackup(req.file.path, stagedDb, stagedUploads, sendRestoreProgress);
-    } catch (e) {
-      cleanupTmp();
-      try { fs.unlinkSync(stagedDb); } catch {}
-      try { fs.rmSync(stagedUploads, { recursive: true, force: true }); } catch {}
-      const status = e && e.status ? e.status : 500;
-      if (status === 500) console.error('[Restore] Failed:', e);
-      if (!res.headersSent) res.status(status).json({ error: status === 500 ? ('Restore failed: ' + e.message) : e.message });
-      return;
-    }
-
-    cleanupTmp();
-    res.json({
-      ok: true,
-      message: 'Backup staged. Server will restart in ~2 seconds to apply. If the server does not come back up, your hosting setup may not auto-restart — start Haven manually.',
-      scheduled: true,
-    });
-
-    // Apply swap and exit so the supervisor restarts us cleanly
-    setTimeout(() => {
-      console.log('🔄 Applying staged backup restore and restarting...');
-      botAudioManager?.shutdown();
-      try {
-        if (fs.existsSync(stagedDb)) {
-          try { fs.copyFileSync(DB_PATH, DB_PATH + '.pre-restore'); } catch {}
-          // Remove stale WAL/SHM so SQLite reopens against the restored file
-          try { fs.unlinkSync(DB_PATH + '-wal'); } catch {}
-          try { fs.unlinkSync(DB_PATH + '-shm'); } catch {}
-          fs.renameSync(stagedDb, DB_PATH);
-        }
-        if (fs.existsSync(stagedUploads)) {
-          const oldUploads = UPLOADS_DIR + '.pre-restore';
-          if (fs.existsSync(oldUploads)) fs.rmSync(oldUploads, { recursive: true, force: true });
-          if (fs.existsSync(UPLOADS_DIR)) fs.renameSync(UPLOADS_DIR, oldUploads);
-          fs.renameSync(stagedUploads, UPLOADS_DIR);
-        }
-      } catch (e) {
-        console.error('[Restore] Swap failed:', e);
-      }
-      process.exit(0);
-    }, 1500);
-  });
-});
+// ── Backup download and restore (admin only): src/routes/backup.js ──
+const { buildBackupFile } = require('./src/routes/backup')({ app, verifyAdminFromDb, late });
 
 // ── Server banner upload (admin only, image only, max 4 MB) ──
 app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res) => {
@@ -3002,7 +1700,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
       const isGif  = hdr.slice(0, 6).toString().startsWith('GIF8');
       const isWebp = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
       if (!isJpeg && !isPng && !isGif && !isWebp) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image — only JPG, PNG, GIF, or WebP' }); }
-    } catch { try { fs.unlinkSync(req.file.path); } catch {} return res.status(400).json({ error: 'Failed to validate' }); }
+    } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
     const bannerUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
@@ -3057,591 +1755,8 @@ app.get('/api/gif/trending', gifLimiter, (req, res) => {
     .catch(() => res.status(502).json({ error: 'GIF provider API error' }));
 });
 
-// ── Link preview (Open Graph metadata) ──────────────────
-const linkPreviewCache = new Map(); // url → { data, ts }
-const PREVIEW_CACHE_TTL = 30 * 60 * 1000; // 30 min
-const PREVIEW_MAX_SIZE = 256 * 1024; // only read first 256 KB of page
-
-// Decode common HTML entities in OG-scraped attribute values.
-// Without this, image URLs containing '&amp;' get double-encoded on the client.
-function decodeHtmlEntities(str) {
-  if (!str) return str;
-  return str
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/&quot;/gi, '"')
-    .replace(/&apos;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&amp;/gi, '&');
-}
-const dns = require('dns');
-const { promisify } = require('util');
-const dnsResolve = promisify(dns.resolve4);
-
-// Rate limit link preview fetches (per IP, separate from upload limiter).
-// Returns true when the request is within the window, false if the caller
-// should serve a 429.  The route handler invokes this AFTER the cache
-// lookup, so cache hits never consume a rate-limit token — fixes a bug
-// where reopening a chat with many links 429'd legitimate fresh requests
-// because each cached preview burned a slot.  (#5337)
-const previewLimitStore = new Map();
-function previewLimiterCheck(req) {
-  const ip = req.ip || req.socket.remoteAddress;
-  const now = Date.now();
-  const windowMs = 60 * 1000;
-  const maxReqs = 60; // 60 previews/min/user (was 30; bumped per #5337)
-  if (!previewLimitStore.has(ip)) previewLimitStore.set(ip, []);
-  const stamps = previewLimitStore.get(ip).filter(t => now - t < windowMs);
-  previewLimitStore.set(ip, stamps);
-  if (stamps.length >= maxReqs) return false;
-  stamps.push(now);
-  return true;
-}
-setInterval(() => { const now = Date.now(); for (const [ip, t] of previewLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) previewLimitStore.delete(ip); else previewLimitStore.set(ip, f); } }, 5 * 60 * 1000);
-
-// Check if an IP is private/internal
-function isPrivateIP(ip) {
-  if (!ip) return true;
-  return ip === '127.0.0.1' || ip === '0.0.0.0' || ip === '::1' || ip === '::' ||
-    ip.startsWith('10.') || ip.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
-    ip.startsWith('169.254.') || ip.startsWith('fc00:') || ip.startsWith('fd') ||
-    ip.startsWith('fe80:');
-}
-
-// Check if a hostname is private/internal (SSRF layer 1)
-function isPrivateHostname(hostname) {
-  const host = hostname.toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
-    host === '::1' || host === '[::1]' ||
-    host.startsWith('10.') || host.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    host === '169.254.169.254' ||
-    host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.localhost');
-}
-
-// Validate a URL is safe to fetch (not internal/private) — checks hostname + DNS
-// Set ALLOW_PRIVATE_PREVIEWS=true in .env to allow link previews for local/private services
-const allowPrivatePreviews = (process.env.ALLOW_PRIVATE_PREVIEWS || '').toLowerCase() === 'true';
-async function validateUrlSafe(urlStr) {
-  const parsed = new URL(urlStr);
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error('Only http/https URLs allowed');
-  }
-  if (!allowPrivatePreviews) {
-    if (isPrivateHostname(parsed.hostname)) {
-      throw new Error('Private addresses not allowed');
-    }
-    // SSRF layer 2: DNS resolution check (defeats DNS rebinding)
-    try {
-      const addresses = await dnsResolve(parsed.hostname);
-      if (addresses.some(isPrivateIP)) {
-        throw new Error('Private addresses not allowed');
-      }
-    } catch (err) {
-      if (err.message === 'Private addresses not allowed') throw err;
-      // DNS resolution failed — could be IPv6-only or non-existent; allow fetch to fail naturally
-    }
-  }
-  return parsed;
-}
-
-// ── Media proxy (v3.43.0) ─────────────────────────────────
-// Clients never fetch remote media directly any more; they ask Haven, Haven
-// fetches once and caches on disk. Closes the passive IP leak completely
-// rather than only for non-allowlisted domains, and keeps embeds working
-// after the origin expires.
-const mediaProxy = require('./src/mediaProxy');
-mediaProxy.loadIndex();
-
-function mediaProxyEnabled() {
-  try {
-    const { getDb } = require('./src/database');
-    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'media_proxy_enabled'").get();
-    return !row || row.value !== 'false';
-  } catch { return true; }
-}
-app.set('mediaProxyEnabled', mediaProxyEnabled);
-
-// Hands the client its short-lived media token. Authenticated normally; the
-// token it returns is what <img> tags carry, since they cannot send headers.
-app.get('/api/media-token', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!mediaProxyEnabled()) return res.json({ enabled: false, token: null });
-  res.json({ enabled: true, token: mediaProxy.issueToken(user.id) });
-});
-
-// Per-user rate limit. Generous, because opening a busy channel legitimately
-// requests many images at once; the cache means repeats are nearly free.
-const _mediaRate = new Map();   // userId -> { count, resetAt }
-function _mediaRateOk(userId) {
-  const now = Date.now();
-  let e = _mediaRate.get(userId);
-  if (!e || now > e.resetAt) { e = { count: 0, resetAt: now + 60000 }; _mediaRate.set(userId, e); }
-  e.count++;
-  return e.count <= 600;
-}
-setInterval(() => {
-  const now = Date.now();
-  for (const [uid, e] of _mediaRate) if (now > e.resetAt + 120000) _mediaRate.delete(uid);
-}, 5 * 60 * 1000).unref?.();
-
-app.get('/api/media-proxy', async (req, res) => {
-  if (!mediaProxyEnabled()) return res.status(404).json({ error: 'Media proxy disabled' });
-
-  const userId = mediaProxy.verifyToken((req.query.mt || '').trim());
-  if (!userId) return res.status(401).json({ error: 'Invalid or expired media token' });
-  if (!_mediaRateOk(userId)) return res.status(429).json({ error: 'Rate limited' });
-
-  const url = (req.query.url || '').trim();
-  if (!url || url.length > 2048) return res.status(400).json({ error: 'Missing or oversized url' });
-
-  // Serve straight from disk when we already hold it — no upstream request,
-  // so a link that has since expired or gone offline still renders.
-  const send = (item) => {
-    res.set('Content-Type', item.type);
-    res.set('Content-Length', String(item.size));
-    // Immutable: the cache key is a hash of the source URL, so a given proxy
-    // URL always resolves to the same bytes.
-    res.set('Cache-Control', 'public, max-age=604800, immutable');
-    res.set('X-Content-Type-Options', 'nosniff');
-    res.set('Cross-Origin-Resource-Policy', 'same-origin');
-    return res.sendFile(item.path);
-  };
-
-  const cached = mediaProxy.get(url);
-  if (cached) return send(cached);
-
-  try {
-    const item = await mediaProxy.fetchAndCache(url, validateUrlSafe);
-    return send(item);
-  } catch (err) {
-    // A transparent 1x1 would silently hide broken images; a status code lets
-    // the client fall back to its own placeholder.
-    return res.status(502).json({ error: String(err.message || 'fetch failed').slice(0, 120) });
-  }
-});
-
-app.get('/api/link-preview', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  const url = (req.query.url || '').trim();
-  if (!url) return res.status(400).json({ error: 'Missing url param' });
-
-  // Cache check FIRST — cache hits should never consume a rate-limit slot.
-  // Reopening a chat full of links was hitting 429 because the limiter ran
-  // before the cache lookup. (#5337)
-  const cached = linkPreviewCache.get(url);
-  if (cached && Date.now() - cached.ts < PREVIEW_CACHE_TTL) {
-    return res.json(cached.data);
-  }
-
-  // Cache miss — now apply the per-IP rate limit.
-  if (!previewLimiterCheck(req)) {
-    // Tell the client roughly when a slot frees so it can pace its retries
-    // instead of hammering (or, worse, silently dropping the embed). The
-    // client-side scheduler honours this header. (#5337 follow-up)
-    res.set('Retry-After', '3');
-    return res.status(429).json({ error: 'Rate limited — try again shortly' });
-  }
-
-  // Validate the initial URL is safe (protocol, hostname, DNS)
-  let parsed;
-  try {
-    parsed = await validateUrlSafe(url);
-  } catch (err) {
-    return res.status(400).json({ error: err.message || 'Invalid URL' });
-  }
-
-  // ── Auto-mod domain gate (v3.42.0) ──────────────────────
-  // This is the control that closes the passive IP leak, and it matters more
-  // than the click-through case. Haven renders og:image and bare image URLs
-  // straight from the third-party host in every viewer's browser, so a hostile
-  // link hands the attacker the IP and User-Agent of everyone who merely
-  // scrolls past the message. Refusing to unfurl a non-allowlisted host means
-  // no client is ever told to fetch from it.
-  try {
-    const automod = require('./src/automod');
-    if (!automod.previewAllowed(url)) {
-      return res.status(403).json({ error: 'Link previews are not enabled for that domain' });
-    }
-  } catch { /* automod unavailable — fall through rather than break previews */ }
-
-  // Use a real browser UA — many sites (Twitter/X, Instagram, etc.) serve
-  // JS-only pages to unknown bots, omitting the OG meta tags we need.
-  const PREVIEW_UA = 'Mozilla/5.0 (compatible; HavenBot/2.1; +https://github.com/ancsemi/Haven)';
-
-  try {
-    let data = null;
-
-    // ── Site-specific handlers ───────────────────────────
-    // Native twitter.com / x.com — their HTML requires JS rendering so the generic
-    // scraper gets blank OG tags. The fxtwitter public JSON API returns structured
-    // post data (author, avatar, text, media, engagement counts) with no auth, so
-    // the client can render a rich social card matching the mobile app's embeds.
-    // NOTE: fxtwitter / vxtwitter / fixupx proxy URLs are NOT matched here; they
-    // serve their own OG-enriched HTML and fall through to the generic scraper.
-    const twitterMatch = url.match(/^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i);
-    if (twitterMatch) {
-      try {
-        const fxApi = await fetch(
-          `https://api.fxtwitter.com/${twitterMatch[1]}/status/${twitterMatch[2]}`,
-          { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
-        );
-        if (fxApi.ok) {
-          const tw = (await fxApi.json())?.tweet;
-          if (tw) {
-            const a = tw.author || {};
-            const photos = (tw.media?.photos || []).map(p => p.url).filter(Boolean);
-            const vid = tw.media?.videos?.[0] || null;
-            const text = tw.text || '';
-            data = {
-              kind: 'twitter',
-              siteName: 'X / Twitter',
-              accentColor: '#1d9bf0',
-              author: a.name || null,
-              handle: a.screen_name ? `@${a.screen_name}` : null,
-              avatar: a.avatar_url || null,
-              title: a.name ? `${a.name} on X` : 'X / Twitter',
-              text: text || null,
-              description: text.slice(0, 280) || null,
-              image: vid?.thumbnail_url || photos[0] || null,
-              images: photos.length >= 2 ? photos.slice(0, 4) : undefined,
-              video: vid?.url || null,
-              videoType: vid?.url ? 'video/mp4' : undefined,
-              stats: { replies: tw.replies ?? -1, reposts: tw.retweets ?? -1, likes: tw.likes ?? -1, views: tw.views ?? -1 },
-              url
-            };
-          }
-        }
-      } catch { /* fall through to fxtwitter OG scrape / generic */ }
-    }
-
-    // ── fxtwitter / vxtwitter / fixupx fallback for native Twitter/X links ──
-    // If the oEmbed handler above didn't fire (non-matching URL) or failed,
-    // and the URL is a native twitter.com/x.com link, try fxtwitter as an
-    // OG-enriched proxy. fxtwitter serves bot-friendly HTML with OG tags.
-    if (!data && /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/\w+\/status\/\d+/i.test(url)) {
-      try {
-        const fxUrl = url.replace(/^https?:\/\/(?:www\.|mobile\.)?(?:twitter|x)\.com/i, 'https://fxtwitter.com');
-        const fxResp = await fetch(fxUrl, {
-          signal: AbortSignal.timeout(6000),
-          headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'text/html' },
-          redirect: 'manual'
-        });
-        if (fxResp.ok) {
-          const fxHtml = (await fxResp.text()).slice(0, PREVIEW_MAX_SIZE);
-          const fxMeta = (prop) => {
-            const r1 = new RegExp(`<meta[^>]*?(?:property|name)=["']${prop}["'][^>]*?content=["']([^"']+)["']`, 'is');
-            const r2 = new RegExp(`<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["']${prop}["']`, 'is');
-            const m = fxHtml.match(r1) || fxHtml.match(r2);
-            return m ? decodeHtmlEntities(m[1].trim()) : null;
-          };
-          const fxTitle = fxMeta('og:title') || fxMeta('twitter:title');
-          const fxDesc = fxMeta('og:description') || fxMeta('twitter:description');
-          const fxImg = fxMeta('og:image') || fxMeta('twitter:image');
-          if (fxTitle || fxDesc) {
-            data = {
-              title: fxTitle,
-              description: fxDesc,
-              image: fxImg,
-              siteName: fxMeta('og:site_name') || 'X',
-              url
-            };
-          }
-        }
-      } catch { /* fxtwitter fallback failed — continue to generic scrape */ }
-    }
-
-    // ── Reddit — serves no OG tags to unknown bots; use JSON API instead ──
-    if (!data && /^https?:\/\/(?:(?:www|old|new)\.)?reddit\.com\/r\/[\w]+\/comments\/[\w]+/i.test(url)) {
-      try {
-        // Reddit's .json endpoint works with any User-Agent
-        const jsonUrl = url.replace(/\/?(?:\?.*)?$/, '/.json');
-        const rResp = await fetch(jsonUrl, {
-          signal: AbortSignal.timeout(6000),
-          headers: { 'User-Agent': PREVIEW_UA }
-        });
-        if (rResp.ok) {
-          const rJson = await rResp.json();
-          const post = rJson?.[0]?.data?.children?.[0]?.data;
-          if (post) {
-            const redTitle = `${post.subreddit_name_prefixed || 'Reddit'}: ${post.title || ''}`;
-            let redImage = null;
-            let redImages;
-
-            if (post.is_gallery && post.media_metadata) {
-              // Gallery post — collect up to 4 preview images
-              const imgs = Object.values(post.media_metadata)
-                .filter(m => m.status === 'valid' && m.s?.u)
-                .map(m => decodeHtmlEntities(m.s.u))
-                .slice(0, 4);
-              if (imgs.length >= 2) redImages = imgs;
-              redImage = imgs[0] || null;
-            } else if (post.preview?.images?.[0]?.source?.url) {
-              redImage = decodeHtmlEntities(post.preview.images[0].source.url);
-            } else if (post.thumbnail && post.thumbnail !== 'self' && post.thumbnail !== 'default' && post.thumbnail !== 'nsfw' && post.thumbnail !== 'spoiler') {
-              redImage = post.thumbnail;
-            }
-
-            data = {
-              title: redTitle,
-              description: post.selftext ? post.selftext.slice(0, 280) : null,
-              image: redImage,
-              images: redImages,
-              siteName: 'Reddit',
-              url
-            };
-          }
-        }
-      } catch { /* Reddit JSON fallback failed — continue to generic scrape */ }
-    }
-
-    // ── Pixiv — blocks bots for HTML but provides an oEmbed API ────────
-    if (!data && /^https?:\/\/(?:www\.)?pixiv\.net\/(?:en\/)?artworks\/\d+/i.test(url)) {
-      try {
-        const poEmbed = await fetch(
-          `https://embed.pixiv.net/oembed.php?url=${encodeURIComponent(url)}&format=json`,
-          { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
-        );
-        if (poEmbed.ok) {
-          const oj = await poEmbed.json();
-          data = {
-            title: oj.title || null,
-            description: oj.author_name ? `by ${oj.author_name}` : null,
-            image: oj.thumbnail_url || null,
-            siteName: 'pixiv',
-            url
-          };
-        }
-      } catch { /* fall through to generic scrape */ }
-    }
-
-    // ── Bluesky — HTML is client-rendered (blank OG tags); the public AT Protocol
-    // app view returns structured post data with no auth. Resolve the handle to a
-    // DID when needed, then hydrate the post and pull author / text / media. ──
-    if (!data && /^https?:\/\/bsky\.app\/profile\/[^/]+\/post\/[A-Za-z0-9]+/i.test(url)) {
-      try {
-        const m = url.match(/^https?:\/\/bsky\.app\/profile\/([^/?#]+)\/post\/([A-Za-z0-9]+)/i);
-        let did = m[1];
-        if (!did.startsWith('did:')) {
-          const rh = await fetch(
-            `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(did)}`,
-            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
-          );
-          if (rh.ok) did = (await rh.json()).did || did;
-        }
-        if (did.startsWith('did:')) {
-          const atUri = `at://${did}/app.bsky.feed.post/${m[2]}`;
-          const pResp = await fetch(
-            `https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(atUri)}`,
-            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA } }
-          );
-          if (pResp.ok) {
-            const post = (await pResp.json())?.posts?.[0];
-            if (post) {
-              const author = post.author || {};
-              const name = author.displayName || author.handle || 'Bluesky';
-              const embed = post.embed || {};
-              // recordWithMedia nests the real media one level down under .media
-              const media = (embed.$type || '').startsWith('app.bsky.embed.recordWithMedia') ? (embed.media || {}) : embed;
-              const mType = media.$type || '';
-              let image = null, images;
-              if (mType.startsWith('app.bsky.embed.images')) {
-                const imgs = (media.images || []).map(i => i.fullsize).filter(Boolean);
-                if (imgs.length >= 2) images = imgs.slice(0, 4);
-                image = imgs[0] || null;
-              } else if (mType.startsWith('app.bsky.embed.video')) {
-                image = media.thumbnail || null;
-              } else if (mType.startsWith('app.bsky.embed.external')) {
-                image = media.external?.thumb || null;
-              }
-              const text = post.record?.text || '';
-              data = {
-                kind: 'bsky',
-                siteName: 'Bluesky',
-                accentColor: '#0085ff',
-                author: name,
-                handle: author.handle ? `@${author.handle}` : null,
-                avatar: author.avatar || null,
-                title: `${name} on Bluesky`,
-                text: text || null,
-                description: text.slice(0, 280) || null,
-                image,
-                images,
-                video: mType.startsWith('app.bsky.embed.video') ? url : null,
-                stats: { replies: post.replyCount ?? -1, reposts: post.repostCount ?? -1, likes: post.likeCount ?? -1, views: -1 },
-                url
-              };
-            }
-          }
-        }
-      } catch { /* Bluesky app view failed — continue to generic scrape */ }
-    }
-
-    // ── Generic OG scrape (manual redirect following with SSRF checks) ──
-    if (!data) {
-      let currentUrl = url;
-      let resp;
-      const MAX_REDIRECTS = 5;
-      for (let i = 0; i <= MAX_REDIRECTS; i++) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-        resp = await fetch(currentUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': PREVIEW_UA,
-            'Accept': 'text/html,application/xhtml+xml',
-            'Accept-Language': 'en-US,en;q=0.9'
-          },
-          redirect: 'manual'  // handle redirects manually to re-check SSRF
-        });
-        clearTimeout(timeout);
-        // If redirect, validate the new URL before following
-        if ([301, 302, 303, 307, 308].includes(resp.status)) {
-          const location = resp.headers.get('location');
-          if (!location) break;
-          // Resolve relative redirects
-          const nextUrl = new URL(location, currentUrl).href;
-          try {
-            await validateUrlSafe(nextUrl);
-          } catch {
-            // Redirect target is private/internal — abort (SSRF protection)
-            return res.json({ title: null, description: null, image: null, siteName: null });
-          }
-          currentUrl = nextUrl;
-          continue;
-        }
-        break; // not a redirect, use this response
-      }
-
-      const contentType = resp.headers.get('content-type') || '';
-      if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
-        linkPreviewCache.set(url, { data: { title: null, description: null, image: null, siteName: null }, ts: Date.now() });
-        return res.json({ title: null, description: null, image: null, siteName: null });
-      }
-
-      const html = await resp.text();
-      const chunk = html.slice(0, PREVIEW_MAX_SIZE);
-
-      // Regex helper — handles attributes spanning multiple lines and both
-      // orderings: property before content, and content before property.
-      // Decodes HTML entities so image URLs with &amp; etc. work correctly.
-      const getMetaContent = (property) => {
-        const re1 = new RegExp(`<meta[^>]*?(?:property|name)=["']${property}["'][^>]*?content=["']([^"']+)["']`, 'is');
-        const re2 = new RegExp(`<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["']${property}["']`, 'is');
-        const m = chunk.match(re1) || chunk.match(re2);
-        return m ? decodeHtmlEntities(m[1].trim()) : null;
-      };
-
-      // Returns ALL values for a given OG property (e.g. multiple og:image tags
-      // for tweet galleries or reddit image galleries). Deduped, max 4 results.
-      // Decodes HTML entities in each value.
-      const getAllMetaContent = (property) => {
-        const seen = new Set();
-        const re1 = new RegExp(`<meta[^>]*?(?:property|name)=["']${property}["'][^>]*?content=["']([^"']+)["']`, 'gi');
-        const re2 = new RegExp(`<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["']${property}["']`, 'gi');
-        let m;
-        while ((m = re1.exec(chunk)) !== null) seen.add(decodeHtmlEntities(m[1].trim()));
-        while ((m = re2.exec(chunk)) !== null) seen.add(decodeHtmlEntities(m[1].trim()));
-        return [...seen].slice(0, 4);
-      };
-
-      const titleTag = chunk.match(/<title[^>]*>([^<]+)<\/title>/i);
-
-      const ogImages = getAllMetaContent('og:image');
-
-      // Extract og:video for inline video embeds (MP4, WebM)
-      const ogVideo = getMetaContent('og:video') || getMetaContent('og:video:url') || getMetaContent('og:video:secure_url');
-      const ogVideoType = getMetaContent('og:video:type') || '';
-      // Only embed direct video files (not Flash, iframes, etc.)
-      const isEmbeddableVideo = ogVideo && (
-        /^video\/(mp4|webm|ogg)$/i.test(ogVideoType) ||
-        /\.(mp4|webm|ogg)(\?[^#]*)?$/i.test(ogVideo)
-      );
-
-      data = {
-        title: getMetaContent('og:title') || getMetaContent('twitter:title') || (titleTag ? titleTag[1].trim() : null),
-        description: getMetaContent('og:description') || getMetaContent('twitter:description') || getMetaContent('description'),
-        image: ogImages[0] || getMetaContent('twitter:image'),
-        images: ogImages.length >= 2 ? ogImages : undefined,
-        video: isEmbeddableVideo ? ogVideo : undefined,
-        videoType: isEmbeddableVideo ? (ogVideoType || 'video/mp4') : undefined,
-        siteName: getMetaContent('og:site_name') || parsed.hostname,
-        url: getMetaContent('og:url') || url
-      };
-
-      // oEmbed autodiscovery — if OG tags came back empty and the page advertises a
-      // JSON oEmbed endpoint, use it. This future-proofs support for any oEmbed-compatible
-      // site without needing a dedicated handler.
-      if (!data.title && !data.image) {
-        const oembedHref =
-          chunk.match(/<link[^>]*?type=["']application\/json\+oembed["'][^>]*?href=["']([^"']+)["']/i) ||
-          chunk.match(/<link[^>]*?href=["']([^"']+)["'][^>]*?type=["']application\/json\+oembed["']/i);
-        if (oembedHref) {
-          try {
-            const oembedEndpoint = new URL(oembedHref[1], currentUrl).href;
-            await validateUrlSafe(oembedEndpoint);
-            const oResp = await fetch(oembedEndpoint, {
-              signal: AbortSignal.timeout(5000),
-              headers: { 'User-Agent': PREVIEW_UA }
-            });
-            if (oResp.ok) {
-              const oj = await oResp.json();
-              data.title = data.title || oj.title || null;
-              data.image = data.image || oj.thumbnail_url || null;
-              if (!data.siteName || data.siteName === parsed.hostname) {
-                data.siteName = oj.provider_name || data.siteName;
-              }
-            }
-          } catch { /* autodiscovery failed — keep OG data as-is */ }
-        }
-      }
-    } else {
-      // Twitter oEmbed succeeded — try a quick scrape for the image only.
-      // First try fxtwitter (bot-friendly proxy), then fall back to the original URL.
-      const imageSource = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/\w+\/status\/\d+/i.test(url)
-        ? url.replace(/^https?:\/\/(?:www\.|mobile\.)?(?:twitter|x)\.com/i, 'https://fxtwitter.com')
-        : url;
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const resp = await fetch(imageSource, {
-          signal: controller.signal,
-          headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'text/html' },
-          redirect: 'manual'  // no blind redirect following
-        });
-        clearTimeout(timeout);
-        // Only scrape if we got a direct 200 (no redirect chasing for image-only pass)
-        if (resp.status === 200) {
-          const html = (await resp.text()).slice(0, PREVIEW_MAX_SIZE);
-          const imgMatch = html.match(/<meta[^>]*?(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*?content=["']([^"']+)["']/is)
-                        || html.match(/<meta[^>]*?content=["']([^"']+)["'][^>]*?(?:property|name)=["'](?:og:image|twitter:image)["']/is);
-          if (imgMatch) data.image = decodeHtmlEntities(imgMatch[1].trim());
-        }
-      } catch { /* image is optional */ }
-    }
-
-    linkPreviewCache.set(url, { data, ts: Date.now() });
-
-    // Prune old cache entries if over 500
-    if (linkPreviewCache.size > 500) {
-      const now = Date.now();
-      for (const [k, v] of linkPreviewCache) {
-        if (now - v.ts > PREVIEW_CACHE_TTL) linkPreviewCache.delete(k);
-      }
-    }
-
-    res.json(data);
-  } catch {
-    res.json({ title: null, description: null, image: null, siteName: null });
-  }
-});
+// ── Link previews and the media proxy: src/routes/link-preview.js ──
+require('./src/routes/link-preview')({ app });
 
 // ── Games list endpoint — discover available games ──
 app.get('/api/games', (req, res) => {
@@ -3663,8 +1778,10 @@ app.get('/api/high-scores/:game', (req, res) => {
   const game = req.params.game;
   if (!/^[a-z0-9_-]{1,32}$/.test(game)) return res.status(400).json({ error: 'Invalid game id' });
   const { getDb } = require('./src/database');
+  // Answered without a login (the game's fallback cannot send one), so it
+  // carries names and scores only, not account ids.
   const leaderboard = getDb().prepare(`
-    SELECT hs.user_id, COALESCE(u.display_name, u.username) as username, hs.score
+    SELECT COALESCE(u.display_name, u.username) as username, hs.score
     FROM high_scores hs JOIN users u ON hs.user_id = u.id
     WHERE hs.game = ? AND hs.score > 0
       AND NOT EXISTS (
@@ -3725,7 +1842,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   }
 
   const webhook = db.prepare(
-    'SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1'
+    'SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0'
   ).get(token);
 
   if (!webhook) {
@@ -3752,6 +1869,24 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     if (Number.isInteger(rid) && rid > 0) {
       const target = db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(rid, webhook.channel_id);
       if (target) replyTo = rid;
+    }
+  }
+
+  // Optional thread_id: post as a reply inside a thread (#5706). The parent
+  // has to be a top-level message in this bot's channel, and a reply_to
+  // only stands if it points into that same thread.
+  let threadId = null;
+  if (req.body.thread_id !== undefined && req.body.thread_id !== null) {
+    const tid = parseInt(req.body.thread_id, 10);
+    const parent = Number.isInteger(tid) && tid > 0
+      ? db.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ? AND thread_id IS NULL').get(tid, webhook.channel_id)
+      : null;
+    if (!parent) return res.status(400).json({ error: 'thread_id must be a top-level message in this bot\'s channel' });
+    if (req.body.ephemeral === true) return res.status(400).json({ error: 'thread_id cannot be combined with ephemeral' });
+    threadId = tid;
+    if (replyTo) {
+      const r = db.prepare('SELECT thread_id FROM messages WHERE id = ?').get(replyTo);
+      if (!r || r.thread_id !== threadId) replyTo = null;
     }
   }
 
@@ -3787,7 +1922,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
           content: (r.content || '').slice(0, 200),
         });
       }
-    } catch { /* best-effort */ }
+    } catch { /* the inline reply preview is cosmetic; the message still posts without it */ }
   }
 
   const message = {
@@ -3804,7 +1939,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     is_webhook: true,
     webhook_name: username,
     ephemeral,
-    recipient_id: recipientId
+    recipient_id: recipientId,
+    thread_id: threadId,
   };
 
   if (ephemeral) {
@@ -3826,19 +1962,41 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
 
   // Insert non-ephemeral messages into the DB/history.
   const result = db.prepare(
-    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to) VALUES (?, ?, ?, 1, ?, ?, ?)'
-  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo);
+    'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?)'
+  ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId);
   message.id = result.lastInsertRowid;
 
   // Broadcast to all clients in this channel
-  if (io) {
+  if (io && threadId) {
+    // A thread reply: the same two events a person's thread reply sends.
+    const code = webhook.channel_code;
+    io.to(`channel:${code}`).emit('new-thread-message', { channelCode: code, parentId: threadId, message });
+    const count = db.prepare('SELECT COUNT(*) AS count FROM messages WHERE thread_id = ?').get(threadId).count;
+    const last = db.prepare('SELECT id, created_at FROM messages WHERE thread_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').get(threadId);
+    const participants = db.prepare(`
+      SELECT DISTINCT COALESCE(m.webhook_username, u.display_name, u.username) AS username, COALESCE(m.webhook_avatar, u.avatar) AS avatar
+      FROM messages m LEFT JOIN users u ON m.user_id = u.id
+      WHERE m.thread_id = ? ORDER BY m.created_at DESC LIMIT 5
+    `).all(threadId);
+    io.to(`channel:${code}`).emit('thread-updated', {
+      channelCode: code,
+      parentId: threadId,
+      thread: {
+        count,
+        lastReplyAt: last ? last.created_at : null,
+        lastReplyId: last ? last.id : null,
+        senderId: null,
+        participants: participants.map(p => ({ username: p.username, avatar: p.avatar })),
+      },
+    });
+  } else if (io) {
     io.to(`channel:${webhook.channel_code}`).emit('new-message', {
       channelCode: webhook.channel_code,
       message
     });
   }
 
-  res.status(200).json({ success: true, message_id: result.lastInsertRowid });
+  res.status(200).json({ success: true, message_id: result.lastInsertRowid, ...(threadId ? { thread_id: threadId } : {}) });
 });
 
 // ── Listening presence webhook (any music player) ──
@@ -4299,14 +2457,46 @@ app.post('/api/webhooks/:token/sounds', webhookLimiter, express.json({ limit: '1
 const modLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
 
 // Helper: get authenticated user from Bearer token with admin/mod check
+// Moderation over HTTP follows the rules the app follows: the permission
+// must be held server-wide (a role held in one channel does not count; the
+// helper above counts it), the caller must not be banned, and the target must
+// rank below the caller. These routes skipped the rank checks, so a Mod, or
+// anyone who had created a channel, could mute or kick an admin.
 function getModUser(req, permission) {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return { error: 'Unauthorized', status: 401 };
-  if (!verifyAdminFromDb(user) && !userHasPermission(user.id, permission)) {
+  const { getDb } = require('./src/database');
+  if (getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) {
     return { error: 'Insufficient permissions', status: 403 };
   }
-  return { user };
+  const isAdmin = verifyAdminFromDb(user);
+  if (!isAdmin && !(socketRuntime && socketRuntime.userHasPermission(user.id, permission))) {
+    return { error: 'Insufficient permissions', status: 403 };
+  }
+  return { user, isAdmin };
+}
+
+function modOutranks(auth, targetId) {
+  if (!auth || !auth.user || targetId === auth.user.id) return false;
+  const { getDb } = require('./src/database');
+  const target = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(targetId);
+  if (target && target.is_admin) return false;
+  if (auth.isAdmin) return true;
+  if (!socketRuntime) return false;
+  return socketRuntime.getUserEffectiveLevel(targetId) < socketRuntime.getUserEffectiveLevel(auth.user.id);
+}
+
+// Undoing a ban or mute: an admin's stands, as does one placed by someone of
+// equal or higher rank.
+function modMayUndo(auth, placedBy) {
+  if (!auth || !auth.user) return false;
+  if (auth.isAdmin || !placedBy || placedBy === auth.user.id) return true;
+  const { getDb } = require('./src/database');
+  const placer = getDb().prepare('SELECT is_admin FROM users WHERE id = ?').get(placedBy);
+  if (placer && placer.is_admin) return false;
+  if (!socketRuntime) return false;
+  return socketRuntime.getUserEffectiveLevel(placedBy) < socketRuntime.getUserEffectiveLevel(auth.user.id);
 }
 
 // POST /api/moderation/kick
@@ -4325,6 +2515,7 @@ app.post('/api/moderation/kick', modLimiter, express.json({ limit: '16kb' }), (r
 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only kick people ranked below you' });
 
   db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, userId);
 
@@ -4337,6 +2528,7 @@ app.post('/api/moderation/kick', modLimiter, express.json({ limit: '16kb' }), (r
       }
     }
   }
+  socketRuntime?.rotatePrivateCodesAfterRemoval?.(channel.id);
 
   res.json({ success: true, message: `Kicked ${target.username}` });
 });
@@ -4354,6 +2546,7 @@ app.post('/api/moderation/ban', modLimiter, express.json({ limit: '16kb' }), (re
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username, is_admin FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.is_admin) return res.status(403).json({ error: 'Cannot ban an admin' });
+  if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only ban people ranked below you' });
 
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
@@ -4384,6 +2577,10 @@ app.post('/api/moderation/unban', modLimiter, express.json({ limit: '16kb' }), (
   const db = getDb();
   const { userId } = req.body;
   if (!userId || !Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
+  const existingBan = db.prepare('SELECT banned_by FROM bans WHERE user_id = ?').get(userId);
+  if (existingBan && !modMayUndo(auth, existingBan.banned_by)) {
+    return res.status(403).json({ error: 'You can\'t undo a ban placed by an admin or by someone of equal or higher rank' });
+  }
 
   db.prepare('DELETE FROM bans WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
@@ -4402,8 +2599,10 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
 
   const target = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
   if (!target) return res.status(404).json({ error: 'User not found' });
+  if (!modOutranks(auth, userId)) return res.status(403).json({ error: 'You can only mute people ranked below you' });
 
-  const durationMs = Number.isInteger(duration) && duration > 0 ? duration * 60 * 1000 : 10 * 60 * 1000;
+  // Same ceiling as the app: 30 days.
+  const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
   const expiresAt = new Date(Date.now() + durationMs).toISOString();
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
@@ -4413,7 +2612,7 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
   if (io) {
     for (const [, s] of io.sockets.sockets) {
       if (s.user && s.user.id === userId) {
-        s.emit('muted', { reason: safeReason, expiresAt });
+        s.emit('muted', { duration: Math.round(durationMs / 60000), reason: safeReason, expiresAt });
       }
     }
   }
@@ -4430,6 +2629,10 @@ app.post('/api/moderation/unmute', modLimiter, express.json({ limit: '16kb' }), 
   const db = getDb();
   const { userId } = req.body;
   if (!userId || !Number.isInteger(userId)) return res.status(400).json({ error: 'userId required (integer)' });
+  if (!auth.isAdmin && userId === auth.user.id) return res.status(403).json({ error: 'You can\'t unmute yourself' });
+  for (const { muted_by: by } of db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(userId)) {
+    if (!modMayUndo(auth, by)) return res.status(403).json({ error: 'You can\'t undo a mute placed by an admin or by someone of equal or higher rank' });
+  }
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
   const target = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(userId);
@@ -4475,7 +2678,7 @@ function getWebhookByToken(token) {
            w.can_use_voice, w.created_by, c.code AS channel_code
     FROM webhooks w
     LEFT JOIN channels c ON c.id = w.channel_id
-    WHERE w.token = ? AND w.is_active = 1
+    WHERE w.token = ? AND w.is_active = 1 AND COALESCE(c.is_dm, 0) = 0
   `).get(token);
 }
 
@@ -4562,6 +2765,7 @@ app.post('/api/webhooks/:token/moderation/kick', webhookLimiter, express.json({ 
       }
     }
   }
+  socketRuntime?.rotatePrivateCodesAfterRemoval?.(channel.id);
   res.json({ success: true, message: `Kicked ${target.username}` });
 });
 
@@ -4737,9 +2941,10 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
 app.get('/api/bot-commands', (req, res) => {
   const { getDb } = require('./src/database');
   const rows = getDb().prepare(`
-    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name
+    SELECT bc.command, bc.description, bc.subcommands_json, w.name as bot_name, c.code as channel_code
     FROM bot_commands bc
     JOIN webhooks w ON bc.webhook_id = w.id
+    LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.is_active = 1
   `).all();
   const commands = [];
@@ -4760,7 +2965,8 @@ app.get('/api/bot-commands', (req, res) => {
           description: typeof sc.description === 'string' && sc.description.trim()
             ? sc.description.trim()
             : (row.description || 'Bot command'),
-          bot_name: row.bot_name || 'Bot'
+          bot_name: row.bot_name || 'Bot',
+          channel_code: row.channel_code || null
         });
       }
       continue;
@@ -4768,7 +2974,8 @@ app.get('/api/bot-commands', (req, res) => {
     commands.push({
       command: row.command,
       description: row.description || '',
-      bot_name: row.bot_name || 'Bot'
+      bot_name: row.bot_name || 'Bot',
+      channel_code: row.channel_code || null
     });
   }
   res.json({ commands });
@@ -4797,293 +3004,8 @@ const importUpload = multer({
   }
 });
 
-// ── Step 1: Upload & parse → return preview ──────────────
-app.post('/api/import/discord/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-
-  importUpload.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    try {
-      const result = parseDiscordExport(req.file.path);
-
-      // Save parsed data to temp so the execute step can read it
-      const importId = crypto.randomBytes(16).toString('hex');
-      const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
-      fs.writeFileSync(tempPath, JSON.stringify(result));
-
-      // Clean up the uploaded raw file
-      try { fs.unlinkSync(req.file.path); } catch {}
-
-      // Return preview (channel list + counts — NOT the full messages)
-      res.json({
-        importId,
-        format: result.format,
-        serverName: result.serverName,
-        channels: result.channels.map(c => ({
-          discordId: c.discordId,
-          name: c.name,
-          topic: c.topic,
-          category: c.category,
-          messageCount: c.messageCount
-        })),
-        totalMessages: result.channels.reduce((sum, c) => sum + c.messageCount, 0)
-      });
-    } catch (parseErr) {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      res.status(400).json({ error: parseErr.message });
-    }
-  });
-});
-
-// ── Discord Direct Connect — pull messages straight from Discord's API ──
-const DISCORD_API = 'https://discord.com/api/v10';
-
-async function discordApiFetch(endpoint, userToken, retries = 2) {
-  const resp = await fetch(`${DISCORD_API}${endpoint}`, {
-    headers: { Authorization: userToken }
-  });
-  if (resp.status === 401) throw new Error('Invalid or expired Discord token');
-  if (resp.status === 403) throw new Error('Access denied — check token permissions');
-  if (resp.status === 429 && retries > 0) {
-    const wait = parseFloat(resp.headers.get('retry-after') || '3');
-    await new Promise(r => setTimeout(r, wait * 1000));
-    return discordApiFetch(endpoint, userToken, retries - 1);
-  }
-  if (!resp.ok) throw new Error(`Discord API error ${resp.status}`);
-  return resp.json();
-}
-
-// Step A: validate token → list servers
-app.post('/api/import/discord/connect', express.json(), async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-
-  const { discordToken } = req.body;
-  if (!discordToken || typeof discordToken !== 'string') {
-    return res.status(400).json({ error: 'Discord token required' });
-  }
-
-  try {
-    const me = await discordApiFetch('/users/@me', discordToken);
-    const guilds = await discordApiFetch('/users/@me/guilds?limit=200', discordToken);
-    res.json({
-      user: { username: me.global_name || me.username },
-      guilds: guilds.map(g => ({ id: g.id, name: g.name, icon: g.icon }))
-    });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Step B: list text channels, announcement channels, forums, and threads for a guild
-app.post('/api/import/discord/guild-channels', express.json(), async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-
-  const { discordToken, guildId } = req.body;
-  if (!discordToken || !guildId) return res.status(400).json({ error: 'Missing params' });
-
-  try {
-    const allChannels = await discordApiFetch(`/guilds/${guildId}/channels`, discordToken);
-
-    // Build category map
-    const categories = {};
-    allChannels.filter(c => c.type === 4).forEach(c => { categories[c.id] = c.name; });
-
-    // Text (0), Announcement (5), Forum (15), Media (16) — all contain readable content
-    const textTypes = new Set([0, 5, 15, 16]);
-    const channelsList = allChannels
-      .filter(c => textTypes.has(c.type))
-      .sort((a, b) => a.position - b.position)
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        topic: c.topic || '',
-        category: (c.parent_id && categories[c.parent_id]) || null,
-        type: c.type === 5 ? 'announcement' : c.type === 15 ? 'forum' : c.type === 16 ? 'media' : 'text',
-        // Forum tags (available on type 15 and 16)
-        tags: Array.isArray(c.available_tags) ? c.available_tags.map(t => ({ id: t.id, name: t.name })) : []
-      }));
-
-    // Fetch threads (active + archived public)
-    const threads = [];
-
-    // Active threads
-    try {
-      const active = await discordApiFetch(`/guilds/${guildId}/threads/active`, discordToken);
-      if (active.threads) threads.push(...active.threads);
-    } catch {}
-
-    // Archived threads per text/forum/announcement channel (up to 100 per channel)
-    for (const ch of channelsList) {
-      try {
-        const archived = await discordApiFetch(`/channels/${ch.id}/threads/archived/public?limit=100`, discordToken);
-        if (archived.threads) threads.push(...archived.threads);
-      } catch {}
-      await new Promise(r => setTimeout(r, 200));
-    }
-
-    // De-duplicate threads and map to entries
-    const seen = new Set();
-    const threadEntries = [];
-    for (const t of threads) {
-      if (seen.has(t.id)) continue;
-      seen.add(t.id);
-      // Find parent channel
-      const parent = channelsList.find(c => c.id === t.parent_id);
-      const parentName = parent ? parent.name : null;
-
-      // Resolve applied forum tags
-      let tagNames = [];
-      if (Array.isArray(t.applied_tags) && parent && parent.tags.length) {
-        tagNames = t.applied_tags
-          .map(tid => parent.tags.find(tag => tag.id === tid))
-          .filter(Boolean)
-          .map(tag => tag.name);
-      }
-
-      threadEntries.push({
-        id: t.id,
-        name: t.name,
-        topic: '',
-        category: (parent && parent.category) || null,
-        type: 'thread',
-        parentId: t.parent_id,
-        parentName,
-        tags: tagNames
-      });
-    }
-
-    res.json({ channels: channelsList, threads: threadEntries });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Step C: fetch all messages from selected channels → save temp → return preview
-app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-
-  const { discordToken, guildName, channels: selected } = req.body;
-  if (!discordToken || !Array.isArray(selected) || !selected.length) {
-    return res.status(400).json({ error: 'Missing params' });
-  }
-
-  try {
-    const result = {
-      format: 'Discord Direct',
-      serverName: guildName || 'Discord Import',
-      channels: []
-    };
-
-    for (const ch of selected) {
-      const messages = [];
-      let before = null, batch;
-
-      do {
-        let ep = `/channels/${ch.id}/messages?limit=100`;
-        if (before) ep += `&before=${before}`;
-        batch = await discordApiFetch(ep, discordToken);
-
-        for (const msg of batch) {
-          if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
-          let content = msg.content || '';
-          if (Array.isArray(msg.attachments)) {
-            for (const a of msg.attachments) {
-              content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
-            }
-          }
-          if (Array.isArray(msg.embeds)) {
-            for (const e of msg.embeds) {
-              if (e.title) content += `\n🔗 **${e.title}**`;
-              if (e.description) content += `\n${e.description}`;
-              if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
-            }
-          }
-          content = content.trim();
-          if (!content) continue;
-
-          messages.push({
-            discordId: msg.id,
-            author: msg.author?.global_name || msg.author?.username || 'Unknown',
-            authorId: msg.author?.id || null,
-            authorAvatar: msg.author?.avatar
-              ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64`
-              : null,
-            isBot: msg.author?.bot || false,
-            content,
-            timestamp: msg.timestamp,
-            isPinned: msg.pinned || false,
-            reactions: (msg.reactions || []).map(r => ({
-              emoji: r.emoji?.name || 'â“',
-              count: r.count || 1
-            })),
-            replyTo: msg.message_reference?.message_id || null
-          });
-        }
-
-        if (batch.length > 0) before = batch[batch.length - 1].id;
-        await new Promise(r => setTimeout(r, 300)); // respect rate limits
-      } while (batch.length === 100);
-
-      result.channels.push({
-        discordId: ch.id,
-        name: ch.name,
-        topic: ch.topic || '',
-        category: ch.category || null,
-        messageCount: messages.length,
-        messages
-      });
-    }
-
-    const importId = crypto.randomBytes(16).toString('hex');
-    const tempPath = path.join(os.tmpdir(), `haven-import-${importId}.json`);
-    fs.writeFileSync(tempPath, JSON.stringify(result));
-
-    res.json({
-      importId,
-      format: result.format,
-      serverName: result.serverName,
-      channels: result.channels.map(c => ({
-        discordId: c.discordId,
-        name: c.name,
-        topic: c.topic,
-        category: c.category,
-        messageCount: c.messageCount
-      })),
-      totalMessages: result.channels.reduce((sum, c) => sum + c.messageCount, 0)
-    });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// ── Periodic cleanup of orphaned import temp files (1 hour TTL) ──
-function cleanupTempImports() {
-  try {
-    const tmpDir = os.tmpdir();
-    const cutoff = Date.now() - 60 * 60 * 1000; // 1 hour
-    for (const f of fs.readdirSync(tmpDir)) {
-      if (!f.startsWith('haven-import-')) continue;
-      const fp = path.join(tmpDir, f);
-      try {
-        const stat = fs.statSync(fp);
-        if (stat.mtimeMs < cutoff) fs.unlinkSync(fp);
-      } catch {}
-    }
-  } catch {}
-}
-// Run once at startup to clean up any stale files from previous crashes
-cleanupTempImports();
-setInterval(cleanupTempImports, 15 * 60 * 1000); // then every 15 min
+// ── Discord import: src/routes/import.js ──
+require('./src/routes/import')({ uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload });
 
 // ── Step 2: Execute the import ───────────────────────────
 app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, res) => {
@@ -5208,7 +3130,10 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
             try {
               db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)')
                 .run(result.lastInsertRowid, channelId, user.id);
-            } catch {}
+            } catch (err) {
+              // Do not abort the import over one pin, but do not lose it silently either.
+              console.warn('[import] Could not pin an imported message:', err.message);
+            }
           }
 
           // Import reactions
@@ -5218,7 +3143,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
               try {
                 db.prepare('INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)')
                   .run(result.lastInsertRowid, user.id, r.emoji);
-              } catch {}
+              } catch { /* a reaction is cosmetic and can number in the thousands; never abort the import over one */ }
             }
           }
         }
@@ -5228,7 +3153,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
     txn();
 
     // Clean up temp file
-    try { fs.unlinkSync(tempPath); } catch {}
+    try { fs.unlinkSync(tempPath); } catch { /* cleanupTempImports() sweeps any haven-import leftover */ }
 
     res.json({ success: true, ...stats });
   } catch (err) {
@@ -5317,7 +3242,7 @@ const io = new Server(server, {
 const db = initDatabase();
 
 // (#5335) Seed starter stickers now that the DB is ready.
-try { seedStarterStickers(); } catch {}
+seedStarterStickers();   // catches and logs its own errors
 
 // Download / refresh the Unicode emoji list (non-blocking, best-effort).
 // Opt-in: off unless the admin enables it or UNICODE_EMOJI_AUTO_UPDATE forces it.
@@ -5331,7 +3256,9 @@ try { seedStarterStickers(); } catch {}
 try {
   const rp = db.prepare("SELECT value FROM server_settings WHERE key = 'referrer_policy'").get()?.value;
   if (rp && VALID_REFERRER_POLICIES.includes(rp)) currentReferrerPolicy = rp;
-} catch {}
+} catch (err) {
+  console.warn(`[security] Could not load the saved Referrer-Policy, using ${DEFAULT_REFERRER_POLICY}:`, err.message);
+}
 
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.
@@ -5353,7 +3280,10 @@ if (process.env.ADMIN_RESET_PASSWORD) {
       envContent = envContent.replace(/^ADMIN_RESET_PASSWORD=.*$/m, '').replace(/\n{3,}/g, '\n\n');
       fs.writeFileSync(ENV_PATH, envContent);
       console.log('   Removed ADMIN_RESET_PASSWORD from .env (one-time use)');
-    } catch {}
+    } catch (err) {
+      // Left in place it would reset the admin password again on every restart.
+      console.error(`   Could not remove ADMIN_RESET_PASSWORD from ${ENV_PATH}; delete that line by hand:`, err.message);
+    }
   } else {
     console.warn(`âš ï¸  ADMIN_RESET_PASSWORD set but no user "${adminName}" found — skipping`);
   }
@@ -5366,7 +3296,12 @@ if (process.env.ADMIN_RESET_PASSWORD) {
 try {
   const fe = db.prepare("SELECT value FROM server_settings WHERE key = 'fcm_enabled'").get()?.value;
   setFcmAdminEnabled(fe !== 'false');
-} catch {}
+} catch (err) {
+  // Fail closed: if the admin turned FCM off for privacy, an unreadable
+  // setting must not quietly turn it back on.
+  setFcmAdminEnabled(false);
+  console.error('[fcm] Could not read the FCM Privacy setting, leaving FCM off:', err.message);
+}
 initFcm(DATA_DIR);
 app.set('io', io);   // expose to auth routes (session invalidation on password change)
 botAudioManager = new BotAudioManager(io, BOT_AUDIO_DIR);
@@ -5395,17 +3330,24 @@ initFerry({
   db,
   io,
   sanitizeText,
-  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content }) => {
+  // A Discord forum post arrives through here too, with a title and tags, and
+  // becomes a forum topic.
+  insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content, title = null, tags = null }) => {
+    // Topic titles get the same clean-up as titles typed in Haven.
+    title = typeof title === 'string' && title ? (sanitizeText(title) || null) : null;
     try {
+      const tagList = Array.isArray(tags) && tags.length ? tags : null;
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, 1, ?, ?)'
-      ).run(channelId, null, content, username, avatarUrl || null);
+        'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, title, tags) VALUES (?, ?, ?, 1, ?, ?, ?, ?)'
+      ).run(channelId, null, content, username, avatarUrl || null, title || null, tagList ? JSON.stringify(tagList) : null);
 
       io.to(`channel:${channelCode}`).emit('new-message', {
         channelCode,
         message: {
           id: result.lastInsertRowid,
           content,
+          title: title || undefined,
+          tags: tagList || undefined,
           created_at: new Date().toISOString(),
           username: `[BOT] ${username}`,
           user_id: null,
@@ -5445,6 +3387,91 @@ initFerry({
     } catch (err) {
       console.error('Ferry could not apply a Discord edit:', err.message);
     }
+  },
+
+  // A message inside a Discord forum post becomes a reply in its Haven topic.
+  // Same events a Haven reply sends, so an open thread panel shows it and the
+  // topic's reply count and bump follow.
+  insertHavenThreadReply: ({ channelId, channelCode, parentId, username, avatarUrl, content }) => {
+    try {
+      const result = db.prepare(
+        'INSERT INTO messages (channel_id, user_id, content, thread_id, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, ?, 1, ?, ?)'
+      ).run(channelId, null, content, parentId, username, avatarUrl || null);
+      const createdAt = new Date().toISOString();
+
+      io.to(`channel:${channelCode}`).emit('new-thread-message', {
+        channelCode,
+        parentId,
+        message: {
+          id: result.lastInsertRowid,
+          content,
+          created_at: createdAt,
+          // Marked like every relayed author in channel history, so a Discord
+          // nickname cannot pass for a Haven member's name. The stored and
+          // webhook_username copies stay bare, so the prefix is added once.
+          username: `[BOT] ${username}`,
+          user_id: null,
+          avatar: avatarUrl || null,
+          avatar_shape: 'square',
+          reply_to: null,
+          replyContext: null,
+          reactions: [],
+          edited_at: null,
+          is_webhook: 1,
+          webhook_username: username,
+          webhook_avatar: avatarUrl || null,
+          thread_id: parentId,
+          from_discord: true
+        }
+      });
+
+      const count = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parentId).n;
+      // Participants are Haven accounts only, the same as for a Haven reply,
+      // so a relayed Discord author never shows there under any name.
+      const participants = db.prepare(`
+        SELECT DISTINCT COALESCE(u.display_name, u.username) as username, u.avatar
+        FROM messages m JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ? ORDER BY m.created_at DESC LIMIT 5
+      `).all(parentId);
+      io.to(`channel:${channelCode}`).emit('thread-updated', {
+        channelCode,
+        parentId,
+        thread: {
+          count,
+          lastReplyAt: createdAt,
+          lastReplyId: result.lastInsertRowid,
+          senderId: null,
+          participants: participants.map(p => ({ username: p.username, avatar: p.avatar }))
+        }
+      });
+      return result.lastInsertRowid;
+    } catch (err) {
+      console.error('Ferry could not store a Discord forum reply:', err.message);
+      return null;
+    }
+  },
+
+  // A Discord post was renamed, retagged, locked or unlocked. Reuses the
+  // `topic-updated` event a Haven edit of the topic sends. Only the fields
+  // given change.
+  updateHavenTopic: ({ messageId, channelCode, title, tags, closed }) => {
+    try {
+      if (typeof title === 'string' && title) {
+        const clean = sanitizeText(title);
+        if (clean) db.prepare('UPDATE messages SET title = ? WHERE id = ?').run(clean, messageId);
+      }
+      if (Array.isArray(tags)) db.prepare('UPDATE messages SET tags = ? WHERE id = ?').run(tags.length ? JSON.stringify(tags) : null, messageId);
+      if (typeof closed === 'boolean') db.prepare('UPDATE messages SET closed = ? WHERE id = ?').run(closed ? 1 : 0, messageId);
+      const row = db.prepare('SELECT title, tags, closed, nsfw FROM messages WHERE id = ?').get(messageId);
+      if (!row) return;
+      let tagList = [];
+      try { tagList = JSON.parse(row.tags || '[]'); } catch { tagList = []; }
+      io.to(`channel:${channelCode}`).emit('topic-updated', {
+        channelCode, messageId, title: row.title || null, tags: tagList, closed: !!row.closed, nsfw: !!row.nsfw
+      });
+    } catch (err) {
+      console.error('Ferry could not update a forum topic:', err.message);
+    }
   }
 });
 
@@ -5452,476 +3479,11 @@ registerProcessCleanup();
 // Close the Discord socket deliberately on shutdown. Without this a container
 // restart leaves Discord holding a session it will keep feeding for a minute.
 for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => { try { stopFerry(); } catch { /* exit cleanup */ } });
+  process.on(sig, () => { try { stopFerry(); } catch { /* shutting down anyway; Discord drops the session on its own */ } });
 }
 
-// ── Auto-cleanup interval (runs every 15 minutes) ───────
-function runAutoCleanup() {
-  try {
-    const getSetting = (key) => {
-      const row = db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
-      return row ? row.value : null;
-    };
-
-    const enabled = getSetting('cleanup_enabled');
-    if (enabled !== 'true') return;
-
-    const maxAgeDays = parseInt(getSetting('cleanup_max_age_days') || '0');
-    const maxSizeMb = parseInt(getSetting('cleanup_max_size_mb') || '0');
-    let totalDeleted = 0;
-
-    // Pull every /uploads/ attachment path out of a message body. Reuses the
-    // shared UPLOAD_PATH_RE (global regex — reset lastIndex before each use).
-    const extractUploadRelPaths = (content) => {
-      const out = [];
-      if (typeof content !== 'string' || !content) return out;
-      UPLOAD_PATH_RE.lastIndex = 0;
-      let m;
-      while ((m = UPLOAD_PATH_RE.exec(content)) !== null) {
-        if (isSafeUploadRelPath(m[1])) out.push(m[1]);
-      }
-      return out;
-    };
-
-    // Relocate the given attachment paths into deleted-attachments, but only
-    // if no surviving message still references them (a file can be linked from
-    // more than one message via copy/paste). This is the ONLY way auto-cleanup
-    // removes files: it follows the messages it deletes. It never scans the
-    // uploads/ directory directly, so avatars, persona avatars, custom emojis,
-    // soundboard sounds, stickers, and the server icon are never at risk (#5423).
-    const relocateOrphanAttachments = (relPaths) => {
-      for (const rel of relPaths) {
-        try {
-          const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
-          const still = db.prepare(
-            "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
-          ).get(like);
-          if (!still) moveUploadToDeleted(rel, UPLOADS_DIR);
-        } catch { /* best-effort */ }
-      }
-    };
-
-    // 1. Delete messages older than N days (skip archived/pinned messages
-    // and exempt channels)
-    if (maxAgeDays > 0) {
-      // Capture the attachments of the messages we're about to delete first,
-      // so their files can follow them into deleted-attachments afterward.
-      const doomed = db.prepare(
-        "SELECT content FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
-      ).all(`-${maxAgeDays} days`);
-      const doomedAttachments = new Set();
-      for (const row of doomed) for (const p of extractUploadRelPaths(row.content)) doomedAttachments.add(p);
-
-      // Delete reactions for old messages first
-      db.prepare(`
-        DELETE FROM reactions WHERE message_id IN (
-          SELECT id FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0
-          AND id NOT IN (SELECT message_id FROM pinned_messages)
-          AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)
-        )
-      `).run(`-${maxAgeDays} days`);
-      const result = db.prepare(
-        "DELETE FROM messages WHERE created_at < datetime('now', ?) AND is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)"
-      ).run(`-${maxAgeDays} days`);
-      totalDeleted += result.changes;
-
-      relocateOrphanAttachments(doomedAttachments);
-    }
-
-    // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip
-    // archived and pinned)
-    if (maxSizeMb > 0) {
-      const dbPath = DB_PATH;
-      const stats = require('fs').statSync(dbPath);
-      const sizeMb = stats.size / (1024 * 1024);
-      if (sizeMb > maxSizeMb) {
-        // Delete oldest 10% of non-archived, non-pinned messages to bring
-        // size down.
-        const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)').get().cnt;
-        const deleteCount = Math.max(Math.floor(totalCount * 0.1), 100);
-        const oldestRows = db.prepare(
-          'SELECT id, content FROM messages WHERE is_archived = 0 AND id NOT IN (SELECT message_id FROM pinned_messages) AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1) ORDER BY created_at ASC LIMIT ?'
-        ).all(deleteCount);
-        const oldestIds = oldestRows.map(r => r.id);
-        const trimmedAttachments = new Set();
-        for (const row of oldestRows) for (const p of extractUploadRelPaths(row.content)) trimmedAttachments.add(p);
-        if (oldestIds.length > 0) {
-          // Chunk deletes to avoid creating extremely long SQL statements
-          const CHUNK_SIZE = 1000;
-          for (let i = 0; i < oldestIds.length; i += CHUNK_SIZE) {
-            const chunk = oldestIds.slice(i, i + CHUNK_SIZE);
-            const placeholders = chunk.map(() => '?').join(',');
-            db.prepare(`DELETE FROM reactions WHERE message_id IN (${placeholders})`).run(...chunk);
-            db.prepare(`DELETE FROM messages WHERE id IN (${placeholders})`).run(...chunk);
-          }
-          totalDeleted += oldestIds.length;
-          relocateOrphanAttachments(trimmedAttachments);
-        }
-      }
-    }
-
-    // Purge old files from deleted-attachments only. These are former message
-    // attachments that were relocated here when their message was deleted (by
-    // the steps above, by single-message deletes, or by the orphan-DM sweep).
-    //
-    // We deliberately do NOT scan the main uploads/ directory. That directory
-    // also holds user avatars, persona avatars, custom emojis, soundboard
-    // sounds, and the server icon — none of which are posted media. The old
-    // "delete everything in uploads/ that isn't on a protect-list" approach
-    // kept silently eating any file type nobody remembered to allow-list
-    // (persona avatars in #5423, stickers/emojis before that). Auto-cleanup is
-    // scoped to posts and messages and their attachments — nothing else.
-    if (maxAgeDays > 0) {
-      const cutoff = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
-      const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-      if (require('fs').existsSync(deletedDir)) {
-        let daDeleted = 0;
-        for (const f of require('fs').readdirSync(deletedDir)) {
-          try {
-            const fp = require('path').join(deletedDir, f);
-            const st = require('fs').statSync(fp);
-            if (st.isFile() && st.mtimeMs < cutoff) {
-              require('fs').unlinkSync(fp);
-              daDeleted++;
-            }
-          } catch { /* skip */ }
-        }
-        if (daDeleted > 0) {
-          console.log(`Auto-cleanup: removed ${daDeleted} files from deleted-attachments`);
-        }
-      }
-    }
-
-    // 3. (#5282) Orphan-DM sweep — delete any DM channel that has dropped
-    // below 2 members (one or both participants deleted their account or
-    // were force-removed). channel_members.user_id has ON DELETE CASCADE
-    // so the row vanishes when the user does, but the DM channel itself
-    // is left lingering with stale messages forever; this is the
-    // "orphaned conversation" issue called out in #5282. Runs regardless
-    // of cleanup_enabled so the data isn't retained indefinitely.
-    try {
-      const orphanRows = db.prepare(`
-        SELECT c.id, c.code, COUNT(cm.user_id) as member_count
-        FROM channels c
-        LEFT JOIN channel_members cm ON cm.channel_id = c.id
-        WHERE c.is_dm = 1
-        GROUP BY c.id
-        HAVING member_count < 2
-      `).all();
-      let orphansDeleted = 0;
-      for (const ch of orphanRows) {
-        try {
-          // Move any /uploads/<file> referenced in this DM's messages to
-          // deleted-attachments first so file cleanup doesn't lose track.
-          const msgs = db.prepare('SELECT content FROM messages WHERE channel_id = ?').all(ch.id);
-          const uploadRe = UPLOAD_PATH_RE;
-          const seen = new Set();
-          for (const m of msgs) {
-            if (typeof m.content !== 'string') continue;
-            uploadRe.lastIndex = 0;
-            let mm;
-            while ((mm = uploadRe.exec(m.content)) !== null) {
-              if (isSafeUploadRelPath(mm[1])) seen.add(mm[1]);
-            }
-          }
-          if (seen.size) {
-            const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-            require('fs').mkdirSync(deletedDir, { recursive: true });
-            for (const fn of seen) {
-              moveUploadToDeleted(fn, UPLOADS_DIR);
-            }
-          }
-          // Delete the channel — cascades to messages + read_positions +
-          // channel_members + reactions etc. via the existing FKs.
-          db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
-          orphansDeleted++;
-        } catch (e) {
-          console.error('[orphan-DM] failed to clean', ch.code, e.message);
-        }
-      }
-      if (orphansDeleted > 0) {
-        console.log(`ðŸ—‘ï¸  Auto-cleanup: removed ${orphansDeleted} orphan DM channel(s)`);
-      }
-    } catch (e) { /* sweep is best-effort */ }
-
-    if (totalDeleted > 0) {
-      console.log(`ðŸ—‘ï¸  Auto-cleanup: deleted ${totalDeleted} old messages`);
-    }
-  } catch (err) {
-    console.error('Auto-cleanup error:', err);
-  }
-}
-
-// Run cleanup every 15 minutes
-setInterval(runAutoCleanup, 15 * 60 * 1000);
-// Also run once at startup (delayed 30s to let DB settle)
-setTimeout(runAutoCleanup, 30000);
-// Expose globally so socketHandlers can trigger it
-global.runAutoCleanup = runAutoCleanup;
-
-// ── Auto-backup (runs hourly, decides per server settings) ───────
-// Stored under DATA_DIR/auto-backups. Pruned to keep N most recent.
-const AUTO_BACKUP_DIR = path.join(DATA_DIR, 'auto-backups');
-function pruneAutoBackups(retain) {
-  try {
-    if (!fs.existsSync(AUTO_BACKUP_DIR)) return;
-    const files = fs.readdirSync(AUTO_BACKUP_DIR)
-      .filter(f => f.endsWith('.zip') && !f.startsWith('.'))
-      .map(f => ({ name: f, full: path.join(AUTO_BACKUP_DIR, f), mtime: fs.statSync(path.join(AUTO_BACKUP_DIR, f)).mtimeMs }))
-      .sort((a, b) => b.mtime - a.mtime);
-    for (const f of files.slice(retain)) {
-      try { fs.unlinkSync(f.full); } catch {}
-    }
-  } catch (err) {
-    console.error('[AutoBackup] Prune failed:', err);
-  }
-}
-
-async function runAutoBackup() {
-  try {
-    const getSetting = (key) => {
-      const row = db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
-      return row ? row.value : null;
-    };
-    if (getSetting('auto_backup_enabled') !== 'true') return;
-    const intervalH = Math.max(1, parseInt(getSetting('auto_backup_interval_hours') || '24'));
-    const retain = Math.max(1, Math.min(50, parseInt(getSetting('auto_backup_retention') || '7')));
-    const sectionsRaw = getSetting('auto_backup_sections') || 'channels,users,settings,messages';
-    const include = sectionsRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-
-    const lastRunRaw = getSetting('auto_backup_last_run');
-    const lastRun = lastRunRaw ? parseInt(lastRunRaw) : 0;
-    const now = Date.now();
-    if (lastRun && (now - lastRun) < intervalH * 60 * 60 * 1000) return;
-
-    if (!fs.existsSync(AUTO_BACKUP_DIR)) fs.mkdirSync(AUTO_BACKUP_DIR, { recursive: true });
-
-    // Stream to a .partial file first so a crash mid-write can't leave a
-    // truncated .zip that pruning/restore would treat as valid, then rename in.
-    const tmpOut = path.join(AUTO_BACKUP_DIR, `.partial-${Date.now()}-${Math.random().toString(36).slice(2)}.zip`);
-    const { filePath, filename } = await buildBackupFile(include, tmpOut);
-    const outPath = path.join(AUTO_BACKUP_DIR, filename);
-    fs.renameSync(filePath, outPath);
-    const sizeMB = (fs.statSync(outPath).size / 1024 / 1024).toFixed(2);
-    db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('auto_backup_last_run', ?)").run(String(now));
-    pruneAutoBackups(retain);
-    console.log(`💾 Auto-backup written: ${filename} (${sizeMB} MB)`);
-  } catch (err) {
-    console.error('[AutoBackup] Failed:', err);
-  }
-}
-
-// Check hourly whether it's time for an auto-backup. The function itself
-// honors the configured interval, so this can be cheap.
-setInterval(runAutoBackup, 60 * 60 * 1000);
-// First check 60s after boot so it doesn't fight with cleanup or migrations
-setTimeout(runAutoBackup, 60000);
-
-// ── Admin: list / download / delete / trigger auto-backups ─────
-app.get('/api/admin/auto-backups', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  try {
-    if (!fs.existsSync(AUTO_BACKUP_DIR)) return res.json({ files: [] });
-    const files = fs.readdirSync(AUTO_BACKUP_DIR)
-      .filter(f => f.endsWith('.zip') && !f.startsWith('.'))
-      .map(f => {
-        const st = fs.statSync(path.join(AUTO_BACKUP_DIR, f));
-        return { name: f, size: st.size, mtime: st.mtimeMs };
-      })
-      .sort((a, b) => b.mtime - a.mtime);
-    res.json({ files });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/admin/auto-backups/:name', (req, res) => {
-  const token = req.query.token || req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  const name = req.params.name;
-  // Path traversal guard: backups are flat zip files only.
-  if (!/^[\w.-]+\.zip$/.test(name)) return res.status(400).json({ error: 'Invalid name' });
-  const full = path.join(AUTO_BACKUP_DIR, name);
-  if (!fs.existsSync(full) || !full.startsWith(AUTO_BACKUP_DIR)) return res.status(404).json({ error: 'Not found' });
-  res.download(full, name);
-});
-
-app.delete('/api/admin/auto-backups/:name', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  const name = req.params.name;
-  if (!/^[\w.-]+\.zip$/.test(name)) return res.status(400).json({ error: 'Invalid name' });
-  const full = path.join(AUTO_BACKUP_DIR, name);
-  if (!fs.existsSync(full) || !full.startsWith(AUTO_BACKUP_DIR)) return res.status(404).json({ error: 'Not found' });
-  try { fs.unlinkSync(full); res.json({ ok: true }); }
-  catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.post('/api/admin/auto-backups/run-now', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  // Reset last-run so runAutoBackup definitely fires.
-  try { db.prepare("DELETE FROM server_settings WHERE key = 'auto_backup_last_run'").run(); } catch {}
-  setImmediate(runAutoBackup);
-  res.json({ ok: true });
-});
-
-// ── Admin: dynamic DNS status + force-refresh ─────────────
-// Returns the last DDNS update result (provider, IP, ok/error, timestamp).
-// POST forces an immediate update — useful if the user just changed their
-// .env or believes the cached IP is stale (ISP rotation, VPN toggle, etc.).
-app.get('/api/admin/ddns/status', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  res.json(getDdnsStatus());
-});
-
-app.post('/api/admin/ddns/refresh', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  try {
-    const status = await triggerDdnsNow();
-    res.json(status);
-  } catch (err) {
-    res.status(500).json({ error: (err && err.message) || 'Failed to refresh DDNS' });
-  }
-});
-
-// ── Admin: in-app update check + run ─────────────────────
-// Detects how Haven was installed and returns the right command (or runs it).
-// Docker is intentionally NOT auto-runnable from inside the container — we just
-// surface the right command for the operator to run on the host.
-function detectInstallMethod() {
-  const cwd = process.cwd();
-  const inDocker = fs.existsSync('/.dockerenv') || process.env.HAVEN_IN_DOCKER === 'true';
-  if (inDocker) return 'docker';
-  if (fs.existsSync(path.join(cwd, '.git'))) return 'git';
-  if (process.platform === 'win32' && fs.existsSync(path.join(cwd, 'Install Haven.bat'))) return 'windows-installer';
-  if (fs.existsSync(path.join(cwd, 'install.sh'))) return 'shell-installer';
-  return 'manual';
-}
-
-function getUpdateInstructions(method) {
-  switch (method) {
-    case 'docker': return {
-      runnable: false,
-      command: 'docker compose pull && docker compose up -d',
-      message: 'Update from the host machine: cd into the haven-docker folder and run the command below.',
-    };
-    case 'git': return {
-      runnable: true,
-      command: 'git pull --ff-only && npm install --omit=dev',
-      message: 'Pull latest from GitHub and reinstall dependencies. The server will exit after the update so your supervisor (systemd / Docker / installer service) restarts it on the new code.',
-    };
-    case 'windows-installer': return {
-      runnable: true,
-      command: '"Install Haven.bat" /update',
-      message: 'Re-run the Windows installer in update mode. The server will exit so the installer can replace files and restart the service.',
-    };
-    case 'shell-installer': return {
-      runnable: true,
-      command: 'bash install.sh --update',
-      message: 'Re-run the install script in update mode. The server will exit so the installer can refresh files and restart the service.',
-    };
-    default: return {
-      runnable: false,
-      message: 'Update method could not be detected. Pull the latest release from https://github.com/ancsemi/Haven/releases and replace your install manually.',
-    };
-  }
-}
-
-app.get('/api/admin/update/check', async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  const currentVersion = require('./package.json').version;
-  const method = detectInstallMethod();
-  const instructions = getUpdateInstructions(method);
-  try {
-    const r = await fetch('https://api.github.com/repos/ancsemi/Haven/releases/latest', {
-      headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'haven-update-check' },
-    });
-    if (!r.ok) throw new Error(`GitHub HTTP ${r.status}`);
-    const data = await r.json();
-    const latestVersion = String(data.tag_name || '').replace(/^v/, '');
-    const cmp = compareVersions(currentVersion, latestVersion);
-    res.json({
-      currentVersion,
-      latestVersion,
-      updateAvailable: cmp < 0,
-      releaseUrl: data.html_url,
-      releaseNotes: data.body || '',
-      method,
-      ...instructions,
-    });
-  } catch (err) {
-    res.status(502).json({ error: 'Could not reach GitHub: ' + err.message, currentVersion, method, ...instructions });
-  }
-});
-
-function compareVersions(a, b) {
-  const pa = String(a).split('.').map(n => parseInt(n) || 0);
-  const pb = String(b).split('.').map(n => parseInt(n) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
-    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-  }
-  return 0;
-}
-
-app.post('/api/admin/update/run', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
-  const method = detectInstallMethod();
-  const instructions = getUpdateInstructions(method);
-  if (!instructions.runnable) {
-    return res.status(400).json({ error: instructions.message, method });
-  }
-  // Trigger an auto-backup first so we have a rollback point.
-  try { db.prepare("DELETE FROM server_settings WHERE key = 'auto_backup_last_run'").run(); } catch {}
-  try { runAutoBackup(); } catch (err) { console.error('[Update] Pre-update backup failed:', err); }
-
-  res.json({ ok: true, method, message: instructions.message });
-
-  // Run the update command in a detached child process so the parent can exit cleanly.
-  const { spawn } = require('child_process');
-  console.log(`🔄 [Update] Running update command for method=${method}: ${instructions.command}`);
-  setTimeout(() => {
-    try {
-      const child = spawn(instructions.command, {
-        cwd: process.cwd(),
-        shell: true,
-        detached: true,
-        stdio: 'ignore',
-      });
-      child.unref();
-    } catch (err) {
-      console.error('[Update] Failed to spawn update command:', err);
-    }
-    // Give the child a moment to start, then exit so the supervisor restarts us.
-    setTimeout(() => {
-      console.log('🔄 [Update] Exiting so supervisor restarts on new code…');
-      botAudioManager?.shutdown();
-      process.exit(0);
-    }, 1500);
-  }, 1500);
-});
+// ── Auto-cleanup, auto-backup, dynamic DNS and updates: src/routes/maintenance.js ──
+require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late });
 
 // ── Catch-all: 404 ──────────────────────────────────────
 // Must be registered AFTER every app.get/post/etc. handler — Express
@@ -5966,7 +3528,7 @@ function rotateCrashLogIfNeeded() {
     const stat = fs.statSync(CRASH_LOG);
     if (stat.size < MAX_CRASH_LOG_BYTES) return;
     const rotated = `${CRASH_LOG}.1`;
-    try { fs.unlinkSync(rotated); } catch {}
+    try { fs.unlinkSync(rotated); } catch { /* no older rotated log yet */ }
     try {
       fs.renameSync(CRASH_LOG, rotated);
     } catch {
@@ -6034,7 +3596,7 @@ process.on('exit', (code) => {
   if (code !== 0) {
     const ts = new Date().toISOString();
     const line = `[${ts}] Process exited with code ${code}\n`;
-    try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch {}
+    try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch { /* process is exiting; nowhere left to report a log write failure */ }
   }
 });
 
@@ -6154,7 +3716,7 @@ server.listen(PORT, HOST, () => {
 function gracefulShutdown(signal) {
   const ts = new Date().toISOString();
   const line = `[${ts}] Graceful shutdown: ${signal}\n`;
-  try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch {}
+  try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch { /* crash log is a diagnostic extra; shutdown continues */ }
   console.log(`\n${signal} received — shutting down`);
   botAudioManager?.shutdown();
   io.close();

@@ -317,7 +317,7 @@ module.exports = function register(socket, ctx) {
     const claimed = typeof data.recipientPublicKey === 'string' ? data.recipientPublicKey : '';
     if (!pinned || !pinned.public_key || pinned.public_key !== claimed) {
       let existing = null;
-      try { existing = pinned && pinned.public_key ? JSON.parse(pinned.public_key) : null; } catch {}
+      try { existing = pinned && pinned.public_key ? JSON.parse(pinned.public_key) : null; } catch { /* stored key not JSON: report the conflict with no key attached */ }
       return socket.emit('public-key-conflict', { existing });
     }
 

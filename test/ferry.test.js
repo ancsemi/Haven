@@ -8,6 +8,14 @@ const {
   sanitizeWebhookUsername,
   buildHavenContent,
   discordAvatarUrl,
+  translateHavenEmotes,
+  translateDiscordRefs,
+  translateHavenRefs,
+  roleMap,
+  isForumType,
+  matchForumTags,
+  discordTagIdsFor,
+  forumThreadName,
 } = require('../src/ferry');
 
 // Two pairings on one Haven channel, one of them sharing a channel name with
@@ -172,6 +180,8 @@ test('a stream announcement bot relays its link and thumbnail next to the text',
   // Reading the embed only for empty bodies relayed the ping line alone.
   const live = {
     content: '@everyone Streamer is now live!',
+    // Discord sets this when the ping really went out (the bot may ping everyone).
+    mention_everyone: true,
     embeds: [{
       type: 'rich',
       title: 'Streamer is playing Spira Speedruns',
@@ -216,14 +226,34 @@ test('a stream announcement bot relays its link and thumbnail next to the text',
   );
 });
 
-test('Discord custom emotes become readable shortcodes', () => {
-  // Relayed raw these read as "<:blue_heart:1178833036244652178>" mid-sentence.
-  assert.equal(buildHavenContent({ content: 'hi <:wave:1178833036244652178> there' }), 'hi :wave: there');
-  assert.equal(buildHavenContent({ content: '<a:spin:1178833036244652178>' }), ':spin:');
+test('Discord custom emotes keep their id so clients can draw them', () => {
+  // Clients render <:name:id> as the emote through the server's emote cache.
+  // Folding it to :name: left a bare shortcode on any server without a
+  // same-named emoji.
+  assert.equal(buildHavenContent({ content: 'hi <:wave:1178833036244652178> there' }), 'hi <:wave:1178833036244652178> there');
+  assert.equal(buildHavenContent({ content: '<a:spin:1178833036244652178>' }), '<a:spin:1178833036244652178>');
   // A lone angle-bracket expression that is not an emote is left alone.
   assert.equal(buildHavenContent({ content: 'a < b and c > d' }), 'a < b and c > d');
   // No mentions array means nothing to resolve it against, so it stays put.
   assert.equal(buildHavenContent({ content: '<@1178833036244652178>' }), '<@1178833036244652178>');
+});
+
+test('a Haven :name: goes to Discord as the guild emote of that name', () => {
+  const emojis = new Map([
+    ['wave', { id: '1178833036244652178', name: 'wave', animated: false }],
+    ['spin', { id: '1178833036244652179', name: 'spin', animated: true }],
+  ]);
+  assert.equal(
+    translateHavenEmotes('hi :wave: :Spin: :wave::spin:', emojis),
+    'hi <:wave:1178833036244652178> <a:spin:1178833036244652179> <:wave:1178833036244652178><a:spin:1178833036244652179>'
+  );
+  // Unknown names, the colons in a time, and tokens already in Discord's
+  // form all stay put.
+  assert.equal(
+    translateHavenEmotes(':nope: at 10:30:45 <:wave:1178833036244652178>', emojis),
+    ':nope: at 10:30:45 <:wave:1178833036244652178>'
+  );
+  assert.equal(translateHavenEmotes(':wave:', null), ':wave:');
 });
 
 test('a custom trigger is honored and the default is not', () => {
@@ -284,4 +314,100 @@ test('avatar URLs cover custom, animated, and both default schemes', () => {
   assert.match(discordAvatarUrl({ id: '80351110224678912', discriminator: '0' }), /embed\/avatars\/[0-5]\.png/);
   assert.match(discordAvatarUrl({ id: '80351110224678912', discriminator: '1234' }), /embed\/avatars\/[0-4]\.png/);
   assert.equal(discordAvatarUrl(null), null);
+});
+
+// Roles and channels between the two sides. "hunters" is a role anybody on
+// Discord may mention; "Mods" is not, so it never pings from either side.
+const GUILD = {
+  roles: roleMap([
+    { id: '111111111111111111', name: '@everyone', mentionable: true },
+    { id: '222222222222222222', name: 'hunters', mentionable: true },
+    { id: '333333333333333333', name: 'Mods', mentionable: false },
+    { id: '444444444444444444', name: 'Game Night', mentionable: true },
+  ], '111111111111111111'),
+  channelNames: new Map([['555555555555555555', 'general-chat'], ['666666666666666666', 'clips']]),
+  channels: new Map(),
+};
+
+test('@everyone from Discord pings only when Discord says it did', () => {
+  const typed = buildHavenContent({ content: 'hey @everyone and @here', attachments: [], embeds: [] });
+  assert.equal(typed, 'hey @\u200Beveryone and @\u200Bhere');
+  const real = buildHavenContent({ content: '@everyone meeting now', mention_everyone: true, attachments: [], embeds: [] });
+  assert.equal(real, '@everyone meeting now');
+});
+
+test('Discord role and channel mentions arrive as names', () => {
+  const out = translateDiscordRefs('<@&222222222222222222> <@&333333333333333333> <#555555555555555555> <#666666666666666666> <#999999999999999999>', GUILD, {
+    pingRoles: true,
+    havenChannelFor: (id) => (id === '666666666666666666' ? 'video clips' : null),
+  });
+  // The mentionable role pings its Haven namesake; the other only shows its name.
+  // A paired channel reads as its Haven channel, an unknown one is left alone.
+  assert.equal(out, '@hunters @​Mods #general-chat #video_clips <#999999999999999999>');
+  // With pings off nothing pings, but the names still read.
+  assert.equal(translateDiscordRefs('<@&222222222222222222>', GUILD, { pingRoles: false }), '@​hunters');
+  assert.equal(roleMap([{ id: '111111111111111111', name: '@everyone' }], '111111111111111111').size, 0);
+});
+
+test('a Haven @Role and #channel go to Discord as its own tokens', () => {
+  const r = translateHavenRefs('@hunters @game night @Mods @​hunters a@hunters.com #general_chat #clips #nope https://x.io/#clips', GUILD, { pingRoles: true });
+  assert.equal(r.content, '<@&222222222222222222> <@&444444444444444444> @Mods @​hunters a@hunters.com <#555555555555555555> <#666666666666666666> #nope https://x.io/#clips');
+  assert.deepEqual(r.roleIds, ['222222222222222222', '444444444444444444']);
+  // Pings off: roles stay text, channels still link since they ping nobody.
+  const off = translateHavenRefs('@hunters #clips', GUILD, { pingRoles: false });
+  assert.equal(off.content, '@hunters <#666666666666666666>');
+  assert.deepEqual(off.roleIds, []);
+  // A paired channel wins over a Discord channel that happens to share the name.
+  assert.equal(translateHavenRefs('#clips', GUILD, { discordChannelFor: () => '777777777777777777' }).content, '<#777777777777777777>');
+});
+
+test('two Discord roles with one name are ambiguous and neither is pinged', () => {
+  const g = { roles: roleMap([
+    { id: '222222222222222222', name: 'hunters', mentionable: true },
+    { id: '888888888888888888', name: 'Hunters', mentionable: true },
+  ], '1'), channelNames: new Map() };
+  const r = translateHavenRefs('@hunters go', g, { pingRoles: true });
+  assert.equal(r.content, '@hunters go');
+  assert.deepEqual(r.roleIds, []);
+});
+
+// ── Forums ──────────────────────────────────────────────────
+// The full Discord <-> Haven forum flow runs against a stand-in Discord in
+// test/ferryForums.test.js. These are the pure pieces it relies on.
+
+test('only forum and media channels count as forums', () => {
+  assert.equal(isForumType(15), true);
+  assert.equal(isForumType(16), true);
+  for (const t of [0, 5, 11, 12, null, undefined, '0']) assert.equal(isForumType(t), false, `type ${t}`);
+});
+
+test('Discord tags map onto the Haven forum tags by name, ignoring case', () => {
+  const haven = JSON.stringify([{ name: 'Bug' }, { name: 'idea', emoji: '💡' }]);
+  assert.deepEqual(matchForumTags(['bug', 'IDEA', 'Unknown'], haven), ['Bug', 'idea']);
+  // No Haven tags, bad JSON, or no Discord tags all give nothing.
+  assert.deepEqual(matchForumTags(['bug'], null), []);
+  assert.deepEqual(matchForumTags(['bug'], 'not json'), []);
+  assert.deepEqual(matchForumTags([], haven), []);
+  // Discord allows five on a post and so does Haven.
+  const many = JSON.stringify('abcdefg'.split('').map(name => ({ name })));
+  assert.equal(matchForumTags('abcdefg'.split(''), many).length, 5);
+});
+
+test('Haven tags become Discord tag ids, never a moderated one', () => {
+  const discord = [
+    { id: '111111111111111111', name: 'Bug' },
+    { id: '222222222222222222', name: 'Staff pick', moderated: true },
+  ];
+  assert.deepEqual(discordTagIdsFor(['bug', 'staff pick', 'nope'], discord), ['111111111111111111']);
+  assert.deepEqual(discordTagIdsFor(['bug'], undefined), []);
+  assert.deepEqual(discordTagIdsFor(null, discord), []);
+});
+
+test('a Discord post name is 1 to 100 characters and never empty', () => {
+  assert.equal(forumThreadName('  Hello   world ', 'body'), 'Hello world');
+  // An untitled topic is named after its first line.
+  assert.equal(forumThreadName('', 'first line\nsecond line'), 'first line');
+  assert.equal(forumThreadName(null, '   '), 'Haven topic');
+  const long = forumThreadName('x'.repeat(300), '');
+  assert.equal(long.length, 100);
 });

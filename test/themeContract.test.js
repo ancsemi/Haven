@@ -240,7 +240,7 @@ test('authentication regions are present exactly once', () => {
 });
 
 test('every public token has a core default and is covered by the theme template', () => {
-  const coreCss = read('public/css/style.css');
+  const coreCss = require('./coreCss').readCoreCss();
   const defaultThemeBlock = coreCss.match(/:root,\s*\[data-theme="haven"\]\s*\{([\s\S]*?)\n\}/)?.[1] || '';
   const coreProperties = declaredProperties(defaultThemeBlock);
   const template = read('themes/custom.css.example');
@@ -354,9 +354,9 @@ test('core semantic fills use their paired foreground tokens', () => {
     'music.css:.music-search-picker-play'
   ]);
   const statePairs = [
-    ['style.css', '.update-banner:hover', '--accent-text'],
-    ['style.css', '.image-queue-remove:hover', '--danger-text'],
-    ['style.css', '.ferry-step-done .ferry-step-num', '--success-text']
+    ['style-sidebar.css', '.update-banner:hover', '--accent-text'],
+    ['style-tags-uploads-search.css', '.image-queue-remove:hover', '--danger-text'],
+    ['style-gallery-ferry-forums.css', '.ferry-step-done .ferry-step-num', '--success-text']
   ];
   const cssDirectory = path.join(ROOT, 'public/css');
   const stylesheets = fs.readdirSync(cssDirectory).filter(file => file.endsWith('.css'));

@@ -4,6 +4,7 @@ export default {
 
 _renderOnlineUsers(users) {
   this._lastOnlineUsers = users;
+  try { this._restyleMessageAuthors?.(); } catch { /* cosmetic */ }
   this._refreshOpenProfileCard();
   if (this._activeDMPip) this._refreshDMPipHeader?.();   // (#5574)
   const el = document.getElementById('online-users');
@@ -75,6 +76,20 @@ _renderOnlineUsers(users) {
 
   el.innerHTML = html;
 
+  // Re-point the hover card at the rebuilt row. This list is redrawn on every
+  // presence update (someone talking in voice triggers one every few seconds)
+  // and the card's safety net reads a detached trigger as "pointer left", so
+  // without this the card closed by itself under a resting mouse (#5608).
+  const hovered = this._hoverTarget;
+  if (hovered && !hovered.isConnected && hovered.classList && hovered.classList.contains('user-item')) {
+    const uid = hovered.dataset.userId;
+    const fresh = uid ? el.querySelector(`.user-item[data-user-id="${uid}"]`) : null;
+    if (fresh) {
+      this._hoverTarget = fresh;
+      if (this._profilePopupAnchor === hovered) this._profilePopupAnchor = fresh;
+    }
+  }
+
   // Bind gear buttons: same unified menu as right-click, anchored to the gear
   el.querySelectorAll('.user-gear-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -96,52 +111,6 @@ _renderOnlineUsers(users) {
       this.socket.emit('start-dm', { targetUserId: targetId });
       // Re-enable after a timeout in case no response
       setTimeout(() => { btn.disabled = false; btn.style.opacity = ''; }, 5000);
-    });
-  });
-},
-
-// Lightweight channel picker for the user gear menu's "Add to Channel"
-// action. Lists every non-DM, non-private top-level channel the caller can
-// see (admins also see private). Server's `invite-to-channel` handler
-// validates membership/permissions and rejects already-members with a
-// toast, so no need to pre-filter by target's current memberships here.
-_openGearMenuChannelPicker(userId, username, channels) {
-  if (!channels || channels.length === 0) {
-    this._showToast?.(t('users.no_invite_channels'), 'info');
-    return;
-  }
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay aml-channel-picker-overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '100002';
-  overlay.innerHTML = `
-    <div class="modal aml-ch-picker">
-      <div class="aml-ch-picker-header">
-        <h4 class="aml-ch-picker-title">${t('users.add_to_channel_title', { name: this._escapeHtml(username) })}</h4>
-      </div>
-      <div class="aml-channel-list">
-        ${channels.map(c => `
-          <button class="aml-channel-row gm-add-ch-btn" data-cid="${c.id}" data-cname="${this._escapeHtml(c.name)}">
-            <span class="aml-ch-hash">#</span>
-            <span class="aml-ch-name">${this._escapeHtml(c.name)}</span>
-          </button>
-        `).join('')}
-      </div>
-      <div class="modal-actions aml-ch-picker-actions">
-        <button class="btn-sm aml-ch-cancel">${t('modals.common.cancel')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.aml-ch-cancel').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelectorAll('.gm-add-ch-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const channelId = parseInt(btn.dataset.cid);
-      if (!channelId) return;
-      this.socket.emit('invite-to-channel', { targetUserId: userId, channelId });
-      close();
     });
   });
 },
@@ -197,17 +166,20 @@ _renderUserItem(u, scoreLookup) {
   const roleIconBefore = roleIconHtml && !iconAfterName ? roleIconHtml : '';
   const roleIconAfter = roleIconHtml && iconAfterName ? roleIconHtml : '';
   const roleDot = (roleDisplayMode === 'dot' && u.role)
-    ? `<span class="user-role-dot" style="background:${roleColor}" title="${this._escapeHtml(u.role.name)}"></span>`
+    ? `<span class="user-role-dot" style="background:${this._roleFill(u.role, roleColor)}" title="${this._escapeHtml(u.role.name)}"></span>`
     : '';
 
   // In colored-name mode, apply role color to the username
   const nameStyle = (roleDisplayMode === 'colored-name' && u.role && roleColor)
     ? ` style="color:${roleColor}"`
     : '';
+  // A gradient role paints the name itself (see _roleNameHtml).
+  const nameText = this._getNickname(u.id, u.username);
+  const nameHtml = nameStyle ? this._roleNameHtml(u.role, nameText) : this._escapeHtml(nameText);
 
   // Keep the old badge for message area (msg-role-badge) but hide in sidebar
   const roleBadge = u.role
-    ? `<span class="user-role-badge" style="color:${this._safeColor(u.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(u.role.name)}">${this._escapeHtml(u.role.name)}</span>`
+    ? `<span class="user-role-badge" style="color:${this._safeColor(u.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(u.role.name)}">${this._roleNameHtml(u.role, u.role.name)}</span>`
     : '';
   // (#5381) Mark guest accounts with a small badge so people know not to
   // expect long-term presence.
@@ -255,7 +227,7 @@ _renderUserItem(u, scoreLookup) {
       <div class="user-item-text">
         <div class="user-item-line">
           ${roleDot}${roleIconBefore}
-          <span class="user-item-name"${nameStyle}${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
+          <span class="user-item-name"${nameStyle}${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${nameHtml}</span>
           ${roleIconAfter}
           ${roleBadge}
           ${guestBadge}
@@ -623,6 +595,15 @@ _activityMeta(act) {
   };
 },
 
+// A Steam game's art address carries its app id, which is all the store page
+// needs, so the game on a profile card can link there (#5679).
+_activityLink(act) {
+  const m = act && act.type === 'playing' && typeof act.image === 'string'
+    ? act.image.match(/^https:\/\/[a-z0-9.-]*steamstatic\.com\/steam\/apps\/(\d+)\//)
+    : null;
+  return m ? `https://store.steampowered.com/app/${m[1]}/` : '';
+},
+
 /** Milliseconds → "m:ss". */
 _formatClock(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -767,8 +748,12 @@ _profileActivityHtml(activity) {
       const details = act.details
         ? `<span class="profile-activity-details">${this._scrollText(act.details)}</span>`
         : '';
+      const link = this._activityLink(act);
+      const open = link
+        ? `<a class="profile-activity-row profile-activity-link" href="${this._escapeHtml(link)}" target="_blank" rel="noopener noreferrer" title="${this._escapeHtml(t('users.activity_open_steam'))}">`
+        : '<div class="profile-activity-row">';
       return `
-        <div class="profile-activity-row">
+        ${open}
           ${art}
           <span class="profile-activity-text">
             <span class="profile-activity-verb">${act.type === 'listening' && act.paused ? `⏸ ${t('users.activity_paused')}` : meta.verb}</span>
@@ -776,7 +761,7 @@ _profileActivityHtml(activity) {
             ${details}
             ${this._activityProgressHtml(act)}
           </span>
-        </div>`;
+        ${link ? '</a>' : '</div>'}`;
     })
     .filter(Boolean);
 
@@ -805,7 +790,13 @@ _showProfilePopup(profile) {
   // If this was a hover-triggered popup but the mouse already left, abort
   if (this._isHoverPopup && !this._hoverTarget) return;
 
+  // Closing any earlier card clears the hover target. Keep it for the hover
+  // card about to be drawn: without it the next mouseover on the same name
+  // read as a switch to a new trigger, closed the card and reopened it 350ms
+  // later, so it flickered under a resting mouse (#5608).
+  const hoverTarget = this._isHoverPopup ? this._hoverTarget : null;
   this._closeProfilePopup();
+  if (hoverTarget) this._hoverTarget = hoverTarget;
 
   const isSelf = profile.id === this.user.id;
   const currentNick = !isSelf ? (this._nicknames[profile.id] || '') : '';
@@ -824,8 +815,8 @@ _showProfilePopup(profile) {
   // Roles
   const rolesHtml = (profile.roles && profile.roles.length > 0)
     ? profile.roles.map(r => {
-        const rIcon = r.icon ? `<img class="role-icon" src="${this._escapeHtml(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._safeColor(r.color, 'var(--text-muted)')}"></span>`;
-        return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._escapeHtml(r.name)}</span>`;
+        const rIcon = r.icon ? `<img class="role-icon" src="${this._escapeHtml(r.icon)}" alt="">` : `<span class="profile-role-dot" style="background:${this._roleFill(r, 'var(--text-muted)')}"></span>`;
+        return `<span class="profile-popup-role" style="border-color:${this._safeColor(r.color, 'var(--border-light)')}; color:${this._safeColor(r.color, 'var(--text-secondary)')}">${rIcon}${this._roleNameHtml(r, r.name)}</span>`;
       }).join('')
     : '';
 
@@ -843,7 +834,7 @@ _showProfilePopup(profile) {
     : (isSelf ? `<div class="profile-popup-bio profile-bio-empty">${t('users.no_bio')}</div>` : '');
 
   // Join date
-  const joinDate = profile.createdAt ? new Date(profile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  const joinDate = profile.createdAt ? this._fmtDate(profile.createdAt, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 
   // Action buttons. Nickname lives in the unified menu; the gear opens that
   // menu for anyone with mod powers over this user.
@@ -906,11 +897,21 @@ _showProfilePopup(profile) {
   this._startActivityProgress(popup);
 
   // Hover mode is closed by the mouseover/mouseleave handlers; this is a safety
-  // net in case one of them misses.
+  // net in case one of them misses. It only fires once the pointer has actually
+  // left the trigger. A fixed three-second timer closed the card while the
+  // mouse was still resting on the name, and the next nudge of the mouse opened
+  // it again, so it looked like it flickered on its own (#5608).
   if (this._isHoverPopup) {
-    this._hoverAutoCloseTimer = setTimeout(() => {
-      if (this._isHoverPopup) this._closeProfilePopup();
-    }, 3000);
+    const stillHovering = () => {
+      const el = this._hoverTarget;
+      try { return !!(el && el.isConnected && el.matches(':hover')); } catch { return false; }
+    };
+    const check = () => {
+      if (!this._isHoverPopup) return;
+      if (stillHovering()) { this._hoverAutoCloseTimer = setTimeout(check, 1000); return; }
+      this._closeProfilePopup();
+    };
+    this._hoverAutoCloseTimer = setTimeout(check, 3000);
   }
 
   // Close button
@@ -1063,47 +1064,6 @@ _closeProfilePopup() {
   clearTimeout(this._hoverFadeTimeout);
 },
 
-_openEditProfileModal(profile) {
-  // Create a simple modal for editing bio and status
-  this._closeProfilePopup();
-  const existing = document.getElementById('edit-profile-modal');
-  if (existing) existing.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'edit-profile-modal';
-  modal.className = 'modal-overlay';
-  modal.style.display = 'flex';
-  modal.innerHTML = `
-    <div class="modal edit-profile-modal-box">
-      <h3>${t('users.edit_profile_modal_title')}</h3>
-      <label class="edit-profile-label">${t('users.bio_label')} <span class="muted-text">${t('users.bio_max_hint')}</span></label>
-      <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" placeholder="${t('users.bio_placeholder')}">${this._escapeHtml(profile.bio || '')}</textarea>
-      <div class="edit-profile-char-count"><span id="edit-profile-chars">${(profile.bio || '').length}</span>/190</div>
-      <div class="modal-actions">
-        <button class="btn-sm" id="edit-profile-cancel">${t('modals.common.cancel')}</button>
-        <button class="btn-sm btn-accent" id="edit-profile-save">${t('modals.common.save')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-
-  const bioInput = document.getElementById('edit-profile-bio');
-  const charCount = document.getElementById('edit-profile-chars');
-
-  bioInput.addEventListener('input', () => {
-    charCount.textContent = bioInput.value.length;
-  });
-  bioInput.focus();
-
-  document.getElementById('edit-profile-cancel').addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-
-  document.getElementById('edit-profile-save').addEventListener('click', () => {
-    this.socket.emit('set-bio', { bio: bioInput.value });
-    modal.remove();
-  });
-},
-
 // ── Voice Users ───────────────────────────────────────
 
 _renderVoiceUsers(users, channelCode) {
@@ -1152,7 +1112,9 @@ _renderVoiceUsers(users, channelCode) {
     const isSelf = u.id === this.user.id;
     const talking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
     const dotColor = this._safeColor(u.roleColor);
-    const dotStyle = dotColor ? ` style="background:${dotColor};--voice-dot-color:${dotColor}"` : '';
+    // A gradient role fills the dot with its gradient; the talking glow
+    // keeps the role's first color.
+    const dotStyle = dotColor ? ` style="background:${this._roleFill(u, dotColor)};--voice-dot-color:${dotColor}"` : '';
 
     // Stream indicators: is this user streaming? watching?
     // We treat the user as streaming if EITHER the server-side `streams`
@@ -1181,7 +1143,9 @@ _renderVoiceUsers(users, channelCode) {
         ? t(viewerCount === 1 ? 'users.streaming_viewers_one' : 'users.streaming_viewers_other', { count: viewerCount })
         : t('users.streaming_no_viewers');
       const viewerNames = viewers.map(v => v.username).join(', ');
-      const liveTitle = this._escapeHtml(viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel);
+      // The badge is also the way back into a share you dismissed or did not
+      // auto-accept, so the tooltip says so (#5636).
+      const liveTitle = this._escapeHtml(`${viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel}. ${t('users.stream_click_to_watch')}`);
       streamBadge = `<span class="voice-stream-badge live" title="${liveTitle}">🔴${viewerCount ? ' ' + viewerCount : ''}</span>`;
     }
     if (hasWebcam) {
@@ -1201,17 +1165,18 @@ _renderVoiceUsers(users, channelCode) {
     const statusIcons = [];
     if (u.isMuted) statusIcons.push(`<span class="voice-status-icon is-muted" title="${t('voice.status_muted')}">🎙️</span>`);
     if (u.isDeafened) statusIcons.push(`<span class="voice-status-icon is-deafened" title="${t('voice.status_deafened')}">🔊</span>`);
-    const statusIconsHtml = statusIcons.length
-      ? `<span class="voice-status-icons">${statusIcons.join('')}</span>`
-      : '';
+    // Always rendered, even empty: its margin-left:auto is what pins the live
+    // badge to the right edge, so the badge stays put when the mute icon comes
+    // and goes and is not a moving target for someone on push to talk (#5636).
+    const statusIconsHtml = `<span class="voice-status-icons">${statusIcons.join('')}</span>`;
     const botBadge = u.isBot ? '<span class="bot-badge">BOT</span>' : '';
     return `
       <div class="user-item voice-user-item${talking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}"${dotColor ? ` style="--voice-dot-color:${dotColor}"` : ''}>
         <span class="user-dot voice"${dotStyle}></span>
         <span class="user-item-name"${this._nicknames[u.id] ? ` title="${this._escapeHtml(u.username)}"` : ''}>${this._escapeHtml(this._getNickname(u.id, u.username))}</span>
         ${botBadge}
-        ${streamBadge}
         ${statusIconsHtml}
+        ${streamBadge}
         ${isSelf || u.isBot ? '' : `<button class="voice-user-menu-btn" data-user-id="${u.id}" data-username="${this._escapeHtml(u.username)}" title="${t('users.more_actions')}">⋯</button>`}
       </div>
     `;
@@ -1261,26 +1226,44 @@ _renderVoiceUsers(users, channelCode) {
       e.stopPropagation();
       const userId = parseInt(badge.closest('.voice-user-item')?.dataset.userId);
       if (isNaN(userId)) return;
-      const hiddenTile = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
-      if (hiddenTile) {
-        this._showStreamTile(`screen-tile-${userId}`, userId);
-      } else if (!document.getElementById(`screen-tile-${userId}`)) {
-        // No tile at all (e.g. we joined after they went live and their stream
-        // never reached us, or we closed our view and the sharer's tile was
-        // since torn down) — actively ask the sharer to (re)send. Arm the
-        // retry watchdog too: a single renegotiate request often loses the
-        // race (the sharer may be mid-signaling-change), which left the viewer
-        // stuck on "Requesting stream…" forever with no second attempt. The
-        // watchdog re-requests a few times until a live video track arrives.
-        // (#5426)
-        if (this.voice) {
-          this.voice.requestScreenStream(userId);
-          this.voice._watchForScreenStream(userId);
-        }
-        this._showToast?.(t('voice.requesting_stream'), 'info');
-      }
+      this._watchStream(userId);
     });
   });
+},
+
+// Open someone's live stream from the voice list: the red badge and the
+// Watch Stream menu entry both land here.
+_watchStream(userId) {
+  const hiddenTile = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
+  if (hiddenTile) { this._showStreamTile(`screen-tile-${userId}`, userId); return; }
+  if (document.getElementById(`screen-tile-${userId}`)) return;
+  // With auto-accept off the share arrived and waited on the Join prompt.
+  // Once that prompt was gone, asking the sharer to resend brought the same
+  // stream back to the same prompt check, so the click only ever produced
+  // "Requesting stream". Clicking here is the accept: open what already
+  // arrived, or take the next arrival without the prompt (#5636).
+  const offered = this._pendingStreamOffers && this._pendingStreamOffers.get(userId);
+  if (offered && offered.getVideoTracks().some(tr => tr.readyState === 'live')) {
+    this._handleScreenStream(userId, offered, { force: true });
+    return;
+  }
+  this._pendingStreamOffers?.delete(userId);
+  if (!this._acceptedStreams) this._acceptedStreams = new Set();
+  this._acceptedStreams.add(userId);
+  if (!this.voice) return;
+  // Media may already be flowing into a receiver nobody rendered.
+  if (this.voice._deliverScreenFromReceivers?.(userId)) return;
+  // No tile at all (e.g. we joined after they went live and their stream
+  // never reached us, or we closed our view and the sharer's tile was
+  // since torn down) — actively ask the sharer to (re)send. Arm the
+  // retry watchdog too: a single renegotiate request often loses the
+  // race (the sharer may be mid-signaling-change), which left the viewer
+  // stuck on "Requesting stream…" forever with no second attempt. The
+  // watchdog re-requests a few times until a live video track arrives.
+  // (#5426)
+  this.voice.requestScreenStream(userId);
+  this.voice._watchForScreenStream(userId);
+  this._showToast?.(t('voice.requesting_stream'), 'info');
 },
 
 _showVoiceUserMenu(anchorEl, userId, username) {
@@ -1350,17 +1333,7 @@ _showVoiceUserMenu(anchorEl, userId, username) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btn.dataset.action === 'watch-stream') {
-        const hidden = document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`);
-        if (hidden) {
-          this._showStreamTile(`screen-tile-${userId}`, userId);
-        } else if (this.voice) {
-          // No tile yet — ask the sharer to (re)send their stream, and arm the
-          // retry watchdog so a single dropped renegotiate doesn't strand the
-          // viewer on "Requesting stream…" with no follow-up attempt. (#5426)
-          this.voice.requestScreenStream(userId);
-          this.voice._watchForScreenStream(userId);
-          this._showToast?.(t('voice.requesting_stream'), 'info');
-        }
+        this._watchStream(userId);
         this._closeVoiceUserMenu();
       } else if (btn.dataset.action === 'mute-user') {
         // Mute: toggle their volume to 0 so YOU can't hear THEM
@@ -1425,7 +1398,7 @@ _setVoiceVolume(userId, vol) {
     const vols = JSON.parse(localStorage.getItem('haven_voice_volumes') || '{}');
     vols[userId] = vol;
     localStorage.setItem('haven_voice_volumes', JSON.stringify(vols));
-  } catch { /* ignore */ }
+  } catch { /* storage blocked or corrupt: the volume holds for this session only */ }
 },
 
 // ── Nicknames ─────────────────────────────────────────────
@@ -1556,7 +1529,8 @@ _refreshNicknameDisplays() {
       const nick = this._getNickname(uid, realName);
       const authorEl = el.querySelector('.message-author');
       if (authorEl) {
-        authorEl.textContent = nick;
+        // A gradient role name keeps its span; only the words change.
+        (authorEl.querySelector('.role-gradient') || authorEl).textContent = nick;
         authorEl.title = nick !== realName ? realName : '';
       }
     }

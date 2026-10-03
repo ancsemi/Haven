@@ -203,11 +203,13 @@ class HavenE2E {
 
   /**
    * Re-wrap and upload the private key with a new wrapping key.
-   * Call after password change (derive new key from new password).
+   * Call after password change (derive new key from new password), or with
+   * { separatePassphrase } when switching between the login password and a
+   * passphrase of the user's own.
    */
-  async reWrapKey(socket, newWrappingKey) {
+  async reWrapKey(socket, newWrappingKey, extra = {}) {
     if (!this._ready || !this._keyPair) return;
-    await this._uploadBackup(socket, newWrappingKey);
+    await this._uploadBackup(socket, newWrappingKey, extra);
   }
 
   /**
@@ -453,12 +455,12 @@ class HavenE2E {
     });
   }
 
-  async _uploadBackup(socket, secret) {
+  async _uploadBackup(socket, secret, extra = {}) {
     const { encryptedKey, salt } = await this._wrap(secret);
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => reject(new Error('Upload timeout')), 5000);
       socket.once('encrypted-key-stored', () => { clearTimeout(t); resolve(); });
-      socket.emit('store-encrypted-key', { encryptedKey, salt });
+      socket.emit('store-encrypted-key', { encryptedKey, salt, ...extra });
     });
   }
 

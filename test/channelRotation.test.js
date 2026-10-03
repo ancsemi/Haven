@@ -138,11 +138,10 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
     activeScreenSharers: new Map([[oldCode, new Set([1])]]),
     activeScreenSessions: new Map([[oldCode, new Map([[
       1,
-      { transport: 'native', sessionId: 'native-session-1234' },
+      { transport: 'browser', sessionId: null },
     ]])]]),
     activeWebcamUsers: new Map([[oldCode, new Set([1])]]),
     streamViewers: new Map([[`${oldCode}:1`, new Set([2])]]),
-    nativeScreenOfferWindows: new Map([[`1:2:${oldCode}`, [Date.now()]]]),
     pendingVoiceLeave: new Map([[`1:${oldCode}`, pendingVoice]]),
     pendingTempDelete: new Map([[oldCode, pendingTempTimer]]),
     botAudioManager: {
@@ -166,7 +165,6 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
     assert.equal(state[name].has(newCode), true, `${name} missed the new code`);
   }
   assert.equal(state.streamViewers.has(`${newCode}:1`), true);
-  assert.equal(state.nativeScreenOfferWindows.has(`1:2:${newCode}`), true);
   assert.equal(state.pendingVoiceLeave.has(`1:${newCode}`), true);
   assert.equal(pendingVoice.code, newCode);
   assert.equal(state.pendingTempDelete.get(newCode), pendingTempTimer);
@@ -241,7 +239,7 @@ test('a temporary-channel timer deletes by stable id after code rotation', () =>
     const channelUsers = new Map([['22222222', new Map()]]);
     const voiceUsers = new Map([['22222222', new Map()]]);
     const activeScreenSharers = new Map([['22222222', new Set([1])]]);
-    const activeScreenSessions = new Map([['22222222', new Map([[1, { transport: 'native' }]])]]);
+    const activeScreenSessions = new Map([['22222222', new Map([[1, { transport: 'browser' }]])]]);
     const pendingTempDelete = new Map([['22222222', { id: 'timer' }]]);
     let deleted;
     let stoppedAudio;

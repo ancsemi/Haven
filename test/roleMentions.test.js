@@ -36,7 +36,7 @@ test('nothing to strip leaves the message untouched', () => {
 });
 
 // ── client side ───────────────────────────────────────────────────────────
-const MODULES = ['app-utilities.js', 'app-context.js'].map(name => ({
+const MODULES = ['app-utilities.js', 'app-message-content.js', 'app-threads.js', 'app-context.js'].map(name => ({
   name,
   source: fs.readFileSync(path.join(ROOT, 'public/js/modules', name), 'utf8'),
 }));

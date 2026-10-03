@@ -1,0 +1,1418 @@
+﻿/* Haven core styles, part 13 of 16: status dots, toggles, DM categories, rich presence, Connections, the language picker and role badges. Loaded in order by style.css; the order matters. */
+/* Fold arrow on the topic bar (#5625). Folded, the bar is a thin strip with
+   just the arrow at the right, so the placeholder stops taking a line. */
+.channel-topic-bar { display: flex; align-items: center; gap: 0.5rem; }
+.channel-topic-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.channel-topic-toggle { flex: none; margin-left: auto; background: none; border: 0; color: inherit; opacity: 0.55; cursor: pointer; font-size: 0.75rem; line-height: 1; padding: 0 0.25rem; }
+.channel-topic-toggle:hover { opacity: 1; }
+.channel-topic-bar.collapsed { padding-top: 0; padding-bottom: 0; min-height: 0.8rem; }
+.channel-topic-bar.collapsed .channel-topic-text { display: none; }
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   User Status Dots
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* DND: square — distinct shape */
+.user-dot.dnd {
+  background-color: var(--danger) !important;
+  box-shadow: 0 0 4px var(--danger);
+  border-radius: 0.125rem;
+}
+
+/* Away: half-circle dome */
+.user-dot.away {
+  background-color: #faa61a !important;
+  box-shadow: 0 0 4px rgba(250, 166, 26, 0.4);
+  border-radius: 0.125rem 0.125rem 50% 50%;
+}
+
+/* Invisible: hollow circle */
+.user-dot.invisible {
+  background-color: transparent !important;
+  border: 2px solid var(--text-muted);
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+.user-status-text {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+  max-width: 6.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Status Picker
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* The status dot doubles as the control that opens the status menu, but a bare
+   8px dot reads as an indicator, not something you can click. It now sits
+   inside a real button whose surface is about 1.5x the dot's diameter, so the
+   affordance is obvious while staying smaller than the rename/logout icons
+   beside it. The dot keeps all its own state styling (dnd square, away dome,
+   invisible ring) untouched inside. */
+.status-picker-btn {
+  /* 1.125rem (18px at 100% zoom), not 17px: with a 1px border the content box
+     is 16px, so the 8px dot centres on whole pixels (4px a side). At 17px the
+     gap works out to 4.5px and the browser snaps it, painting the dot visibly
+     off-centre. In rem so it scales with the dot, which is 0.5rem. */
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform 0.15s;
+}
+
+.status-picker-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+  transform: scale(1.1);
+}
+
+.status-picker-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Clicks belong to the button; the dot is purely decorative now. */
+.status-picker-dot {
+  cursor: pointer;
+  pointer-events: none;
+}
+
+.status-picker {
+  position: fixed;
+  left: 10px;
+  right: auto;
+  bottom: auto;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.375rem 0;
+  min-width: 12.5rem;
+  width: 13.75rem;
+  z-index: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.status-option {
+  padding: 0.375rem 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.status-option:hover {
+  background: var(--bg-hover);
+}
+
+.status-option .user-dot {
+  position: static;
+  flex-shrink: 0;
+}
+
+.status-text-row {
+  padding: 0.375rem 0.75rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+}
+
+.status-text-row input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.status-text-row input:focus {
+  border-color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Toggle Style — sliding switches for on/off settings
+   ═══════════════════════════════════════════════════════════════════
+   Settings > Layout & Density picks between sliders (default) and classic
+   boxes; the choice lands on <html data-toggle-style>. theme-init.js sets it
+   pre-paint so nothing flips shape after load.
+
+   Scope is deliberate. A switch says "this setting is on or off", while a
+   checkbox says "this item is selected", so only genuine settings rows are
+   listed here. Permission grids (.rac-perm-item, .cr-perm-toggle), channel and
+   media pickers, backup contents (.backup-include), poll votes and the ToS box
+   stay as checkboxes on purpose — they are lists you tick, and a column of
+   switches there would read as a wall of settings and take twice the width.
+
+   These stay real <input type="checkbox"> elements, so keyboard focus, the
+   space key, labels and screen readers all keep working untouched. */
+:root[data-toggle-style="switch"] .toggle-row > input[type="checkbox"],
+:root[data-toggle-style="switch"] .checkbox-row > input[type="checkbox"]:not(.backup-include),
+:root[data-toggle-style="switch"] .status-activity-toggle > input[type="checkbox"],
+:root[data-toggle-style="switch"] .android-beta-promo-dismiss-label > input[type="checkbox"],
+:root[data-toggle-style="switch"] .desktop-promo-dismiss-label > input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 2.125rem;    /* 34px */
+  height: 1.25rem;    /* 20px */
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0.625rem;
+  background: var(--bg-tertiary);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: pointer;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* The knob. Sized off the track so both scale together if the track changes. */
+:root[data-toggle-style="switch"] .toggle-row > input[type="checkbox"]::after,
+:root[data-toggle-style="switch"] .checkbox-row > input[type="checkbox"]:not(.backup-include)::after,
+:root[data-toggle-style="switch"] .status-activity-toggle > input[type="checkbox"]::after,
+:root[data-toggle-style="switch"] .android-beta-promo-dismiss-label > input[type="checkbox"]::after,
+:root[data-toggle-style="switch"] .desktop-promo-dismiss-label > input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--text-muted);
+  /* Positioned with `left` rather than a transform. The travel is 16px on a
+     one-off click, so there's nothing to gain from compositing it, and `left`
+     is readable from getComputedStyle on a pseudo-element, which keeps the
+     knob position testable. */
+  transition: left 0.18s ease, background 0.18s ease;
+}
+
+:root[data-toggle-style="switch"] .toggle-row > input[type="checkbox"]:checked,
+:root[data-toggle-style="switch"] .checkbox-row > input[type="checkbox"]:not(.backup-include):checked,
+:root[data-toggle-style="switch"] .status-activity-toggle > input[type="checkbox"]:checked,
+:root[data-toggle-style="switch"] .android-beta-promo-dismiss-label > input[type="checkbox"]:checked,
+:root[data-toggle-style="switch"] .desktop-promo-dismiss-label > input[type="checkbox"]:checked {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+:root[data-toggle-style="switch"] .toggle-row > input[type="checkbox"]:checked::after,
+:root[data-toggle-style="switch"] .checkbox-row > input[type="checkbox"]:not(.backup-include):checked::after,
+:root[data-toggle-style="switch"] .status-activity-toggle > input[type="checkbox"]:checked::after,
+:root[data-toggle-style="switch"] .android-beta-promo-dismiss-label > input[type="checkbox"]:checked::after,
+:root[data-toggle-style="switch"] .desktop-promo-dismiss-label > input[type="checkbox"]:checked::after {
+  left: 1rem;
+  background: #fff;
+}
+
+/* Keyboard focus has to stay visible — the native outline is suppressed by
+   appearance:none on some platforms. */
+:root[data-toggle-style="switch"] .toggle-row > input[type="checkbox"]:focus-visible,
+:root[data-toggle-style="switch"] .checkbox-row > input[type="checkbox"]:not(.backup-include):focus-visible,
+:root[data-toggle-style="switch"] .status-activity-toggle > input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:root[data-toggle-style="switch"] .toggle-row > input[type="checkbox"]:disabled,
+:root[data-toggle-style="switch"] .checkbox-row > input[type="checkbox"]:not(.backup-include):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Win95 restores native checkboxes on purpose (see the appearance:auto rule
+   near the top), so a sliding switch would be out of place there. */
+[data-theme="win95"] .toggle-row > input[type="checkbox"],
+[data-theme="win95"] .checkbox-row > input[type="checkbox"],
+[data-theme="win95"] .status-activity-toggle > input[type="checkbox"] {
+  -webkit-appearance: auto !important;
+  appearance: auto !important;
+  width: 1rem !important;
+  height: 1rem !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+[data-theme="win95"] .toggle-row > input[type="checkbox"]::after,
+[data-theme="win95"] .checkbox-row > input[type="checkbox"]::after,
+[data-theme="win95"] .status-activity-toggle > input[type="checkbox"]::after {
+  content: none !important;
+}
+
+/* Quick activity toggles. These are a convenient second home for the two
+   sub-toggles in Settings > Activity, not a replacement for that section --
+   the master switch and the account connections still live there. */
+.status-activity-row {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+/* Says what the two toggles below are for -- on their own "Music" and "Game"
+   don't make it clear they control what other people can see. */
+.status-activity-label {
+  padding: 0 0.75rem 0.125rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.status-activity-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.status-activity-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.status-activity-toggle input {
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+  width: 1rem;
+  height: 1rem;
+  /* Matches .toggle-row so these pick up the theme accent like every other
+     checkbox in the app rather than rendering in the browser default blue. */
+  accent-color: var(--accent);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   DM Section in Sidebar
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.dm-section-label {
+  margin-top: 0 !important;
+  padding-top: 0.25rem;
+}
+
+.dm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.dm-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.dm-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 0.625rem;
+}
+
+.dm-toggle-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+.dm-unread-count {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  background: var(--accent);
+  color: var(--accent-text);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.5rem;
+  margin-left: auto;
+}
+
+.dm-item .channel-hash {
+  color: var(--accent);
+}
+
+/* ── DM Category Headers ──────────────────────────────── */
+.dm-category-header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem 0.125rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #888);
+  user-select: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.dm-category-header:hover {
+  color: var(--text-secondary);
+}
+.dm-category-arrow {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 0.5625rem;
+}
+.dm-category-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+.user-dm-btn {
+  font-size: 0.75rem !important;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.user-item:hover .user-dm-btn {
+  opacity: 0.7;
+}
+
+.user-dm-btn:hover {
+  opacity: 1 !important;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   File Attachments
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* ── Rich presence ─────────────────────────────────────── */
+/* Sidebar: one compact line, truncated. Deliberately quiet — it sits next to
+   every name in the member list, so it must never out-shout the username. */
+.user-activity {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 8.125rem;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Profile card: one row per activity, with cover art when the source gave us
+   any. Rows only exist when there's something to show. */
+.profile-popup-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.profile-activity-link { color: inherit; text-decoration: none; cursor: pointer; }
+.profile-activity-link:hover .profile-activity-name { text-decoration: underline; }
+.profile-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.profile-activity-art {
+  width: 2.375rem;
+  height: 2.375rem;
+  border-radius: 0.25rem;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+}
+
+.profile-activity-icon {
+  width: 2.375rem;
+  height: 2.375rem;
+  border-radius: 0.25rem;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.profile-activity-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.profile-activity-verb {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.profile-activity-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-activity-details {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Titles/artists past 30 chars scroll instead of clipping, so everyone sees the
+   whole text at the same constant pace. Two identical copies scroll as one, and
+   translating by half the track lands copy two exactly where copy one began for
+   a seamless loop. Duration is set inline per length to keep the speed uniform. */
+.pa-marquee {
+  display: block;
+  overflow: hidden;
+}
+.pa-marquee-track {
+  display: inline-flex;
+  width: max-content;
+  animation: pa-marquee-scroll var(--pa-marquee-dur, 12s) linear infinite;
+}
+.pa-marquee-seg {
+  white-space: nowrap;
+  padding-right: 2rem;
+}
+@keyframes pa-marquee-scroll {
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pa-marquee-track { animation: none; }
+}
+
+/* Playback progress: a line with a dot playhead, plus elapsed/total times. */
+.profile-activity-progress {
+  display: block;
+  margin-top: 0.3125rem;
+}
+.pap-track {
+  position: relative;
+  display: block;
+  height: 0.25rem;
+  border-radius: 0.125rem;
+  background: var(--bg-tertiary);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.pap-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 0.125rem;
+  background: var(--accent);
+}
+.pap-dot {
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: -0.25rem;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+.pap-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.1875rem;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.profile-activity-progress.is-paused .pap-fill,
+.profile-activity-progress.is-paused .pap-dot {
+  opacity: 0.5;
+}
+
+/* Settings → Connections */
+.connection-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg-tertiary);
+}
+
+.connection-row .connection-icon { font-size: 1.25rem; flex-shrink: 0; }
+/* Name and status must stack, not flow inline. As plain inline spans they
+   wrapped as one paragraph, so "Not set up yet" ran on from the provider name
+   and the wrapped remainder started underneath the icon. */
+.connection-row .connection-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+.connection-row .connection-name { font-size: 0.8125rem; font-weight: 600; }
+.connection-row .connection-sub {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  /* Setup hints name env vars and URLs — let them wrap rather than truncating
+     the one piece of information the admin actually needs. */
+  white-space: normal;
+  line-height: 1.4;
+}
+.connection-row .connection-sub code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.625rem;
+  background: var(--bg-secondary);
+  border-radius: 0.1875rem;
+  padding: 0.0625rem 0.25rem;
+}
+.connection-row.is-unavailable { opacity: 0.55; }
+
+/* Link / Unlink / Set up.
+   .btn-sm's default background is var(--bg-tertiary) — the exact colour of
+   the row these sit on, so they rendered as plain text with no affordance.
+   Give them their own surface plus a border. The accent override also resets
+   .btn-sm.btn-accent's 16px font, which is sized for icon glyphs, not words. */
+.connection-row .btn-sm {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  padding: 0.375rem 0.875rem;
+  flex-shrink: 0;
+}
+.connection-row .btn-sm:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+.connection-row .btn-sm.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  padding: 0.375rem 0.875rem;
+  line-height: normal;
+}
+.connection-row .btn-sm.btn-accent:hover { background: var(--accent-hover); }
+
+/* Same treatment inside the setup form so Save/Cancel read as buttons too. */
+.connection-setup-actions .btn-sm {
+  border: 1px solid var(--border-light);
+  font-size: 0.75rem;
+  padding: 0.375rem 0.875rem;
+  line-height: normal;
+}
+.connection-setup-actions .btn-sm.btn-accent {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.connection-block { margin-bottom: 0.5rem; }
+.connection-block .connection-row { margin-bottom: 0; }
+
+/* Inline credential entry (admins only, collapsed by default) */
+.connection-setup-form {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: var(--bg-secondary);
+  padding: 0.625rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.connection-setup-form[hidden] { display: none; }
+
+/* Username link form (Last.fm) — same shell as the admin setup form. */
+.connection-username-form {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: var(--bg-secondary);
+  padding: 0.625rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.connection-username-form[hidden] { display: none; }
+
+/* "Other options" — keeps the harder, more limited providers out of the way
+   without hiding them outright. */
+.connection-advanced { margin-top: 0.25rem; }
+.connection-advanced > summary {
+  cursor: pointer;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0.125rem;
+  list-style: revert;
+  user-select: none;
+}
+.connection-advanced > summary:hover { color: var(--text-secondary); }
+.connection-advanced[open] > summary { margin-bottom: 0.375rem; }
+
+/* The Last.fm blurb is a real sentence, not a status line — let it breathe. */
+.connection-row .connection-sub { line-height: 1.45; }
+.connection-username-form input { font-family: inherit; font-size: 0.75rem; }
+/* The scrobbling note is multi-line with bullets, not a one-liner hint. */
+.connection-username-form .settings-hint { line-height: 1.7; }
+
+.connection-help {
+  font-size: 0.6875rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+.connection-help:hover { text-decoration: underline; }
+
+.connection-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+.connection-field input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.6875rem;
+  width: 100%;
+}
+.connection-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.connection-setup-actions { display: flex; gap: 0.375rem; }
+
+.connection-steps {
+  margin: 0;
+  padding-left: 1.125rem;
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.connection-steps li { margin-bottom: 0.1875rem; }
+.connection-steps code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.625rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.1875rem;
+  padding: 0.0625rem 0.25rem;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* The redirect URI is long and must be copied character-for-character. Inline
+   it wrapped mid-string and read as a broken fragment, so give it its own
+   full-width block under the instruction that introduces it. */
+.connection-steps code.setup-uri {
+  display: block;
+  margin-top: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.625rem;
+  line-height: 1.5;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 0.25rem;
+  color: var(--text-primary);
+}
+
+/* ── Language picker ───────────────────────────────────── */
+/* Custom control because a native <option> cannot contain an <img>, and
+   Windows renders Unicode flag emoji as bare letter pairs ("GB", "RU"). */
+.lang-select-hidden { display: none !important; }
+
+.lang-picker { position: relative; min-width: 11.875rem; }
+
+.lang-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+}
+.lang-picker-btn:hover { border-color: var(--accent); }
+.lang-picker-btn:focus-visible,
+.lang-picker-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lang-caret { margin-left: auto; opacity: 0.6; font-size: 0.625rem; }
+
+.lang-picker-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  padding: 0.25rem;
+  max-height: 16.25rem;
+  overflow-y: auto;
+}
+.lang-picker-list[hidden] { display: none; }
+
+.lang-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  background: none;
+  border: none;
+  border-radius: 0.375rem;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+}
+.lang-picker-item:hover { background: var(--bg-tertiary); }
+.lang-picker-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+.lang-flag {
+  width: 1.25rem;
+  height: 0.9375rem;
+  object-fit: cover;
+  border-radius: 0.125rem;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+}
+/* Fallback for a locale with no bundled artwork. */
+.lang-flag-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+.lang-flag-auto { border-radius: 50%; }
+
+/* The auth picker sits near the bottom edge, so open it upward. */
+.auth-lang-bar .lang-picker-list {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.file-attachment {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  max-width: 25rem;
+  margin: 0.25rem 0;
+}
+
+.file-download-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: color 0.15s;
+}
+
+.file-download-link:hover {
+  color: var(--accent);
+}
+
+.file-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.file-name {
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.file-size {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.file-download-arrow {
+  margin-left: auto;
+  font-size: 1rem;
+  opacity: 0.5;
+}
+
+.file-download-link:hover .file-download-arrow {
+  opacity: 1;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.file-attachment audio {
+  width: 100%;
+  height: 2rem;
+}
+
+.file-video {
+  max-width: 100%;
+  max-height: 18.75rem;
+  border-radius: 0.25rem;
+  margin-top: 0.25rem;
+  background: #0a0a0a;
+  object-fit: contain;
+}
+
+.file-video-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+
+
+/* Risky file highlight */
+.file-download-link.risky-file .file-name {
+  color: var(--error, #e74c3c);
+}
+
+/* ── Risky download warning modal ── */
+.risky-download-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.15s ease;
+}
+.risky-download-modal {
+  background: var(--bg-secondary, #2b2d31);
+  border: 1px solid var(--border, #3a3c42);
+  border-radius: 0.75rem;
+  padding: 1.75rem 2rem;
+  max-width: 26.25rem;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.risky-download-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+.risky-download-modal h3 {
+  margin: 0 0 0.75rem;
+  color: var(--error, #e74c3c);
+  font-size: 1.125rem;
+}
+.risky-download-modal p {
+  margin: 0 0 0.5rem;
+  color: var(--text-primary, #dbdee1);
+  font-size: 0.875rem;
+  word-break: break-all;
+}
+.risky-download-desc {
+  color: var(--text-muted, #949ba4) !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.5;
+  word-break: normal !important;
+}
+.risky-download-actions {
+  display: flex;
+  gap: 0.625rem;
+  justify-content: center;
+  margin-top: 1.25rem;
+}
+.risky-download-cancel {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border, #3a3c42);
+  background: var(--bg-tertiary, #232428);
+  color: var(--text-primary, #dbdee1);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.15s;
+}
+.risky-download-cancel:hover {
+  background: var(--bg-primary, #1e1f22);
+}
+.risky-download-confirm {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.375rem;
+  border: none;
+  background: var(--error, #e74c3c);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: filter 0.15s;
+}
+.risky-download-confirm:hover {
+  filter: brightness(1.15);
+}
+
+.user-bar {
+  position: relative;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   THEMED SLIDER EFFECTS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* Bloodborne / Dark Souls — health bar red glow */
+[data-theme="bloodborne"] .slider-sm,
+[data-theme="bloodborne"] .ns-slider {
+  --track-bg: #1a0c0c;
+}
+[data-theme="bloodborne"] .slider-sm::-webkit-slider-thumb,
+[data-theme="bloodborne"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(204, 0, 32, 0.6);
+}
+
+[data-theme="darksouls"] .slider-sm,
+[data-theme="darksouls"] .ns-slider {
+  --track-bg: #1a1510;
+}
+[data-theme="darksouls"] .slider-sm::-webkit-slider-thumb,
+[data-theme="darksouls"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(200, 168, 78, 0.5);
+}
+
+/* Elden Ring — golden estus glow */
+[data-theme="eldenring"] .slider-sm,
+[data-theme="eldenring"] .ns-slider {
+  --track-bg: #14141e;
+}
+[data-theme="eldenring"] .slider-sm::-webkit-slider-thumb,
+[data-theme="eldenring"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 10px rgba(212, 168, 50, 0.6);
+}
+
+/* Minecraft — blocky green bar */
+[data-theme="minecraft"] .slider-sm,
+[data-theme="minecraft"] .ns-slider {
+  --track-bg: #2e2e2e;
+  --track-h: 6px;
+  --track-r: 0;
+  --track-border: 1px solid #3a3a3a;
+  height: 0.375rem;
+  border-radius: 0;
+  border: 1px solid #3a3a3a;
+}
+[data-theme="minecraft"] .slider-sm::-webkit-slider-thumb,
+[data-theme="minecraft"] .ns-slider::-webkit-slider-thumb {
+  border-radius: 0.125rem;
+  box-shadow: 2px 2px 0 #2a5a2a;
+}
+[data-theme="minecraft"] .slider-sm::-moz-range-thumb,
+[data-theme="minecraft"] .ns-slider::-moz-range-thumb {
+  border-radius: 0.125rem;
+}
+
+/* Final Fantasy X — blue mana bar */
+[data-theme="ffx"] .slider-sm,
+[data-theme="ffx"] .ns-slider {
+  --track-bg: #101a30;
+  --track-h: 5px;
+  height: 0.3125rem;
+}
+[data-theme="ffx"] .slider-sm::-webkit-slider-thumb,
+[data-theme="ffx"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(64, 168, 224, 0.5);
+}
+
+/* Zelda — green heart / stamina bar */
+[data-theme="zelda"] .slider-sm,
+[data-theme="zelda"] .ns-slider {
+  --track-bg: #142014;
+  --track-h: 5px;
+  height: 0.3125rem;
+}
+[data-theme="zelda"] .slider-sm::-webkit-slider-thumb,
+[data-theme="zelda"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(68, 187, 68, 0.5);
+}
+
+/* Matrix — green terminal glow */
+[data-theme="matrix"] .slider-sm,
+[data-theme="matrix"] .ns-slider {
+  --track-bg: #0a0a0a;
+}
+[data-theme="matrix"] .slider-sm::-webkit-slider-thumb,
+[data-theme="matrix"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+}
+
+/* Tron — neon blue trail */
+[data-theme="tron"] .slider-sm,
+[data-theme="tron"] .ns-slider {
+  --track-bg: #0c141f;
+}
+[data-theme="tron"] .slider-sm::-webkit-slider-thumb,
+[data-theme="tron"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 10px rgba(111, 236, 255, 0.6);
+}
+
+/* Cyberpunk — neon pink */
+[data-theme="cyberpunk"] .slider-sm,
+[data-theme="cyberpunk"] .ns-slider {
+  --track-bg: #0a0a12;
+}
+[data-theme="cyberpunk"] .slider-sm::-webkit-slider-thumb,
+[data-theme="cyberpunk"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(255, 45, 111, 0.5);
+}
+
+/* Halo — UNSC blue-green */
+[data-theme="halo"] .slider-sm,
+[data-theme="halo"] .ns-slider {
+  --track-bg: #0d1a0d;
+}
+[data-theme="halo"] .slider-sm::-webkit-slider-thumb,
+[data-theme="halo"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(79, 195, 247, 0.5);
+}
+
+/* Ice — frozen blue */
+[data-theme="ice"] .slider-sm,
+[data-theme="ice"] .ns-slider {
+  --track-bg: #102030;
+}
+[data-theme="ice"] .slider-sm::-webkit-slider-thumb,
+[data-theme="ice"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+}
+
+/* LoTR — golden warmth */
+[data-theme="lotr"] .slider-sm,
+[data-theme="lotr"] .ns-slider {
+  --track-bg: #2a221a;
+}
+[data-theme="lotr"] .slider-sm::-webkit-slider-thumb,
+[data-theme="lotr"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 6px rgba(212, 168, 68, 0.5);
+}
+
+/* Dracula — purple accent */
+[data-theme="dracula"] .slider-sm,
+[data-theme="dracula"] .ns-slider {
+  --track-bg: #22232e;
+}
+[data-theme="dracula"] .slider-sm::-webkit-slider-thumb,
+[data-theme="dracula"] .ns-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px rgba(189, 147, 249, 0.5);
+}
+
+/* ── Sub-channel styling ─────────────────────────────── */
+.sub-channel-item {
+  padding: 0.1875rem 1rem 0.1875rem 2.375rem !important;
+}
+.sub-channel-item .channel-hash {
+  font-size: 0.75rem;
+  opacity: 0.55;
+}
+.sub-channel-item .channel-name {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+/* ── Private sub-channel styling ─────────────────────── */
+.private-channel .channel-name {
+  opacity: 0.65;
+  font-style: italic;
+}
+.private-channel .channel-hash {
+  font-size: 0.75rem;
+}
+
+/* ── Sub-channel Subscriptions Panel ─────────────────── */
+.sub-panel-parent-section {
+  margin-bottom: 1rem;
+}
+.sub-panel-parent-section:last-child {
+  margin-bottom: 0;
+}
+.sub-panel-parent-header {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+.sub-panel-group-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.4;
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 600;
+  color: var(--accent, #7289da);
+}
+.sub-panel-group-label.unsubbed {
+  color: var(--text-muted, #72767d);
+}
+.sub-panel-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.sub-panel-tile {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  min-width: 0;
+  max-width: 100%;
+}
+.sub-panel-tile:hover {
+  background: rgba(255,255,255,0.08);
+}
+.sub-panel-tile.subbed {
+  border-left: 2px solid var(--accent, #7289da);
+}
+.sub-panel-tile.unsubbed {
+  opacity: 0.5;
+  border-left: 2px solid transparent;
+}
+.sub-panel-tile.unsubbed:hover {
+  opacity: 0.75;
+}
+.sub-panel-tile-name {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sub-panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sub-panel-toggle input[type="checkbox"] {
+  display: none;
+}
+.sub-panel-toggle-label {
+  font-size: 0.85rem;
+  user-select: none;
+}
+.sub-panel-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: var(--accent, #7289da);
+  color: var(--accent-text);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+  min-width: 1rem;
+  text-align: center;
+}
+
+/* ── Role badge (user list & messages) ───────────────── */
+.user-role-badge {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  background: rgba(255,255,255,0.06);
+  margin-left: 0.25rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  /* Hidden in sidebar user list — role shown via dot + tooltip instead */
+  display: none;
+}
+.msg-role-badge {
+  font-size: 0.5625rem;
+  vertical-align: middle;
+  margin-left: 0.25rem;
+  /* Always show in messages */
+  display: inline;
+}
+/* Multi-role: small "+N" appended to the badge when the user holds extra
+   roles. Hover the badge to see the full list (native title tooltip). */
+.msg-role-extra-count {
+  font-size: 0.5rem;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-left: 0.125rem;
+}
+
+/* ── BOT badge for webhook messages ───────────────── */
+.bot-badge {
+  display: inline-block;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  background: var(--accent-color, #5865f2);
+  color: #fff;
+  vertical-align: middle;
+  margin-left: 0.25rem;
+}
+.webhook-message .message-avatar {
+  border: 2px solid var(--accent-color, #5865f2);
+}
+
+/* ── Webhook management items ──────────────────────────── */
+.webhook-item {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.625rem;
+  margin-bottom: 0.5rem;
+}
+.webhook-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+.webhook-item-name {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+.webhook-item-channel {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.25rem;
+}
+.webhook-item-status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+.webhook-item-status.status-online { color: #2ecc71; }
+.webhook-item-status.status-offline { color: #e74c3c; }
+.webhook-item-url {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+}
+.webhook-url-text {
+  font-size: 0.625rem;
+  font-family: monospace;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  padding: 0.1875rem 0.375rem;
+  border-radius: 0.25rem;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+.webhook-item-actions {
+  display: flex;
+  gap: 0.375rem;
+}
+.btn-xs {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-xs:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+/* Win95 overrides for webhook items */
+[data-theme="win95"] .webhook-item { background: #bfbfbf; border: 2px inset #808080; border-radius: 0; }
+[data-theme="win95"] .webhook-url-text { background: #fff; border: 2px inset #808080; border-radius: 0; color: #000; }
+[data-theme="win95"] .btn-xs { background: #bfbfbf; border: 2px outset #fff; border-radius: 0; color: #000; }
+[data-theme="win95"] .btn-xs:hover { background: #dfdfdf; }
+[data-theme="win95"] .btn-xs:active { border: 2px inset #808080; }
+
+/* ── Collapsible sub-channel toggle arrow ────────────── */
+.channel-collapse-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, color 0.15s;
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.channel-collapse-arrow:hover {
+  color: var(--accent);
+}
+.channel-collapse-arrow.collapsed {
+  transform: translateY(-50%) rotate(-90deg);
+}
+
+/* ── Category collapse arrow ──── */
+.cat-collapse-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  font-size: 0.625rem;
+  color: inherit;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.cat-collapse-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+

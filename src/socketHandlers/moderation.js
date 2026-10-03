@@ -113,11 +113,18 @@ module.exports = function register(socket, ctx) {
     const code = socket.currentChannel;
     if (!code) return;
 
+    // Kicking is a membership change, so a member who is away can be kicked
+    // the same as one who is here. Only the live parts (the kicked notice,
+    // the socket rooms, the online list) need a connection to exist.
+    const targetUser = db.prepare('SELECT id, username, display_name FROM users WHERE id = ?').get(data.userId);
+    if (!targetUser) return socket.emit('error-msg', 'User not found');
     const channelRoom = channelUsers.get(code);
     const targetInfo = channelRoom ? channelRoom.get(data.userId) : null;
-    if (!targetInfo) {
-      return socket.emit('error-msg', 'User is not currently online in this channel (use ban instead)');
+    const isMember = kickCh ? !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(kickCh.id, data.userId) : false;
+    if (!targetInfo && !isMember) {
+      return socket.emit('error-msg', 'User is not in this channel');
     }
+    const targetName = targetInfo ? targetInfo.username : (targetUser.display_name || targetUser.username);
 
     if (kickCh) {
       db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(kickCh.id, data.userId);
@@ -126,10 +133,12 @@ module.exports = function register(socket, ctx) {
       subs.forEach(s => delSub.run(s.id, data.userId));
     }
 
-    io.to(targetInfo.socketId).emit('kicked', {
-      channelCode: code,
-      reason: typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : ''
-    });
+    if (targetInfo) {
+      io.to(targetInfo.socketId).emit('kicked', {
+        channelCode: code,
+        reason: typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : ''
+      });
+    }
 
     const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === data.userId);
     for (const ts of targetSockets) {
@@ -141,20 +150,21 @@ module.exports = function register(socket, ctx) {
       ts.emit('channels-list', getEnrichedChannels(data.userId, false, (room) => ts.join(room)));
     }
 
-    channelRoom.delete(data.userId);
-
-    const online = Array.from(channelRoom.values()).map(u => ({
-      id: u.id, username: u.username
-    }));
-    io.to(`channel:${code}`).emit('online-users', {
-      channelCode: code,
-      users: online
-    });
+    if (channelRoom) {
+      channelRoom.delete(data.userId);
+      const online = Array.from(channelRoom.values()).map(u => ({
+        id: u.id, username: u.username
+      }));
+      io.to(`channel:${code}`).emit('online-users', {
+        channelCode: code,
+        users: online
+      });
+    }
 
     io.to(`channel:${code}`).emit('new-message', {
       channelCode: code,
       message: {
-        id: 0, content: `${targetInfo.username} was kicked`, created_at: new Date().toISOString(),
+        id: 0, content: `${targetName} was kicked`, created_at: new Date().toISOString(),
         username: 'System', user_id: 0, reply_to: null, replyContext: null, reactions: [], edited_at: null, system: true
       }
     });
@@ -170,11 +180,15 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    socket.emit('error-msg', `Kicked ${targetInfo.username}`);
+    socket.emit('toast', { message: `Kicked ${targetName}`, type: 'success' });
     _audit({ actor: socket.user, action: 'user_kick',
-      target_type: 'user', target_id: data.userId, target_name: targetInfo.username,
+      target_type: 'user', target_id: data.userId, target_name: targetName,
       details: { channelCode: code, reason: data.reason || null,
         scrubMessages: !!data.scrubMessages, scrubScope: data.scrubScope || null } });
+    // Last, since everything above still addresses the channel by its old
+    // code: a kicked person must not be able to walk back into a private
+    // channel with the code they already know.
+    if (kickCh && typeof ctx.rotatePrivateCodesAfterRemoval === 'function') ctx.rotatePrivateCodesAfterRemoval(kickCh.id);
   });
 
   // ── Ban user ────────────────────────────────────────────
@@ -736,8 +750,11 @@ module.exports = function register(socket, ctx) {
   socket.on('mute-user', (data) => {
     if (!data || typeof data !== 'object') return;
     const muteCode = socket.currentChannel;
-    const muteCh = muteCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(muteCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user', muteCh ? muteCh.id : null)) {
+    // A mute silences someone in every channel, so it takes mute_user held
+    // server-wide and rank compared server-wide. A channel role (every
+    // channel's creator gets Channel Mod there) used to be enough to mute
+    // anyone ranked below for up to 30 days, everywhere.
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user')) {
       return socket.emit('error-msg', 'You don\'t have permission to mute users');
     }
     if (!isInt(data.userId)) return;
@@ -746,8 +763,8 @@ module.exports = function register(socket, ctx) {
     }
 
     if (!socket.user.isAdmin) {
-      const myLevel = getUserEffectiveLevel(socket.user.id, muteCh ? muteCh.id : null);
-      const targetLevel = getUserEffectiveLevel(data.userId, muteCh ? muteCh.id : null);
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      const targetLevel = getUserEffectiveLevel(data.userId);
       if (targetLevel >= myLevel) {
         return socket.emit('error-msg', 'You can\'t mute a user with equal or higher rank');
       }
@@ -781,16 +798,38 @@ module.exports = function register(socket, ctx) {
       details: { durationMinutes, reason, channelCode: muteCode || null } });
   });
 
+  // Anyone who can mute can unmute. Admin-only unmute left a moderator with
+  // mute_user unable to undo their own mute, and nothing in the client ever
+  // sent this event at all, so every mute ran its full timer (#5640).
   socket.on('unmute-user', (data) => {
     if (!data || typeof data !== 'object') return;
-    if (!socket.user.isAdmin) {
-      return socket.emit('error-msg', 'Only admins can unmute users');
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'mute_user')) {
+      return socket.emit('error-msg', 'You don\'t have permission to unmute users');
     }
     if (!isInt(data.userId)) return;
+    // The same rule as lifting a ban: not your own mute, not an admin's, and
+    // not one placed by someone of equal or higher rank.
+    if (!socket.user.isAdmin) {
+      if (data.userId === socket.user.id) return socket.emit('error-msg', 'You can\'t unmute yourself');
+      const myLevel = getUserEffectiveLevel(socket.user.id);
+      const placers = db.prepare("SELECT DISTINCT muted_by FROM mutes WHERE user_id = ? AND expires_at > datetime('now')").all(data.userId);
+      for (const { muted_by: by } of placers) {
+        if (!by || by === socket.user.id) continue;
+        const placer = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(by);
+        if (placer && placer.is_admin) return socket.emit('error-msg', 'You can\'t undo a mute placed by an admin');
+        if (getUserEffectiveLevel(by) >= myLevel) return socket.emit('error-msg', 'You can\'t undo a mute placed by someone of equal or higher rank');
+      }
+    }
 
-    db.prepare('DELETE FROM mutes WHERE user_id = ?').run(data.userId);
     const targetUser = db.prepare('SELECT COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
-    socket.emit('error-msg', `Unmuted ${targetUser ? targetUser.username : 'user'}`);
+    if (!targetUser) return socket.emit('error-msg', 'User not found');
+    const wasMuted = db.prepare('SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') LIMIT 1').get(data.userId);
+    db.prepare('DELETE FROM mutes WHERE user_id = ?').run(data.userId);
+    if (!wasMuted) return socket.emit('toast', { message: `${targetUser.username} is not muted`, type: 'info' });
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === data.userId) s.emit('unmuted', {});
+    }
+    socket.emit('toast', { message: `Unmuted ${targetUser.username}`, type: 'success' });
     _audit({ actor: socket.user, action: 'user_unmute',
       target_type: 'user', target_id: data.userId,
       target_name: targetUser ? targetUser.username : null });
@@ -873,7 +912,11 @@ module.exports = function register(socket, ctx) {
       for (const [, s] of io.sockets.sockets) {
         try {
           if (ipMatches(socketClientIp(s), ip)) { s.emit('banned', { reason }); s.disconnect(true); }
-        } catch {}
+        } catch (err) {
+          // Keep sweeping the rest. This client may stay connected until it
+          // reloads; the ban still blocks its next connection.
+          console.warn('ban-ip: could not check or disconnect a socket:', err.message);
+        }
       }
       socket.emit('error-msg', `Banned IP ${ip}`);
       _audit({ actor: socket.user, action: 'ip_ban',

@@ -176,7 +176,11 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
         `SELECT key, value FROM user_preferences
          WHERE user_id = ? AND key IN ('share_activity','share_game_activity','share_music_activity')`
       ).all(userId);
-    } catch { /* table missing on a very old DB */ }
+    } catch {
+      // If the opt-outs cannot be read, share nothing rather than assume
+      // consent. Not logged: this runs on every presence update.
+      return { master: false, games: false, music: false };
+    }
     const map = {};
     rows.forEach(r => { map[r.key] = r.value; });
     return {
@@ -197,7 +201,9 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
       const row = db.prepare('SELECT status FROM users WHERE id = ?').get(userId);
       return !!row && row.status === 'invisible';
     } catch {
-      return false;
+      // Unknown status: treat them as invisible, so someone who chose to hide
+      // is never shown because a read failed.
+      return true;
     }
   }
 
@@ -312,7 +318,9 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     let rows = [];
     try {
       rows = db.prepare('SELECT provider, display_name, created_at FROM user_connections WHERE user_id = ?').all(userId);
-    } catch { /* table missing */ }
+    } catch (err) {
+      console.warn('[Haven activity] Could not list connections:', err.message);
+    }
     return rows.map(r => ({
       provider: r.provider,
       displayName: r.display_name || '',
@@ -345,7 +353,11 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
   function removeConnection(userId, provider) {
     try {
       db.prepare('DELETE FROM user_connections WHERE user_id = ? AND provider = ?').run(userId, provider);
-    } catch { /* nothing to remove */ }
+    } catch (err) {
+      // A DELETE that matches nothing does not throw, so this is a real failure:
+      // the stored tokens for this link are still there.
+      console.error(`[Haven activity] Failed to remove ${provider} connection:`, err.message);
+    }
     notifyConnections(userId);
     // Drop whatever that provider was reporting so the activity doesn't linger
     // until the next poll tick that will no longer happen.
@@ -381,7 +393,11 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
   function disableListening(userId) {
     try {
       db.prepare('DELETE FROM listening_tokens WHERE user_id = ?').run(userId);
-    } catch { /* nothing to remove */ }
+    } catch (err) {
+      // A DELETE that matches nothing does not throw, so the old webhook token
+      // is still valid here.
+      console.error('[Haven activity] Failed to revoke listening token:', err.message);
+    }
     clearListeningPresence(userId);
   }
 
@@ -792,9 +808,9 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     // unconfigured. Registering unconditionally is what lets an admin paste
     // keys into Settings and have presence start working without a restart —
     // gating the intervals on boot-time config would strand them until reboot.
-    timers.push(setInterval(() => { pollSteam().catch(() => {}); }, STEAM_POLL_MS));
-    timers.push(setInterval(() => { pollSpotify().catch(() => {}); }, SPOTIFY_POLL_MS));
-    timers.push(setInterval(() => { pollLastfm().catch(() => {}); }, LASTFM_POLL_MS));
+    timers.push(setInterval(() => { pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message)); }, STEAM_POLL_MS));
+    timers.push(setInterval(() => { pollSpotify().catch((err) => console.warn('[Haven activity] Spotify poll failed:', err.message)); }, SPOTIFY_POLL_MS));
+    timers.push(setInterval(() => { pollLastfm().catch((err) => console.warn('[Haven activity] Last.fm poll failed:', err.message)); }, LASTFM_POLL_MS));
     timers.forEach(t => t.unref?.());
     if (isSteamConfigured())   console.log('[Haven activity] Steam presence enabled');
     if (isSpotifyConfigured()) console.log('[Haven activity] Spotify presence enabled');

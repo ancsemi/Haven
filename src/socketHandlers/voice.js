@@ -1,34 +1,24 @@
 'use strict';
 
 const { isString, isInt } = require('./helpers');
-const {
-  SESSION_ID_PATTERN,
-  clearNativeScreenOfferWindows,
-  registerNativeScreenSignaling,
-} = require('./nativeScreen');
-
-const NATIVE_SCREEN_VERSION = 2;
-const NATIVE_SCREEN_CODECS = new Set(['H264', 'AV1', 'H265']);
-
-function readNativeScreenClient(data) {
-  const version = data?.nativeScreenVersion === NATIVE_SCREEN_VERSION
-    ? NATIVE_SCREEN_VERSION
-    : 0;
-  const codecs = version && Array.isArray(data.nativeScreenCodecs)
-    ? [...new Set(data.nativeScreenCodecs.filter(codec => NATIVE_SCREEN_CODECS.has(codec)))].slice(0, 3)
-    : [];
-  return codecs.includes('H264') ? { version, codecs } : { version: 0, codecs: [] };
-}
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
-          broadcastVoiceUsers, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
+          broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
           pruneStaleVoiceUsers, getMentionableChannelMembers,
           getActiveMusicSyncState, getMusicQueuePayload, botAudioManager } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
           activeScreenSharers, activeScreenSessions, activeWebcamUsers,
-          nativeScreenOfferWindows, streamViewers, pendingTempDelete,
+          streamViewers, pendingTempDelete,
           pendingVoiceLeave } = state;
+
+  // Direct (peer to peer) or through the voice relay. Settled by whoever
+  // starts the call and kept until it empties (see src/voiceRelay).
+  function callKind(code, occupied = true) {
+    const relay = state.voiceRelay;
+    if (!relay) return 'direct';
+    return (occupied && relay.currentKind(code)) || relay.kindFor(code, occupied);
+  }
 
   function activeScreenPayload(code) {
     const room = voiceUsers.get(code);
@@ -39,9 +29,7 @@ module.exports = function register(socket, ctx) {
       return user ? {
         id: uid,
         username: user.username,
-        transport: session?.transport || 'browser',
-        sessionId: session?.transport === 'native' ? session.sessionId : null,
-        codec: session?.transport === 'native' ? session.codec : null,
+        transport: 'browser',
         hasAudio: !!session?.hasAudio,
       } : null;
     }).filter(Boolean);
@@ -66,7 +54,6 @@ module.exports = function register(socket, ctx) {
       if (sessions.size === 0) activeScreenSessions.delete(code);
     }
     streamViewers.delete(`${code}:${userId}`);
-    clearNativeScreenOfferWindows(nativeScreenOfferWindows, code, userId);
   }
 
   function clearViewerState(code, userId) {
@@ -84,42 +71,10 @@ module.exports = function register(socket, ctx) {
     isDeafened: !!user.isDeafened,
     isBot: !!user.isBot,
     isListening: !!user.isListening,
-    nativeScreenVersion: user.nativeScreenVersion || 0,
-    nativeScreenCodecs: user.nativeScreenCodecs || [],
+    // Can use the voice relay. Anyone who cannot (an older app, a bot) is
+    // still reached directly, even inside a relayed call.
+    relayCapable: !!user.relayCapable,
   });
-
-  function notifyNativeSharersOfIncompatiblePeer(code, peer) {
-    if (!peer || peer.isBot) return;
-    const room = voiceUsers.get(code);
-    const sessions = activeScreenSessions.get(code);
-    for (const [sharerId, session] of sessions || []) {
-      if (session.transport !== 'native' || sharerId === peer.id) continue;
-      const compatible = peer.nativeScreenVersion === NATIVE_SCREEN_VERSION &&
-        peer.nativeScreenCodecs?.includes(session.codec);
-      const sharer = room?.get(sharerId);
-      if (!compatible && sharer) {
-        io.to(sharer.socketId).emit('native-screen-incompatible-peer', {
-          channelCode: code,
-          userId: peer.id,
-          sessionId: session.sessionId,
-        });
-      }
-    }
-
-    const session = sessions?.get(peer.id);
-    if (session?.transport !== 'native') return;
-    const incompatible = Array.from(room?.values() || [])
-      .find(user => user.id !== peer.id && !user.isBot &&
-        (user.nativeScreenVersion !== NATIVE_SCREEN_VERSION ||
-         !user.nativeScreenCodecs?.includes(session.codec)));
-    if (incompatible) {
-      io.to(peer.socketId).emit('native-screen-incompatible-peer', {
-        channelCode: code,
-        userId: incompatible.id,
-        sessionId: session.sessionId,
-      });
-    }
-  }
 
   function sendCurrentBotAudio(code) {
     const current = botAudioManager?.getCurrent(code);
@@ -129,7 +84,11 @@ module.exports = function register(socket, ctx) {
 
   function serializeVoiceRosterUser(user, channelId) {
     const role = getUserHighestRole(user.id, channelId);
-    return { ...serializeVoicePeer(user), roleColor: role ? role.color : null };
+    return {
+      ...serializeVoicePeer(user), roleColor: role ? role.color : null,
+      roleColor2: (role && role.color2) || null,
+      roleShimmer: !!(role && role.color2 && role.color_shimmer),
+    };
   }
 
   // ── Local helper: broadcast stream/viewer info ──────────
@@ -160,11 +119,43 @@ module.exports = function register(socket, ctx) {
   }
 
   // ── Voice join ──────────────────────────────────────────
+  // (#5687) On unless an admin switched it off under Guest Access.
+  function guestsMayUseVoice() {
+    try {
+      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'guests_allow_voice'").get();
+      return !(row && row.value === 'false');
+    } catch { return true; }
+  }
+
+  // Rejoining after a reconnect and the server's own heal put someone back in
+  // a voice room without going through voice-join, so they make the same
+  // checks it makes. They used to check only membership, so someone refused
+  // voice (no use_voice, missing the channel's required roles, a guest on a
+  // text-only server) could get in that way, and past a full room.
+  function voiceEntryRefusal(code, channelId) {
+    if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channelId))) {
+      return 'This channel needs a role you do not hold';
+    }
+    if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', channelId)) {
+      return 'You don\'t have permission to use voice chat';
+    }
+    if (socket.user.isGuest && !guestsMayUseVoice()) return 'Guests cannot join voice on this server';
+    const lim = db.prepare('SELECT voice_user_limit FROM channels WHERE id = ?').get(channelId);
+    const room = voiceUsers.get(code);
+    if (lim && lim.voice_user_limit > 0 && !(room && room.has(socket.user.id)) && (room ? room.size : 0) >= lim.voice_user_limit) {
+      return `Voice is full (${room.size}/${lim.voice_user_limit})`;
+    }
+    return null;
+  }
+
+  socket.on('dm-call-decline', (data) => {
+    const code = typeof data?.code === 'string' ? data.code.trim() : '';
+    if (!/^[a-f0-9]{8}$/i.test(code)) return;
+    ctx.dmCalls?.decline(code, socket.user);
+  });
   socket.on('voice-join', (data) => {
     if (!data || typeof data !== 'object') return;
-    const nativeClient = readNativeScreenClient(data);
-    socket.nativeScreenVersion = nativeClient.version;
-    socket.nativeScreenCodecs = nativeClient.codecs;
+    socket.relayCapable = data.relay === 1;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
@@ -174,6 +165,10 @@ module.exports = function register(socket, ctx) {
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(vch.id, socket.user.id);
     if (!vMember) return socket.emit('error-msg', 'Not a member of this channel');
+    // A role gate on the channel covers its voice room too (#5597).
+    if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(vch.id))) {
+      return socket.emit('error-msg', 'This channel needs a role you do not hold');
+    }
 
     const vchSettings = db.prepare('SELECT voice_enabled, voice_user_limit, voice_bitrate FROM channels WHERE code = ?').get(code);
     if (vchSettings && vchSettings.voice_enabled === 0) {
@@ -183,6 +178,11 @@ module.exports = function register(socket, ctx) {
     }
     if (!socket.user.isAdmin && !socket.user.isGuest && !userHasPermission(socket.user.id, 'use_voice', vch.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to use voice chat');
+    }
+    // Guests skip the role permission above, since they hold no roles. An
+    // admin can keep them to text with one switch instead (#5687).
+    if (socket.user.isGuest && !guestsMayUseVoice()) {
+      return socket.emit('error-msg', 'Guests cannot join voice on this server');
     }
     if (vchSettings && vchSettings.voice_user_limit > 0) {
       const currentCount = voiceUsers.has(code) ? voiceUsers.get(code).size : 0;
@@ -268,17 +268,16 @@ module.exports = function register(socket, ctx) {
       socketId: socket.id,
       isMuted: false,
       isDeafened: false,
-      nativeScreenVersion: socket.nativeScreenVersion,
-      nativeScreenCodecs: socket.nativeScreenCodecs,
+      relayCapable: !!socket.relayCapable,
     });
-    notifyNativeSharersOfIncompatiblePeer(code, voiceUsers.get(code).get(socket.user.id));
 
     voiceLastActivity.set(socket.user.id, Date.now());
 
     socket.emit('voice-existing-users', {
       channelCode: code,
       users: existingUsers.map(serializeVoicePeer),
-      voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0
+      voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+      transport: callKind(code, existingUsers.some(u => !u.isBot)),
     });
 
     existingUsers.forEach(u => {
@@ -289,6 +288,7 @@ module.exports = function register(socket, ctx) {
     });
 
     broadcastVoiceUsers(code);
+    ctx.dmCalls?.joined(code, socket.user);
     broadcastStreamInfo(code);
 
     // Send active music state to late joiner
@@ -315,11 +315,6 @@ module.exports = function register(socket, ctx) {
       setTimeout(() => {
         for (const sharerId of sharers) {
           const sharerInfo = voiceUsers.get(code)?.get(sharerId);
-          const session = activeScreenSessions.get(code)?.get(sharerId);
-          const target = voiceUsers.get(code)?.get(socket.user.id);
-          if (session?.transport === 'native' &&
-              (!target || target.isBot || target.nativeScreenVersion !== NATIVE_SCREEN_VERSION ||
-               !target.nativeScreenCodecs?.includes(session.codec))) continue;
           if (sharerInfo) {
             io.to(sharerInfo.socketId).emit('renegotiate-screen', {
               targetUserId: socket.user.id,
@@ -419,14 +414,6 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  registerNativeScreenSignaling(socket, {
-    io,
-    voiceUsers,
-    activeScreenSharers,
-    activeScreenSessions,
-    nativeScreenOfferWindows,
-  });
-
   // ── Voice leave ─────────────────────────────────────────
   socket.on('voice-leave', (data, callback) => {
     if (!data || typeof data !== 'object') return;
@@ -462,6 +449,8 @@ module.exports = function register(socket, ctx) {
 
     if (target.isBot) botAudioManager?.stopWebhook(-Number(data.userId));
     voiceRoom.delete(data.userId);
+    // In a relayed call, stop sending the call to them right now.
+    ctx.dropRelayUser?.(data.code, data.userId);
     const targetSocket = io.sockets.sockets.get(target.socketId);
     if (targetSocket) {
       targetSocket.leave(`voice:${data.code}`);
@@ -515,62 +504,34 @@ module.exports = function register(socket, ctx) {
       return acknowledge({ ok: false, error: 'streams_disabled' });
     }
 
-    const nativeTransport = data.transport === 'native';
-    if (nativeTransport &&
-        (typeof data.sessionId !== 'string' || !SESSION_ID_PATTERN.test(data.sessionId))) {
-      return acknowledge({ ok: false, error: 'invalid_session' });
-    }
-    const nativeCodec = nativeTransport && NATIVE_SCREEN_CODECS.has(data.codec)
-      ? data.codec
-      : null;
-    if (nativeTransport && !nativeCodec) {
-      return acknowledge({ ok: false, error: 'invalid_codec' });
-    }
-    if (nativeTransport &&
-        (voiceEntry.nativeScreenVersion !== NATIVE_SCREEN_VERSION ||
-         !voiceEntry.nativeScreenCodecs?.includes(nativeCodec))) {
-      return acknowledge({ ok: false, error: 'incompatible_sender' });
-    }
-    const nativeViewers = nativeTransport
-      ? Array.from(voiceRoom.values()).filter(user => user.id !== socket.user.id && !user.isBot)
-      : [];
-    if (nativeViewers.some(user =>
-      user.nativeScreenVersion !== NATIVE_SCREEN_VERSION ||
-      !user.nativeScreenCodecs?.includes(nativeCodec)
-    )) {
-      return acknowledge({ ok: false, error: 'incompatible_viewer' });
-    }
-
     const currentSession = activeScreenSessions.get(data.code)?.get(socket.user.id);
-    if (currentSession && currentSession.transport === (nativeTransport ? 'native' : 'browser') &&
-        currentSession.sessionId === (nativeTransport ? data.sessionId : null)) {
-      return acknowledge({ ok: true, viewerIds: nativeViewers.map(user => user.id) });
+    if (currentSession && currentSession.transport === 'browser' &&
+        currentSession.sessionId == null) {
+      return acknowledge({ ok: true, viewerIds: [] });
     }
 
     if (!activeScreenSharers.has(data.code)) activeScreenSharers.set(data.code, new Set());
     activeScreenSharers.get(data.code).add(socket.user.id);
     if (!activeScreenSessions.has(data.code)) activeScreenSessions.set(data.code, new Map());
     activeScreenSessions.get(data.code).set(socket.user.id, {
-      transport: nativeTransport ? 'native' : 'browser',
-      sessionId: nativeTransport ? data.sessionId : null,
-      codec: nativeTransport ? nativeCodec : null,
+      transport: 'browser',
+      sessionId: null,
+      codec: null,
       hasAudio: !!data.hasAudio,
     });
     for (const [uid, user] of voiceRoom) {
-      if (uid !== socket.user.id && (!nativeTransport || !user.isBot)) {
+      if (uid !== socket.user.id) {
         io.to(user.socketId).emit('screen-share-started', {
           userId: socket.user.id,
           username: socket.user.displayName,
           channelCode: data.code,
           hasAudio: !!data.hasAudio,
-          transport: nativeTransport ? 'native' : 'browser',
-          sessionId: nativeTransport ? data.sessionId : null,
-          codec: nativeTransport ? nativeCodec : null
+          transport: 'browser'
         });
       }
     }
     broadcastStreamInfo(data.code);
-    acknowledge({ ok: true, viewerIds: nativeViewers.map(user => user.id) });
+    acknowledge({ ok: true, viewerIds: [] });
   });
 
   socket.on('screen-share-stopped', (data, callback) => {
@@ -585,12 +546,10 @@ module.exports = function register(socket, ctx) {
 
     const currentSession = activeScreenSessions.get(data.code)?.get(socket.user.id);
     if (!currentSession) return acknowledge(true);
-    if (currentSession.transport === 'native' && data.sessionId !== currentSession.sessionId) {
-      return acknowledge(false);
-    }
-    if (currentSession.transport === 'browser' && data.sessionId != null) return acknowledge(false);
+    if (data.sessionId != null) return acknowledge(false);
 
     clearScreenState(data.code, socket.user.id);
+    ctx.closeRelaySources?.(data.code, socket.user.id, ['screen', 'screen-audio']);
 
     for (const [uid, user] of voiceRoom) {
       if (uid !== socket.user.id) {
@@ -657,6 +616,7 @@ module.exports = function register(socket, ctx) {
       camUsersSet.delete(socket.user.id);
       if (camUsersSet.size === 0) activeWebcamUsers.delete(data.code);
     }
+    ctx.closeRelaySources?.(data.code, socket.user.id, ['webcam']);
 
     for (const [uid, user] of voiceRoom) {
       if (uid !== socket.user.id) {
@@ -679,6 +639,10 @@ module.exports = function register(socket, ctx) {
     if (!streamViewers.has(key)) streamViewers.set(key, new Set());
     streamViewers.get(key).add(socket.user.id);
     broadcastStreamInfo(data.code);
+    // Relayed call: the screen's video starts flowing to this viewer now.
+    if (state.voiceRelay?.currentKind(data.code) === 'relay') {
+      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, true).catch((err) => console.warn('[Relay] could not start sending the screen to a viewer:', err.message));
+    }
   });
 
   socket.on('stream-unwatch', (data) => {
@@ -691,6 +655,10 @@ module.exports = function register(socket, ctx) {
       if (viewers.size === 0) streamViewers.delete(`${data.code}:${data.sharerId}`);
     }
     broadcastStreamInfo(data.code);
+    // Relayed call: stop sending the screen's video to someone not looking.
+    if (state.voiceRelay?.currentKind(data.code) === 'relay') {
+      state.voiceRelay.setWatching(data.code, `u${socket.user.id}`, data.sharerId, false).catch((err) => console.warn('[Relay] could not stop sending the screen to a viewer:', err.message));
+    }
   });
 
   // ── Voice state ─────────────────────────────────────────
@@ -720,6 +688,8 @@ module.exports = function register(socket, ctx) {
     }
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     const channelId = channel ? channel.id : null;
+    // A voice roster is for the channel's own members.
+    if (!channel || !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id)) return;
     const room = voiceUsers.get(code);
     const users = room
       ? Array.from(room.values()).map(u => serializeVoiceRosterUser(u, channelId))
@@ -762,8 +732,13 @@ module.exports = function register(socket, ctx) {
           const vMember = db.prepare(
             'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
           ).get(vch.id, socket.user.id);
+          const healRefusal = vMember ? voiceEntryRefusal(code, vch.id) : null;
           if (!vMember) {
             console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code}; signalling client to clean up.`);
+            socket.emit('voice-channel-gone', { code });
+          } else if (healRefusal) {
+            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped for ${socket.user.username} on ${code}: ${healRefusal}`);
+            socket.emit('error-msg', healRefusal);
             socket.emit('voice-channel-gone', { code });
           } else {
             // Cancel any pending grace-period eviction for this slot.
@@ -782,10 +757,8 @@ module.exports = function register(socket, ctx) {
               socketId: socket.id,
               isMuted: false,
               isDeafened: false,
-              nativeScreenVersion: socket.nativeScreenVersion || 0,
-              nativeScreenCodecs: socket.nativeScreenCodecs || [],
+              relayCapable: !!socket.relayCapable,
             });
-            notifyNativeSharersOfIncompatiblePeer(code, voiceUsers.get(code).get(socket.user.id));
             voiceLastActivity.set(socket.user.id, Date.now());
             console.log(`[VoiceDiag] PROACTIVE HEAL added ${socket.user.username} (id=${socket.user.id}) to voiceUsers[${code}]. Broadcasting to peers + sending voice-existing-users.`);
 
@@ -796,6 +769,7 @@ module.exports = function register(socket, ctx) {
               channelCode: code,
               users: existingUsers.map(serializeVoicePeer),
               voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+              transport: callKind(code),
               rejoin: true,
             });
             // Notify existing peers that we're (back) in the room so
@@ -863,7 +837,7 @@ module.exports = function register(socket, ctx) {
           }
         }
         socket.emit('status-updated', { status: 'online', statusText: socket.user.statusText || '' });
-      } catch { /* ignore */ }
+      } catch { /* runs on every voice-activity ping; the user stays "away" and the next ping retries */ }
     }
   });
 
@@ -886,9 +860,7 @@ module.exports = function register(socket, ctx) {
       console.warn(`[VoiceDiag] voice-rejoin REJECTED — bad payload`);
       return;
     }
-    const nativeClient = readNativeScreenClient(data);
-    socket.nativeScreenVersion = nativeClient.version;
-    socket.nativeScreenCodecs = nativeClient.codecs;
+    socket.relayCapable = data.relay === 1;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) {
       console.warn(`[VoiceDiag] voice-rejoin REJECTED — invalid code "${code}"`);
@@ -917,6 +889,13 @@ module.exports = function register(socket, ctx) {
       socket.emit('voice-channel-gone', { code });
       return;
     }
+    const rejoinRefusal = voiceEntryRefusal(code, vch.id);
+    if (rejoinRefusal) {
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED for ${socket.user.username} on ${code}: ${rejoinRefusal}`);
+      socket.emit('error-msg', rejoinRefusal);
+      socket.emit('voice-channel-gone', { code });
+      return;
+    }
 
     if (pendingTempDelete?.has(code)) {
       clearTimeout(pendingTempDelete.get(code));
@@ -940,9 +919,6 @@ module.exports = function register(socket, ctx) {
       const existing = voiceUsers.get(code)?.get(socket.user.id);
       if (existing) {
         existing.socketId = socket.id;
-        existing.nativeScreenVersion = socket.nativeScreenVersion;
-        existing.nativeScreenCodecs = socket.nativeScreenCodecs;
-        notifyNativeSharersOfIncompatiblePeer(code, existing);
         socket.join(`voice:${code}`);
         voiceLastActivity.set(socket.user.id, Date.now());
         console.log(`[VoiceDiag] voice-rejoin FAST PATH: rebound ${socket.user.username} on ${code} to socket ${socket.id} (no peer churn)`);
@@ -956,6 +932,7 @@ module.exports = function register(socket, ctx) {
           channelCode: code,
           users: existingUsers.map(serializeVoicePeer),
           voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+          transport: callKind(code),
           // Hint to the client: skip building new RTCPeerConnections —
           // existing ones from before the blip are still live.
           skipRenegotiate: true,
@@ -986,9 +963,6 @@ module.exports = function register(socket, ctx) {
       socket.join(`voice:${code}`);
       voiceLastActivity.set(socket.user.id, Date.now());
       _already.username = socket.user.displayName;
-      _already.nativeScreenVersion = socket.nativeScreenVersion;
-      _already.nativeScreenCodecs = socket.nativeScreenCodecs;
-      notifyNativeSharersOfIncompatiblePeer(code, _already);
       console.log(`[VoiceDiag] voice-rejoin NO-OP (already bound on same socket) for ${socket.user.username} on ${code}`);
       const existingUsers = Array.from(voiceUsers.get(code).values())
         .filter(u => u.id !== socket.user.id);
@@ -997,6 +971,7 @@ module.exports = function register(socket, ctx) {
         channelCode: code,
         users: existingUsers.map(serializeVoicePeer),
         voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+        transport: callKind(code),
         skipRenegotiate: true,
         rejoin: true
       });
@@ -1061,10 +1036,8 @@ module.exports = function register(socket, ctx) {
       socketId: socket.id,
       isMuted: preservedMute,
       isDeafened: preservedDeafen,
-      nativeScreenVersion: socket.nativeScreenVersion,
-      nativeScreenCodecs: socket.nativeScreenCodecs,
+      relayCapable: !!socket.relayCapable,
     });
-    notifyNativeSharersOfIncompatiblePeer(code, voiceUsers.get(code).get(socket.user.id));
 
     voiceLastActivity.set(socket.user.id, Date.now());
 
@@ -1076,6 +1049,7 @@ module.exports = function register(socket, ctx) {
       channelCode: code,
       users: existingUsers.map(serializeVoicePeer),
       voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
+      transport: callKind(code),
       rejoin: true
     });
 
@@ -1111,11 +1085,6 @@ module.exports = function register(socket, ctx) {
       setTimeout(() => {
         for (const sharerId of sharers) {
           const sharerInfo = voiceUsers.get(code)?.get(sharerId);
-          const session = activeScreenSessions.get(code)?.get(sharerId);
-          const target = voiceUsers.get(code)?.get(socket.user.id);
-          if (session?.transport === 'native' &&
-              (!target || target.isBot || target.nativeScreenVersion !== NATIVE_SCREEN_VERSION ||
-               !target.nativeScreenCodecs?.includes(session.codec))) continue;
           if (sharerInfo) {
             io.to(sharerInfo.socketId).emit('renegotiate-screen', {
               targetUserId: socket.user.id,
@@ -1154,9 +1123,12 @@ module.exports = function register(socket, ctx) {
     // Prune ghost entries first so the requesting client doesn't replace
     // an already-clean sidebar with a stale snapshot. If pruning actually
     // removed users, also rebroadcast the fresh roster so every other
-    // client reconciles too. (#5347 follow-up.)
+    // client reconciles too. (#5347 follow-up.) Only rooms of channels the
+    // user belongs to are reported.
+    const visible = voiceCodesVisibleTo(socket.user.id);
     for (const code of Array.from(voiceUsers.keys())) {
       const removed = pruneStaleVoiceUsers(code);
+      if (!visible.has(code)) { if (removed.length) broadcastVoiceUsers(code); continue; }
       const room = voiceUsers.get(code);
       if (room && room.size > 0) {
         const users = Array.from(room.values()).map(serializeVoicePeer);

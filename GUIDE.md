@@ -56,6 +56,28 @@ volumes:
 
 Replace the `haven_data:/data` line in `docker-compose.yml`.
 
+### Podman (Fedora and similar)
+
+Haven runs under Podman as well. A few things differ from Docker:
+
+- **SELinux.** On Fedora, add `:Z` to a folder mount so the container may use it: `-v ./haven-data:/data:Z`.
+- **Ports below 1024.** Rootless Podman cannot listen on 443. Publish Haven's own port (`-p 3000:3000`) and, if you want people outside to reach it on 443, forward it in the firewall:
+  ```bash
+  sudo firewall-cmd --permanent --add-forward-port=port=443:proto=tcp:toport=3000
+  sudo firewall-cmd --reload
+  ```
+- **File owners.** Inside the container Haven runs as uid 1000, and the container hands the data folder to that user each time it starts. If you copy data in from another machine, or run Haven once outside the container against the same folder, and the container cannot fix the owner itself, it says so in the log. Fix it from the host with:
+  ```bash
+  podman unshare chown -R 1000:1000 ./haven-data
+  ```
+  If you start the container with `--userns=keep-id`, uid 1000 in the container is your own account (when your account is uid 1000), so use `sudo chown -R $(id -u):$(id -g) ./haven-data` instead.
+- **Updating.** The container runs the copy of Haven built into the image, not files on your machine, so extracting a new zip or running Haven outside the container does not update it (and running it outside against the data folder changes the file owners). Pull the new image and recreate the container; the data folder stays as it is:
+  ```bash
+  podman pull ghcr.io/ancsemi/haven:latest
+  podman rm -f haven
+  ```
+  Then run the same `podman run` command you started it with.
+
 ### Updating
 
 **Option A — Pre-built image** (default, recommended):
@@ -194,40 +216,39 @@ Any channel can be switched between private and public later from **Channel Func
 
 ## 📥 Importing from Discord
 
-Haven can import your entire Discord server's message history — directly from the app. No external tools required.
+Haven can copy a Discord server's message history into Haven channels. The easiest way uses your Ferry bot: nothing to download, nothing to paste.
 
-### Method 1: Direct Connect (Recommended)
+### Method 1: Your Ferry bot (recommended)
 
-1. Open **Settings** (⚙️ in the sidebar) → scroll to **Import Discord History**
-2. Click the **🔗 Connect to Discord** tab
-3. Get your Discord token:
-   - Open Discord in your browser (or desktop app with dev tools enabled)
-   - Press **F12** → go to the **Application** tab
-   - In the left sidebar: **Local Storage** → **https://discord.com**
-   - Find the key called **`token`** and copy its value (without quotes)
-4. Paste the token and click **Connect**
-5. Pick a server from the grid, then select which channels and threads to import
-6. Click **Fetch Messages** — Haven downloads everything
-7. In the preview, rename channels if you want, then click **Import**
+1. Set up Ferry if you haven't yet. The [Ferry section](#-ferry-discord-bridge) walks you through it and takes about two minutes. For importing you only need its first two parts: create the bot, then connect it to Haven and add it to your Discord server. You don't have to turn Ferry on or pair any channels.
+2. In Haven, open **Settings** (⚙️ in the sidebar) → **Import Discord History**, then click the **🔗 Connect to Discord** tab
+3. Click **Use my Ferry bot**
+4. Pick your Discord server, then tick the channels and threads you want
+5. Click **Fetch Messages** and wait while Haven copies them. A big server can take a few minutes
+6. In the preview, rename channels if you want, then click **Import Selected**
 
-**What gets imported:** messages, replies, embeds, attachments, reactions, pins, forum tags, and original Discord avatars.
+The bot can only import channels it can see on Discord. If a channel is private there, give the bot's role access to it first. Otherwise Haven skips that channel and tells you which ones it skipped.
 
-**Channel types supported:** text, announcement, forum, media, plus active and archived threads.
+**What gets imported:** messages, replies, embeds, reactions, pins, links to attachments, and the original Discord names and avatars.
 
-### Method 2: File Upload
+**Channel types supported:** text, announcement, forum, media, plus active and archived public threads.
 
-If you prefer, export your Discord data with [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter) (JSON format), then:
+### Method 2: Upload an export file
 
-1. Open **Settings** → **Import Discord History**
-2. Click the **📁 Upload File** tab
-3. Drag/drop or browse for the `.json` or `.zip` file
-4. Preview, rename channels, and import
+If you'd rather not set up a bot, Discord can give you a download of your own messages (only yours, not everyone's):
+
+1. In Discord, go to **User Settings → Data & Privacy → Request all of my Data**. Discord emails you a ZIP when it's ready, which can take a few days
+2. In Haven, open **Settings** → **Import Discord History**. The **📁 Upload File** tab is already open
+3. Drop the ZIP in, or click **browse** to find it
+4. In the preview, rename channels if you want, then click **Import Selected**
+
+Export files from DiscordChatExporter (JSON) work here too.
 
 ### Important Notes
 
 - Imported messages appear as the original Discord usernames, but they're all stored under the admin account. They're clearly marked as imported from Discord.
-- The import is **history only** — Discord roles, permissions, bots, and webhooks are not imported.
-- Your Discord token is never stored by Haven. It's used only during the import session and discarded.
+- The import is **history only**: Discord roles, permissions, bots, and webhooks are not imported.
+- To keep chatting with people who stay on Discord, use [Ferry](#-ferry-discord-bridge) to bridge channels between the two.
 
 ---
 
@@ -645,6 +666,22 @@ The `Upgrade` / `Connection` headers are required for Socket.io WebSocket traffi
 
 ---
 
+## 📤 Outgoing Proxy
+
+If the server can only reach the internet through a proxy (for example a Docker container with no route out and a filtering proxy beside it), set the standard proxy variables in `.env`:
+
+```env
+https_proxy=http://proxy.example:3128
+http_proxy=http://proxy.example:3128
+no_proxy=localhost,127.0.0.1
+```
+
+Link previews, the media proxy, bot callbacks, push notifications and Haven's other outgoing requests then go through the proxy. Hosts listed in `no_proxy` (names, subdomains, IP addresses or CIDR ranges) connect directly. Only `http://` proxy addresses are supported. Voice traffic is UDP and does not use the proxy.
+
+> ⚠️ **Your proxy becomes part of Haven's security.** For a request through the proxy, Haven can't pin the connection to the address it checked, and names it can't resolve itself are passed to the proxy. Haven still refuses private, loopback and cloud metadata addresses it can see, but a proxy that can reach your internal network could let members use link previews to reach hosts behind it. Restrict the proxy to the destinations Haven needs, ideally with whole-hostname allowlist rules.
+
+---
+
 ## 🔧 Router-Specific Tips
 
 ### Xfinity / Comcast (XB7 Gateway)
@@ -660,7 +697,7 @@ The `Upgrade` / `Connection` headers are required for Socket.io WebSocket traffi
 
 | Problem | Solution |
 |---------|----------|
-| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or install OpenSSL and restart (see Troubleshooting below) |
+| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or unset `FORCE_HTTP` and restart (see Troubleshooting below) |
 | Friends get "took too long to respond" | Port forwarding not set up, or firewall blocking |
 | Friends get "connection refused" | Server isn't running — launch `Start Haven.bat` |
 | Can't connect with `https://` | Make sure you're using port 3000, not 443 |
@@ -692,16 +729,20 @@ Your theme choice is saved per browser.
 
 ### Bundled optional themes and plugins
 
-Haven also ships a couple of extras that are **installed but switched off by default**, so you will not see them until an admin turns them on. They are already on your server, including in the Docker image. There is nothing to download.
+Haven also ships optional extras that are **installed but switched off by default**, so you will not see them until an admin turns them on. They are already on your server, including in the Docker image. There is nothing to download.
 
 | File | What it is |
 |------|-----------|
 | `themes/compact.theme.css` | Compact, a dense graphite Theme API v1 theme |
 | `themes/braid.theme.css` | Braid, a dark mint theme |
 | `themes/braid-light.theme.css` | Braid Light |
+| `themes/amni-scient.theme.css` | Amni-Scient, gold on ink with the Archivo typeface |
+| `themes/amni-scient-light.theme.css` | Amni-Scient Light |
 | `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |
+| `plugins/HavenGlyphs.plugin.js` | Reversible contextual interface icons using the bundled local Font Awesome font |
+| `public/fonts/fa-solid-900.woff2` | Local Font Awesome Solid font used by Haven Glyphs |
 
 To make a bundled theme available to everyone, go to **Settings → Admin → 🏠 Branding → Custom Themes** and publish it. Publishing is what adds its button to the theme picker in the sidebar. Until then it stays hidden even though the file is present, which is the usual reason a theme "looks missing" after an update.
 
@@ -720,6 +761,11 @@ Compact and classic layout without disabling the plugin.
 Only one structural layout plugin can be active at a time. If Braid Layout is
 already engaged, Compact waits until Braid restores the native layout, and vice
 versa.
+
+Haven Glyphs is optional per browser under **Settings → Plugins & Themes**. It
+uses the bundled local Font Awesome font for interface affordances. Message
+bodies, reactions, emoji/GIF pickers, soundboard names, user content, and form
+fields stay unchanged. It can be disabled from the same settings screen.
 
 Theme authors who need stable CSS variables and semantic layout selectors should use the [Theme API v1 authoring reference](docs/theme-authoring.md) instead of depending on Haven's internal classes and IDs.
 
@@ -895,7 +941,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 
 - **HTTPS is required.** Push notifications use Service Workers, which only work over `https://` or `localhost`. If you're accessing Haven via a LAN IP like `http://192.168.1.x:3000`, push will **not** work.
 - A modern browser (Chrome, Edge, Firefox, or Safari 16+)
-- Haven must be running with SSL certificates (the default if OpenSSL is installed)
+- Haven must be running with SSL certificates (the default; Haven makes its own)
 
 ### How to Enable
 
@@ -932,7 +978,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 | "Permission denied" | You blocked notifications. Reset in browser settings: Settings → Site Settings → Notifications → find Haven → Allow |
 | Toggle is grayed out | Your browser doesn't support push, or you're in incognito/private mode |
 | Notifications not appearing | Check your OS notification settings — Haven notifications may be muted at the system level |
-| Only works on localhost | For LAN/remote access, you need valid SSL. Haven auto-generates self-signed certs if OpenSSL is installed |
+| Only works on localhost | For LAN/remote access, you need valid SSL. Haven generates self-signed certs itself on first start |
 
 ---
 
@@ -1070,6 +1116,8 @@ Click the **🔐** button in the DM header to view your **safety number** — a 
 Ferry relays messages between your Haven channels and Discord channels. Haven users
 appear on Discord under their own names, and Discord messages show up in Haven.
 
+The same bot can also copy your Discord server's history into Haven: see [Importing from Discord](#-importing-from-discord).
+
 **Every Haven server needs its own Discord bot.** Haven cannot ship a shared one:
 Discord caps unverified applications at 100 servers and verification requires a company
 review. Setting one up takes a couple of minutes and is free.
@@ -1105,6 +1153,33 @@ A pairing joins one Haven channel to one Discord channel. Each pairing has two s
 Pairings are also the boundary: members can only send to Discord channels paired with
 the Haven channel they are in. They cannot reach other servers the bot happens to
 belong to.
+
+#### Forums
+
+A Haven forum channel pairs with a Discord forum (or media) channel, and only with one.
+A chat channel pairs with a Discord text or announcement channel. The pairing form only
+offers the matching kind once you pick the Haven channel, and Haven refuses a mixed pair.
+
+- A new post on Discord becomes a new topic in the Haven forum: the post's name is the
+  title, its first message is the body, and any tags with the same name in both forums
+  carry over. Messages in the post become replies in the topic
+- A new topic in Haven becomes a new post in the Discord forum, under the author's
+  Haven name and picture, with the shared tags. Replies in the topic go into that post
+- Forum pairings always carry every post and reply, so they have no **Outgoing** setting
+- Only posts made after you pair cross. Replies in older posts stay on their own side
+- Editing the first message or a reply on Discord updates the Haven copy. For a topic
+  that started on Discord, renaming or retagging the post updates the topic, and locking
+  it closes the topic. Edits made in Haven stay in Haven, the same as chat messages
+- Deleting a post on Discord unlinks it, and closes its Haven topic if the topic started
+  on Discord. Deleting a topic in Haven unlinks it too, and the Discord post stays.
+  Removing the pairing forgets every link between its topics and posts
+- If the Discord forum requires a tag on every post, give the Haven forum a tag with the
+  same name as one of the Discord tags and use it on topics. Tags only Discord moderators
+  may set are never applied from Haven
+
+Forums need nothing extra on Discord: no new intent and no new permission. The bot
+needs to see the forum and have **Manage Webhooks** there, the same as for a text
+channel.
 
 ### 4. Grant the permission
 
@@ -1160,6 +1235,8 @@ The Ferry panel shows the connection state and the last error on each pairing.
 | Discord rejected the bot token | Reset the token in the portal and paste the new one |
 | The bot needs "Manage Webhooks" | Give the bot that permission in the Discord channel |
 | Discord refused the Server Members intent | Turn it on in the portal, or leave DMs off |
+| This pairing joins a forum to a channel that is not a forum | A paired Haven channel was switched to or from a forum. Remove the pairing and pair matching kinds |
+| That Discord forum requires a tag on every post | Add a Haven forum tag named like one of the Discord forum's tags and tag the topic with it |
 
 ---
 
@@ -1269,7 +1346,11 @@ be handed to others through the role system, one permission at a time.
 - **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
   disk allows), attachments per message (10 by default), max message length,
   per-member storage usage
-- **Auto-cleanup**: automatic deletion of messages past a chosen age
+- **Auto-cleanup**: automatic deletion of messages past a chosen age, or of the
+  oldest messages once the database or the uploads folder passes a size you
+  set (for uploads, only messages with files go, and pinned and archived ones
+  stay), and how long the files left behind by deleted messages and channels are kept before
+  they are removed for good (a week by default)
 - **Server updates**: check for a new Haven release and apply it in place. Haven
   takes a pre-update backup and restarts itself
 
@@ -1299,6 +1380,10 @@ has:
 - **Scheduled auto-backups**: on a daily or weekly schedule
 - **Restore**: upload a backup to restore a server. The previous database and
   uploads are kept as `.pre-restore` copies for one cycle as a safety net
+- **Restore on a new machine**: the setup wizard (`Install Haven.bat` on Windows,
+  `install.sh` elsewhere) has **Restore from a backup** on its first page, so
+  moving Haven to another computer brings your accounts back without creating a
+  new admin first. The backup needs Messages ticked
 
 Backups stream to and from disk rather than being held in memory, so a large
 uploads folder will not run the server out of RAM.
@@ -1321,6 +1406,11 @@ The key is stored server-side, so only admins can see or change it, and every us
 can search GIFs once it is set. No payment is involved; GIPHY's free tier is far more
 than a private server will use. Tenor is no longer supported for new setup; a server
 that already has a Tenor key keeps working until a GIPHY key is set.
+
+KLIPY works as well. Get a key at [klipy.com/developers](https://klipy.com/developers)
+and set `KLIPY_API_KEY` in your `.env` (or Docker environment). If more than one key
+is set, `PREFERRED_GIF_SEARCH` (`klipy`, `giphy` or `tenor`) picks which provider the
+picker uses; without it the server tries GIPHY first, then KLIPY, then Tenor.
 
 ---
 
@@ -1381,6 +1471,8 @@ Content-Type: application/json
 - `avatar_url` (optional) — override the bot's avatar for this message
 - `ephemeral` (optional) — when `true`, deliver only to `recipient_id` and do not store in history
 - `recipient_id` (required when `ephemeral` is `true`) — user id that should receive the private bot message
+- `reply_to` (optional): id of a message in the same channel to reply to
+- `thread_id` (optional): id of a top-level message in the bot's channel; the message is posted as a reply inside that thread (not combinable with `ephemeral`)
 
 Ephemeral example:
 
@@ -1395,7 +1487,19 @@ Content-Type: application/json
 }
 ```
 
-Response (regular): `{ "success": true, "message_id": 123 }`
+Thread example:
+
+```
+POST https://your-server.com/api/webhooks/<token>
+Content-Type: application/json
+
+{
+  "content": "Build finished",
+  "thread_id": 123
+}
+```
+
+Response (regular): `{ "success": true, "message_id": 124 }` (plus `"thread_id": 123` for a thread reply)
 
 Response (ephemeral): `{ "success": true, "ephemeral": true, "recipient_id": 42, "delivered": true }`
 
@@ -1492,14 +1596,12 @@ If your webhook has a `callback_url` and `callback_secret` configured, Haven wil
 ## 🆘 Troubleshooting
 
 **"SSL_ERROR_RX_RECORD_TOO_LONG" or "ERR_SSL_PROTOCOL_ERROR" in browser**
-→ Your browser is trying to connect via `https://` but the server is actually running in HTTP mode. This happens when SSL certificates weren't generated (usually because OpenSSL isn't installed).
+→ Your browser is trying to connect via `https://` but the server is actually running in HTTP mode. Haven makes its own self-signed certificate on first start (no OpenSSL needed), so this now only happens when `FORCE_HTTP=true` is set in your `.env`, or when the certificate files in your data directory are unreadable.
 **Quick fix:** Change the URL in your browser from `https://localhost:3000` to `http://localhost:3000`.
-**Permanent fix:** Install OpenSSL so Haven can generate certificates:
-1. Download from [slproweb.com/products/Win32OpenSSL.html](https://slproweb.com/products/Win32OpenSSL.html) (the "Light" version is fine)
-2. During install, choose **"Copy OpenSSL DLLs to the Windows system directory"**
-3. **Restart your PC** (so OpenSSL is added to PATH)
-4. Delete the `certs` folder in your data directory (`%APPDATA%\Haven\certs`)
-5. Re-launch `Start Haven.bat` — it will regenerate certificates and start in HTTPS mode
+**Permanent fix:**
+1. Open `.env` in your data directory (`%APPDATA%\Haven` on Windows, `~/.haven` elsewhere) and remove `FORCE_HTTP=true` unless a reverse proxy is terminating TLS for you
+2. If the startup log says the certificate could not be loaded, delete the `certs` folder in that data directory
+3. Re-launch `Start Haven.bat` — Haven regenerates the certificate and starts in HTTPS mode
 
 **How to tell if you're running HTTP or HTTPS:**
 Check the server's startup banner in the terminal. If it says `http://localhost:3000` — you're on HTTP. If it says `https://localhost:3000` — you're on HTTPS. The protocol in the URL you use must match.

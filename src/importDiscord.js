@@ -89,7 +89,10 @@ function parseDCEZip(zip, jsonFiles) {
         serverName = r.serverName;
         channels.push(...r.channels);
       }
-    } catch { /* skip unparseable */ }
+    } catch (err) {
+      // Untrusted file: skip it, but say so, or the channel just goes missing from the import.
+      console.warn('[import] Skipped unreadable file in export:', entry.entryName, err.message);
+    }
   }
 
   if (channels.length === 0) {
@@ -110,7 +113,7 @@ function parseOfficialZip(zip, entries) {
     try {
       const g = JSON.parse(zip.readAsText(guildJsons[0]));
       if (g.name) serverName = g.name;
-    } catch {}
+    } catch { /* unreadable guild.json: keep the default server name */ }
   }
 
   // Build channel map from channel.json files
@@ -133,7 +136,9 @@ function parseOfficialZip(zip, entries) {
         messageCount: 0
       };
       if (info.guild?.name) serverName = info.guild.name;
-    } catch {}
+    } catch (err) {
+      console.warn('[import] Skipped unreadable channel file in export:', entry.entryName, err.message);
+    }
   }
 
   // Parse CSV files
@@ -146,7 +151,9 @@ function parseOfficialZip(zip, entries) {
       const msgs = parseCSV(csv);
       ch.messages = msgs;
       ch.messageCount = msgs.length;
-    } catch {}
+    } catch (err) {
+      console.warn('[import] Skipped unreadable messages file in export:', entry.entryName, err.message);
+    }
   }
 
   const channels = Object.values(channelMap).filter(c => c.messageCount > 0);

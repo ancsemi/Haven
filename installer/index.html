@@ -141,6 +141,18 @@
   }
   input:focus { border-color: var(--accent); }
   .field-group { margin-bottom: 14px; }
+  input[type="file"] {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .restore-points { font-size: 13px; color: var(--subtext); line-height: 1.6; margin: 0 0 16px 18px; }
+  .restore-points strong { color: var(--text); }
   .field-error {
     font-size: 12px;
     color: var(--red);
@@ -251,6 +263,8 @@
   .step-row.active { color: var(--text); }
   .step-row.done { color: var(--green); }
   .step-row.error { color: var(--red); }
+  .step-row.restore-only { display: none; }
+  .restoring .step-row.restore-only { display: flex; }
   .step-icon { width: 20px; text-align: center; flex-shrink: 0; }
 
   .install-bar-track {
@@ -347,7 +361,8 @@
       No technical knowledge needed &mdash; it takes about 2 minutes.
     </p>
     <div class="btn-row-center" style="margin-top:36px;">
-      <button class="btn btn-accent" onclick="showPage(1)">Get Started &rarr;</button>
+      <button class="btn btn-accent" onclick="chooseMode(false)">Get Started &rarr;</button>
+      <button class="btn btn-ghost" onclick="chooseMode(true)">Restore from a backup</button>
     </div>
     <p class="platform-info" id="platformInfo"></p>
   </div>
@@ -459,7 +474,7 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-ghost" onclick="showPage(2)">&larr; Back</button>
+      <button class="btn btn-ghost" onclick="showPage(restoreMode ? 6 : 2)">&larr; Back</button>
       <button class="btn btn-green" onclick="startInstall()">Install &rarr;</button>
     </div>
   </div>
@@ -474,6 +489,10 @@
     </div>
 
     <div class="install-steps" id="installSteps">
+      <div class="step-row restore-only" data-step="upload">
+        <span class="step-icon">&nbsp;&nbsp;</span>
+        <span>Reading your backup&hellip;</span>
+      </div>
       <div class="step-row" data-step="deps">
         <span class="step-icon">&nbsp;&nbsp;</span>
         <span>Installing dependencies&hellip;</span>
@@ -481,6 +500,10 @@
       <div class="step-row" data-step="datadir">
         <span class="step-icon">&nbsp;&nbsp;</span>
         <span>Creating data directory&hellip;</span>
+      </div>
+      <div class="step-row restore-only" data-step="restore">
+        <span class="step-icon">&nbsp;&nbsp;</span>
+        <span>Restoring your backup&hellip;</span>
       </div>
       <div class="step-row" data-step="ssl">
         <span class="step-icon">&nbsp;&nbsp;</span>
@@ -515,12 +538,35 @@
       <button class="btn btn-ghost" onclick="window.close()">Close</button>
     </div>
   </div>
+
+  <!-- ════════ PAGE 6: Restore from a backup ════════ -->
+  <div class="page" id="page6">
+    <h2>Restore from a backup</h2>
+    <p class="hint">Pick a backup made in Haven under Settings, Admin, Backup. It must have been made with Messages ticked.</p>
+    <ul class="restore-points">
+      <li>Your <strong>accounts, channels, messages and settings</strong> come back, so you sign in with your existing account. There is no new admin to create.</li>
+      <li>Uploaded files come back too if the backup has them.</li>
+      <li>If this computer already has Haven data, it is kept beside the restored copy, not deleted.</li>
+    </ul>
+
+    <div class="field-group">
+      <label class="field-label" for="backupFile">Backup file (.zip)</label>
+      <input type="file" id="backupFile" accept=".zip,application/zip">
+    </div>
+    <div class="field-error" id="restoreError"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="showPage(0)">&larr; Back</button>
+      <button class="btn btn-accent" onclick="validateBackup()">Continue &rarr;</button>
+    </div>
+  </div>
 </div>
 
 <script>
   // ── State ──
   let currentPage = 0;
   let selectedTunnel = 'cloudflare';
+  let restoreMode = false;
 
   const calmingMessages = [
     'Setting up your private space\u2026',
@@ -539,7 +585,46 @@
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('page' + n).classList.add('active');
     currentPage = n;
-    document.getElementById('progressFill').style.width = (n / 5 * 100) + '%';
+    document.getElementById('progressFill').style.width = ((n === 6 ? 1.5 : n) / 5 * 100) + '%';
+  }
+
+  // ── New server or restore ──
+  function chooseMode(restore) {
+    restoreMode = restore;
+    showPage(restore ? 6 : 1);
+  }
+
+  function validateBackup() {
+    const input = document.getElementById('backupFile');
+    const err = document.getElementById('restoreError');
+    const file = input.files && input.files[0];
+    if (!file) { err.textContent = 'Pick your backup file first.'; return; }
+    if (!/\.zip$/i.test(file.name)) { err.textContent = 'A Haven backup is a .zip file.'; return; }
+    err.textContent = '';
+    showPage(3);
+  }
+
+  // Sends the backup to the installer (on this computer) before installing.
+  // XMLHttpRequest rather than fetch, for the upload progress.
+  function uploadBackup(file) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/backup-upload');
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const pct = Math.floor(e.loaded / e.total * 100);
+        setStep('upload', 'active', 'Reading your backup\u2026 ' + pct + '%');
+        setProgress(Math.floor(pct * 0.05));
+      };
+      xhr.onload = () => {
+        let body = {};
+        try { body = JSON.parse(xhr.responseText); } catch (e) { body = { error: xhr.responseText }; }
+        if (xhr.status === 200) resolve(body);
+        else reject(new Error(body.error || ('HTTP ' + xhr.status)));
+      };
+      xhr.onerror = () => reject(new Error('The installer stopped responding. Check the console window.'));
+      xhr.send(file);
+    });
   }
 
   // ── Network selection ──
@@ -570,7 +655,9 @@
     const row = document.querySelector('[data-step="' + stepKey + '"]');
     if (!row) return;
     const icon = row.querySelector('.step-icon');
-    const text = row.querySelector('span:last-child');
+    // The row's own label. A plain 'span:last-child' also matched the spinner
+    // inside the icon while a step was running, so labels never updated.
+    const text = row.querySelector(':scope > span:last-child');
 
     row.className = 'step-row ' + state;
     if (state === 'active') { icon.innerHTML = '<span class="spinner"></span>'; }
@@ -587,8 +674,9 @@
   }
 
   // ── Start installation via SSE ──
-  function startInstall() {
+  async function startInstall() {
     showPage(4);
+    document.getElementById('installSteps').classList.toggle('restoring', restoreMode);
 
     // Start calming message rotation
     calmInterval = setInterval(() => {
@@ -603,7 +691,20 @@
     document.getElementById('calmingMsg').textContent = calmingMessages[0];
     calmIdx = 1;
 
-    const config = {
+    if (restoreMode) {
+      setStep('upload', 'active', 'Reading your backup\u2026');
+      try {
+        await uploadBackup(document.getElementById('backupFile').files[0]);
+        setStep('upload', 'done', 'Backup received');
+      } catch (e) {
+        clearInterval(calmInterval);
+        document.getElementById('calmingMsg').textContent = '';
+        setStep('upload', 'error', e.message);
+        return;
+      }
+    }
+
+    const config = restoreMode ? { restore: true, tunnel: selectedTunnel } : {
       serverName: document.getElementById('serverName').value.trim() || 'Haven',
       adminUser: document.getElementById('adminUser').value.trim(),
       adminPass: document.getElementById('adminPass').value,
@@ -654,13 +755,17 @@
       document.getElementById('calmingMsg').textContent = '';
 
       if (evt.error) {
-        document.getElementById('installStatus').textContent =
-          'Something went wrong. Check the console window for details.';
+        document.getElementById('installStatus').textContent = evt.message
+          ? 'Something went wrong: ' + evt.message
+          : 'Something went wrong. Check the console window for details.';
       } else {
         // Build success message
-        const name = document.getElementById('serverName').value.trim() || 'Haven';
-        document.getElementById('successMsg').textContent =
-          'Your server "' + name + '" is ready to go.';
+        const r = evt.restored || {};
+        const name = restoreMode ? r.serverName : (document.getElementById('serverName').value.trim() || 'Haven');
+        document.getElementById('successMsg').textContent = restoreMode
+          ? 'Your server' + (name ? ' "' + name + '"' : '') + ' has been restored. Sign in with your existing account' +
+            (r.adminUsername ? ' (the admin is ' + r.adminUsername + ')' : '') + '.'
+          : 'Your server "' + name + '" is ready to go.';
 
         let shareMsg = 'Double-click "Start Haven" to begin!';
         if (selectedTunnel === 'cloudflare') {

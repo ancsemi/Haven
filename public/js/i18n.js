@@ -41,7 +41,7 @@ const I18n = (() => {
   //   4. DEFAULT ('en')
   async function _detect() {
     let stored = null;
-    try { stored = localStorage.getItem('haven_locale'); } catch {}
+    try { stored = localStorage.getItem('haven_locale'); } catch { /* storage blocked (private mode): keep the default */ }
     if (stored && SUPPORTED.includes(stored)) {
       _preference = stored;
       return stored;
@@ -190,7 +190,7 @@ const I18n = (() => {
         _languageChangeBound = true;
         window.addEventListener('languagechange', () => {
           if (_preference === 'auto') {
-            try { window.location.reload(); } catch {}
+            try { window.location.reload(); } catch { /* non-browser test harness or embedded view without reload */ }
           }
         });
       }
@@ -205,7 +205,7 @@ const I18n = (() => {
   async function setLocale(locale) {
     const preference = locale === 'auto' ? 'auto' : (SUPPORTED.includes(locale) ? locale : DEFAULT);
     _preference = preference;
-    try { localStorage.setItem('haven_locale', preference); } catch {}
+    try { localStorage.setItem('haven_locale', preference); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
     try {
       window.location.reload();
       return;

@@ -1,0 +1,1456 @@
+﻿/* Haven core styles, part 12 of 16: webcam and stream tiles, the soundboard pop-out, admin tags, markdown and embeds. Loaded in order by style.css; the order matters. */
+/* Webcam tile pop-out/minimize/close buttons (mirrors screen share) */
+.webcam-tile .stream-popout-btn,
+.webcam-tile .stream-fullscreen-btn,
+.webcam-tile .stream-minimize-btn,
+.webcam-tile .stream-close-btn {
+  position: absolute;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  padding: 0.125rem 0.375rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 3;
+}
+.webcam-tile:hover .stream-popout-btn,
+.webcam-tile:hover .stream-fullscreen-btn,
+.webcam-tile:hover .stream-minimize-btn,
+.webcam-tile:hover .stream-close-btn {
+  opacity: 1;
+}
+.webcam-tile .stream-popout-btn { top: 4px; left: 4px; }
+.webcam-tile .stream-fullscreen-btn { top: 4px; left: 32px; }
+.webcam-tile .stream-minimize-btn { top: 4px; right: 28px; }
+.webcam-tile .stream-close-btn { top: 4px; right: 4px; }
+
+/* Webcam layout modes (reuse screen-share layout classes) */
+.webcam-grid.layout-vertical    { flex-direction: column; align-items: center; }
+.webcam-grid.layout-side-by-side .webcam-tile { flex: 0 1 calc(50% - 4px); max-width: calc(50% - 0.25rem); }
+.webcam-grid.layout-grid-2x2 .webcam-tile    { flex: 0 1 calc(50% - 4px); max-width: calc(50% - 0.25rem); }
+
+/* Webcam focus mode (double-click to expand) */
+.webcam-container.webcam-focus-mode {
+  max-height: none !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  height: 100%;
+}
+.webcam-container.webcam-focus-mode .webcam-grid {
+  max-height: none !important;
+  flex: 1;
+  height: 100%;
+}
+.webcam-container.webcam-focus-mode .webcam-tile:not(.webcam-focused) {
+  display: none;
+}
+.webcam-container.webcam-focus-mode .webcam-tile.webcam-focused {
+  flex: 1;
+  width: 100%;
+  max-width: none !important;
+  min-height: 0;
+  height: 100%;
+}
+.webcam-container.webcam-focus-mode .webcam-tile.webcam-focused video {
+  width: 100%;
+  height: 100%;
+  max-height: none !important;
+  object-fit: contain;
+}
+
+/* Webcam popped-out tile (mirrors screen-share) */
+.webcam-tile.webcam-popped-out {
+  height: 1.75rem !important; min-height: 0;
+  overflow: hidden; opacity: 0.5;
+}
+.webcam-tile.webcam-popped-out video { display: none; }
+.webcam-tile.webcam-popped-out::after {
+  content: '⧉ Popped out'; display: flex; align-items: center; justify-content: center;
+  height: 100%; font-size: 0.6875rem; color: var(--text-muted);
+}
+
+/* Webcam PiP overlay */
+.webcam-pip-overlay {
+  width: 20rem; min-height: 15rem;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SCREEN SHARE
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.screen-share-container {
+  display: none;
+  flex-direction: column;
+  background: #000;
+  border-bottom: 2px solid var(--accent);
+  max-height: 50vh;
+  min-height: 11.25rem;
+  position: relative;
+}
+
+.screen-share-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.6875rem;
+  border-radius: 0.75rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  animation: pulse-glow 2s ease-in-out infinite;
+  white-space: nowrap;
+}
+.screen-share-indicator:hover { filter: brightness(1.2); }
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.screen-share-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-tertiary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.screen-share-header .icon-btn {
+  color: var(--text-muted);
+}
+
+.screen-share-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stream-size-slider {
+  width: 6.25rem;
+  height: 1.125rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border-radius: 0.125rem;
+  cursor: pointer;
+  vertical-align: middle;
+  outline: none;
+}
+.stream-size-slider::-webkit-slider-runnable-track {
+  background: rgba(255,255,255,0.3);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.stream-size-slider::-moz-range-track {
+  background: rgba(255,255,255,0.3);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.stream-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -0.25rem;
+  box-shadow: 0 0 6px var(--accent-glow, rgba(124,92,252,0.4));
+}
+.stream-size-slider::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+.stream-size-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  user-select: none;
+  white-space: nowrap;
+}
+.screen-share-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.125rem;
+  max-height: calc(50vh - 2rem);
+  overflow-y: auto;
+  background: #000;
+}
+/* Stream layout modes */
+.screen-share-grid.layout-vertical   { grid-template-columns: 1fr; }
+.screen-share-grid.layout-side-by-side { grid-template-columns: repeat(2, 1fr); }
+.screen-share-grid.layout-grid-2x2   { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+
+/* Stream layout picker */
+.stream-layout-picker { position: relative; }
+.stream-layout-btn {
+  background: none; border: none; color: var(--text-muted, #aaa); cursor: pointer;
+  font-size: 1rem; padding: 0.125rem 0.375rem; border-radius: 0.25rem; line-height: 1;
+}
+.stream-layout-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.stream-layout-menu {
+  display: none; position: absolute; top: 100%; right: 0; z-index: 50;
+  background: var(--bg-tertiary, #2a2a3a); border: 1px solid var(--border, #444);
+  border-radius: 0.375rem; padding: 0.25rem; min-width: 6.875rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.stream-layout-menu.open { display: flex; flex-direction: column; gap: 0.125rem; }
+.stream-layout-opt {
+  background: none; border: none; color: var(--text-secondary, #bbb); cursor: pointer;
+  padding: 0.3125rem 0.625rem; border-radius: 0.25rem; text-align: left; font-size: 0.75rem; white-space: nowrap;
+}
+.stream-layout-opt:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.stream-layout-opt.active { background: var(--accent, #7c5cfc); color: var(--accent-text); }
+
+.screen-share-tile {
+  position: relative;
+  background: #111;
+}
+
+.screen-share-tile video {
+  width: 100%;
+  display: block;
+  object-fit: contain;
+  max-height: 45vh;
+  background: #000;
+}
+/* When a stream/webcam video is fullscreened, override tile constraints */
+video:fullscreen,
+video:-webkit-full-screen {
+  max-height: unset !important;
+  max-width: unset !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  background: #000;
+}
+/* When the file-video wrapper is the fullscreen element, center the video */
+.file-video-wrap:fullscreen,
+.file-video-wrap:-webkit-full-screen {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000 !important;
+  max-width: unset !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+.file-video-wrap:fullscreen .file-video,
+.file-video-wrap:-webkit-full-screen .file-video {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  margin: 0 !important;
+}
+
+.screen-share-tile-label {
+  position: absolute;
+  bottom: 4px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  pointer-events: none;
+}
+
+/* ── Stream Audio Controls (per-tile overlay) ──────────── */
+
+.stream-audio-controls {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+.screen-share-tile:hover .stream-audio-controls { opacity: 1; }
+
+.stream-mute-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  line-height: 1;
+}
+.stream-mute-btn:hover { background: rgba(255,255,255,0.15); }
+.stream-mute-btn.muted { color: var(--danger, #e74c3c); }
+
+.stream-vol-slider {
+  --track-bg: rgba(255,255,255,0.2);
+  width: 3.75rem;
+  height: 0.875rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border-radius: 0.125rem;
+  cursor: pointer;
+  outline: none;
+  vertical-align: middle;
+}
+.stream-vol-slider::-webkit-slider-runnable-track {
+  background: rgba(255,255,255,0.3);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.stream-vol-slider::-moz-range-track {
+  background: rgba(255,255,255,0.3);
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.stream-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.875rem; height: 0.875rem;
+  border-radius: 50%;
+  background: var(--accent, #7c5cfc);
+  cursor: pointer;
+  margin-top: -0.3125rem;
+  box-shadow: 0 0 4px rgba(124,92,252,0.4);
+}
+.stream-vol-slider::-moz-range-thumb {
+  width: 0.875rem; height: 0.875rem;
+  border-radius: 50%;
+  background: var(--accent, #7c5cfc);
+  cursor: pointer;
+  border: none;
+}
+.stream-vol-pct {
+  color: rgba(255,255,255,0.7);
+  font-size: 0.625rem;
+  min-width: 1.75rem;
+  text-align: center;
+  user-select: none;
+}
+
+.stream-audio-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: rgba(0,0,0,0.65);
+  color: var(--accent, #7c5cfc);
+  font-size: 0.625rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.1875rem;
+}
+
+.stream-no-audio-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: rgba(0,0,0,0.75);
+  color: var(--text-muted, #888);
+  font-size: 0.625rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.1875rem;
+  opacity: 0.85;
+}
+
+/* ── Audio-mode variants for the streamer's own tile.
+   Subtle color cue so the streamer can tell at a glance which audio path
+   their share is using. Only visible on their own tile. ── */
+.stream-audio-badge.mode-app          { color: #7cfc7c; }                /* green: clean per-app capture */
+.stream-audio-badge.mode-system-clean { color: #7cb8fc; }                /* blue:  system minus Haven */
+.stream-audio-badge.mode-fallback     { color: #fcc77c; }                /* amber: fell back from per-app */
+.stream-audio-badge.mode-loopback     { color: #fc7c7c; }                /* red:   raw loopback (voice-loop risk) */
+
+/* ── Stream Viewer Badge (eye icon + count on tiles) ── */
+
+.stream-viewer-badge {
+  position: absolute;
+  bottom: 30px;
+  right: 6px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.625rem;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  z-index: 5;
+  backdrop-filter: blur(4px);
+}
+.stream-viewer-badge .viewer-eye {
+  font-size: 0.75rem;
+}
+
+/* ── Stream Focus Mode (double-click to expand) ──────── */
+
+.stream-focus-mode {
+  max-height: none !important;
+  flex: 999 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stream-focus-mode .screen-share-grid {
+  max-height: none !important;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.stream-focus-mode .screen-share-tile:not(.stream-focused) {
+  display: none;
+}
+
+.stream-focus-mode .screen-share-tile.stream-focused {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.stream-focus-mode .screen-share-tile.stream-focused video {
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ── Stream Pop-out Button ──────────────────────────── */
+
+.stream-popout-btn {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 3;
+  line-height: 1;
+}
+.screen-share-tile:hover .stream-popout-btn { opacity: 1; }
+.stream-popout-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Stream Fullscreen Button (beside pop-out, top-left) ── */
+
+.stream-fullscreen-btn {
+  position: absolute;
+  top: 4px;
+  left: 36px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 3;
+  line-height: 1;
+}
+.screen-share-tile:hover .stream-fullscreen-btn { opacity: 1; }
+.stream-fullscreen-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Stream Minimize Button (top-right, keeps audio) ───── */
+
+.stream-minimize-btn {
+  position: absolute;
+  top: 4px;
+  right: 30px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 3;
+  line-height: 1;
+}
+.screen-share-tile:hover .stream-minimize-btn { opacity: 1; }
+.stream-minimize-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Stream Close Button (top-right corner, mutes audio) ─ */
+
+.stream-close-btn {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 3;
+  line-height: 1;
+}
+.screen-share-tile:hover .stream-close-btn { opacity: 1; }
+.stream-close-btn:hover { background: rgba(220,53,69,0.7); }
+
+/* Collapse tile when popped out — free up Haven space */
+.screen-share-tile.stream-popped-out {
+  height: 1.75rem !important;
+  min-height: 0 !important;
+  overflow: hidden;
+  flex: none !important;
+}
+.screen-share-tile.stream-popped-out video { display: none; }
+.screen-share-tile.stream-popped-out .stream-controls { display: none; }
+.screen-share-tile.stream-popped-out::after {
+  content: '⧉ Popped out — click to restore';
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 1.75rem;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  background: var(--bg-tertiary);
+}
+
+/* When ALL tiles are popped out, collapse the entire container */
+.screen-share-container.all-streams-popped {
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+}
+.screen-share-container.all-streams-popped .screen-share-grid {
+  max-height: none !important;
+}
+
+/* ── Stream PiP Overlay ─────────────────────────────────── */
+.stream-pip-overlay {
+  width: 30rem;
+  min-height: 20rem;
+}
+.stream-pip-overlay .stream-pip-video {
+  flex: 1;
+  overflow: hidden;
+  background: #000;
+  min-height: 15rem;
+}
+.stream-pip-overlay video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Maximized state — fill the whole window so the stream can take up a full
+   monitor. !important is required to beat the inline width/height the drag +
+   browser resize handles write onto the element. */
+.stream-pip-overlay.stream-pip-maximized {
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0;
+  resize: none;
+}
+.stream-pip-maximize.active { background: rgba(255,255,255,0.22); }
+
+@media (max-width: 768px) {
+  .stream-pip-overlay {
+    width: 17.5rem;
+    bottom: 12px;
+    right: 12px;
+  }
+}
+
+/* ── Soundboard PiP Overlay ─────────────────────────────── */
+.sb-pip-overlay {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 25rem;
+  z-index: 10000;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  min-width: 16.25rem;
+  min-height: 13.75rem;
+}
+.sb-pip-body {
+  flex: 1;
+  overflow: hidden;
+  padding: 0.5rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+.sb-pip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.375rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 5rem;
+  /* It also carries .soundboard-grid for the list-view styles; that class caps
+     height and pads the Sound Manager grid, neither of which fits the pop-out. */
+  max-height: none;
+  padding: 0;
+}
+@media (max-width: 768px) {
+  .sb-pip-overlay {
+    width: 17.5rem;
+    bottom: 12px;
+    right: 12px;
+  }
+}
+
+/* ── Soundboard Sidebar (twin panel, sits directly LEFT of voice/users sidebar) ── */
+.sb-sidebar-panel {
+  width: 13.75rem;
+  min-width: 13.75rem;
+  max-width: 26.25rem;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  transition: width 0.25s ease, min-width 0.25s ease, border-left-width 0.25s ease, opacity 0.2s ease;
+}
+.sb-sidebar-panel.sb-hidden {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-left-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+/* When the soundboard panel is open it shares an edge with the voice/users
+   panel's existing border-left, so no extra border-right is required. */
+/* Resize handle on the left edge */
+.sb-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 0.375rem;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.sb-sidebar-resize-handle:hover,
+.sb-sidebar-resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.5;
+}
+.sb-sidebar-header {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sb-sidebar-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  min-height: 0;
+}
+.sb-sidebar-body .soundboard-grid.sidebar-mode {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+/* Collapsible category groups inside the soundboard sidebar */
+.sb-sidebar-group { margin-bottom: 0.375rem; }
+.sb-sidebar-group-label {
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  padding: 0.25rem 0.125rem;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.sb-sidebar-group-label::-webkit-details-marker { display: none; }
+.sb-sidebar-group-label::before {
+  content: '\25BE'; /* small down triangle */
+  font-size: 0.5625rem;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.sb-sidebar-group:not([open]) > .sb-sidebar-group-label::before {
+  transform: rotate(-90deg);
+}
+.sb-sidebar-group-count {
+  margin-left: auto;
+  font-size: 0.85em;
+  opacity: 0.7;
+  font-weight: 600;
+}
+.sb-sidebar-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-top: 0.125rem;
+}
+/* Soundboard sidebar toggle button — fixed; sits at the LEFT edge of the
+   soundboard panel (which is directly LEFT of the voice/users panel).
+   JS keeps `right` synced with the combined width of voice + soundboard. */
+.sb-sidebar-toggle-btn {
+  position: fixed;
+  right: 0;           /* JS recalculates on mount + resize/collapse events */
+  top: 114px;         /* staggered below the voice/users collapse btn at 72px */
+  transform: none;
+  width: 1.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6875rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 0.375rem 0 0 0.375rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  z-index: 100;
+  /* `right` and `top` are set imperatively in JS when sidebars open/close
+     — animate them so the button slides with the panel rather than popping
+     into place. `top` animates because the open-state position (72px,
+     aligned with header) and the closed-state position (114px, staggered
+     below the voice toggle) differ. */
+  transition: right 0.25s ease, top 0.25s ease, color 0.15s, background 0.15s;
+}
+.sb-sidebar-toggle-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+/* Stack a small note over the arrow. The members handle sits directly above
+   this one in the same spot at the same size, and with nothing but an arrow on
+   each there was no way to tell them apart short of remembering which was
+   which. Only this one is marked, so one has a note and one does not. (#5534) */
+.sb-sidebar-toggle-btn {
+  flex-direction: column;
+  gap: 0.0625rem;
+  height: 2.75rem;
+}
+.sb-sidebar-toggle-btn .sb-toggle-mark {
+  font-size: 0.625rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+.sb-sidebar-toggle-btn .sb-toggle-arrow {
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   WHITELIST PANEL
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.whitelist-add-row {
+  display: flex;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.whitelist-add-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-text-input {
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+}
+
+.settings-text-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Admin Tags panel (#tagging phase 4) */
+.tag-admin-add { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.tag-admin-add .settings-text-input { flex: 1; min-width: 0; }
+.tag-admin-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.tag-admin-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tag-admin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-admin-uses { font-size: 0.72rem; color: var(--text-muted); }
+.tag-admin-row-actions { margin-left: auto; display: flex; gap: 0.375rem; flex-shrink: 0; }
+.tag-admin-edit-input { flex: 1; min-width: 0; }
+
+.whitelist-list {
+  max-height: 12.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.whitelist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+}
+
+.whitelist-username {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.btn-danger-sm {
+  padding: 0.125rem 0.5rem !important;
+  font-size: 0.6875rem;
+  background: var(--danger) !important;
+  color: var(--danger-text) !important;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-height: 0;
+  line-height: 1.4;
+}
+
+.btn-danger-sm:hover { opacity: 0.85; }
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   PINNED MESSAGES
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.message.pinned,
+.message-compact.pinned {
+  border-left: 3px solid var(--accent);
+  background: rgba(124, 92, 252, 0.04);
+}
+
+.pinned-tag {
+  font-size: 0.6875rem;
+  margin-left: 0.25rem;
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ARCHIVED / PROTECTED MESSAGES
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.message.archived,
+.message-compact.archived {
+  border-left: 3px solid #27ae60;
+  background: rgba(39, 174, 96, 0.04);
+}
+
+.archived-tag {
+  font-size: 0.6875rem;
+  margin-left: 0.25rem;
+  opacity: 0.7;
+  cursor: default;
+}
+
+.ephemeral-tag {
+  display: inline-block;
+  margin-right: 0.375rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 62.4375rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #6b4f00;
+  background: rgba(212, 160, 23, 0.2);
+  border: 1px solid rgba(212, 160, 23, 0.35);
+  vertical-align: middle;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ANNOUNCEMENT CHANNELS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.message.announcement,
+.message-compact.announcement {
+  border-left: 3px solid #d4a017;
+  background: rgba(212, 160, 23, 0.05);
+}
+
+.announcement-badge {
+  background: #d4a017 !important;
+  color: #fff !important;
+}
+
+.pinned-panel {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  max-height: 18.75rem;
+  overflow-y: auto;
+}
+
+.pinned-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+}
+
+.pinned-list { padding: 0.25rem 0; }
+
+.pinned-item {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background var(--transition);
+}
+
+.pinned-item:hover { background: rgba(255,255,255,0.04); }
+
+.pinned-item-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.125rem;
+}
+
+.pinned-item-author { font-weight: 600; font-size: 0.8125rem; }
+.pinned-item-time { font-size: 0.6875rem; color: var(--text-muted); }
+
+.pinned-item-content {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.pinned-item-footer {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   CODE BLOCKS & BLOCKQUOTES
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.code-block {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin: 0.375rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.code-block code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: var(--text-primary);
+  background: none;
+  padding: 0;
+}
+
+.code-block-lang {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.inline-code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background: var(--bg-tertiary);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  font-size: 0.9em;
+  color: var(--accent);
+}
+
+.chat-blockquote {
+  border-left: 3px solid var(--text-muted);
+  padding: 0.25rem 0.625rem;
+  margin: 0.0625rem 0;
+  color: var(--text-secondary);
+  font-style: italic;
+  background: var(--bg-tertiary);
+  border-radius: 0.375rem;
+  max-width: fit-content;
+}
+
+/* ── Markdown tables ────────────────────────────────── */
+.chat-table-wrap {
+  margin: 0.25rem 0;
+  overflow-x: auto;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  max-width: 100%;
+}
+.chat-table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  width: auto;
+  min-width: 12.5rem;
+  background: var(--bg-tertiary, rgba(0,0,0,0.15));
+}
+.chat-table th,
+.chat-table td {
+  padding: 0.375rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+  border-right: 1px solid var(--border-color, rgba(255,255,255,0.04));
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.chat-table th:last-child,
+.chat-table td:last-child { border-right: none; }
+.chat-table tr:last-child td { border-bottom: none; }
+.chat-table th {
+  background: rgba(255,255,255,0.04);
+  font-weight: 600;
+  color: var(--text);
+}
+.chat-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+.chat-table .custom-emoji { width: 1.1em; height: 1.1em; vertical-align: -0.15em; }
+.chat-blockquote-author {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.0625rem;
+}
+.chat-blockquote-body {
+  line-height: 1.35;
+}
+
+/* ── Chat Markdown: Highlight ──────────────────────────── */
+.chat-highlight {
+  background: rgba(250, 200, 50, 0.25);
+  color: inherit;
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.1875rem;
+}
+
+/* ── Chat Markdown: Headings ───────────────────────────── */
+.chat-heading {
+  font-weight: 700;
+  margin: 0.25rem 0 0.125rem;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.chat-h1 { font-size: 1.5em; }
+.chat-h2 { font-size: 1.25em; }
+.chat-h3 { font-size: 1.1em; }
+
+/* ── Chat Markdown: Horizontal Rules ───────────────────── */
+.chat-hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 0.375rem 0;
+}
+
+/* ── Chat Markdown: Lists ──────────────────────────────── */
+.chat-list {
+  margin: 0.25rem 0;
+  padding-left: 1.375rem;
+}
+.chat-list li {
+  margin: 0.0625rem 0;
+  line-height: 1.45;
+}
+ol.chat-list { list-style-type: decimal; }
+ul.chat-list { list-style-type: disc; }
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   LINK PREVIEWS
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.link-preview {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 0.375rem;
+  padding: 0.625rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: inherit;
+  max-width: 30rem;
+  overflow: hidden;
+  transition: background var(--transition);
+}
+
+.link-preview:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.link-preview-image {
+  width: 5rem;
+  height: 5rem;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+}
+
+.link-preview-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.link-preview-site {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.link-preview-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-link);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link-preview-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Multi-image gallery embed (2×2 grid, Discord-style) ─ */
+.link-preview--gallery {
+  flex-direction: column;
+  max-width: 25rem;
+  gap: 0.375rem;
+}
+
+.link-preview-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.125rem;
+  border-radius: 0.25rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.link-preview-gallery-img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+/* 3-image: first spans both columns so it isn't stretched tiny */
+.link-preview-gallery[data-count="3"] .link-preview-gallery-img:first-child {
+  grid-column: 1 / -1;
+  aspect-ratio: 2 / 1;
+}
+
+/* ── Inline YouTube embed in chat messages ────────────── */
+.link-preview-yt {
+  margin-top: 0.375rem;
+  max-width: 30rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid #ff0000;
+  background: #000;
+  aspect-ratio: 16 / 9;
+}
+.link-preview-yt iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* ── Rich embed card (Bluesky / X / generic) — mobile-parity layout ───── */
+.link-preview--rich {
+  flex-direction: column;
+  gap: 0.375rem;
+  align-items: stretch;
+  max-width: 30rem;
+  padding: 0.5rem 0.625rem;
+  border-left-color: var(--lp-accent, var(--accent));
+}
+.lp-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.lp-site {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--lp-accent, var(--accent));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-size,
+.lp-collapse {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+}
+.lp-size:hover,
+.lp-collapse:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-secondary);
+}
+.lp-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+}
+.link-preview.lp-collapsed .lp-content { display: none; }
+.lp-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.lp-author {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+.lp-avatar {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.lp-author-name {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-handle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.lp-text {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 14;
+  overflow: hidden;
+}
+.lp-media {
+  position: relative;
+  display: block;
+  line-height: 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  max-width: 100%;
+}
+.lp-image,
+.lp-video {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 32.5rem;
+  border-radius: 0.5rem;
+  background: #000;
+  object-fit: contain;
+}
+.lp-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3.25rem;
+  height: 3.25rem;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.lp-play::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 54%;
+  transform: translate(-50%, -50%);
+  border-style: solid;
+  border-width: 9px 0 9px 15px;
+  border-color: transparent transparent transparent #fff;
+}
+.lp-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.lp-stats span { white-space: nowrap; }
+/* YouTube card reuses the shared chrome; neutralise the legacy inner styling */
+.link-preview--yt {
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+}
+.link-preview--yt .link-preview-yt {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0.375rem;
+  max-width: 30rem;
+  width: 100%;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   DM auto-cleanup notice (#5340)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.dm-cleanup-notice {
+  display: none;
+  padding: 0.25rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Channel Topic Bar
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+.channel-topic-bar {
+  padding: 0.25rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 1.5rem;
+  line-height: 24px;
+}
+
+.channel-topic-bar:hover {
+  color: var(--text-primary);
+}
+

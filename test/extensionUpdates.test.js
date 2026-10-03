@@ -108,6 +108,83 @@ test('manual check, install and rollback preserve filename and original bytes', 
   assert.equal(afterRollback.find(offer => offer.action === 'install').version, '1.1.0');
 });
 
+test('broken plugin and theme headers are isolated while healthy extensions can update', async t => {
+  for (const type of ['plugin', 'theme']) {
+    for (const source of [
+      '/**\n * @id dev.example.broken\n * @version 1.0.0\n */',
+      '/**\n * @id dev.example.broken\n * @version invalid\n * @update-repo bad-owner/broken\n */',
+      '/**\n * @id dev.example.broken\n * @id dev.example.other\n * @version 1.0.0\n * @update-repo bad-owner/broken\n */',
+    ]) {
+      const fixture = createUpdateFixture(t);
+      const file = 'Broken' + (type === 'plugin' ? '.plugin.js' : '.theme.css');
+      const badFile = path.join(fixture.dirs[type], file);
+      fs.writeFileSync(badFile, source);
+      const rows = (await fixture.updater.check('admin')).extensions;
+      const broken = rows.find(row => row.file === file);
+      assert.match(broken.error, /metadata|Duplicate extension header field/);
+      assert.deepEqual(broken.offers, []);
+      assert.equal(fixture.calls.some(url => url.includes('bad-owner')), false);
+      const healthy = rows.find(row => row.file === 'Example.plugin.js');
+      await fixture.updater.apply(healthy.offers.find(offer => offer.action === 'install').token, 'admin');
+      assert.deepEqual(fs.readFileSync(fixture.file), pluginSource('1.1.0'));
+      assert.equal(fs.readFileSync(badFile, 'utf8'), source);
+    }
+  }
+});
+
+test('an unrelated broken file added after checking does not prevent an approved update', async t => {
+  const fixture = createUpdateFixture(t);
+  const offer = await fixture.offer();
+  fs.writeFileSync(path.join(fixture.dirs.plugin, 'Broken.plugin.js'), '/**\n * @id broken\n */');
+  await fixture.updater.apply(offer.token, 'admin');
+  assert.deepEqual(fs.readFileSync(fixture.file), pluginSource('1.1.0'));
+});
+
+test('all duplicate installed identities get errors while unrelated extensions are checked', async t => {
+  const fixture = createUpdateFixture(t);
+  const duplicate = pluginSource('1.0.0').toString().replace(id, 'dev.example.duplicate');
+  fs.writeFileSync(path.join(fixture.dirs.plugin, 'Duplicate.plugin.js'), duplicate);
+  fs.writeFileSync(path.join(fixture.dirs.theme, 'Duplicate.theme.css'), duplicate.replace(repo, repo.toUpperCase()));
+  const rows = (await fixture.updater.check('admin')).extensions;
+  for (const row of rows.filter(row => row.id === 'dev.example.duplicate')) {
+    assert.match(row.error, /Duplicate installed extension ID/);
+    assert.deepEqual(row.offers, []);
+  }
+  assert.equal(rows.filter(row => row.error).length, 2);
+  assert.equal(rows.find(row => row.file === 'Example.plugin.js').offers[0].version, '1.1.0');
+});
+
+test('an installed identity becoming ambiguous invalidates an existing offer even when its bytes match', async t => {
+  const fixture = createUpdateFixture(t);
+  const offer = await fixture.offer();
+  fs.copyFileSync(fixture.file, path.join(fixture.dirs.plugin, 'Copy.plugin.js'));
+  await assert.rejects(fixture.updater.apply(offer.token, 'admin'), /Duplicate installed extension ID/);
+  assert.deepEqual(fs.readFileSync(fixture.file), pluginSource('1.0.0'));
+});
+
+test('locally edited managed headers remain error rows without update or rollback offers', async t => {
+  for (const source of [
+    '/**\n * @version 1.1.0\n */',
+    pluginSource('1.1.0').toString().replace(repo, 'other-owner/extensions'),
+  ]) {
+    const fixture = createUpdateFixture(t);
+    await fixture.updater.apply((await fixture.offer()).token, 'admin');
+    fs.writeFileSync(fixture.file, source);
+    const row = (await fixture.updater.check('admin')).extensions[0];
+    assert.equal(row.file, 'Example.plugin.js');
+    assert.match(row.error, /Local edits or source changes/);
+    assert.deepEqual(row.offers, []);
+    assert.equal(fs.readFileSync(fixture.file, 'utf8'), source);
+  }
+});
+
+test('extensions without update metadata remain outside the managed update list', async t => {
+  const fixture = createUpdateFixture(t);
+  fs.writeFileSync(path.join(fixture.dirs.plugin, 'Legacy.plugin.js'), '/**\n * @version 1.0.0\n */');
+  const rows = (await fixture.updater.check('admin')).extensions;
+  assert.deepEqual(rows.map(row => row.file), ['Example.plugin.js']);
+});
+
 test('mutable, prerelease and incompatible releases are not offered', async t => {
   for (const change of [
     fixture => (fixture.release.immutable = false),
@@ -310,7 +387,9 @@ test('symlinked extensions are rejected without touching their targets', async t
   const external = path.join(fixture.options.stateDir, 'external');
   fs.renameSync(fixture.file, external);
   fs.symlinkSync(external, fixture.file);
-  await assert.rejects(fixture.updater.check('admin'), /regular file/);
+  const row = (await fixture.updater.check('admin')).extensions[0];
+  assert.match(row.error, /regular file/);
+  assert.deepEqual(row.offers, []);
   assert.deepEqual(fs.readFileSync(external), pluginSource('1.0.0'));
 });
 

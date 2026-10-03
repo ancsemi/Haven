@@ -91,9 +91,6 @@ function clearChannelRuntimeState(state, code) {
     if (pending?.timer) clearTimeout(pending.timer);
     state.pendingVoiceLeave.delete(key);
   }
-  for (const key of state.nativeScreenOfferWindows?.keys() || []) {
-    if (key.endsWith(`:${code}`)) state.nativeScreenOfferWindows.delete(key);
-  }
 }
 
 function createTempChannelDeleteCallback({ db, io, state, channelId, log = console.log, warn = console.warn }) {
@@ -208,15 +205,6 @@ function rotateLiveChannelState(io, state, channelId, oldCode, newCode) {
     state.pendingTempDelete.delete(oldCode);
     state.pendingTempDelete.set(newCode, timer);
   }
-  for (const [key, timestamps] of state.nativeScreenOfferWindows || []) {
-    if (!key.endsWith(`:${oldCode}`)) continue;
-    state.nativeScreenOfferWindows.delete(key);
-    state.nativeScreenOfferWindows.set(
-      `${key.slice(0, -(oldCode.length))}${newCode}`,
-      timestamps
-    );
-  }
-
   state.botAudioManager?.renameChannel(oldCode, newCode);
   io.to(newRoom).to(newVoiceRoom).emit('channel-code-rotated', rotation);
 }

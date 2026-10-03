@@ -186,6 +186,7 @@ const VALID_ROLE_PERMS = [
   'upload_files', 'use_voice', 'use_tts', 'manage_webhooks', 'mention_everyone', 'view_history',
   'use_ferry',
   'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue',
+  'manage_tags',
   'promote_user', 'transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'read_only_override',
   'view_audit_log', 'manage_display_names'
 ];
@@ -252,8 +253,47 @@ function stripRoleMentions(content, roleNames) {
   return content.replace(re, '@\u200B$1');
 }
 
+// ── Files that go with a deleted message ─────────────────────────
+// Deleting a message (or a whole DM) takes the files it attached with it,
+// but only files one of `ownerIds` uploaded as an attachment, and only when
+// nothing else still points at them. The paths come from the message text
+// or, for an encrypted DM, from the client, so without these checks anyone
+// could name someone else's avatar, emoji or attachment in a message of their
+// own, delete it, and have that file purged for good. Call it after the
+// message rows are gone, so they do not count as a reference.
+function releasableUploads(db, relPaths, ownerIds) {
+  const owners = new Set((ownerIds || []).filter(id => Number.isInteger(id)));
+  if (!owners.size) return [];
+  const ownership = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?');
+  const inMessages = db.prepare('SELECT 1 FROM messages WHERE instr(content, ?) > 0 LIMIT 1');
+  const inProfiles = db.prepare(`
+    SELECT 1 WHERE
+         EXISTS(SELECT 1 FROM users WHERE instr(COALESCE(avatar, ''), @p) > 0 OR instr(COALESCE(border, ''), @p) > 0)
+      OR EXISTS(SELECT 1 FROM user_personas WHERE instr(COALESCE(avatar, ''), @p) > 0)
+      OR EXISTS(SELECT 1 FROM webhooks WHERE instr(COALESCE(avatar_url, ''), @p) > 0)
+      OR EXISTS(SELECT 1 FROM roles WHERE instr(COALESCE(icon, ''), @p) > 0)
+      OR EXISTS(SELECT 1 FROM server_settings WHERE instr(COALESCE(value, ''), @p) > 0)
+      OR EXISTS(SELECT 1 FROM custom_sounds WHERE filename = @f)
+      OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = @f)
+      OR EXISTS(SELECT 1 FROM stickers WHERE filename = @f)
+  `);
+  const out = [];
+  for (const relPath of new Set(relPaths || [])) {
+    if (typeof relPath !== 'string' || !relPath || out.length >= 200) continue;
+    const own = ownership.get(relPath);
+    if (!own || !owners.has(own.user_id) || (own.scope !== 'channel' && own.scope !== 'dm')) continue;
+    const ref = '/uploads/' + relPath;
+    try {
+      if (inMessages.get(ref)) continue;
+      if (inProfiles.get({ p: ref, f: relPath })) continue;
+    } catch { continue; }
+    out.push(relPath);
+  }
+  return out;
+}
+
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
   sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline,
-  replyAuthorUsername, toReplyContext, stripRoleMentions,
+  replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
 };

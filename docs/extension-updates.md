@@ -13,6 +13,9 @@ Open **Settings → Admin → Extension Updates** and select **Check for updates
 Haven checks the repositories declared by the installed extensions and lists
 newer compatible versions.
 
+An extension with invalid update metadata or local edits is shown with an error
+and cannot be updated or rolled back. Other extensions are still checked.
+
 Before making a change, Haven shows the repository, installed and proposed
 versions, the GitHub release notes, and a security warning. Release notes are
 shown as escaped plain text. Select **I understand, update** to continue.
@@ -156,7 +159,9 @@ and manifest.
 
 Haven reads its blocklist from
 `https://ancsemi.github.io/Haven/blocklist.json` before checking, installing,
-or rolling back an extension. Each entry identifies a repository, extension ID,
+or rolling back an extension. That GitHub Pages address redirects to
+`https://haven-app.com/blocklist.json`. Both destinations are restricted to the
+blocklist file. Each entry identifies a repository, extension ID,
 exact versions, and a reason:
 
 ```json

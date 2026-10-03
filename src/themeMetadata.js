@@ -100,6 +100,10 @@ function parseThemeMetadata(content) {
   return {
     ...meta,
     ...classifyThemeApi(declared === undefined ? null : declared),
+    // A file that sets the page background is a full palette, not a stackable
+    // tweak. Settings toggles for those used to keep injecting :root tokens
+    // after the picker moved to Matrix.
+    palette: typeof content === 'string' && /--bg-primary\s*:/.test(content),
   };
 }
 
@@ -171,11 +175,14 @@ function compatibleThemeFiles(directory, files) {
 }
 
 function validatedThemeDefault(directory, value, publishedFiles) {
-  if (typeof value !== 'string' || !value.startsWith('file:')) return value || '';
-  const file = value.slice(5);
-  return publishedFiles.includes(file) && readThemeMetadataFile(directory, file)?.compatible
-    ? value
-    : '';
+  if (typeof value !== 'string' || !value) return '';
+  const file = value.startsWith('file:') ? value.slice(5) : value;
+  const usable = publishedFiles.includes(file) && readThemeMetadataFile(directory, file)?.compatible;
+  if (usable) return `file:${file}`;
+  // A name that can only refer to a theme file, but does not resolve to one, never
+  // reaches the client as a theme name: it would apply no stylesheet and raise no
+  // error, so an admin would see a healthy setting and an unthemed page.
+  return isThemeFilename(file) ? '' : value;
 }
 
 module.exports = {

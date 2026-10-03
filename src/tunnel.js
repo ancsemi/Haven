@@ -7,6 +7,7 @@ const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { agentFor } = require('./outboundProxy');
 const { DATA_DIR } = require('./paths');
 
 // ── cloudflared location ─────────────────────────────────────
@@ -53,7 +54,7 @@ function resolveCloudflared({ binDir = BIN_DIR, pathHas = onPath } = {}) {
 function fetchToFile(url, dest, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 6) return reject(new Error('too many redirects'));
-    const req = https.get(url, { headers: { 'User-Agent': 'Haven' }, timeout: 30000 }, (resp) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'Haven' }, timeout: 30000, agent: agentFor(url) }, (resp) => {
       if ([301, 302, 303, 307, 308].includes(resp.statusCode) && resp.headers.location) {
         resp.resume();
         return fetchToFile(new URL(resp.headers.location, url).href, dest, redirects + 1).then(resolve, reject);
@@ -85,7 +86,7 @@ async function downloadCloudflared({ binDir = BIN_DIR, fetch = fetchToFile } = {
     fs.renameSync(tmp, dest);
     if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
   } catch (err) {
-    try { fs.unlinkSync(tmp); } catch { /* nothing to clean */ }
+    try { fs.unlinkSync(tmp); } catch { /* partial download may not exist; the real error is thrown below */ }
     throw new Error(`could not download cloudflared (${err.message}). Download ${asset} from github.com/cloudflare/cloudflared/releases and save it as ${dest}`);
   }
   console.log(`[tunnel] cloudflared ready at ${dest}`);
@@ -125,7 +126,10 @@ async function stopTunnel() {
   try {
     if (current.type === 'localtunnel' && current.ref?.close) await current.ref.close();
     if (current.type === 'cloudflared' && current.ref && !current.ref.killed) current.ref.kill();
-  } catch { /* cleanup errors are non-critical */ }
+  } catch (err) {
+    // The tunnel may still be up even though it is now reported as stopped.
+    console.warn('[tunnel] Error while stopping tunnel:', err.message);
+  }
   status = { ...status, active: false, url: null };
   return true;
 }
@@ -238,7 +242,8 @@ let hooked = false;
 function registerProcessCleanup() {
   if (hooked) return;
   hooked = true;
-  const cleanup = () => { try { stopTunnel(); } catch { /* exit cleanup */ } };
+  // stopTunnel is async and catches its own errors, so nothing can throw here.
+  const cleanup = () => { stopTunnel(); };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
   process.on('exit', cleanup);

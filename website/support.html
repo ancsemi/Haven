@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Haven — Help &amp; Support</title>
   <meta name="description" content="Get help with Haven. Troubleshooting, bug reports, and contact info.">
-  <link rel="canonical" href="https://ancsemi.github.io/Haven/support.html">
+  <link rel="canonical" href="https://haven-app.com/support.html">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>">
 
   <style>
@@ -298,7 +298,7 @@
             </tr>
             <tr>
               <td>Voice chat not working</td>
-              <td>Voice requires HTTPS <em>or</em> localhost. If friends are connecting over the internet without HTTPS, voice won't work in most browsers. Install <a href="https://slproweb.com/products/Win32OpenSSL.html" target="_blank">OpenSSL</a> and restart Haven to enable HTTPS automatically.</td>
+              <td>Voice requires HTTPS <em>or</em> localhost. If friends are connecting over the internet without HTTPS, voice won't work in most browsers. Haven generates its own certificate on first start, so check the startup log says <code>HTTPS enabled</code> and that <code>FORCE_HTTP</code> is not set in your <code>.env</code>.</td>
             </tr>
             <tr>
               <td>"Port 3000 already in use"</td>
@@ -338,7 +338,7 @@
 
         <h3 style="margin-top: 24px;">How to report</h3>
         <div class="btn-row">
-          <a href="mailto:help.havenapp@gmail.com?subject=Haven%20Bug%20Report&body=What%20happened%3A%0A%0AWhat%20I%20expected%3A%0A%0ASteps%20to%20reproduce%3A%0A%0AMy%20setup%20(OS%2C%20browser)%3A%0A" class="btn btn-primary">
+          <a href="mailto:ancsemi@haven-app.com?subject=Haven%20Bug%20Report&body=What%20happened%3A%0A%0AWhat%20I%20expected%3A%0A%0ASteps%20to%20reproduce%3A%0A%0AMy%20setup%20(OS%2C%20browser)%3A%0A" class="btn btn-primary">
             ✉️ Email Us
           </a>
           <a href="https://github.com/ancsemi/Haven/issues/new" target="_blank" class="btn btn-secondary">
@@ -427,7 +427,7 @@
             <span class="arrow">▼</span>
           </button>
           <div class="faq-a">
-            <p>Install <a href="https://slproweb.com/products/Win32OpenSSL.html" target="_blank">OpenSSL</a> (Windows) or use your system's package manager (Mac/Linux). Restart Haven and it'll automatically generate certificates and switch to HTTPS. Check the <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">Setup Guide</a> for full instructions.</p>
+            <p>Haven generates a self-signed certificate itself on first start, no OpenSSL needed. If the log says HTTP, remove <code>FORCE_HTTP=true</code> from your <code>.env</code> (or delete the <code>certs</code> folder in your data directory if the log says the certificate could not be loaded) and restart. Check the <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md" target="_blank">Setup Guide</a> for full instructions.</p>
           </div>
         </div>
       </div>
@@ -439,8 +439,8 @@
         <h2>Still stuck?</h2>
         <p>Reach out directly. I usually respond within a day or two.</p>
         <div class="contact-methods">
-          <a href="mailto:help.havenapp@gmail.com?subject=Haven%20Support">
-            <span class="cm-icon">✉️</span> help.havenapp@gmail.com
+          <a href="mailto:ancsemi@haven-app.com?subject=Haven%20Support">
+            <span class="cm-icon">✉️</span> ancsemi@haven-app.com
           </a>
           <a href="https://github.com/ancsemi/Haven/issues/new" target="_blank">
             <span class="cm-icon">📋</span> GitHub Issues

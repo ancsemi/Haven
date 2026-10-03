@@ -62,13 +62,16 @@ function loadGame() {
     return;
   }
 
-  // Load Ruffle from CDN
+  // Ruffle is served by this server (see /games/ruffle in server.js), and
+  // loads its .wasm from the same folder.
+  window.RufflePlayer = window.RufflePlayer || {};
+  window.RufflePlayer.config = Object.assign({ publicPath: '/games/ruffle/' }, window.RufflePlayer.config);
   const script = document.createElement('script');
-  script.src = 'https://unpkg.com/@ruffle-rs/ruffle';
+  script.src = '/games/ruffle/ruffle.js';
   script.onload = () => initRuffle();
   script.onerror = () => {
     document.getElementById('loading-msg').innerHTML =
-      `<div class="error-msg">${t('games.flash.emulator_failed')}<br>${t('games.flash.check_connection')}</div>`;
+      `<div class="error-msg">${t('games.flash.emulator_failed')}<br>${t('games.flash.not_installed')}</div>`;
   };
   document.head.appendChild(script);
 }

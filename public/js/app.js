@@ -4,19 +4,63 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=3.51.6';
-import UIBindMethods   from './modules/app-ui.js?v=4.5.1';
-import MediaMethods    from './modules/app-media.js?v=4.5.1';
-import ContextMethods  from './modules/app-context.js?v=3.44.6';
-import ChannelMethods  from './modules/app-channels.js?v=3.44.6';
-import MessageMethods  from './modules/app-messages.js?v=3.52.3';
-import UserMethods     from './modules/app-users.js?v=4.5.1';
-import VoiceMethods    from './modules/app-voice.js?v=3.34.2';
-import UtilityMethods  from './modules/app-utilities.js?v=4.5.1';
-import AdminMethods    from './modules/app-admin.js?v=4.5.1';
-import PlatformMethods from './modules/app-platform.js?v=3.16.14';
-import SearchMethods   from './modules/app-search.js?v=3.49.0';
-import FerryMethods    from './modules/app-ferry.js?v=3.51.4';
+import SocketMethods   from './modules/app-socket.js?v=4.17.13';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.17.13';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.17.17';
+import UIBindMethods   from './modules/app-ui.js?v=4.17.4';
+import ComposerMethods from './modules/app-composer.js?v=4.17.3';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.17.2';
+import VoiceControlMethods from './modules/app-voice-controls.js?v=4.17.14';
+import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.17.2';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.17.2';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.17.6';
+import PeopleMethods from './modules/app-people.js?v=4.17.2';
+import SettingsMethods from './modules/app-settings.js?v=4.17.15';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.17.17';
+import ServerBarMethods from './modules/app-server-bar.js?v=4.17.2';
+import MobileMethods from './modules/app-mobile.js?v=4.17.2';
+import MediaMethods    from './modules/app-media.js?v=4.17.5';
+import AttachmentMethods from './modules/app-attachments.js?v=4.17.5';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.17.5';
+import AppearanceMethods from './modules/app-appearance.js?v=4.17.5';
+import SoundMethods from './modules/app-sounds.js?v=4.17.5';
+import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.17.5';
+import BotMethods from './modules/app-bots.js?v=4.17.5';
+import ContextMethods  from './modules/app-context.js?v=4.17.1';
+import ChannelMethods  from './modules/app-channels.js?v=4.17.10';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.17.10';
+import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.17.10';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.17.10';
+import MessageMethods  from './modules/app-messages.js?v=4.17.12';
+import LinkPreviewMethods from './modules/app-link-previews.js?v=4.17.12';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.17.12';
+import UserMethods     from './modules/app-users.js?v=4.17.1';
+import VoiceMethods    from './modules/app-voice.js?v=4.17.11';
+import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.17.13';
+import StreamTileMethods from './modules/app-stream-tiles.js?v=4.17.14';
+import MusicMethods from './modules/app-music.js?v=4.17.11';
+import UtilityMethods  from './modules/app-utilities.js?v=4.17.6';
+import MessageContentMethods from './modules/app-message-content.js?v=4.17.7';
+import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.17.6';
+import GifPickerMethods from './modules/app-gif-picker.js?v=4.17.6';
+import ThreadMethods from './modules/app-threads.js?v=4.17.6';
+import AdminMethods    from './modules/app-admin.js?v=4.17.17';
+import BrandingMethods from './modules/app-branding.js?v=4.17.4';
+import MembersAdminMethods from './modules/app-members-admin.js?v=4.17.6';
+import AutocompleteMethods from './modules/app-autocomplete.js?v=4.17.4';
+import StatusMethods from './modules/app-status.js?v=4.17.4';
+import DiscordImportMethods from './modules/app-discord-import.js?v=4.17.4';
+import RoleMethods from './modules/app-roles.js?v=4.17.4';
+import RoleAssignMethods from './modules/app-role-assign.js?v=4.17.4';
+import ModerationMethods from './modules/app-moderation.js?v=4.17.4';
+import PlatformMethods from './modules/app-platform.js?v=4.17.15';
+import SearchMethods   from './modules/app-search.js?v=4.10.1';
+import FerryMethods    from './modules/app-ferry.js?v=4.17.0';
+import ForumMethods    from './modules/app-forum.js?v=4.17.1';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.16.3';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.10.0';
+import CallMethods from './modules/app-calls.js?v=4.17.1';
+import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 
 class HavenApp {
   constructor() {
@@ -60,6 +104,10 @@ class HavenApp {
     this._e2eWrappingKey = null;   // wrapping key kept in memory for cross-device sync
     this._pendingKeyReqs = {};     // userId → [resolve] for promise-based partner key fetch
     this._pendingE2ENotice = null; // E2E notice text to re-append after message re-render
+    this._e2eNoKey = new Set();    // DM partners the server has no public key for
+    this._e2eKeyNotices = new Map(); // partner id -> key-change note shown in their DM this session
+    this._plainDmOk = new Set();   // DM codes the user agreed to send unencrypted this session
+    this._dmGateAsking = new Map(); // DM code -> the send question in progress
     this._oldestMsgId = null;      // oldest message ID in current view (for pagination)
     this._noMoreHistory = false;   // true when all history has been loaded
     this._loadingHistory = false;  // prevent concurrent history requests
@@ -92,6 +140,7 @@ class HavenApp {
       { cmd: 'play',       args: t('commands.args.name_or_url'),       desc: t('commands.description.play') },
       { cmd: 'gif',        args: t('commands.args.query'),             desc: t('commands.description.gif') },
       { cmd: 'poll',       args: t('commands.args.optional_question'), desc: t('commands.description.poll') },
+      { cmd: 'schedule',   args: t('commands.args.optional_text'),     desc: t('commands.description.schedule') },
       { cmd: 'time',       args: t('commands.args.time'),              desc: t('commands.description.time') },
     ];
 
@@ -280,7 +329,9 @@ class HavenApp {
     // exists, below, since it travels over the authenticated connection.
 
     this.socket = io({
-      auth: { token: this.token },
+      // presenceDeltas: this client merges member-list changes
+      // (online-users-delta) instead of needing every list in full.
+      auth: { token: this.token, presenceDeltas: 1 },
       reconnectionDelay: 1500,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.4,
@@ -323,6 +374,7 @@ class HavenApp {
     this._setupDiscordImport();
     this._setupAuditLog();
     this._initRoleManagement();
+    this._initPermMatrix();
     this._initServerBranding();
     this._setupResizableSidebars();
     this.modMode = typeof ModMode === 'function' ? new ModMode() : null;
@@ -335,6 +387,7 @@ class HavenApp {
     this._setupZoomSlider();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
+    this._setupLazyMedia();
     this._setupEmbedSizePicker();
     this._setupRoleDisplayPicker();
     this._setupToolbarIconPicker();
@@ -398,22 +451,40 @@ class HavenApp {
       if (!res.ok) return;
       const data = await res.json();
       if (!data.commands || !data.commands.length) return;
-      const knownCmds = new Set(this.slashCommands.map(c => String(c.cmd || '').toLowerCase()));
+      const known = new Map(this.slashCommands.map(c => [String(c.cmd || '').toLowerCase(), c]));
       for (const bc of data.commands) {
         const cmd = String(bc.command || '').trim();
         if (!cmd) continue;
         const key = cmd.toLowerCase();
-        if (knownCmds.has(key)) continue;
-        knownCmds.add(key);
-        this.slashCommands.push({
+        const channelCode = bc.channel_code || null;
+        const desc = `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`;
+        const existing = known.get(key);
+        if (existing) {
+          // The same command registered by a second bot in another channel
+          // keeps the one menu entry and adds its channel to it, so the
+          // suggestions show in every channel that has a bot for it, each
+          // naming its own bot. A built-in command of the same name stays as
+          // it is (#5635).
+          if (channelCode && Array.isArray(existing.channelCodes) && !existing.channelCodes.includes(channelCode)) {
+            existing.channelCodes.push(channelCode);
+            existing.descByChannel[channelCode] = desc;
+          }
+          continue;
+        }
+        const entry = {
           cmd,
           // Bot commands can have arbitrary args; a hardcoded "<...>" makes
           // subcommand entries look broken and encourages base-command clicks.
           args: '',
-          desc: `${bc.description || t('commands.bot_command')}  [${bc.bot_name || t('commands.bot')}]`
-        });
+          desc,
+          // A bot lives in one channel, so its commands are only offered there (#5635).
+          channelCodes: channelCode ? [channelCode] : null,
+          descByChannel: channelCode ? { [channelCode]: desc } : {}
+        };
+        known.set(key, entry);
+        this.slashCommands.push(entry);
       }
-    } catch { /* non-critical */ }
+    } catch (err) { console.warn('[Commands] could not load bot slash commands', err); }
   }
 
 }
@@ -421,18 +492,62 @@ class HavenApp {
 // ── Merge all method groups onto the prototype ────────────
 Object.assign(HavenApp.prototype,
   SocketMethods,
+  SocketChannelMethods,
+  SocketEventMethods,
   UIBindMethods,
+  ComposerMethods,
+  ChannelMenuMethods,
+  VoiceControlMethods,
+  MediaGalleryMethods,
+  MessageActionMethods,
+  PipPanelMethods,
+  PeopleMethods,
+  SettingsMethods,
+  AdminControlMethods,
+  ServerBarMethods,
+  MobileMethods,
   MediaMethods,
+  AttachmentMethods,
+  AvatarEditorMethods,
+  AppearanceMethods,
+  SoundMethods,
+  EmojiStickerMethods,
+  BotMethods,
   ContextMethods,
   ChannelMethods,
+  ChannelContextMethods,
+  ChannelOrganizeMethods,
+  ChannelUnreadMethods,
   MessageMethods,
+  LinkPreviewMethods,
+  MessageToolMethods,
   UserMethods,
   VoiceMethods,
+  ScreenWebcamMethods,
+  StreamTileMethods,
+  MusicMethods,
   UtilityMethods,
+  MessageContentMethods,
+  EmojiPickerMethods,
+  GifPickerMethods,
+  ThreadMethods,
   AdminMethods,
+  BrandingMethods,
+  MembersAdminMethods,
+  AutocompleteMethods,
+  StatusMethods,
+  DiscordImportMethods,
+  RoleMethods,
+  RoleAssignMethods,
+  ModerationMethods,
   PlatformMethods,
   SearchMethods,
   FerryMethods,
+  ForumMethods,
+  RoleToolMethods,
+  PermMatrixMethods,
+  CallMethods,
+  ScalingMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

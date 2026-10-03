@@ -88,3 +88,14 @@ test('the login page and its assets load over plain HTTP', async () => {
     assert.equal(status, 200, `${p} served`);
   }
 });
+
+test('the Flash player comes from Haven itself, not a CDN', async () => {
+  // Ruffle used to load from unpkg, and the games pages' CSP allowed any
+  // script from there, which is any package anyone publishes to npm.
+  for (const p of ['/', '/games/flash.html']) {
+    const csp = (await head(p))['content-security-policy'] || '';
+    assert.ok(!/unpkg/.test(csp), `${p} CSP names no CDN: ${csp}`);
+  }
+  const h = await head('/games/ruffle/ruffle.js');
+  assert.match(h['content-type'] || '', /javascript/, 'the pinned player is served');
+});

@@ -172,6 +172,7 @@ async function runPluginLoader({
   safe = false,
   theme = 'haven',
   enabledPlugins = [],
+  enabledThemes = [],
   plugins = [],
   themes = [],
   themeResponses = null,
@@ -184,7 +185,7 @@ async function runPluginLoader({
   const localStorage = new MemoryStorage({
     haven_theme: theme,
     haven_enabled_plugins: JSON.stringify(enabledPlugins),
-    haven_enabled_themes: '[]',
+    haven_enabled_themes: JSON.stringify(enabledThemes),
   });
   const sessionStorage = new MemoryStorage({
     ...(safe ? { haven_safe_mode: '1' } : {}),
@@ -347,7 +348,16 @@ test('theme metadata parser preserves existing fields and exposes compatibility'
     themeApiDeclared: '1',
     compatibility: 'compatible',
     compatible: true,
+    palette: false,
   });
+});
+
+test('theme metadata marks a --bg-primary file as a palette', () => {
+  const meta = parseThemeMetadata(`/**
+   * @name Braid
+   */
+:root { --bg-primary: #0b0d12; --accent: #00ff9d; }`);
+  assert.equal(meta.palette, true);
 });
 
 test('theme metadata parser supports compact one-line comment blocks', () => {
@@ -432,6 +442,27 @@ test('stored theme settings expose only compatible installed file themes', () =>
   assert.deepEqual(published, ['braid.theme.css']);
   assert.equal(validatedThemeDefault(themesDir, 'file:braid.theme.css', published), 'file:braid.theme.css');
   assert.equal(validatedThemeDefault(themesDir, 'file:missing.theme.css', published), '');
+});
+
+test('a theme named without the file: prefix is normalised, not passed through', () => {
+  const themesDir = path.join(ROOT, 'themes');
+  const published = compatibleThemeFiles(themesDir, ['braid.theme.css']);
+
+  // A bare filename is the same intent as `file:` — it is what an admin writes by hand.
+  // Passing it through unchanged makes the client apply an unknown built-in theme, so
+  // the page loads no stylesheet and reports no error.
+  assert.equal(validatedThemeDefault(themesDir, 'braid.theme.css', published), 'file:braid.theme.css');
+
+  // A name that could only be a theme file, but is not one, must not reach the client.
+  assert.equal(validatedThemeDefault(themesDir, 'unpublished.theme.css', published), '');
+
+  // Built-in names are not files and stay exactly as they are.
+  assert.equal(validatedThemeDefault(themesDir, 'nord', published), 'nord');
+  assert.equal(validatedThemeDefault(themesDir, 'haven', published), 'haven');
+
+  // Nothing selected stays nothing selected.
+  assert.equal(validatedThemeDefault(themesDir, '', published), '');
+  assert.equal(validatedThemeDefault(themesDir, null, published), '');
 });
 
 test('safe mode persists for the tab and can be explicitly cleared', () => {
@@ -611,6 +642,53 @@ test('refresh reconciles a removed theme before applying fallback', async () => 
 
   assert.equal(result.loader.loadedThemes.has('temporary.theme.css'), false);
   assert.equal(result.localStorage.getItem('haven_theme'), 'haven');
+});
+
+test('unpublished palette themes do not stack on a built-in theme', async () => {
+  const result = await runPluginLoader({
+    theme: 'matrix',
+    enabledThemes: ['braid.theme.css', 'compact.theme.css'],
+    themes: [
+      {
+        file: 'braid.theme.css',
+        published: false,
+        palette: true,
+        compatible: true,
+        compatibility: 'legacy',
+      },
+      {
+        file: 'compact.theme.css',
+        published: false,
+        palette: true,
+        compatible: true,
+        compatibility: 'compatible',
+        themeApi: 1,
+      },
+    ],
+  });
+
+  assert.equal(result.links.length, 0);
+  result.loader.reapplyEnabledThemes();
+  assert.equal(result.links.length, 0);
+  assert.equal(result.localStorage.getItem('haven_enabled_themes'), '[]');
+  assert.equal(result.loader.loadedThemes.get('braid.theme.css').enabled, false);
+});
+
+test('unpublished tweak themes still stack on a built-in theme', async () => {
+  const result = await runPluginLoader({
+    theme: 'matrix',
+    enabledThemes: ['fonts.theme.css'],
+    themes: [{
+      file: 'fonts.theme.css',
+      published: false,
+      palette: false,
+      compatible: true,
+      compatibility: 'legacy',
+    }],
+  });
+
+  assert.equal(result.links.length, 1);
+  assert.equal(result.links[0].id, 'haven-theme-fonts.theme.css');
 });
 
 test('admin theme settings accept only installed themes and clear an unpublished default', t => {

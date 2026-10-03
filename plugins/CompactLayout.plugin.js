@@ -36,6 +36,11 @@ class CompactLayout {
         if (event.detail?.owner !== 'CompactLayout') this._syncDesktop();
       });
       this._listen(this._media, 'change', () => this._syncDesktop());
+      this._listen(document, 'haven:layout-effect', (event) => {
+        if (typeof event.detail?.compact !== 'boolean') return;
+        if (event.detail.compact) this._engage();
+        else this._disengage();
+      });
 
       if (HavenApi.Data.load('CompactLayout', 'layoutOn', '1') !== '0') this._engage(false);
       else this._renderControl();
@@ -95,6 +100,7 @@ class CompactLayout {
       this._syncDesktop();
       if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '1');
       this._renderControl();
+      document.dispatchEvent(new CustomEvent('haven:compact-layout', { detail: { on: true } }));
     } catch (error) {
       this._engaged = false;
       try { this._restoreDesktop(); }
@@ -113,6 +119,7 @@ class CompactLayout {
     document.documentElement.removeAttribute('data-compact-layout');
     if (persist) HavenApi.Data.save('CompactLayout', 'layoutOn', '0');
     this._renderControl();
+    document.dispatchEvent(new CustomEvent('haven:compact-layout', { detail: { on: false } }));
   }
 
   _renderControl() {

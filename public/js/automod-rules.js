@@ -127,12 +127,34 @@
     return { text: out, obfuscated: out !== before };
   }
 
+  // ── Code in chat messages ─────────────────────────────────────────
+  // Commands people paste name things like ghcr.io/owner/image or start.sh
+  // that nobody is meant to click, and Haven never turns a bare address into
+  // a link anyway. So in a chat message, code (``` blocks and `inline`) keeps
+  // only its full http(s) links for checking; the bare addresses are dropped.
+  // A full link is checked wherever it sits. The patterns match the message
+  // formatter's, so both read the same spans as code.
+  var FENCE_RE = /```(?:\w+[ \t]*\n|\n)?([\s\S]*?)```/g;
+  var INLINE_CODE_RE = /`([^`]+)`/g;
+  var FULL_LINK_RE = /\bhttps?:\/\/[^\s<>"'`]+/gi;
+  function keepFullLinks(code) {
+    var links = code.match(FULL_LINK_RE);
+    return ' ' + (links ? links.join(' ') : '') + ' ';
+  }
+  function codeLinksOnly(text) {
+    return text
+      .replace(FENCE_RE, function (_, code) { return keepFullLinks(code); })
+      .replace(INLINE_CODE_RE, function (_, code) { return keepFullLinks(code); });
+  }
+
   // ── URL extraction ────────────────────────────────────────────────
   // Returns [{ raw, host, url, viaMarkdown, label, obfuscated }]. `host` is the
   // normalised hostname a browser would actually connect to, which is the only
-  // thing worth making a policy decision about.
-  function extractUrls(rawText) {
+  // thing worth making a policy decision about. opts.markdown: the text is a
+  // chat message, so bare addresses inside code are not counted (see above).
+  function extractUrls(rawText, opts) {
     if (typeof rawText !== 'string' || !rawText) return [];
+    if (opts && opts.markdown) rawText = codeLinksOnly(rawText);
 
     var stripped = rawText.replace(INVISIBLE_RE, '');
     var d = deobfuscate(stripped);
@@ -240,10 +262,10 @@
   }
 
   // Evaluate a whole block of text. Returns null when everything is fine, or
-  // the first offending { rule, host, url, message }.
-  function checkText(text, policy) {
+  // the first offending { rule, host, url, message }. opts as for extractUrls.
+  function checkText(text, policy, opts) {
     if (!policy || policy.mode === 'off') return null;
-    var links = extractUrls(text);
+    var links = extractUrls(text, opts);
     if (!links.length) return null;
 
     for (var i = 0; i < links.length; i++) {

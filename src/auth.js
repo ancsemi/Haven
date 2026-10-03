@@ -3,10 +3,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { getDb } = require('./database');
+const { grantAdminRole } = require('./roleDefaults');
 const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const https = require('https');
 const http = require('http');
+const { agentFor } = require('./outboundProxy');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -29,7 +31,12 @@ function _sessionExpiresIn() {
     const n = parseInt(row && row.value);
     if (n === 0) return null;
     if (Number.isFinite(n) && n >= 1 && n <= 365) return `${n}d`;
-  } catch {}
+  } catch (err) {
+    // If the setting cannot be read, do not hand out a token that never
+    // expires; fall back to the old 7 day default instead.
+    console.warn('[auth] Could not read session duration, using 7 days:', err.message);
+    return '7d';
+  }
   return null;
 }
 
@@ -166,7 +173,7 @@ function downloadSSOAvatar(url) {
     }
 
     const fetcher = parsed.protocol === 'https:' ? https : http;
-    const request = fetcher.get(url, { timeout: 10000 }, (res) => {
+    const request = fetcher.get(url, { timeout: 10000, agent: agentFor(parsed) }, (res) => {
       if (res.statusCode !== 200) {
         res.resume();
         return reject(new Error(`HTTP ${res.statusCode}`));
@@ -355,7 +362,10 @@ router.post('/guest-login', authLimiter, async (req, res) => {
         db.prepare(
           'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
         ).run(userId, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
-      } catch { /* non-critical */ }
+      } catch (err) {
+        // Not worth failing the login over, but the acceptance record is gone.
+        console.warn('[guest-login] Failed to record EULA acceptance:', err.message);
+      }
     }
 
     const token = jwt.sign(
@@ -400,9 +410,14 @@ function provisionNewUser(db, userId, username, io) {
           const ins = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
           for (const ch of grantChannels) ins.run(ch.channel_id, userId);
         }
-      } catch { /* non-critical */ }
+      } catch (err) {
+        console.warn(`[provision] Failed to grant linked channels for role ${role.id}:`, err.message);
+      }
     }
-  } catch { /* non-critical */ }
+  } catch (err) {
+    // Without these roles a new member may not see any channel.
+    console.warn('[provision] Failed to assign auto roles:', err.message);
+  }
 
   // ── Persistent welcome message ─────────────────────────
   // Post a saved welcome message to every channel flagged show_welcome, so a
@@ -593,6 +608,7 @@ router.post('/register', authLimiter, async (req, res) => {
     const result = db.prepare(
       'INSERT INTO users (username, password_hash, is_admin, avatar) VALUES (?, ?, ?, ?)'
     ).run(username, hash, isAdmin, avatarPath);
+    if (isAdmin) grantAdminRole(db, result.lastInsertRowid);
     _regTimestamps.push(Date.now()); // feed the opt-in global registration rate limit
 
     // Consume the invite if it was used for registration.
@@ -617,7 +633,9 @@ router.post('/register', authLimiter, async (req, res) => {
         db.prepare(
           'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
         ).run(result.lastInsertRowid, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
-      } catch { /* non-critical */ }
+      } catch (err) {
+        console.warn('[register] Failed to record EULA acceptance:', err.message);
+      }
     }
 
     res.json({
@@ -702,6 +720,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
     if (!anyAdmin && user.username.toLowerCase() === ADMIN_USERNAME && !user.is_admin) {
       db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+      grantAdminRole(db, user.id);
       user.is_admin = 1;
     }
 
@@ -737,12 +756,14 @@ router.post('/login', authLimiter, async (req, res) => {
         db.prepare(
           'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
         ).run(user.id, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
-      } catch { /* non-critical */ }
+      } catch (err) {
+        console.warn('[login] Failed to record EULA acceptance:', err.message);
+      }
     }
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName },
+      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, e2ePassphrase: !!user.e2e_passphrase },
       // (#5300) Set when an admin reset this user's password to a temp
       // placeholder AND the user just logged in with that temp pw. Client
       // must funnel the user through a mandatory change-password screen
@@ -808,7 +829,7 @@ router.post('/ban-appeal', authLimiter, async (req, res) => {
           }
         }
       }
-    } catch { /* non-critical */ }
+    } catch { /* the appeal is already saved; admins still see it in the Banned Users list */ }
 
     return res.json({ success: true });
   } catch (err) {
@@ -826,8 +847,14 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
   try {
     const auth = req.headers.authorization || '';
     if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
-    let decoded;
-    try { decoded = jwt.verify(auth.slice(7), JWT_SECRET); } catch { return res.status(401).json({ error: 'Unauthorized' }); }
+    // A live session token only (verifyToken refuses the two-factor
+    // challenge token, linking tokens and revoked sessions), and only for an
+    // account that is actually being made to change its password. With a
+    // bare signature check, the challenge token set a new password and came
+    // back with a full session, second factor never entered; and any stolen
+    // session could change the password without knowing the current one.
+    const decoded = verifyToken(auth.slice(7));
+    if (!decoded || !decoded.id) return res.status(401).json({ error: 'Unauthorized' });
     const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
     // (#5300 DM-preservation) Optional escape hatch from the forced
     // change-password screen: if the user remembers their original password
@@ -837,13 +864,14 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
     // history is preserved. The newPassword field is ignored in this path.
     const oldPassword = typeof req.body.oldPassword === 'string' ? req.body.oldPassword : '';
     const db = getDb();
-    const user = db.prepare('SELECT id, username, is_admin, display_name, password_version, password_hash FROM users WHERE id = ?').get(decoded.id);
+    const user = db.prepare('SELECT id, username, is_admin, display_name, password_version, password_hash, must_change_password FROM users WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!user.must_change_password) return res.status(403).json({ error: 'No password change is pending for this account' });
 
     let preserved = false;
     if (oldPassword) {
       let matchesOriginal = false;
-      try { matchesOriginal = await bcrypt.compare(oldPassword, user.password_hash); } catch { /* fall through */ }
+      try { matchesOriginal = await bcrypt.compare(oldPassword, user.password_hash); } catch { /* unusable stored hash counts as no match, so this fails closed */ }
       if (matchesOriginal) {
         preserved = true;
       } else {
@@ -871,7 +899,7 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
       JWT_SECRET,
       _sessionSignOptions()
     );
-    res.json({ token: freshToken, user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName }, preserved });
+    res.json({ token: freshToken, user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, e2ePassphrase: !!user.e2e_passphrase }, preserved });
   } catch (err) {
     console.error('change-password-required error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -896,6 +924,22 @@ router.get('/validate', (req, res) => {
 });
 
 // ── TOTP Validate (second step of login) ─────────────────
+// Wrong authenticator codes are counted per account, not per address: the
+// address limit alone could be walked around wherever the client address is
+// taken from a forwarded header, and a six-digit code falls to a few hundred
+// thousand guesses. Someone who already has the password gets 10 tries in 15
+// minutes; after that the code step waits.
+const _totpFails = new Map();   // userId -> [timestamps]
+const TOTP_MAX_FAILS = 10;
+const TOTP_FAIL_WINDOW_MS = 15 * 60 * 1000;
+function _totpRecentFails(userId) {
+  const now = Date.now();
+  const list = (_totpFails.get(userId) || []).filter(t => now - t < TOTP_FAIL_WINDOW_MS);
+  if (list.length) _totpFails.set(userId, list); else _totpFails.delete(userId);
+  return list;
+}
+setInterval(() => { for (const id of [..._totpFails.keys()]) _totpRecentFails(id); }, TOTP_FAIL_WINDOW_MS).unref?.();
+
 router.post('/totp/validate', authLimiter, async (req, res) => {
   try {
     const challengeToken = typeof req.body.challengeToken === 'string' ? req.body.challengeToken : '';
@@ -914,6 +958,9 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(challenge.id);
     if (!user || !user.totp_enabled || !user.totp_secret) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (_totpRecentFails(user.id).length >= TOTP_MAX_FAILS) {
+      return res.status(429).json({ error: 'Too many wrong codes. Wait a few minutes and log in again.' });
     }
 
     // Try TOTP code first
@@ -952,8 +999,10 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
     }
 
     if (!valid) {
+      _totpFails.set(user.id, [..._totpRecentFails(user.id), Date.now()]);
       return res.status(401).json({ error: 'Invalid code' });
     }
+    _totpFails.delete(user.id);
 
     // (#5300) Apply any deferred temp-reset state mutations now that TOTP
     // succeeded. If the user logged in with their original password,
@@ -973,7 +1022,7 @@ router.post('/totp/validate', authLimiter, async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName },
+      user: { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, e2ePassphrase: !!user.e2e_passphrase },
       mustChangePassword: !!challenge.mustChangePassword
     });
   } catch (err) {
@@ -1384,9 +1433,15 @@ function _currentPwv(userId) {
   return pwv;
 }
 
-function verifyToken(token) {
+// Only a session token is a session. The two-factor challenge token (issued
+// once the password checks out, before the code is entered) and the
+// account-linking token are signed with the same key, and anything that
+// takes them as a login walks straight past the second factor. Callers that
+// really do want a linking token say so with { allowScoped: true }.
+function verifyToken(token, opts = {}) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded && (decoded.purpose || decoded.scope) && !opts.allowScoped) return null;
     if (decoded && decoded.id && !decoded.purpose) {
       const current = _currentPwv(decoded.id);
       if (current !== null && (decoded.pwv || 1) !== current) return null;
@@ -1497,7 +1552,8 @@ router.post('/recover-account', authLimiter, async (req, res) => {
         public_key = NULL,
         encrypted_private_key = NULL,
         e2e_key_salt = NULL,
-        e2e_secret = NULL
+        e2e_secret = NULL,
+        e2e_passphrase = 0
       WHERE id = ?
     `).run(newHash, newVersion, user.id);
     _forgetPwv(user.id);
@@ -1539,9 +1595,34 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     if (!valid) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    // The password alone is not enough when the account has two-factor on:
+    // this route hands back a full admin session, so it asks for the code
+    // the normal login asks for, under the same per-account limit.
+    if (user.totp_enabled && user.totp_secret) {
+      if (_totpRecentFails(user.id).length >= TOTP_MAX_FAILS) {
+        return res.status(429).json({ error: 'Too many wrong codes. Wait a few minutes and try again.' });
+      }
+      const code = typeof req.body.code === 'string' ? req.body.code.replace(/\s/g, '') : '';
+      if (!code) return res.status(401).json({ error: 'Enter your two-factor code', needsCode: true });
+      const totp = new OTPAuth.TOTP({ issuer: 'Haven', label: user.username, algorithm: 'SHA1', digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(user.totp_secret) });
+      let ok = totp.validate({ token: code, window: 1 }) !== null;
+      if (!ok) {
+        const norm = code.toUpperCase().replace(/-/g, '');
+        const asBackup = norm.slice(0, 4) + '-' + norm.slice(4);
+        const wanted = crypto.createHash('sha256').update(asBackup).digest('hex');
+        const hit = db.prepare('SELECT id FROM totp_backup_codes WHERE user_id = ? AND used = 0 AND code_hash = ?').get(user.id, wanted);
+        if (hit) { db.prepare('UPDATE totp_backup_codes SET used = 1 WHERE id = ?').run(hit.id); ok = true; }
+      }
+      if (!ok) {
+        _totpFails.set(user.id, [..._totpRecentFails(user.id), Date.now()]);
+        return res.status(401).json({ error: 'Invalid code', needsCode: true });
+      }
+      _totpFails.delete(user.id);
+    }
 
     // Restore admin status
     db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
+    grantAdminRole(db, user.id);
 
     // Remove any active ban on the admin
     db.prepare('DELETE FROM bans WHERE user_id = ?').run(user.id);
@@ -1557,7 +1638,7 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     );
 
     console.log(`🔑 Admin recovery used for "${user.username}" from ${req.ip || 'unknown'}`);
-    res.json({ token, user: { id: user.id, username: user.username, isAdmin: true, displayName } });
+    res.json({ token, user: { id: user.id, username: user.username, isAdmin: true, displayName, e2ePassphrase: !!user.e2e_passphrase } });
   } catch (err) {
     console.error('Admin recovery error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -1683,6 +1764,9 @@ router.get('/SSO', (req, res) => {
   const safeAuthCode = authCode.replace(/[^a-fA-F0-9]/g, '');
   const safeOrigin = origin.replace(/[<>"'&]/g, '');
 
+  const nonce = crypto.randomBytes(16).toString('base64');
+  res.set('Content-Security-Policy',
+    `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
   // Serve a self-contained consent page that reads JWT from localStorage
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1722,7 +1806,7 @@ router.get('/SSO', (req, res) => {
     <div id="not-logged-in" style="display:none">
       <p class="not-logged-in">You are not logged in to this server.</p>
       <p style="font-size:13px;color:#888;margin-top:8px">Log in first, then try again.</p>
-      <button class="btn btn-primary" onclick="window.location.href='/'">Go to Login</button>
+      <button class="btn btn-primary" id="login-btn">Go to Login</button>
     </div>
     <div id="consent" style="display:none">
       <p>Another Haven server wants to use your identity to pre-fill registration.</p>
@@ -1734,12 +1818,14 @@ router.get('/SSO', (req, res) => {
       <p style="font-size:12px;color:#666">Your password is <strong>never</strong> shared. Only your username and profile picture.</p>
       <div id="buttons">
         <button class="btn btn-primary" id="approve-btn">Approve</button>
-        <button class="btn btn-cancel" onclick="window.close()">Cancel</button>
+        <button class="btn btn-cancel" id="cancel-btn">Cancel</button>
       </div>
       <p class="success" id="success-msg">✓ Approved! You can close this tab.</p>
     </div>
   </div>
-  <script>
+  <script nonce="${nonce}">
+    document.getElementById('login-btn').addEventListener('click', () => { window.location.href = '/'; });
+    document.getElementById('cancel-btn').addEventListener('click', () => window.close());
     const authCode = '${safeAuthCode}';
     const origin = '${safeOrigin}';
     let approvedProfile = null;
@@ -1787,7 +1873,7 @@ router.get('/SSO', (req, res) => {
               setDebug('Using cached profile (validate endpoint did not respond in time).', 'ok');
               return;
             }
-          } catch {}
+          } catch { /* storage blocked or cached profile unreadable: show the timeout message below */ }
           showNotLoggedIn('SSO check timed out. Try refreshing this page or logging in again.');
         }
       }, 5000);
@@ -1884,7 +1970,7 @@ router.get('/SSO', (req, res) => {
                   profile: approvedProfile,
                   serverOrigin: window.location.origin
                 }, origin);
-              } catch {}
+              } catch { /* opener closed or navigated away; approval is already stored on the server */ }
             }
             document.getElementById('buttons').style.display = 'none';
             document.getElementById('success-msg').style.display = 'block';
@@ -2118,11 +2204,21 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
 
     // Keep the display name in step with the directory, but never clobber a
     // name the user set inside Haven.
+    // The provider's name goes through the same rules as one typed in
+    // Haven (letters, numbers, underscores, spaces); one that fails them is
+    // simply not used, and the username stands in.
     if (!user.display_name && typeof claims.name === 'string' && claims.name.trim()) {
       try {
-        db.prepare('UPDATE users SET display_name = ? WHERE id = ?')
-          .run(sanitizeString(claims.name, 32), user.id);
-      } catch { /* non-critical */ }
+        const { normalizeDisplayName } = require('./socketHandlers/helpers');
+        const dn = normalizeDisplayName(claims.name);
+        if (dn && dn.value) {
+          db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(dn.value, user.id);
+          user.display_name = dn.value;
+        }
+      } catch (err) {
+        // Sign-in still goes ahead; the username stands in for the name.
+        console.warn('[OIDC] Failed to set display name:', err.message);
+      }
     }
 
     const displayName = user.display_name || user.username;
@@ -2157,8 +2253,8 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
 <body>
 <script>
   try {
-    sessionStorage.setItem('haven_oidc_handoff', ${JSON.stringify(handoff)});
-  } catch (e) {}
+    sessionStorage.setItem('haven_oidc_handoff', ${JSON.stringify(handoff).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')});
+  } catch (e) { /* storage blocked in this browser: the login page just shows the sign-in form again */ }
   location.replace('/?oidc=1');
 </script>
 </body></html>`);

@@ -14,6 +14,11 @@ services:
     ports:
       - "${PORT:-3000}:${PORT:-3000}"    # Main HTTPS port
       - "${REDIRECT_PORT:-3001}:${REDIRECT_PORT:-3001}"  # HTTP → HTTPS redirect
+      # ── Voice relay (Settings → Large Server Setup) ──
+      # Uncomment both lines when you switch the relay on, and use the same
+      # port the setup page shows. It needs UDP and TCP.
+      # - "40000:40000/udp"
+      # - "40000:40000/tcp"
     volumes:
       - haven_data:/data
       # ── Or use a local folder instead (good for NAS / Synology): ──
@@ -23,7 +28,9 @@ services:
       - HOST=0.0.0.0
       # - SERVER_NAME=My Haven           # Name shown in the UI
       # - ADMIN_USERNAME=admin            # First account to register becomes admin
-      # - GIPHY_API_KEY=                  # Optional: enable GIF search
+      # - GIPHY_API_KEY=                  # Optional: enable GIF search (GIPHY)
+      # - KLIPY_API_KEY=                  # Optional: enable GIF search (KLIPY)
+      # - PREFERRED_GIF_SEARCH=           # Optional: klipy, giphy, or tenor
       # - VAPID_EMAIL=mailto:you@example  # Optional: email for push notifications
       # - TURN_URL=turn:your-server:3478  # Optional: TURN relay for voice over internet
       # - TURN_SECRET=your-secret         # Shared secret (coturn --use-auth-secret)

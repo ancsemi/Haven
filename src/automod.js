@@ -47,29 +47,61 @@ const DEFAULTS = {
     windowHours: 24, warnAt: 1, muteAt: 3, muteMinutes: 60, banAt: 5
   }),
   automod_ban_ip: 'false',                  // escalated bans also ban the offender's recent IPs
-  automod_log_channel: ''                   // channel code to mirror automod actions into
+  automod_log_channel: '',                  // channel code to mirror automod actions into
+  // Word groups (#5614): [{ name, words: [...], strikes }]. A message carrying
+  // any word of a group is blocked and counts `strikes` towards escalation.
+  automod_words: '[]'
 };
+
+// Parse the stored word groups into one regex per group, harshest first.
+// Whole words (or phrases) only, case-insensitive, so "class" never trips a
+// group that lists "ass".
+function compileWordGroups(raw) {
+  let groups = [];
+  try { groups = JSON.parse(raw || '[]'); } catch { groups = []; }
+  if (!Array.isArray(groups)) return [];
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  return groups.map(g => {
+    const words = Array.isArray(g && g.words) ? g.words.map(w => String(w || '').trim()).filter(Boolean) : [];
+    if (!words.length) return null;
+    try {
+      return {
+        name: String((g && g.name) || '').slice(0, 40) || 'words',
+        strikes: Math.min(100, Math.max(1, parseInt(g && g.strikes, 10) || 1)),
+        re: new RegExp('(?<![\\p{L}\\p{N}_])(?:' + words.map(esc).join('|') + ')(?![\\p{L}\\p{N}_])', 'iu')
+      };
+    } catch { return null; }
+  }).filter(Boolean).sort((a, b) => b.strikes - a.strikes);
+}
 
 function settings() {
   const now = Date.now();
   if (_cache.settings && now < _cache.expires) return _cache.settings;
 
   const s = Object.assign({}, DEFAULTS);
+  let readFailed = false;
   try {
     const rows = getDb().prepare(
       "SELECT key, value FROM server_settings WHERE key LIKE 'automod_%'"
     ).all();
     for (const r of rows) s[r.key] = r.value;
-  } catch { /* pre-migration DB: fall back to defaults (all off) */ }
+  } catch (err) {
+    // Falls back to defaults (all off). Cached, so this logs at most every CACHE_MS.
+    console.warn('automod: could not read settings, filtering is off:', err.message);
+    readFailed = true;
+  }
 
   let allow = new Map(), deny = new Map();
   try {
     for (const r of getDb().prepare('SELECT domain, mode, include_subdomains FROM automod_domains').all()) {
       (r.mode === 'deny' ? deny : allow).set(r.domain, r.include_subdomains !== 0);
     }
-  } catch { /* table not created yet */ }
+  } catch (err) {
+    console.warn('automod: could not read domain lists:', err.message);
+    readFailed = true;
+  }
 
-  _cache = { settings: s, allow, deny, expires: now + CACHE_MS };
+  _cache = { settings: s, allow, deny, words: compileWordGroups(s.automod_words), readFailed, expires: now + CACHE_MS };
   return s;
 }
 
@@ -109,7 +141,8 @@ const extractUrls = rules.extractUrls;
 // Content check
 // ══════════════════════════════════════════════════════════════════════
 
-// ctx: { userId, isAdmin, effectiveLevel, createdAt, surface }
+// ctx: { userId, isAdmin, effectiveLevel, createdAt, surface, markdown }
+// markdown: the text is a chat message, so bare addresses inside code do not count.
 // surface is one of 'message' | 'edit' | 'dm' | 'profile' | 'channel'.
 //
 // Returns { ok: true } or { ok: false, rule, message, host, excerpt }.
@@ -132,7 +165,29 @@ function checkText(text, ctx = {}) {
     return { ok: true };
   }
 
-  const links = extractUrls(text);
+  // ── Word groups (#5614) ──
+  // Before the link rules, and independent of the link policy being on. DMs
+  // are ciphertext here, so they cannot be checked.
+  if (ctx.surface !== 'dm') {
+    for (const g of _cache.words || []) {
+      const m = g.re.exec(text);
+      if (m) {
+        return {
+          ok: false,
+          rule: 'word',
+          host: null,
+          excerpt: String(m[0]).slice(0, 60),
+          weight: g.strikes,
+          group: g.name,
+          message: `That message has a word this server does not allow (${g.name}).`
+        };
+      }
+    }
+  }
+
+  // A chat message's code only counts its full links (see automod-rules.js).
+  const linkOpts = { markdown: !!ctx.markdown };
+  const links = extractUrls(text, linkOpts);
   if (!links.length) return { ok: true };
 
   // ── New-account link gate ──
@@ -158,7 +213,7 @@ function checkText(text, ctx = {}) {
 
   // Domain policy itself is evaluated by the shared rules module, so the
   // server and the browser reach identical verdicts on identical input.
-  const hit = rules.checkText(text, policy());
+  const hit = rules.checkText(text, policy(), linkOpts);
   if (hit) {
     return {
       ok: false,
@@ -200,10 +255,12 @@ function recordInfraction(userId, verdict, channelId) {
   const db = getDb();
   const cfg = escalationConfig();
 
+  // A word group can be worth several strikes; everything else is one (#5614).
+  const weight = Math.min(100, Math.max(1, parseInt(verdict.weight, 10) || 1));
   try {
     db.prepare(
-      'INSERT INTO automod_infractions (user_id, rule, channel_id, host, excerpt) VALUES (?, ?, ?, ?, ?)'
-    ).run(userId, verdict.rule, channelId || null, verdict.host || null, (verdict.excerpt || '').slice(0, 300));
+      'INSERT INTO automod_infractions (user_id, rule, channel_id, host, excerpt, weight) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, verdict.rule, channelId || null, verdict.host || null, (verdict.excerpt || '').slice(0, 300), weight);
   } catch (err) {
     console.error('automod: failed to record infraction', err);
     return { count: 0, action: 'none', muteMinutes: 0 };
@@ -212,10 +269,10 @@ function recordInfraction(userId, verdict, channelId) {
   let count = 0;
   try {
     count = db.prepare(
-      `SELECT COUNT(*) AS c FROM automod_infractions
+      `SELECT COALESCE(SUM(weight), 0) AS c FROM automod_infractions
        WHERE user_id = ? AND created_at >= datetime('now', ?)`
     ).get(userId, `-${cfg.windowHours} hours`).c;
-  } catch { count = 1; }
+  } catch { count = weight; }
 
   // Highest threshold that has been reached wins.
   let action = 'none';
@@ -237,6 +294,10 @@ function recordInfraction(userId, verdict, channelId) {
 // merely scrolls past it, with no click involved.
 function previewAllowed(url) {
   const s = settings();
+  // Messages still go through when the settings cannot be read (blocking all
+  // chat would be worse), but a preview is optional: without knowing the
+  // admin's link policy, show none rather than fetch a host they may not allow.
+  if (_cache.readFailed) return false;
   if (!enabled()) return true;
   if (s.automod_preview_allowlist_only !== 'true') return true;
   if (s.automod_link_mode === 'off') return true;

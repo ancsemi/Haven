@@ -1,31 +1,7 @@
-// GIF favorites live entirely client-side: starring a GIF just keeps its
-// GIPHY URLs in localStorage, so the Favorites tab keeps working even when
-// the server has no GIPHY key configured.
-const GIF_FAVORITES_KEY = 'haven_gif_favorites';
-const GIF_FAVORITES_MAX = 200;
-
-// Emoji skin tones. A tone is a Unicode Fitzpatrick modifier appended to a
-// "modifier base" emoji (hands, people, body parts); non-base emoji are left
-// untouched. EMOJI_MODIFIER_BASE is the authoritative set from the Unicode
-// emoji-data, so the transform stays correct as Haven's emoji lists grow.
-const SKIN_TONE_KEY = 'haven_emoji_skin_tone';
-const SKIN_TONE_MODIFIERS = {
-  light: '\u{1F3FB}', 'medium-light': '\u{1F3FC}', medium: '\u{1F3FD}',
-  'medium-dark': '\u{1F3FE}', dark: '\u{1F3FF}'
-};
-const EMOJI_MODIFIER_BASE = new Set(
-  ('261D 26F9 270A 270B 270C 270D 1F385 1F3C2 1F3C3 1F3C4 1F3C7 1F3CA 1F3CB 1F3CC ' +
-   '1F442 1F443 1F446 1F447 1F448 1F449 1F44A 1F44B 1F44C 1F44D 1F44E 1F44F 1F450 ' +
-   '1F466 1F467 1F468 1F469 1F46B 1F46C 1F46D 1F46E 1F470 1F471 1F472 1F473 1F474 ' +
-   '1F475 1F476 1F477 1F478 1F47C 1F481 1F482 1F483 1F485 1F486 1F487 1F48F 1F491 ' +
-   '1F4AA 1F574 1F575 1F57A 1F590 1F595 1F596 1F645 1F646 1F647 1F64B 1F64C 1F64D ' +
-   '1F64E 1F64F 1F6A3 1F6B4 1F6B5 1F6B6 1F6C0 1F6CC 1F90C 1F90F 1F918 1F919 1F91A ' +
-   '1F91B 1F91C 1F91D 1F91E 1F91F 1F926 1F930 1F931 1F932 1F933 1F934 1F935 1F936 ' +
-   '1F937 1F938 1F939 1F93D 1F93E 1F977 1F9B5 1F9B6 1F9B8 1F9B9 1F9BB 1F9CD 1F9CE ' +
-   '1F9CF 1F9D1 1F9D2 1F9D3 1F9D4 1F9D5 1F9D6 1F9D7 1F9D8 1F9D9 1F9DA 1F9DB 1F9DC ' +
-   '1F9DD 1FAC3 1FAC4 1FAC5 1FAF0 1FAF1 1FAF2 1FAF3 1FAF4 1FAF5 1FAF6 1FAF7 1FAF8')
-  .split(' ').map(h => String.fromCodePoint(parseInt(h, 16)))
-);
+// Shared helpers: channel preferences, role colours, pins, burn-after-read,
+// picture and link checks, emoji lookups, role mentions, timestamps in the
+// reader's time zone, scrolling, toasts and warnings, media tokens and
+// sessions, and the prompt and confirm windows.
 
 export default {
 
@@ -40,13 +16,11 @@ _syncChannelMutePref(code, muted) {
   if (!code) return;
   const tok = localStorage.getItem('haven_token');
   if (!tok) return;
-  try {
-    fetch('/api/user/channel-prefs/mute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
-      body: JSON.stringify({ code, muted: !!muted }),
-    }).catch(() => { /* best-effort */ });
-  } catch { /* ignore */ }
+  fetch('/api/user/channel-prefs/mute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
+    body: JSON.stringify({ code, muted: !!muted }),
+  }).catch((err) => { console.warn('[Mute] could not save the channel mute to the server', err); });
 },
 
 /** One-shot reconciliation between localStorage and the server-side
@@ -75,7 +49,7 @@ async _bootstrapChannelPrefs() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
         body: JSON.stringify({ codes: union }),
-      }).catch(() => {});
+      }).catch((err) => { console.warn('[Mute] could not sync local mutes to the server', err); });
     }
   } catch {
     this._channelPrefsSynced = false;
@@ -90,6 +64,74 @@ _safeColor(c, fallback = '') {
   if (/^(rgb|hsl)a?\([0-9,\s.%]+\)$/.test(s)) return s;
   if (/^var\(--[a-zA-Z0-9-]+\)$/.test(s)) return s;
   return fallback;
+},
+
+// ── Gradient role colors ──
+// A role draws names in its color, or as a gradient from `color` to `color2`
+// that can slowly shimmer. Role rows carry color / color2 / color_shimmer;
+// voice entries carry the same as roleColor / roleColor2 / roleShimmer.
+
+/** The colors a role draws a name with: { c1, c2, shimmer }, c2 null for a
+ *  plain color. Null when the role has no usable color. */
+_roleLook(role) {
+  if (!role) return null;
+  const c1 = this._safeColor(role.color !== undefined ? role.color : role.roleColor);
+  if (!c1) return null;
+  const c2 = this._safeColor(role.color2 !== undefined ? role.color2 : role.roleColor2) || null;
+  const shimmer = !!(c2 && (role.color_shimmer || role.roleShimmer));
+  return { c1, c2, shimmer };
+},
+
+/** A name as HTML in the role's style. A plain color is left to the caller's
+ *  own `color:` style, as before; a gradient wraps the text in a span sized to
+ *  the text, so the whole gradient shows however wide the row is. */
+_roleNameHtml(role, text) {
+  const safe = this._escapeHtml(text == null ? '' : String(text));
+  const look = this._roleLook(role);
+  if (!look || !look.c2) return safe;
+  return `<span class="role-gradient${look.shimmer ? ' role-shimmer' : ''}" style="--role-c1:${look.c1};--role-c2:${look.c2}">${safe}</span>`;
+},
+
+/** The same for an element already on the page: sets its color and puts the
+ *  name in it, gradient span included. Null role means no role color. */
+_applyRoleName(el, role, text, fallback = '') {
+  if (!el) return;
+  const look = this._roleLook(role);
+  el.style.color = look ? look.c1 : fallback;
+  el.innerHTML = this._roleNameHtml(role, text);
+},
+
+/** The role that colors a person's name in chat, read from the member lists,
+ *  or null when they have none or names are not shown in role colors. */
+_chatNameRole(userId) {
+  if ((localStorage.getItem('haven-role-display') || 'colored-name') !== 'colored-name') return null;
+  const u = this._memberById(userId);
+  return u && u.role && this._roleLook(u.role) ? u.role : null;
+},
+
+/** A person's entry from the online list, else the channel's member list.
+ *  Messages look this up for every author they draw, so the two lists are
+ *  indexed once and the index is rebuilt only when either list is replaced,
+ *  instead of copying and searching every member for every message. */
+_memberById(userId) {
+  const online = this._lastOnlineUsers || [];
+  const members = this.channelMembers || [];
+  const idx = this._memberIndex;
+  if (!idx || idx.online !== online || idx.members !== members) {
+    const map = new Map();
+    for (const u of online) if (u && !map.has(String(u.id))) map.set(String(u.id), u);
+    for (const u of members) if (u && !map.has(String(u.id))) map.set(String(u.id), u);
+    this._memberIndex = { online, members, map };
+  }
+  return this._memberIndex.map.get(String(userId)) || null;
+},
+
+/** A background (dot, swatch) in the role's colors: the gradient when it has
+ *  one, else its color, else `fallback`. */
+_roleFill(role, fallback = '') {
+  const look = this._roleLook(role);
+  if (!look) return fallback;
+  return look.c2 ? `linear-gradient(90deg, ${look.c1}, ${look.c2})` : look.c1;
 },
 
 /**
@@ -116,7 +158,7 @@ _setMaxSeenPinId(code, id) {
   try {
     const cur = this._getMaxSeenPinId(code) || 0;
     if ((id | 0) > cur) localStorage.setItem(this._pinSeenKey(code), String(id | 0));
-  } catch {}
+  } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
 },
 
 _updatePinIndicator(count) {
@@ -277,7 +319,7 @@ _replaceBurnedMessage(el) {
   const content = el.querySelector('.message-content');
   if (!content) return;
   const doneText = t('messages.burn_done');
-  content.innerHTML = `<span class="muted-text" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
+  content.innerHTML = `<span class="muted-text burn-complete-label" style="font-style:italic">🔥 ${this._escapeHtml(doneText)}</span>`;
   el.classList.remove('message-burn-pending');
   el.classList.add('message-burned');
 },
@@ -293,7 +335,9 @@ _isImageUrl(str) {
   // basename. Must stay in lockstep with the early-return regex in
   // `_formatContent` or classified-as-image messages render as empty.
   if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) return true;
-  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>]*)?$/i.test(trimmed)) return true;
+  // The query part stops at whitespace: two Discord CDN links on separate
+  // lines used to match as one URL, which drew one broken image for the pair.
+  if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?[^"'<>\s]*)?$/i.test(trimmed)) return true;
   // GIPHY / Tenor GIF URLs (may not have file extensions)
   if (/^https:\/\/media\d*\.giphy\.com\/.+/i.test(trimmed)) return true;
   if (/^https:\/\/(media|c)\.tenor\.com\/.+/i.test(trimmed)) return true;
@@ -332,8 +376,21 @@ _getMessageAttachments(messageId) {
   if (hinted && hinted.length) return hinted.slice();
   const msgs = this._lastRenderedMessages || [];
   const msg = msgs.find(m => m && m.id === messageId);
-  if (!msg || typeof msg.content !== 'string') return [];
-  return this._extractUploadUrls(msg.content);
+  if (msg && typeof msg.content === 'string') {
+    const urls = this._extractUploadUrls(msg.content);
+    if (urls.length) return urls;
+  }
+  // A message just sent or received is appended live to the DOM and never lands
+  // in _lastRenderedMessages, so its attachments were invisible here until a
+  // full re-render (which is why the retroactive "Edit tags" entry only showed
+  // after a refresh or channel switch). Fall back to the rendered content in the
+  // DOM, scoped to .message-content so an author avatar is not counted.
+  const el = document.querySelector(`#messages [data-msg-id="${messageId}"]`);
+  if (el) {
+    const body = el.querySelector('.message-content') || el;
+    return this._extractUploadUrls(body.innerHTML);
+  }
+  return [];
 },
 
 _extractUploadUrls(content) {
@@ -386,6 +443,9 @@ _highlightSearch(escapedHtml, query) {
 // Capped at 27 to avoid jumbo-sizing a wall of emoji.
 _isEmojiOnly(str) {
   if (!str || !str.trim()) return false;
+  // A Discord emote token counts as one emoji, like a resolved :name: does.
+  const discordEmotes = (str.match(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g) || []).length;
+  str = str.replace(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g, ' ');
   const customMatches = str.match(/:([a-zA-Z0-9_-]+):/g) || [];
   // Only expand custom tokens that actually exist as loaded emojis
   const resolvedCustom = customMatches.filter(m => {
@@ -403,9 +463,20 @@ _isEmojiOnly(str) {
   }
   if (s.trim().length > 0) return false;
   let unicodeCount = 0;
-  try { unicodeCount = (str.match(/[\p{Extended_Pictographic}]/gu) || []).length; } catch {}
-  const total = resolvedCustom.length + unicodeCount;
+  try { unicodeCount = (str.match(/[\p{Extended_Pictographic}]/gu) || []).length; } catch { /* no Unicode property escapes in this browser: count only custom emoji */ }
+  const total = resolvedCustom.length + unicodeCount + discordEmotes;
   return total >= 1 && total <= 27;
+},
+
+// Markup for one Discord emote token. Haven's own emoji of that name is
+// preferred so a server carrying the same set shows its copy; the fallback is
+// the server-side emote cache, and a failed load turns back into the :name:
+// text (the capture-phase error listener in app-ui.js does that).
+_discordEmoteHtml(name, id, animated) {
+  const label = this._escapeHtml(`:${name}:`);
+  const own = this._findNamedEmoji(name);
+  if (own) return `<img src="${this._escapeHtml(own.url)}" alt="${label}" title="${label}" class="custom-emoji">`;
+  return `<img src="/api/ferry/emote/${id}.${animated ? 'gif' : 'png'}" alt="${label}" title="${label}" class="custom-emoji discord-emote">`;
 },
 
 // Resolve a `:name:` shortcode to an image emoji — checks the bundled
@@ -467,7 +538,7 @@ _refreshMentionableRoles() {
       const roles = res && Array.isArray(res.roles) ? res.roles : [];
       this._mentionableRoles = roles
         .filter(r => r && r.name)
-        .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, level: r.level }));
+        .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, color2: r.color2 || null, color_shimmer: r.color_shimmer || 0, level: r.level }));
     });
   } catch { /* offline: keep whatever we had */ }
 },
@@ -499,6 +570,119 @@ _timeLocale() {
   return browser.find(l => String(l).toLowerCase().split('-')[0] === base) || ui;
 },
 
+/** The reader's confirmed IANA timezone, or undefined to let the browser use
+ *  the device zone. Only a value the user actively confirmed counts; Skip and
+ *  "Remind later" leave this unset so nothing changes from Haven's old
+ *  browser-default behaviour. Passing an IANA id to Intl means DST and any
+ *  historical offset change are resolved per-instant — never a frozen offset. */
+_userTimeZone() {
+  const tz = this._userPrefs && this._userPrefs.timezone;
+  if (typeof tz !== 'string' || !tz) return undefined;
+  // A zone this browser does not know (a newer zone name on an older engine,
+  // or a stray value) would make every Intl call throw and take the message
+  // list with it. Check it once per value and fall back to the browser's own
+  // zone when it is unknown.
+  if (this._tzCheckedValue !== tz) {
+    this._tzCheckedValue = tz;
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); this._tzCheckedOk = true; }
+    catch { this._tzCheckedOk = false; }
+  }
+  return this._tzCheckedOk ? tz : undefined;
+},
+
+/** The reader's confirmed hour cycle as an Intl `hour12` value: true for 12h,
+ *  false for 24h, undefined to keep the locale's own default. */
+_userHour12() {
+  const f = this._userPrefs && this._userPrefs.time_format;
+  if (f === '12') return true;
+  if (f === '24') return false;
+  return undefined;
+},
+
+/** Merge the reader's persisted timezone + hour cycle into a set of
+ *  Intl.DateTimeFormat options. Both `timeZone` and `hour12` are legal
+ *  alongside dateStyle/timeStyle as well as explicit component options, so
+ *  every existing call site can route through here unchanged. */
+_dtOpts(opts) {
+  const out = Object.assign({}, opts);
+  const tz = this._userTimeZone();
+  if (tz && out.timeZone === undefined) out.timeZone = tz;
+  const h12 = this._userHour12();
+  if (h12 !== undefined && out.hour12 === undefined && out.hourCycle === undefined) out.hour12 = h12;
+  return out;
+},
+
+/** Central time/date formatters. All timestamp rendering across the app goes
+ *  through these so a confirmed timezone/format applies everywhere at once and
+ *  an unset preference falls back to exactly what the browser did before.
+ *  `locale` defaults to the browser default (what every call site used before);
+ *  the <t:> token formatter passes _timeLocale() to keep its own behaviour. */
+_fmtTime(value, opts = { hour: '2-digit', minute: '2-digit' }, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleTimeString(locale, this._dtOpts(opts));
+},
+_fmtDate(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleDateString(locale, this._dtOpts(opts));
+},
+_fmtDateTime(value, opts = {}, locale) {
+  const d = (value instanceof Date) ? value : new Date(value);
+  return d.toLocaleString(locale, this._dtOpts(opts));
+},
+
+// ── Wall-clock <-> instant in the reader's confirmed zone ───────────────
+// The formatters above render an instant; these go the other way, for the
+// features that let someone type a wall-clock time (the /time command and its
+// modal). With no timezone confirmed they fall back to the device zone, so the
+// behaviour is unchanged; with one set the entered time is anchored to that
+// zone instead of whatever the browser reports, which is the whole point on a
+// privacy browser that lies about the system clock.
+
+/** The wall-clock parts of an instant in the confirmed zone (or the device
+ *  zone when none is set). monthIndex is 0-based to match the Date API. */
+_zonedParts(date, tz = this._userTimeZone()) {
+  const d = (date instanceof Date) ? date : new Date(date);
+  if (!tz) {
+    return { year: d.getFullYear(), monthIndex: d.getMonth(), day: d.getDate(),
+             hour: d.getHours(), minute: d.getMinutes(), second: d.getSeconds() };
+  }
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const m = {};
+  for (const p of parts) if (p.type !== 'literal') m[p.type] = p.value;
+  let hour = Number(m.hour);
+  if (hour === 24) hour = 0; // some engines report midnight as 24
+  return { year: Number(m.year), monthIndex: Number(m.month) - 1, day: Number(m.day),
+           hour, minute: Number(m.minute), second: Number(m.second) };
+},
+
+/** Milliseconds that `tz` is ahead of UTC at instant `ts` (negative if behind). */
+_zoneOffsetMs(tz, ts) {
+  const p = this._zonedParts(new Date(ts), tz);
+  const asUTC = Date.UTC(p.year, p.monthIndex, p.day, p.hour, p.minute, p.second);
+  return asUTC - ts;
+},
+
+/** Turn a wall-clock (year, 0-based month, day, hour, minute, second) read in
+ *  the confirmed zone into the matching instant. With no zone set this is
+ *  exactly new Date(y, mo, d, ...) in the device zone, so the fallback path is
+ *  byte-for-byte the old behaviour. */
+_wallToInstant(y, moIndex, d, h, mi, s, tz = this._userTimeZone()) {
+  if (!tz) return new Date(y, moIndex, d, h, mi, s, 0);
+  const naive = Date.UTC(y, moIndex, d, h, mi, s);
+  // One correction, then a second pass so a DST boundary resolves correctly.
+  let inst = naive - this._zoneOffsetMs(tz, naive);
+  inst = naive - this._zoneOffsetMs(tz, inst);
+  return new Date(inst);
+},
+
+/** "Now" decomposed into the confirmed zone's wall-clock, for seeding pickers. */
+_nowZonedParts() {
+  return this._zonedParts(new Date());
+},
+
 /** "in 5 minutes" / "3 hours ago", in the largest unit that still reads well. */
 _relativeTimestamp(ms, locale) {
   const diff = ms - Date.now();
@@ -523,19 +707,19 @@ _formatTimestampToken(seconds, style = 'f') {
   let text;
   try {
     switch (style) {
-      case 't': text = date.toLocaleTimeString(locale, { timeStyle: 'short' }); break;
-      case 'T': text = date.toLocaleTimeString(locale, { timeStyle: 'medium' }); break;
-      case 'd': text = date.toLocaleDateString(locale, { dateStyle: 'short' }); break;
-      case 'D': text = date.toLocaleDateString(locale, { dateStyle: 'long' }); break;
-      case 'F': text = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'short' }); break;
+      case 't': text = this._fmtTime(date, { timeStyle: 'short' }, locale); break;
+      case 'T': text = this._fmtTime(date, { timeStyle: 'medium' }, locale); break;
+      case 'd': text = this._fmtDate(date, { dateStyle: 'short' }, locale); break;
+      case 'D': text = this._fmtDate(date, { dateStyle: 'long' }, locale); break;
+      case 'F': text = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'short' }, locale); break;
       case 'R': text = this._relativeTimestamp(date.getTime(), locale); break;
-      default:  text = date.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' }); break;
+      default:  text = this._fmtDateTime(date, { dateStyle: 'long', timeStyle: 'short' }, locale); break;
     }
   } catch { return null; }
   // The hover title always spells the instant out in full, so a relative or
   // time-only token can still be pinned down without asking the sender.
   let title = text;
-  try { title = date.toLocaleString(locale, { dateStyle: 'full', timeStyle: 'long' }); } catch { /* keep the visible text */ }
+  try { title = this._fmtDateTime(date, { dateStyle: 'full', timeStyle: 'long' }, locale); } catch { /* keep the visible text */ }
   if (style === 'R') this._startTimestampTicker();
   return `<time class="chat-timestamp" datetime="${this._escapeHtml(date.toISOString())}" data-ts="${Math.trunc(seconds)}" data-tstyle="${this._escapeHtml(style)}" title="${this._escapeHtml(title)}">${this._escapeHtml(text)}</time>`;
 },
@@ -612,11 +796,14 @@ _parseTimeExpression(input, now = new Date()) {
   let when;
   if (ymd) {
     const y = Number(ymd[1]), mo = Number(ymd[2]) - 1, d = Number(ymd[3]);
-    when = new Date(y, mo, d, hour, mi, 0, 0);
-    // Reject dates that do not exist (JS rolls 2026-02-31 into March).
-    if (when.getFullYear() !== y || when.getMonth() !== mo || when.getDate() !== d) return null;
+    when = this._wallToInstant(y, mo, d, hour, mi, 0);
+    // Reject dates that do not exist (JS rolls 2026-02-31 into March), checked
+    // in the same zone the wall-clock was read in.
+    const back = this._zonedParts(when);
+    if (back.year !== y || back.monthIndex !== mo || back.day !== d) return null;
   } else {
-    when = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (dayShift || 0), hour, mi, 0, 0);
+    const nowP = this._zonedParts(now);
+    when = this._wallToInstant(nowP.year, nowP.monthIndex, nowP.day + (dayShift || 0), hour, mi, 0);
     // A bare time that already went by today means the next one. Someone
     // saying "8pm" at nine in the evening is scheduling, not reminiscing.
     if (dayShift === null && when.getTime() <= now.getTime()) when = new Date(when.getTime() + 86400000);
@@ -631,538 +818,63 @@ _buildTimeToken(arg, now = new Date()) {
   return parsed ? `<t:${parsed.seconds}:${parsed.style}>` : null;
 },
 
-_formatContent(str) {
-  // Spoiler image: spoiler-img:<payload> where payload is an /uploads URL or
-  // an e2e-img: marker. The sender marked this image as a spoiler, so render
-  // it blurred behind a "Spoiler" overlay; a click reveals it (handled by the
-  // delegated reveal listener). Only treat as a spoiler when the payload is
-  // actually media so a plain text message that happens to start with the
-  // marker isn't blurred unexpectedly.
-  if (typeof str === 'string' && str.startsWith('spoiler-img:')) {
-    const rest = str.slice('spoiler-img:'.length);
-    if (this._isImageUrl(rest) || /^\/uploads\//i.test(rest) || rest.startsWith('e2e-img:')) {
-      const inner = this._formatContent(rest);
-      const label = this._escapeHtml(t('app.messages.spoiler'));
-      return `<div class="spoiler-media" role="button" tabindex="0" title="${label}"><span class="spoiler-media-tag">\u{1F441}️ ${label}</span>${inner}</div>`;
-    }
-  }
+// "1:05" for a voice-message-1m05s.weba name, "" for a voice message with
+// no length in its name, null for any other file (#5665).
+_voiceMessageLength(name) {
+  if (!/^voice-message/i.test(String(name || ''))) return null;
+  const m = String(name).match(/(\d+)m(\d+)s/);
+  return m ? `${Number(m[1])}:${String(m[2]).padStart(2, '0')}` : '';
+},
 
-  // E2E encrypted image: e2e-img:<mime>:<url>
-  const e2eImgMatch = str.match(/^e2e-img:(image\/(?:jpeg|png|gif|webp|svg\+xml)):(\/uploads\/[\w\-.]+)$/i);
-  if (e2eImgMatch) {
-    const mime = this._escapeHtml(e2eImgMatch[1]);
-    const url = this._escapeHtml(e2eImgMatch[2]);
-    return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="${t('app.messages.e2e_image_alt')}" title="${t('app.messages.e2e_image_title')}">`;
-  }
+// "Today at 9 PM" is only true until midnight, and a label is written once.
+// An app left open overnight kept calling last night's messages Today, so
+// every label carries its timestamp (data-ftime) and is rewritten when the
+// calendar day changes.
+_timeAttr(dateStr) {
+  return ` data-ftime="${this._escapeHtml(String(dateStr ?? ''))}"`;
+},
 
-  // E2E encrypted file: e2e-file:{"mime":...,"size":N,"url":"/uploads/...","name":"..."}
-  // (#5310, #5308) — non-image DM uploads, plus paste-into-PiP, are encrypted
-  // before upload and the metadata is wrapped in this marker.
-  if (str.startsWith('e2e-file:')) {
-    try {
-      const meta = JSON.parse(str.slice(9));
-      if (meta && typeof meta.url === 'string' && meta.url.startsWith('/uploads/')) {
-        const name = this._escapeHtml(typeof meta.name === 'string' ? meta.name : t('app.messages.file'));
-        const url = this._escapeHtml(meta.url);
-        const mime = this._escapeHtml(typeof meta.mime === 'string' ? meta.mime : 'application/octet-stream');
-        const size = Number(meta.size) || 0;
-        const sizeStr = this._escapeHtml(this._formatFileSize ? this._formatFileSize(size) : (size + ' B'));
-        return `<div class="file-attachment e2e-file-pending" data-e2e-url="${url}" data-e2e-mime="${mime}" data-e2e-name="${name}" title="${t('app.messages.e2e_file_title')}">
-          <button type="button" class="file-download-link e2e-file-download">
-            <span class="file-icon">🔒</span>
-            <span class="file-name">${name}</span>
-            <span class="file-size">(${sizeStr})</span>
-            <span class="file-download-arrow">⬇</span>
-          </button>
-        </div>`;
-      }
-    } catch {}
-    return `<span class="muted-text">${t('app.messages.e2e_file_parse_error')}</span>`;
-  }
-
-  // Decode legacy HTML entities from old server-side sanitization.
-  // The server no longer entity-encodes, but older messages in the DB
-  // may still contain entities like &#39; &amp; &lt; etc.
-  const emojiOnly = this._isEmojiOnly(str);
-  str = this._decodeHtmlEntities(str);
-
-  // Render file attachments [file:name](url|size)
-  const fileMatch = str.match(/^\[file:(.+?)\]\((.+?)\|(.+?)\)$/);
-  if (fileMatch) {
-    const fileName = this._escapeHtml(fileMatch[1]);
-    const fileUrl = this._escapeHtml(fileMatch[2]);
-    const fileSize = this._escapeHtml(fileMatch[3]);
-    const ext = fileName.split('.').pop().toLowerCase();
-    const icon = { pdf: '📄', zip: '📦', '7z': '📦', rar: '📦', tar: '📦', gz: '📦',
-      mp3: '🎵', ogg: '🎵', oga: '🎵', wav: '🎵', flac: '🎵', aac: '🎵', wma: '🎵',
-      m4a: '🎵', opus: '🎵', weba: '🎵',
-      mp4: '🎬', webm: '🎬', mkv: '🎬', avi: '🎬', mov: '🎬', flv: '🎬',
-      m4v: '🎬', ogv: '🎬',
-      doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', ppt: '📊', pptx: '📊',
-      txt: '📄', csv: '📄', json: '📄', md: '📄', log: '📄',
-      exe: '⚙️', msi: '⚙️', bat: '⚙️', cmd: '⚙️', ps1: '⚙️', sh: '⚙️',
-      dll: '⚙️', iso: '💿', dmg: '💿', img: '💿',
-      apk: '📱', deb: '📦', rpm: '📦',
-      py: '🐍', js: '📜', ts: '📜', html: '🌐', css: '🎨', svg: '🖼️' }[ext] || '📎';
-    const RISKY_EXTS = new Set([
-      'exe','bat','cmd','com','scr','pif','msi','msp','mst',
-      'ps1','vbs','vbe','js','jse','wsf','wsh','hta',
-      'cpl','inf','reg','dll','ocx','sys','drv',
-      'sh','app','dmg','pkg','deb','rpm','appimage',
-    ]);
-    // Audio/video get inline players. The extension lists are optimistic —
-    // a container being playable depends on the codecs inside it, not just the
-    // extension (a .mov holding ProRes or HEVC won't decode in most browsers).
-    // _setupVideos swaps the player back out for a download link
-    // if the element fires `error`, so listing a format here is safe.
-    if (['mp3', 'ogg', 'oga', 'wav', 'm4a', 'aac', 'flac', 'opus', 'weba'].includes(ext)) {
-      return `<div class="file-attachment">
-        <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
-        <audio controls preload="none" src="${fileUrl}" class="file-audio"></audio>
-      </div>`;
-    }
-    if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) {
-      return `<div class="file-attachment">
-        <div class="file-info">${icon} <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
-        <div class="file-video-wrap">
-          <video controls preload="none" src="${fileUrl}" class="file-video"></video>
-        </div>
-      </div>`;
-    }
-    return `<div class="file-attachment">
-      <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" class="file-download-link${RISKY_EXTS.has(ext) ? ' risky-file' : ''}" download="${fileName}"${RISKY_EXTS.has(ext) ? ' data-risky="true"' : ''}>
-        <span class="file-icon">${icon}</span>
-        <span class="file-name">${fileName}</span>
-        <span class="file-size">(${fileSize})</span>
-        <span class="file-download-arrow">⬇</span>
-      </a>
-    </div>`;
-  }
-
-  // Render server-hosted stickers inline at sticker dimensions (CSS-controlled)
-  if (/^\/uploads\/stickers\/[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
-    return `<img src="${this._escapeHtml(str.trim())}" class="sticker-img" alt="sticker">`;
-  }
-
-  // Render server-hosted images inline (early return)
-  // No loading="lazy" — content-visibility:auto on .message already skips off-screen
-  // rendering; lazy loading on top creates 0→real-height jumps when scrolling history.
-  // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
-  // Basename allows dots (`photo.edit.jpg`) and one extra path segment so this
-  // matches `_isImageUrl` / Haven Mobile. The previous `[\w\-]+` pattern
-  // classified those as images then emitted no <img>, so the bubble was blank.
-  if (/^\/uploads\/(?:[\w\-]+\/)?[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
-    const u = str.trim();
-    if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
-    return `<img src="${this._escapeHtml(u)}" class="chat-image" alt="image">`;
-  }
-
-  // Remote image-only messages (Ferry Discord attachments, pasted CDN URLs).
-  // Must run on the unescaped string so signed query params keep their `&`.
-  {
-    const u = str.trim();
-    if (this._isImageUrl(u) && /^https?:\/\//i.test(u)) {
-      if (this._isImageHidden && this._isImageHidden(u)) return this._hiddenImagePlaceholder(u);
-      return `<img ${this._imgSrcAttr(u)} class="chat-image" alt="image">`;
-    }
-  }
-
-  // ── Extract fenced code blocks before escaping ──
-  const codeBlocks = [];
-  const withPlaceholders = str.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    const idx = codeBlocks.length;
-    codeBlocks.push({ lang: lang || '', code });
-    return `\x00CODEBLOCK_${idx}\x00`;
+_refreshTimeLabels() {
+  document.querySelectorAll('[data-ftime]').forEach(el => {
+    const raw = el.dataset.ftime;
+    if (!raw) return;
+    const next = this._formatTime(raw);
+    if (next && el.textContent !== next) el.textContent = next;
   });
+},
 
-  // ── Timestamps: <t:1780853820> / <t:1780853820:R> ──
-  // Extracted before escaping (the token has angle brackets) and after the
-  // code fences above, so a token inside ``` stays literal.
-  const timestamps = [];
-  const withTimestamps = withPlaceholders.replace(/<t:(-?\d{1,15})(?::([tTdDfFR]))?>/g, (full, secs, style) => {
-    const rendered = this._formatTimestampToken(Number(secs), style || 'f');
-    if (!rendered) return full;
-    const idx = timestamps.length;
-    timestamps.push(rendered);
-    return `\x00TIMESTAMP_${idx}\x00`;
-  });
-
-  let html = this._escapeHtml(withTimestamps);
-
-  // ── Markdown images & links (extract before auto-linking) ──
-  const mdLinks = [];
-  // ![alt](url)
-  html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g, (full, alt, url) => {
-    const safeUrl = this._rawHttpUrl(url);
-    if (!safeUrl) return full;
-    const idx = mdLinks.length;
-    mdLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
-      ? this._hiddenImagePlaceholder(safeUrl)
-      : `<img ${this._imgSrcAttr(safeUrl)} class="chat-image" alt="${alt || 'image'}">`);
-    return `\x00MDLINK_${idx}\x00`;
-  });
-  // [text](url)
-  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (full, text, url) => {
-    const safeUrl = this._rawHttpUrl(url);
-    if (!safeUrl) return full;
-    const idx = mdLinks.length;
-    mdLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow" title="${this._escapeHtml(safeUrl)}" data-masked-link="true">${text}</a>`);
-    return `\x00MDLINK_${idx}\x00`;
-  });
-
-  // Auto-link URLs (and render image URLs as inline images)
-  // Use placeholders to prevent @mention regex from matching inside URLs
-  const autoLinks = [];
-  html = html.replace(
-    /\bhttps?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&()*+,;=%]+/g,
-    (url) => {
-      const safeUrl = this._rawHttpUrl(url);
-      if (!safeUrl) return url;
-      const idx = autoLinks.length;
-      if (this._isRemoteImageUrl(safeUrl)) {
-        autoLinks.push((this._isImageHidden && this._isImageHidden(safeUrl))
-          ? this._hiddenImagePlaceholder(safeUrl)
-          : `<img ${this._imgSrcAttr(safeUrl)} class="chat-image" alt="image" loading="lazy">`);
-      } else {
-        autoLinks.push(`<a href="${this._escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow">${this._escapeHtml(safeUrl)}</a>`);
-      }
-      return `\x00AUTOLINK_${idx}\x00`;
-    }
-  );
-
-  // Render @mentions with highlight (negative lookbehind prevents matching inside email addresses).
-  // Only style as a mention when the matched name resolves to a real
-  // channel member (login name OR display name), or to the current user.
-  // Random `@text` that doesn't match anyone is left as plain text. (#5273)
-  // Match by login name first (longest first, supports spaces), then fall
-  // back to display names. Self-mention falls back to a simple \w match for
-  // when channel members haven't loaded yet.
-  const validNames = new Set();
-  const loginToDisplay = new Map();
-  const displayToLogin = new Map();
-  // Map matched names back to user id so we can prefer the viewer's personal
-  // nickname for the display text. (#5290)
-  const nameToUserId = new Map();
-  if (Array.isArray(this.channelMembers)) {
-    for (const m of this.channelMembers) {
-      if (!m) continue;
-      if (m.loginName) {
-        validNames.add(m.loginName.toLowerCase());
-        loginToDisplay.set(m.loginName.toLowerCase(), m.username || m.loginName);
-        if (m.id) nameToUserId.set(m.loginName.toLowerCase(), m.id);
-      }
-      if (m.username) {
-        validNames.add(m.username.toLowerCase());
-        displayToLogin.set(m.username.toLowerCase(), m.loginName || m.username);
-        if (m.id) nameToUserId.set(m.username.toLowerCase(), m.id);
-      }
-      // Also let users autocomplete/style mentions by their assigned nickname.
-      const nick = m.id && this._nicknames ? this._nicknames[m.id] : null;
-      if (nick) {
-        validNames.add(nick.toLowerCase());
-        if (m.id) nameToUserId.set(nick.toLowerCase(), m.id);
-      }
-    }
-  }
-  const selfLogin = (this.user.username || '').toLowerCase();
-  if (selfLogin) validNames.add(selfLogin);
-  // Also include known persona names so @PersonaName lights up as a mention
-  // and pings the persona's owner. (#5349) Personas are tracked in
-  // _channelPersonas (lowercase name → { user_id, name, avatar }) and are
-  // populated as messages from personas are rendered.
-  if (this._channelPersonas instanceof Map) {
-    for (const [low, p] of this._channelPersonas.entries()) {
-      validNames.add(low);
-      if (p && p.user_id) nameToUserId.set(low, p.user_id);
-    }
-  }
-  // Also include the user's own personas so they can self-reference.
-  if (Array.isArray(this._personas)) {
-    for (const p of this._personas) {
-      if (!p || !p.name) continue;
-      const low = p.name.toLowerCase();
-      validNames.add(low);
-      if (this.user && this.user.id) nameToUserId.set(low, this.user.id);
-    }
-  }
-  // Role mentions (#5579): every role name is a valid @target, styled as a
-  // role and lit up for a viewer who holds it.
-  const roleByName = new Map();
-  const myRoleIds = new Set(((this.user && this.user.roles) || []).map(r => r && r.id));
-  for (const r of (this._mentionableRoles || [])) {
-    if (!r || !r.name) continue;
-    const low = r.name.toLowerCase();
-    roleByName.set(low, { name: r.name, color: r.color, mine: myRoleIds.has(r.id) });
-    validNames.add(low);
-  }
-  const allNames = [...validNames].sort((a, b) => b.length - a.length);
-  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Build alt list of known names; also keep a generic fallback for any
-  // \w token so we can detect a candidate before validating it below.
-  const namesAlt = allNames.length ? allNames.map(escapeRe).join('|') + '|' : '';
-  const mentionRegex = new RegExp(`(?<![\\w@])@(${namesAlt}\\w{1,30})`, 'gi');
-  html = html.replace(mentionRegex, (match, name) => {
-    const lower = name.toLowerCase();
-    // Only render as a mention if this matches a known member or self.
-    // (When channelMembers hasn't loaded yet, allow self-mention only.)
-    const isKnown = validNames.has(lower);
-    const isSelf  = lower === selfLogin;
-    if (!isKnown && !isSelf) return match;
-    // A role, unless a member shares the name, in which case the person wins.
-    const role = roleByName.get(lower);
-    if (role && !nameToUserId.has(lower) && !isSelf) {
-      const style = role.color ? ` style="--role-color:${this._escapeHtml(role.color)}"` : '';
-      return `<span class="mention mention-role${role.mine ? ' mention-self' : ''}"${style}>@${this._escapeHtml(role.name)}</span>`;
-    }
-    // Prefer the viewer's personal nickname for that user, then the
-    // server-side display name, then the raw token. (#5290)
-    const uid = nameToUserId.get(lower);
-    const nick = uid && this._nicknames ? this._nicknames[uid] : null;
-    const display = nick || loginToDisplay.get(lower) || name;
-    return `<span class="mention${isSelf ? ' mention-self' : ''}">@${this._escapeHtml(display)}</span>`;
-  });
-
-  // ── @everyone / @here mentions ──
-  // Render as a styled mention badge. Notification + audio cue is handled
-  // separately in app-socket.js when a new message arrives.
-  html = html.replace(/(?<![\w@])@(everyone|here)\b/gi, (_m, name) => {
-    return `<span class="mention mention-everyone" data-everyone="${name.toLowerCase()}">@${this._escapeHtml(name.toLowerCase())}</span>`;
-  });
-
-  // ── #channel-name links ──
-  // Recognize #foo / #foo-bar / #🎮general references and turn them into
-  // clickable spans that switch the active channel on click. We resolve
-  // against the user's currently-loaded channel list (case-insensitive).
-  // Matched names must follow a non-word/non-hash boundary so things like
-  // ## headings or message IDs (#1234) don't get linkified spuriously.
-  if (Array.isArray(this.channels) && this.channels.length) {
-    const chanByName = new Map();
-    for (const c of this.channels) {
-      if (c && c.name && c.code && !c.is_dm) {
-        chanByName.set(String(c.name).toLowerCase(), c.code);
-      }
-    }
-    if (chanByName.size > 0) {
-      html = html.replace(/(?<![\w#&])#([\p{L}\p{N}\p{Emoji_Presentation}_-][\p{L}\p{N}\p{Emoji_Presentation}_-]{0,49})/gu, (match, name) => {
-        const lower = name.toLowerCase();
-        // Names with spaces are typed as #foo_bar — try the literal form
-        // first, then fall back to a space-substituted lookup so spaced
-        // channel names resolve too.
-        let code = chanByName.get(lower) || chanByName.get(lower.replace(/_/g, ' '));
-        if (!code) return match;
-        return `<span class="channel-link" data-channel-code="${this._escapeHtml(code)}">#${this._escapeHtml(name)}</span>`;
-      });
-    }
-  }
-
-  // Render spoilers (||text||) — CSP-safe, uses delegated click handler
-  html = html.replace(/\|\|(.+?)\|\|/g, '<span class="spoiler">$1</span>');
-
-  // Render custom + bundled built-in image emojis :name:
-  html = html.replace(/:([a-zA-Z0-9_-]+):/g, (match, name) => {
-    const emoji = this._findNamedEmoji(name);
-    if (emoji) return `<img src="${this._escapeHtml(emoji.url)}" alt=":${this._escapeHtml(name)}:" title=":${this._escapeHtml(name)}:" class="custom-emoji">`;
-    return match;
-  });
-
-  // Render /me action text (italic)
-  if (html.startsWith('_') && html.endsWith('_') && html.length > 2) {
-    html = `<em class="action-text">${html.slice(1, -1)}</em>`;
-  }
-
-  // Render **bold**
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-  // Render *italic*
-  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-
-  // Render ~~strikethrough~~
-  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-
-  // Render ==highlight==
-  html = html.replace(/==(.+?)==/g, '<mark class="chat-highlight">$1</mark>');
-
-  // Render `inline code`
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-
-  // Render grouped > blockquotes and preserve attribution lines inside the quote.
-  const blockquotes = [];
-  html = html.replace(/(^|\n)((?:&gt;[^\n]*(?:\n|$))+)/g, (full, pre, block) => {
-    const lines = block.trim().split('\n').map(line => line.replace(/^&gt;\s?/, ''));
-    let authorHtml = '';
-    if (lines[0] && /^@[^\s].+ wrote:$/.test(lines[0])) {
-      authorHtml = `<div class="chat-blockquote-author">${lines.shift()}</div>`;
-    }
-    const textHtml = lines.join('<br>');
-    const idx = blockquotes.length;
-    blockquotes.push(`${pre}<blockquote class="chat-blockquote">${authorHtml}<div class="chat-blockquote-body">${textHtml}</div></blockquote>`);
-    return `\x00BLOCKQUOTE_${idx}\x00`;
-  });
-
-  // ── Headings: # H1, ## H2, ### H3 at start of line ──
-  html = html.replace(/(^|\n)(#{1,3})\s+(.+)/g, (_, pre, hashes, text) => {
-    const level = hashes.length;
-    return `${pre}<div class="chat-heading chat-h${level}">${text}</div>`;
-  });
-
-  // ── Horizontal rules: --- or ___ on their own line (3+ chars) ──
-  html = html.replace(/(^|\n)([-]{3,}|[_]{3,})\s*(?=\n|$)/g, '$1<hr class="chat-hr">');
-
-  // ── Markdown tables ──
-  // | h1 | h2 |
-  // |----|----|
-  // | a  | b  |
-  // Run before lists/line-break conversion. Cell text passes through
-  // already-resolved emoji / custom-emoji / mention HTML, so emoji
-  // (unicode and :name:) render naturally inside cells. (#5286)
-  const tablePlaceholders = [];
-  const splitRow = (line) => line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
-  const tableRe = /(^|\n)((?:\|[^\n]*\|\s*\n)+)\|\s*:?-{2,}:?(?:\s*\|\s*:?-{2,}:?)+\s*\|\s*(?:\n((?:\|[^\n]*\|\s*(?:\n|$))*))?/g;
-  html = html.replace(tableRe, (full, pre, headBlock, bodyBlock) => {
-    // headBlock holds 1+ leading rows; the last one is the header (the rest
-    // would only happen with malformed input — drop them safely by taking
-    // just the last row as header).
-    const headRows = headBlock.trim().split('\n').filter(l => /^\s*\|.*\|\s*$/.test(l));
-    if (headRows.length === 0) return full;
-    const headerCells = splitRow(headRows[headRows.length - 1]);
-    const bodyRows = (bodyBlock || '').trim().split('\n').filter(l => /^\s*\|.*\|\s*$/.test(l));
-    const thead = `<thead><tr>${headerCells.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
-    const tbody = bodyRows.length
-      ? `<tbody>${bodyRows.map(row => {
-          const cells = splitRow(row);
-          // Pad / trim to header width
-          while (cells.length < headerCells.length) cells.push('');
-          return `<tr>${cells.slice(0, headerCells.length).map(c => `<td>${c}</td>`).join('')}</tr>`;
-        }).join('')}</tbody>`
-      : '';
-    const idx = tablePlaceholders.length;
-    tablePlaceholders.push(`<div class="chat-table-wrap"><table class="chat-table">${thead}${tbody}</table></div>`);
-    return `${pre}\x00TABLE_${idx}\x00`;
-  });
-
-  // ── Lists (ordered + unordered) with multi-tier nesting (#5304) ──
-  // A list line starts with optional leading whitespace (spaces or tabs;
-  // tabs count as 2 spaces for indent purposes), then either "- " / "* "
-  // / "+ " (unordered) or "N. " (ordered). Indentation determines depth:
-  // each 2 spaces ⇒ one extra level. Mixed unordered/ordered at the same
-  // depth open separate lists. Adjacent list-blocks are detected by the
-  // outer regex (any consecutive run of qualifying lines).
-  const listLineRe = /^([ \t]*)([-*+]|\d+\.)\s+(.*)$/;
-  const listBlockRe = /((?:(?:^|\n)[ \t]*(?:[-*+]|\d+\.)[ \t]+.+)+)/g;
-  html = html.replace(listBlockRe, (match) => {
-    const lines = match.replace(/^\n/, '').split('\n');
-    // Parse each line into { depth, ordered, num, text }
-    const parsed = lines.map(line => {
-      const m = line.match(listLineRe);
-      if (!m) return null;
-      const indent = m[1].replace(/\t/g, '  ');
-      const depth = Math.floor(indent.length / 2);
-      const marker = m[2];
-      const ordered = /^\d+\.$/.test(marker);
-      const num = ordered ? parseInt(marker, 10) : null;
-      return { depth, ordered, num, text: m[3] };
-    }).filter(Boolean);
-    if (!parsed.length) return match;
-
-    // Build nested HTML using a stack of open lists.
-    let out = '';
-    const stack = []; // each entry: { ordered, depth }
-    const closeTo = (targetLen) => {
-      while (stack.length > targetLen) {
-        const top = stack.pop();
-        out += '</li>';
-        out += top.ordered ? '</ol>' : '</ul>';
-      }
-    };
-    parsed.forEach((item, idx) => {
-      // Close lists that are at deeper depth than this item
-      while (stack.length && stack[stack.length - 1].depth > item.depth) {
-        out += '</li>';
-        const top = stack.pop();
-        out += top.ordered ? '</ol>' : '</ul>';
-      }
-      const top = stack[stack.length - 1];
-      if (!top || top.depth < item.depth) {
-        // Open a new nested list. If we're nesting under an open <li>,
-        // don't close it — the new list goes inside.
-        if (top && top.depth < item.depth) {
-          // already inside an open <li> from previous sibling
-        }
-        const startAttr = item.ordered ? ` start="${item.num || 1}"` : '';
-        out += item.ordered ? `<ol class="chat-list"${startAttr}>` : '<ul class="chat-list">';
-        stack.push({ ordered: item.ordered, depth: item.depth });
-      } else if (top.depth === item.depth && top.ordered !== item.ordered) {
-        // Same depth but list type changed — close current, open new.
-        out += '</li>';
-        const popped = stack.pop();
-        out += popped.ordered ? '</ol>' : '</ul>';
-        const startAttr = item.ordered ? ` start="${item.num || 1}"` : '';
-        out += item.ordered ? `<ol class="chat-list"${startAttr}>` : '<ul class="chat-list">';
-        stack.push({ ordered: item.ordered, depth: item.depth });
-      } else {
-        // Same depth, same type — close previous <li> sibling.
-        out += '</li>';
-      }
-      out += `<li>${item.text}`;
-    });
-    closeTo(0);
-    return '\n' + out;
-  });
-
-  html = html.replace(/\n/g, '<br>');
-
-  // ── Restore tables (do this after <br> so they aren't broken up) ──
-  tablePlaceholders.forEach((tbl, idx) => {
-    html = html.replace(new RegExp(`(?:<br>)?\\x00TABLE_${idx}\\x00(?:<br>)?`), tbl);
-  });
-
-  blockquotes.forEach((block, idx) => {
-    html = html.replace(`\x00BLOCKQUOTE_${idx}\x00`, block);
-  });
-
-  // ── Restore fenced code blocks ──
-  codeBlocks.forEach((block, idx) => {
-    const escaped = this._escapeHtml(block.code).replace(/\n$/, '');
-    const langAttr = block.lang ? ` data-lang="${this._escapeHtml(block.lang)}"` : '';
-    const langLabel = block.lang ? `<span class="code-block-lang">${this._escapeHtml(block.lang)}</span>` : '';
-    const rendered = `<div class="code-block"${langAttr}>${langLabel}<pre><code>${escaped}</code></pre></div>`;
-    html = html.replace(`\x00CODEBLOCK_${idx}\x00`, rendered);
-  });
-
-  // ── Restore markdown links/images ──
-  mdLinks.forEach((link, idx) => {
-    html = html.replace(`\x00MDLINK_${idx}\x00`, link);
-  });
-
-  // ── Restore auto-linked URLs ──
-  autoLinks.forEach((link, idx) => {
-    html = html.replace(`\x00AUTOLINK_${idx}\x00`, link);
-  });
-
-  // ── Restore timestamps ──
-  // Function replacement, so a formatted date containing $& or $1 cannot
-  // be read as a replacement pattern.
-  timestamps.forEach((el, idx) => {
-    html = html.replace(`\x00TIMESTAMP_${idx}\x00`, () => el);
-  });
-
-  if (emojiOnly) html = `<span class="emoji-only-msg">${html}</span>`;
-
-  return html;
+_startDayRolloverWatch() {
+  if (this._dayRolloverTimer || typeof document === 'undefined') return;
+  const dayKey = () => this._fmtDate(new Date(), { year: 'numeric', month: '2-digit', day: '2-digit' });
+  this._dayRolloverKey = dayKey();
+  const check = () => {
+    const key = dayKey();
+    if (key === this._dayRolloverKey) return;
+    this._dayRolloverKey = key;
+    this._refreshTimeLabels();
+  };
+  this._dayRolloverTimer = setInterval(check, 60000);
+  // A sleeping laptop or a hidden tab can skip the timer; look again on return.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 },
 
 _formatTime(dateStr) {
+  this._startDayRolloverWatch();
   const date = new Date(dateStr);
   const now = new Date();
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const isToday = date.toDateString() === now.toDateString();
+  const time = this._fmtTime(date);
+  // Compare the calendar day in the reader's chosen zone (falls back to the
+  // device zone when unset), so "today"/"yesterday" don't drift across a date
+  // boundary when a timezone is picked.
+  const dayKey = (d) => this._fmtDate(d, { year: 'numeric', month: '2-digit', day: '2-digit' });
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const isToday = dayKey(date) === dayKey(now);
+  const isYesterday = dayKey(date) === dayKey(yesterday);
 
   if (isToday) return t('utils.today_at', { time });
   if (isYesterday) return t('utils.yesterday_at', { time });
-  return `${date.toLocaleDateString()} ${time}`;
+  return `${this._fmtDate(date)} ${time}`;
 },
 
 _getUserColor(username) {
@@ -1393,2885 +1105,6 @@ _showRiskyDownloadWarning(fileName, ext, url) {
 },
 
 // ═══════════════════════════════════════════════════════
-// EMOJI PICKER (categorized + searchable)
-// ═══════════════════════════════════════════════════════
-
-// Skin-tone preference, cached in memory and mirrored to localStorage
-// (same pattern as _getQuickEmojis). Stored as base emoji everywhere; the
-// tone is applied only at display and insert time via _toneEmoji.
-_getEmojiSkinTone() {
-  if (this._skinTone === undefined) this._skinTone = localStorage.getItem(SKIN_TONE_KEY) || 'default';
-  return this._skinTone;
-},
-
-_saveEmojiSkinTone(tone) {
-  this._skinTone = tone;
-  localStorage.setItem(SKIN_TONE_KEY, tone);
-},
-
-// Apply a specific tone to one emoji. Only single-person "modifier base"
-// emoji are toned; multi-person sequences (couples, people holding hands)
-// carry more than one base and are left as-is.
-_applySkinTone(emoji, tone) {
-  const mod = SKIN_TONE_MODIFIERS[tone];
-  if (!mod || typeof emoji !== 'string') return emoji;
-  // Prefer the set derived from the server's emoji list; fall back to the
-  // built-in one when the standard list hasn't loaded.
-  const base = this._emojiModifierBase || EMOJI_MODIFIER_BASE;
-  const cps = [...emoji];
-  if (cps.filter(c => base.has(c)).length !== 1) return emoji;
-  const out = [];
-  for (let i = 0; i < cps.length; i++) {
-    out.push(cps[i]);
-    if (base.has(cps[i])) {
-      out.push(mod);
-      if (cps[i + 1] === '\uFE0F') i++; // skip VS16: the modifier already implies emoji style
-    }
-  }
-  return out.join('');
-},
-
-// Apply the user's current tone — used at every render/insert surface.
-_toneEmoji(emoji) {
-  return this._applySkinTone(emoji, this._getEmojiSkinTone());
-},
-
-_toggleEmojiPicker(anchorEl) {
-  const picker = document.getElementById('emoji-picker');
-  if (picker.style.display === 'flex') {
-    picker.style.display = 'none';
-    if (picker._havenOrigParent) {
-      picker._havenOrigParent.appendChild(picker);
-      picker._havenOrigParent = null;
-      ['position', 'top', 'left', 'bottom', 'right', 'z-index'].forEach(p => picker.style.removeProperty(p));
-    }
-    return;
-  }
-  picker.innerHTML = '';
-  this._emojiActiveCategory = this._emojiActiveCategory || Object.keys(this.emojiCategories)[0];
-  this._emojiPickerSection = this._emojiPickerSection || 'emoji';
-
-  // Section toggle (Emoji | Sticker)
-  const sectionRow = document.createElement('div');
-  sectionRow.className = 'emoji-section-row';
-  const mkSectionBtn = (key, label) => {
-    const b = document.createElement('button');
-    b.className = 'emoji-section-tab' + (this._emojiPickerSection === key ? ' active' : '');
-    b.textContent = label;
-    b.addEventListener('click', (ev) => {
-      // (#5335) Prevent the click from bubbling to the global outside-click
-      // handler in app-ui.js. Without this, the rebuild below detaches the
-      // tab DOM node mid-event, so by the time the document listener checks
-      // `picker.contains(e.target)` the original target is gone, the check
-      // returns false, and the picker is auto-closed every time the user
-      // switches between Emoji and Stickers.
-      ev.stopPropagation();
-      if (this._emojiPickerSection === key) return;
-      this._emojiPickerSection = key;
-      // Re-open to rebuild contents in the new section.
-      picker.style.display = 'none';
-      this._toggleEmojiPicker(anchorEl);
-    });
-    return b;
-  };
-  sectionRow.appendChild(mkSectionBtn('emoji', t('emoji.section_emoji')));
-  sectionRow.appendChild(mkSectionBtn('sticker', t('emoji.section_sticker')));
-  picker.appendChild(sectionRow);
-
-  // ── Sticker section ──
-  if (this._emojiPickerSection === 'sticker') {
-    const stickerSearchRow = document.createElement('div');
-    stickerSearchRow.className = 'emoji-search-row';
-    const stickerSearch = document.createElement('input');
-    stickerSearch.type = 'text';
-    stickerSearch.className = 'emoji-search-input';
-    stickerSearch.placeholder = t('emoji.sticker_search_placeholder');
-    stickerSearch.maxLength = 30;
-    stickerSearchRow.appendChild(stickerSearch);
-    picker.appendChild(stickerSearchRow);
-
-    const stickers = Array.isArray(this.stickers) ? this.stickers : [];
-    const packs = [...new Set(stickers.map(s => s.pack_name || 'General'))].sort((a, b) => a.localeCompare(b));
-    this._activeStickerPack = this._activeStickerPack && packs.includes(this._activeStickerPack)
-      ? this._activeStickerPack
-      : (packs[0] || null);
-
-    if (packs.length > 1) {
-      const packRow = document.createElement('div');
-      packRow.className = 'sticker-pack-row';
-      packs.forEach(pack => {
-        const tab = document.createElement('button');
-        tab.className = 'sticker-pack-btn' + (pack === this._activeStickerPack ? ' active' : '');
-        tab.textContent = pack;
-        tab.title = pack;
-        tab.addEventListener('click', () => {
-          this._activeStickerPack = pack;
-          stickerSearch.value = '';
-          renderStickers();
-          packRow.querySelectorAll('.sticker-pack-btn').forEach(t => t.classList.remove('active'));
-          tab.classList.add('active');
-        });
-        packRow.appendChild(tab);
-      });
-      picker.appendChild(packRow);
-    }
-
-    const grid = document.createElement('div');
-    grid.className = 'sticker-grid';
-    picker.appendChild(grid);
-
-    const self = this;
-    function renderStickers(filter) {
-      grid.innerHTML = '';
-      let list = stickers;
-      if (filter) {
-        const q = filter.toLowerCase();
-        list = stickers.filter(s =>
-          (s.name || '').toLowerCase().includes(q) ||
-          (s.pack_name || '').toLowerCase().includes(q)
-        );
-      } else if (self._activeStickerPack) {
-        list = stickers.filter(s => (s.pack_name || 'General') === self._activeStickerPack);
-      }
-      if (list.length === 0) {
-        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:0.75rem;width:100%;text-align:center">${
-          stickers.length === 0
-            ? t('emoji.no_stickers')
-            : t('emoji.no_results')
-        }</p>`;
-        return;
-      }
-      list.forEach(sticker => {
-        const btn = document.createElement('button');
-        btn.className = 'sticker-picker-item';
-        btn.title = `:${sticker.name}:`;
-        btn.innerHTML = `<img src="${self._escapeHtml(sticker.url)}" alt=":${self._escapeHtml(sticker.name)}:" class="sticker-picker-thumb">`;
-        btn.addEventListener('click', () => {
-          self._sendStickerMessage(sticker.url);
-          picker.style.display = 'none';
-          if (picker._havenOrigParent) {
-            picker._havenOrigParent.appendChild(picker);
-            picker._havenOrigParent = null;
-            ['position', 'top', 'left', 'bottom', 'right', 'z-index'].forEach(p => picker.style.removeProperty(p));
-          }
-        });
-        grid.appendChild(btn);
-      });
-    }
-
-    stickerSearch.addEventListener('input', () => {
-      const q = stickerSearch.value.trim();
-      renderStickers(q || null);
-    });
-
-    renderStickers();
-
-    // Anchor positioning + display reused below — fall through to common code.
-    if (anchorEl) {
-      if (picker.parentElement !== document.body) {
-        picker._havenOrigParent = picker.parentElement;
-        document.body.appendChild(picker);
-      }
-      const r = anchorEl.getBoundingClientRect();
-      const pickerW = 340;
-      const pickerH = 368;
-      const top = Math.max(4, r.top - pickerH - 4);
-      const left = Math.max(4, Math.min(r.left, window.innerWidth - pickerW - 4));
-      picker.style.cssText += '; position:fixed; top:' + top + 'px; left:' + left + 'px; bottom:auto; right:auto; z-index:100030;';
-    }
-    picker.style.display = 'flex';
-    return;
-  }
-
-  // ── Emoji section (default) ──
-
-  // Search bar
-  const searchRow = document.createElement('div');
-  searchRow.className = 'emoji-search-row';
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.className = 'emoji-search-input';
-  searchInput.placeholder = t('emoji.search_placeholder');
-  searchInput.maxLength = 30;
-  searchRow.appendChild(searchInput);
-
-  // Skin-tone selector: a hand button whose glyph reflects the current tone,
-  // opening a dropdown of Default + the five tones. Picking one saves the
-  // preference and re-renders so every emoji adopts it.
-  const skinBtn = document.createElement('button');
-  skinBtn.className = 'emoji-skin-btn';
-  skinBtn.title = t('emoji.skin_tone');
-  const skinMenu = document.createElement('div');
-  skinMenu.className = 'emoji-skin-menu';
-  skinMenu.style.display = 'none';
-  const paintSkinBtn = () => { skinBtn.textContent = this._toneEmoji('✋'); };
-  paintSkinBtn();
-  ['default', 'light', 'medium-light', 'medium', 'medium-dark', 'dark'].forEach(tone => {
-    const opt = document.createElement('button');
-    opt.className = 'emoji-skin-opt';
-    opt.textContent = this._applySkinTone('✋', tone);
-    opt.title = t(`emoji.skin_tones.${tone.replace('-', '_')}`);
-    opt.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      this._saveEmojiSkinTone(tone);
-      paintSkinBtn();
-      skinMenu.style.display = 'none';
-      renderGrid(searchInput.value.trim() || null);
-    });
-    skinMenu.appendChild(opt);
-  });
-  skinBtn.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    skinMenu.style.display = skinMenu.style.display === 'none' ? 'flex' : 'none';
-  });
-  searchRow.appendChild(skinBtn);
-  searchRow.appendChild(skinMenu);
-  picker.appendChild(searchRow);
-
-  // Build combined categories — custom first so they sit front and centre,
-  // then the standard sets.
-  const allCategories = {};
-  const hasCustom = this.customEmojis && this.customEmojis.length > 0;
-  if (hasCustom) {
-    allCategories['Custom'] = this.customEmojis.map(e => `:${e.name}:`);
-  }
-  Object.assign(allCategories, this.emojiCategories);
-  this._emojiActiveCategory = Object.keys(allCategories)[0];
-
-  // Category tabs — clicking scrolls the grid to that section rather than
-  // swapping it out, so every category is reachable by scrolling too.
-  const tabRow = document.createElement('div');
-  tabRow.className = 'emoji-tab-row';
-  const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Flags':'🚩', 'Custom':'⭐' };
-  const catTabs = {};
-  const catSections = {}; // cat -> non-sticky section wrapper, our stable scroll anchor
-  const setActiveTab = (cat) => {
-    for (const [c, tab] of Object.entries(catTabs)) tab.classList.toggle('active', c === cat);
-  };
-  for (const cat of Object.keys(allCategories)) {
-    const tab = document.createElement('button');
-    tab.className = 'emoji-tab' + (cat === this._emojiActiveCategory ? ' active' : '');
-    tab.textContent = catIcons[cat] || cat.charAt(0);
-    tab.title = t(`emoji.categories.${cat.toLowerCase()}`) || cat;
-    tab.addEventListener('click', () => {
-      if (searchInput.value.trim()) { searchInput.value = ''; renderGrid(); }
-      const section = catSections[cat];
-      // Scroll to the section wrapper, not its header: the wrapper isn't
-      // sticky, so its offsetTop is always the true layout position.
-      if (section) {
-        grid.scrollTop = section.offsetTop;
-        // Move the keyboard highlight to this category's first emoji, so
-        // arrowing/Enter continues from where the user just jumped to.
-        highlightFirstEmoji(section);
-      }
-      setActiveTab(cat);
-    });
-    catTabs[cat] = tab;
-    tabRow.appendChild(tab);
-  }
-  picker.appendChild(tabRow);
-
-  // Grid
-  const grid = document.createElement('div');
-  grid.className = 'emoji-grid';
-  picker.appendChild(grid);
-
-  const self = this;
-  function appendEmojiButton(parent, emoji) {
-    const btn = document.createElement('button');
-    btn.className = 'emoji-item';
-    // Check if it's a custom emoji (:name:)
-    const customMatch = typeof emoji === 'string' && emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-    // Standard emoji get the current skin tone; custom emoji pass through.
-    const value = customMatch ? emoji : self._toneEmoji(emoji);
-    if (customMatch) {
-      const ce = self._findNamedEmoji(customMatch[1]);
-      if (ce) {
-        btn.innerHTML = `<img src="${self._escapeHtml(ce.url)}" alt=":${self._escapeHtml(ce.name)}:" class="custom-emoji">`;
-        btn.title = `:${ce.name}:`;
-      } else {
-        btn.textContent = emoji;
-        btn.title = emoji;
-      }
-    } else {
-      btn.textContent = value;
-      // Use the first keyword (canonical name) as the tooltip,
-      // matching the reaction picker behavior.
-      const names = self.emojiNames && self.emojiNames[emoji];
-      btn.title = names ? names.split(/\s+/)[0] : emoji;
-    }
-    btn.addEventListener('click', () => {
-      // Insert into the active edit textarea if editing, otherwise the main input
-      const input = self._activeEditTextarea || document.getElementById('message-input');
-      const start = input.selectionStart;
-      const end = input.selectionEnd;
-      input.value = input.value.substring(0, start) + value + input.value.substring(end);
-      input.selectionStart = input.selectionEnd = start + value.length;
-      input.focus();
-    });
-    parent.appendChild(btn);
-  }
-
-  // Keyboard nav: highlight the first emoji so arrow keys + Enter work the
-  // moment the picker opens (Discord-style). Re-run after every grid render.
-  // Pass a section to highlight the first emoji within it (e.g. after a
-  // category jump); defaults to the first emoji in the whole grid.
-  const highlightFirstEmoji = (scope) => {
-    grid.querySelectorAll('.emoji-item.kb-active').forEach(el => el.classList.remove('kb-active'));
-    const first = (scope || grid).querySelector('.emoji-item');
-    if (first) first.classList.add('kb-active');
-  };
-
-  function renderGrid(filter) {
-    grid.innerHTML = '';
-    for (const k in catSections) delete catSections[k];
-    if (filter) {
-      const q = filter.toLowerCase().trim();
-      const matched = new Set();
-      // Search by keyword, literal character, and punctuation alias
-      for (const [emoji, keywords] of Object.entries(self.emojiNames)) {
-        if (self._emojiSearchMatch(emoji, keywords, filter)) matched.add(emoji);
-      }
-      // Also search by category name
-      for (const [cat, list] of Object.entries(self.emojiCategories)) {
-        if (cat.toLowerCase().includes(q)) list.forEach(e => matched.add(e));
-      }
-      // Search custom emojis by name
-      if (self.customEmojis) {
-        self.customEmojis.forEach(e => {
-          if (e.name.toLowerCase().includes(q)) matched.add(`:${e.name}:`);
-        });
-      }
-      // Search bundled built-in image emoji by name + keywords
-      if (self.builtinEmojis) {
-        self.builtinEmojis.forEach(e => {
-          if (e.name.includes(q) || (e.keywords && e.keywords.toLowerCase().includes(q))) matched.add(`:${e.name}:`);
-        });
-      }
-      if (matched.size === 0) {
-        grid.innerHTML = `<p class="muted-text" style="padding:12px;font-size:0.75rem;width:100%;text-align:center">${t('emoji.no_results')}</p>`;
-        return;
-      }
-      const results = document.createElement('div');
-      results.className = 'emoji-cat-grid';
-      matched.forEach(e => appendEmojiButton(results, e));
-      grid.appendChild(results);
-      highlightFirstEmoji();
-      return;
-    }
-    // No filter: render every category as its own section (sticky header +
-    // its emoji grid) so scrolling flows through all of them and adjacent
-    // headers push each other out cleanly.
-    for (const [cat, list] of Object.entries(allCategories)) {
-      const section = document.createElement('div');
-      section.className = 'emoji-cat';
-      const header = document.createElement('div');
-      header.className = 'emoji-cat-header';
-      header.textContent = t(`emoji.categories.${cat.toLowerCase()}`) || cat;
-      section.appendChild(header);
-      const catGrid = document.createElement('div');
-      catGrid.className = 'emoji-cat-grid';
-      list.forEach(e => appendEmojiButton(catGrid, e));
-      section.appendChild(catGrid);
-      grid.appendChild(section);
-      catSections[cat] = section;
-    }
-    highlightFirstEmoji();
-  }
-
-  // Scroll-spy: highlight the tab of whichever section is at the top. Compares
-  // stable offsetTop values against scrollTop — no sticky-poisoned measurements.
-  grid.addEventListener('scroll', () => {
-    if (searchInput.value.trim()) return;
-    const y = grid.scrollTop;
-    let current = null;
-    for (const cat of Object.keys(catSections)) {
-      if (catSections[cat].offsetTop - y <= 8) current = cat;
-      else break;
-    }
-    if (current && current !== self._emojiActiveCategory) {
-      self._emojiActiveCategory = current;
-      setActiveTab(current);
-    }
-  });
-
-  searchInput.addEventListener('input', () => {
-    const q = searchInput.value.trim();
-    renderGrid(q || null);
-    if (!q) setActiveTab(self._emojiActiveCategory = Object.keys(allCategories)[0]);
-  });
-
-  renderGrid();
-
-  // Arrow-key navigation + Enter to pick, bound once to the picker. Reads its
-  // state from the DOM on each keypress so it survives the grid being rebuilt
-  // on search/category changes. Enter reuses the emoji's own click handler, so
-  // there's a single source of truth for what "picking" an emoji does.
-  if (!picker._havenNavBound) {
-    picker._havenNavBound = true;
-    picker.addEventListener('keydown', (e) => {
-      if (picker.style.display === 'none') return;
-      const items = [...picker.querySelectorAll('.emoji-grid .emoji-item')];
-      if (!items.length) return;
-      const active = picker.querySelector('.emoji-item.kb-active');
-      const setActive = (el) => {
-        if (!el) return;
-        items.forEach(i => i.classList.remove('kb-active'));
-        el.classList.add('kb-active');
-        el.scrollIntoView({ block: 'nearest' });
-      };
-      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        const idx = active ? items.indexOf(active) : -1;
-        if (idx === -1) { setActive(items[0]); return; }
-        if (e.key === 'ArrowRight') setActive(items[Math.min(idx + 1, items.length - 1)]);
-        else if (e.key === 'ArrowLeft') setActive(items[Math.max(idx - 1, 0)]);
-        else setActive(this._emojiGridVerticalNav(items, idx, e.key === 'ArrowDown' ? 1 : -1));
-      } else if (e.key === 'Enter' && active) {
-        e.preventDefault();
-        active.click(); // insert the selected emoji (same as clicking it)
-        if (e.shiftKey) {
-          // Shift+Enter: keep the menu open to pick more; clicking moved focus
-          // to the message box, so hand it back to the search field.
-          picker.querySelector('.emoji-search-input')?.focus();
-        } else {
-          this._toggleEmojiPicker(); // plain Enter closes after one pick
-        }
-      }
-    });
-  }
-
-  // On mobile with the iOS keyboard open, dynamically position the picker
-  // above the input area using the visual viewport so it doesn't push
-  // content off-screen.
-  if (window.innerWidth <= 480 && window.visualViewport) {
-    const vvHeight = window.visualViewport.height;
-    const inputArea = document.getElementById('message-input-area');
-    if (inputArea) {
-      const inputRect = inputArea.getBoundingClientRect();
-      picker.style.bottom = (window.innerHeight - inputRect.top) + 'px';
-    }
-  }
-
-  // Anchor-based positioning: used when opening from PiP or thread input buttons.
-  // Move the picker to document.body so it escapes any overflow clipping context,
-  // then position it with fixed coords above the anchor button. Boost z-index so
-  // it renders above the dm-pip-panel (z-index 99999) and pip-mode thread-panel
-  // (z-index 99999).
-  if (anchorEl) {
-    if (picker.parentElement !== document.body) {
-      picker._havenOrigParent = picker.parentElement;
-      document.body.appendChild(picker);
-    }
-    const r = anchorEl.getBoundingClientRect();
-    const pickerW = 340;
-    const pickerH = 368;
-    const top = Math.max(4, r.top - pickerH - 4);
-    const left = Math.max(4, Math.min(r.left, window.innerWidth - pickerW - 4));
-    picker.style.cssText += '; position:fixed; top:' + top + 'px; left:' + left + 'px; bottom:auto; right:auto; z-index:100030;';
-  }
-
-  picker.style.display = 'flex';
-  searchInput.focus();
-
-  // Always open scrolled to the top, so the view and the keyboard highlight
-  // both start on the first category in every browser. Chromium discards the
-  // old scroll when the grid is rebuilt; Firefox/Safari can preserve it, which
-  // would leave the view on the last-used category while the highlight resets.
-  grid.scrollTop = 0;
-},
-
-// Find the emoji one visual row above/below the current one (dir: -1 up, 1 down).
-// Emoji wrap into rows of varying counts across category sections, so this walks
-// by geometry rather than a fixed column count: nearest row wins first, then the
-// closest horizontal neighbour in that row.
-_emojiGridVerticalNav(items, idx, dir) {
-  const cur = items[idx].getBoundingClientRect();
-  const curX = cur.left + cur.width / 2;
-  const curY = cur.top + cur.height / 2;
-  let best = null, bestScore = Infinity;
-  for (let i = 0; i < items.length; i++) {
-    if (i === idx) continue;
-    const r = items[i].getBoundingClientRect();
-    const dy = (r.top + r.height / 2) - curY;
-    if (dir === 1 ? dy <= 2 : dy >= -2) continue; // must be strictly below/above
-    const score = Math.abs(dy) * 1000 + Math.abs((r.left + r.width / 2) - curX);
-    if (score < bestScore) { bestScore = score; best = items[i]; }
-  }
-  return best || items[idx];
-},
-
-// ═══════════════════════════════════════════════════════
-// GIF PICKER (GIPHY)
-// ═══════════════════════════════════════════════════════
-
-_setupGifPicker() {
-  const btn = document.getElementById('gif-btn');
-  const picker = document.getElementById('gif-picker');
-  const searchInput = document.getElementById('gif-search-input');
-  const grid = document.getElementById('gif-grid');
-  if (!btn || !picker) return;
-
-  this._gifDebounce = null;
-  this._gifTab = 'search';
-
-  btn.addEventListener('click', () => {
-    if (picker.style.display === 'flex') {
-      picker.style.display = 'none';
-      return;
-    }
-    // Close emoji picker if open
-    document.getElementById('emoji-picker').style.display = 'none';
-    picker.style.display = 'flex';
-    searchInput.value = '';
-    searchInput.focus();
-    // Re-open on whichever tab was last used this session
-    this._switchGifTab(this._gifTab);
-  });
-
-  picker.querySelectorAll('.gif-tab').forEach(tab => {
-    tab.addEventListener('click', () => this._switchGifTab(tab.dataset.gifTab));
-  });
-
-  // Close when clicking outside
-  document.addEventListener('click', (e) => {
-    if (picker.style.display !== 'none' &&
-        !picker.contains(e.target) && !btn.contains(e.target)) {
-      picker.style.display = 'none';
-    }
-  });
-
-  // Search on typing with debounce — on the Favorites tab the same box
-  // filters the saved list locally instead of hitting GIPHY.
-  searchInput.addEventListener('input', () => {
-    clearTimeout(this._gifDebounce);
-    const q = searchInput.value.trim();
-    if (this._gifTab === 'favorites') {
-      this._renderGifFavorites(q);
-      return;
-    }
-    if (!q) {
-      this._loadTrendingGifs();
-      return;
-    }
-    this._gifDebounce = setTimeout(() => this._searchGifs(q), 350);
-  });
-
-  // Star toggles favorite; clicking the GIF itself sends it
-  grid.addEventListener('click', (e) => {
-    const star = e.target.closest('.gif-fav-btn');
-    if (star) {
-      const favorited = this._toggleGifFavorite({
-        full: star.dataset.full,
-        tiny: star.dataset.tiny,
-        title: star.dataset.title,
-      });
-      // On the Favorites tab an un-starred GIF should leave the grid
-      if (this._gifTab === 'favorites') this._renderGifFavorites(searchInput.value.trim());
-      else this._paintGifStar(star, favorited);
-      return;
-    }
-    const img = e.target.closest('img');
-    if (!img || !img.dataset.full) return;
-    this._sendGifMessage(img.dataset.full);
-    picker.style.display = 'none';
-  });
-},
-
-_switchGifTab(tab) {
-  const picker = document.getElementById('gif-picker');
-  const searchInput = document.getElementById('gif-search-input');
-  if (!picker || !searchInput) return;
-
-  this._gifTab = tab === 'favorites' ? 'favorites' : 'search';
-  picker.querySelectorAll('.gif-tab').forEach(el => {
-    el.classList.toggle('active', el.dataset.gifTab === this._gifTab);
-  });
-  clearTimeout(this._gifDebounce);
-
-  const q = searchInput.value.trim();
-  if (this._gifTab === 'favorites') {
-    searchInput.placeholder = t('gifs.search_favorites');
-    this._renderGifFavorites(q);
-  } else {
-    searchInput.placeholder = t('header.gif_search_placeholder');
-    if (q) this._searchGifs(q);
-    else this._loadTrendingGifs();
-  }
-},
-
-// The proxy reports which provider served the batch — keep the picker
-// footer honest ("Powered by Tenor" vs "Powered by GIPHY").
-_setGifFooter(provider) {
-  if (!provider) return;
-  const footer = document.querySelector('.gif-picker-footer');
-  if (footer) footer.textContent = t('gifs.powered_by', { provider: provider === 'tenor' ? 'Tenor' : 'GIPHY' });
-},
-
-_loadTrendingGifs() {
-  const grid = document.getElementById('gif-grid');
-  grid.innerHTML = `<div class="gif-picker-empty">${t('thread_list.loading')}</div>`;
-  fetch('/api/gif/trending?limit=20', {
-    headers: { 'Authorization': `Bearer ${this.token}` }
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (this._gifTab === 'favorites') return; // tab switched mid-flight
-      if (data.error === 'gif_not_configured') {
-        this._showGifSetupGuide(grid);
-        return;
-      }
-      if (data.error) {
-        grid.innerHTML = `<div class="gif-picker-empty">${this._escapeHtml(data.error)}</div>`;
-        return;
-      }
-      this._setGifFooter(data.provider);
-      this._renderGifGrid(data.results || []);
-    })
-    .catch(() => {
-      if (this._gifTab === 'favorites') return;
-      grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.load_failed')}</div>`;
-    });
-},
-
-_searchGifs(query) {
-  const grid = document.getElementById('gif-grid');
-  grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.searching')}</div>`;
-  fetch(`/api/gif/search?q=${encodeURIComponent(query)}&limit=20`, {
-    headers: { 'Authorization': `Bearer ${this.token}` }
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (this._gifTab === 'favorites') return; // tab switched mid-flight
-      if (data.error === 'gif_not_configured') {
-        this._showGifSetupGuide(grid);
-        return;
-      }
-      if (data.error) {
-        grid.innerHTML = `<div class="gif-picker-empty">${this._escapeHtml(data.error)}</div>`;
-        return;
-      }
-      const results = data.results || [];
-      if (results.length === 0) {
-        grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.no_results')}</div>`;
-        return;
-      }
-      this._setGifFooter(data.provider);
-      this._renderGifGrid(results);
-    })
-    .catch(() => {
-      if (this._gifTab === 'favorites') return;
-      grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.search_failed')}</div>`;
-    });
-},
-
-_showGifSetupGuide(grid) {
-  const isAdmin = this.user && this.user.isAdmin;
-  if (isAdmin) {
-    // GIPHY is the supported provider. Tenor is no longer offered here;
-    // an existing tenor_api_key still works on the server if no GIPHY key is set.
-    grid.innerHTML = `
-      <div class="gif-setup-guide">
-        <h3>🎞️ ${t('gifs.setup.title')}</h3>
-        <p>${t('gifs.setup.powered_by')}</p>
-        <ol>
-          <li>${t('gifs.setup.step_1')}</li>
-          <li>${t('gifs.setup.step_2')}</li>
-          <li>${t('gifs.setup.step_3')}</li>
-          <li>${t('gifs.setup.step_4')}</li>
-          <li>${t('gifs.setup.step_5')}</li>
-        </ol>
-        <div class="gif-setup-input-row">
-          <input type="text" id="gif-provider-key-input" placeholder="${t('gifs.setup.key_placeholder')}" spellcheck="false" autocomplete="off" />
-          <button id="gif-provider-key-save">${t('gifs.setup.save_btn')}</button>
-        </div>
-        <p class="gif-setup-note">💡 ${t('gifs.setup.note')}</p>
-      </div>`;
-    const saveBtn = document.getElementById('gif-provider-key-save');
-    const input = document.getElementById('gif-provider-key-input');
-    saveBtn.addEventListener('click', () => {
-      const key = input.value.trim();
-      if (!key) return;
-      this.socket.emit('update-server-setting', { key: 'giphy_api_key', value: key });
-      grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.setup.saved')}</div>`;
-      setTimeout(() => this._loadTrendingGifs(), 500);
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') saveBtn.click();
-    });
-  } else {
-    grid.innerHTML = `
-      <div class="gif-setup-guide">
-        <h3>🎞️ ${t('gifs.setup.unavailable_title')}</h3>
-        <p>${t('gifs.setup.unavailable_desc')}</p>
-      </div>`;
-  }
-},
-
-_renderGifGrid(results) {
-  const grid = document.getElementById('gif-grid');
-  grid.innerHTML = '';
-  results.forEach(gif => {
-    if (!gif.tiny) return;
-    const full = gif.full || gif.tiny;
-    const item = document.createElement('div');
-    item.className = 'gif-item';
-
-    const img = document.createElement('img');
-    img.src = gif.tiny;
-    img.alt = gif.title || 'GIF';
-    img.loading = 'lazy';
-    img.dataset.full = full;
-
-    const star = document.createElement('button');
-    star.type = 'button';
-    star.className = 'gif-fav-btn';
-    star.dataset.full = full;
-    star.dataset.tiny = gif.tiny;
-    star.dataset.title = gif.title || '';
-    this._paintGifStar(star, this._isGifFavorited(full));
-
-    item.append(img, star);
-    grid.appendChild(item);
-  });
-},
-
-/** Sync a star button's glyph, state class and tooltip to `favorited`. */
-_paintGifStar(star, favorited) {
-  star.classList.toggle('favorited', favorited);
-  star.textContent = favorited ? '★' : '☆';
-  star.title = favorited ? t('gifs.unfavorite') : t('gifs.favorite');
-  star.setAttribute('aria-label', star.title);
-  star.setAttribute('aria-pressed', String(favorited));
-},
-
-_renderGifFavorites(query = '') {
-  const grid = document.getElementById('gif-grid');
-  const q = query.trim().toLowerCase();
-  let favs = this._getGifFavorites();
-  if (q) favs = favs.filter(g => (g.title || '').toLowerCase().includes(q));
-  if (!favs.length) {
-    grid.innerHTML = `<div class="gif-picker-empty">${q ? t('gifs.no_favorite_matches') : t('gifs.no_favorites')}</div>`;
-    return;
-  }
-  this._renderGifGrid(favs);
-},
-
-_getGifFavorites() {
-  if (this._gifFavorites) return this._gifFavorites;
-  try {
-    const raw = JSON.parse(localStorage.getItem(GIF_FAVORITES_KEY) || '[]');
-    this._gifFavorites = Array.isArray(raw)
-      ? raw.filter(g => g && typeof g.full === 'string' && typeof g.tiny === 'string')
-      : [];
-  } catch {
-    this._gifFavorites = [];
-  }
-  return this._gifFavorites;
-},
-
-_isGifFavorited(full) {
-  return this._getGifFavorites().some(g => g.full === full);
-},
-
-/** Toggle a GIF in the favorites list. Returns its new favorited state. */
-_toggleGifFavorite(gif) {
-  if (!gif || !gif.full || !gif.tiny) return false;
-  const favs = this._getGifFavorites();
-  const idx = favs.findIndex(g => g.full === gif.full);
-  if (idx !== -1) {
-    favs.splice(idx, 1);
-    this._saveGifFavorites();
-    return false;
-  }
-  // Newest first, oldest trimmed once the cap is hit
-  favs.unshift({ full: gif.full, tiny: gif.tiny, title: gif.title || '' });
-  if (favs.length > GIF_FAVORITES_MAX) favs.length = GIF_FAVORITES_MAX;
-  this._saveGifFavorites();
-  return true;
-},
-
-_saveGifFavorites() {
-  try {
-    localStorage.setItem(GIF_FAVORITES_KEY, JSON.stringify(this._gifFavorites || []));
-  } catch { /* quota exceeded — favorites are best-effort */ }
-},
-
-_sendGifMessage(url) {
-  if (!this.currentChannel || !url) return;
-  const payload = {
-    code: this.currentChannel,
-    content: url,
-  };
-  if (this.replyingTo) {
-    payload.replyTo = this.replyingTo.id;
-    this._clearReply();
-  }
-  this.socket.emit('send-message', payload);
-  this.notifications.play('sent');
-},
-
-// Send a sticker URL as a message. Routes to the active picker context
-// (main composer, thread composer, or DM PiP) so stickers respect the
-// surrounding scope, replies, and E2E encryption that each composer applies.
-_sendStickerMessage(url) {
-  if (!url) return;
-  const ctx = this._emojiPickerContext || 'main';
-  if (ctx === 'thread') {
-    if (!this._activeThreadParent) return;
-    const input = document.getElementById('thread-input');
-    if (!input) return;
-    input.value = url;
-    this._sendThreadMessage();
-    return;
-  }
-  if (ctx === 'dmpip') {
-    if (!this._activeDMPip) return;
-    const input = document.getElementById('dm-pip-input');
-    if (!input) return;
-    input.value = url;
-    this._sendDMPiPMessage();
-    return;
-  }
-  // Main composer — go through _sendMessage so E2E DMs and slash-command
-  // pre-processing apply uniformly.
-  const input = document.getElementById('message-input');
-  if (!input || !this.currentChannel) return;
-  input.value = url;
-  if (typeof this._sendMessage === 'function') this._sendMessage();
-  else this.socket.emit('send-message', { code: this.currentChannel, content: url });
-},
-
-// /gif slash command — inline GIF search results above the input
-_showGifSlashResults(query) {
-  // Remove any existing picker
-  document.getElementById('gif-slash-picker')?.remove();
-
-  const picker = document.createElement('div');
-  picker.id = 'gif-slash-picker';
-  picker.className = 'gif-slash-picker';
-  picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.searching')}</div>`;
-
-  // Position above the message input
-  const inputArea = document.querySelector('.message-input-area');
-  inputArea.parentElement.insertBefore(picker, inputArea);
-
-  // Close on click outside
-  const closeOnClick = (e) => {
-    if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', closeOnClick); }
-  };
-  setTimeout(() => document.addEventListener('click', closeOnClick), 100);
-
-  // Close on Escape
-  const closeOnEsc = (e) => {
-    if (e.key === 'Escape') { picker.remove(); document.removeEventListener('keydown', closeOnEsc); }
-  };
-  document.addEventListener('keydown', closeOnEsc);
-
-  fetch(`/api/gif/search?q=${encodeURIComponent(query)}&limit=12`, {
-    headers: { 'Authorization': `Bearer ${this.token}` }
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (data.error === 'gif_not_configured') {
-        picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.setup.unavailable_desc')}</div>`;
-        return;
-      }
-      if (data.error) { picker.innerHTML = `<div class="gif-slash-loading">${this._escapeHtml(data.error)}</div>`; return; }
-      const results = data.results || [];
-      if (results.length === 0) { picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.no_results')}</div>`; return; }
-
-      picker.innerHTML = `<div class="gif-slash-header"><span>/gif ${this._escapeHtml(query)}</span><button class="icon-btn small gif-slash-close">&times;</button></div><div class="gif-slash-grid"></div>`;
-      const grid = picker.querySelector('.gif-slash-grid');
-      picker.querySelector('.gif-slash-close').addEventListener('click', () => picker.remove());
-
-      results.forEach(gif => {
-        if (!gif.tiny) return;
-        const img = document.createElement('img');
-        img.src = gif.tiny;
-        img.alt = gif.title || 'GIF';
-        img.loading = 'lazy';
-        img.dataset.full = gif.full || gif.tiny;
-        img.addEventListener('click', () => {
-          this._sendGifMessage(img.dataset.full);
-          picker.remove();
-          document.removeEventListener('click', closeOnClick);
-          document.removeEventListener('keydown', closeOnEsc);
-        });
-        grid.appendChild(img);
-      });
-    })
-    .catch(() => {
-      picker.innerHTML = `<div class="gif-slash-loading">${t('gifs.search_failed')}</div>`;
-    });
-},
-
-// ═══════════════════════════════════════════════════════
-// POLLS
-// ═══════════════════════════════════════════════════════
-
-_renderPollWidget(msgId, poll) {
-  if (!poll || !poll.question || !Array.isArray(poll.options)) return '';
-  const votes = poll.votes || {};
-  const totalVotes = poll.totalVotes || 0;
-  const myId = this.user.id;
-
-  const optionsHtml = poll.options.map((opt, i) => {
-    const voters = votes[i] || [];
-    const count = voters.length;
-    const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-    const myVote = voters.some(v => v.user_id === myId);
-    const voterNames = poll.anonymous ? '' : voters.map(v => this._escapeHtml(v.username)).join(', ');
-    return `<button class="poll-option${myVote ? ' poll-voted' : ''}" data-msg-id="${msgId}" data-option="${i}" title="${voterNames}">
-      <div class="poll-option-bar" style="width:${pct}%"></div>
-      <span class="poll-option-text">${this._escapeHtml(opt)}</span>
-      <span class="poll-option-count">${count} (${pct}%)</span>
-    </button>`;
-  }).join('');
-
-  const settings = [];
-  if (poll.multiVote) settings.push(t('poll.multiple_votes'));
-  if (poll.anonymous) settings.push(t('poll.anonymous'));
-  const settingsHtml = settings.length ? `<div class="poll-settings-info">${settings.join(' · ')}</div>` : '';
-
-  return `<div class="poll-widget" data-msg-id="${msgId}">
-    <div class="poll-question">${this._escapeHtml(poll.question)}</div>
-    <div class="poll-options">${optionsHtml}</div>
-    <div class="poll-footer">${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml ? ' · ' : ''}${settingsHtml}</div>
-  </div>`;
-},
-
-_updatePollVotes(messageId, votes, totalVotes) {
-  const widget = document.querySelector(`.poll-widget[data-msg-id="${messageId}"]`);
-  if (!widget) return;
-
-  const wasAtBottom = this._coupledToBottom;
-  const myId = this.user.id;
-
-  // Get current poll data from the message to know anonymous/multiVote settings
-  const msgEl = document.querySelector(`[data-msg-id="${messageId}"]`);
-  const pollAnonymous = msgEl && msgEl.dataset.pollAnonymous === '1';
-
-  widget.querySelectorAll('.poll-option').forEach(btn => {
-    const idx = parseInt(btn.dataset.option);
-    const voters = votes[idx] || [];
-    const count = voters.length;
-    const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-    const myVote = voters.some(v => v.user_id === myId);
-
-    btn.classList.toggle('poll-voted', myVote);
-    btn.title = pollAnonymous ? '' : voters.map(v => this._escapeHtml(v.username)).join(', ');
-    const bar = btn.querySelector('.poll-option-bar');
-    if (bar) bar.style.width = pct + '%';
-    const countEl = btn.querySelector('.poll-option-count');
-    if (countEl) countEl.textContent = `${count} (${pct}%)`;
-  });
-
-  const footer = widget.querySelector('.poll-footer');
-  if (footer) {
-    const settingsInfo = footer.querySelector('.poll-settings-info');
-    const settingsHtml = settingsInfo ? ' · ' + settingsInfo.outerHTML : '';
-    footer.innerHTML = `${t(totalVotes === 1 ? 'poll.votes_one' : 'poll.votes_other', { count: totalVotes })}${settingsHtml}`;
-  }
-
-  if (wasAtBottom) this._scrollToBottom(true);
-},
-
-// ═══════════════════════════════════════════════════════
-// REACTIONS
-// ═══════════════════════════════════════════════════════
-
-_renderReactions(msgId, reactions) {
-  if (!reactions || reactions.length === 0) return '';
-  // Group by emoji
-  const grouped = {};
-  reactions.forEach(r => {
-    if (!grouped[r.emoji]) grouped[r.emoji] = { emoji: r.emoji, users: [] };
-    grouped[r.emoji].users.push({ id: r.user_id, username: r.username });
-  });
-
-  const badges = Object.values(grouped).map(g => {
-    const isOwn = g.users.some(u => u.id === this.user.id);
-    const names = g.users.map(u => u.username).join(', ');
-    const usersJson = this._escapeHtml(JSON.stringify(g.users.map(u => u.username)));
-    // Check if it's a custom emoji
-    const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-    let emojiDisplay = g.emoji;
-    if (customMatch && this.customEmojis) {
-      const ce = this._findNamedEmoji(customMatch[1]);
-      if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;
-    }
-    return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${names}">${emojiDisplay} ${g.users.length}</button>`;
-  }).join('');
-
-  return `<div class="reactions-row">${badges}</div>`;
-},
-
-_updateMessageReactions(messageId, reactions) {
-  // Update both the main pane and the DM PiP if either contains this message.
-  const els = document.querySelectorAll(`[data-msg-id="${messageId}"]`);
-  if (!els.length) return;
-
-  const wasAtBottom = this._coupledToBottom;
-  const html = this._renderReactions(messageId, reactions);
-
-  els.forEach((msgEl) => {
-    const oldRow = msgEl.querySelector('.reactions-row');
-    if (oldRow) oldRow.remove();
-    if (!html) return;
-    const content = msgEl.querySelector('.message-content, .thread-msg-content');
-    if (content) content.insertAdjacentHTML('afterend', html);
-  });
-
-  if (wasAtBottom) this._scrollToBottom(true);
-},
-
-// ── Reaction popout (who reacted) ─────────────────────
-
-_showReactionPopout(badge) {
-  this._hideReactionPopout();
-  let users;
-  try { users = JSON.parse(badge.dataset.users || '[]'); } catch { return; }
-  if (!users.length) return;
-
-  const emoji = badge.dataset.emoji;
-  const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-  let emojiDisplay = emoji;
-  if (customMatch && this.customEmojis) {
-    const ce = this.customEmojis.find(e => e.name === customMatch[1]);
-    if (ce) emojiDisplay = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji reaction-custom-emoji">`;
-  }
-
-  const popout = document.createElement('div');
-  popout.id = 'reaction-popout';
-  popout.className = 'reaction-popout';
-  popout.innerHTML = `
-    <div class="reaction-popout-header">${emojiDisplay} <span class="reaction-popout-count">${users.length}</span></div>
-    <div class="reaction-popout-list">
-      ${users.map(u => `<div class="reaction-popout-user">${this._escapeHtml(u)}</div>`).join('')}
-    </div>
-  `;
-  document.body.appendChild(popout);
-
-  // Position above the badge
-  const rect = badge.getBoundingClientRect();
-  popout.style.left = rect.left + 'px';
-  popout.style.top = (rect.top - popout.offsetHeight - 6) + 'px';
-  // Clamp to viewport
-  const pr = popout.getBoundingClientRect();
-  if (pr.right > window.innerWidth) popout.style.left = (window.innerWidth - pr.width - 8) + 'px';
-  if (pr.left < 0) popout.style.left = '8px';
-  if (pr.top < 0) popout.style.top = (rect.bottom + 6) + 'px';
-},
-
-_hideReactionPopout() {
-  const existing = document.getElementById('reaction-popout');
-  if (existing) existing.remove();
-},
-
-_getQuickEmojis() {
-  const saved = localStorage.getItem('haven_quick_emojis');
-  if (saved) {
-    try { const arr = JSON.parse(saved); if (Array.isArray(arr) && arr.length === 8) return arr; } catch {}
-  }
-  return ['👍','👎','😂','❤️','🔥','💯','😮','😢'];
-},
-
-_saveQuickEmojis(emojis) {
-  localStorage.setItem('haven_quick_emojis', JSON.stringify(emojis));
-},
-
-_showQuickEmojiEditor(picker, msgEl, msgId) {
-  // Remove any existing editor AND any open full picker. Both panels carry the
-  // .reaction-full-picker class and both are absolutely positioned at
-  // bottom:100%/right:0 on the same message, so leaving one behind stacks two
-  // 320px panels on the exact same spot — which reads as "the emoji pane
-  // covered everything and I can't reach the slot row". _showFullReactionPicker
-  // already clears both directions; this is the missing mirror of that.
-  document.querySelectorAll('.quick-emoji-editor, .reaction-full-picker').forEach(el => el.remove());
-
-  const editor = document.createElement('div');
-  editor.className = 'quick-emoji-editor reaction-full-picker';
-
-  const title = document.createElement('div');
-  title.className = 'reaction-full-category';
-  title.textContent = t('emoji.customize_quick_title');
-  editor.appendChild(title);
-
-  const hint = document.createElement('p');
-  hint.className = 'muted-text';
-  hint.style.cssText = 'font-size:0.6875rem;padding:0 8px 6px;margin:0';
-  hint.textContent = t('emoji.customize_quick_hint');
-  editor.appendChild(hint);
-
-  // Current slots
-  const current = this._getQuickEmojis();
-  const slotsRow = document.createElement('div');
-  slotsRow.className = 'quick-emoji-slots';
-  let activeSlot = null;
-
-  const renderSlots = () => {
-    slotsRow.innerHTML = '';
-    current.forEach((emoji, i) => {
-      const slot = document.createElement('button');
-      slot.className = 'reaction-pick-btn quick-emoji-slot' + (activeSlot === i ? ' active' : '');
-      // Check for custom emoji
-      const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-      if (customMatch && this.customEmojis) {
-        const ce = this._findNamedEmoji(customMatch[1]);
-        if (ce) {
-          slot.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:20px;height:20px">`;
-          slot.title = `:${ce.name}:`;
-        } else {
-          slot.textContent = emoji;
-          slot.title = emoji;
-        }
-      } else {
-        slot.textContent = this._toneEmoji(emoji);
-        slot.title = (this.emojiNames && this.emojiNames[emoji]) ? this.emojiNames[emoji] : emoji;
-      }
-      slot.addEventListener('click', (e) => {
-        e.stopPropagation();
-        activeSlot = i;
-        renderSlots();
-      });
-      slotsRow.appendChild(slot);
-    });
-  };
-  renderSlots();
-  editor.appendChild(slotsRow);
-
-  // Emoji grid for selection
-  const grid = document.createElement('div');
-  grid.className = 'reaction-full-grid';
-  grid.style.maxHeight = '180px';
-
-  const renderOptions = () => {
-    grid.innerHTML = '';
-    // Standard emojis
-    for (const [category, emojis] of Object.entries(this.emojiCategories)) {
-      const label = document.createElement('div');
-      label.className = 'reaction-full-category';
-      label.textContent = t(`emoji.categories.${category.toLowerCase()}`) || category;
-      grid.appendChild(label);
-
-      const row = document.createElement('div');
-      row.className = 'reaction-full-row';
-      emojis.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = 'reaction-full-btn';
-        const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
-        if (named) btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:22px;height:22px">`;
-        else btn.textContent = this._toneEmoji(emoji);
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (activeSlot !== null) {
-            current[activeSlot] = emoji;
-            this._saveQuickEmojis(current);
-            renderSlots();
-          }
-        });
-        row.appendChild(btn);
-      });
-      grid.appendChild(row);
-    }
-    // Custom emojis
-    if (this.customEmojis && this.customEmojis.length > 0) {
-      const label = document.createElement('div');
-      label.className = 'reaction-full-category';
-      label.textContent = t('emoji.categories.custom');
-      grid.appendChild(label);
-
-      const row = document.createElement('div');
-      row.className = 'reaction-full-row';
-      this.customEmojis.forEach(ce => {
-        const btn = document.createElement('button');
-        btn.className = 'reaction-full-btn';
-        btn.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" class="custom-emoji" style="width:22px;height:22px">`;
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (activeSlot !== null) {
-            current[activeSlot] = `:${ce.name}:`;
-            this._saveQuickEmojis(current);
-            renderSlots();
-          }
-        });
-        row.appendChild(btn);
-      });
-      grid.appendChild(row);
-    }
-  };
-  renderOptions();
-  editor.appendChild(grid);
-
-  // Done button
-  const doneBtn = document.createElement('button');
-  doneBtn.className = 'btn-sm btn-accent';
-  doneBtn.style.cssText = 'margin:8px;width:calc(100% - 16px)';
-  doneBtn.textContent = t('modals.common.done');
-  doneBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    editor.remove();
-  });
-  editor.appendChild(doneBtn);
-
-  msgEl.appendChild(editor);
-
-  // Placement parity with _showReactionPicker. Without this the editor is
-  // positioned by CSS alone (always above the message), so opening it on a
-  // message near the top of the viewport — or inside a PiP panel, which clips
-  // overflow — pushes the slot row off-screen.
-  const pipParent = msgEl.closest('.dm-pip-panel, .thread-panel.pip');
-  if (pipParent) {
-    const msgRect = msgEl.getBoundingClientRect();
-    document.body.appendChild(editor);
-    editor.style.position = 'fixed';
-    editor.style.zIndex = '100021';
-    requestAnimationFrame(() => {
-      const r = editor.getBoundingClientRect();
-      let top = msgRect.top - r.height - 6;
-      if (top < 4) top = Math.min(msgRect.bottom + 6, window.innerHeight - r.height - 8);
-      editor.style.top = Math.max(4, top) + 'px';
-      editor.style.right = Math.max(8, window.innerWidth - msgRect.right) + 'px';
-      editor.style.left = 'auto';
-      editor.style.bottom = 'auto';
-    });
-  } else {
-    requestAnimationFrame(() => {
-      const r = editor.getBoundingClientRect();
-      const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
-      const containerTop = container ? container.getBoundingClientRect().top : 0;
-      if (r.top < containerTop + 4) editor.classList.add('flip-below');
-    });
-  }
-},
-
-_showReactionPicker(msgEl, msgId) {
-  // Toggle: if this message already has a picker open, close it and bail
-  const existingPicker = msgEl.querySelector('.reaction-picker');
-  if (existingPicker) {
-    existingPicker.remove();
-    msgEl.classList.remove('showing-picker');
-    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-    document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
-    if (this._reactionPickerClose) {
-      document.removeEventListener('click', this._reactionPickerClose);
-      this._reactionPickerClose = null;
-    }
-    return;
-  }
-
-  // Clean up previous close-on-click-outside handler so it can't
-  // interfere with the new picker (e.g. removing showing-picker class).
-  if (this._reactionPickerClose) {
-    document.removeEventListener('click', this._reactionPickerClose);
-    this._reactionPickerClose = null;
-  }
-  document.querySelectorAll('.showing-picker').forEach(el => el.classList.remove('showing-picker'));
-  document.querySelectorAll('.reaction-picker').forEach(el => el.remove());
-  document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-  document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
-
-  // Disable content-visibility containment so the picker isn't clipped
-  msgEl.classList.add('showing-picker');
-
-  const picker = document.createElement('div');
-  picker.className = 'reaction-picker';
-  const quickEmojis = this._getQuickEmojis();
-  quickEmojis.forEach(emoji => {
-    const btn = document.createElement('button');
-    btn.className = 'reaction-pick-btn';
-    // Check for custom emoji
-    const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
-    const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
-    if (customMatch && this.customEmojis) {
-      const ce = this._findNamedEmoji(customMatch[1]);
-      if (ce) {
-        btn.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:20px;height:20px">`;
-        btn.title = `:${ce.name}:`;
-      } else {
-        btn.textContent = emoji;
-        btn.title = emoji;
-      }
-    } else {
-      btn.textContent = value;
-      btn.title = (this.emojiNames && this.emojiNames[emoji]) ? this.emojiNames[emoji] : emoji;
-    }
-    btn.addEventListener('click', () => {
-      this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
-      picker.remove();
-      msgEl.classList.remove('showing-picker');
-      if (this._reactionPickerClose) {
-        document.removeEventListener('click', this._reactionPickerClose);
-        this._reactionPickerClose = null;
-      }
-    });
-    picker.appendChild(btn);
-  });
-
-  // "..." button opens the full emoji picker for reactions
-  const moreBtn = document.createElement('button');
-  moreBtn.className = 'reaction-pick-btn reaction-more-btn';
-  moreBtn.textContent = '⋯';
-  moreBtn.title = t('emoji.all_emojis_title');
-  moreBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    this._showFullReactionPicker(msgEl, msgId, picker);
-  });
-  picker.appendChild(moreBtn);
-
-  // Separator + gear icon for customization
-  const sep = document.createElement('span');
-  sep.className = 'reaction-pick-sep';
-  sep.textContent = '|';
-  picker.appendChild(sep);
-
-  const gearBtn = document.createElement('button');
-  gearBtn.className = 'reaction-pick-btn reaction-gear-btn';
-  gearBtn.textContent = '⚙️';
-  gearBtn.title = t('emoji.customize_quick_title');
-  gearBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    this._showQuickEmojiEditor(picker, msgEl, msgId);
-  });
-  picker.appendChild(gearBtn);
-
-  msgEl.appendChild(picker);
-
-  // PiP context: the dm-pip-panel and pip-mode thread-panel both have
-  // `overflow: hidden`, which clips this absolute-positioned picker. Pop the
-  // picker out to <body> with fixed positioning so it can render above the
-  // floating panel.
-  const pipParent = msgEl.closest('.dm-pip-panel, .thread-panel.pip');
-  if (pipParent) {
-    const msgRect = msgEl.getBoundingClientRect();
-    document.body.appendChild(picker);
-    picker.style.position = 'fixed';
-    picker.style.zIndex = '100020';
-    // Provisional placement above the message; flip-below check below
-    // adjusts to under the message if there's no room above.
-    const place = () => {
-      const pickerRect = picker.getBoundingClientRect();
-      let top = msgRect.top - pickerRect.height - 6;
-      const below = msgRect.bottom + 6;
-      const tooHigh = top < 4;
-      if (tooHigh) top = below;
-      const right = Math.max(8, window.innerWidth - msgRect.right);
-      picker.style.top = top + 'px';
-      picker.style.right = right + 'px';
-      picker.style.left = 'auto';
-      picker.style.bottom = 'auto';
-    };
-    requestAnimationFrame(place);
-  }
-
-  // Flip picker below the message if it would be clipped above
-  requestAnimationFrame(() => {
-    if (pipParent) return; // fixed-position branch handles placement
-    const pickerRect = picker.getBoundingClientRect();
-    const container = msgEl.closest('#thread-messages, #messages, #dm-pip-messages');
-    const containerTop = container ? container.getBoundingClientRect().top : 0;
-    if (pickerRect.top < containerTop + 4) {
-      picker.classList.add('flip-below');
-    }
-  });
-
-  // Close on click outside
-  const close = (e) => {
-    if (!picker.contains(e.target) && !e.target.closest('.reaction-full-picker') && !e.target.closest('.quick-emoji-editor')) {
-      picker.remove();
-      msgEl.classList.remove('showing-picker');
-      document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-      document.removeEventListener('click', close);
-      this._reactionPickerClose = null;
-    }
-  };
-  this._reactionPickerClose = close;
-  setTimeout(() => document.addEventListener('click', close), 0);
-},
-
-_showFullReactionPicker(msgEl, msgId, quickPicker) {
-  // Remove any existing full picker
-  document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-
-  const panel = document.createElement('div');
-  panel.className = 'reaction-full-picker';
-
-  // Search bar
-  const searchRow = document.createElement('div');
-  searchRow.className = 'reaction-full-search';
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.placeholder = t('reactions.search_placeholder');
-  searchInput.className = 'reaction-full-search-input';
-  searchRow.appendChild(searchInput);
-  panel.appendChild(searchRow);
-
-  // Scrollable emoji grid
-  const grid = document.createElement('div');
-  grid.className = 'reaction-full-grid';
-
-  const renderAll = (filter) => {
-    grid.innerHTML = '';
-    const lowerFilter = filter ? filter.toLowerCase() : '';
-    for (const [category, emojis] of Object.entries(this.emojiCategories)) {
-      const matching = lowerFilter
-        ? emojis.filter(e => this._emojiSearchMatch(e, this.emojiNames[e] || '', filter) || category.toLowerCase().includes(lowerFilter))
-        : emojis;
-      if (matching.length === 0) continue;
-
-      const label = document.createElement('div');
-      label.className = 'reaction-full-category';
-      label.textContent = t(`emoji.categories.${category.toLowerCase()}`) || category;
-      grid.appendChild(label);
-
-      const row = document.createElement('div');
-      row.className = 'reaction-full-row';
-      matching.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = 'reaction-full-btn';
-        const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
-        const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
-        if (named) { btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" title="${this._escapeHtml(emoji)}" class="custom-emoji">`; }
-        else { btn.textContent = value; btn.title = this.emojiNames[emoji] || ''; }
-        btn.addEventListener('click', () => {
-          this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
-          panel.remove();
-          quickPicker.remove();
-          msgEl.classList.remove('showing-picker');
-          if (this._reactionPickerClose) {
-            document.removeEventListener('click', this._reactionPickerClose);
-            this._reactionPickerClose = null;
-          }
-        });
-        row.appendChild(btn);
-      });
-      grid.appendChild(row);
-    }
-
-    // Custom emojis section
-    if (this.customEmojis && this.customEmojis.length > 0) {
-      const customMatching = lowerFilter
-        ? this.customEmojis.filter(e => e.name.toLowerCase().includes(lowerFilter) || 'custom'.includes(lowerFilter))
-        : this.customEmojis;
-      if (customMatching.length > 0) {
-        const label = document.createElement('div');
-        label.className = 'reaction-full-category';
-        label.textContent = t('emoji.categories.custom');
-        grid.appendChild(label);
-
-        const row = document.createElement('div');
-        row.className = 'reaction-full-row';
-        customMatching.forEach(ce => {
-          const btn = document.createElement('button');
-          btn.className = 'reaction-full-btn';
-          btn.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" title=":${this._escapeHtml(ce.name)}:" class="custom-emoji">`;
-          btn.addEventListener('click', () => {
-            this.socket.emit('add-reaction', { messageId: msgId, emoji: `:${ce.name}:` });
-            panel.remove();
-            quickPicker.remove();
-            msgEl.classList.remove('showing-picker');
-            if (this._reactionPickerClose) {
-              document.removeEventListener('click', this._reactionPickerClose);
-              this._reactionPickerClose = null;
-            }
-          });
-          row.appendChild(btn);
-        });
-        grid.appendChild(row);
-      }
-    }
-  };
-
-  renderAll('');
-  panel.appendChild(grid);
-
-  // Debounced search
-  let searchTimer;
-  searchInput.addEventListener('input', () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => renderAll(searchInput.value.trim()), 150);
-  });
-
-  // Pop to body with fixed positioning so the panel never causes the messages
-  // container to scroll-jump when the message is near the top of the viewport.
-  document.body.appendChild(panel);
-  panel.style.position = 'fixed';
-  panel.style.zIndex = '100020';
-  panel.style.bottom = 'auto';
-  panel.style.right = 'auto';
-
-  requestAnimationFrame(() => {
-    const qRect = quickPicker.getBoundingClientRect();
-    const panelH = panel.offsetHeight;
-    const panelW = panel.offsetWidth;
-
-    // Right-align with the quick picker, clamped to viewport edges
-    let left = qRect.right - panelW;
-    if (left < 8) left = 8;
-    if (left + panelW > window.innerWidth - 8) left = window.innerWidth - panelW - 8;
-    panel.style.left = left + 'px';
-
-    // Open above the quick picker if there's room, otherwise open below
-    if (qRect.top - 6 >= panelH + 8) {
-      panel.style.top = (qRect.top - panelH - 6) + 'px';
-    } else {
-      panel.style.top = (qRect.bottom + 6) + 'px';
-    }
-  });
-  searchInput.focus();
-},
-
-// ═══════════════════════════════════════════════════════
-// THREADS
-// ═══════════════════════════════════════════════════════
-
-_renderThreadPreview(parentId, thread, opts = {}) {
-  if (!thread) return '';
-  if (!thread.count) {
-    // A forum topic with no replies yet gets the same button as an
-    // invitation, so a fresh topic reads as a topic rather than a message.
-    if (!opts.forum) return '';
-    return `
-    <button class="thread-preview thread-preview-empty" data-thread-parent="${parentId}">
-      <span class="thread-preview-count">${t('thread_runtime.reply_to_topic')}</span>
-      <span class="thread-preview-arrow">›</span>
-    </button>
-  `;
-  }
-  const participantAvatars = (thread.participants || []).map(p => {
-    if (p.avatar) {
-      return `<img class="thread-participant-avatar" src="${this._escapeHtml(p.avatar)}" alt="${this._escapeHtml(p.username)}" title="${this._escapeHtml(p.username)}">`;
-    }
-    const color = this._getUserColor(p.username);
-    const initial = p.username.charAt(0).toUpperCase();
-    return `<div class="thread-participant-avatar thread-participant-initial" style="background:${color}" title="${this._escapeHtml(p.username)}">${initial}</div>`;
-  }).join('');
-
-  const timeAgo = this._relativeTime(thread.lastReplyAt);
-  return `
-    <button class="thread-preview" data-thread-parent="${parentId}">
-      ${participantAvatars}
-      <span class="thread-preview-count">${t(thread.count === 1 ? 'thread_runtime.reply_one' : 'thread_runtime.reply_other', { count: thread.count })}</span>
-      <span class="thread-preview-time">${timeAgo}</span>
-      <span class="thread-preview-arrow">›</span>
-    </button>
-  `;
-},
-
-_relativeTime(isoStr) {
-  if (!isoStr) return '';
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t('thread_runtime.just_now');
-  if (mins < 60) return t('thread_runtime.minutes_ago', { count: mins });
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return t('thread_runtime.hours_ago', { count: hours });
-  const days = Math.floor(hours / 24);
-  return t('thread_runtime.days_ago', { count: days });
-},
-
-_setThreadParentHeader(meta = {}) {
-  const wrap = document.getElementById('thread-parent-avatar-wrap');
-  const nameEl = document.getElementById('thread-parent-name');
-  if (!wrap || !nameEl) return;
-
-  const baseUsername = (meta.username || '').trim() || t('thread_runtime.starter');
-  // Apply the local user's nickname assignment so threads match the rest of
-  // the UI (members list, message author, mentions). Falls back to the
-  // server-provided display name when no nickname is set. (#5291)
-  const username = meta.userId != null
-    ? (this._getNickname?.(meta.userId, baseUsername) || baseUsername)
-    : baseUsername;
-  const shape = (meta.avatarShape || 'circle') === 'square' ? 'square' : 'circle';
-  const shapeClass = shape === 'square' ? ' thread-parent-avatar-square' : '';
-
-  if (meta.avatar) {
-    wrap.innerHTML = `<img class="thread-parent-avatar${shapeClass}" src="${this._escapeHtml(meta.avatar)}" alt="${this._escapeHtml(username)}">`;
-  } else {
-    const initial = username.charAt(0).toUpperCase() || '?';
-    const color = this._getUserColor(username);
-    wrap.innerHTML = `<div class="thread-parent-avatar-initial${shapeClass}" style="background:${color}">${this._escapeHtml(initial)}</div>`;
-  }
-
-  nameEl.textContent = username;
-  nameEl.title = username;
-},
-
-_setThreadReply(msgEl, msgId) {
-  const author = msgEl.querySelector('.thread-msg-author')?.textContent
-    || this._getNickname?.(parseInt(msgEl.dataset.userId, 10), msgEl.dataset.username)
-    || msgEl.dataset.username || t('voice.someone');
-  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
-  const preview = rawContent.length > 70 ? rawContent.substring(0, 70) + '…' : rawContent;
-  this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
-
-  const bar = document.getElementById('thread-reply-bar');
-  const text = document.getElementById('thread-reply-preview-text');
-  if (!bar || !text) return;
-  bar.style.display = 'flex';
-  text.innerHTML = t('thread_runtime.replying_to', { author: this._escapeHtml(author), preview: this._escapeHtml(preview) });
-
-  const input = document.getElementById('thread-input');
-  if (input) input.focus();
-},
-
-_clearThreadReply() {
-  this._threadReplyingTo = null;
-  const bar = document.getElementById('thread-reply-bar');
-  if (bar) bar.style.display = 'none';
-},
-
-_quoteThreadMessage(msgEl) {
-  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
-  const author = msgEl.querySelector('.thread-msg-author')?.textContent
-    || this._getNickname?.(parseInt(msgEl.dataset.userId, 10), msgEl.dataset.username)
-    || msgEl.dataset.username || t('voice.someone');
-  const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
-  const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
-
-  const input = document.getElementById('thread-input');
-  if (!input) return;
-  if (input.value) {
-    input.value += '\n' + quoteText;
-  } else {
-    input.value = quoteText;
-  }
-  input.focus();
-  input.dispatchEvent(new Event('input'));
-},
-
-// ── Thread @mention tracking ──────────────────────
-_recordThreadMention(channelCode, parentId, msg) {
-  if (!this._threadMentions) {
-    try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
-    catch { this._threadMentions = {}; }
-  }
-  const list = this._threadMentions[channelCode] || (this._threadMentions[channelCode] = []);
-  // Dedupe by messageId
-  if (list.some(m => m.messageId === msg.id)) return;
-  list.push({
-    parentId,
-    messageId: msg.id,
-    username: msg.username || '',
-    snippet: (msg.content || '').slice(0, 140),
-    when: Date.now()
-  });
-  this._persistThreadMentions();
-  this._renderChannels?.();
-  this._updateThreadMentionsPill();
-},
-_clearThreadMentionsForParent(channelCode, parentId) {
-  if (!this._threadMentions || !this._threadMentions[channelCode]) return;
-  this._threadMentions[channelCode] = this._threadMentions[channelCode].filter(m => m.parentId !== parentId);
-  if (this._threadMentions[channelCode].length === 0) delete this._threadMentions[channelCode];
-  this._persistThreadMentions();
-  this._renderChannels?.();
-  this._updateThreadMentionsPill();
-},
-_clearThreadMentionsForChannel(channelCode) {
-  if (!this._threadMentions || !this._threadMentions[channelCode]) return;
-  delete this._threadMentions[channelCode];
-  this._persistThreadMentions();
-  this._renderChannels?.();
-  this._updateThreadMentionsPill();
-},
-_persistThreadMentions() {
-  try { localStorage.setItem('haven_thread_mentions', JSON.stringify(this._threadMentions || {})); } catch {}
-},
-_updateThreadMentionsPill() {
-  const pill = document.getElementById('thread-mentions-pill');
-  const cnt = document.getElementById('thread-mentions-pill-count');
-  if (!pill || !cnt) return;
-  if (!this._threadMentions) {
-    try { this._threadMentions = JSON.parse(localStorage.getItem('haven_thread_mentions') || '{}'); }
-    catch { this._threadMentions = {}; }
-  }
-  const list = (this._threadMentions[this.currentChannel] || []);
-  if (list.length === 0) {
-    pill.style.display = 'none';
-    return;
-  }
-  pill.style.display = '';
-  cnt.textContent = String(list.length);
-  pill.title = t(list.length === 1 ? 'thread_runtime.mention_one' : 'thread_runtime.mention_other', { count: list.length });
-},
-_openMostRecentThreadMention() {
-  if (!this._threadMentions) return;
-  const list = this._threadMentions[this.currentChannel];
-  if (!list || list.length === 0) return;
-  const newest = list[list.length - 1];
-  this._openThread(newest.parentId);
-},
-
-// ── DM Picture-in-Picture (overlay panel, like thread PiP) ──
-// Opens a floating, draggable, resizable panel that hosts a DM
-// without leaving the user's current channel. The DM panel is its
-// own message view — receives `new-message` events filtered by code,
-// sends via `send-message` with the PiP channel code.
-_openDMPiP(code) {
-  // Don't open as PiP if this DM is already the active main channel — user is
-  // already viewing it. This prevents sidebar clicks, dm-opened events, and
-  // channel-link clicks from spawning a redundant PiP overlay.
-  if (code === this.currentChannel) return;
-  const ch = (this.channels || []).find(c => c.code === code);
-  if (!ch || !ch.is_dm) return;
-  this._activeDMPip = code;
-  try { localStorage.setItem('haven_active_dm_pip', code); } catch {}
-  // Keep the DM PiP cleared from the unread badge AND tell the server
-  // we've read up to its latest message.  Without the server emit the
-  // local mirror gets clobbered the next time `channels-list` snapshots
-  // (which can happen at any moment for unrelated reasons — a peer
-  // joining a voice channel, an admin tweak, a role change, etc.) and
-  // the unread dot keeps coming back forever.  This was the root cause
-  // of "I've sat on this DM for an hour and it still keeps re-notifying".
-  // We use the channel's last-known latestMessageId from the snapshot;
-  // the in-pane render of the message history will fire its own _markRead
-  // for the actual painted message id on top, and the server takes
-  // MAX(last_read, incoming) so the two can't fight.
-  this.unreadCounts[code] = 0;
-  this._updateBadge?.(code);
-  if (ch.latestMessageId) {
-    try { this.socket.emit('mark-read', { code, messageId: ch.latestMessageId }); } catch {}
-  }
-  try { this._updateDmSectionBadge?.(); } catch {}
-  try { this._updateTabTitle?.(); } catch {}
-  try { this._updateDesktopBadge?.(); } catch {}
-
-  const panel = document.getElementById('dm-pip-panel');
-  if (!panel) {
-    // Fallback: cached app shell may predate the PiP panel element. Open the
-    // DM in the main pane so the click isn't a no-op (notably for self-DMs
-    // where users were seeing the toast but no panel — issue: SerChiz v3.8).
-    console.warn('[DM] PiP panel not found in DOM, falling back to switchChannel');
-    this._activeDMPip = null;
-    try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
-    this.switchChannel?.(code);
-    return;
-  }
-  panel.style.display = 'flex';
-  panel.dataset.code = code;
-  // Title: partner name
-  const partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
-  const titleEl = document.getElementById('dm-pip-title');
-  if (titleEl) titleEl.textContent = ch.is_self_dm ? `📝 ${t('dm_runtime.self_title', { name: partnerName })}` : `@ ${partnerName}`;
-
-  this._refreshDMPipHeader(ch, partnerName);
-
-  // Banner background: use server banner as a subtle backdrop
-  const bannerEl = document.getElementById('dm-pip-banner');
-  const bannerUrl = this.serverSettings && this.serverSettings.server_banner;
-  if (bannerEl) {
-    if (bannerUrl) {
-      bannerEl.style.backgroundImage = `url("${bannerUrl.replace(/"/g, '\\"')}")`;
-      panel.classList.remove('no-banner');
-    } else {
-      bannerEl.style.backgroundImage = '';
-      panel.classList.add('no-banner');
-    }
-  }
-  this._openDMPiPBody(ch, code, panel);
-},
-
-// Header avatar and status dot for the open DM PiP. Runs when the panel opens
-// and again on every presence broadcast (#5574): it used to render once, from
-// whatever the online list held at that moment, so a PiP opened before the
-// list arrived, or whose partner came online later, kept the grey dot and the
-// initial for as long as the panel stayed open.
-_refreshDMPipHeader(ch, partnerName) {
-  if (!ch) {
-    const code = this._activeDMPip;
-    ch = code ? (this.channels || []).find(c => c.code === code) : null;
-    if (!ch) return;
-  }
-  if (!partnerName) partnerName = ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : 'DM';
-  const avatarWrap = document.getElementById('dm-pip-avatar-wrap');
-  if (avatarWrap) {
-    const partnerId = ch.dm_target && ch.dm_target.id;
-    const onlinePartner = partnerId && this._lastOnlineUsers
-      ? this._lastOnlineUsers.find(u => u.id === partnerId)
-      : null;
-    const avatarUrl = (onlinePartner && onlinePartner.avatar) || (ch.dm_target && ch.dm_target.avatar);
-    const shape = (onlinePartner && onlinePartner.avatarShape)
-      || (ch.dm_target && ch.dm_target.avatarShape)
-      || 'circle';
-    avatarWrap.className = `dm-pip-avatar-wrap avatar-${shape}`;
-    // Determine status: 'online' / 'away' / 'dnd' / 'invisible' / 'offline'
-    // (matches the sidebar `.user-status-dot` modifier classes — empty
-    // class = online green; 'away'/'dnd'/'invisible' for explicit states;
-    // offline users are treated as 'away' visually like the sidebar does
-    // so a self-DM (always us) doesn't render a meaningless gray dot.)
-    let statusClass = '';
-    if (ch.is_self_dm) {
-      statusClass = '';
-    } else if (onlinePartner) {
-      const s = onlinePartner.status;
-      statusClass = s === 'dnd' ? 'dnd'
-        : s === 'away' ? 'away'
-        : s === 'invisible' ? 'invisible'
-        : (onlinePartner.online === false ? 'away' : '');
-    } else {
-      statusClass = 'away'; // partner not in online list → treat as offline/away
-    }
-    const statusLabel = statusClass === 'dnd' ? t('app.profile.dnd')
-      : statusClass === 'away' ? t('dm_runtime.offline_away')
-      : statusClass === 'invisible' ? t('app.profile.invisible')
-      : t('app.profile.online');
-    const statusDot = `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
-    if (avatarUrl) {
-      avatarWrap.style.backgroundColor = '';
-      avatarWrap.innerHTML = `<img src="${this._escapeHtml(avatarUrl)}" alt="">${statusDot}`;
-    } else {
-      const initial = (partnerName || '?').charAt(0).toUpperCase();
-      const color = this._getUserColor(partnerName || '');
-      avatarWrap.style.backgroundColor = color;
-      avatarWrap.innerHTML = `<span class="dm-pip-avatar-initial">${this._escapeHtml(initial)}</span>${statusDot}`;
-    }
-  }
-},
-
-// The rest of opening a DM PiP: everything after the header and banner.
-_openDMPiPBody(ch, code, panel) {
-
-  // Restore geometry from localStorage
-  this._applyDMPiPGeometry(panel);
-  // Bind drag once
-  this._bindDMPiPDrag();
-
-  // Clear messages and request fresh
-  const msgsEl = document.getElementById('dm-pip-messages');
-  if (msgsEl) msgsEl.innerHTML = `<div class="dm-pip-loading">${t('thread_list.loading')}</div>`;
-  // E2E: ensure partner key is loaded before history arrives so messages decrypt.
-  // For self-DMs the "partner" is the user themselves, so seed our own public
-  // key directly instead of round-tripping through the server. Avoids any
-  // chance of the loading state lingering when the server's get-public-key
-  // for our own id returns null/empty (issue: SerChiz v3.10.3).
-  if (ch.dm_target && this._dmPublicKeys && !this._dmPublicKeys[ch.dm_target.id]) {
-    if (ch.is_self_dm && this.e2e && this.e2e.publicKeyJwk) {
-      this._dmPublicKeys[ch.dm_target.id] = this.e2e.publicKeyJwk;
-    } else {
-      try { this._fetchDMPartnerKey?.(ch); } catch {}
-    }
-  }
-  this.socket.emit('get-messages', { code });
-  // Safety: if message-history doesn't arrive within 6s (e.g. a transient
-  // server issue or a stuck E2E key fetch), replace the localized "Loading…"
-  // placeholder so the panel never looks frozen. Cleared on next open/close.
-  clearTimeout(this._dmPipLoadingTimer);
-  this._dmPipLoadingTimer = setTimeout(() => {
-    const stillLoading = document.querySelector('#dm-pip-messages .dm-pip-loading');
-    if (stillLoading && this._activeDMPip === code) {
-      stillLoading.textContent = t('dm_runtime.no_messages');
-    }
-  }, 6000);
-
-  // Clear any stale reply state
-  this._clearDMPiPReply();
-
-  // Focus input
-  const input = document.getElementById('dm-pip-input');
-  if (input) input.focus();
-},
-
-_closeDMPiP() {
-  this._activeDMPip = null;
-  this._dmPipReplyingTo = null;
-  this._pipImageQueue = [];
-  this._pipImageQueueTarget = null;
-  this._renderPiPImageQueue?.();
-  clearTimeout(this._dmPipLoadingTimer);
-  try { localStorage.removeItem('haven_active_dm_pip'); } catch {}
-  const panel = document.getElementById('dm-pip-panel');
-  if (panel) panel.style.display = 'none';
-},
-
-_applyDMPiPGeometry(panel) {
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem('haven_dm_pip_rect') || 'null'); } catch {}
-  const minW = 320, minH = 280;
-  const maxW = Math.min(720, window.innerWidth - 28);
-  const maxH = Math.max(minH, window.innerHeight - 28);
-  const width = Math.max(minW, Math.min(maxW, (saved && saved.width) || 420));
-  const height = Math.max(minH, Math.min(maxH, (saved && saved.height) || 540));
-  const defaultLeft = Math.max(0, window.innerWidth - width - 20);
-  const defaultTop = Math.max(0, window.innerHeight - height - 80);
-  const left = Math.max(0, Math.min(window.innerWidth - width, (saved && Number.isFinite(saved.left)) ? saved.left : defaultLeft));
-  const top = Math.max(0, Math.min(window.innerHeight - height, (saved && Number.isFinite(saved.top)) ? saved.top : defaultTop));
-  panel.style.width = `${Math.round(width)}px`;
-  panel.style.height = `${Math.round(height)}px`;
-  panel.style.left = `${Math.round(left)}px`;
-  panel.style.top = `${Math.round(top)}px`;
-},
-
-_bindDMPiPDrag() {
-  if (this._dmPipDragBound) return;
-  this._dmPipDragBound = true;
-  const panel = document.getElementById('dm-pip-panel');
-  if (!panel) return;
-  const header = panel.querySelector('.dm-pip-header');
-  if (!header) return;
-  let startX = 0, startY = 0, startLeft = 0, startTop = 0, dragging = false;
-  header.addEventListener('mousedown', (e) => {
-    if (e.target.closest('button, a, input, select, textarea')) return;
-    dragging = true;
-    startX = e.clientX; startY = e.clientY;
-    const r = panel.getBoundingClientRect();
-    startLeft = r.left; startTop = r.top;
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    const w = panel.offsetWidth, h = panel.offsetHeight;
-    const left = Math.max(0, Math.min(window.innerWidth - w, startLeft + (e.clientX - startX)));
-    const top = Math.max(0, Math.min(window.innerHeight - h, startTop + (e.clientY - startY)));
-    panel.style.left = `${left}px`;
-    panel.style.top = `${top}px`;
-  });
-  const persist = () => {
-    if (!panel || panel.style.display === 'none') return;
-    try {
-      localStorage.setItem('haven_dm_pip_rect', JSON.stringify({
-        left: parseInt(panel.style.left, 10) || 0,
-        top: parseInt(panel.style.top, 10) || 0,
-        width: panel.offsetWidth,
-        height: panel.offsetHeight
-      }));
-    } catch {}
-  };
-  window.addEventListener('mouseup', () => {
-    if (dragging) { dragging = false; persist(); }
-  });
-  // Persist on resize (CSS resize: both)
-  if (typeof ResizeObserver !== 'undefined') {
-    const ro = new ResizeObserver(() => persist());
-    ro.observe(panel);
-  }
-},
-
-// Render a DM message in the PiP panel using the same DOM structure as
-// the main pane.  Avatars are hidden via CSS — partner pfp lives in the
-// header instead, since DMs are 1-on-1 and the per-row pfp is redundant.
-_appendDMPiPMessage(msg) {
-  const list = document.getElementById('dm-pip-messages');
-  if (!list) return;
-  if (msg && msg.id && list.querySelector(`[data-msg-id="${msg.id}"]`)) return;
-  const ph = list.querySelector('.dm-pip-loading');
-  if (ph) ph.remove();
-  // Tag this render so `_createMessageEl` knows to suppress thread UI -
-  // threads are not available in DMs.
-  if (msg) msg._isDmRender = true;
-  // Use the previous message in the PiP list as the "prev" reference so
-  // grouping into compact messages still works.
-  let prevMsg = null;
-  const lastEl = list.lastElementChild;
-  if (lastEl && lastEl.dataset && lastEl.dataset.userId && lastEl.dataset.msgId) {
-    // Rebuild enough of the previous message for `_createMessageEl`'s grouping
-    // check. It compares username and persona too, so a prev that only carried
-    // user_id + time never matched and every message rendered ungrouped. (the
-    // dataset already stores these from when the element was created.)
-    prevMsg = {
-      user_id: parseInt(lastEl.dataset.userId, 10),
-      username: lastEl.dataset.username || null,
-      persona_id: lastEl.dataset.personaId ? parseInt(lastEl.dataset.personaId, 10) : null,
-      persona_username: lastEl.dataset.personaUsername || null,
-      break_chain: lastEl.dataset.breakChain === '1' ? 1 : 0,
-      created_at: lastEl.dataset.time
-    };
-  }
-  const wasAtBottom = (list.scrollHeight - list.clientHeight - list.scrollTop) < 80;
-  const el = this._createMessageEl(msg, prevMsg);
-  list.appendChild(el);
-  // Async content (link previews, E2E images/files, videos) — hook into existing pipelines
-  try { this._fetchLinkPreviews?.(el); } catch {}
-  try { this._setupVideos?.(el); } catch {}
-  try { this._decryptE2EImages?.(el); } catch {}
-  try { this._decryptE2EFiles?.(el); } catch {}
-  // DM PiP is unambiguously a DM view, so enforce directly rather than
-  // routing through _isDmContainer. (#5483)
-  try { this._enforceDmLinkPolicy?.(el); } catch {}
-  try { this._wireBurnMessages?.(el); } catch {}
-  if (wasAtBottom) list.scrollTop = list.scrollHeight;
-},
-
-_renderDMPiPHistory(messages) {
-  const list = document.getElementById('dm-pip-messages');
-  if (!list) return;
-  list.innerHTML = '';
-  (messages || []).forEach((m, i) => {
-    if (m) m._isDmRender = true;
-    const prev = i > 0 ? messages[i - 1] : null;
-    const el = this._createMessageEl(m, prev);
-    list.appendChild(el);
-  });
-  try { this._fetchLinkPreviews?.(list); } catch {}
-  try { this._setupVideos?.(list); } catch {}
-  try { this._decryptE2EImages?.(list); } catch {}
-  try { this._decryptE2EFiles?.(list); } catch {}
-  // DM PiP is unambiguously a DM view, so enforce directly rather than
-  // routing through _isDmContainer. (#5483)
-  try { this._enforceDmLinkPolicy?.(list); } catch {}
-  try { this._maybeShowDmSafetyNotice?.(list); } catch {}
-  try { this._wireBurnMessages?.(list); } catch {}
-  list.scrollTop = list.scrollHeight;
-},
-
-_setDMPiPReply(msgEl, msgId) {
-  let author = msgEl.querySelector('.message-author')?.textContent;
-  if (!author) {
-    let prev = msgEl.previousElementSibling;
-    while (prev) {
-      const a = prev.querySelector('.message-author');
-      if (a) { author = a.textContent; break; }
-      prev = prev.previousElementSibling;
-    }
-  }
-  author = author || t('voice.someone');
-  const content = msgEl.querySelector('.message-content')?.textContent || '';
-  const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
-  this._dmPipReplyingTo = { id: msgId, username: author, content };
-  const bar = document.getElementById('dm-pip-reply-bar');
-  if (bar) {
-    bar.style.display = 'flex';
-    const txt = document.getElementById('dm-pip-reply-preview-text');
-    if (txt) txt.innerHTML = t('thread_runtime.replying_to', { author: this._escapeHtml(author), preview: this._escapeHtml(preview) });
-  }
-  document.getElementById('dm-pip-input')?.focus();
-},
-
-_clearDMPiPReply() {
-  this._dmPipReplyingTo = null;
-  const bar = document.getElementById('dm-pip-reply-bar');
-  if (bar) bar.style.display = 'none';
-},
-
-_quoteDMPiPMessage(msgEl) {
-  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '';
-  let author = msgEl.querySelector('.message-author')?.textContent;
-  if (!author) {
-    let prev = msgEl.previousElementSibling;
-    while (prev) {
-      const a = prev.querySelector('.message-author');
-      if (a) { author = a.textContent; break; }
-      prev = prev.previousElementSibling;
-    }
-  }
-  author = author || t('voice.someone');
-  const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
-  const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
-  const input = document.getElementById('dm-pip-input');
-  if (!input) return;
-  input.value = input.value ? `${input.value}\n${quoteText}` : quoteText;
-  input.focus();
-},
-
-_sendDMPiPMessage() {
-  const input = document.getElementById('dm-pip-input');
-  if (!input || !this._activeDMPip) return;
-  let content = (input.value || '').trim();
-  const hasPiPImages = this._pipImageQueue && this._pipImageQueue.length > 0;
-  if (!content && !hasPiPImages) return;
-  const code = this._activeDMPip;
-  const replyTo = this._dmPipReplyingTo ? this._dmPipReplyingTo.id : null;
-
-  // Clear the UI immediately so the input feels responsive.
-  input.value = '';
-  this._clearDMPiPReply();
-  input.focus();
-
-  // E2E-encrypt for the PiP's DM channel (not the active currentChannel).
-  (async () => {
-    const ch = this.channels.find(c => c.code === code);
-    const isDm = ch && ch.is_dm && ch.dm_target;
-    let partner = isDm ? this._getE2EPartnerFor(code) : null;
-    if (isDm && !partner && this.e2e && this.e2e.ready) {
-      try {
-        const jwk = await this.e2e.requestPartnerKey(this.socket, ch.dm_target.id);
-        if (jwk) {
-          this._dmPublicKeys[ch.dm_target.id] = jwk;
-          partner = this._getE2EPartnerFor(code);
-        }
-      } catch {}
-    }
-
-    // Pre-process content-transforming slash commands client-side so they
-    // survive E2E encryption (server can't parse encrypted slash commands).
-    // Mirror of the same block in _sendMessage. (#5297)
-    if (isDm) {
-      const slashMatch = content.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/);
-      if (slashMatch) {
-        const cmd = slashMatch[1].toLowerCase();
-        const arg = (slashMatch[2] || '').trim();
-        const displayName = this.user?.displayName || this.user?.username || '';
-        const clientSlash = {
-          spoiler:    () => arg ? `||${arg}||` : null,
-          shrug:      () => `${arg ? arg + ' ' : ''}¯\\_(ツ)_/¯`,
-          tableflip:  () => `${arg ? arg + ' ' : ''}(╯°□°)╯︵ ┻━┻`,
-          unflip:     () => `${arg ? arg + ' ' : ''}┬─┬ ノ( ゜-゜ノ)`,
-          lenny:      () => `${arg ? arg + ' ' : ''}( ͡° ͜ʖ ͡°)`,
-          disapprove: () => `${arg ? arg + ' ' : ''}ಠ_ಠ`,
-          bbs:        () => t('commands.output.bbs', { name: displayName }),
-          boobs:      () => `( . Y . )`,
-          butt:       () => `( . )( . )`,
-          brb:        () => t('commands.output.brb', { name: displayName }),
-          afk:        () => t('commands.output.afk', { name: displayName }),
-          me:         () => arg ? `_${displayName} ${arg}_` : null,
-          flip:       () => t('commands.output.flip', {
-            name: displayName,
-            side: t(Math.random() < 0.5 ? 'commands.output.heads' : 'commands.output.tails'),
-          }),
-          roll:       () => {
-            const m = (arg || '1d6').match(/^(\d{1,2})?d(\d{1,4})$/i);
-            if (!m) return t('commands.output.roll_simple', {
-              name: displayName,
-              result: Math.floor(Math.random() * 6) + 1,
-            });
-            const count = Math.min(parseInt(m[1] || '1'), 20);
-            const sides = Math.min(parseInt(m[2]), 1000);
-            const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
-            const total = rolls.reduce((a, b) => a + b, 0);
-            return t('commands.output.roll', {
-              name: displayName,
-              count,
-              sides,
-              rolls: rolls.join(', '),
-              total,
-            });
-          },
-          hug:        () => arg ? t('commands.output.hug', { name: displayName, target: arg }) : null,
-          wave:       () => t('commands.output.wave', { name: displayName, text: arg ? ` ${arg}` : '' }),
-        };
-        if (clientSlash[cmd]) {
-          const transformed = clientSlash[cmd]();
-          if (transformed !== null) content = transformed;
-        }
-      }
-    }
-
-    const payload = { code, content };
-    if (replyTo) payload.replyTo = replyTo;
-    if (content) {
-      if (partner) {
-        try {
-          const encrypted = await this.e2e.encrypt(content, partner.userId, partner.publicKeyJwk);
-          payload.content = encrypted;
-          payload.encrypted = true;
-        } catch (err) {
-          console.warn('[E2E][PiP] Encryption failed:', err);
-        }
-      }
-      this.socket.emit('send-message', payload);
-      try { this.notifications?.play?.('sent'); } catch {}
-    }
-
-    // Flush any queued images (same as main channel behavior, #5324)
-    // Pass bundled=true when text was also sent so slow mode doesn't double-tick
-    if (hasPiPImages) {
-      await this._flushPiPImageQueue?.(!!content);
-    }
-  })();
-},
-
-_openThread(parentId) {
-  this._activeThreadParent = parentId;
-  // Clear any pending thread mentions for this thread/channel
-  this._clearThreadMentionsForParent(this.currentChannel, parentId);
-  const panel = document.getElementById('thread-panel');
-  if (!panel) return;
-  panel.style.display = 'flex';
-  panel.dataset.parentId = parentId;
-  this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
-
-  // Request thread messages from server
-  this.socket.emit('get-thread-messages', { parentId });
-
-  // Update header
-  const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
-  const author = msgEl?.querySelector('.message-author')?.textContent || t('thread_runtime.starter');
-  document.getElementById('thread-panel-title').textContent = t('msg_toolbar.thread');
-  const parentPreview = msgEl?.querySelector('.message-content')?.textContent || '';
-  document.getElementById('thread-parent-preview').textContent = parentPreview.length > 120 ? parentPreview.substring(0, 120) + '…' : parentPreview;
-
-  const avatarImg = msgEl?.querySelector('.message-avatar-img');
-  let avatar = null;
-  if (avatarImg && avatarImg.getAttribute('src')) avatar = avatarImg.getAttribute('src');
-  const avatarShape = (avatarImg && avatarImg.classList.contains('avatar-square')) ? 'square' : 'circle';
-  const parentUserIdRaw = msgEl?.dataset?.userId;
-  const parentUserId = parentUserIdRaw ? parseInt(parentUserIdRaw, 10) : null;
-  this._setThreadParentHeader({ userId: parentUserId, username: author, avatar, avatarShape });
-
-  // Focus input
-  const input = document.getElementById('thread-input');
-  if (input) input.focus();
-},
-
-_setThreadPiPEnabled(enabled) {
-  const panel = document.getElementById('thread-panel');
-  const pipBtn = document.getElementById('thread-panel-pip');
-  if (!panel || !pipBtn) return;
-
-  const isOn = !!enabled;
-  panel.classList.toggle('pip', isOn);
-  pipBtn.textContent = isOn ? '▣' : '⧉';
-  pipBtn.title = t(isOn ? 'thread_runtime.dock_panel' : 'thread_runtime.pop_out');
-  pipBtn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
-  localStorage.setItem('haven_thread_panel_pip', isOn ? '1' : '0');
-
-  if (isOn) {
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem('haven_thread_panel_pip_rect') || 'null'); } catch {}
-
-    const minW = 320;
-    const maxW = Math.min(760, window.innerWidth - 28);
-    const minH = 240;
-    const footerOffset = (() => {
-      const raw = getComputedStyle(document.body).getPropertyValue('--thread-footer-offset');
-      const v = parseInt(raw, 10);
-      return Number.isFinite(v) ? v : 0;
-    })();
-    const maxH = Math.max(minH, window.innerHeight - footerOffset - 28);
-
-    const width = Math.max(minW, Math.min(maxW, (saved && saved.width) || panel.offsetWidth || 420));
-    const height = Math.max(minH, Math.min(maxH, (saved && saved.height) || panel.offsetHeight || 460));
-    const defaultLeft = Math.max(0, window.innerWidth - width - 14);
-    const defaultTop = Math.max(0, window.innerHeight - footerOffset - height - 14);
-    const left = Math.max(0, Math.min(window.innerWidth - width, (saved && Number.isFinite(saved.left)) ? saved.left : defaultLeft));
-    const top = Math.max(0, Math.min(window.innerHeight - footerOffset - height, (saved && Number.isFinite(saved.top)) ? saved.top : defaultTop));
-
-    panel.style.width = `${Math.round(width)}px`;
-    panel.style.height = `${Math.round(height)}px`;
-    panel.style.left = `${Math.round(left)}px`;
-    panel.style.top = `${Math.round(top)}px`;
-    panel.style.right = 'auto';
-    panel.style.bottom = 'auto';
-  } else {
-    panel.style.height = '';
-    panel.style.left = '';
-    panel.style.top = '';
-    panel.style.right = '';
-    panel.style.bottom = '';
-  }
-},
-
-_toggleThreadPiP() {
-  const panel = document.getElementById('thread-panel');
-  if (!panel) return;
-  this._setThreadPiPEnabled(!panel.classList.contains('pip'));
-},
-
-_closeThread() {
-  this._activeThreadParent = null;
-  this._clearThreadReply();
-  const panel = document.getElementById('thread-panel');
-  if (panel) {
-    panel.style.display = 'none';
-    panel.dataset.parentId = '';
-  }
-},
-
-_sendThreadMessage() {
-  const input = document.getElementById('thread-input');
-  if (!input) return;
-  const content = input.value.trim();
-  const parentId = this._activeThreadParent;
-  if (!parentId) return;
-  const hasPending = !!(this._threadPending && this._threadPending.length);
-  // Nothing to send — no text and no held attachments.
-  if (!content && !hasPending) return;
-  const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
-
-  if (content) {
-    this.socket.emit('send-thread-message', { parentId, content, replyTo }, (resp) => {
-      if (resp && resp.error) {
-        this._showToast(resp.error, 'error');
-        return;
-      }
-      this._clearThreadReply();
-    });
-    input.value = '';
-  }
-
-  // Flush any pasted/dropped attachments that were held until now.
-  if (hasPending) {
-    this._flushThreadPending?.(parentId);
-    if (!content) this._clearThreadReply();
-  }
-},
-
-_appendThreadMessage(msg) {
-  const container = document.getElementById('thread-messages');
-  if (!container) return;
-
-  // Apply the local user's nickname assignment so thread messages match
-  // everywhere else nicknames are honored. (#5291)
-  const displayName = this._getNickname?.(msg.user_id, msg.username) || msg.username;
-  const color = this._getUserColor(msg.username);
-  const initial = displayName.charAt(0).toUpperCase();
-  let avatarHtml;
-  if (msg.avatar) {
-    avatarHtml = `<img class="thread-msg-avatar" src="${this._escapeHtml(msg.avatar)}" alt="${initial}">`;
-  } else {
-    avatarHtml = `<div class="thread-msg-avatar thread-msg-avatar-initial" style="background:${color}">${initial}</div>`;
-  }
-
-  const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
-  const replyHtml = msg.replyContext ? this._renderReplyBanner(msg.replyContext) : '';
-  const canDelete = msg.user_id === this.user.id || this.user.isAdmin || this._canModerate();
-  const canEdit = msg.user_id === this.user.id;
-  const iconPair = (emoji, monoSvg) => `<span class="tb-icon tb-icon-emoji" aria-hidden="true">${emoji}</span><span class="tb-icon tb-icon-mono" aria-hidden="true">${monoSvg}</span>`;
-  const iReact = iconPair('😀', '<svg class="thread-action-react-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-width="1.8"></circle><path d="M8.5 14.5c1 1.2 2.2 1.8 3.5 1.8s2.5-.6 3.5-1.8" stroke-width="1.8" stroke-linecap="round"></path><circle cx="9.2" cy="10.2" r="1" fill="currentColor" stroke="none"></circle><circle cx="14.8" cy="10.2" r="1" fill="currentColor" stroke="none"></circle></svg>');
-  const iReply = iconPair('↩️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8L4 12L10 16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M20 12H5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
-  const iQuote = iconPair('💬', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 7h-4v6h4l-2 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>');
-  const iEdit = iconPair('✏️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z" stroke-width="1.8" stroke-linejoin="round"></path><path d="M13.5 6.5l3.5 3.5" stroke-width="1.8" stroke-linecap="round"></path></svg>');
-  const iDelete = iconPair('🗑️', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 7V5h6v2" stroke-width="1.8" stroke-linecap="round"></path><path d="M7 7l1 12h8l1-12" stroke-width="1.8" stroke-linejoin="round"></path></svg>');
-  const iMore = iconPair('⋯', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"></circle></svg>');
-  const threadCoreToolbarBtns = `<button data-thread-action="react" title="${t('msg_toolbar.react')}" aria-label="${t('msg_toolbar.react')}">${iReact}</button><button data-thread-action="reply" title="${t('msg_toolbar.reply')}">${iReply}</button><button data-thread-action="quote" title="${t('msg_toolbar.quote')}">${iQuote}</button>`;
-  let threadOverflowToolbarBtns = '';
-  if (canEdit) threadOverflowToolbarBtns += `<button data-thread-action="edit" title="${t('msg_toolbar.edit')}">${iEdit}</button>`;
-  if (canDelete) threadOverflowToolbarBtns += `<button data-thread-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>`;
-  const threadOverflowHtml = threadOverflowToolbarBtns
-    ? `<div class="thread-msg-more"><button class="thread-msg-more-btn" type="button" aria-label="${t('app.actions.message_actions')}">${iMore}</button><div class="thread-msg-overflow">${threadOverflowToolbarBtns}</div></div>`
-    : '';
-
-  // Group consecutive replies from the same author (within 5 min, no reply
-  // banner) into compact rows, the same way the main channel does — drop the
-  // avatar and author header, keep the content and the hover toolbar. The
-  // thread's parent message lives in a separate preview element, not in this
-  // container, so we only ever group reply-against-reply.
-  let threadCompact = false;
-  const prevEl = container.lastElementChild;
-  if (prevEl && prevEl.classList?.contains('thread-message') && !msg.reply_to) {
-    const samePerson = parseInt(prevEl.dataset.userId, 10) === msg.user_id
-      && (prevEl.dataset.personaId || '') === (msg.persona_id ? String(msg.persona_id) : '');
-    const prevTime = prevEl.dataset.time ? new Date(prevEl.dataset.time).getTime() : 0;
-    const within = prevTime && (new Date(msg.created_at).getTime() - prevTime) < 5 * 60 * 1000;
-    threadCompact = samePerson && within;
-  }
-
-  const el = document.createElement('div');
-  el.className = 'thread-message' + (threadCompact ? ' thread-compact' : '');
-  el.dataset.msgId = msg.id;
-  el.dataset.rawContent = msg.content;
-  el.dataset.userId = msg.user_id;
-  el.dataset.time = msg.created_at;
-  // Stash the raw username + avatar so a compact row can be promoted back to a
-  // full row (with the header restored) if the group head above it is deleted,
-  // and so reply/quote can resolve the author on compact rows that have no
-  // `.thread-msg-author` element.
-  el.dataset.username = msg.username || '';
-  if (msg.avatar) el.dataset.avatar = msg.avatar;
-  if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
-  if (threadCompact) {
-    const shortTime = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    el.innerHTML = `
-      <div class="thread-msg-row">
-        <div class="thread-msg-avatar thread-msg-compact-spacer"><span class="thread-compact-time">${this._escapeHtml(shortTime)}</span></div>
-        <div class="thread-msg-body">
-          <div class="thread-msg-toolbar">
-            <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
-            ${threadOverflowHtml}
-          </div>
-          <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
-        </div>
-      </div>
-    `;
-  } else {
-    el.innerHTML = `
-      <div class="thread-msg-row">
-        ${avatarHtml}
-        <div class="thread-msg-body">
-          <div class="thread-msg-header">
-            <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-            <span class="thread-msg-time">${this._formatTime(msg.created_at)}</span>
-            <span class="thread-msg-header-spacer"></span>
-            <div class="thread-msg-toolbar">
-              <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
-              ${threadOverflowHtml}
-            </div>
-          </div>
-          ${replyHtml}
-          <div class="thread-msg-content">${this._formatContent(msg.content)}</div>
-          ${reactionsHtml}
-        </div>
-      </div>
-    `;
-  }
-  container.appendChild(el);
-  try { this._decryptE2EImages?.(el); } catch {}
-  try { this._decryptE2EFiles?.(el); } catch {}
-  try { if (this._isDmContainer(el)) this._enforceDmLinkPolicy?.(el); } catch {}
-  try { this._setupVideos?.(el); } catch {}
-  container.scrollTop = container.scrollHeight;
-},
-
-// Promote a compact thread reply back to a full row (avatar + author header
-// restored), keeping its existing content/toolbar/reactions. Called when the
-// group head above it is deleted, so the new head still shows who sent it —
-// the thread mirror of `_promoteCompactToFull`.
-_promoteThreadCompactToFull(compactEl) {
-  if (!compactEl) return;
-  const userId = parseInt(compactEl.dataset.userId, 10);
-  const rawUsername = compactEl.dataset.username || t('app.messages.unknown_user');
-  const displayName = this._getNickname?.(userId, rawUsername) || rawUsername;
-  const time = compactEl.dataset.time;
-  const color = this._getUserColor(rawUsername);
-  const initial = (displayName || '?').charAt(0).toUpperCase();
-
-  // Preserve the already-rendered content, toolbar, and reactions.
-  const contentHtml = compactEl.querySelector('.thread-msg-content')?.innerHTML || '';
-  const toolbarHtml = compactEl.querySelector('.thread-msg-toolbar')?.outerHTML || '';
-  const reactionsHtml = compactEl.querySelector('.reactions-row')?.outerHTML || '';
-
-  // Avatar: stored at render time, else the online/member list, else initial.
-  const _pool = (this._lastOnlineUsers || []).concat(this.channelMembers || []);
-  const onlineUser = _pool.find(u => u.id === userId) || null;
-  const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
-  const avatarHtml = avatar
-    ? `<img class="thread-msg-avatar" src="${this._escapeHtml(avatar)}" alt="${initial}">`
-    : `<div class="thread-msg-avatar thread-msg-avatar-initial" style="background:${color}">${initial}</div>`;
-
-  compactEl.classList.remove('thread-compact');
-  compactEl.innerHTML = `
-    <div class="thread-msg-row">
-      ${avatarHtml}
-      <div class="thread-msg-body">
-        <div class="thread-msg-header">
-          <span class="thread-msg-author" style="color:${color}">${this._escapeHtml(displayName)}</span>
-          <span class="thread-msg-time">${this._formatTime(time)}</span>
-          <span class="thread-msg-header-spacer"></span>
-          ${toolbarHtml}
-        </div>
-        <div class="thread-msg-content">${contentHtml}</div>
-        ${reactionsHtml}
-      </div>
-    </div>
-  `;
-},
-
-_updateThreadPreview(parentId, thread) {
-  const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
-  if (!msgEl) return;
-  const oldPreview = msgEl.querySelector('.thread-preview');
-  const ch = this.channels && this.channels.find(c => c.code === this.currentChannel);
-  const newHtml = this._renderThreadPreview(parentId, thread, { forum: !!(ch && ch.is_forum) });
-  if (oldPreview) {
-    oldPreview.outerHTML = newHtml;
-  } else if (newHtml) {
-    // Insert after reactions row, or after message-content
-    const reactions = msgEl.querySelector('.reactions-row');
-    const content = msgEl.querySelector('.message-content');
-    const insertAfter = reactions || content;
-    if (insertAfter) insertAfter.insertAdjacentHTML('afterend', newHtml);
-  }
-},
-
-// ═══════════════════════════════════════════════════════
-// REPLY
-// ═══════════════════════════════════════════════════════
-
-_renderReplyBanner(replyCtx) {
-  const previewText = replyCtx.content.length > 80
-    ? replyCtx.content.substring(0, 80) + '…'
-    : replyCtx.content;
-  const color = this._getUserColor(replyCtx.username);
-  return `
-    <div class="reply-banner" data-reply-msg-id="${replyCtx.id}">
-      <span class="reply-line" style="background:${color}"></span>
-      <span class="reply-author" style="color:${color}">${this._escapeHtml(this._getNickname(replyCtx.user_id, replyCtx.username))}</span>
-      <span class="reply-preview">${this._escapeHtml(previewText)}</span>
-    </div>
-  `;
-},
-
-_setReply(msgEl, msgId) {
-  // In a forum a reply to a topic belongs in the topic's thread: that is what
-  // bumps it, and it keeps the answer under the question instead of posting
-  // a second topic that quotes the first. (#144)
-  const forumCh = this.channels && this.channels.find(c => c.code === this.currentChannel);
-  if (forumCh && forumCh.is_forum && msgEl && msgEl.closest && msgEl.closest('#messages')) {
-    this._clearReply();
-    this._openThread(msgId);
-    return;
-  }
-  // Get message info — works for both full messages and compact messages
-  let author = msgEl.querySelector('.message-author')?.textContent;
-  if (!author) {
-    // Compact message — look up the previous full message's author
-    let prev = msgEl.previousElementSibling;
-    while (prev) {
-      const authorEl = prev.querySelector('.message-author');
-      if (authorEl) { author = authorEl.textContent; break; }
-      prev = prev.previousElementSibling;
-    }
-  }
-  author = author || t('voice.someone');
-  const content = msgEl.querySelector('.message-content')?.textContent || '';
-  const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
-
-  this.replyingTo = { id: msgId, username: author, content };
-
-  const bar = document.getElementById('reply-bar');
-  bar.style.display = 'flex';
-  document.getElementById('reply-preview-text').innerHTML =
-    t('thread_runtime.replying_to', { author: this._escapeHtml(author), preview: this._escapeHtml(preview) });
-  document.getElementById('message-input').focus();
-},
-
-_clearReply() {
-  this.replyingTo = null;
-  const bar = document.getElementById('reply-bar');
-  if (bar) bar.style.display = 'none';
-},
-
-_quoteMessage(msgEl) {
-  // Get the raw text content of the message
-  const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '';
-  // Get the author name
-  let author = msgEl.querySelector('.message-author')?.textContent;
-  if (!author) {
-    let prev = msgEl.previousElementSibling;
-    while (prev) {
-      const authorEl = prev.querySelector('.message-author');
-      if (authorEl) { author = authorEl.textContent; break; }
-      prev = prev.previousElementSibling;
-    }
-  }
-  author = author || t('voice.someone');
-
-  // Build the blockquote text — each line prefixed with >
-  const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
-  const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
-
-  const input = document.getElementById('message-input');
-  // If there's already text, add a newline before the quote
-  if (input.value) {
-    input.value += '\n' + quoteText;
-  } else {
-    input.value = quoteText;
-  }
-
-  input.focus();
-  // Trigger input event so textarea auto-resizes
-  input.dispatchEvent(new Event('input'));
-},
-
-// ═══════════════════════════════════════════════════════
-// EDIT MESSAGE
-// ═══════════════════════════════════════════════════════
-
-_startEditMessage(msgEl, msgId) {
-  // Guard against re-entering edit mode
-  if (msgEl.classList.contains('editing')) return;
-
-  const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
-  if (!contentEl) return;
-
-  // Use the stored raw markdown content (set on render and kept in sync on
-  // edit events). Falls back to textContent only for very old DOM nodes that
-  // pre-date this attribute, but avoids the two bugs that textContent causes:
-  // 1) markdown formatting stripped (bold/italic/etc. lost)
-  // 2) '(edited)' tag text leaked into the textarea on repeated edits.
-  const rawText = msgEl.dataset.rawContent ?? contentEl.textContent;
-
-  // Replace content with an editable textarea
-  const originalHtml = contentEl.innerHTML;
-  contentEl.innerHTML = '';
-  msgEl.classList.add('editing'); // hide toolbar while editing
-
-  const textarea = document.createElement('textarea');
-  textarea.className = 'edit-textarea';
-  textarea.value = rawText;
-  textarea.rows = 1;
-  textarea.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
-  contentEl.appendChild(textarea);
-
-  // Track active edit textarea for emoji picker redirection
-  this._activeEditTextarea = textarea;
-
-  const btnRow = document.createElement('div');
-  btnRow.className = 'edit-actions';
-  btnRow.innerHTML = `<button class="edit-emoji-btn" title="${t('app.input_bar.emoji_btn')}">😀</button><button class="edit-save-btn">${t('modals.common.save')}</button><button class="edit-cancel-btn">${t('modals.common.cancel')}</button>`;
-  contentEl.appendChild(btnRow);
-
-  // Emoji button in edit bar opens the picker
-  btnRow.querySelector('.edit-emoji-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    this._activeEditTextarea = textarea;
-    this._toggleEmojiPicker();
-  });
-
-  textarea.focus();
-  textarea.style.height = 'auto';
-  textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-
-  const cancel = () => {
-    msgEl.classList.remove('editing');
-    contentEl.innerHTML = originalHtml;
-    if (this._activeEditTextarea === textarea) this._activeEditTextarea = null;
-    // Close emoji picker if it was open for this edit
-    const picker = document.getElementById('emoji-picker');
-    if (picker) picker.style.display = 'none';
-    // Close autocomplete dropdowns
-    this._hideMentionDropdown();
-    this._hideEmojiDropdown();
-  };
-
-  btnRow.querySelector('.edit-cancel-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    cancel();
-  });
-  btnRow.querySelector('.edit-save-btn').addEventListener('click', async (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    let newContent = textarea.value.trim();
-    if (!newContent) {
-      // Discord-style: clearing the whole message and confirming the edit
-      // offers to delete the message rather than silently cancelling it.
-      // Enter confirms the prompt via the shared confirm modal.
-      cancel();
-      if (await this._showConfirmModal(t('confirm.delete_message'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') })) {
-        const pip = msgEl.closest('#dm-pip-messages') ? this._activeDMPip : null;
-        const attachments = this._getMessageAttachments?.(msgId);
-        this.socket.emit('delete-message', pip
-          ? { messageId: msgId, channelCode: pip, attachments }
-          : { messageId: msgId, attachments });
-      }
-      return;
-    }
-    if (newContent === rawText) return cancel();
-
-    // E2E: encrypt edited DM content. The PiP can edit a DM that isn't
-    // the active channel, so resolve the partner against the container's
-    // channel code when available.
-    const pipContext = msgEl.closest('#dm-pip-messages') ? this._activeDMPip : null;
-    const partner = pipContext ? this._getE2EPartnerFor(pipContext) : this._getE2EPartner();
-    if (partner) {
-      try {
-        newContent = await this.e2e.encrypt(newContent, partner.userId, partner.publicKeyJwk);
-      } catch (err) {
-        console.warn('[E2E] Failed to encrypt edited message:', err);
-      }
-    }
-
-    const channelCode = pipContext || this.currentChannel;
-    this.socket.emit('edit-message', { messageId: msgId, content: newContent, channelCode });
-    cancel(); // will be updated by the server event
-  });
-
-  textarea.addEventListener('keydown', (e) => {
-    e.stopPropagation();
-
-    // Handle @mention and :emoji dropdown navigation in edit mode
-    const mentionDd = document.getElementById('mention-dropdown');
-    if (mentionDd && mentionDd.style.display !== 'none') {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        this._navigateMentionDropdown(e.key === 'ArrowDown' ? 1 : -1);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        const active = mentionDd.querySelector('.mention-item.active');
-        if (active) { e.preventDefault(); active.click(); return; }
-      }
-      if (e.key === 'Escape') { this._hideMentionDropdown(); return; }
-    }
-    const emojiDd = document.getElementById('emoji-dropdown');
-    if (emojiDd && emojiDd.style.display !== 'none') {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        this._navigateEmojiDropdown(e.key === 'ArrowDown' ? 1 : -1);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        const active = emojiDd.querySelector('.emoji-ac-item.active');
-        if (active) { e.preventDefault(); active.click(); return; }
-      }
-      if (e.key === 'Escape') { this._hideEmojiDropdown(); return; }
-    }
-
-    // Markdown formatting shortcuts
-    if (this._handleMarkdownShortcuts(textarea, e)) {
-      e.preventDefault();
-      return;
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      btnRow.querySelector('.edit-save-btn').click();
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      cancel();
-    }
-  });
-
-  textarea.addEventListener('paste', (e) => {
-    if (this._handleMarkdownLinkPaste(textarea, e)) {
-      e.preventDefault();
-      return;
-    }
-  });
-
-  // Enable @mention and :emoji autocomplete in edit textarea
-  textarea.addEventListener('input', () => {
-    this._checkMentionTrigger(textarea);
-    this._checkChannelTrigger(textarea);
-    this._checkEmojiTrigger(textarea);
-  });
-
-  // Click inside edit area should not bubble to delegation handler
-  contentEl.addEventListener('click', (e) => {
-    e.stopPropagation();
-  }, { once: false });
-},
-
-// ═══════════════════════════════════════════════════════
-// CLIENT-SIDE LINK POLICY (#5483, v3.44.0)
-// ═══════════════════════════════════════════════════════
-//
-// End-to-end encrypted DMs are ciphertext by the time they reach the server,
-// so the send-message automod path cannot see their links at all. The setting
-// existed and did nothing for them, which is worse than not having it.
-//
-// The recipient's client CAN see them, after decryption and before rendering,
-// and that is the check worth having. A hostile sender can run a patched
-// client and skip any check on their own side, but they cannot reach into the
-// recipient's browser and switch this off. So the enforcement that protects
-// the person at risk is the one that runs where the risk lands.
-//
-// The rules themselves come from /js/automod-rules.js, the same file the
-// server requires, so the two cannot drift into disagreeing.
-
-// Is this container showing DM content?
-//
-// The first version of this looked for a [data-dm-render] attribute that does
-// not exist: the DM PiP renderer marks a JS property on the message object,
-// not the DOM. So the only branch that ever fired was the current-channel
-// check, and a DM popped out over a normal channel was never recognised.
-// @birdcrazy caught it (#5483). Detect the PiP container by its actual id.
-_isDmContainer(containerEl) {
-  try {
-    if (containerEl) {
-      if (containerEl.id === 'dm-pip-messages') return true;
-      if (containerEl.closest && containerEl.closest('#dm-pip-messages, #dm-pip')) return true;
-      if (containerEl.querySelector && containerEl.querySelector('#dm-pip-messages')) return true;
-    }
-    const ch = (this.channels || []).find(c => c.code === this.currentChannel);
-    return !!(ch && ch.is_dm);
-  } catch { return false; }
-},
-
-_initLinkPolicy() {
-  this._linkPolicy = null;
-  const apply = (p) => { this._linkPolicy = p && p.enabled ? p : null; };
-  this.socket.on('link-policy', apply);
-  this.socket.emit('get-link-policy', null, apply);
-},
-
-// Returns null when the text is fine, or { rule, host, url, message }.
-// Safe to call before the policy has loaded: no policy means no verdict.
-_checkLinkPolicy(text) {
-  if (!this._linkPolicy || !window.HavenAutomodRules) return null;
-  try {
-    return window.HavenAutomodRules.checkText(text, this._linkPolicy);
-  } catch { return null; }
-},
-
-// True when links in this text should be rendered inert rather than clickable.
-// Applied to DM content specifically, since that is the path the server cannot
-// inspect. Channel messages were already blocked at send time.
-_dmLinkBlocked(text) {
-  if (!this._linkPolicy || !this._linkPolicy.scanDms) return null;
-  return this._checkLinkPolicy(text);
-},
-
-// One-time identity disclosure on DMs. Haven does not verify who anyone is,
-// and on an open server someone can register a display name that matches a
-// person you trust (the owner, a mod) and DM you as them. This is a nudge to
-// check, not a control. Dismissed globally, remembered in localStorage.
-_maybeShowDmSafetyNotice(container) {
-  if (!container) return;
-  try { if (localStorage.getItem('haven_dm_safety_dismissed') === '1') return; } catch {}
-  // Already present in this container — don't stack copies on re-render.
-  if (container.querySelector(':scope > .dm-safety-notice')) return;
-
-  const notice = document.createElement('div');
-  notice.className = 'dm-safety-notice';
-  notice.innerHTML =
-    '<span class="dm-safety-icon" aria-hidden="true">🛡️</span>' +
-    `<span class="dm-safety-text">${t('dm_runtime.safety_notice')}</span>` +
-    `<button type="button" class="dm-safety-dismiss">${t('dm_runtime.safety_dismiss')}</button>`;
-
-  notice.querySelector('.dm-safety-dismiss').addEventListener('click', () => {
-    try { localStorage.setItem('haven_dm_safety_dismissed', '1'); } catch {}
-    // Clear it everywhere it might be showing (main pane + any open PiP).
-    document.querySelectorAll('.dm-safety-notice').forEach(n => n.remove());
-  });
-
-  container.insertBefore(notice, container.firstChild);
-},
-
-// Neutralise disallowed links in an already-rendered DM message container.
-//
-// Scoped to DMs on purpose. Channel messages were checked at send time, so
-// running this there would only ever affect history that predates the current
-// policy, and silently breaking old links nobody complained about is not a
-// trade worth making.
-//
-// Anchors become plain text with a warning; images from disallowed hosts
-// become a click-to-reveal placeholder rather than loading. The media proxy
-// already stops the IP leak, so this is about the click, not the fetch.
-_enforceDmLinkPolicy(containerEl) {
-  if (!containerEl) return;
-  const policy = this._linkPolicy;
-  const R = window.HavenAutomodRules;
-  if (!policy || !policy.scanDms || !R) return;
-
-  const hostBlocked = (rawUrl) => {
-    if (!rawUrl) return false;
-    try {
-      const u = new URL(rawUrl, location.href);
-      if (u.origin === location.origin) return false;   // our own uploads / proxy
-      return !R.checkHost(u.hostname, policy).allowed;
-    } catch { return false; }
-  };
-
-  containerEl.querySelectorAll('.message-content a[href]').forEach(a => {
-    if (a.dataset.policyChecked) return;
-    a.dataset.policyChecked = '1';
-    if (!hostBlocked(a.href)) return;
-
-    let host = a.href;
-    try { host = new URL(a.href).hostname; } catch {}
-    const span = document.createElement('span');
-    span.className = 'blocked-link';
-    span.title = t('dm_runtime.blocked_link_tooltip', { host });
-    span.textContent = a.textContent;
-    const badge = document.createElement('span');
-    badge.className = 'blocked-link-badge';
-    badge.textContent = ` ⚠ ${t('dm_runtime.blocked_link_badge')}`;
-    span.appendChild(badge);
-    a.replaceWith(span);
-  });
-
-  containerEl.querySelectorAll('.message-content img[data-mp-origin], .message-content img.chat-image').forEach(img => {
-    if (img.dataset.policyChecked) return;
-    img.dataset.policyChecked = '1';
-    const origin = img.dataset.mpOrigin || img.getAttribute('data-mp-src') || img.src;
-    if (!hostBlocked(origin)) return;
-    const ph = document.createElement('span');
-    ph.className = 'hidden-image';
-    ph.setAttribute('role', 'button');
-    ph.tabIndex = 0;
-    ph.dataset.hiddenSrc = origin;
-    ph.textContent = t('dm_runtime.blocked_image');
-    img.replaceWith(ph);
-  });
-},
-
-// ═══════════════════════════════════════════════════════
 // MEDIA PROXY (v3.43.0)
 // ═══════════════════════════════════════════════════════
 //
@@ -4427,336 +1260,6 @@ _flushPendingMedia() {
   });
 },
 
-// ═══════════════════════════════════════════════════════
-// ADMIN MODERATION UI
-// ═══════════════════════════════════════════════════════
-
-_showAdminActionModal(action, userId, username) {
-  this.adminActionTarget = { action, userId, username };
-  const modal = document.getElementById('admin-action-modal');
-  const title = document.getElementById('admin-action-title');
-  const desc = document.getElementById('admin-action-desc');
-  const durationGroup = document.getElementById('admin-duration-group');
-  const scrubGroup = document.getElementById('admin-scrub-group');
-  const scrubCheckbox = document.getElementById('admin-scrub-checkbox');
-  const scrubScopeRow = document.getElementById('admin-scrub-scope-row');
-  const confirmBtn = document.getElementById('confirm-admin-action-btn');
-
-  const labels = {
-    kick: t('modals.admin_action.label_kick'),
-    ban: t('modals.admin_action.label_ban'),
-    mute: t('modals.admin_action.label_mute'),
-    'delete-user': t('modals.admin_action.label_delete_user')
-  };
-  title.textContent = `${labels[action] || action} — ${username}`;
-  desc.textContent = action === 'ban'
-    ? t('modals.admin_action.desc_ban')
-    : action === 'mute'
-      ? t('modals.admin_action.desc_mute')
-      : action === 'delete-user'
-        ? t('modals.admin_action.desc_delete_user')
-        : t('modals.admin_action.desc_kick');
-
-  durationGroup.style.display = action === 'mute' ? 'block' : 'none';
-
-  // Show scrub option for kick, ban, and delete-user
-  const hasScrub = ['kick', 'ban', 'delete-user'].includes(action);
-  scrubGroup.style.display = hasScrub ? 'block' : 'none';
-  scrubCheckbox.checked = false;
-  // Kick gets scope dropdown (channel vs server), ban/delete are server-wide only
-  scrubScopeRow.style.display = 'none';
-  if (action === 'kick') {
-    scrubCheckbox.onchange = () => { scrubScopeRow.style.display = scrubCheckbox.checked ? 'block' : 'none'; };
-  } else {
-    scrubCheckbox.onchange = null;
-  }
-
-  // Purge option: replace messages with placeholder. Ban-only for now —
-  // it's a softer, less destructive alternative to scrub. Mutually exclusive
-  // with scrub (you can't both delete and replace the same messages).
-  const purgeGroup = document.getElementById('admin-purge-group');
-  const purgeCheckbox = document.getElementById('admin-purge-checkbox');
-  const purgeMessageRow = document.getElementById('admin-purge-message-row');
-  const purgeMessageInput = document.getElementById('admin-purge-message');
-  if (purgeGroup) {
-    purgeGroup.style.display = action === 'ban' ? 'block' : 'none';
-    if (purgeCheckbox) purgeCheckbox.checked = false;
-    if (purgeMessageRow) purgeMessageRow.style.display = 'none';
-    if (purgeMessageInput) purgeMessageInput.value = '';
-    if (purgeCheckbox && action === 'ban') {
-      purgeCheckbox.onchange = () => {
-        if (purgeMessageRow) purgeMessageRow.style.display = purgeCheckbox.checked ? 'block' : 'none';
-        // Mutually exclusive with scrub
-        if (purgeCheckbox.checked && scrubCheckbox.checked) {
-          scrubCheckbox.checked = false;
-          if (scrubScopeRow) scrubScopeRow.style.display = 'none';
-        }
-      };
-      const origScrubChange = scrubCheckbox.onchange;
-      scrubCheckbox.onchange = () => {
-        if (typeof origScrubChange === 'function') origScrubChange();
-        if (scrubCheckbox.checked && purgeCheckbox.checked) {
-          purgeCheckbox.checked = false;
-          if (purgeMessageRow) purgeMessageRow.style.display = 'none';
-        }
-      };
-    }
-  }
-
-  confirmBtn.textContent = labels[action] || t('modals.common.confirm');
-
-  // IP-ban option: visible only for the ban action, and only when the current
-  // user has either admin or the ban_ip permission. Default to unchecked.
-  const banIpGroup = document.getElementById('admin-ban-ip-group');
-  const banIpCheckbox = document.getElementById('admin-ban-ip-checkbox');
-  if (banIpGroup) {
-    // ban_ip is a server-wide permission, so it arrives in globalPermissions;
-    // checking only `permissions` (the channel-scoped set) meant the option
-    // stayed hidden for moderators who genuinely held it. (v3.43.0)
-    const _has = (p) => {
-      if (!this.user) return false;
-      if (this.user.isAdmin) return true;
-      const scoped = Array.isArray(this.user.permissions) ? this.user.permissions : [];
-      const global = Array.isArray(this.user.globalPermissions) ? this.user.globalPermissions : [];
-      return scoped.includes('*') || global.includes('*') || scoped.includes(p) || global.includes(p);
-    };
-    const canBanIp = _has('ban_ip');
-    banIpGroup.style.display = (action === 'ban' && canBanIp) ? 'block' : 'none';
-    if (banIpCheckbox) banIpCheckbox.checked = false;
-  }
-
-  document.getElementById('admin-action-reason').value = '';
-  document.getElementById('admin-action-duration').value = '10';
-  document.getElementById('admin-scrub-scope').value = 'channel';
-  modal.style.display = 'flex';
-  modal.style.zIndex = '100002';
-},
-
-// ── Admin password reset (#5300) ───────────────────────
-// Three-stage flow: (1) confirm with explicit DM-loss warning and
-// escape-hatch explanation, (2) emit socket event to server which
-// gates on the target user having 2FA enabled, (3) reveal modal that
-// shows the temp password once for the admin to transmit out-of-band.
-_confirmAdminResetPassword(userId, username) {
-  this._hideUserContextMenu();
-  this._closeProfilePopup();
-  const safeName = this._escapeHtml(username);
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay admin-reset-pw-overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '100002';
-  overlay.innerHTML = `
-    <div class="modal admin-reset-pw-modal">
-      <div class="modal-header">
-        <h4>🔑 ${t('modals.admin_reset_pw.title')}</h4>
-        <button class="modal-close-btn admin-reset-pw-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>${t('modals.admin_reset_pw.confirm_prompt').replace('{username}', safeName)}</p>
-        <div style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
-          <strong>⚠️ ${t('modals.admin_reset_pw.dm_warning_title')}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.dm_warning_body')}</p>
-        </div>
-        <div style="background:rgba(241,196,15,0.12);border:1px solid rgba(241,196,15,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
-          <strong>🔐 ${t('modals.admin_reset_pw.mfa_required_title')}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_required_body')}</p>
-        </div>
-        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">${t('modals.admin_reset_pw.transmit_hint')}</p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-sm admin-reset-pw-cancel">${t('modals.common.cancel')}</button>
-        <button class="btn-sm btn-accent btn-danger-fill admin-reset-pw-confirm">${t('modals.admin_reset_pw.confirm_btn')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.admin-reset-pw-close').addEventListener('click', close);
-  overlay.querySelector('.admin-reset-pw-cancel').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('.admin-reset-pw-confirm').addEventListener('click', () => {
-    const confirmBtn = overlay.querySelector('.admin-reset-pw-confirm');
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = t('modals.admin_reset_pw.working');
-    this.socket.emit('admin-reset-user-password', { userId }, (resp) => {
-      close();
-      if (!resp || resp.error) {
-        // The 2FA gate (#5300) is intended behavior, not a failure. Showing it
-        // as a red error toast made people think the feature was broken (#5451),
-        // so explain it calmly in its own info modal instead.
-        if (resp?.code === 'mfa_required') {
-          this._showAdminResetMfaRequired(username);
-          return;
-        }
-        const msg = resp?.error || t('modals.admin_reset_pw.errors.generic');
-        if (this._showToast) this._showToast(msg, 'error', 8000);
-        else alert(msg);
-        return;
-      }
-      this._showAdminResetPwReveal(resp.username, resp.tempPassword);
-    });
-  });
-},
-
-// Shown when an admin tries to reset the password of a user who has not yet
-// enabled 2FA. This is a deliberate security requirement (#5300), not a bug,
-// so it gets a plain informational modal that says exactly why and what to do
-// next, rather than a red error toast that reads like something broke (#5451).
-_showAdminResetMfaRequired(username) {
-  const safeName = this._escapeHtml(username);
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay admin-reset-mfa-overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '100003';
-  overlay.innerHTML = `
-    <div class="modal admin-reset-mfa-modal">
-      <div class="modal-header">
-        <h4>🔐 ${t('modals.admin_reset_pw.mfa_required_title')}</h4>
-        <button class="modal-close-btn admin-reset-mfa-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>${t('modals.admin_reset_pw.mfa_blocked_prompt').replace('{username}', safeName)}</p>
-        <div style="background:rgba(52,152,219,0.12);border:1px solid rgba(52,152,219,0.4);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:0.85rem;">
-          <strong>💡 ${t('modals.admin_reset_pw.mfa_blocked_why_title')}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.mfa_blocked_why_body')}</p>
-        </div>
-        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:8px;">${t('modals.admin_reset_pw.mfa_blocked_action').replace('{username}', safeName)}</p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-sm btn-accent admin-reset-mfa-ok" type="button">${t('modals.common.got_it')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.admin-reset-mfa-close').addEventListener('click', close);
-  overlay.querySelector('.admin-reset-mfa-ok').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-},
-
-_showAdminResetPwReveal(username, tempPassword) {
-  const safeName = this._escapeHtml(username);
-  const safePw = this._escapeHtml(tempPassword);
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay admin-reset-pw-reveal-overlay';
-  overlay.style.display = 'flex';
-  overlay.style.zIndex = '100003';
-  overlay.innerHTML = `
-    <div class="modal admin-reset-pw-reveal-modal">
-      <div class="modal-header">
-        <h4>🔑 ${t('modals.admin_reset_pw.reveal_title')}</h4>
-      </div>
-      <div class="modal-body">
-        <p>${t('modals.admin_reset_pw.reveal_prompt').replace('{username}', safeName)}</p>
-        <div style="display:flex;gap:8px;align-items:center;margin:12px 0;">
-          <code id="admin-reset-pw-value" style="flex:1;font-family:monospace;font-size:1.2rem;letter-spacing:0.05em;padding:10px 12px;background:var(--bg-secondary,#222);border:1px solid var(--border-color,#444);border-radius:6px;user-select:all;">${safePw}</code>
-          <button class="btn-sm admin-reset-pw-copy" type="button">📋 ${t('modals.common.copy')}</button>
-        </div>
-        <div style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:8px 12px;font-size:0.85rem;">
-          <strong>⚠️ ${t('modals.admin_reset_pw.reveal_warning_title')}</strong>
-          <p style="margin:6px 0 0 0;">${t('modals.admin_reset_pw.reveal_warning_body')}</p>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-sm btn-accent admin-reset-pw-reveal-close" type="button">${t('modals.common.done')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('.admin-reset-pw-reveal-close').addEventListener('click', close);
-  overlay.querySelector('.admin-reset-pw-copy').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(tempPassword);
-      const btn = overlay.querySelector('.admin-reset-pw-copy');
-      const orig = btn.textContent;
-      btn.textContent = '✓ ' + t('modals.common.copied');
-      setTimeout(() => { btn.textContent = orig; }, 1500);
-    } catch {
-      if (this._showToast) this._showToast(t('modals.common.copy_failed'), 'error');
-    }
-  });
-},
-
-_confirmTransferAdmin(userId, username) {
-  // Build a custom modal for transfer admin with a confirmation step.
-  // An SSO admin has no Haven password, so they confirm with an authenticator
-  // code instead. The server decides which it will accept and rejects the
-  // wrong one, this only picks which field to put in front of you. (#5539)
-  this._hideUserContextMenu();
-  const ssoConfirm = !!this.user?.isSso;
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay transfer-admin-overlay';
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div class="modal transfer-admin-modal">
-      <div class="modal-header">
-        <h4>🔑 ${t('modals.transfer_admin.title')}</h4>
-        <button class="modal-close-btn transfer-admin-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="transfer-admin-warning">
-          <div class="transfer-admin-warning-icon">⚠️</div>
-          <div class="transfer-admin-warning-text">
-            ${t('modals.transfer_admin.warning', { username: this._escapeHtml(username) })}
-          </div>
-        </div>
-        <p class="transfer-admin-note">${t('modals.transfer_admin.note')}</p>
-        <div class="form-group">
-          <label class="form-label">${ssoConfirm ? t('modals.transfer_admin.totp_label') : t('modals.transfer_admin.password_label')}</label>
-          <input type="${ssoConfirm ? 'text' : 'password'}" id="transfer-admin-pw" class="form-input" placeholder="${ssoConfirm ? t('modals.transfer_admin.totp_placeholder') : t('modals.transfer_admin.password_placeholder')}" ${ssoConfirm ? 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"' : 'autocomplete="current-password"'}>
-        </div>
-        <p id="transfer-admin-error" class="transfer-admin-error"></p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary transfer-admin-cancel">${t('modals.common.cancel')}</button>
-        <button class="btn-danger-fill transfer-admin-confirm">${t('modals.transfer_admin.confirm_btn')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const pwInput = overlay.querySelector('#transfer-admin-pw');
-  const errorEl = overlay.querySelector('#transfer-admin-error');
-  const confirmBtn = overlay.querySelector('.transfer-admin-confirm');
-  const close = () => overlay.remove();
-
-  overlay.querySelector('.transfer-admin-close').addEventListener('click', close);
-  overlay.querySelector('.transfer-admin-cancel').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-
-  pwInput.focus();
-  pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmBtn.click(); });
-
-  confirmBtn.addEventListener('click', () => {
-    const secret = pwInput.value.trim();
-    if (!secret) {
-      errorEl.textContent = ssoConfirm
-        ? t('modals.transfer_admin.error_totp_required')
-        : t('modals.transfer_admin.error_required');
-      errorEl.style.display = '';
-      pwInput.focus();
-      return;
-    }
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = t('modals.transfer_admin.transferring');
-    const payload = ssoConfirm ? { userId, totpCode: secret } : { userId, password: secret };
-    this.socket.emit('transfer-admin', payload, (res) => {
-      if (res && res.error) {
-        errorEl.textContent = res.error;
-        errorEl.style.display = '';
-        confirmBtn.disabled = false;
-        confirmBtn.textContent = t('modals.transfer_admin.confirm_btn');
-        pwInput.value = '';
-        pwInput.focus();
-      } else if (res && res.success) {
-        close();
-        this._showToast(t('modals.transfer_admin.success'), 'info');
-      }
-    });
-  });
-},
-
 // ── Generic prompt modal (replaces window.prompt for Electron compat) ──
 _showPromptModal(title, message, defaultValue = '') {
   return new Promise((resolve) => {
@@ -4827,6 +1330,40 @@ _showConfirmModal(title, message, opts = {}) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
     document.addEventListener('keydown', onKey);
     setTimeout(() => okBtn.focus(), 0);
+  });
+},
+
+// A question with several answers. Resolves the id of the button pressed, or
+// null for Escape or a click outside. Focus starts on the first button and
+// Enter only presses the focused one, so a stray Enter (someone still sending)
+// cannot pick a risky answer.
+_askChoice(title, message, buttons) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '100002';
+    overlay.innerHTML = `
+      <div class="modal modal-confirm">
+        <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
+        ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
+        <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap"></div>
+      </div>
+    `;
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    const close = (val) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const row = overlay.querySelector('.modal-actions');
+    for (const b of buttons) {
+      const el = document.createElement('button');
+      el.className = b.danger ? 'btn-sm btn-danger-fill' : (b.accent ? 'btn-sm btn-accent' : 'btn-sm');
+      el.textContent = b.label;
+      el.addEventListener('click', () => close(b.id));
+      row.appendChild(el);
+    }
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    setTimeout(() => row.querySelector('button')?.focus(), 0);
   });
 },
 

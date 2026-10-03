@@ -44,6 +44,7 @@
         </div>
         <div id="admin-recover-section" style="display:none;text-align:center;margin-top:6px">
           <small style="color:var(--text-muted)" data-i18n="auth.login.admin_recover_hint">Enter your admin credentials above and click Recover</small><br>
+          <input type="text" id="admin-recover-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-i18n-placeholder="auth.login.admin_recover_code" placeholder="Two-factor code" style="display:none;margin-top:6px;max-width:180px;text-align:center">
           <button type="button" class="btn-primary" id="admin-recover-btn" data-i18n="auth.login.admin_recover_btn" style="margin-top:6px;font-size:0.85rem;padding:6px 16px">Recover Admin Access</button>
         </div>
         <!-- (#12) SSO — only shown when the server has OIDC configured -->

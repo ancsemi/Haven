@@ -13,6 +13,10 @@ const IS_WIN = process.platform === 'win32';
 const DATA_DIR = IS_WIN
   ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Haven')
   : path.join(os.homedir(), '.haven');
+// A backup uploaded for "Restore from a backup" waits here until the install
+// step unpacks it. It sits in the data folder's own temp folder, like a restore
+// from Settings, because a backup can be many gigabytes.
+const UPLOADED_BACKUP = path.join(DATA_DIR, 'tmp-restore', 'installer-backup.zip');
 
 // ── Serve the installer HTML ──────────────────────────────
 const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
@@ -33,7 +37,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'GET' && req.url === '/api/check') {
     let nodeVersion = '';
-    try { nodeVersion = process.version; } catch {}
+    nodeVersion = process.version;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       platform: process.platform,
@@ -41,6 +45,11 @@ const server = http.createServer((req, res) => {
       dataDir: DATA_DIR,
       alreadyInstalled: fs.existsSync(path.join(DATA_DIR, '.tunnel_configured'))
     }));
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/api/backup-upload') {
+    receiveBackup(req, res);
     return;
   }
 
@@ -94,7 +103,7 @@ server.listen(0, '127.0.0.1', () => {
 
 // ── SSE helper ────────────────────────────────────────────
 function send(res, data) {
-  try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
+  try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { /* the browser closed the progress page: nothing left to tell */ }
 }
 
 // ── Run a command and return a promise ────────────────────
@@ -117,10 +126,95 @@ function run(cmd, args, opts = {}) {
   });
 }
 
+// ── Backup upload ("Restore from a backup") ──────────────
+// The browser sends the file itself as the request body. It is streamed to
+// disk, never held in memory, since a backup with files can be very large.
+function removeUploadedBackup() {
+  try { fs.rmSync(UPLOADED_BACKUP, { force: true }); }
+  catch (err) { console.warn('[Installer] could not remove the uploaded backup:', err.message); }
+}
+
+function receiveBackup(req, res) {
+  const reply = (status, obj) => {
+    if (res.headersSent) return;
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  };
+  try {
+    fs.mkdirSync(path.dirname(UPLOADED_BACKUP), { recursive: true });
+  } catch (err) {
+    reply(500, { error: 'Could not create ' + path.dirname(UPLOADED_BACKUP) + ': ' + err.message });
+    return;
+  }
+  const out = fs.createWriteStream(UPLOADED_BACKUP);
+  let failed = false;
+  const fail = (err) => {
+    if (failed) return;
+    failed = true;
+    out.destroy();
+    removeUploadedBackup();
+    reply(500, { error: 'Could not save the backup: ' + err.message });
+  };
+  req.on('error', fail);
+  out.on('error', fail);
+  out.on('finish', () => {
+    if (failed) return;
+    // Every zip starts with "PK". Saying so now beats finding out after the
+    // dependencies have installed.
+    try {
+      const head = Buffer.alloc(2);
+      const fd = fs.openSync(UPLOADED_BACKUP, 'r');
+      try { fs.readSync(fd, head, 0, 2, 0); } finally { fs.closeSync(fd); }
+      if (head.toString('latin1') !== 'PK') {
+        removeUploadedBackup();
+        reply(400, { error: 'That file is not a Haven backup. Pick the .zip file Haven gave you.' });
+        return;
+      }
+      reply(200, { ok: true, bytes: fs.statSync(UPLOADED_BACKUP).size });
+    } catch (err) {
+      fail(err);
+    }
+  });
+  req.pipe(out);
+}
+
+// Runs installer/restore-backup.js and passes its progress along. Resolves
+// with { serverName, adminUsername } from the restored database.
+function runRestore(onProgress) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(__dirname, 'restore-backup.js'), UPLOADED_BACKUP, DATA_DIR], {
+      cwd: HAVEN_DIR,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let buffered = '', errText = '', result = null;
+    child.stdout.on('data', (chunk) => {
+      buffered += chunk;
+      const lines = buffered.split('\n');
+      buffered = lines.pop();
+      for (const line of lines) {
+        let msg;
+        try { msg = JSON.parse(line); } catch { continue; } // only the script's own JSON lines carry anything
+        if (typeof msg.progress === 'number') onProgress(msg.progress);
+        else if ('ok' in msg) result = msg;
+      }
+    });
+    child.stderr.on('data', (chunk) => { errText += chunk; });
+    child.on('error', reject);
+    child.on('close', () => {
+      if (result && result.ok) resolve(result);
+      else reject(new Error((result && result.error) || errText.trim() || 'The restore stopped without saying why'));
+    });
+  });
+}
+
 // ── Installation pipeline ─────────────────────────────────
 async function runInstall(config, res) {
   const { serverName, adminUser, adminPass, tunnel } = config;
+  // Restore mode brings the accounts, name and settings from a backup, so no
+  // admin account is made and the server name is left as the backup has it.
+  const restore = config.restore === true;
   let hasError = false;
+  let restored = null;
 
   try {
     // ── Step 1: Install npm dependencies ──
@@ -137,12 +231,14 @@ async function runInstall(config, res) {
     }
 
     // ── Step 2: Create data directory ──
+    let envCreated = false;
     send(res, { step: 'datadir', state: 'active', label: 'Creating data directory\u2026', progress: 40 });
     try {
       fs.mkdirSync(DATA_DIR, { recursive: true });
       const envExample = path.join(HAVEN_DIR, '.env.example');
       const envDest = path.join(DATA_DIR, '.env');
       if (fs.existsSync(envExample) && !fs.existsSync(envDest)) {
+        envCreated = true;
         let envContent = fs.readFileSync(envExample, 'utf8');
         if (adminUser) envContent = envContent.replace(/ADMIN_USERNAME=.*/,'ADMIN_USERNAME=' + adminUser);
         envContent += '\nFCM_RELAY_URL=https://us-central1-amni-haven.cloudfunctions.net/sendPush\n';
@@ -155,38 +251,45 @@ async function runInstall(config, res) {
       hasError = true;
     }
 
+    // ── Step 2b: Restore the backup (restore mode) ──
+    if (restore) {
+      send(res, { step: 'restore', state: 'active', label: 'Restoring your backup\u2026', progress: 46 });
+      try {
+        if (!fs.existsSync(UPLOADED_BACKUP)) throw new Error('No backup was uploaded');
+        restored = await runRestore((pct) => send(res, {
+          step: 'restore', state: 'active', label: `Restoring your backup\u2026 ${pct}%`, progress: 46 + Math.floor(pct * 0.04)
+        }));
+        // The .env made above names the first admin, as the original install did.
+        const envDest = path.join(DATA_DIR, '.env');
+        if (envCreated && restored.adminUsername && /^[A-Za-z0-9_.-]+$/.test(restored.adminUsername)) {
+          const envContent = fs.readFileSync(envDest, 'utf8').replace(/ADMIN_USERNAME=.*/, 'ADMIN_USERNAME=' + restored.adminUsername);
+          fs.writeFileSync(envDest, envContent);
+        }
+        send(res, { step: 'restore', state: 'done', label: 'Backup restored', progress: 50 });
+      } catch (e) {
+        // Going on would set up an empty server in its place, so stop here.
+        send(res, { step: 'restore', state: 'error', label: 'Restore failed: ' + e.message, progress: 50 });
+        send(res, { done: true, error: true, message: e.message });
+        res.end();
+        return;
+      } finally {
+        removeUploadedBackup();
+      }
+    }
+
     // ── Step 3: Generate SSL certificate ──
     send(res, { step: 'ssl', state: 'active', label: 'Generating SSL certificate\u2026', progress: 50 });
     const certDir = path.join(DATA_DIR, 'certs');
     const certPath = path.join(certDir, 'cert.pem');
-    const keyPath = path.join(certDir, 'key.pem');
     if (fs.existsSync(certPath)) {
       send(res, { step: 'ssl', state: 'done', label: 'SSL certificate exists', progress: 60 });
     } else {
       try {
         fs.mkdirSync(certDir, { recursive: true });
-        // Detect local IP for SAN extension
-        let localIp = '127.0.0.1';
-        try {
-          const nets = os.networkInterfaces();
-          for (const ifaces of Object.values(nets)) {
-            for (const iface of ifaces) {
-              if (!iface.internal && iface.family === 'IPv4') { localIp = iface.address; break; }
-            }
-            if (localIp !== '127.0.0.1') break;
-          }
-        } catch {}
-
-        const sanArg = IS_WIN ? [] : ['-addext', `subjectAltName=IP:127.0.0.1,IP:${localIp},DNS:localhost`];
-        await run('openssl', [
-          'req', '-x509', '-newkey', 'rsa:2048',
-          '-keyout', keyPath, '-out', certPath,
-          '-days', '3650', '-nodes', '-subj', '/CN=Haven',
-          ...sanArg
-        ]);
+        require('../src/selfsignedCert').ensureCerts(certDir);
         send(res, { step: 'ssl', state: 'done', label: 'SSL certificate generated', progress: 60 });
-      } catch {
-        send(res, { step: 'ssl', state: 'done', label: 'Skipped (OpenSSL not found, will use HTTP)', progress: 60 });
+      } catch (err) {
+        send(res, { step: 'ssl', state: 'error', label: `SSL generation failed: ${err.message}`, progress: 60 });
       }
     }
 
@@ -203,10 +306,10 @@ async function runInstall(config, res) {
 const { initDatabase, getDb } = require('./src/database');
 initDatabase();
 const db = getDb();
-db.prepare("INSERT OR REPLACE INTO server_settings(key,value) VALUES('server_name',?)").run(${JSON.stringify(serverName || 'Haven')});
+${restore ? '' : `db.prepare("INSERT OR REPLACE INTO server_settings(key,value) VALUES('server_name',?)").run(${JSON.stringify(serverName || 'Haven')});`}
 db.prepare("INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_enabled',?)").run(${JSON.stringify(tunnelEnabled)});
 db.prepare("INSERT OR REPLACE INTO server_settings(key,value) VALUES('tunnel_provider',?)").run(${JSON.stringify(tunnelProvider)});
-${adminUser && adminPass ? `
+${adminUser && adminPass && !restore ? `
 const bcrypt = require('bcryptjs');
 const hash = bcrypt.hashSync(${JSON.stringify(adminPass)}, 12);
 const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(${JSON.stringify(adminUser)});
@@ -225,7 +328,7 @@ if (!existing) {
       try {
         await run('node', [tmpScript], { cwd: HAVEN_DIR });
         send(res, { step: 'config', state: 'done', label: 'Server configured', progress: 80 });
-        try { fs.unlinkSync(tmpScript); } catch {}
+        try { fs.unlinkSync(tmpScript); } catch { /* a leftover temp script is harmless; the next run overwrites it */ }
       } catch (runErr) {
         throw new Error(runErr.message || 'Run failed');
       }
@@ -237,7 +340,7 @@ if (!existing) {
     // Mark tunnel as configured
     try {
       fs.writeFileSync(path.join(DATA_DIR, '.tunnel_configured'), 'configured');
-    } catch {}
+    } catch (err) { console.warn('[Installer] could not mark the tunnel as configured:', err.message); }
 
     // ── Step 5: Create shortcuts (Windows only) ──
     send(res, { step: 'shortcuts', state: 'active', label: 'Creating shortcuts\u2026', progress: 85 });
@@ -288,7 +391,7 @@ if (!existing) {
         if (fs.existsSync(desktopDir)) {
           const dFile = path.join(desktopDir, 'Haven.desktop');
           fs.writeFileSync(dFile, desktopEntry);
-          try { fs.chmodSync(dFile, 0o755); } catch {}
+          try { fs.chmodSync(dFile, 0o755); } catch (err) { console.warn('[Installer] could not make the desktop shortcut runnable:', err.message); }
         }
         fs.mkdirSync(appsDir, { recursive: true });
         fs.writeFileSync(path.join(appsDir, 'Haven.desktop'), desktopEntry);
@@ -299,7 +402,7 @@ if (!existing) {
       }
     }
 
-    send(res, { progress: 100, done: true, error: hasError });
+    send(res, { progress: 100, done: true, error: hasError, restored });
   } catch (e) {
     send(res, { done: true, error: true, message: e.message });
   }
