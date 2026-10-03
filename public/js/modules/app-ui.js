@@ -3552,8 +3552,8 @@ _setupUI() {
     );
 
     if (name && name.trim()) {
-      closeJoinCreateChannelModal();
       this.socket.emit('create-temp-channel', { name: name.trim() });
+      closeJoinCreateChannelModal();
     }
   });
 
