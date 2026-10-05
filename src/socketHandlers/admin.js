@@ -136,6 +136,7 @@ module.exports = function register(socket, ctx) {
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'cleanup_max_uploads_mb',
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
+      'keep_self_destructed_attachments', // off removes a self destructed message's files for good instead of holding them
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner', 'permission_thresholds',
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
@@ -186,6 +187,7 @@ module.exports = function register(socket, ctx) {
       if (!Number.isInteger(n) || n < 1 || n > 60 || String(n) !== String(value).trim()) return;
     }
     if (key === 'auto_away_enabled' && !['true', 'false'].includes(value)) return;
+    if (key === 'keep_self_destructed_attachments' && !['true', 'false'].includes(value)) return;
 
     // ── Auto-mod validation (v3.42.0) ─────────────────────
     const automodBools = [

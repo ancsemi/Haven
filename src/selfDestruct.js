@@ -3,8 +3,11 @@
 // Self-destructing messages. A message sent with a timer carries destruct_at;
 // once that passes, the message goes, and its files go the way a deleted
 // message's do: only the sender's own, only when nothing else still uses
-// them, and into deleted-attachments for the usual retention window, so a
-// moderator can still recover something abusive posted on a short timer.
+// them (a link in another message does not count), and into
+// deleted-attachments for the usual retention window, so a moderator can
+// still recover something abusive posted on a short timer.
+// An admin can turn that off (keep_self_destructed_attachments), and then the
+// files are removed for good instead.
 //
 // One timer waits for the soonest deadline. When it fires it deletes what is
 // due and waits for the next one, or sleeps when none is left. A new message
@@ -49,7 +52,7 @@ function forget(destructAt) {
   if (run && armedFor !== null && Date.parse(destructAt) === armedFor) run();
 }
 
-function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted }) {
+function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
   const due = db.prepare(`
     SELECT m.id, m.user_id, m.content, c.code
     FROM messages m JOIN channels c ON c.id = m.channel_id
@@ -57,6 +60,7 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted }) {
     ORDER BY m.destruct_at ASC LIMIT 200
   `);
   const next = db.prepare('SELECT MIN(destruct_at) AS at FROM messages WHERE destruct_at IS NOT NULL');
+  const keepSetting = db.prepare("SELECT value FROM server_settings WHERE key = 'keep_self_destructed_attachments'");
   const removeOne = db.transaction((id) => {
     db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(id);
     db.prepare('DELETE FROM reactions WHERE message_id = ?').run(id);
@@ -69,6 +73,13 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted }) {
       console.error('[self-destruct] query error:', err.message);
       return 0;
     }
+    // Only an explicit off removes for good; an unreadable setting keeps.
+    let dispose = moveUploadToDeleted;
+    try {
+      if (keepSetting.get()?.value === 'false') dispose = removeUpload;
+    } catch (err) {
+      console.error('[self-destruct] setting read error:', err.message);
+    }
     let removed = 0;
     for (const row of rows) {
       try {
@@ -77,10 +88,10 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted }) {
         const paths = [];
         let m;
         while ((m = UPLOAD_PATH_RE.exec(row.content || '')) !== null) paths.push(m[1]);
-        // Same rules as deleting it by hand: someone else's file named in the
-        // message is never touched, and a file a quote or a profile still
-        // uses stays.
-        for (const rel of releasableUploads(db, paths, [row.user_id])) moveUploadToDeleted(rel);
+        // Someone else's file named in the message is never touched, and a
+        // file a profile still uses stays. A link in another message does
+        // not keep it, or pasting the link would beat the timer.
+        for (const rel of releasableUploads(db, paths, [row.user_id], { ignoreMessages: true })) dispose(rel);
         io.to(`channel:${row.code}`).emit('message-deleted', { channelCode: row.code, messageId: row.id });
         removed++;
       } catch (err) {

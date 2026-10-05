@@ -27,6 +27,7 @@ const moveUploadToDeleted = (rel) => {
   fs.mkdirSync(DELETED_ATTACHMENTS_DIR, { recursive: true });
   fs.renameSync(path.join(UPLOADS_DIR, rel), path.join(DELETED_ATTACHMENTS_DIR, rel));
 };
+const removeUpload = (rel) => fs.unlinkSync(path.join(UPLOADS_DIR, rel));
 
 const MIN = 60 * 1000;
 const db = initDatabase();
@@ -77,14 +78,15 @@ test('startup removes what came due while the server was down', () => {
   const pending = add('/uploads/sd-later.png', at(60 * MIN));
   db.prepare('INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(expired, other, '🔥');
 
-  selfDestruct.start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted });
+  selfDestruct.start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
 
   assert.equal(exists(expired), false);
   assert.equal(exists(quote), true);
   assert.equal(exists(pending), true);
   assert.equal(db.prepare('SELECT COUNT(*) AS c FROM reactions WHERE message_id = ?').get(expired).c, 0);
   assert.deepEqual(emitted.pop(), { room: 'channel:abcd1234', event: 'message-deleted', data: { channelCode: 'abcd1234', messageId: expired } });
-  assert.equal(onDisk('sd-mine.png'), true, 'a file a quote still links to stays, as with any delete');
+  assert.equal(onDisk('sd-mine.png'), false, 'a link in another message does not keep it');
+  assert.equal(fs.existsSync(path.join(DELETED_ATTACHMENTS_DIR, 'sd-mine.png')), true);
   assert.equal(onDisk('sd-solo.png'), false, 'own file nothing else uses leaves uploads');
   assert.equal(fs.existsSync(path.join(DELETED_ATTACHMENTS_DIR, 'sd-solo.png')), true, 'and waits in deleted-attachments for the retention window');
   assert.equal(onDisk('sd-theirs.png'), true, "someone else's file untouched");
@@ -96,6 +98,17 @@ test('startup removes what came due while the server was down', () => {
   test.mock.timers.tick(1);
   assert.equal(exists(pending), false);
   assert.equal(onDisk('sd-later.png'), false);
+});
+
+test("the sender's own link in another message does not keep the file either", () => {
+  file('sd-reused.png', author);
+  const msg = add('/uploads/sd-reused.png', at(MIN));
+  const again = add('again /uploads/sd-reused.png', null);
+  selfDestruct.schedule(at(MIN));
+  test.mock.timers.tick(MIN);
+  assert.equal(exists(msg), false);
+  assert.equal(onDisk('sd-reused.png'), false);
+  assert.equal(exists(again), true, 'the other message itself stays');
 });
 
 test('asleep with nothing left, and a new message wakes it', () => {
@@ -125,4 +138,48 @@ test('deleting the message it waits for moves it to the next one', () => {
   assert.equal(exists(second), true);
   test.mock.timers.tick(MIN);
   assert.equal(exists(second), false);
+});
+
+const setKeep = (value) => db.prepare(
+  "INSERT OR REPLACE INTO server_settings (key, value) VALUES ('keep_self_destructed_attachments', ?)"
+).run(value);
+const held = (name) => fs.existsSync(path.join(DELETED_ATTACHMENTS_DIR, name));
+
+test('with keep self destructed attachments off, files are removed for good', () => {
+  setKeep('false');
+  file('sd-gone.png', author);
+  const msg = add('/uploads/sd-gone.png', at(MIN));
+  selfDestruct.schedule(at(MIN));
+  test.mock.timers.tick(MIN);
+  assert.equal(exists(msg), false);
+  assert.equal(onDisk('sd-gone.png'), false);
+  assert.equal(held('sd-gone.png'), false, 'not held in deleted-attachments');
+
+  setKeep('true');
+  file('sd-kept.png', author);
+  add('/uploads/sd-kept.png', at(MIN));
+  selfDestruct.schedule(at(MIN));
+  test.mock.timers.tick(MIN);
+  assert.equal(held('sd-kept.png'), true, 'turned back on, files are held again');
+});
+
+test('an unreadable keep setting holds the files', () => {
+  setKeep('false');
+  selfDestruct.stop();
+  const busy = new Proxy(db, {
+    get(target, prop) {
+      if (prop !== 'prepare') return Reflect.get(target, prop);
+      return (sql) => {
+        const stmt = target.prepare(sql);
+        if (!sql.includes('keep_self_destructed_attachments')) return stmt;
+        return { get: () => { throw new Error('database is locked'); } };
+      };
+    },
+  });
+  file('sd-busy.png', author);
+  const msg = add('/uploads/sd-busy.png', at(-MIN));
+  selfDestruct.start({ db: busy, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
+  assert.equal(exists(msg), false, 'the message still goes');
+  assert.equal(held('sd-busy.png'), true, 'but its file is held, not removed for good');
+  setKeep('true');
 });

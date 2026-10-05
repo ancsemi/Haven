@@ -261,7 +261,9 @@ function stripRoleMentions(content, roleNames) {
 // could name someone else's avatar, emoji or attachment in a message of their
 // own, delete it, and have that file purged for good. Call it after the
 // message rows are gone, so they do not count as a reference.
-function releasableUploads(db, relPaths, ownerIds) {
+// With `ignoreMessages`, links in other messages do not keep a file, so a
+// pasted link cannot keep a self destructed file alive.
+function releasableUploads(db, relPaths, ownerIds, { ignoreMessages = false } = {}) {
   const owners = new Set((ownerIds || []).filter(id => Number.isInteger(id)));
   if (!owners.size) return [];
   const ownership = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?');
@@ -284,7 +286,7 @@ function releasableUploads(db, relPaths, ownerIds) {
     if (!own || !owners.has(own.user_id) || (own.scope !== 'channel' && own.scope !== 'dm')) continue;
     const ref = '/uploads/' + relPath;
     try {
-      if (inMessages.get(ref)) continue;
+      if (!ignoreMessages && inMessages.get(ref)) continue;
       if (inProfiles.get({ p: ref, f: relPath })) continue;
     } catch { continue; }
     out.push(relPath);

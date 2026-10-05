@@ -3442,6 +3442,11 @@
             <input type="number" id="deleted-retention-days" min="1" max="3650" value="7" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.deleted_retention_hint">Attachments from deleted messages and channels are held this long, then removed for good. This runs whether or not auto-cleanup is enabled (default 7).</small>
+          <label class="toggle-row">
+            <span data-i18n="settings.admin.keep_self_destructed">Keep self-destructed attachments</span>
+            <input type="checkbox" id="keep-self-destructed" checked>
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.keep_self_destructed_hint">Controls whether self-destructing attachments are saved also. For community servers, it is recommended to keep this setting turned on so users can&#39;t send abusive attachments and cover the evidence. For small servers, where everybody trusts each other, turning this setting off can be preferable. If this setting is turned on, deleted self-destructing attachments are kept the same duration as regular deleted attachments which is configurable directly above this setting.</small>
           <button class="btn-sm btn-full btn-accent" id="run-cleanup-now-btn" style="margin-top:4px;">🧹 <span data-i18n="settings.admin.cleanup_run_btn">Run Cleanup Now</span></button>
         </div>
 
@@ -4973,7 +4978,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=3.44.0"></script>
-  <script type="module" src="/js/app.js?v=4.18.1"></script>
+  <script type="module" src="/js/app.js?v=4.18.2"></script>
   <script src="/js/plugin-loader.js?v=4.17.24"></script>
   <script src="/js/modules/stream-debug.js?v=3.16.15"></script>
   <script src="/js/password-eye.js?v=3.17.1"></script>

@@ -444,7 +444,8 @@
     "burn_pending_tooltip": "Self-destructs {{seconds}}s after the recipient views it",
     "burn_reveal_hint": "({{seconds}}s after viewing)",
     "new_messages": "NEW MESSAGES",
-    "self_destructing": "Self-destructing {{time}}"
+    "self_destructing": "Self-destructing {{time}}",
+    "self_destruct_no_reply": "Self-destructing messages can't be replied to or quoted"
   },
   "utils": {
     "today_at": "Today at {{time}}",
@@ -2293,6 +2294,7 @@
       "cleanup_max_uploads": "Max Uploads Size (MB)",
       "cleanup_run_btn": "Run Cleanup Now",
       "deleted_retention": "Keep deleted files for (days)",
+      "keep_self_destructed": "Keep self-destructed attachments",
       "uploads_title": "Uploads & Limits",
       "max_upload": "Max Upload Size (MB)",
       "max_attachments": "Max Attachments per Message",
@@ -2362,6 +2364,7 @@
       "cleanup_size_hint": "Trim oldest messages when DB exceeds N MB (0 = off)",
       "cleanup_uploads_hint": "When the uploads folder passes N MB, remove the oldest messages with files until it is back under (0 = off). Avatars, emoji and stickers count toward it but are never removed.",
       "deleted_retention_hint": "Attachments from deleted messages and channels are held this long, then removed for good. This runs whether or not auto-cleanup is enabled (default 7).",
+      "keep_self_destructed_hint": "Controls whether self-destructing attachments are saved also. For community servers, it is recommended to keep this setting turned on so users can't send abusive attachments and cover the evidence. For small servers, where everybody trusts each other, turning this setting off can be preferable. If this setting is turned on, deleted self-destructing attachments are kept the same duration as regular deleted attachments which is configurable directly above this setting.",
       "max_upload_hint": "Maximum file size users can upload in MB (default 25). No hard cap — limited by available disk space.",
       "max_attachments_hint": "How many files someone can queue on one message by dropping, pasting or picking them (1 to 50, default 10). Each one still has to fit the size limit above.",
       "max_tags_per_attachment": "Max Tags per Attachment",

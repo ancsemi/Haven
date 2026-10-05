@@ -785,7 +785,16 @@ _renderReplyBanner(replyCtx) {
   `;
 },
 
+// A self destructing message takes no replies or quotes. Pinning or
+// protecting it drops the timer line, and with it this block.
+_refuseSelfDestructing(msgEl) {
+  if (!msgEl?.querySelector?.('.msg-self-destruct')) return false;
+  this._showToast?.(t('messages.self_destruct_no_reply'), 'info');
+  return true;
+},
+
 _setReply(msgEl, msgId) {
+  if (this._refuseSelfDestructing(msgEl)) return;
   // In a forum a reply to a topic belongs in the topic's thread: that is what
   // bumps it, and it keeps the answer under the question instead of posting
   // a second topic that quotes the first. (#144)
@@ -826,6 +835,7 @@ _clearReply() {
 },
 
 _quoteMessage(msgEl) {
+  if (this._refuseSelfDestructing(msgEl)) return;
   // Get the raw text content of the message
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '';
   // Get the author name

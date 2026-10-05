@@ -187,6 +187,16 @@ function moveUploadToDeleted(relPath, srcRoot = UPLOADS_DIR) {
   }
 }
 
+// For files an admin chose not to keep: gone for good, never held for recovery.
+function removeUpload(relPath) {
+  if (!isSafeUploadRelPath(relPath)) return;
+  try {
+    fs.unlinkSync(path.join(UPLOADS_DIR, relPath));
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn(`[uploads] Could not remove ${relPath}:`, err.message);
+  }
+}
+
 function collectUploadRelPaths(contents) {
   const paths = new Set();
   for (const content of contents) {
@@ -3285,7 +3295,7 @@ socketRuntime = setupSocketHandlers(io, db, {
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
 activityRef.engine = socketRuntime.activity;
-require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted });
+require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
 
 // ── Ferry: Haven <-> Discord bridge ─────────────────────
 // Started after the socket layer so an inbound Discord message always has a

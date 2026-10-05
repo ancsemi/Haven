@@ -1328,10 +1328,11 @@ module.exports = function register(socket, ctx) {
     const safeContent = sanitizeText(content.trim());
     if (!safeContent) return;
 
-    // Validate replyTo belongs to same channel (prevents cross-channel data leaks)
+    // Validate replyTo belongs to same channel (prevents cross-channel data leaks).
+    // A self destructing message takes no replies, so nothing outlives it.
     if (replyTo) {
-      const replyMsg = db.prepare('SELECT channel_id FROM messages WHERE id = ?').get(replyTo);
-      if (!replyMsg || replyMsg.channel_id !== channel.id) replyTo = null;
+      const replyMsg = db.prepare('SELECT channel_id, destruct_at FROM messages WHERE id = ?').get(replyTo);
+      if (!replyMsg || replyMsg.channel_id !== channel.id || replyMsg.destruct_at) replyTo = null;
     }
 
     // (#5280) burn-after-read for DMs — capped at 5 minutes; only honored
