@@ -1,5 +1,7 @@
 # ⬡ HAVEN
 
+[![Deploy to Railyard](https://app.railyard.run/deploy/badge)](https://app.railyard.run/deploy?repo=https://github.com/ancsemi/Haven)
+
 **A private Discord alternative that runs on your own machine.** No cloud, no company
 account, no telemetry, no paid tier. Free forever.
 
