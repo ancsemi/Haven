@@ -41,7 +41,7 @@ channel, share the code. The certificate warning on first load is expected, clic
 | | |
 |---|---|
 | 🖥️ **[Haven Desktop](https://github.com/ancsemi/Haven-Desktop/releases/latest)** | Windows and Linux. Per-app audio sharing (send one app’s sound, nothing else), device switching mid-call, native notifications, tray. It can also **run the server itself**. |
-| 📱 **[Haven for Android](https://play.google.com/store/apps/details?id=com.havenapp.mobile&gl=US)** | On Google Play. Native, not a web wrapper. Full chat, voice and push notifications. Built by [Amnibro](https://github.com/Amnibro). |
+| 📱 **[Haven for Android (Google Play)](https://play.google.com/store/apps/details?id=com.havenapp.mobile&gl=US)** **[Android (Via Obtainium)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://amni-scient.com/downloads/amni-haven.apk)** | On Google Play. Native, not a web wrapper. Full chat, voice and push notifications. Built by [Amnibro](https://github.com/Amnibro). |
 | 🍎 **[Haven for iOS](https://testflight.apple.com/join/ADeG5zRq)** | In testing through TestFlight. Native, by [Amnibro](https://github.com/Amnibro) as well. Until it is on the App Store, the browser works too: open your server in Safari and Add to Home Screen. |
 | 🌐 **Any browser** | Nothing to install. Send a link, they are in. Works on phones. |
 
