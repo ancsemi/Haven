@@ -366,10 +366,17 @@ module.exports = function register(socket, ctx) {
     try { const u = new URL(endpoint); if (u.protocol !== 'https:') return; } catch { return; }
     // The server posts to this address for every notification, so it has to
     // be a public push service: a client-chosen endpoint on the server's own
-    // network was a way to make it send requests there.
+    // network was a way to make it send requests there. A self-hosted ntfy
+    // next to Haven is the exception HAVEN_ALLOW_PRIVATE_CALLBACKS opts into.
     try {
-      await require('../webhookCallback').resolveCallbackDestination(endpoint);
-    } catch { return; }
+      await require('../webhookCallback').resolveCallbackDestination(endpoint,
+        { allowPrivateCallbacks: process.env.HAVEN_ALLOW_PRIVATE_CALLBACKS === 'true' });
+    } catch (err) {
+      // The client is never told, so say why here or the device just stops
+      // getting notifications with no trace anywhere.
+      console.warn(`Push subscription refused for ${new URL(endpoint).host}: ${err.message}`);
+      return;
+    }
 
     try {
       // One endpoint is one browser/device, and only one account is signed

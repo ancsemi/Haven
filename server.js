@@ -935,11 +935,13 @@ app.post('/api/push/subscribe', express.json(), async (req, res) => {
     return res.status(400).json({ error: 'Invalid subscription object' });
   // Same rule as the socket path: the server posts to this address for every
   // notification, so it must be a public HTTPS push service, never an address
-  // on the server's own network.
+  // on the server's own network, unless HAVEN_ALLOW_PRIVATE_CALLBACKS allows it.
   try {
     if (new URL(endpoint).protocol !== 'https:') throw new Error('not https');
-    await require('./src/webhookCallback').resolveCallbackDestination(endpoint);
-  } catch {
+    await require('./src/webhookCallback').resolveCallbackDestination(endpoint,
+      { allowPrivateCallbacks: process.env.HAVEN_ALLOW_PRIVATE_CALLBACKS === 'true' });
+  } catch (err) {
+    console.warn(`Push subscription refused: ${err.message}`);
     return res.status(400).json({ error: 'Invalid subscription object' });
   }
 
